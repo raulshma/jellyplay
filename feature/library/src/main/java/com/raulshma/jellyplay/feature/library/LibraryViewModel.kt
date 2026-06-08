@@ -125,10 +125,28 @@ class LibraryViewModel @Inject constructor(
 
     fun selectFolder(folder: LibraryFolder?) {
         _selectedFolder.set(folder)
+        if (folder != null) {
+            val savedOrder = preferencesStore.preferences.value.defaultLibrarySortOrders[folder.id]
+            if (savedOrder != null) {
+                val option = SortOption.entries.find { it.name == savedOrder || it.apiValue == savedOrder } ?: SortOption.SORT_NAME
+                _filters.set(_filters.value.copy(sortBy = option))
+            } else {
+                _filters.set(_filters.value.copy(sortBy = SortOption.SORT_NAME))
+            }
+        }
     }
 
     fun updateFilters(newFilters: LibraryFilters) {
+        val currentFilters = _filters.value
         _filters.set(newFilters)
+        if (newFilters.sortBy != currentFilters.sortBy) {
+            val folder = _selectedFolder.value
+            if (folder != null) {
+                launch {
+                    preferencesStore.setDefaultLibrarySortOrder(folder.id, newFilters.sortBy.name)
+                }
+            }
+        }
     }
 
     fun toggleShowFilters() {

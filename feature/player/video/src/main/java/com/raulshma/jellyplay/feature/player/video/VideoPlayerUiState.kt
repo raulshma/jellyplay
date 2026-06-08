@@ -107,6 +107,7 @@ data class VideoPlayerUiState(
     val videoEffects: VideoEffectsConfig = VideoEffectsConfig(),
     val isScreenLocked: Boolean = false,
     val showPlaybackMetadata: Boolean = true,
+    val keepScreenOnDuringVideo: Boolean = true,
 ) {
 
     companion object {

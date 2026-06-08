@@ -12,6 +12,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
+import com.raulshma.jellyplay.core.datastore.UserPreferencesStore
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -30,6 +31,7 @@ interface PlaybackCoreCallbacks {
 class SyncPlayPlaybackCore @Inject constructor(
     private val timeSyncManager: TimeSyncManager,
     private val controller: SyncPlayController,
+    private val userPreferencesStore: UserPreferencesStore,
 ) {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
 
@@ -349,7 +351,8 @@ class SyncPlayPlaybackCore @Inject constructor(
         val latest = cb.currentPositionMs()
         val delta = kotlin.math.abs(lastReported - latest).toDouble()
         val drift = delta
-        return drift >= SYNC_CORRECTION_THRESHOLD_MS
+        val toleranceMs = userPreferencesStore.preferences.value.syncPlayToleranceMs
+        return drift >= toleranceMs
     }
 
     private fun scheduleEnableSync() {

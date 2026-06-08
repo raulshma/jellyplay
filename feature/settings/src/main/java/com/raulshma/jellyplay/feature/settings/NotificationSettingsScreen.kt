@@ -10,6 +10,9 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.RadioButton
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
+import androidx.compose.material3.Checkbox
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -19,7 +22,6 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.clickable
 import androidx.compose.material3.rememberTimePickerState
@@ -28,6 +30,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.raulshma.jellyplay.core.model.CheckFrequency
+import com.raulshma.jellyplay.core.model.LibraryNotificationConfig
 import com.raulshma.jellyplay.core.ui.adaptive.LocalAdaptiveInfo
 import com.raulshma.jellyplay.core.ui.adaptive.bottomPadding
 import com.raulshma.jellyplay.core.ui.adaptive.contentPadding
@@ -53,6 +56,8 @@ sealed class NotificationSettingsDialog {
     object FrequencyPicker : NotificationSettingsDialog()
     object QuietStartPicker : NotificationSettingsDialog()
     object QuietEndPicker : NotificationSettingsDialog()
+    object MaxPerCheckPicker : NotificationSettingsDialog()
+    object LibrariesPicker : NotificationSettingsDialog()
 }
 
 @OptIn(ExperimentalMaterial3Api::class, androidx.compose.material3.ExperimentalMaterial3ExpressiveApi::class)
@@ -104,13 +109,12 @@ fun NotificationSettingsScreen(
                 ) {
                     var notifIdx = 0
                     val notifBaseTotal = run {
-                        var c = 2
+                        var c = 1
                         if (notifPrefs.enabled) {
-                            c += 2
+                            c += 4 // Check Frequency, Sound, Vibrate, Lights
                             if (showAdvanced) {
-                                c += 1
+                                c += 3 // Quiet Hours, Max Per Check, Libraries
                                 if (notifPrefs.quietHoursEnabled) c += 2
-                                c += 2
                             }
                         }
                         c
@@ -186,6 +190,16 @@ fun NotificationSettingsScreen(
                                 viewModel.updateNotificationPreferences { it.copy(vibrateEnabled = enabled) }
                             },
                         )
+                        SettingToggleItem(
+                            icon = Tabler.Outline.Bulb,
+                            title = "Notification Lights",
+                            subtitle = "Pulse notification light on devices that support it",
+                            checked = notifPrefs.lightsEnabled,
+                            index = notifIdx++, count = notifTotal,
+                            onCheckedChange = { enabled ->
+                                viewModel.updateNotificationPreferences { it.copy(lightsEnabled = enabled) }
+                            },
+                        )
                         if (showAdvanced) {
                             SettingListItem(
                                 icon = Tabler.Outline.LetterCase,
@@ -193,7 +207,7 @@ fun NotificationSettingsScreen(
                                 subtitle = "Maximum items per notification batch",
                                 trailingText = "${notifPrefs.maxPerCheck}",
                                 index = notifIdx++, count = notifTotal,
-                                onClick = { },
+                                onClick = { activeDialog = NotificationSettingsDialog.MaxPerCheckPicker },
                             )
                             val libraryCount = viewModel.libraryFolders.size
                             val enabledLibraries = viewModel.libraryFolders.count { folder ->
@@ -204,7 +218,7 @@ fun NotificationSettingsScreen(
                                 title = "Libraries",
                                 subtitle = "$enabledLibraries of $libraryCount libraries monitored",
                                 index = notifIdx, count = notifTotal,
-                                onClick = { },
+                                onClick = { activeDialog = NotificationSettingsDialog.LibrariesPicker },
                             )
                         }
                     }
@@ -321,6 +335,96 @@ fun NotificationSettingsScreen(
             dismissButton = {
                 TextButton(onClick = { activeDialog = NotificationSettingsDialog.None }) { Text("Cancel") }
             },
+        )
+    }
+
+    if (activeDialog is NotificationSettingsDialog.MaxPerCheckPicker) {
+        val notifPrefs = preferences.notificationPreferences
+        val options = listOf(5, 10, 15, 20, 30, 50, 100)
+        AlertDialog(
+            onDismissRequest = { activeDialog = NotificationSettingsDialog.None },
+            title = { Text("Max Items Per Check") },
+            text = {
+                Column(modifier = Modifier.verticalScroll(rememberScrollState())) {
+                    options.forEach { opt ->
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clickable {
+                                    viewModel.updateNotificationPreferences { it.copy(maxPerCheck = opt) }
+                                    activeDialog = NotificationSettingsDialog.None
+                                }
+                                .padding(vertical = 12.dp, horizontal = 8.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            RadioButton(
+                                selected = opt == notifPrefs.maxPerCheck,
+                                onClick = {
+                                    viewModel.updateNotificationPreferences { it.copy(maxPerCheck = opt) }
+                                    activeDialog = NotificationSettingsDialog.None
+                                }
+                            )
+                            Spacer(Modifier.width(8.dp))
+                            Text(text = "$opt items", style = MaterialTheme.typography.bodyLarge)
+                        }
+                    }
+                }
+            },
+            confirmButton = {
+                TextButton(onClick = { activeDialog = NotificationSettingsDialog.None }) { Text("Cancel") }
+            }
+        )
+    }
+
+    if (activeDialog is NotificationSettingsDialog.LibrariesPicker) {
+        val notifPrefs = preferences.notificationPreferences
+        AlertDialog(
+            onDismissRequest = { activeDialog = NotificationSettingsDialog.None },
+            title = { Text("Monitored Libraries") },
+            text = {
+                Column(modifier = Modifier.verticalScroll(rememberScrollState())) {
+                    if (viewModel.libraryFolders.isEmpty()) {
+                        Text(
+                            text = "No libraries found",
+                            style = MaterialTheme.typography.bodyMedium,
+                            modifier = Modifier.padding(16.dp)
+                        )
+                    } else {
+                        viewModel.libraryFolders.forEach { folder ->
+                            val currentConfig = notifPrefs.libraryConfigs[folder.id] ?: LibraryNotificationConfig(enabled = true)
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .clickable {
+                                        val newConfig = currentConfig.copy(enabled = !currentConfig.enabled)
+                                        val newConfigs = notifPrefs.libraryConfigs.toMutableMap().apply {
+                                            put(folder.id, newConfig)
+                                        }
+                                        viewModel.updateNotificationPreferences { it.copy(libraryConfigs = newConfigs) }
+                                    }
+                                    .padding(vertical = 8.dp, horizontal = 8.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Checkbox(
+                                    checked = currentConfig.enabled,
+                                    onCheckedChange = { checked ->
+                                        val newConfig = currentConfig.copy(enabled = checked)
+                                        val newConfigs = notifPrefs.libraryConfigs.toMutableMap().apply {
+                                            put(folder.id, newConfig)
+                                        }
+                                        viewModel.updateNotificationPreferences { it.copy(libraryConfigs = newConfigs) }
+                                    }
+                                )
+                                Spacer(Modifier.width(8.dp))
+                                Text(text = folder.name, style = MaterialTheme.typography.bodyLarge)
+                            }
+                        }
+                    }
+                }
+            },
+            confirmButton = {
+                TextButton(onClick = { activeDialog = NotificationSettingsDialog.None }) { Text("Done") }
+            }
         )
     }
 }

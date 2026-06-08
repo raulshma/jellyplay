@@ -231,6 +231,7 @@ class PlayerSessionManager(
                 channelMixEnabled = prefs.channelMixEnabled,
             ),
             engineSpecific = resolveEngineConfig(playerType, prefs),
+            pauseOnAudioFocusLoss = prefs.pauseOnAudioFocusLoss,
         )
         eng.updateConfig(config)
         eng.setPlaybackSpeed(prefs.videoDefaultSpeed)
@@ -337,6 +338,7 @@ class PlayerSessionManager(
                 channelMixEnabled = prefs.channelMixEnabled,
             ),
             engineSpecific = resolveEngineConfig(playerType, prefs),
+            pauseOnAudioFocusLoss = prefs.pauseOnAudioFocusLoss,
         )
         eng.updateConfig(config)
         eng.setPlaybackSpeed(playbackSpeed)

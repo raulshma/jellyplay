@@ -36,6 +36,8 @@ import com.raulshma.jellyplay.core.model.PreloadBufferSize
 import com.raulshma.jellyplay.core.model.StreamingQuality
 import com.raulshma.jellyplay.core.model.VlcAudioOutput
 import com.raulshma.jellyplay.core.model.VlcVideoOutput
+import com.raulshma.jellyplay.core.model.SyncPlayJoinBehavior
+import com.raulshma.jellyplay.core.model.CastingStrategy
 import com.raulshma.jellyplay.core.ui.adaptive.LocalAdaptiveInfo
 import com.raulshma.jellyplay.core.ui.adaptive.bottomPadding
 import com.raulshma.jellyplay.core.ui.adaptive.contentPadding
@@ -91,6 +93,7 @@ sealed class PlaybackSettingsDialog {
     object SwipeSeekPicker : PlaybackSettingsDialog()
     object PreloadBufferPicker : PlaybackSettingsDialog()
     object AudioDelayPicker : PlaybackSettingsDialog()
+    object BrightnessPicker : PlaybackSettingsDialog()
     object MpvVideoOutputPicker : PlaybackSettingsDialog()
     object MpvScalerPicker : PlaybackSettingsDialog()
     object MpvAudioOutputPicker : PlaybackSettingsDialog()
@@ -110,6 +113,13 @@ sealed class PlaybackSettingsDialog {
     object ExoAudioOffloadPicker : PlaybackSettingsDialog()
     object ExoBackBufferPicker : PlaybackSettingsDialog()
     object ExoCodecPicker : PlaybackSettingsDialog()
+    object SyncPlayJoinBehaviorPicker : PlaybackSettingsDialog()
+    object SyncPlayTolerancePicker : PlaybackSettingsDialog()
+    object CastingStrategyPicker : PlaybackSettingsDialog()
+    object DvrPrePaddingPicker : PlaybackSettingsDialog()
+    object DvrPostPaddingPicker : PlaybackSettingsDialog()
+    object DvrRecordingQualityPicker : PlaybackSettingsDialog()
+    object AutoPlayCountdownPicker : PlaybackSettingsDialog()
 }
 
 @OptIn(ExperimentalMaterial3Api::class, androidx.compose.material3.ExperimentalMaterial3ExpressiveApi::class)
@@ -155,11 +165,7 @@ fun PlaybackSettingsScreen(
                     initiallyExpanded = true,
                 ) {
                     var idx = 0
-                    val total = run {
-                        var c = 7
-                        if (showAdvanced) c += 9
-                        c
-                    }
+                    val total = if (showAdvanced) 24 else 9
 
                     SettingListItem(
                         icon = Tabler.Outline.PlayerPlay,
@@ -217,6 +223,15 @@ fun PlaybackSettingsScreen(
                         index = idx++, count = total,
                         onCheckedChange = { viewModel.setVideoAutoplayNext(it) },
                     )
+                    val countdownLabel = if (preferences.autoPlayCountdownSec == 0) "Off" else "${preferences.autoPlayCountdownSec}s"
+                    SettingListItem(
+                        icon = Tabler.Outline.Clock,
+                        title = "Auto-Play Countdown",
+                        subtitle = "Countdown duration before auto-playing next episode",
+                        trailingText = countdownLabel,
+                        index = idx++, count = total,
+                        onClick = { activeDialog = PlaybackSettingsDialog.AutoPlayCountdownPicker },
+                    )
                     if (showAdvanced) {
                         SettingListItem(
                             icon = Tabler.Outline.Clock,
@@ -268,6 +283,14 @@ fun PlaybackSettingsScreen(
                                 viewModel.setVideoRememberBrightness(enabled)
                             },
                         )
+                        SettingListItem(
+                            icon = Tabler.Outline.Sun,
+                            title = "Default Brightness Level",
+                            subtitle = "Default screen brightness for video playback",
+                            trailingText = "${(preferences.videoBrightnessLevel * 100).toInt()}%",
+                            index = idx++, count = total,
+                            onClick = { activeDialog = PlaybackSettingsDialog.BrightnessPicker },
+                        )
                         SettingToggleItem(
                             icon = Tabler.Outline.Photo,
                             title = "Trickplay Preview",
@@ -289,8 +312,48 @@ fun PlaybackSettingsScreen(
                             title = "Preload Buffer",
                             subtitle = "Amount to buffer ahead during playback",
                             trailingText = preferences.videoPreloadBufferSize.displayName,
-                            index = idx, count = total,
+                            index = idx++, count = total,
                             onClick = { activeDialog = PlaybackSettingsDialog.PreloadBufferPicker },
+                        )
+                        SettingToggleItem(
+                            icon = Tabler.Outline.Music,
+                            title = "Background Audio",
+                            subtitle = "Keep audio playing when switching apps during video playback",
+                            checked = preferences.backgroundVideoAudioEnabled,
+                            index = idx++, count = total,
+                            onCheckedChange = { viewModel.setBackgroundVideoAudioEnabled(it) },
+                        )
+                        SettingToggleItem(
+                            icon = Tabler.Outline.Eye,
+                            title = "Keep Screen On",
+                            subtitle = "Prevent screen from turning off during video playback",
+                            checked = preferences.keepScreenOnDuringVideo,
+                            index = idx++, count = total,
+                            onCheckedChange = { viewModel.setKeepScreenOnDuringVideo(it) },
+                        )
+                        SettingToggleItem(
+                            icon = Tabler.Outline.Ghost,
+                            title = "Incognito Mode",
+                            subtitle = if (preferences.incognitoModeEnabled) "Bypasses reporting playback progress to server" else "Reports playback progress to server",
+                            checked = preferences.incognitoModeEnabled,
+                            index = idx++, count = total,
+                            onCheckedChange = { viewModel.setIncognitoModeEnabled(it) },
+                        )
+                        SettingToggleItem(
+                            icon = Tabler.Outline.Clock,
+                            title = "Show Time Remaining",
+                            subtitle = if (preferences.showTimeRemaining) "Display remaining time instead of elapsed time" else "Display elapsed time",
+                            checked = preferences.showTimeRemaining,
+                            index = idx++, count = total,
+                            onCheckedChange = { viewModel.setShowTimeRemaining(it) },
+                        )
+                        SettingToggleItem(
+                            icon = Tabler.Outline.PlayerPause,
+                            title = "Pause on Focus Loss",
+                            subtitle = if (preferences.pauseOnAudioFocusLoss) "Pause playback when system reports focus loss" else "Continue playback on focus loss",
+                            checked = preferences.pauseOnAudioFocusLoss,
+                            index = idx, count = total,
+                            onCheckedChange = { viewModel.setPauseOnAudioFocusLoss(it) },
                         )
                     }
                 }
@@ -681,6 +744,130 @@ fun PlaybackSettingsScreen(
                     }
                 }
             }
+            }
+
+            item {
+                SettingsGroup(
+                    icon = Tabler.Outline.Users,
+                    title = "SyncPlay",
+                    summary = { "Join behavior: ${preferences.syncPlayJoinBehavior.displayName}" },
+                    modifier = Modifier.padding(vertical = 8.dp),
+                ) {
+                    val syncTotal = 3
+                    var syncIdx = 0
+
+                    SettingListItem(
+                        icon = Tabler.Outline.MessageQuestion,
+                        title = "Join Behavior",
+                        subtitle = "Action when joining a SyncPlay group",
+                        trailingText = preferences.syncPlayJoinBehavior.displayName,
+                        index = syncIdx++, count = syncTotal,
+                        onClick = { activeDialog = PlaybackSettingsDialog.SyncPlayJoinBehaviorPicker },
+                    )
+
+                    SettingListItem(
+                        icon = Tabler.Outline.WaveSine,
+                        title = "Sync Tolerance",
+                        subtitle = "Allowed drift before correcting playback",
+                        trailingText = "${preferences.syncPlayToleranceMs}ms",
+                        index = syncIdx++, count = syncTotal,
+                        onClick = { activeDialog = PlaybackSettingsDialog.SyncPlayTolerancePicker },
+                    )
+
+                    SettingToggleItem(
+                        icon = Tabler.Outline.CircleCheck,
+                        title = "Auto-Accept Invites",
+                        subtitle = "Automatically accept SyncPlay invites from friends",
+                        checked = preferences.syncPlayAutoAcceptInvites,
+                        index = syncIdx++, count = syncTotal,
+                        onCheckedChange = { viewModel.setSyncPlayAutoAcceptInvites(it) },
+                    )
+                }
+            }
+
+            item {
+                SettingsGroup(
+                    icon = Tabler.Outline.DeviceTv,
+                    title = "Casting & DLNA",
+                    summary = { "Strategy: ${preferences.defaultCastingStrategy.displayName}" },
+                    modifier = Modifier.padding(vertical = 8.dp),
+                ) {
+                    val castTotal = 3
+                    var castIdx = 0
+
+                    SettingListItem(
+                        icon = Tabler.Outline.Cast,
+                        title = "Casting Strategy",
+                        subtitle = "Preferred method for big screen streaming",
+                        trailingText = preferences.defaultCastingStrategy.displayName,
+                        index = castIdx++, count = castTotal,
+                        onClick = { activeDialog = PlaybackSettingsDialog.CastingStrategyPicker },
+                    )
+
+                    SettingToggleItem(
+                        icon = Tabler.Outline.Settings,
+                        title = "Background Casting",
+                        subtitle = "Keep casting active when app is closed",
+                        checked = preferences.backgroundCastingEnabled,
+                        index = castIdx++, count = castTotal,
+                        onCheckedChange = { viewModel.setBackgroundCastingEnabled(it) },
+                    )
+
+                    val rendererText = preferences.preferredRenderer ?: "None"
+                    SettingListItem(
+                        icon = Tabler.Outline.Devices,
+                        title = "Preferred Renderer",
+                        subtitle = "Device to target by default when casting (click to toggle)",
+                        trailingText = rendererText,
+                        index = castIdx++, count = castTotal,
+                        onClick = {
+                            if (preferences.preferredRenderer != null) {
+                                viewModel.setPreferredRenderer(null)
+                            } else {
+                                viewModel.setPreferredRenderer("Living Room TV")
+                            }
+                        },
+                    )
+                }
+            }
+
+            item {
+                SettingsGroup(
+                    icon = Tabler.Outline.DeviceTvOld,
+                    title = "Live TV & DVR",
+                    summary = { "Padding: +${preferences.dvrPrePaddingMinutes}m / -${preferences.dvrPostPaddingMinutes}m" },
+                    modifier = Modifier.padding(vertical = 8.dp),
+                ) {
+                    val dvrTotal = 3
+                    var dvrIdx = 0
+
+                    SettingListItem(
+                        icon = Tabler.Outline.Clock,
+                        title = "DVR Pre-Padding",
+                        subtitle = "Start recording before scheduled time",
+                        trailingText = "${preferences.dvrPrePaddingMinutes} min",
+                        index = dvrIdx++, count = dvrTotal,
+                        onClick = { activeDialog = PlaybackSettingsDialog.DvrPrePaddingPicker },
+                    )
+
+                    SettingListItem(
+                        icon = Tabler.Outline.Clock,
+                        title = "DVR Post-Padding",
+                        subtitle = "Extend recording after scheduled end time",
+                        trailingText = "${preferences.dvrPostPaddingMinutes} min",
+                        index = dvrIdx++, count = dvrTotal,
+                        onClick = { activeDialog = PlaybackSettingsDialog.DvrPostPaddingPicker },
+                    )
+
+                    SettingListItem(
+                        icon = Tabler.Outline.Video,
+                        title = "DVR Recording Quality",
+                        subtitle = "Default video quality for DVR recordings",
+                        trailingText = preferences.dvrRecordingQuality,
+                        index = dvrIdx++, count = dvrTotal,
+                        onClick = { activeDialog = PlaybackSettingsDialog.DvrRecordingQualityPicker },
+                    )
+                }
             }
 
             if (!showAdvanced) {
@@ -1134,6 +1321,161 @@ fun PlaybackSettingsScreen(
             onDismiss = { activeDialog = PlaybackSettingsDialog.None },
             onSelect = {
                 viewModel.setExoPlayerConfig(exoCfg.copy(preferredVideoMimeTypes = it))
+                activeDialog = PlaybackSettingsDialog.None
+            },
+        )
+    }
+
+    if (activeDialog is PlaybackSettingsDialog.BrightnessPicker) {
+        SettingsSliderSheet(
+            title = "Default Video Brightness Level",
+            value = preferences.videoBrightnessLevel,
+            valueRange = 0.0f..1.0f,
+            steps = 20,
+            valueLabel = { "${(it * 100).toInt()}%" },
+            rangeStartLabel = "0%",
+            rangeEndLabel = "100%",
+            onDismiss = { activeDialog = PlaybackSettingsDialog.None },
+            onConfirm = {
+                viewModel.setVideoBrightnessLevel(it)
+                activeDialog = PlaybackSettingsDialog.None
+            },
+        )
+    }
+
+    if (activeDialog is PlaybackSettingsDialog.SyncPlayJoinBehaviorPicker) {
+        SettingsListPickerSheet(
+            title = "Join Behavior",
+            items = SyncPlayJoinBehavior.entries,
+            label = { it.displayName },
+            subtitle = {
+                when (it) {
+                    SyncPlayJoinBehavior.ALWAYS_JOIN -> "Automatically join active groups"
+                    SyncPlayJoinBehavior.ASK -> "Prompt to join when a group is active"
+                    SyncPlayJoinBehavior.NEVER_JOIN -> "Ignore group playback sessions"
+                }
+            },
+            isSelected = { it == preferences.syncPlayJoinBehavior },
+            onDismiss = { activeDialog = PlaybackSettingsDialog.None },
+            onSelect = {
+                viewModel.setSyncPlayJoinBehavior(it)
+                activeDialog = PlaybackSettingsDialog.None
+            },
+        )
+    }
+
+    if (activeDialog is PlaybackSettingsDialog.SyncPlayTolerancePicker) {
+        val options = listOf(50L, 100L, 200L, 300L, 500L, 1000L)
+        SettingsListPickerSheet(
+            title = "Sync Tolerance",
+            items = options,
+            label = { "${it}ms" },
+            subtitle = {
+                when (it) {
+                    50L -> "Tight sync (more network seeks)"
+                    100L -> "Balanced sync (recommended)"
+                    500L -> "Loose sync (fewer seeks)"
+                    else -> "Custom drift limit"
+                }
+            },
+            isSelected = { it == preferences.syncPlayToleranceMs },
+            onDismiss = { activeDialog = PlaybackSettingsDialog.None },
+            onSelect = {
+                viewModel.setSyncPlayToleranceMs(it)
+                activeDialog = PlaybackSettingsDialog.None
+            },
+        )
+    }
+
+    if (activeDialog is PlaybackSettingsDialog.CastingStrategyPicker) {
+        SettingsListPickerSheet(
+            title = "Casting Strategy",
+            items = CastingStrategy.entries,
+            label = { it.displayName },
+            subtitle = {
+                when (it) {
+                    CastingStrategy.PREFER_CAST -> "Always try Google Cast protocol first"
+                    CastingStrategy.PREFER_DLNA -> "Always try DLNA/UPnP rendering first"
+                    CastingStrategy.ASK -> "Show device choice menu when casting"
+                }
+            },
+            isSelected = { it == preferences.defaultCastingStrategy },
+            onDismiss = { activeDialog = PlaybackSettingsDialog.None },
+            onSelect = {
+                viewModel.setDefaultCastingStrategy(it)
+                activeDialog = PlaybackSettingsDialog.None
+            },
+        )
+    }
+
+    if (activeDialog is PlaybackSettingsDialog.DvrPrePaddingPicker) {
+        val options = listOf(0, 1, 2, 5, 10, 15)
+        SettingsListPickerSheet(
+            title = "DVR Pre-Padding",
+            items = options,
+            label = { if (it == 0) "None" else "$it minutes" },
+            subtitle = { if (it == 0) "Start exactly on time" else "Start recording $it minutes early" },
+            isSelected = { it == preferences.dvrPrePaddingMinutes },
+            onDismiss = { activeDialog = PlaybackSettingsDialog.None },
+            onSelect = {
+                viewModel.setDvrPrePaddingMinutes(it)
+                activeDialog = PlaybackSettingsDialog.None
+            },
+        )
+    }
+
+    if (activeDialog is PlaybackSettingsDialog.DvrPostPaddingPicker) {
+        val options = listOf(0, 1, 2, 5, 10, 15, 30)
+        SettingsListPickerSheet(
+            title = "DVR Post-Padding",
+            items = options,
+            label = { if (it == 0) "None" else "$it minutes" },
+            subtitle = { if (it == 0) "Stop exactly on time" else "Stop recording $it minutes late" },
+            isSelected = { it == preferences.dvrPostPaddingMinutes },
+            onDismiss = { activeDialog = PlaybackSettingsDialog.None },
+            onSelect = {
+                viewModel.setDvrPostPaddingMinutes(it)
+                activeDialog = PlaybackSettingsDialog.None
+            },
+        )
+    }
+
+    if (activeDialog is PlaybackSettingsDialog.DvrRecordingQualityPicker) {
+        val options = listOf("AUTO", "HIGH", "MEDIUM", "LOW")
+        SettingsListPickerSheet(
+            title = "DVR Recording Quality",
+            items = options,
+            label = { it },
+            subtitle = {
+                when (it) {
+                    "AUTO" -> "Original broadcast stream quality"
+                    "HIGH" -> "Transcode to High quality (1080p)"
+                    "MEDIUM" -> "Transcode to Medium quality (720p)"
+                    "LOW" -> "Transcode to Low quality (480p)"
+                    else -> ""
+                }
+            },
+            isSelected = { it == preferences.dvrRecordingQuality },
+            onDismiss = { activeDialog = PlaybackSettingsDialog.None },
+            onSelect = {
+                viewModel.setDvrRecordingQuality(it)
+                activeDialog = PlaybackSettingsDialog.None
+            },
+        )
+    }
+
+
+    if (activeDialog is PlaybackSettingsDialog.AutoPlayCountdownPicker) {
+        val options = listOf(0, 5, 10, 15)
+        SettingsListPickerSheet(
+            title = "Auto-Play Countdown",
+            items = options,
+            label = { if (it == 0) "Off" else "${it}s" },
+            subtitle = { if (it == 0) "Play next item immediately" else "Show countdown screen for $it seconds" },
+            isSelected = { it == preferences.autoPlayCountdownSec },
+            onDismiss = { activeDialog = PlaybackSettingsDialog.None },
+            onSelect = {
+                viewModel.setAutoPlayCountdownSec(it)
                 activeDialog = PlaybackSettingsDialog.None
             },
         )

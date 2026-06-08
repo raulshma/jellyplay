@@ -31,7 +31,10 @@ import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.raulshma.jellyplay.core.model.AudioNormalizationMode
 import com.raulshma.jellyplay.core.model.EffectStrength
+import com.raulshma.jellyplay.core.model.ReverbPreset
+import com.raulshma.jellyplay.core.model.ChannelMixMode
 import com.raulshma.jellyplay.core.model.EqualizerSettings
+import com.raulshma.jellyplay.core.model.EqualizerPreset
 import com.raulshma.jellyplay.core.model.PreloadBufferSize
 import com.raulshma.jellyplay.core.ui.adaptive.LocalAdaptiveInfo
 import com.raulshma.jellyplay.core.ui.adaptive.bottomPadding
@@ -52,6 +55,12 @@ sealed class AudioSettingsDialog {
     object EqualizerEditor : AudioSettingsDialog()
     object NormalizationModePicker : AudioSettingsDialog()
     object PreAmpPicker : AudioSettingsDialog()
+    object EqualizerPresetPicker : AudioSettingsDialog()
+    object ChannelMixModePicker : AudioSettingsDialog()
+    object SleepTimerPicker : AudioSettingsDialog()
+    object LrBalancePicker : AudioSettingsDialog()
+    object PitchShiftPicker : AudioSettingsDialog()
+    object VolumeBoostGainPicker : AudioSettingsDialog()
 }
 
 @OptIn(ExperimentalMaterial3Api::class, androidx.compose.material3.ExperimentalMaterial3ExpressiveApi::class)
@@ -98,16 +107,24 @@ fun AudioSettingsScreen(
                 ) {
                     var idx = 0
                     val total = run {
-                        var c = 2
+                        var c = 5 // Default Speed, Auto-play Next, Visualizer, Sleep Timer, Audio Description
                         if (showAdvanced) {
-                            c += 7
-                            if (preferences.equalizerEnabled) c++
-                            if (preferences.dialogueBoostEnabled) c++
-                            if (preferences.nightModeEnabled) c++
-                            if (preferences.audioNormalizationMode != AudioNormalizationMode.NONE) c++
-                            c += 6
-                            if (preferences.bassBoostEnabled) c++
-                            if (preferences.virtualizerEnabled) c++
+                            c += 7 // Night Volume, Night Gain, Skip Prev, Gapless, Crossfade, Preload, Normalization
+                            if (preferences.audioNormalizationMode == AudioNormalizationMode.TRACK ||
+                                preferences.audioNormalizationMode == AudioNormalizationMode.ALBUM) c++ // Pre-Amp
+                            c += 1 // Equalizer toggle
+                            if (preferences.equalizerEnabled) c += 2 // Equalizer Preset, Dialogue Boost toggle
+                            if (preferences.dialogueBoostEnabled) c++ // Dialogue Boost Strength
+                            c += 1 // Night Mode toggle
+                            if (preferences.nightModeEnabled) c++ // Night Mode Strength
+                            c += 1 // Bass Boost toggle
+                            if (preferences.bassBoostEnabled) c++ // Bass Boost Strength
+                            c += 1 // Virtualizer toggle
+                            if (preferences.virtualizerEnabled) c++ // Virtualizer Strength
+                            c += 1 // Volume Boost toggle
+                            if (preferences.volumeBoostEnabled) c++ // Volume Boost Gain
+                            c += 5 // Reverb, Auto-EQ, Channel Mix toggle, L/R Balance, Pitch Shift
+                            if (preferences.channelMixEnabled) c++ // Channel Mix Mode
                         }
                         c
                     }
@@ -127,6 +144,30 @@ fun AudioSettingsScreen(
                         checked = preferences.audioAutoplayNext,
                         index = idx++, count = total,
                         onCheckedChange = { viewModel.setAudioAutoplayNext(it) },
+                    )
+                    SettingToggleItem(
+                        icon = Tabler.Outline.Eye,
+                        title = "Audio Visualizer",
+                        subtitle = if (preferences.audioVisualizerEnabled) "Real-time FFT audio visualizer active" else "Visualizer disabled",
+                        checked = preferences.audioVisualizerEnabled,
+                        index = idx++, count = total,
+                        onCheckedChange = { viewModel.setAudioVisualizerEnabled(it) },
+                    )
+                    SettingListItem(
+                        icon = Tabler.Outline.Clock,
+                        title = "Sleep Timer",
+                        subtitle = if (preferences.sleepTimerDurationMs == 0L) "No sleep timer set" else "${preferences.sleepTimerDurationMs / 60000} minutes",
+                        trailingText = if (preferences.sleepTimerDurationMs == 0L) "Off" else "${preferences.sleepTimerDurationMs / 60000}m",
+                        index = idx++, count = total,
+                        onClick = { activeDialog = AudioSettingsDialog.SleepTimerPicker },
+                    )
+                    SettingToggleItem(
+                        icon = Tabler.Outline.Speakerphone,
+                        title = "Audio Description",
+                        subtitle = if (preferences.preferAudioDescription) "Prefer descriptive/narrated audio tracks" else "Standard audio tracks",
+                        checked = preferences.preferAudioDescription,
+                        index = idx++, count = total,
+                        onCheckedChange = { viewModel.setPreferAudioDescription(it) },
                     )
                     if (showAdvanced) {
                         SettingListItem(
@@ -217,6 +258,14 @@ fun AudioSettingsScreen(
                             onClick = { activeDialog = AudioSettingsDialog.EqualizerEditor },
                         )
                         if (preferences.equalizerEnabled) {
+                            SettingListItem(
+                                icon = Tabler.Outline.Adjustments,
+                                title = "Equalizer Preset",
+                                subtitle = "Quick preset: ${preferences.equalizerPreset.displayName}",
+                                trailingText = preferences.equalizerPreset.displayName,
+                                index = idx++, count = total,
+                                onClick = { activeDialog = AudioSettingsDialog.EqualizerPresetPicker },
+                            )
                             SettingToggleItem(
                                 icon = Tabler.Outline.Microphone2,
                                 title = "Dialogue Boost",
@@ -310,6 +359,24 @@ fun AudioSettingsScreen(
                                 },
                             )
                         }
+                        SettingToggleItem(
+                            icon = Tabler.Outline.Speakerphone,
+                            title = "Volume Boost",
+                            subtitle = if (preferences.volumeBoostEnabled) "+${preferences.volumeBoostGain / 100} dB gain" else "Off",
+                            checked = preferences.volumeBoostEnabled,
+                            index = idx++, count = total,
+                            onCheckedChange = { viewModel.setVolumeBoostEnabled(it) },
+                        )
+                        if (preferences.volumeBoostEnabled) {
+                            SettingListItem(
+                                icon = Tabler.Outline.Speakerphone,
+                                title = "Volume Boost Gain",
+                                subtitle = "Loudness boost level",
+                                trailingText = "+${preferences.volumeBoostGain / 100} dB",
+                                index = idx++, count = total,
+                                onClick = { activeDialog = AudioSettingsDialog.VolumeBoostGainPicker },
+                            )
+                        }
                         SettingListItem(
                             icon = Tabler.Outline.WaveSine,
                             title = "Reverb",
@@ -328,8 +395,42 @@ fun AudioSettingsScreen(
                             title = "Auto-EQ by Genre",
                             subtitle = if (preferences.autoEqByGenre) "Automatically applies EQ preset based on genre" else "Off",
                             checked = preferences.autoEqByGenre,
-                            index = idx, count = total,
+                            index = idx++, count = total,
                             onCheckedChange = { viewModel.setAutoEqByGenre(it) },
+                        )
+                        SettingToggleItem(
+                            icon = Tabler.Outline.Speakerphone,
+                            title = "Channel Mixing",
+                            subtitle = if (preferences.channelMixEnabled) "Surround mixing active" else "Stereo bypass",
+                            checked = preferences.channelMixEnabled,
+                            index = idx++, count = total,
+                            onCheckedChange = { viewModel.setChannelMixEnabled(it) },
+                        )
+                        if (preferences.channelMixEnabled) {
+                            SettingListItem(
+                                icon = Tabler.Outline.Speakerphone,
+                                title = "Channel Mix Mode",
+                                subtitle = preferences.channelMixMode.displayName,
+                                trailingText = preferences.channelMixMode.displayName,
+                                index = idx++, count = total,
+                                onClick = { activeDialog = AudioSettingsDialog.ChannelMixModePicker },
+                            )
+                        }
+                        SettingListItem(
+                            icon = Tabler.Outline.Adjustments,
+                            title = "L/R Balance",
+                            subtitle = if (preferences.lrBalance == 0f) "Center" else if (preferences.lrBalance < 0f) "Left" else "Right",
+                            trailingText = if (preferences.lrBalance == 0f) "Center" else String.format("%.2f", preferences.lrBalance),
+                            index = idx++, count = total,
+                            onClick = { activeDialog = AudioSettingsDialog.LrBalancePicker },
+                        )
+                        SettingListItem(
+                            icon = Tabler.Outline.WaveSine,
+                            title = "Pitch Shift",
+                            subtitle = if (preferences.pitchSemitones == 0f) "Normal pitch" else "${if (preferences.pitchSemitones > 0) "+" else ""}${preferences.pitchSemitones} semitones",
+                            trailingText = if (preferences.pitchSemitones == 0f) "0" else "${if (preferences.pitchSemitones > 0) "+" else ""}${preferences.pitchSemitones}",
+                            index = idx, count = total,
+                            onClick = { activeDialog = AudioSettingsDialog.PitchShiftPicker },
                         )
                 }
             }
@@ -370,6 +471,86 @@ fun AudioSettingsScreen(
             onDismiss = { activeDialog = AudioSettingsDialog.None },
             onSelect = {
                 viewModel.setAudioPreloadBufferSize(it)
+                activeDialog = AudioSettingsDialog.None
+            },
+        )
+    }
+
+    if (activeDialog is AudioSettingsDialog.EqualizerPresetPicker) {
+        val presets = EqualizerPreset.entries
+        SettingsListPickerSheet(
+            title = "Equalizer Preset",
+            items = presets,
+            label = { it.displayName },
+            isSelected = { it == preferences.equalizerPreset },
+            onDismiss = { activeDialog = AudioSettingsDialog.None },
+            onSelect = {
+                viewModel.setEqualizerPreset(it)
+                activeDialog = AudioSettingsDialog.None
+            },
+        )
+    }
+
+    if (activeDialog is AudioSettingsDialog.ChannelMixModePicker) {
+        val modes = ChannelMixMode.entries
+        SettingsListPickerSheet(
+            title = "Channel Mix Mode",
+            items = modes,
+            label = { it.displayName },
+            isSelected = { it == preferences.channelMixMode },
+            onDismiss = { activeDialog = AudioSettingsDialog.None },
+            onSelect = {
+                viewModel.setChannelMixMode(it)
+                activeDialog = AudioSettingsDialog.None
+            },
+        )
+    }
+
+    if (activeDialog is AudioSettingsDialog.SleepTimerPicker) {
+        val options = listOf(0L, 15 * 60000L, 30 * 60000L, 45 * 60000L, 60 * 60000L, 120 * 60000L)
+        val labels = listOf("Off", "15 minutes", "30 minutes", "45 minutes", "1 hour", "2 hours")
+        SettingsListPickerSheet(
+            title = "Sleep Timer Duration",
+            items = options,
+            label = { labels[options.indexOf(it)] },
+            isSelected = { it == preferences.sleepTimerDurationMs },
+            onDismiss = { activeDialog = AudioSettingsDialog.None },
+            onSelect = {
+                viewModel.setSleepTimerDurationMs(it)
+                activeDialog = AudioSettingsDialog.None
+            },
+        )
+    }
+
+    if (activeDialog is AudioSettingsDialog.LrBalancePicker) {
+        SettingsSliderSheet(
+            title = "L/R Balance",
+            value = preferences.lrBalance,
+            valueRange = -1.0f..1.0f,
+            steps = 20,
+            valueLabel = { if (it == 0f) "Center" else if (it < 0f) "${(it * -100).toInt()}% Left" else "${(it * 100).toInt()}% Right" },
+            rangeStartLabel = "Left",
+            rangeEndLabel = "Right",
+            onDismiss = { activeDialog = AudioSettingsDialog.None },
+            onConfirm = {
+                viewModel.setLrBalance(it)
+                activeDialog = AudioSettingsDialog.None
+            },
+        )
+    }
+
+    if (activeDialog is AudioSettingsDialog.PitchShiftPicker) {
+        SettingsSliderSheet(
+            title = "Pitch Shift",
+            value = preferences.pitchSemitones,
+            valueRange = -12.0f..12.0f,
+            steps = 24,
+            valueLabel = { if (it == 0f) "Normal pitch" else "${if (it > 0) "+" else ""}${it.toInt()} semitones" },
+            rangeStartLabel = "-12 semitones",
+            rangeEndLabel = "+12 semitones",
+            onDismiss = { activeDialog = AudioSettingsDialog.None },
+            onConfirm = {
+                viewModel.setPitchSemitones(it)
                 activeDialog = AudioSettingsDialog.None
             },
         )
@@ -521,5 +702,22 @@ fun AudioSettingsScreen(
                 }
             }
         }
+    }
+
+    if (activeDialog is AudioSettingsDialog.VolumeBoostGainPicker) {
+        SettingsSliderSheet(
+            title = "Volume Boost Gain",
+            value = preferences.volumeBoostGain.toFloat(),
+            valueRange = 0f..1500f,
+            steps = 15,
+            valueLabel = { "+${it.toInt() / 100} dB" },
+            rangeStartLabel = "0 dB",
+            rangeEndLabel = "+15 dB",
+            onDismiss = { activeDialog = AudioSettingsDialog.None },
+            onConfirm = {
+                viewModel.setVolumeBoostGain(it.toInt())
+                activeDialog = AudioSettingsDialog.None
+            },
+        )
     }
 }

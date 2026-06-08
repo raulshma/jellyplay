@@ -130,8 +130,19 @@ class VideoPlayerViewModel @Inject constructor(
         getPlaySessionId = { playSessionId },
         getResolvedPlayMethod = { playerSessionManager.sessionState.value.playMethod },
         getMediaEngine = { playerSessionManager.engine },
+        getIncognitoModeEnabled = { cachedPreferences.incognitoModeEnabled },
         onAutoSkip = { segment -> skipSegment(segment) },
         onPlaybackEndedNoNext = { _closePlayer.trySend(Unit) },
+        onWatchedThresholdReached = { itemId ->
+            if (cachedPreferences.smartDownloadsEnabled) {
+                launch {
+                    val download = downloadRepository.getDownloadByMediaItemId(itemId)
+                    if (download != null) {
+                        downloadRepository.deleteDownload(download.id)
+                    }
+                }
+            }
+        }
     )
     private val syncPlayBridge = SyncPlayBridge(
         syncPlayManager = syncPlayManager,
@@ -153,6 +164,7 @@ class VideoPlayerViewModel @Inject constructor(
     init {
         launch {
             preferencesStore.preferences.collect { prefs ->
+                val oldPrefs = cachedPreferences
                 cachedPreferences = prefs
                 if (_uiState.value.subtitleStyle != prefs.subtitleStyle) {
                     _uiState.update { it.copy(subtitleStyle = prefs.subtitleStyle) }
@@ -165,6 +177,17 @@ class VideoPlayerViewModel @Inject constructor(
                 }
                 if (_uiState.value.showPlaybackMetadata != prefs.videoShowPlaybackMetadata) {
                     _uiState.update { it.copy(showPlaybackMetadata = prefs.videoShowPlaybackMetadata) }
+                }
+                if (_uiState.value.keepScreenOnDuringVideo != prefs.keepScreenOnDuringVideo) {
+                    _uiState.update { it.copy(keepScreenOnDuringVideo = prefs.keepScreenOnDuringVideo) }
+                }
+                if (oldPrefs.volumeBoostEnabled != prefs.volumeBoostEnabled ||
+                    oldPrefs.volumeBoostGain != prefs.volumeBoostGain ||
+                    oldPrefs.equalizerSettings != prefs.equalizerSettings ||
+                    oldPrefs.pauseOnAudioFocusLoss != prefs.pauseOnAudioFocusLoss) {
+                    playerSessionManager.engine?.let {
+                        updateConfigWithUiState()
+                    }
                 }
             }
         }
@@ -211,6 +234,7 @@ class VideoPlayerViewModel @Inject constructor(
                         audioNormalizationEnabled = prefs.audioNormalizationEnabled,
                         channelMixMode = prefs.channelMixMode,
                         channelMixEnabled = prefs.channelMixEnabled,
+                        keepScreenOnDuringVideo = prefs.keepScreenOnDuringVideo,
                     )}
                     updateCastStrategyForEngine(engine)
                     engineCollectionJob = launch {
@@ -365,6 +389,7 @@ class VideoPlayerViewModel @Inject constructor(
                 segmentBehaviors = prefs.segmentBehaviors,
                 videoEpisodeBrowserEnabled = prefs.videoEpisodeBrowserEnabled,
                 showPlaybackMetadata = prefs.videoShowPlaybackMetadata,
+                keepScreenOnDuringVideo = prefs.keepScreenOnDuringVideo,
             ) }
             autoplayNext = prefs.videoAutoplayNext
 
@@ -409,14 +434,16 @@ class VideoPlayerViewModel @Inject constructor(
                 }
             }
 
-            playbackRepository.reportPlaybackStart(
-                com.raulshma.jellyplay.core.model.PlaybackStartInfo(
-                    itemId = itemId,
-                    sessionId = playSessionId,
-                    mediaSourceId = source?.id,
-                    playMethod = sessionState.playMethod,
+            if (!cachedPreferences.incognitoModeEnabled) {
+                playbackRepository.reportPlaybackStart(
+                    com.raulshma.jellyplay.core.model.PlaybackStartInfo(
+                        itemId = itemId,
+                        sessionId = playSessionId,
+                        mediaSourceId = source?.id,
+                        playMethod = sessionState.playMethod,
+                    )
                 )
-            )
+            }
 
             progressReporter.startPositionTracking()
             progressReporter.startProgressReporting()
@@ -799,7 +826,7 @@ class VideoPlayerViewModel @Inject constructor(
         updateConfigWithUiStateDebounced()
     }
 
-    private fun updateConfigWithUiState() {
+     private fun updateConfigWithUiState() {
         val state = _uiState.value
         val config = com.raulshma.jellyplay.feature.player.video.engine.EngineConfig(
             decoderMode = state.decoderMode,
@@ -824,7 +851,10 @@ class VideoPlayerViewModel @Inject constructor(
                 virtualizerEnabled = state.virtualizerEnabled,
                 virtualizerStrength = state.virtualizerStrength,
                 reverbPreset = state.reverbPreset,
-            )
+                volumeBoostEnabled = cachedPreferences.volumeBoostEnabled,
+                volumeBoostGain = cachedPreferences.volumeBoostGain,
+            ),
+            pauseOnAudioFocusLoss = cachedPreferences.pauseOnAudioFocusLoss
         )
         playerSessionManager.engine?.updateConfig(config)
     }
@@ -1405,6 +1435,7 @@ class VideoPlayerViewModel @Inject constructor(
     }
 
     private fun reportCurrentPlaybackStopped() {
+        if (cachedPreferences.incognitoModeEnabled) return
         val itemId = playerSessionManager.sessionState.value.currentItemId ?: return
         val sessionId = playSessionId
         val positionTicks = playerSessionManager.engine?.currentPositionMs?.let { it * 10_000 } ?: 0L

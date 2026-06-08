@@ -27,6 +27,8 @@ import com.raulshma.jellyplay.core.model.ContrastLevel
 import com.raulshma.jellyplay.core.model.HomeMode
 import com.raulshma.jellyplay.core.model.HomeSectionType
 import com.raulshma.jellyplay.core.model.ThemeMode
+import com.raulshma.jellyplay.core.model.LibraryViewMode
+import com.raulshma.jellyplay.core.model.NewsletterSectionType
 import com.raulshma.jellyplay.core.ui.adaptive.LocalAdaptiveInfo
 import com.raulshma.jellyplay.core.ui.adaptive.bottomPadding
 import com.raulshma.jellyplay.core.ui.adaptive.contentPadding
@@ -101,6 +103,7 @@ fun AppearanceSettingsScreen(
                         if (isDarkActive) add("oled_mode")
                         if (showAdvanced) {
                             add("contrast")
+                            add("library_view_mode")
                             add("home_mode")
                             add("hero_section")
                             add("nav_labels")
@@ -187,6 +190,25 @@ fun AppearanceSettingsScreen(
                                     },
                                 )
                             }
+                            "library_view_mode" -> {
+                                SettingListItem(
+                                    icon = Tabler.Outline.LayoutGrid,
+                                    title = "Library View Mode",
+                                    subtitle = when (preferences.libraryViewMode) {
+                                        LibraryViewMode.GRID -> "Display items in a grid layout"
+                                        LibraryViewMode.LIST -> "Display items in a list layout"
+                                    },
+                                    trailingText = preferences.libraryViewMode.name,
+                                    index = currentIdx++, count = totalCount,
+                                    onClick = {
+                                        val next = when (preferences.libraryViewMode) {
+                                            LibraryViewMode.GRID -> LibraryViewMode.LIST
+                                            LibraryViewMode.LIST -> LibraryViewMode.GRID
+                                        }
+                                        viewModel.setLibraryViewMode(next)
+                                    },
+                                )
+                            }
                             "home_mode" -> {
                                 SettingListItem(
                                     icon = Tabler.Outline.Home,
@@ -228,20 +250,96 @@ fun AppearanceSettingsScreen(
             if (showAdvanced) {
             item {
                 SettingsGroup(
-                    icon = Tabler.Outline.Bolt,
-                    title = "Performance",
+                    icon = Tabler.Outline.LayoutGrid,
+                    title = "Library & Cards",
                     summary = {
-                        if (preferences.performanceMode) "Reduced animations and effects" else "Standard experience"
+                        val unwatched = if (preferences.showUnwatchedBadge) "Unwatched badges" else null
+                        val checkmarks = if (preferences.showWatchedCheckmark) "Watched checkmarks" else null
+                        val hideWatched = if (preferences.hideWatchedItems) "Hide watched" else null
+                        val shareOpt = if (preferences.showShareMediaOption) "Share button" else null
+                        val ratingsOpt = if (preferences.showExternalRatings) "External ratings" else null
+                        listOfNotNull(unwatched, checkmarks, hideWatched, shareOpt, ratingsOpt).joinToString(", ").ifEmpty { "All badges/checkmarks hidden" }
                     },
                     modifier = Modifier.padding(vertical = 8.dp),
                 ) {
+                    val cardTotal = 5
+                    var cardIdx = 0
+
+                    SettingToggleItem(
+                        icon = Tabler.Outline.Folder,
+                        title = "Show Unwatched Badge",
+                        subtitle = "Overlay a badge on items that are unwatched",
+                        checked = preferences.showUnwatchedBadge,
+                        index = cardIdx++, count = cardTotal,
+                        onCheckedChange = { viewModel.setShowUnwatchedBadge(it) },
+                    )
+
+                    SettingToggleItem(
+                        icon = Tabler.Outline.CircleCheck,
+                        title = "Show Watched Checkmark",
+                        subtitle = "Overlay a checkmark badge on card views",
+                        checked = preferences.showWatchedCheckmark,
+                        index = cardIdx++, count = cardTotal,
+                        onCheckedChange = { viewModel.setShowWatchedCheckmark(it) },
+                    )
+
+                    SettingToggleItem(
+                        icon = Tabler.Outline.EyeOff,
+                        title = "Hide Watched Items",
+                        subtitle = "Default-filter out watched media from libraries",
+                        checked = preferences.hideWatchedItems,
+                        index = cardIdx++, count = cardTotal,
+                        onCheckedChange = { viewModel.setHideWatchedItems(it) },
+                    )
+
+                    SettingToggleItem(
+                        icon = Tabler.Outline.Share,
+                        title = "Show Share Media Option",
+                        subtitle = "Show share option button on details pages",
+                        checked = preferences.showShareMediaOption,
+                        index = cardIdx++, count = cardTotal,
+                        onCheckedChange = { viewModel.setShowShareMediaOption(it) },
+                    )
+
+                    SettingToggleItem(
+                        icon = Tabler.Outline.Star,
+                        title = "Show External Ratings",
+                        subtitle = "Display critic rating scores (IMDb/TMDB) on details pages",
+                        checked = preferences.showExternalRatings,
+                        index = cardIdx++, count = cardTotal,
+                        onCheckedChange = { viewModel.setShowExternalRatings(it) },
+                    )
+                }
+            }
+
+            item {
+                SettingsGroup(
+                    icon = Tabler.Outline.Bolt,
+                    title = "Performance",
+                    summary = {
+                        val parts = mutableListOf<String>()
+                        if (preferences.performanceMode) parts.add("Performance Mode")
+                        if (preferences.reduceMotionEnabled) parts.add("Reduced motion")
+                        parts.joinToString(", ").ifEmpty { "Standard experience" }
+                    },
+                    modifier = Modifier.padding(vertical = 8.dp),
+                ) {
+                    val perfTotal = 2
                     SettingToggleItem(
                         icon = Tabler.Outline.Gauge,
                         title = "Performance Mode",
                         subtitle = "Reduces animations and effects for better performance on lower-end devices",
                         checked = preferences.performanceMode,
-                        index = 0, count = 1,
+                        index = 0, count = perfTotal,
                         onCheckedChange = { viewModel.setPerformanceMode(it) },
+                    )
+                    SettingToggleItem(
+                        icon = Tabler.Outline.Activity,
+                        title = "Reduce Motion",
+                        subtitle = "Disable heavy parallax and card animations",
+                        checked = preferences.reduceMotionEnabled,
+                        index = 1, count = perfTotal,
+                        onCheckedChange = { viewModel.setReduceMotionEnabled(it) },
                     )
                 }
             }
@@ -340,12 +438,168 @@ fun AppearanceSettingsScreen(
                     }
                 }
             }
+
+            item {
+                SettingsGroup(
+                    icon = Tabler.Outline.Mail,
+                    title = "Newsletter Layout & Config",
+                    summary = {
+                        val enabled = preferences.enabledNewsletterSections
+                        if (preferences.newsletterEnabled) {
+                            "${enabled.size} of ${NewsletterSectionType.entries.size} sections enabled"
+                        } else {
+                            "Disabled"
+                        }
+                    },
+                    modifier = Modifier.padding(vertical = 8.dp),
+                ) {
+                    val newsletterSections = remember { mutableStateListOf<NewsletterSectionType>().apply { addAll(preferences.newsletterSectionOrder) } }
+                    val itemHeights = remember { mutableStateMapOf<NewsletterSectionType, Int>() }
+                    var draggingSection by remember { mutableStateOf<NewsletterSectionType?>(null) }
+                    var dragOffsetY by remember { mutableFloatStateOf(0f) }
+
+                    LaunchedEffect(preferences.newsletterSectionOrder) {
+                        if (draggingSection == null) {
+                            newsletterSections.clear()
+                            newsletterSections.addAll(preferences.newsletterSectionOrder)
+                        }
+                    }
+
+                    fun persistNewsletterSectionOrder() {
+                        val currentOrder = newsletterSections.toList()
+                        if (currentOrder != preferences.newsletterSectionOrder) {
+                            viewModel.setNewsletterSectionOrder(currentOrder)
+                        }
+                    }
+
+                    fun moveSection(type: NewsletterSectionType, deltaY: Float) {
+                        if (draggingSection != type) return
+                        dragOffsetY += deltaY
+
+                        while (true) {
+                            val currentIndex = newsletterSections.indexOf(type)
+                            if (currentIndex == -1) return
+
+                            val draggedHeight = itemHeights[type] ?: return
+
+                            if (dragOffsetY > 0f && currentIndex < newsletterSections.lastIndex) {
+                                val nextType = newsletterSections[currentIndex + 1]
+                                val nextHeight = itemHeights[nextType] ?: draggedHeight
+                                val threshold = (draggedHeight + nextHeight) / 2f
+                                if (dragOffsetY > threshold) {
+                                    newsletterSections.removeAt(currentIndex)
+                                    newsletterSections.add(currentIndex + 1, type)
+                                    dragOffsetY -= nextHeight.toFloat()
+                                    continue
+                                }
+                            }
+
+                            if (dragOffsetY < 0f && currentIndex > 0) {
+                                val prevType = newsletterSections[currentIndex - 1]
+                                val prevHeight = itemHeights[prevType] ?: draggedHeight
+                                val threshold = (draggedHeight + prevHeight) / 2f
+                                if (-dragOffsetY > threshold) {
+                                    newsletterSections.removeAt(currentIndex)
+                                    newsletterSections.add(currentIndex - 1, type)
+                                    dragOffsetY += prevHeight.toFloat()
+                                    continue
+                                }
+                            }
+                            break
+                        }
+                    }
+
+                    val totalCount = newsletterSections.size + 2
+
+                    SettingToggleItem(
+                        icon = Tabler.Outline.Mail,
+                        title = "Enable Newsletter",
+                        subtitle = "Enable periodic newsletter digest",
+                        checked = preferences.newsletterEnabled,
+                        index = 0,
+                        count = totalCount,
+                        onCheckedChange = { viewModel.setNewsletterEnabled(it) }
+                    )
+
+                    val daysOfWeek = listOf(
+                        java.util.Calendar.MONDAY to "Monday",
+                        java.util.Calendar.TUESDAY to "Tuesday",
+                        java.util.Calendar.WEDNESDAY to "Wednesday",
+                        java.util.Calendar.THURSDAY to "Thursday",
+                        java.util.Calendar.FRIDAY to "Friday",
+                        java.util.Calendar.SATURDAY to "Saturday",
+                        java.util.Calendar.SUNDAY to "Sunday",
+                    )
+                    val dayLabel = daysOfWeek.find { it.first == preferences.newsletterDayOfWeek }?.second ?: "Saturday"
+
+                    SettingListItem(
+                        icon = Tabler.Outline.Calendar,
+                        title = "Newsletter Delivery Day",
+                        subtitle = "Day of the week to receive the newsletter",
+                        trailingText = dayLabel,
+                        index = 1,
+                        count = totalCount,
+                        onClick = {
+                            val currentIdx = daysOfWeek.indexOfFirst { it.first == preferences.newsletterDayOfWeek }
+                            val nextIdx = (currentIdx + 1) % daysOfWeek.size
+                            viewModel.setNewsletterDayOfWeek(daysOfWeek[nextIdx].first)
+                        }
+                    )
+
+                    if (preferences.newsletterEnabled) {
+                        newsletterSections.forEachIndexed { index, sectionType ->
+                            val enabled = sectionType in preferences.enabledNewsletterSections
+                            val displayName = when (sectionType) {
+                                NewsletterSectionType.RECENTLY_ADDED -> "Recently Added"
+                                NewsletterSectionType.ACTIVITY_DIGEST -> "Activity Log"
+                                NewsletterSectionType.LIBRARY_STATS -> "Library Stats"
+                                NewsletterSectionType.CONTINUE_WATCHING -> "Continue Watching"
+                                NewsletterSectionType.NEXT_UP -> "Next Up"
+                                NewsletterSectionType.CURATED_PICKS -> "Curated Picks"
+                            }
+                            val sectionDesc = when (sectionType) {
+                                NewsletterSectionType.RECENTLY_ADDED -> "Newest media items added to server"
+                                NewsletterSectionType.ACTIVITY_DIGEST -> "Recent server activity logs"
+                                NewsletterSectionType.LIBRARY_STATS -> "Overview statistics of your libraries"
+                                NewsletterSectionType.CONTINUE_WATCHING -> "In-progress items to resume"
+                                NewsletterSectionType.NEXT_UP -> "Next episodes in series"
+                                NewsletterSectionType.CURATED_PICKS -> "Special recommendations for you"
+                            }
+
+                            SettingReorderableToggleItem(
+                                icon = when (sectionType) {
+                                    NewsletterSectionType.CONTINUE_WATCHING -> Tabler.Outline.PlayerPlay
+                                    NewsletterSectionType.NEXT_UP -> Tabler.Outline.PlayerSkipForward
+                                    NewsletterSectionType.RECENTLY_ADDED -> Tabler.Outline.Clock
+                                    NewsletterSectionType.LIBRARY_STATS -> Tabler.Outline.LayersLinked
+                                    NewsletterSectionType.CURATED_PICKS -> Tabler.Outline.Wand
+                                    NewsletterSectionType.ACTIVITY_DIGEST -> Tabler.Outline.Folder
+                                },
+                                title = displayName,
+                                subtitle = sectionDesc,
+                                checked = enabled,
+                                index = index + 2,
+                                count = totalCount,
+                                modifier = Modifier.onSizeChanged { itemHeights[sectionType] = it.height },
+                                onCheckedChange = { checked ->
+                                    val current = preferences.enabledNewsletterSections.toMutableSet()
+                                    if (checked) current.add(sectionType) else current.remove(sectionType)
+                                    viewModel.setEnabledNewsletterSections(current)
+                                },
+                                onDrag = { delta -> moveSection(sectionType, delta) },
+                                onDragStart = { draggingSection = sectionType; dragOffsetY = 0f },
+                                onDragEnd = { draggingSection = null; persistNewsletterSectionOrder() },
+                            )
+                        }
+                    }
+                }
+            }
             }
 
             if (!showAdvanced) {
                 item {
                     HiddenSettingsHint(
-                        hiddenCount = 6,
+                        hiddenCount = 9,
                         onShowAdvanced = { viewModel.setShowAdvancedSettings(true) },
                     )
                 }

@@ -135,7 +135,72 @@ data class UserPreferences(
     val libraryViewMode: LibraryViewMode = LibraryViewMode.GRID,
     val notificationPreferences: NotificationPreferences = NotificationPreferences(),
     val showAdvancedSettings: Boolean = false,
+    val audioVisualizerEnabled: Boolean = false,
+    val syncPlayJoinBehavior: SyncPlayJoinBehavior = SyncPlayJoinBehavior.ASK,
+    val syncPlayToleranceMs: Long = 100L,
+    val syncPlayAutoAcceptInvites: Boolean = false,
+    val defaultCastingStrategy: CastingStrategy = CastingStrategy.ASK,
+    val backgroundCastingEnabled: Boolean = true,
+    val preferredRenderer: String? = null,
+    val dvrPrePaddingMinutes: Int = 0,
+    val dvrPostPaddingMinutes: Int = 0,
+    val dvrRecordingQuality: String = "AUTO",
+    val favoriteChannels: Set<String> = emptySet(),
+    val enabledNewsletterSections: Set<NewsletterSectionType> = setOf(
+        NewsletterSectionType.RECENTLY_ADDED,
+        NewsletterSectionType.LIBRARY_STATS,
+        NewsletterSectionType.CONTINUE_WATCHING,
+        NewsletterSectionType.NEXT_UP,
+        NewsletterSectionType.CURATED_PICKS,
+        NewsletterSectionType.ACTIVITY_DIGEST
+    ),
+    val newsletterSectionOrder: List<NewsletterSectionType> = NewsletterSectionType.DEFAULT_ORDER,
+    val manualOfflineEnabled: Boolean = false,
+    val autoOfflineEnabled: Boolean = true,
+    val manualBandwidthCap: Long = 0L,
+    val meteredNetworkBehavior: MeteredNetworkBehavior = MeteredNetworkBehavior.WARN,
+    val adaptiveBitrateEnabled: Boolean = true,
+    val backgroundVideoAudioEnabled: Boolean = false,
+    val autoPlayCountdownSec: Int = 10,
+    val showUnwatchedBadge: Boolean = true,
+    val hideWatchedItems: Boolean = false,
+    val cellularStreamingQuality: StreamingQuality = StreamingQuality.AUTO,
+    val showWatchedCheckmark: Boolean = true,
+    val defaultLibrarySortOrders: Map<String, String> = emptyMap(),
+    val keepScreenOnDuringVideo: Boolean = true,
+    val downloadQuality: DownloadQuality = DownloadQuality.ORIGINAL,
+    val smartDownloadsEnabled: Boolean = false,
+    val autoDownloadNewEpisodes: Boolean = false,
+    val incognitoModeEnabled: Boolean = false,
+    val showTimeRemaining: Boolean = false,
+    val pauseOnAudioFocusLoss: Boolean = true,
+    val volumeBoostEnabled: Boolean = false,
+    val volumeBoostGain: Int = 0,
+    val showShareMediaOption: Boolean = true,
+    val showExternalRatings: Boolean = true,
+    val dataSaverEnabled: Boolean = false,
+    val reduceMotionEnabled: Boolean = false,
+    val preferAudioDescription: Boolean = false,
+    val highContrastSubtitles: Boolean = false,
+    val hideSearchHistory: Boolean = false,
+    val blueLightFilterEnabled: Boolean = false,
+    val blueLightFilterStrength: Float = 0.3f,
+    val tvZoomModePercent: Float = 0f,
+    val remoteControlEnabled: Boolean = true,
+    val maxDownloadStorageGb: Int = 0,
+    val downloadStorageLocation: String = "INTERNAL",
+    val kidsModeEnabled: Boolean = false,
+    val kidsModeMaxRating: String = "G",
 )
+
+@Immutable
+@Serializable
+enum class DownloadQuality(val displayName: String) {
+    ORIGINAL("Original"),
+    HIGH_1080P("High (1080p transcoded)"),
+    MEDIUM_720P("Medium (720p)"),
+    LOW_480P("Low (480p)"),
+}
 
 @Immutable
 @Serializable
@@ -289,3 +354,28 @@ enum class PreloadBufferSize(
     HIGH("High (50s)", 50_000, 120_000),
     UNLIMITED("Unlimited", 50_000, 500_000),
 }
+
+@Immutable
+@Serializable
+enum class SyncPlayJoinBehavior(val displayName: String) {
+    ALWAYS_JOIN("Always Join"),
+    ASK("Always Ask"),
+    NEVER_JOIN("Never Join"),
+}
+
+@Immutable
+@Serializable
+enum class CastingStrategy(val displayName: String) {
+    PREFER_CAST("Prefer Google Cast"),
+    PREFER_DLNA("Prefer DLNA"),
+    ASK("Always Ask"),
+}
+
+@Immutable
+@Serializable
+enum class MeteredNetworkBehavior(val displayName: String) {
+    ALLOW("Allow Connection"),
+    WARN("Warn Before Streaming"),
+    BLOCK("Block Streaming"),
+}
+

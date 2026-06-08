@@ -337,10 +337,10 @@ fun VideoPlayerScreen(
         }
     }
 
-    LaunchedEffect(uiState.isPlaying) {
+    LaunchedEffect(uiState.isPlaying, uiState.keepScreenOnDuringVideo) {
         activity?.let {
             if (!it.isDestroyed && !it.isFinishing) {
-                if (uiState.isPlaying) {
+                if (uiState.isPlaying && uiState.keepScreenOnDuringVideo) {
                     it.window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
                 } else {
                     it.window.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
@@ -801,6 +801,7 @@ fun VideoPlayerScreen(
                 modifier = Modifier.fillMaxSize(),
             )
         }
+
 
         if (uiState.showVideoStats) {
             VideoStatsOverlay(
