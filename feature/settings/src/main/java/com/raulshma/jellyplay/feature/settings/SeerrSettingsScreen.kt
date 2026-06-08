@@ -76,10 +76,12 @@ fun SeerrSettingsScreen(
     val adaptiveInfo = LocalAdaptiveInfo.current
     val isTv = LocalTvMode.current
     val contentPad = adaptiveInfo.contentPadding(isTv)
+    val backgroundColor = com.raulshma.jellyplay.core.ui.components.rememberScreenBackgroundColor()
 
     JellyPlayScreenScaffold(
         title = "Seerr",
         onBack = onBack,
+        backgroundColor = backgroundColor,
     ) {
         LazyColumn(
             modifier = Modifier

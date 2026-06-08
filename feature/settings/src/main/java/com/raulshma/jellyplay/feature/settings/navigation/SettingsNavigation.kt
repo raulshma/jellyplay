@@ -5,10 +5,18 @@ import androidx.navigation3.runtime.NavKey
 import com.raulshma.jellyplay.core.ui.navigation.Navigator
 import com.raulshma.jellyplay.core.ui.navigation.Route
 import com.raulshma.jellyplay.feature.settings.AboutScreen
+import com.raulshma.jellyplay.feature.settings.AppearanceSettingsScreen
+import com.raulshma.jellyplay.feature.settings.AudioSettingsScreen
+import com.raulshma.jellyplay.feature.settings.BackupSettingsScreen
+import com.raulshma.jellyplay.feature.settings.LanguageSettingsScreen
 import com.raulshma.jellyplay.feature.settings.LicensesScreen
+import com.raulshma.jellyplay.feature.settings.NotificationSettingsScreen
+import com.raulshma.jellyplay.feature.settings.PlaybackSettingsScreen
 import com.raulshma.jellyplay.feature.settings.SeerrSettingsScreen
+import com.raulshma.jellyplay.feature.settings.SecuritySettingsScreen
 import com.raulshma.jellyplay.feature.settings.ServerManagementScreen
 import com.raulshma.jellyplay.feature.settings.SettingsScreen
+import com.raulshma.jellyplay.feature.settings.StorageSettingsScreen
 import com.raulshma.jellyplay.feature.settings.UserManagementScreen
 
 fun EntryProviderScope<NavKey>.settingsSection(
@@ -29,6 +37,14 @@ fun EntryProviderScope<NavKey>.settingsSection(
             onFavoritesClick = { navigator.navigate(Route.Favorites) },
             onAboutClick = { navigator.navigate(Route.About) },
             onWatchProgressHeatmapClick = { navigator.navigate(Route.WatchProgressHeatmap) },
+            onAppearanceSettings = { navigator.navigate(Route.AppearanceSettings) },
+            onPlaybackSettings = { navigator.navigate(Route.PlaybackSettings) },
+            onAudioSettings = { navigator.navigate(Route.AudioSettings) },
+            onLanguageSettings = { navigator.navigate(Route.LanguageSettings) },
+            onNotificationSettings = { navigator.navigate(Route.NotificationSettings) },
+            onStorageSettings = { navigator.navigate(Route.StorageSettings) },
+            onSecuritySettings = { navigator.navigate(Route.SecuritySettings) },
+            onBackupSettings = { navigator.navigate(Route.BackupSettings) },
         )
     }
 
@@ -49,6 +65,54 @@ fun EntryProviderScope<NavKey>.settingsSection(
 
     entry<Route.SeerrSettings> {
         SeerrSettingsScreen(
+            onBack = { navigator.goBack() },
+        )
+    }
+
+    entry<Route.AppearanceSettings> {
+        AppearanceSettingsScreen(
+            onBack = { navigator.goBack() },
+        )
+    }
+
+    entry<Route.PlaybackSettings> {
+        PlaybackSettingsScreen(
+            onBack = { navigator.goBack() },
+        )
+    }
+
+    entry<Route.AudioSettings> {
+        AudioSettingsScreen(
+            onBack = { navigator.goBack() },
+        )
+    }
+
+    entry<Route.LanguageSettings> {
+        LanguageSettingsScreen(
+            onBack = { navigator.goBack() },
+        )
+    }
+
+    entry<Route.NotificationSettings> {
+        NotificationSettingsScreen(
+            onBack = { navigator.goBack() },
+        )
+    }
+
+    entry<Route.StorageSettings> {
+        StorageSettingsScreen(
+            onBack = { navigator.goBack() },
+        )
+    }
+
+    entry<Route.SecuritySettings> {
+        SecuritySettingsScreen(
+            onBack = { navigator.goBack() },
+        )
+    }
+
+    entry<Route.BackupSettings> {
+        BackupSettingsScreen(
             onBack = { navigator.goBack() },
         )
     }
