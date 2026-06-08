@@ -122,6 +122,29 @@ class VideoPlayerViewModel @Inject constructor(
 
     val castManagerField: CastManager = castManager
 
+    private var lastSeekPositionMs: Long? = null
+    private var lastSeekTimestamp: Long = 0L
+
+    fun seekTo(positionMs: Long) {
+        lastSeekPositionMs = positionMs
+        lastSeekTimestamp = System.currentTimeMillis()
+        _uiState.update { it.copy(currentPosition = positionMs) }
+        playerSessionManager.engine?.seekTo(positionMs)
+    }
+
+    private fun getReportPositionMs(): Long {
+        val enginePos = playerSessionManager.engine?.currentPositionMs ?: 0L
+        val seekPos = lastSeekPositionMs
+        val seekTime = lastSeekTimestamp
+        if (seekPos != null && seekTime > 0L) {
+            val timeSinceSeek = System.currentTimeMillis() - seekTime
+            if (timeSinceSeek < 3000L) {
+                return seekPos
+            }
+        }
+        return enginePos
+    }
+
     private val progressReporter = PlaybackProgressReporter(
         playbackRepository = playbackRepository,
         viewModel = this,
@@ -153,7 +176,7 @@ class VideoPlayerViewModel @Inject constructor(
             if (playerSessionManager.sessionState.value.currentItemId != itemId) {
                 initialize(itemId, null, positionTicks)
             } else {
-                playerSessionManager.engine?.seekTo(positionTicks / 10_000)
+                seekTo(positionTicks / 10_000)
             }
         },
         scope = scope,
@@ -292,6 +315,8 @@ class VideoPlayerViewModel @Inject constructor(
         audioStreamIndex: Int? = null,
     ) {
         released = false
+        lastSeekPositionMs = null
+        lastSeekTimestamp = 0L
         pendingSubtitleStreamIndex = subtitleStreamIndex
         pendingAudioStreamIndex = audioStreamIndex
         val currentItemId = playerSessionManager.sessionState.value.currentItemId
@@ -924,7 +949,7 @@ class VideoPlayerViewModel @Inject constructor(
         }
         val endTicks = state.introSegmentEndTicks
         if (endTicks != null && endTicks > 0) {
-            playerSessionManager.engine?.seekTo(endTicks / 10_000)
+            seekTo(endTicks / 10_000)
         }
     }
 
@@ -965,14 +990,14 @@ class VideoPlayerViewModel @Inject constructor(
         }
         val endTicks = state.creditSegmentEndTicks
         if (endTicks != null && endTicks > 0) {
-            playerSessionManager.engine?.seekTo(endTicks / 10_000)
+            seekTo(endTicks / 10_000)
         }
     }
 
     fun skipSegment(segment: com.raulshma.jellyplay.core.model.MediaSegment) {
         val endTicks = _uiState.value.segmentEndTicks(segment)
         if (endTicks != null && endTicks > 0) {
-            playerSessionManager.engine?.seekTo(endTicks / 10_000)
+            seekTo(endTicks / 10_000)
         }
     }
 
@@ -1438,7 +1463,7 @@ class VideoPlayerViewModel @Inject constructor(
         if (cachedPreferences.incognitoModeEnabled) return
         val itemId = playerSessionManager.sessionState.value.currentItemId ?: return
         val sessionId = playSessionId
-        val positionTicks = playerSessionManager.engine?.currentPositionMs?.let { it * 10_000 } ?: 0L
+        val positionTicks = getReportPositionMs() * 10_000
         if (positionTicks > 0) {
             launch {
                 playbackRepository.reportPlaybackStopped(itemId, sessionId, positionTicks)
@@ -1487,6 +1512,8 @@ class VideoPlayerViewModel @Inject constructor(
         mediaDetail = null
         autoplayNext = false
         equalizerEnabled = false
+        lastSeekPositionMs = null
+        lastSeekTimestamp = 0L
 
         _uiState.update { currentState ->
             VideoPlayerUiState(
@@ -1611,7 +1638,7 @@ class VideoPlayerViewModel @Inject constructor(
     private fun performRelease() {
         val itemId = playerSessionManager.sessionState.value.currentItemId
         val sessionId = playSessionId
-        val positionTicks = playerSessionManager.engine?.currentPositionMs?.let { it * 10_000 } ?: 0L
+        val positionTicks = getReportPositionMs() * 10_000
         playerLifecycleManager.requestAutoEnterPip(false)
         releaseInternals()
         castManager.release()
