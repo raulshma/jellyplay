@@ -367,18 +367,130 @@ class UserPreferencesStore @Inject constructor(
         }
     }
 
+    private data class ParsedCache<T>(
+        val raw: String?,
+        val value: T,
+    )
+
+    private var cachedSubtitleStyle: ParsedCache<SubtitleStyle?> = ParsedCache(null, null)
+    private var cachedEqualizerSettings: ParsedCache<EqualizerSettings?> = ParsedCache(null, null)
+    private var cachedMpvConfig: ParsedCache<MpvEngineConfig> = ParsedCache(null, MpvEngineConfig())
+    private var cachedLibVlcConfig: ParsedCache<LibVlcEngineConfig> = ParsedCache(null, LibVlcEngineConfig())
+    private var cachedExoPlayerConfig: ParsedCache<ExoPlayerEngineConfig> = ParsedCache(null, ExoPlayerEngineConfig())
+    private var cachedDreamImageCategories: ParsedCache<Set<DreamImageCategory>> = ParsedCache(null, setOf(DreamImageCategory.MOVIES, DreamImageCategory.SERIES))
+    private var cachedEnabledHomeSectionTypes: ParsedCache<Set<HomeSectionType>> = ParsedCache(null, HomeSectionType.CONFIGURABLE.toSet())
+    private var cachedHomeSectionOrder: ParsedCache<List<HomeSectionType>> = ParsedCache(null, HomeSectionType.CONFIGURABLE)
+    private var cachedHiddenLibrarySectionIds: ParsedCache<Set<String>> = ParsedCache(null, emptySet())
+    private var cachedMediaStreamSelections: ParsedCache<Map<String, MediaStreamSelection>> = ParsedCache(null, emptyMap())
+    private var cachedSegmentBehaviors: ParsedCache<Map<MediaSegmentType, SegmentBehavior>> = ParsedCache(null, SegmentBehavior.DEFAULT_BEHAVIORS)
+    private var cachedNotificationLibraryConfigs: ParsedCache<Map<String, LibraryNotificationConfig>> = ParsedCache(null, emptyMap())
+
     val preferences: StateFlow<UserPreferences> = sharedPrefs.map { prefs ->
-        val subtitleStyle = try {
-            prefs[Keys.SUBTITLE_STYLE]?.let { json.decodeFromString<SubtitleStyle>(it) }
-        } catch (_: Exception) { null }
+        val subtitleStyleRaw = prefs[Keys.SUBTITLE_STYLE]
+        val subtitleStyle = if (subtitleStyleRaw != cachedSubtitleStyle.raw) {
+            try {
+                subtitleStyleRaw?.let { json.decodeFromString<SubtitleStyle>(it) }
+            } catch (_: Exception) { null }.also { cachedSubtitleStyle = ParsedCache(subtitleStyleRaw, it) }
+        } else cachedSubtitleStyle.value
 
-        val streamingQuality = try {
-            StreamingQuality.valueOf(prefs[Keys.STREAMING_QUALITY] ?: StreamingQuality.AUTO.name)
-        } catch (_: Exception) { StreamingQuality.AUTO }
+        val equalizerSettingsRaw = prefs[Keys.EQUALIZER_SETTINGS]
+        val equalizerSettings = if (equalizerSettingsRaw != cachedEqualizerSettings.raw) {
+            try {
+                equalizerSettingsRaw?.let { json.decodeFromString<EqualizerSettings>(it) }
+            } catch (_: Exception) { null }.also { cachedEqualizerSettings = ParsedCache(equalizerSettingsRaw, it) }
+        } else cachedEqualizerSettings.value
 
-        val equalizerSettings = try {
-            prefs[Keys.EQUALIZER_SETTINGS]?.let { json.decodeFromString<EqualizerSettings>(it) }
-        } catch (_: Exception) { null }
+        val mpvConfigRaw = prefs[Keys.MPV_CONFIG]
+        val mpvConfig = if (mpvConfigRaw != cachedMpvConfig.raw) {
+            try {
+                mpvConfigRaw?.let { json.decodeFromString<MpvEngineConfig>(it) } ?: MpvEngineConfig()
+            } catch (_: Exception) { MpvEngineConfig() }.also { cachedMpvConfig = ParsedCache(mpvConfigRaw, it) }
+        } else cachedMpvConfig.value
+
+        val libVlcConfigRaw = prefs[Keys.LIBVLC_CONFIG]
+        val libVlcConfig = if (libVlcConfigRaw != cachedLibVlcConfig.raw) {
+            try {
+                libVlcConfigRaw?.let { json.decodeFromString<LibVlcEngineConfig>(it) } ?: LibVlcEngineConfig()
+            } catch (_: Exception) { LibVlcEngineConfig() }.also { cachedLibVlcConfig = ParsedCache(libVlcConfigRaw, it) }
+        } else cachedLibVlcConfig.value
+
+        val exoPlayerConfigRaw = prefs[Keys.EXO_CONFIG]
+        val exoPlayerConfig = if (exoPlayerConfigRaw != cachedExoPlayerConfig.raw) {
+            try {
+                exoPlayerConfigRaw?.let { json.decodeFromString<ExoPlayerEngineConfig>(it) } ?: ExoPlayerEngineConfig()
+            } catch (_: Exception) { ExoPlayerEngineConfig() }.also { cachedExoPlayerConfig = ParsedCache(exoPlayerConfigRaw, it) }
+        } else cachedExoPlayerConfig.value
+
+        val dreamImageCategoriesRaw = prefs[Keys.DREAM_IMAGE_CATEGORIES]
+        val dreamImageCategories = if (dreamImageCategoriesRaw != cachedDreamImageCategories.raw) {
+            try {
+                dreamImageCategoriesRaw?.let { json.decodeFromString<Set<DreamImageCategory>>(it) }
+                    ?: setOf(DreamImageCategory.MOVIES, DreamImageCategory.SERIES)
+            } catch (_: Exception) { setOf(DreamImageCategory.MOVIES, DreamImageCategory.SERIES) }
+                .also { cachedDreamImageCategories = ParsedCache(dreamImageCategoriesRaw, it) }
+        } else cachedDreamImageCategories.value
+
+        val enabledHomeSectionTypesRaw = prefs[Keys.HOME_ENABLED_SECTION_TYPES]
+        val enabledHomeSectionTypes = if (enabledHomeSectionTypesRaw != cachedEnabledHomeSectionTypes.raw) {
+            try {
+                enabledHomeSectionTypesRaw?.let {
+                    json.decodeFromString<Set<String>>(it)
+                        .mapNotNull { name -> HomeSectionType.entries.find { e -> e.name == name } }
+                        .toSet()
+                } ?: HomeSectionType.CONFIGURABLE.toSet()
+            } catch (_: Exception) { HomeSectionType.CONFIGURABLE.toSet() }
+                .also { cachedEnabledHomeSectionTypes = ParsedCache(enabledHomeSectionTypesRaw, it) }
+        } else cachedEnabledHomeSectionTypes.value
+
+        val homeSectionOrderRaw = prefs[Keys.HOME_SECTION_ORDER]
+        val homeSectionOrder = if (homeSectionOrderRaw != cachedHomeSectionOrder.raw) {
+            try {
+                homeSectionOrderRaw?.let {
+                    val parsed = try {
+                        json.decodeFromString<List<String>>(it)
+                    } catch (_: Exception) {
+                        json.decodeFromString<Set<String>>(it).toList()
+                    }
+                    val mapped = parsed.mapNotNull { name -> HomeSectionType.entries.find { e -> e.name == name } }
+                    buildList {
+                        addAll(mapped)
+                        addAll(HomeSectionType.CONFIGURABLE.filterNot { it in mapped })
+                    }
+                } ?: HomeSectionType.CONFIGURABLE
+            } catch (_: Exception) { HomeSectionType.CONFIGURABLE }
+                .also { cachedHomeSectionOrder = ParsedCache(homeSectionOrderRaw, it) }
+        } else cachedHomeSectionOrder.value
+
+        val hiddenLibrarySectionIdsRaw = prefs[Keys.HOME_HIDDEN_LIBRARY_SECTION_IDS]
+        val hiddenLibrarySectionIds = if (hiddenLibrarySectionIdsRaw != cachedHiddenLibrarySectionIds.raw) {
+            try {
+                hiddenLibrarySectionIdsRaw?.let { json.decodeFromString<Set<String>>(it) } ?: emptySet()
+            } catch (_: Exception) { emptySet() }
+                .also { cachedHiddenLibrarySectionIds = ParsedCache(hiddenLibrarySectionIdsRaw, it) }
+        } else cachedHiddenLibrarySectionIds.value
+
+        val mediaStreamSelectionsRaw = prefs[Keys.MEDIA_STREAM_SELECTIONS]
+        val mediaStreamSelections = if (mediaStreamSelectionsRaw != cachedMediaStreamSelections.raw) {
+            try {
+                mediaStreamSelectionsRaw?.let { json.decodeFromString<Map<String, MediaStreamSelection>>(it) } ?: emptyMap()
+            } catch (_: Exception) { emptyMap() }
+                .also { cachedMediaStreamSelections = ParsedCache(mediaStreamSelectionsRaw, it) }
+        } else cachedMediaStreamSelections.value
+
+        val segmentBehaviorsRaw = prefs[Keys.SEGMENT_BEHAVIORS]
+        val segmentBehaviors = if (segmentBehaviorsRaw != cachedSegmentBehaviors.raw) {
+            readSegmentBehaviors(prefs).also { cachedSegmentBehaviors = ParsedCache(segmentBehaviorsRaw, it) }
+        } else cachedSegmentBehaviors.value
+
+        val notificationLibraryConfigsRaw = prefs[Keys.NOTIFICATIONS_LIBRARY_CONFIGS]
+        val notificationLibraryConfigs = if (notificationLibraryConfigsRaw != cachedNotificationLibraryConfigs.raw) {
+            try {
+                notificationLibraryConfigsRaw?.let {
+                    json.decodeFromString<Map<String, LibraryNotificationConfig>>(it)
+                } ?: emptyMap()
+            } catch (_: Exception) { emptyMap() }
+                .also { cachedNotificationLibraryConfigs = ParsedCache(notificationLibraryConfigsRaw, it) }
+        } else cachedNotificationLibraryConfigs.value
 
         UserPreferences(
             preferredPlayer = try {
@@ -386,7 +498,7 @@ class UserPreferencesStore @Inject constructor(
             } catch (_: Exception) { PlayerType.EXO_PLAYER },
             preferredSubtitleLanguage = prefs[Keys.PREFERRED_SUBTITLE_LANG],
             preferredAudioLanguage = prefs[Keys.PREFERRED_AUDIO_LANG],
-            mediaStreamSelections = readMediaStreamSelections(prefs),
+            mediaStreamSelections = mediaStreamSelections,
             dynamicTheming = readBool(prefs, Keys.DYNAMIC_THEMING, "dynamic_theming", true),
             themeMode = try {
                 ThemeMode.valueOf(prefs[Keys.THEME_MODE] ?: ThemeMode.SYSTEM.name)
@@ -396,7 +508,9 @@ class UserPreferencesStore @Inject constructor(
             } catch (_: Exception) { ContrastLevel.DEFAULT },
             oledMode = readBool(prefs, Keys.OLED_MODE, "oled_mode", false),
             subtitleStyle = subtitleStyle ?: SubtitleStyle(),
-            streamingQuality = streamingQuality,
+            streamingQuality = try {
+                StreamingQuality.valueOf(prefs[Keys.STREAMING_QUALITY] ?: StreamingQuality.AUTO.name)
+            } catch (_: Exception) { StreamingQuality.AUTO },
             maxCacheSizeMb = readInt(prefs, Keys.MAX_CACHE_SIZE_MB, "max_cache_size_mb", 0),
             autoDeleteCache = readBool(prefs, Keys.AUTO_DELETE_CACHE, "auto_delete_cache", true),
             pinLockEnabled = readBool(prefs, Keys.PIN_LOCK_ENABLED, "pin_lock_enabled", false),
@@ -442,7 +556,7 @@ class UserPreferencesStore @Inject constructor(
             audioAutoplayNext = readBool(prefs, Keys.AUDIO_AUTOPLAY_NEXT, "audio_autoplay_next", true),
             trickplayEnabled = readBool(prefs, Keys.TRICKPLAY_ENABLED, "trickplay_enabled", true),
             trickplayOnSeekGesture = readBool(prefs, Keys.TRICKPLAY_ON_SEEK_GESTURE, "trickplay_on_seek_gesture", true),
-            segmentBehaviors = readSegmentBehaviors(prefs),
+            segmentBehaviors = segmentBehaviors,
             videoEpisodeBrowserEnabled = readBool(prefs, Keys.VIDEO_EPISODE_BROWSER_ENABLED, "video_episode_browser_enabled", true),
             videoShowPlaybackMetadata = readBool(prefs, Keys.VIDEO_SHOW_PLAYBACK_METADATA, "video_show_playback_metadata", true),
             videoPreloadBufferSize = try {
@@ -467,11 +581,7 @@ class UserPreferencesStore @Inject constructor(
             audioCrossfadeDurationMs = readLong(prefs, Keys.AUDIO_CROSSFADE_DURATION_MS, "audio_crossfade_duration_ms", 0L),
             sleepTimerDurationMs = readLong(prefs, Keys.SLEEP_TIMER_DURATION_MS, "sleep_timer_duration_ms", 0L),
             sleepTimerEndOfEpisode = readBool(prefs, Keys.SLEEP_TIMER_END_OF_EPISODE, "sleep_timer_end_of_episode", false),
-            dreamImageCategories = try {
-                prefs[Keys.DREAM_IMAGE_CATEGORIES]?.let {
-                    json.decodeFromString<Set<DreamImageCategory>>(it)
-                } ?: setOf(DreamImageCategory.MOVIES, DreamImageCategory.SERIES)
-            } catch (_: Exception) { setOf(DreamImageCategory.MOVIES, DreamImageCategory.SERIES) },
+            dreamImageCategories = dreamImageCategories,
             dreamSlideshowIntervalMs = readLong(prefs, Keys.DREAM_SLIDESHOW_INTERVAL_MS, "dream_slideshow_interval_ms", 15_000L),
             dreamKenBurnsEnabled = readBool(prefs, Keys.DREAM_KEN_BURNS_ENABLED, "dream_ken_burns_enabled", true),
             dreamTransitionStyle = try {
@@ -495,44 +605,15 @@ class UserPreferencesStore @Inject constructor(
             pitchSemitones = readFloat(prefs, Keys.PITCH_SEMITONES, "pitch_semitones", 0f),
             wifiOnlyDownloads = readBool(prefs, Keys.WIFI_ONLY_DOWNLOADS, "wifi_only_downloads", true),
             downloadConnections = readInt(prefs, Keys.DOWNLOAD_CONNECTIONS, "download_connections", 4),
-            enabledHomeSectionTypes = try {
-                prefs[Keys.HOME_ENABLED_SECTION_TYPES]?.let {
-                    json.decodeFromString<Set<String>>(it)
-                        .mapNotNull { name -> HomeSectionType.entries.find { e -> e.name == name } }
-                        .toSet()
-                } ?: HomeSectionType.CONFIGURABLE.toSet()
-            } catch (_: Exception) { HomeSectionType.CONFIGURABLE.toSet() },
-            homeSectionOrder = try {
-                prefs[Keys.HOME_SECTION_ORDER]?.let {
-                    val parsed = try {
-                        json.decodeFromString<List<String>>(it)
-                    } catch (_: Exception) {
-                        json.decodeFromString<Set<String>>(it).toList()
-                    }
-                    val mapped = parsed.mapNotNull { name -> HomeSectionType.entries.find { e -> e.name == name } }
-                    buildList {
-                        addAll(mapped)
-                        addAll(HomeSectionType.CONFIGURABLE.filterNot { it in mapped })
-                    }
-                } ?: HomeSectionType.CONFIGURABLE
-            } catch (_: Exception) { HomeSectionType.CONFIGURABLE },
-            hiddenLibrarySectionIds = try {
-                prefs[Keys.HOME_HIDDEN_LIBRARY_SECTION_IDS]?.let {
-                    json.decodeFromString<Set<String>>(it)
-                } ?: emptySet()
-            } catch (_: Exception) { emptySet() },
+            enabledHomeSectionTypes = enabledHomeSectionTypes,
+            homeSectionOrder = homeSectionOrder,
+            hiddenLibrarySectionIds = hiddenLibrarySectionIds,
             navBarShowLabels = readBool(prefs, Keys.NAV_BAR_SHOW_LABELS, "nav_bar_show_labels", true),
             homeHeroEnabled = readBool(prefs, Keys.HOME_HERO_ENABLED, "home_hero_enabled", true),
             onboardingCompleted = readBool(prefs, Keys.ONBOARDING_COMPLETED, "onboarding_completed", false),
-            mpvConfig = try {
-                prefs[Keys.MPV_CONFIG]?.let { json.decodeFromString<MpvEngineConfig>(it) } ?: MpvEngineConfig()
-            } catch (_: Exception) { MpvEngineConfig() },
-            libVlcConfig = try {
-                prefs[Keys.LIBVLC_CONFIG]?.let { json.decodeFromString<LibVlcEngineConfig>(it) } ?: LibVlcEngineConfig()
-            } catch (_: Exception) { LibVlcEngineConfig() },
-            exoPlayerConfig = try {
-                prefs[Keys.EXO_CONFIG]?.let { json.decodeFromString<ExoPlayerEngineConfig>(it) } ?: ExoPlayerEngineConfig()
-            } catch (_: Exception) { ExoPlayerEngineConfig() },
+            mpvConfig = mpvConfig,
+            libVlcConfig = libVlcConfig,
+            exoPlayerConfig = exoPlayerConfig,
             performanceMode = readBool(prefs, Keys.PERFORMANCE_MODE, "performance_mode", false),
             newsletterEnabled = readBool(prefs, Keys.NEWSLETTER_ENABLED, "newsletter_enabled", true),
             newsletterDayOfWeek = readInt(prefs, Keys.NEWSLETTER_DAY_OF_WEEK, "newsletter_day_of_week", 7),
@@ -556,11 +637,7 @@ class UserPreferencesStore @Inject constructor(
                 vibrateEnabled = readBool(prefs, Keys.NOTIFICATIONS_VIBRATE_ENABLED, "notifications_vibrate_enabled", true),
                 lightsEnabled = readBool(prefs, Keys.NOTIFICATIONS_LIGHTS_ENABLED, "notifications_lights_enabled", true),
                 maxPerCheck = readInt(prefs, Keys.NOTIFICATIONS_MAX_PER_CHECK, "notifications_max_per_check", 10),
-                libraryConfigs = try {
-                    prefs[Keys.NOTIFICATIONS_LIBRARY_CONFIGS]?.let {
-                        json.decodeFromString<Map<String, LibraryNotificationConfig>>(it)
-                    } ?: emptyMap()
-                } catch (_: Exception) { emptyMap() },
+                libraryConfigs = notificationLibraryConfigs,
             ),
         )
     }.distinctUntilChanged().stateIn(scope, SharingStarted.Eagerly, UserPreferences())

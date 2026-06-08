@@ -35,6 +35,7 @@ import okhttp3.Cache
 import okhttp3.OkHttpClient
 import okhttp3.ConnectionPool
 import okhttp3.Protocol
+import javax.inject.Named
 import org.jellyfin.sdk.Jellyfin
 import org.jellyfin.sdk.api.okhttp.OkHttpFactory
 import org.jellyfin.sdk.createJellyfin
@@ -150,7 +151,6 @@ abstract class NetworkModule {
                         path == "/System/Info/Public" -> 600
                         path.startsWith("/Library/MediaFolders") -> 300
                         path == "/System/Info" -> 120
-                        path == "/System/Info/Public" -> 600
                         path.startsWith("/Sessions") -> 10
                         path.startsWith("/ScheduledTasks") -> 30
                         path == "/Shows/NextUp" || query.contains("resume") && path == "/Items" -> 120
@@ -170,5 +170,14 @@ abstract class NetworkModule {
                 }
                 .build()
         }
+
+        @Provides
+        @Singleton
+        @Named("streaming")
+        fun provideStreamingOkHttpClient(
+            okHttpClient: OkHttpClient,
+        ): OkHttpClient = okHttpClient.newBuilder()
+            .readTimeout(30, TimeUnit.SECONDS)
+            .build()
     }
 }

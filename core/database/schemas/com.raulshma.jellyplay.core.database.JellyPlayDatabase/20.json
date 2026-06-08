@@ -2,7 +2,7 @@
   "formatVersion": 1,
   "database": {
     "version": 20,
-    "identityHash": "a580913cff7affee43b87963fece2c62",
+    "identityHash": "d0408597440cac22f461f0b922044bcf",
     "entities": [
       {
         "tableName": "servers",
@@ -316,6 +316,16 @@
             ],
             "orders": [],
             "createSql": "CREATE INDEX IF NOT EXISTS `index_downloads_seasonId` ON `${TABLE_NAME}` (`seasonId`)"
+          },
+          {
+            "name": "index_downloads_mediaItemId_status",
+            "unique": false,
+            "columnNames": [
+              "mediaItemId",
+              "status"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_downloads_mediaItemId_status` ON `${TABLE_NAME}` (`mediaItemId`, `status`)"
           }
         ]
       },
@@ -1265,74 +1275,11 @@
             "createSql": "CREATE INDEX IF NOT EXISTS `index_seen_media_seenAt` ON `${TABLE_NAME}` (`seenAt`)"
           }
         ]
-      },
-      {
-        "tableName": "watch_sessions",
-        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, `itemId` TEXT NOT NULL, `positionTicks` INTEGER NOT NULL, `recordedAt` INTEGER NOT NULL, `mediaType` TEXT NOT NULL DEFAULT 'unknown')",
-        "fields": [
-          {
-            "fieldPath": "id",
-            "columnName": "id",
-            "affinity": "INTEGER",
-            "notNull": true
-          },
-          {
-            "fieldPath": "itemId",
-            "columnName": "itemId",
-            "affinity": "TEXT",
-            "notNull": true
-          },
-          {
-            "fieldPath": "positionTicks",
-            "columnName": "positionTicks",
-            "affinity": "INTEGER",
-            "notNull": true
-          },
-          {
-            "fieldPath": "recordedAt",
-            "columnName": "recordedAt",
-            "affinity": "INTEGER",
-            "notNull": true
-          },
-          {
-            "fieldPath": "mediaType",
-            "columnName": "mediaType",
-            "affinity": "TEXT",
-            "notNull": true,
-            "defaultValue": "'unknown'"
-          }
-        ],
-        "primaryKey": {
-          "autoGenerate": true,
-          "columnNames": [
-            "id"
-          ]
-        },
-        "indices": [
-          {
-            "name": "index_watch_sessions_recordedAt",
-            "unique": false,
-            "columnNames": [
-              "recordedAt"
-            ],
-            "orders": [],
-            "createSql": "CREATE INDEX IF NOT EXISTS `index_watch_sessions_recordedAt` ON `${TABLE_NAME}` (`recordedAt`)"
-          },
-          {
-            "name": "index_watch_sessions_itemId",
-            "unique": false,
-            "columnNames": [
-              "itemId"
-            ],
-            "orders": [],
-            "createSql": "CREATE INDEX IF NOT EXISTS `index_watch_sessions_itemId` ON `${TABLE_NAME}` (`itemId`)"
-          }
-        ]
       }
     ],
     "setupQueries": [
       "CREATE TABLE IF NOT EXISTS room_master_table (id INTEGER PRIMARY KEY,identity_hash TEXT)",
-      "INSERT OR REPLACE INTO room_master_table (id,identity_hash) VALUES(42, 'a580913cff7affee43b87963fece2c62')"
+      "INSERT OR REPLACE INTO room_master_table (id,identity_hash) VALUES(42, 'd0408597440cac22f461f0b922044bcf')"
     ]
   }
 }

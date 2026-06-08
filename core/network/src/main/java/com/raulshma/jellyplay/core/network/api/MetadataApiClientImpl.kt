@@ -42,7 +42,7 @@ class MetadataApiClientImpl @Inject constructor(
         preferredMetadataLanguage: String?, preferredMetadataCountryCode: String?,
         taglines: List<String>, productionLocations: List<String>, dateCreated: String?,
         type: String,
-    ): Result<Unit> = engine.apiResult {
+    ): Result<Unit> = engine.apiResultWithRetry {
         val api = engine.requireApi()
         val dto = BaseItemDto(
             id = runCatching { itemId.toUUID() }.getOrNull() ?: java.util.UUID.randomUUID(),
@@ -85,7 +85,7 @@ class MetadataApiClientImpl @Inject constructor(
         api.itemUpdateApi.updateItem(itemId = runCatching { itemId.toUUID() }.getOrThrow(), data = dto)
     }
 
-    override suspend fun getMetadataEditorInfo(itemId: String): Result<MetadataEditorInfo> = engine.apiResult {
+    override suspend fun getMetadataEditorInfo(itemId: String): Result<MetadataEditorInfo> = engine.apiResultWithRetry {
         val api = engine.requireApi()
         val uuid = runCatching { itemId.toUUID() }.getOrThrow()
         val dto = api.itemUpdateApi.getMetadataEditorInfo(itemId = uuid).content
@@ -115,7 +115,7 @@ class MetadataApiClientImpl @Inject constructor(
         replaceAllMetadata: Boolean,
         replaceAllImages: Boolean,
         regenerateTrickplay: Boolean,
-    ): Result<Unit> = engine.apiResult {
+    ): Result<Unit> = engine.apiResultWithRetry {
         val api = engine.requireApi()
         val uuid = runCatching { itemId.toUUID() }.getOrThrow()
         api.itemRefreshApi.refreshItem(
@@ -128,7 +128,7 @@ class MetadataApiClientImpl @Inject constructor(
         )
     }
 
-    override suspend fun getItemImageInfo(itemId: String): Result<List<ImageInfo>> = engine.apiResult {
+    override suspend fun getItemImageInfo(itemId: String): Result<List<ImageInfo>> = engine.apiResultWithRetry {
         val api = engine.requireApi()
         val uuid = runCatching { itemId.toUUID() }.getOrThrow()
         api.imageApi.getItemImageInfos(itemId = uuid).content.map { dto ->
@@ -143,7 +143,7 @@ class MetadataApiClientImpl @Inject constructor(
         }
     }
 
-    override suspend fun setItemImage(itemId: String, imageType: String, imageBytes: ByteArray): Result<Unit> = engine.apiResult {
+    override suspend fun setItemImage(itemId: String, imageType: String, imageBytes: ByteArray): Result<Unit> = engine.apiResultWithRetry {
         val api = engine.requireApi()
         val uuid = runCatching { itemId.toUUID() }.getOrThrow()
         val type = ImageType.fromNameOrNull(imageType) ?: throw IllegalArgumentException("Unknown image type: $imageType")
@@ -154,7 +154,7 @@ class MetadataApiClientImpl @Inject constructor(
         )
     }
 
-    override suspend fun deleteItemImage(itemId: String, imageType: String, imageIndex: Int?): Result<Unit> = engine.apiResult {
+    override suspend fun deleteItemImage(itemId: String, imageType: String, imageIndex: Int?): Result<Unit> = engine.apiResultWithRetry {
         val api = engine.requireApi()
         val uuid = runCatching { itemId.toUUID() }.getOrThrow()
         val type = ImageType.fromNameOrNull(imageType) ?: throw IllegalArgumentException("Unknown image type: $imageType")
@@ -167,7 +167,7 @@ class MetadataApiClientImpl @Inject constructor(
         provider: String?,
         startIndex: Int?,
         limit: Int?,
-    ): Result<RemoteImageResult> = engine.apiResult {
+    ): Result<RemoteImageResult> = engine.apiResultWithRetry {
         val api = engine.requireApi()
         val uuid = runCatching { itemId.toUUID() }.getOrThrow()
         val dto = api.remoteImageApi.getRemoteImages(
@@ -185,7 +185,7 @@ class MetadataApiClientImpl @Inject constructor(
         )
     }
 
-    override suspend fun getRemoteImageProviders(itemId: String): Result<List<ImageProviderInfo>> = engine.apiResult {
+    override suspend fun getRemoteImageProviders(itemId: String): Result<List<ImageProviderInfo>> = engine.apiResultWithRetry {
         val api = engine.requireApi()
         val uuid = runCatching { itemId.toUUID() }.getOrThrow()
         api.remoteImageApi.getRemoteImageProviders(itemId = uuid).content.map { dto ->
@@ -196,7 +196,7 @@ class MetadataApiClientImpl @Inject constructor(
         }
     }
 
-    override suspend fun downloadRemoteImage(itemId: String, imageType: String, imageUrl: String): Result<Unit> = engine.apiResult {
+    override suspend fun downloadRemoteImage(itemId: String, imageType: String, imageUrl: String): Result<Unit> = engine.apiResultWithRetry {
         val api = engine.requireApi()
         val uuid = runCatching { itemId.toUUID() }.getOrThrow()
         val type = ImageType.fromNameOrNull(imageType) ?: throw IllegalArgumentException("Unknown image type: $imageType")
@@ -210,7 +210,7 @@ class MetadataApiClientImpl @Inject constructor(
         language: String?,
         isForced: Boolean,
         isHearingImpaired: Boolean,
-    ): Result<Unit> = engine.apiResult {
+    ): Result<Unit> = engine.apiResultWithRetry {
         val api = engine.requireApi()
         val uuid = runCatching { itemId.toUUID() }.getOrThrow()
         api.subtitleApi.uploadSubtitle(
@@ -225,13 +225,13 @@ class MetadataApiClientImpl @Inject constructor(
         )
     }
 
-    override suspend fun deleteSubtitle(itemId: String, index: Int): Result<Unit> = engine.apiResult {
+    override suspend fun deleteSubtitle(itemId: String, index: Int): Result<Unit> = engine.apiResultWithRetry {
         val api = engine.requireApi()
         val uuid = runCatching { itemId.toUUID() }.getOrThrow()
         api.subtitleApi.deleteSubtitle(itemId = uuid, index = index)
     }
 
-    override suspend fun searchRemoteSubtitles(itemId: String, language: String): Result<List<RemoteSubtitleInfo>> = engine.apiResult {
+    override suspend fun searchRemoteSubtitles(itemId: String, language: String): Result<List<RemoteSubtitleInfo>> = engine.apiResultWithRetry {
         val api = engine.requireApi()
         val uuid = runCatching { itemId.toUUID() }.getOrThrow()
         api.subtitleApi.searchRemoteSubtitles(itemId = uuid, language = language, isPerfectMatch = null).content.map { dto ->

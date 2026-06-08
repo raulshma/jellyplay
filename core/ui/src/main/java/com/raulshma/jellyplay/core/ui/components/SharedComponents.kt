@@ -94,16 +94,19 @@ import com.composables.icons.tabler.outline.*
 private val dominantColorCache = android.util.LruCache<String, Color>(500)
 
 @Composable
-fun rememberDominantColor(imageUrl: String?, fallback: Color = MaterialTheme.colorScheme.surfaceContainer): Color {
+fun rememberDominantColor(imageUrl: String?, fallback: Color = MaterialTheme.colorScheme.surfaceContainer, itemId: String? = null): Color {
     val context = LocalContext.current
-    var color by remember(imageUrl) { mutableStateOf(imageUrl?.let { dominantColorCache.get(it) } ?: fallback) }
+    val cacheKey = itemId ?: imageUrl
+    var color by remember(cacheKey) { mutableStateOf(cacheKey?.let { dominantColorCache.get(it) } ?: fallback) }
     val loader = coil3.SingletonImageLoader.get(context)
 
     LaunchedEffect(imageUrl) {
         if (imageUrl.isNullOrBlank()) return@LaunchedEffect
-        dominantColorCache.get(imageUrl)?.let {
-            color = it
-            return@LaunchedEffect
+        if (cacheKey != null) {
+            dominantColorCache.get(cacheKey)?.let {
+                color = it
+                return@LaunchedEffect
+            }
         }
         withContext(Dispatchers.Default) {
             try {
@@ -122,7 +125,9 @@ fun rememberDominantColor(imageUrl: String?, fallback: Color = MaterialTheme.col
                         ?: palette.mutedSwatch?.rgb
                     if (extracted != null) {
                         val c = Color(extracted)
-                        dominantColorCache.put(imageUrl, c)
+                        if (cacheKey != null) {
+                            dominantColorCache.put(cacheKey, c)
+                        }
                         color = c
                     }
                 }
@@ -309,7 +314,7 @@ fun PosterCard(
     }
     val shape = ShapeCache.smooth12
 
-    val dominantColor = rememberDominantColor(imageUrl)
+    val dominantColor = rememberDominantColor(imageUrl, itemId = item.id)
     val playButtonSize = if (isTv) 44.dp else 36.dp
 
     val sharedTransitionScope = LocalSharedTransitionScope.current

@@ -132,6 +132,8 @@ class AlbumDetailViewModel @Inject constructor(
         }
     }
 
+    private val downloadSemaphore = kotlinx.coroutines.sync.Semaphore(3)
+
     fun downloadAlbum() {
         val albumTracks = tracks
         if (albumTracks.isEmpty()) return
@@ -141,6 +143,7 @@ class AlbumDetailViewModel @Inject constructor(
                 val existing = currentDownloads[track.id]
                 if (existing == null || existing.status == DownloadStatus.FAILED || existing.status == DownloadStatus.CANCELLED) {
                     launch {
+                        downloadSemaphore.acquire()
                         try {
                             val detail = mediaRepository.getMediaDetail(track.id).getOrNull() ?: return@launch
                             val source = detail.mediaSources.firstOrNull() ?: return@launch
@@ -166,7 +169,10 @@ class AlbumDetailViewModel @Inject constructor(
                                     } catch (_: Exception) {}
                                 }
                             }
-                        } catch (_: Exception) {}
+                        } catch (_: Exception) {
+                        } finally {
+                            downloadSemaphore.release()
+                        }
                     }
                 }
             }
