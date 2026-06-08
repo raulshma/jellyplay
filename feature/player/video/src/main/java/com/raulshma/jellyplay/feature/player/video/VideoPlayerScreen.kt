@@ -377,7 +377,6 @@ fun VideoPlayerScreen(
                     val layout = act.window.attributes
                     layout.screenBrightness = uiState.brightnessLevel
                     act.window.attributes = layout
-                    brightnessOverlay = uiState.brightnessLevel
                 }
             }
         }
