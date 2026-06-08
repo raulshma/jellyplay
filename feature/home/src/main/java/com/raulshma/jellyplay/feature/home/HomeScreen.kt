@@ -370,7 +370,7 @@ private fun MainHomeContent(
             drawerState = drawerState,
             drawerContent = @Composable {
                 ModalDrawerSheet(
-                drawerContainerColor = MaterialTheme.colorScheme.surfaceContainerHigh.copy(alpha = 0.98f),
+                drawerContainerColor = backgroundColor.copy(alpha = 0.98f),
                 modifier = Modifier
                     .width(320.dp)
                     .fillMaxHeight(),
