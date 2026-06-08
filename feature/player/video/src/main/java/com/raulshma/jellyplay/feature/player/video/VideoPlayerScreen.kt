@@ -470,7 +470,7 @@ fun VideoPlayerScreen(
         { ms ->
             if (isInSyncPlaySession) viewModel.syncPlaySeekTo(ms)
             else if (isCastConnected) viewModel.castSeekTo(ms)
-            else engine?.seekTo(ms)
+            else viewModel.seekTo(ms)
         }
     }
     val doSeekBack: () -> Unit = remember(engine, uiState.seekDurationMs, doSeekTo, isCastConnected) {
