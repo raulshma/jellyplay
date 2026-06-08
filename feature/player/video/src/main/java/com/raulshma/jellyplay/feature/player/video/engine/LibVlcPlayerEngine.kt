@@ -1,10 +1,8 @@
 package com.raulshma.jellyplay.feature.player.video.engine
 
-import android.app.ActivityManager
 import android.content.Context
 import android.graphics.Bitmap
 import android.net.Uri
-import android.os.Build
 import android.os.Handler
 import android.os.Looper
 import android.util.Log
@@ -35,7 +33,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
-import kotlinx.coroutines.cancel
+import kotlinx.coroutines.cancelChildren
 import org.videolan.libvlc.LibVLC
 import org.videolan.libvlc.Media
 import org.videolan.libvlc.MediaPlayer
@@ -51,8 +49,8 @@ class LibVlcPlayerEngine(
         private const val LOW_RAM_THRESHOLD_MB = 2048L
     }
 
-    private val isLowRamDevice by lazy { detectLowRamDevice() }
-    private var engineScope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
+    private val isLowRamDevice by lazy { EngineDeviceProfile.isLowRamDevice(context) }
+    private val engineScope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
 
     override val capabilities = EngineCapabilities(
         supportsPip = true,
@@ -91,6 +89,11 @@ class LibVlcPlayerEngine(
     private val _videoStats = MutableStateFlow(EngineVideoStats())
     override val videoStats: StateFlow<EngineVideoStats> = _videoStats.asStateFlow()
 
+    private val _pollingIntervalMs = MutableStateFlow(1000L)
+    override val pollingIntervalMs: StateFlow<Long> = _pollingIntervalMs.asStateFlow()
+    private val _videoStatsEnabled = MutableStateFlow(false)
+    override val videoStatsEnabled: StateFlow<Boolean> = _videoStatsEnabled.asStateFlow()
+
     private var libVLC: LibVLC? = null
     val libVlc: LibVLC? get() = libVLC
     private var mediaPlayer: MediaPlayer? = null
@@ -110,15 +113,6 @@ class LibVlcPlayerEngine(
     private var cachedDurationMs: Long = 0L
 
     private val mainHandler = Handler(Looper.getMainLooper())
-
-    private fun detectLowRamDevice(): Boolean {
-        val am = context.getSystemService(Context.ACTIVITY_SERVICE) as? ActivityManager ?: return false
-        return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.KITKAT) {
-            am.isLowRamDevice || am.memoryClass <= 256
-        } else {
-            am.memoryClass <= 256
-        }
-    }
 
     override fun onActivityPause() {
         wasPlayingBeforeActivityPause = _isPlaying.value
@@ -328,7 +322,7 @@ class LibVlcPlayerEngine(
     }
 
     override fun release() {
-        engineScope.cancel()
+        engineScope.coroutineContext.cancelChildren()
         releaseInternal(releaseVlc = true)
         hasRenderer = false
         pendingRendererItem = null
@@ -390,6 +384,7 @@ class LibVlcPlayerEngine(
     }
 
     override fun updateConfig(config: EngineConfig) {
+        if (currentConfig == config) return
         val oldConfig = currentConfig
         currentConfig = config
         
@@ -781,6 +776,9 @@ class LibVlcPlayerEngine(
     override val audioSessionId: Int
         get() = try { mediaPlayer?.audioTrack ?: 0 } catch (_: Exception) { 0 }
 
+    override fun setPollingIntervalMs(ms: Long) { _pollingIntervalMs.value = ms }
+    override fun setVideoStatsEnabled(enabled: Boolean) { _videoStatsEnabled.value = enabled }
+
     override val positionFlow: Flow<Long> = callbackFlow {
         trySend(currentPositionMs)
         var lastPlayingState = _isPlaying.value
@@ -789,12 +787,18 @@ class LibVlcPlayerEngine(
                 if (!_isPlaying.value) {
                     _isPlaying.first { it }
                 }
-                delay(500)
+                delay(_pollingIntervalMs.value)
                 runCatching {
                     trySend(currentPositionMs)
                     val currentlyPlaying = _isPlaying.value
                     if (currentlyPlaying || currentlyPlaying != lastPlayingState) {
-                        updateBufferAndStats()
+                        _bufferedPositionMs.value = durationMs.coerceAtLeast(0L).let { dur ->
+                            if (dur > 0 && _bufferedPositionMs.value <= currentPositionMs) dur
+                            else _bufferedPositionMs.value
+                        }
+                        if (_videoStatsEnabled.value) {
+                            updateVideoStats()
+                        }
                     }
                     lastPlayingState = currentlyPlaying
                 }
@@ -803,15 +807,8 @@ class LibVlcPlayerEngine(
         awaitClose { ticker.cancel() }
     }
 
-    private fun updateBufferAndStats() {
+    private fun updateVideoStats() {
         val mp = mediaPlayer ?: return
-        try {
-            val dur = durationMs
-            if (dur > 0 && _bufferedPositionMs.value <= currentPositionMs) {
-                _bufferedPositionMs.value = dur
-            }
-        } catch (_: Exception) {}
-
         try {
             val newStats = EngineVideoStats(
                 audioCodec = try {

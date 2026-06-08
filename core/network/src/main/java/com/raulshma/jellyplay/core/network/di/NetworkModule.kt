@@ -21,6 +21,8 @@ import com.raulshma.jellyplay.core.network.api.PlaybackApiClientImpl
 import com.raulshma.jellyplay.core.network.api.SyncPlayApiClient
 import com.raulshma.jellyplay.core.network.api.SyncPlayApiClientImpl
 import com.raulshma.jellyplay.core.network.seerr.ResilientSeerrApiClient
+import com.raulshma.jellyplay.core.network.api.TmdbApiClient
+import com.raulshma.jellyplay.core.network.api.TmdbApiClientImpl
 import com.raulshma.jellyplay.core.network.seerr.SeerrApiClient
 import com.raulshma.jellyplay.core.network.interceptor.BandwidthInterceptor
 import dagger.Binds
@@ -34,6 +36,7 @@ import okhttp3.OkHttpClient
 import okhttp3.ConnectionPool
 import okhttp3.Protocol
 import org.jellyfin.sdk.Jellyfin
+import org.jellyfin.sdk.api.okhttp.OkHttpFactory
 import org.jellyfin.sdk.createJellyfin
 import org.jellyfin.sdk.model.ClientInfo
 import java.io.File
@@ -88,6 +91,12 @@ abstract class NetworkModule {
         impl: ResilientSeerrApiClient,
     ): SeerrApiClient
 
+    @Binds
+    @Singleton
+    abstract fun bindTmdbApiClient(
+        impl: TmdbApiClientImpl,
+    ): TmdbApiClient
+
     companion object {
         @Provides
         @Singleton
@@ -100,6 +109,7 @@ abstract class NetworkModule {
         @Singleton
         fun provideJellyfin(
             @ApplicationContext context: Context,
+            okHttpClient: OkHttpClient,
         ): Jellyfin = createJellyfin {
             this.context = context
             clientInfo = ClientInfo(
@@ -107,6 +117,7 @@ abstract class NetworkModule {
                 version = context.packageManager
                     .getPackageInfo(context.packageName, 0).versionName ?: "1.0"
             )
+            apiClientFactory = OkHttpFactory(okHttpClient)
         }
 
         @Provides

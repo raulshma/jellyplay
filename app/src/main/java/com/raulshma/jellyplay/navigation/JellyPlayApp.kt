@@ -118,6 +118,7 @@ import com.raulshma.jellyplay.feature.details.navigation.detailsSection
 import com.raulshma.jellyplay.feature.downloads.navigation.downloadsSection
 import com.raulshma.jellyplay.feature.editor.navigation.editorSection
 import com.raulshma.jellyplay.feature.home.navigation.homeSection
+import com.raulshma.jellyplay.feature.insights.navigation.insightsSection
 import com.raulshma.jellyplay.feature.library.navigation.librarySection
 import com.raulshma.jellyplay.feature.livetv.navigation.liveTvSection
 import com.raulshma.jellyplay.feature.music.navigation.musicSection
@@ -299,13 +300,15 @@ private fun MainContent(
 
     val context = LocalContext.current
 
-    LaunchedEffect(viewModel.navigationRequest) {
-        viewModel.navigationRequest.collect { route ->
+    val pendingRoute by viewModel.pendingRoute.collectAsStateWithLifecycle()
+    LaunchedEffect(pendingRoute) {
+        pendingRoute?.let { route ->
             if (ALL_TOP_LEVEL_ROUTE_KEYS.contains(route)) {
                 navigationState.topLevelRoute.value = route
             } else {
                 navigator.navigate(route)
             }
+            viewModel.consumePendingRoute()
         }
     }
 
@@ -1086,6 +1089,7 @@ private fun MainNavDisplay(
             syncPlaySection(navigator)
             onboardingSection { navigator.goBack() }
             newsletterSection(navigator)
+            insightsSection(navigator)
         },
         modifier = modifier,
     )

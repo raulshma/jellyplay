@@ -10,6 +10,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
@@ -79,7 +80,7 @@ class SeerrRepositoryImpl @Inject constructor(
     }
 
     private suspend fun getCredentials(): Pair<String, String>? {
-        val prefs = cachedPrefs.value ?: return null
+        val prefs = cachedPrefs.value ?: seerrPreferencesStore.preferences.first()
         val prefsHash = 31 * prefs.serverUrl.hashCode() + prefs.apiKey.hashCode()
         if (prefsHash == lastPrefsHash) {
             cachedCredentials?.let { return it }
@@ -148,11 +149,18 @@ class SeerrRepositoryImpl @Inject constructor(
         getCached<SeerrSearchResponse>("recommendations_${tmdbId}_${mediaType.name}")?.let { return Result.success(it) }
         val (serverUrl, apiKey) = getCredentials()
             ?: return Result.failure(Exception("Seerr not configured"))
+        val typeStr = if (mediaType == MediaType.MOVIE) "movie" else "tv"
         return (when (mediaType) {
             MediaType.MOVIE -> seerrApiClient.getMovieRecommendations(serverUrl, apiKey, tmdbId)
             MediaType.SERIES -> seerrApiClient.getTvRecommendations(serverUrl, apiKey, tmdbId)
             else -> Result.failure(Exception("Unsupported media type for recommendations"))
-        }).also { result ->
+        }).map { response ->
+            response.copy(
+                results = response.results.map { item ->
+                    if (item.mediaType.isBlank()) item.copy(mediaType = typeStr) else item
+                }
+            )
+        }.also { result ->
             result.getOrNull()?.let { putCached("recommendations_${tmdbId}_${mediaType.name}", it) }
         }
     }
@@ -161,11 +169,18 @@ class SeerrRepositoryImpl @Inject constructor(
         getCached<SeerrSearchResponse>("similar_${tmdbId}_${mediaType.name}")?.let { return Result.success(it) }
         val (serverUrl, apiKey) = getCredentials()
             ?: return Result.failure(Exception("Seerr not configured"))
+        val typeStr = if (mediaType == MediaType.MOVIE) "movie" else "tv"
         return (when (mediaType) {
             MediaType.MOVIE -> seerrApiClient.getMovieSimilar(serverUrl, apiKey, tmdbId)
             MediaType.SERIES -> seerrApiClient.getTvSimilar(serverUrl, apiKey, tmdbId)
             else -> Result.failure(Exception("Unsupported media type for similar items"))
-        }).also { result ->
+        }).map { response ->
+            response.copy(
+                results = response.results.map { item ->
+                    if (item.mediaType.isBlank()) item.copy(mediaType = typeStr) else item
+                }
+            )
+        }.also { result ->
             result.getOrNull()?.let { putCached("similar_${tmdbId}_${mediaType.name}", it) }
         }
     }
@@ -261,12 +276,24 @@ class SeerrRepositoryImpl @Inject constructor(
     override suspend fun getDiscoverMovies(page: Int, primaryReleaseDateGte: String?): Result<SeerrSearchResponse> {
         val (serverUrl, apiKey) = getCredentials()
             ?: return Result.failure(Exception("Seerr not configured"))
-        return seerrApiClient.getDiscoverMovies(serverUrl, apiKey, page, primaryReleaseDateGte)
+        return seerrApiClient.getDiscoverMovies(serverUrl, apiKey, page, primaryReleaseDateGte).map { response ->
+            response.copy(
+                results = response.results.map { item ->
+                    if (item.mediaType.isBlank()) item.copy(mediaType = "movie") else item
+                }
+            )
+        }
     }
 
     override suspend fun getDiscoverTv(page: Int, firstAirDateGte: String?): Result<SeerrSearchResponse> {
         val (serverUrl, apiKey) = getCredentials()
             ?: return Result.failure(Exception("Seerr not configured"))
-        return seerrApiClient.getDiscoverTv(serverUrl, apiKey, page, firstAirDateGte)
+        return seerrApiClient.getDiscoverTv(serverUrl, apiKey, page, firstAirDateGte).map { response ->
+            response.copy(
+                results = response.results.map { item ->
+                    if (item.mediaType.isBlank()) item.copy(mediaType = "tv") else item
+                }
+            )
+        }
     }
 }

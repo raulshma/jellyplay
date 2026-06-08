@@ -36,6 +36,7 @@ import java.util.UUID
 @Singleton
 class LibraryApiClientImpl @Inject constructor(
     private val engine: JellyfinApiEngine,
+    private val lyricsApi: LyricsApi,
 ) : LibraryApiClient {
 
     override suspend fun getHomeSections(
@@ -136,6 +137,21 @@ class LibraryApiClientImpl @Inject constructor(
                     val insertIndex = if (latestMediaLastIndex >= 0) latestMediaLastIndex + 1 else sections.size
                     sections.add(insertIndex, recentlyAddedSection)
                 }
+            }
+
+            if (HomeSectionType.RECOMMENDATIONS in enabledSections) {
+                getRecommendations(limit = 20)
+                    .onSuccess { recommendations ->
+                        if (recommendations.isNotEmpty()) {
+                            sections.add(HomeSection(
+                                "recommendations",
+                                "Recommended For You",
+                                HomeSectionType.RECOMMENDATIONS,
+                                recommendations,
+                            ))
+                        }
+                    }
+                    .onFailure { if (firstError == null) firstError = it }
             }
 
             if (sections.isEmpty() && firstError != null) {
@@ -460,6 +476,34 @@ class LibraryApiClientImpl @Inject constructor(
             }
         }
 
+    override suspend fun getRecommendations(limit: Int): Result<List<MediaItem>> = runCatching {
+        val continueWatching = getContinueWatching(limit = 5).getOrDefault(emptyList())
+        val nextUp = getNextUp(limit = 5).getOrDefault(emptyList())
+
+        val seedItems = (continueWatching + nextUp)
+            .distinctBy { it.id }
+            .take(5)
+
+        if (seedItems.isEmpty()) return@runCatching emptyList<MediaItem>()
+
+        val seedIds = seedItems.map { it.id }.toSet()
+        val semaphore = Semaphore(3)
+        val allSimilar = coroutineScope {
+            seedItems.map { seed ->
+                async {
+                    semaphore.acquire()
+                    try { getSimilarItems(seed.id, limit = limit / seedItems.size + 2).getOrDefault(emptyList()) }
+                    finally { semaphore.release() }
+                }
+            }.flatMap { it.await() }
+        }
+
+        allSimilar
+            .filter { it.id !in seedIds }
+            .distinctBy { it.id }
+            .take(limit)
+    }
+
     override suspend fun getItemsByPerson(personId: String, limit: Int): Result<List<MediaItem>> =
         runCatching {
             val response = engine.requireApi().itemsApi.getItems(
@@ -553,9 +597,7 @@ class LibraryApiClientImpl @Inject constructor(
     }
 
     override suspend fun getLyrics(itemId: String): Result<LyricsResult> = engine.apiResult {
-        val server = engine._currentServer.value ?: throw IllegalStateException("No server")
-        val user = engine._currentUser.value ?: throw IllegalStateException("No user")
-        LyricsApi.fetchLyrics(engine.okHttpClient, server.address, itemId, user.accessToken)
+        lyricsApi.fetchLyrics(itemId)
     }
 
     override suspend fun getPlaylists(limit: Int): Result<List<Playlist>> = engine.apiResult {
@@ -735,10 +777,16 @@ class LibraryApiClientImpl @Inject constructor(
     private val favoriteCache = androidx.collection.LruCache<UUID, Boolean>(200)
 
     override fun getImageUrl(itemId: String, imageType: String, maxWidth: Int?, imageIndex: Int?, tag: String?): String {
-        val server = engine._currentServer.value ?: return ""
-        val indexPart = imageIndex?.let { "/$it" } ?: ""
-        val widthPart = maxWidth?.let { "?maxWidth=$it" } ?: ""
-        return "${server.address}/Items/$itemId/Images/$imageType$indexPart$widthPart"
+        val api = engine.api ?: return ""
+        val imageTypeEnum = org.jellyfin.sdk.model.api.ImageType.fromNameOrNull(imageType)
+            ?: return ""
+        return api.imageApi.getItemImageUrl(
+            itemId = runCatching { itemId.toUUID() }.getOrNull() ?: return "",
+            imageType = imageTypeEnum,
+            tag = tag,
+            maxWidth = maxWidth,
+            imageIndex = imageIndex,
+        )
     }
 
     override fun getBackdropImageUrl(itemId: String, maxWidth: Int, tag: String?): String =

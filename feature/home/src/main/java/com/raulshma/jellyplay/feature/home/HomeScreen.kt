@@ -417,6 +417,12 @@ private fun MainHomeContent(
                                 focusManager.clearFocus()
                                 onSearchSeerrClick(item.id, item.mediaType)
                             },
+                            searchHistory = viewModel.searchHistory.collectAsStateWithLifecycle().value,
+                            onHistoryClick = { query ->
+                                viewModel.onEvent(HomeUiEvent.UpdateSearchQuery(query))
+                            },
+                            onDeleteHistoryItem = { id -> viewModel.deleteSearchHistoryItem(id) },
+                            onClearHistory = { viewModel.clearSearchHistory() },
                         )
                     },
                 )

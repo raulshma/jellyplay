@@ -756,6 +756,12 @@ class AudioPlaybackManager @Inject constructor(
         exoPlayer?.seekTo(positionMs)
     }
 
+    fun seekByDelta(deltaMs: Long) {
+        val player = exoPlayer ?: return
+        val target = (player.currentPosition + deltaMs).coerceIn(0L, player.duration.coerceAtLeast(0L))
+        player.seekTo(target)
+    }
+
     fun togglePlayPause() {
         val player = exoPlayer ?: return
         if (player.isPlaying) player.pause() else player.play()

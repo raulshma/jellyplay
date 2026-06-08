@@ -10,6 +10,8 @@ import com.raulshma.jellyplay.core.database.dao.LyricsCacheDao
 import com.raulshma.jellyplay.core.database.dao.MoodPlaylistDao
 import com.raulshma.jellyplay.core.database.dao.OfflineMediaDao
 import com.raulshma.jellyplay.core.database.dao.ScanStateDao
+import com.raulshma.jellyplay.core.database.dao.SearchHistoryDao
+import com.raulshma.jellyplay.core.database.dao.SeenMediaDao
 import com.raulshma.jellyplay.core.database.dao.ServerDao
 import com.raulshma.jellyplay.core.database.dao.SmartPlaylistDao
 import com.raulshma.jellyplay.core.database.dao.UserDao
@@ -22,6 +24,8 @@ import com.raulshma.jellyplay.core.database.entity.MoodPlaylistEntity
 import com.raulshma.jellyplay.core.database.entity.MoodPlaylistPreferenceEntity
 import com.raulshma.jellyplay.core.database.entity.OfflineMediaEntity
 import com.raulshma.jellyplay.core.database.entity.ScanStateEntity
+import com.raulshma.jellyplay.core.database.entity.SearchHistoryEntity
+import com.raulshma.jellyplay.core.database.entity.SeenMediaEntity
 import com.raulshma.jellyplay.core.database.entity.ServerEntity
 import com.raulshma.jellyplay.core.database.entity.SmartPlaylistEntity
 import com.raulshma.jellyplay.core.database.entity.UserEntity
@@ -40,8 +44,10 @@ import com.raulshma.jellyplay.core.database.entity.UserEntity
         MoodPlaylistPreferenceEntity::class,
         AudioQueueEntity::class,
         AudioQueueStateEntity::class,
+        SearchHistoryEntity::class,
+        SeenMediaEntity::class,
     ],
-    version = 17,
+    version = 19,
     exportSchema = true,
 )
 @TypeConverters(Converters::class)
@@ -56,4 +62,6 @@ abstract class JellyPlayDatabase : RoomDatabase() {
     abstract fun smartPlaylistDao(): SmartPlaylistDao
     abstract fun moodPlaylistDao(): MoodPlaylistDao
     abstract fun audioQueueDao(): AudioQueueDao
+    abstract fun searchHistoryDao(): SearchHistoryDao
+    abstract fun seenMediaDao(): SeenMediaDao
 }

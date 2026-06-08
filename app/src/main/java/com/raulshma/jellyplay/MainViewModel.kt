@@ -54,8 +54,8 @@ class MainViewModel @Inject constructor(
     val preferences = preferencesStore.preferences
         .stateIn(scope, SharingStarted.WhileSubscribed(5_000), UserPreferences())
 
-    private val _navigationRequest = MutableSharedFlow<Route>(extraBufferCapacity = 1)
-    val navigationRequest = _navigationRequest.asSharedFlow()
+    private val _pendingRoute = stateFlow<Route?>(null)
+    val pendingRoute = _pendingRoute.flow
 
     private val _globalMessage = MutableSharedFlow<String>(extraBufferCapacity = 1)
     val globalMessage = _globalMessage.asSharedFlow()
@@ -115,7 +115,8 @@ class MainViewModel @Inject constructor(
 
     fun handleShortcutIntent(intent: Intent) {
         val route = when (intent.action) {
-            AppShortcutManager.ACTION_CONTINUE_WATCHING -> Route.Home
+            AppShortcutManager.ACTION_CONTINUE_WATCHING ->
+                Route.NewsletterSectionList("CONTINUE_WATCHING")
             AppShortcutManager.ACTION_SEARCH -> Route.Search
             AppShortcutManager.ACTION_PLAY_MUSIC -> Route.MusicBrowse
             AppShortcutManager.ACTION_DOWNLOADS -> Route.Downloads
@@ -126,13 +127,17 @@ class MainViewModel @Inject constructor(
             else -> null
         }
         if (route != null) {
-            _navigationRequest.tryEmit(route)
+            _pendingRoute.set(route)
         }
     }
 
     fun handleDeepLink(intent: Intent) {
         val route = deepLinkHandler.parse(intent) ?: return
-        _navigationRequest.tryEmit(route)
+        _pendingRoute.set(route)
+    }
+
+    fun consumePendingRoute() {
+        _pendingRoute.set(null)
     }
 
     fun logout() {

@@ -9,6 +9,11 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -67,7 +72,7 @@ fun VideoStatsOverlay(
             val bufferHealthMs = (stats.bufferedPositionMs - currentPositionMs).coerceAtLeast(0L)
             StatsRow("Buffer Health", formatDurationMs(bufferHealthMs))
             StatsRow("Buffered", formatDurationMs(stats.bufferedPositionMs))
-            StatsRow("Clock", currentTimeString())
+            StatsRow("Clock", rememberCurrentTimeString())
         }
 
         if (stats.videoCodec != null || stats.videoResolution != null) {
@@ -203,6 +208,15 @@ private fun formatChannels(ch: Int): String = when (ch) {
     else -> "$ch ch"
 }
 
-private fun currentTimeString(): String {
-    return SimpleDateFormat("HH:mm:ss", Locale.getDefault()).format(Date())
+@Composable
+private fun rememberCurrentTimeString(): String {
+    val formatter = remember { SimpleDateFormat("HH:mm:ss", Locale.getDefault()) }
+    var time by remember { mutableStateOf(formatter.format(Date())) }
+    LaunchedEffect(Unit) {
+        while (true) {
+            kotlinx.coroutines.delay(1000)
+            time = formatter.format(Date())
+        }
+    }
+    return time
 }

@@ -76,6 +76,7 @@ data class UserPreferences(
     val videoDefaultSpeed: Float = 1.0f,
     val videoDefaultAspectRatio: String = "AUTO",
     val videoAutoplayNext: Boolean = false,
+    val trailerAutoplay: Boolean = true,
     val videoSwipeSeekMaxMs: Long = 120_000L,
     val videoRememberBrightness: Boolean = false,
     val videoBrightnessLevel: Float = 0.5f,
@@ -114,6 +115,7 @@ data class UserPreferences(
     val lrBalance: Float = 0f,
     val autoEqByGenre: Boolean = false,
     val pitchSemitones: Float = 0f,
+    val wifiOnlyDownloads: Boolean = true,
     val downloadConnections: Int = 4,
     val enabledHomeSectionTypes: Set<HomeSectionType> = HomeSectionType.CONFIGURABLE.toSet(),
     val homeSectionOrder: List<HomeSectionType> = HomeSectionType.CONFIGURABLE,
@@ -130,6 +132,8 @@ data class UserPreferences(
     val newsletterLastViewedMs: Long = 0L,
     val accentColorSwatch: String = "dynamic",
     val colorStyle: ColorStyle = ColorStyle.TONAL_SPOT,
+    val libraryViewMode: LibraryViewMode = LibraryViewMode.GRID,
+    val notificationPreferences: NotificationPreferences = NotificationPreferences(),
 )
 
 @Immutable

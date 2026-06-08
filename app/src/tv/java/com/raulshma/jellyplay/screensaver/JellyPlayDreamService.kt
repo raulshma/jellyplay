@@ -27,6 +27,7 @@ import dagger.hilt.components.SingletonComponent
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
@@ -65,7 +66,7 @@ class JellyPlayDreamService : DreamService() {
     private val imageProvider by lazy { DreamImageProvider(apiClient, applicationContext) }
 
     private val dreamLifecycle = DreamLifecycleOwner()
-    private var serviceScope = CoroutineScope(Dispatchers.Main + Job())
+    private var serviceScope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
     private var images by mutableStateOf<List<DreamImage>>(emptyList())
     private var fetchJob: Job? = null
 

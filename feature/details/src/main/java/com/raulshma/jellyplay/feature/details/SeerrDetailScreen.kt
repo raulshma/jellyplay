@@ -50,6 +50,8 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalUriHandler
+import androidx.compose.ui.window.Dialog
+import androidx.compose.ui.window.DialogProperties
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
@@ -58,6 +60,7 @@ import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.raulshma.jellyplay.core.designsystem.theme.ArtworkThemeWrapper
+import com.raulshma.jellyplay.core.ui.components.InlineTrailerPlayer
 import com.raulshma.jellyplay.core.designsystem.theme.LocalArtworkColors
 import com.raulshma.jellyplay.core.model.MediaType
 import com.raulshma.jellyplay.core.model.seerr.*
@@ -119,13 +122,15 @@ fun SeerrDetailScreen(
     val episodesBySeason by viewModel.episodesBySeason.collectAsStateWithLifecycle()
     val isLoadingEpisodes by viewModel.isLoadingEpisodes.collectAsStateWithLifecycle()
 
+    val uriHandler = LocalUriHandler.current
+
     LaunchedEffect(tmdbId, mediaType) {
         viewModel.loadDetails(tmdbId, mediaType)
     }
 
     val backdropUrl = movieDetail?.backdropUrl ?: tvDetail?.backdropUrl
-
     val outerIsLightTheme = rememberIsLightTheme()
+    var activeTrailerKey by remember { mutableStateOf<String?>(null) }
 
     ArtworkThemeWrapper(
         imageUrl = backdropUrl ?: "",
@@ -186,6 +191,18 @@ fun SeerrDetailScreen(
                                 viewModel.toggleSeason(tvId, seasonNumber)
                             }
                         },
+                        onVideoClick = { video ->
+                            if (video.site?.lowercase() == "youtube" && video.key != null) {
+                                activeTrailerKey = video.key
+                            } else if (video.key != null) {
+                                val url = when (video.site?.lowercase()) {
+                                    "youtube" -> "https://www.youtube.com/watch?v=${video.key}"
+                                    else -> null
+                                }
+                                url?.let { uriHandler.openUri(it) }
+                            }
+                        },
+                        preferences = preferences,
                     )
                 }
             }
@@ -242,6 +259,36 @@ fun SeerrDetailScreen(
                     )
                 }
             }
+
+            activeTrailerKey?.let { key ->
+                Dialog(
+                    onDismissRequest = { activeTrailerKey = null },
+                    properties = DialogProperties(
+                        usePlatformDefaultWidth = false,
+                        dismissOnBackPress = true,
+                        dismissOnClickOutside = true
+                    )
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .background(Color.Black),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        InlineTrailerPlayer(
+                            videoKey = key,
+                            modifier = Modifier.fillMaxSize(),
+                            muted = false,
+                            showControls = true,
+                            autoplay = true,
+                            onEmbedFailed = {
+                                activeTrailerKey = null
+                                uriHandler.openUri("https://www.youtube.com/watch?v=$key")
+                            }
+                        )
+                    }
+                }
+            }
         }
         } // CompositionLocalProvider
     }
@@ -265,6 +312,8 @@ private fun SeerrDetailContent(
     episodesBySeason: Map<Int, List<SeerrEpisode>> = emptyMap(),
     isLoadingEpisodes: Boolean = false,
     onSeasonClick: (Int) -> Unit = {},
+    onVideoClick: (SeerrRelatedVideo) -> Unit,
+    preferences: com.raulshma.jellyplay.core.model.UserPreferences,
 ) {
     val listState = rememberLazyListState()
     val adaptiveInfo = LocalAdaptiveInfo.current
@@ -276,6 +325,15 @@ private fun SeerrDetailContent(
     val backdropUrl = movieDetail?.backdropUrl ?: tvDetail?.backdropUrl
     val title = movieDetail?.title ?: tvDetail?.name ?: ""
     val posterUrl = movieDetail?.posterUrl ?: tvDetail?.posterUrl
+
+    val relatedVideos = movieDetail?.relatedVideos ?: tvDetail?.relatedVideos ?: emptyList()
+    val trailerVideo = remember(relatedVideos) {
+        relatedVideos.firstOrNull {
+            it.site?.lowercase() == "youtube" &&
+            (it.type?.lowercase() == "trailer" || it.type?.lowercase() == "teaser")
+        } ?: relatedVideos.firstOrNull { it.site?.lowercase() == "youtube" }
+    }
+    var autoplayEmbedFailed by remember { mutableStateOf(false) }
 
     val backdropHeight = when {
         isTv -> AdaptiveBackdropHeight.Tv
@@ -352,19 +410,37 @@ private fun SeerrDetailContent(
                     alpha = 1f - (scrollFraction * 0.8f)
                 }
         ) {
-            if (backdropUrl != null) {
-                MediaImage(
-                    url = backdropUrl,
-                    contentDescription = null,
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .graphicsLayer {
-                            val scale = 1f + (scrollOffset * 0.001f).coerceAtLeast(0f)
-                            scaleX = scale
-                            scaleY = scale
-                        },
-                    contentScale = ContentScale.Crop
-                )
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .graphicsLayer {
+                        val scale = 1f + (scrollOffset * 0.001f).coerceAtLeast(0f)
+                        scaleX = scale
+                        scaleY = scale
+                    }
+            ) {
+                if (backdropUrl != null) {
+                    MediaImage(
+                        url = backdropUrl,
+                        contentDescription = null,
+                        modifier = Modifier.fillMaxSize(),
+                        contentScale = ContentScale.Crop
+                    )
+                }
+                val playAutoplayTrailer = preferences.trailerAutoplay && trailerVideo != null && !autoplayEmbedFailed
+                val trailerKey = trailerVideo?.key
+                if (playAutoplayTrailer && trailerKey != null) {
+                    InlineTrailerPlayer(
+                        videoKey = trailerKey,
+                        modifier = Modifier.fillMaxSize(),
+                        muted = true,
+                        showControls = false,
+                        autoplay = true,
+                        focusable = false,
+                        cropToFill = true,
+                        onEmbedFailed = { autoplayEmbedFailed = true },
+                    )
+                }
             }
 
             val isLandscapeExpanded = isExpanded && adaptiveInfo.isLandscape
@@ -482,6 +558,7 @@ private fun SeerrDetailContent(
                             episodesBySeason = episodesBySeason,
                             isLoadingEpisodes = isLoadingEpisodes,
                             onSeasonClick = onSeasonClick,
+                            onVideoClick = onVideoClick,
                         )
                     }
                 } else {
@@ -581,6 +658,7 @@ private fun SeerrDetailContent(
                             episodesBySeason = episodesBySeason,
                             isLoadingEpisodes = isLoadingEpisodes,
                             onSeasonClick = onSeasonClick,
+                            onVideoClick = onVideoClick,
                         )
                     }
                 }
@@ -708,6 +786,7 @@ private fun SeerrDetailBody(
     episodesBySeason: Map<Int, List<SeerrEpisode>> = emptyMap(),
     isLoadingEpisodes: Boolean = false,
     onSeasonClick: (Int) -> Unit = {},
+    onVideoClick: (SeerrRelatedVideo) -> Unit,
 ) {
     val adaptiveInfo = LocalAdaptiveInfo.current
     val isTv = LocalTvMode.current
@@ -795,7 +874,7 @@ private fun SeerrDetailBody(
                         // Videos
                         val videos = movieDetail?.relatedVideos ?: tvDetail?.relatedVideos ?: emptyList()
                         if (videos.isNotEmpty()) {
-                            VideosSection(videos)
+                            VideosSection(videos, onVideoClick)
                         }
                     }
 
@@ -825,7 +904,7 @@ private fun SeerrDetailBody(
 
                 val videos = movieDetail?.relatedVideos ?: tvDetail?.relatedVideos ?: emptyList()
                 if (videos.isNotEmpty()) {
-                    VideosSection(videos)
+                    VideosSection(videos, onVideoClick)
                 }
 
                 MediaInformationSection(movieDetail, tvDetail, streamingRegion, discoverRegion, seerrServerUrl)
@@ -1430,9 +1509,8 @@ private fun formatRuntime(minutes: Int): String {
 @Composable
 private fun VideosSection(
     videos: List<SeerrRelatedVideo>,
+    onVideoClick: (SeerrRelatedVideo) -> Unit,
 ) {
-    val uriHandler = LocalUriHandler.current
-
     Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
         Text(
             text = "Videos",
@@ -1462,9 +1540,7 @@ private fun VideosSection(
                         .then(if (isTv) videoCardFocusState.focusModifier else Modifier)
                         .then(if (isTv) Modifier.tvFocusIndicator(videoCardFocusState, ShapeCache.smooth8) else Modifier)
                         .clickable {
-                            if (video.site?.lowercase() == "youtube") {
-                                uriHandler.openUri("https://www.youtube.com/watch?v=${video.key}")
-                            }
+                            onVideoClick(video)
                         },
                     shape = ShapeCache.smooth8
                 ) {

@@ -10,38 +10,36 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.cancel
-import kotlinx.coroutines.cancelChildren
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.withTimeoutOrNull
 import java.io.File
 import java.util.concurrent.ConcurrentHashMap
 
 class TrickplayManager(
     private val playbackRepository: PlaybackRepository,
+    lowRamDevice: Boolean = false,
 ) {
 
-    private val thumbnailCache = object : LruCache<Int, Bitmap>((MAX_THUMBNAIL_CACHE_BYTES / 1024).toInt()) {
+    private val maxThumbnailCacheBytes = if (lowRamDevice) LOW_RAM_THUMBNAIL_BYTES else MAX_THUMBNAIL_CACHE_BYTES
+    private val maxSpriteSheetCacheBytes = if (lowRamDevice) LOW_RAM_SPRITE_SHEET_BYTES else MAX_SPRITE_SHEET_CACHE_BYTES
+
+    private val thumbnailCache = object : LruCache<Int, Bitmap>((maxThumbnailCacheBytes / 1024).toInt()) {
         override fun sizeOf(key: Int, value: Bitmap): Int = value.allocationByteCount / 1024
         override fun entryRemoved(evictedBySize: Boolean, key: Int, oldValue: Bitmap, newValue: Bitmap?) {
-            // Recycle the native bitmap memory when it is evicted from the cache.
-            // Guard against double-recycle: if a caller still holds a reference the
-            // system will silently ignore further operations on the recycled bitmap.
             if (!oldValue.isRecycled) oldValue.recycle()
         }
     }
-    private val spriteSheetCache = object : LruCache<Int, Bitmap>((MAX_SPRITE_SHEET_CACHE_BYTES / 1024).toInt()) {
+    private val spriteSheetCache = object : LruCache<Int, Bitmap>((maxSpriteSheetCacheBytes / 1024).toInt()) {
         override fun sizeOf(key: Int, value: Bitmap): Int = value.allocationByteCount / 1024
         override fun entryRemoved(evictedBySize: Boolean, key: Int, oldValue: Bitmap, newValue: Bitmap?) {
-            // Only recycle sprite sheets when the cache evicts them automatically;
-            // explicit clear() handles the remaining entries via evictAll() which
-            // also triggers this callback, so all paths are covered.
             if (!oldValue.isRecycled) oldValue.recycle()
         }
     }
     private val sheetMutexes = ConcurrentHashMap<Int, Mutex>()
 
-    private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
+    private var scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
     private var info: TrickplayInfo? = null
     private var itemId: String? = null
     private var preloadJob: kotlinx.coroutines.Job? = null
@@ -54,6 +52,7 @@ class TrickplayManager(
         this.info = trickplayInfo
         this.localCacheDir = null
         this.persistDir = null
+        prefetchInitial(trickplayInfo)
     }
 
     fun initializeWithCache(itemId: String, trickplayInfo: TrickplayInfo, cacheDir: File) {
@@ -62,6 +61,7 @@ class TrickplayManager(
         this.info = trickplayInfo
         this.localCacheDir = null
         this.persistDir = cacheDir.apply { mkdirs() }
+        prefetchInitial(trickplayInfo)
     }
 
     fun initializeLocal(itemId: String, trickplayInfo: TrickplayInfo, cacheDir: File) {
@@ -69,6 +69,16 @@ class TrickplayManager(
         this.itemId = itemId
         this.info = trickplayInfo
         this.localCacheDir = cacheDir
+        prefetchInitial(trickplayInfo)
+    }
+
+    private fun prefetchInitial(trickplayInfo: TrickplayInfo) {
+        val id = itemId ?: return
+        scope.launch {
+            val sheet = loadSpriteSheet(id, 0, trickplayInfo) ?: return@launch
+            extractAllTilesFromSheet(sheet, 0, trickplayInfo)
+            preloadAdjacentSheets(id, 0, trickplayInfo)
+        }
     }
 
     suspend fun getThumbnail(positionMs: Long): Bitmap? {
@@ -81,28 +91,124 @@ class TrickplayManager(
         thumbnailCache.get(thumbnailIndex)?.let { return it }
 
         return withContext(Dispatchers.Default) {
-            val thumbnailsPerSheet = currentInfo.tileWidth * currentInfo.tileHeight
-            val sheetIndex = thumbnailIndex / thumbnailsPerSheet
-            val tileIndex = thumbnailIndex % thumbnailsPerSheet
-            val tileCol = tileIndex % currentInfo.tileWidth
-            val tileRow = tileIndex / currentInfo.tileWidth
-
-            val sheet = spriteSheetCache.get(sheetIndex)
-                ?: loadSpriteSheet(id, sheetIndex, currentInfo)
-                ?: return@withContext null
-
-            val offsetX = tileCol * currentInfo.width
-            val offsetY = tileRow * currentInfo.height
-
             try {
-                val thumbnail = Bitmap.createBitmap(
-                    sheet, offsetX, offsetY, currentInfo.width, currentInfo.height,
-                )
-                thumbnailCache.put(thumbnailIndex, thumbnail)
-                preloadNeighbors(id, thumbnailIndex, currentInfo)
-                thumbnail
+                val thumbnailsPerSheet = currentInfo.tileWidth * currentInfo.tileHeight
+                val sheetIndex = thumbnailIndex / thumbnailsPerSheet
+
+                val sheet = spriteSheetCache.get(sheetIndex)
+                    ?: loadSpriteSheet(id, sheetIndex, currentInfo)
+                    ?: return@withContext null
+
+                val result = extractTile(sheet, thumbnailIndex, currentInfo)
+                if (result != null) {
+                    thumbnailCache.put(thumbnailIndex, result)
+                }
+
+                extractAllTilesFromSheet(sheet, sheetIndex, currentInfo)
+                schedulePreload(id, thumbnailIndex, sheetIndex, currentInfo)
+
+                result
             } catch (_: Exception) {
                 null
+            }
+        }
+    }
+
+    private fun extractTile(
+        sheet: Bitmap,
+        thumbnailIndex: Int,
+        trickplayInfo: TrickplayInfo,
+    ): Bitmap? {
+        val thumbnailsPerSheet = trickplayInfo.tileWidth * trickplayInfo.tileHeight
+        val sheetStartIndex = (thumbnailIndex / thumbnailsPerSheet) * thumbnailsPerSheet
+        val tileIndex = thumbnailIndex - sheetStartIndex
+        val tileCol = tileIndex % trickplayInfo.tileWidth
+        val tileRow = tileIndex / trickplayInfo.tileWidth
+        val offsetX = tileCol * trickplayInfo.width
+        val offsetY = tileRow * trickplayInfo.height
+        return try {
+            Bitmap.createBitmap(sheet, offsetX, offsetY, trickplayInfo.width, trickplayInfo.height)
+        } catch (_: Exception) {
+            null
+        }
+    }
+
+    private fun extractAllTilesFromSheet(
+        sheet: Bitmap,
+        sheetIndex: Int,
+        trickplayInfo: TrickplayInfo,
+    ) {
+        val thumbnailsPerSheet = trickplayInfo.tileWidth * trickplayInfo.tileHeight
+        val startIndex = sheetIndex * thumbnailsPerSheet
+        val count = minOf(thumbnailsPerSheet, trickplayInfo.thumbnailCount - startIndex)
+        val w = trickplayInfo.width
+        val h = trickplayInfo.height
+
+        for (i in 0 until count) {
+            val globalIndex = startIndex + i
+            if (thumbnailCache.get(globalIndex) != null) continue
+            val col = i % trickplayInfo.tileWidth
+            val row = i / trickplayInfo.tileWidth
+            try {
+                val tile = Bitmap.createBitmap(sheet, col * w, row * h, w, h)
+                thumbnailCache.put(globalIndex, tile)
+            } catch (_: Exception) { }
+        }
+    }
+
+    private fun schedulePreload(
+        id: String,
+        currentIndex: Int,
+        currentSheetIndex: Int,
+        trickplayInfo: TrickplayInfo,
+    ) {
+        preloadJob?.cancel()
+        preloadJob = scope.launch {
+            preloadAdjacentSheets(id, currentSheetIndex, trickplayInfo)
+            preloadNeighborTiles(id, currentIndex, trickplayInfo)
+        }
+    }
+
+    private suspend fun preloadAdjacentSheets(
+        id: String,
+        currentSheetIndex: Int,
+        trickplayInfo: TrickplayInfo,
+    ) {
+        val totalSheets = (trickplayInfo.thumbnailCount + trickplayInfo.tileWidth * trickplayInfo.tileHeight - 1) /
+            (trickplayInfo.tileWidth * trickplayInfo.tileHeight)
+
+        for (offset in 1..ADJACENT_SHEET_PRELOAD_COUNT) {
+            for (sheetIdx in listOf(currentSheetIndex + offset, currentSheetIndex - offset)) {
+                if (sheetIdx < 0 || sheetIdx >= totalSheets) continue
+                if (spriteSheetCache.get(sheetIdx) != null) continue
+
+                val sheet = withTimeoutOrNull(SHEET_PRELOAD_TIMEOUT_MS) {
+                    loadSpriteSheet(id, sheetIdx, trickplayInfo)
+                } ?: continue
+
+                extractAllTilesFromSheet(sheet, sheetIdx, trickplayInfo)
+            }
+        }
+    }
+
+    private suspend fun preloadNeighborTiles(
+        id: String,
+        currentIndex: Int,
+        trickplayInfo: TrickplayInfo,
+    ) {
+        val minIndex = (currentIndex - PRELOAD_NEIGHBOR_COUNT).coerceAtLeast(0)
+        val maxIndex = (currentIndex + PRELOAD_NEIGHBOR_COUNT).coerceAtMost(trickplayInfo.thumbnailCount - 1)
+        val thumbnailsPerSheet = trickplayInfo.tileWidth * trickplayInfo.tileHeight
+
+        for (i in minIndex..maxIndex) {
+            if (thumbnailCache.get(i) != null) continue
+
+            val sheetIndex = i / thumbnailsPerSheet
+            val sheet = spriteSheetCache.get(sheetIndex)
+                ?: continue
+
+            extractTile(sheet, i, trickplayInfo)?.let { tile ->
+                thumbnailCache.put(i, tile)
             }
         }
     }
@@ -148,46 +254,6 @@ class TrickplayManager(
         }
     }
 
-    private fun preloadNeighbors(
-        id: String,
-        currentIndex: Int,
-        trickplayInfo: TrickplayInfo,
-    ) {
-        preloadJob?.cancel()
-        preloadJob = scope.launch {
-            val preloadRange = PRELOAD_NEIGHBOR_COUNT
-            val minIndex = (currentIndex - preloadRange).coerceAtLeast(0)
-            val maxIndex = (currentIndex + preloadRange).coerceAtMost(trickplayInfo.thumbnailCount - 1)
-            val thumbnailsPerSheet = trickplayInfo.tileWidth * trickplayInfo.tileHeight
-
-            for (i in minIndex..maxIndex) {
-                if (i == currentIndex) continue
-                if (thumbnailCache.get(i) != null) continue
-
-                val sheetIndex = i / thumbnailsPerSheet
-                val tileIndex = i % thumbnailsPerSheet
-                val tileCol = tileIndex % trickplayInfo.tileWidth
-                val tileRow = tileIndex / trickplayInfo.tileWidth
-
-                val sheet = spriteSheetCache.get(sheetIndex)
-                    ?: loadSpriteSheet(id, sheetIndex, trickplayInfo)
-                    ?: continue
-
-                val offsetX = tileCol * trickplayInfo.width
-                val offsetY = tileRow * trickplayInfo.height
-
-                withContext(Dispatchers.Default) {
-                    try {
-                        val thumbnail = Bitmap.createBitmap(
-                            sheet, offsetX, offsetY, trickplayInfo.width, trickplayInfo.height,
-                        )
-                        thumbnailCache.put(i, thumbnail)
-                    } catch (_: Exception) { }
-                }
-            }
-        }
-    }
-
     fun clear() {
         preloadJob?.cancel()
         preloadJob = null
@@ -200,12 +266,17 @@ class TrickplayManager(
         localCacheDir = null
         persistDir = null
         sheetMutexes.clear()
-        scope.coroutineContext.cancelChildren()
+        scope.cancel()
+        scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
     }
 
     companion object {
-        private const val MAX_THUMBNAIL_CACHE_BYTES = 16 * 1024 * 1024L
-        private const val MAX_SPRITE_SHEET_CACHE_BYTES = 64 * 1024 * 1024L
-        private const val PRELOAD_NEIGHBOR_COUNT = 1
+        private const val MAX_THUMBNAIL_CACHE_BYTES = 24 * 1024 * 1024L
+        private const val MAX_SPRITE_SHEET_CACHE_BYTES = 96 * 1024 * 1024L
+        private const val LOW_RAM_THUMBNAIL_BYTES = 12 * 1024 * 1024L
+        private const val LOW_RAM_SPRITE_SHEET_BYTES = 48 * 1024 * 1024L
+        private const val PRELOAD_NEIGHBOR_COUNT = 5
+        private const val ADJACENT_SHEET_PRELOAD_COUNT = 1
+        private const val SHEET_PRELOAD_TIMEOUT_MS = 3000L
     }
 }

@@ -10,4 +10,69 @@
     <string name="shortcut_play_music_long">Play Music</string>
     <string name="shortcut_downloads_short">Downloads</string>
     <string name="shortcut_downloads_long">Open Downloads</string>
+
+    <string name="widget_now_playing_description">See and control the music you\'re listening to right from your home screen.</string>
+    <string name="widget_continue_watching_description">Jump back into the shows and movies you started but haven\'t finished.</string>
+    <string name="widget_nothing_playing">Nothing playing</string>
+    <string name="widget_open_to_play">Tap to open JellyPlay</string>
+    <string name="widget_continue_watching_empty">Nothing to continue yet</string>
+    <string name="widget_continue_watching_empty_subtitle">Start watching a show and it will appear here</string>
+    <string name="widget_placeholder_title">Track title</string>
+    <string name="widget_placeholder_subtitle">Artist name</string>
+    <string name="widget_album_art">Album art</string>
+    <string name="widget_app_icon">JellyPlay</string>
+    <string name="widget_play_pause">Play or pause</string>
+    <string name="widget_next">Next track</string>
+    <string name="widget_previous">Previous track</string>
+    <string name="widget_rewind">Rewind 10 seconds</string>
+    <string name="widget_forward">Forward 10 seconds</string>
+    <string name="widget_seek_to">Seek to position</string>
+    <string name="widget_continue_watching_title">Continue Watching</string>
+    <string name="widget_continue_watching_see_all">See all</string>
+    <string name="widget_minutes_left">%1$d min left</string>
+    <string name="widget_progress_percent">%1$d%%</string>
+    <string name="widget_placeholder_position">—</string>
+
+    <!-- Library Recommendations widget -->
+    <string name="widget_library_recommendations_label">Library Picks</string>
+    <string name="widget_library_recommendations_title">Library Picks</string>
+    <string name="widget_library_recommendations_subtitle">Because you watched</string>
+    <string name="widget_library_recommendations_description">Personalized picks from your Jellyfin library — based on what you have been watching.</string>
+    <string name="widget_library_recommendations_empty">No recommendations yet</string>
+    <string name="widget_library_recommendations_empty_subtitle">Open JellyPlay to start exploring your library</string>
+
+    <!-- Seerr Recommendations widget -->
+    <string name="widget_seerr_recommendations_label">Seerr Picks</string>
+    <string name="widget_seerr_recommendations_title">Seerr Picks</string>
+    <string name="widget_seerr_recommendations_subtitle">Trending this week</string>
+    <string name="widget_seerr_recommendations_description">Trending and upcoming movies and TV from your Seerr (Jellyseerr / Overseerr) server.</string>
+    <string name="widget_seerr_recommendations_empty">Seerr is not connected</string>
+    <string name="widget_seerr_recommendations_empty_subtitle">Configure Seerr in JellyPlay settings to see picks</string>
+    <string name="widget_seerr_no_recommendations">No recommendations yet</string>
+    <string name="widget_seerr_no_recommendations_subtitle">Tap refresh or check back later</string>
+
+    <!-- Shared -->
+    <string name="widget_refresh">Refresh</string>
+
+    <!-- Configuration activity -->
+    <string name="widget_config_title">Choose recommendations</string>
+    <string name="widget_config_save">Save</string>
+    <string name="widget_config_source_similar">Because you watched</string>
+    <string name="widget_config_source_similar_description">Personalized picks based on your most recently watched item</string>
+    <string name="widget_config_source_latest">Latest in your library</string>
+    <string name="widget_config_source_latest_description">Freshly added media across your libraries</string>
+    <string name="widget_config_source_favorites">Your favorites</string>
+    <string name="widget_config_source_favorites_description">Items you have marked as favorite</string>
+    <string name="widget_config_source_surprise_me">Surprise me</string>
+    <string name="widget_config_source_surprise_me_description">A randomized shuffle from your library</string>
+    <string name="widget_config_source_trending">Trending this week</string>
+    <string name="widget_config_source_trending_description">What everyone is talking about</string>
+    <string name="widget_config_source_popular_movies">Popular movies</string>
+    <string name="widget_config_source_popular_movies_description">Top rated movies right now</string>
+    <string name="widget_config_source_popular_tv">Popular TV</string>
+    <string name="widget_config_source_popular_tv_description">Top rated shows right now</string>
+    <string name="widget_config_source_upcoming_movies">Upcoming movies</string>
+    <string name="widget_config_source_upcoming_movies_description">Movies releasing soon</string>
+    <string name="widget_config_source_upcoming_tv">Upcoming TV</string>
+    <string name="widget_config_source_upcoming_tv_description">Shows premiering soon</string>
 </resources>

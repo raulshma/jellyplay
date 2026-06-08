@@ -6,6 +6,8 @@ import androidx.paging.PagingData
 import androidx.paging.cachedIn
 import com.raulshma.jellyplay.core.data.repository.MediaRepository
 import com.raulshma.jellyplay.core.data.repository.PlaybackRepository
+import com.raulshma.jellyplay.core.data.repository.SearchHistoryItem
+import com.raulshma.jellyplay.core.data.repository.SearchHistoryRepository
 import com.raulshma.jellyplay.core.data.repository.SeerrRepository
 import com.raulshma.jellyplay.core.data.seerr.SeerrRequestDelegate
 import com.raulshma.jellyplay.core.model.Genre
@@ -46,6 +48,8 @@ class SearchViewModel @Inject constructor(
     private val playbackRepository: PlaybackRepository,
     private val seerrRepository: SeerrRepository,
     private val seerrRequestDelegate: SeerrRequestDelegate,
+    private val searchHistoryRepository: SearchHistoryRepository,
+    private val preferencesStore: com.raulshma.jellyplay.core.datastore.UserPreferencesStore,
 ) : JellyPlayViewModel() {
 
     private val _query = composeState("")
@@ -64,6 +68,9 @@ class SearchViewModel @Inject constructor(
 
     private val _seerrResults = stateFlow<List<SeerrSearchItem>>(emptyList())
     val seerrResults: StateFlow<List<SeerrSearchItem>> = _seerrResults.flow
+
+    private val _searchHistory = stateFlow<List<SearchHistoryItem>>(emptyList())
+    val searchHistory: StateFlow<List<SearchHistoryItem>> = _searchHistory.flow
 
     val isSeerrConnected: StateFlow<Boolean> = seerrRepository.isConnected()
         .stateIn(scope, SharingStarted.WhileSubscribed(5_000), false)
@@ -86,6 +93,7 @@ class SearchViewModel @Inject constructor(
                 flowOf(PagingData.empty())
             } else {
                 seerrSearchJob = launch { searchSeerr(currentQuery) }
+                launch { saveQueryIfNeeded(currentQuery) }
                 mediaRepository.searchPaged(
                     query = currentQuery,
                     mediaTypes = filters.mediaTypes.ifEmpty { null },
@@ -96,6 +104,30 @@ class SearchViewModel @Inject constructor(
 
     init {
         loadGenres()
+        loadSearchHistory()
+    }
+
+    private fun loadSearchHistory() {
+        launch {
+            preferencesStore.activeUserId.collect { userId ->
+                if (userId != null) {
+                    searchHistoryRepository.getRecent(userId).collect { history ->
+                        _searchHistory.set(history)
+                    }
+                }
+            }
+        }
+    }
+
+    fun deleteHistoryItem(id: Long) {
+        launch { searchHistoryRepository.deleteById(id) }
+    }
+
+    fun clearHistory() {
+        launch {
+            val userId = preferencesStore.activeUserId.first() ?: return@launch
+            searchHistoryRepository.clearAll(userId)
+        }
     }
 
     fun search(newQuery: String) {
@@ -128,6 +160,15 @@ class SearchViewModel @Inject constructor(
         launch {
             mediaRepository.getGenres()
                 .onSuccess { _genres.set(it) }
+        }
+    }
+
+    private suspend fun saveQueryIfNeeded(query: String) {
+        if (query.trim().length < 2) return
+        val userId = preferencesStore.activeUserId.first() ?: return
+        val hasResults = mediaRepository.search(query, limit = 1).getOrNull()?.items?.isNotEmpty() == true
+        if (hasResults) {
+            searchHistoryRepository.saveQuery(query, userId)
         }
     }
 
