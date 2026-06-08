@@ -75,7 +75,7 @@ interface DownloadDao {
     @Query("SELECT * FROM downloads WHERE mediaItemId IN (:mediaItemIds)")
     fun getDownloadsByMediaItemIdsFlow(mediaItemIds: List<String>): Flow<List<DownloadEntity>>
 
-    @Query("UPDATE downloads SET status = 'PENDING' WHERE status IN ('DOWNLOADING') AND id IN (SELECT id FROM downloads WHERE status = 'DOWNLOADING')")
+    @Query("UPDATE downloads SET status = 'PENDING' WHERE status = 'DOWNLOADING'")
     suspend fun resetStuckDownloading()
 
     @Query("SELECT * FROM downloads WHERE status = 'FAILED'")

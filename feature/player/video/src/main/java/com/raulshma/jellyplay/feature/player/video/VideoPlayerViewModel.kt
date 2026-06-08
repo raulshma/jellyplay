@@ -193,6 +193,7 @@ class VideoPlayerViewModel @Inject constructor(
             playerSessionManager.engineFlow.collect { engine ->
                 engineCollectionJob?.cancel()
                 if (engine != null) {
+                    activePlayerController.bindEngine(engine)
                     val prefs = cachedPreferences
                     _uiState.update { it.copy(
                         engineCapabilities = engine.capabilities,
@@ -238,6 +239,8 @@ class VideoPlayerViewModel @Inject constructor(
                             launch { engine.errorFlow.collect { e -> _uiState.update { s -> s.copy(playerError = e, showPlaybackErrorDialog = true) } } }
                         }
                     }
+                } else {
+                    activePlayerController.clearEngine()
                 }
             }
         }
@@ -246,16 +249,6 @@ class VideoPlayerViewModel @Inject constructor(
             playerLifecycleManager.pipDismissed.collect { dismissed ->
                 if (dismissed) {
                     playerSessionManager.engine?.pause()
-                }
-            }
-        }
-
-        launch {
-            playerSessionManager.engineFlow.collect { engine ->
-                if (engine != null) {
-                    activePlayerController.bindEngine(engine)
-                } else {
-                    activePlayerController.clearEngine()
                 }
             }
         }

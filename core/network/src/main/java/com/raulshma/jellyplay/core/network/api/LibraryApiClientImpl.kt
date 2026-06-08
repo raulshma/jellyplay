@@ -42,7 +42,7 @@ class LibraryApiClientImpl @Inject constructor(
     override suspend fun getHomeSections(
         enabledSections: Set<HomeSectionType>,
         hiddenLibraryIds: Set<String>,
-    ): Result<List<HomeSection>> = engine.apiResult {
+    ): Result<List<HomeSection>> = engine.apiResultWithRetry {
         coroutineScope {
             val sections = mutableListOf<HomeSection>()
             var firstError: Throwable? = null
@@ -180,7 +180,7 @@ class LibraryApiClientImpl @Inject constructor(
             }
         }
 
-    override suspend fun getNextUp(limit: Int): Result<List<MediaItem>> = engine.apiResult {
+    override suspend fun getNextUp(limit: Int): Result<List<MediaItem>> = engine.apiResultWithRetry {
         val response = engine.requireApi().tvShowsApi.getNextUp(
             limit = limit,
             fields = listOf(
@@ -191,7 +191,7 @@ class LibraryApiClientImpl @Inject constructor(
         engine.run { (response?.items ?: emptyList()).map { it.toMediaItem() }.filterByParentalRating() }
     }
 
-    override suspend fun getContinueWatching(limit: Int): Result<List<MediaItem>> = engine.apiResult {
+    override suspend fun getContinueWatching(limit: Int): Result<List<MediaItem>> = engine.apiResultWithRetry {
         val response = engine.requireApi().itemsApi.getResumeItems(
             limit = limit,
             fields = listOf(
@@ -205,7 +205,7 @@ class LibraryApiClientImpl @Inject constructor(
         }
     }
 
-    override suspend fun getLibraryFolders(): Result<List<LibraryFolder>> = engine.apiResult {
+    override suspend fun getLibraryFolders(): Result<List<LibraryFolder>> = engine.apiResultWithRetry {
         val response = engine.requireApi().libraryApi.getMediaFolders().content
             ?: throw IllegalStateException("Server returned empty response")
         val enabledFolders = engine._currentUser.value?.enabledFolderIds
@@ -230,7 +230,7 @@ class LibraryApiClientImpl @Inject constructor(
         sortOrder: String,
         startIndex: Int,
         limit: Int,
-    ): Result<SearchResult> = engine.apiResult {
+    ): Result<SearchResult> = engine.apiResultWithRetry {
         val sortByEnum = ItemSortBy.entries
             .find { it.serialName.equals(sortBy, ignoreCase = true) }
         val sortOrderEnum = SortOrder.entries
@@ -263,7 +263,7 @@ class LibraryApiClientImpl @Inject constructor(
         )
     }
 
-    override suspend fun getMediaDetail(itemId: String): Result<MediaDetail> = engine.apiResult {
+    override suspend fun getMediaDetail(itemId: String): Result<MediaDetail> = engine.apiResultWithRetry {
         coroutineScope {
             val client = engine.requireApi()
             val uuid = itemId.toUUID()
@@ -383,7 +383,7 @@ class LibraryApiClientImpl @Inject constructor(
         mediaTypes: List<MediaType>?,
         limit: Int,
         startIndex: Int,
-    ): Result<SearchResult> = engine.apiResult {
+    ): Result<SearchResult> = engine.apiResultWithRetry {
         val response = engine.requireApi().itemsApi.getItems(
             searchTerm = query,
             includeItemTypes = mediaTypes?.mapNotNull { it.toBaseItemKind() },
@@ -403,7 +403,7 @@ class LibraryApiClientImpl @Inject constructor(
     }
 
     override suspend fun getGenres(parentId: String?, startIndex: Int, limit: Int): Result<List<Genre>> =
-        engine.apiResult {
+        engine.apiResultWithRetry {
             val userId = engine._currentUser.value?.id?.toUUID()
             val response = engine.requireApi().genresApi.getGenres(
                 parentId = parentId?.let { it.toUUID() },
@@ -421,7 +421,7 @@ class LibraryApiClientImpl @Inject constructor(
         mediaTypes: List<MediaType>?,
         startIndex: Int,
         limit: Int,
-    ): Result<SearchResult> = engine.apiResult {
+    ): Result<SearchResult> = engine.apiResultWithRetry {
         val response = engine.requireApi().itemsApi.getItems(
             genreIds = listOf(genreId.toUUID()),
             includeItemTypes = mediaTypes?.mapNotNull { it.toBaseItemKind() },
@@ -436,7 +436,7 @@ class LibraryApiClientImpl @Inject constructor(
         )
     }
 
-    override suspend fun getArtistAlbums(artistId: String, limit: Int): Result<List<MediaItem>> = engine.apiResult {
+    override suspend fun getArtistAlbums(artistId: String, limit: Int): Result<List<MediaItem>> = engine.apiResultWithRetry {
         val response = engine.requireApi().itemsApi.getItems(
             albumArtistIds = listOf(artistId.toUUID()),
             includeItemTypes = listOf(BaseItemKind.MUSIC_ALBUM),
@@ -451,7 +451,7 @@ class LibraryApiClientImpl @Inject constructor(
         engine.run { response.items.map { it.toMediaItem() }.filterByParentalRating() }
     }
 
-    override suspend fun getAlbumTracks(albumId: String): Result<List<MediaItem>> = engine.apiResult {
+    override suspend fun getAlbumTracks(albumId: String): Result<List<MediaItem>> = engine.apiResultWithRetry {
         val response = engine.requireApi().itemsApi.getItems(
             parentId = albumId.toUUID(),
             includeItemTypes = listOf(BaseItemKind.AUDIO),
@@ -518,7 +518,7 @@ class LibraryApiClientImpl @Inject constructor(
             engine.run { response.items.map { it.toMediaItem() }.filterByParentalRating() }
         }
 
-    override suspend fun getSeasons(seriesId: String): Result<List<MediaItem>> = engine.apiResult {
+    override suspend fun getSeasons(seriesId: String): Result<List<MediaItem>> = engine.apiResultWithRetry {
         engine.run {
             engine.requireApi().tvShowsApi.getSeasons(
                 seriesId = seriesId.toUUID(),
@@ -527,7 +527,7 @@ class LibraryApiClientImpl @Inject constructor(
     }
 
     override suspend fun getEpisodes(seriesId: String, seasonId: String): Result<List<MediaItem>> =
-        engine.apiResult {
+        engine.apiResultWithRetry {
             engine.run {
                 engine.requireApi().tvShowsApi.getEpisodes(
                     seriesId = seriesId.toUUID(),
@@ -540,7 +540,7 @@ class LibraryApiClientImpl @Inject constructor(
         collectionId: String,
         startIndex: Int,
         limit: Int,
-    ): Result<SearchResult> = engine.apiResult {
+    ): Result<SearchResult> = engine.apiResultWithRetry {
         val response = engine.requireApi().itemsApi.getItems(
             parentId = collectionId.toUUID(),
             startIndex = startIndex,
@@ -562,7 +562,7 @@ class LibraryApiClientImpl @Inject constructor(
         parentId: String?,
         startIndex: Int,
         limit: Int,
-    ): Result<List<String>> = engine.apiResult {
+    ): Result<List<String>> = engine.apiResultWithRetry {
         val response = engine.requireApi().itemsApi.getItems(
             parentId = parentId?.let { it.toUUID() },
             startIndex = startIndex,
@@ -577,7 +577,7 @@ class LibraryApiClientImpl @Inject constructor(
         mediaTypes: List<MediaType>?,
         limit: Int,
         startIndex: Int,
-    ): Result<SearchResult> = engine.apiResult {
+    ): Result<SearchResult> = engine.apiResultWithRetry {
         val response = engine.requireApi().itemsApi.getItems(
             includeItemTypes = mediaTypes?.mapNotNull { it.toBaseItemKind() },
             filters = listOf(ItemFilter.IS_FAVORITE),
@@ -596,11 +596,11 @@ class LibraryApiClientImpl @Inject constructor(
         )
     }
 
-    override suspend fun getLyrics(itemId: String): Result<LyricsResult> = engine.apiResult {
+    override suspend fun getLyrics(itemId: String): Result<LyricsResult> = engine.apiResultWithRetry {
         lyricsApi.fetchLyrics(itemId)
     }
 
-    override suspend fun getPlaylists(limit: Int): Result<List<Playlist>> = engine.apiResult {
+    override suspend fun getPlaylists(limit: Int): Result<List<Playlist>> = engine.apiResultWithRetry {
         val response = engine.requireApi().itemsApi.getItems(
             includeItemTypes = listOf(BaseItemKind.PLAYLIST),
             limit = limit,
@@ -634,7 +634,7 @@ class LibraryApiClientImpl @Inject constructor(
         playlistId: String,
         startIndex: Int,
         limit: Int,
-    ): Result<List<PlaylistItem>> = engine.apiResult {
+    ): Result<List<PlaylistItem>> = engine.apiResultWithRetry {
         val response = engine.requireApi().itemsApi.getItems(
             parentId = playlistId.toUUID(),
             startIndex = startIndex,
@@ -662,7 +662,7 @@ class LibraryApiClientImpl @Inject constructor(
         name: String,
         overview: String?,
         itemIds: List<String>,
-    ): Result<String> = engine.apiResult {
+    ): Result<String> = engine.apiResultWithRetry {
         val userId = engine._currentUser.value?.id?.toUUID()
         val dto = CreatePlaylistDto(
             name = name,
@@ -681,7 +681,7 @@ class LibraryApiClientImpl @Inject constructor(
         name: String?,
         overview: String?,
         isPublic: Boolean?,
-    ): Result<Unit> = engine.apiResult {
+    ): Result<Unit> = engine.apiResultWithRetry {
         val dto = UpdatePlaylistDto(
             name = name,
             isPublic = isPublic,
@@ -690,7 +690,7 @@ class LibraryApiClientImpl @Inject constructor(
         Unit
     }
 
-    override suspend fun deletePlaylist(playlistId: String): Result<Unit> = engine.apiResult {
+    override suspend fun deletePlaylist(playlistId: String): Result<Unit> = engine.apiResultWithRetry {
         engine.requireApi().request(
             method = HttpMethod.DELETE,
             pathTemplate = "Items/$playlistId",
@@ -701,7 +701,7 @@ class LibraryApiClientImpl @Inject constructor(
     override suspend fun addItemsToPlaylist(
         playlistId: String,
         itemIds: List<String>,
-    ): Result<Unit> = engine.apiResult {
+    ): Result<Unit> = engine.apiResultWithRetry {
         val userId = engine._currentUser.value?.id?.toUUID()
         engine.requireApi().playlistsApi.addItemToPlaylist(
             playlistId = playlistId.toUUID(),
@@ -714,7 +714,7 @@ class LibraryApiClientImpl @Inject constructor(
     override suspend fun removeItemsFromPlaylist(
         playlistId: String,
         entryIds: List<String>,
-    ): Result<Unit> = engine.apiResult {
+    ): Result<Unit> = engine.apiResultWithRetry {
         engine.requireApi().playlistsApi.removeItemFromPlaylist(
             playlistId = playlistId,
             entryIds = entryIds,
@@ -726,7 +726,7 @@ class LibraryApiClientImpl @Inject constructor(
         playlistId: String,
         entryId: String,
         newIndex: Int,
-    ): Result<Unit> = engine.apiResult {
+    ): Result<Unit> = engine.apiResultWithRetry {
         engine.requireApi().playlistsApi.moveItem(
             playlistId = playlistId,
             itemId = entryId,
@@ -735,21 +735,27 @@ class LibraryApiClientImpl @Inject constructor(
         Unit
     }
 
-    override suspend fun markPlayed(itemId: String): Result<Unit> = engine.apiResult {
+    override suspend fun markPlayed(itemId: String): Result<Unit> = runCatching {
+        val userId = engine._currentUser.value?.id
+            ?: throw IllegalStateException("Not authenticated")
         engine.requireApi().playStateApi.markPlayedItem(
-            userId = engine._currentUser.value?.id!!.toUUID(),
+            userId = userId.toUUID(),
             itemId = itemId.toUUID(),
         )
     }
 
-    override suspend fun markUnplayed(itemId: String): Result<Unit> = engine.apiResult {
+    override suspend fun markUnplayed(itemId: String): Result<Unit> = runCatching {
+        val userId = engine._currentUser.value?.id
+            ?: throw IllegalStateException("Not authenticated")
         engine.requireApi().playStateApi.markUnplayedItem(
-            userId = engine._currentUser.value?.id!!.toUUID(),
+            userId = userId.toUUID(),
             itemId = itemId.toUUID(),
         )
     }
 
-    override suspend fun toggleFavorite(itemId: String, currentIsFavorite: Boolean?): Result<Boolean> = engine.apiResult {
+    override suspend fun toggleFavorite(itemId: String, currentIsFavorite: Boolean?): Result<Boolean> = runCatching {
+        val userId = engine._currentUser.value?.id
+            ?: throw IllegalStateException("Not authenticated")
         val uuid = itemId.toUUID()
         val cached = favoriteCache[uuid]
         val isFavorite = currentIsFavorite ?: cached ?: run {
@@ -759,14 +765,14 @@ class LibraryApiClientImpl @Inject constructor(
         }
         if (isFavorite) {
             engine.requireApi().userLibraryApi.unmarkFavoriteItem(
-                userId = engine._currentUser.value?.id!!.toUUID(),
+                userId = userId.toUUID(),
                 itemId = uuid,
             )
             favoriteCache.put(uuid, false)
             false
         } else {
             engine.requireApi().userLibraryApi.markFavoriteItem(
-                userId = engine._currentUser.value?.id!!.toUUID(),
+                userId = userId.toUUID(),
                 itemId = uuid,
             )
             favoriteCache.put(uuid, true)

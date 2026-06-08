@@ -64,8 +64,10 @@ class QueuePersistenceHelper @Inject constructor(
     }
 
     private suspend fun persistQueue(items: List<AudioQueueItem>) {
-        audioQueueDao.clearQueue()
-        if (items.isEmpty()) return
+        if (items.isEmpty()) {
+            audioQueueDao.clearQueue()
+            return
+        }
         val entities = items.mapIndexed { index, item ->
             AudioQueueEntity(
                 id = item.id,
@@ -79,7 +81,7 @@ class QueuePersistenceHelper @Inject constructor(
                 normalizationGain = item.normalizationGain,
             )
         }
-        audioQueueDao.insertAll(entities)
+        audioQueueDao.replaceQueue(entities)
     }
 
     private suspend fun persistState(

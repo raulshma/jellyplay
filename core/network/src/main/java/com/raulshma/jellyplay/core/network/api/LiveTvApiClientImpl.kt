@@ -18,7 +18,7 @@ class LiveTvApiClientImpl @Inject constructor(
     override suspend fun getLiveTvChannels(
         startIndex: Int,
         limit: Int,
-    ): Result<List<com.raulshma.jellyplay.core.model.LiveTvChannel>> = engine.apiResult {
+    ): Result<List<com.raulshma.jellyplay.core.model.LiveTvChannel>> = engine.apiResultWithRetry {
         val response = engine.requireApi().itemsApi.getItems(
             includeItemTypes = listOf(BaseItemKind.LIVE_TV_CHANNEL),
             startIndex = startIndex,
@@ -35,7 +35,7 @@ class LiveTvApiClientImpl @Inject constructor(
         channelId: String,
         startDateUtc: String?,
         endDateUtc: String?,
-    ): Result<List<com.raulshma.jellyplay.core.model.LiveTvProgram>> = engine.apiResult {
+    ): Result<List<com.raulshma.jellyplay.core.model.LiveTvProgram>> = engine.apiResultWithRetry {
         val response = engine.requireApi().itemsApi.getItems(
             parentId = channelId.toUUID(),
             includeItemTypes = listOf(BaseItemKind.LIVE_TV_PROGRAM),
@@ -49,7 +49,7 @@ class LiveTvApiClientImpl @Inject constructor(
         endDateUtc: String,
         startIndex: Int,
         limit: Int,
-    ): Result<EpgGuide> = engine.apiResult {
+    ): Result<EpgGuide> = engine.apiResultWithRetry {
         coroutineScope {
             val client = engine.requireApi()
             val channelsDeferred = async {
@@ -71,11 +71,11 @@ class LiveTvApiClientImpl @Inject constructor(
         }
     }
 
-    override suspend fun getTimers(): Result<List<com.raulshma.jellyplay.core.model.DvrTimer>> = engine.apiResult {
+    override suspend fun getTimers(): Result<List<com.raulshma.jellyplay.core.model.DvrTimer>> = engine.apiResultWithRetry {
         engine.requireApi().liveTvApi.getTimers().content.items.map { it.toDvrTimer() }
     }
 
-    override suspend fun getSeriesTimers(): Result<List<com.raulshma.jellyplay.core.model.DvrSeriesTimer>> = engine.apiResult {
+    override suspend fun getSeriesTimers(): Result<List<com.raulshma.jellyplay.core.model.DvrSeriesTimer>> = engine.apiResultWithRetry {
         engine.requireApi().liveTvApi.getSeriesTimers().content.items.map { it.toDvrSeriesTimer() }
     }
 
@@ -84,7 +84,7 @@ class LiveTvApiClientImpl @Inject constructor(
         channelId: String,
         startDate: String?,
         endDate: String?,
-    ): Result<Unit> = engine.apiResult {
+    ): Result<Unit> = engine.apiResultWithRetry {
         engine.requireApi().liveTvApi.createTimer(
             org.jellyfin.sdk.model.api.TimerInfoDto(
                 programId = programId,
@@ -95,7 +95,7 @@ class LiveTvApiClientImpl @Inject constructor(
         )
     }
 
-    override suspend fun cancelTimer(timerId: String): Result<Unit> = engine.apiResult {
+    override suspend fun cancelTimer(timerId: String): Result<Unit> = engine.apiResultWithRetry {
         engine.requireApi().liveTvApi.cancelTimer(timerId = timerId)
     }
 }

@@ -51,9 +51,6 @@
 }
 
 -keep class com.raulshma.jellyplay.core.ui.navigation.Route** { *; }
--keepclassmembers class com.raulshma.jellyplay.core.ui.navigation.Route** {
-    *;
-}
 
 # libmpv - JNI library, must keep all classes and methods
 -keep class is.xyz.mpv.** { *; }
@@ -109,3 +106,7 @@
 -keep class com.google.android.gms.internal.** { *; }
 -dontwarn com.google.mlkit.**
 -dontwarn com.google.android.gms.internal.**
+
+-dontwarn okio.**
+-keep class okio.** { *; }
+-dontwarn org.conscrypt.**

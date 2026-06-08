@@ -1,5 +1,6 @@
 package com.raulshma.jellyplay.core.data.repository
 
+import java.util.Collections
 import androidx.paging.Pager
 import androidx.paging.PagingConfig
 import androidx.paging.PagingData
@@ -51,10 +52,12 @@ class MediaRepositoryImpl @Inject constructor(
     // reflected promptly.
     private data class CachedDetail(val detail: MediaDetail, val fetchedAt: Long)
     private val detailCache: MutableMap<String, CachedDetail> =
-        object : LinkedHashMap<String, CachedDetail>(16, 0.75f, true) {
-            override fun removeEldestEntry(eldest: MutableMap.MutableEntry<String, CachedDetail>?): Boolean =
-                size > DETAIL_CACHE_MAX_ENTRIES
-        }
+        Collections.synchronizedMap(
+            object : LinkedHashMap<String, CachedDetail>(16, 0.75f, true) {
+                override fun removeEldestEntry(eldest: MutableMap.MutableEntry<String, CachedDetail>?): Boolean =
+                    size > DETAIL_CACHE_MAX_ENTRIES
+            }
+        )
 
     fun invalidateDetailCache(itemId: String? = null) {
         if (itemId != null) {
@@ -279,7 +282,7 @@ class MediaRepositoryImpl @Inject constructor(
             val trackSynced = track.syncedLyrics
             val trackPlain = track.plainLyrics
             if (track.instrumental) {
-                lyricsCacheDao.insert(
+                lyricsCacheDao.upsert(
                     LyricsCacheEntity(
                         itemId = itemId,
                         provider = LyricsSource.LRCLIB.name,
@@ -295,7 +298,7 @@ class MediaRepositoryImpl @Inject constructor(
             if (!trackSynced.isNullOrBlank()) {
                 val lines = parseLrc(trackSynced)
                 if (lines.isNotEmpty()) {
-                    lyricsCacheDao.insert(
+                    lyricsCacheDao.upsert(
                         LyricsCacheEntity(
                             itemId = itemId,
                             provider = LyricsSource.LRCLIB.name,
@@ -314,7 +317,7 @@ class MediaRepositoryImpl @Inject constructor(
             if (!trackPlain.isNullOrBlank()) {
                 val lines = trackPlain.lineSequence().filter { it.isNotBlank() }
                     .map { LyricsLine(timeMs = 0L, text = it.trim()) }.toList()
-                lyricsCacheDao.insert(
+                lyricsCacheDao.upsert(
                     LyricsCacheEntity(
                         itemId = itemId,
                         provider = LyricsSource.LRCLIB.name,
@@ -330,7 +333,7 @@ class MediaRepositoryImpl @Inject constructor(
             }
         }
 
-        lyricsCacheDao.insert(
+        lyricsCacheDao.upsert(
             LyricsCacheEntity(
                 itemId = itemId,
                 provider = LyricsSource.UNKNOWN.name,
@@ -358,7 +361,7 @@ class MediaRepositoryImpl @Inject constructor(
             } else {
                 emptyList()
             }
-            lyricsCacheDao.insert(
+            lyricsCacheDao.upsert(
                 LyricsCacheEntity(
                     itemId = itemId,
                     provider = LyricsSource.LRCLIB.name,
@@ -515,7 +518,7 @@ class MediaRepositoryImpl @Inject constructor(
             val sec = (line.timeMs % 60_000) / 1000.0
             "[%02d:%06.3f] %s".format(min, sec, line.text)
         }
-        lyricsCacheDao.insert(
+        lyricsCacheDao.upsert(
             LyricsCacheEntity(
                 itemId = itemId,
                 provider = source.name,
