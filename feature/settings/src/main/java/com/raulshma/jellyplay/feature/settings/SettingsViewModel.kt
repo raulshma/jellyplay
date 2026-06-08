@@ -318,6 +318,10 @@ class SettingsViewModel @Inject constructor(
         launch { preferencesStore.setBiometricLockEnabled(enabled) }
     }
 
+    fun setShowAdvancedSettings(enabled: Boolean) {
+        launch { preferencesStore.setShowAdvancedSettings(enabled) }
+    }
+
     fun setAutoLockTimerMs(ms: Long) {
         launch { preferencesStore.setAutoLockTimerMs(ms) }
     }

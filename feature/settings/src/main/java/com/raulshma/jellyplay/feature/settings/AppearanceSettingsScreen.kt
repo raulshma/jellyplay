@@ -42,6 +42,7 @@ fun AppearanceSettingsScreen(
     viewModel: SettingsViewModel = hiltViewModel(),
 ) {
     val preferences = viewModel.preferences
+    val showAdvanced = preferences.showAdvancedSettings
     val adaptiveInfo = LocalAdaptiveInfo.current
     val isTv = LocalTvMode.current
     val backgroundColor = com.raulshma.jellyplay.core.ui.components.rememberScreenBackgroundColor()
@@ -50,6 +51,12 @@ fun AppearanceSettingsScreen(
         title = "Appearance",
         onBack = onBack,
         backgroundColor = backgroundColor,
+        actions = {
+            AdvancedSettingsToggleButton(
+                showAdvanced = showAdvanced,
+                onToggle = { viewModel.setShowAdvancedSettings(!showAdvanced) },
+            )
+        },
     ) { innerPadding ->
         LazyColumn(
             modifier = Modifier
@@ -92,10 +99,12 @@ fun AppearanceSettingsScreen(
                         add("color_style")
                         if (isAndroid12) add("dynamic_theming")
                         if (isDarkActive) add("oled_mode")
-                        add("contrast")
-                        add("home_mode")
-                        add("hero_section")
-                        add("nav_labels")
+                        if (showAdvanced) {
+                            add("contrast")
+                            add("home_mode")
+                            add("hero_section")
+                            add("nav_labels")
+                        }
                     }
                     val totalCount = appearanceItems.size
                     var currentIdx = 0
@@ -216,6 +225,7 @@ fun AppearanceSettingsScreen(
                 }
             }
 
+            if (showAdvanced) {
             item {
                 SettingsGroup(
                     icon = Tabler.Outline.Bolt,
@@ -328,6 +338,16 @@ fun AppearanceSettingsScreen(
                             onDragEnd = { draggingSection = null; persistHomeSectionOrder() },
                         )
                     }
+                }
+            }
+            }
+
+            if (!showAdvanced) {
+                item {
+                    HiddenSettingsHint(
+                        hiddenCount = 6,
+                        onShowAdvanced = { viewModel.setShowAdvancedSettings(true) },
+                    )
                 }
             }
         }

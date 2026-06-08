@@ -65,6 +65,7 @@ fun LanguageSettingsScreen(
     viewModel: SettingsViewModel = hiltViewModel(),
 ) {
     val preferences = viewModel.preferences
+    val showAdvanced = preferences.showAdvancedSettings
     val adaptiveInfo = LocalAdaptiveInfo.current
     val isTv = LocalTvMode.current
     var activeDialog by remember { mutableStateOf<LanguageSettingsDialog>(LanguageSettingsDialog.None) }
@@ -76,6 +77,12 @@ fun LanguageSettingsScreen(
         title = "Language & Subtitles",
         onBack = onBack,
         backgroundColor = backgroundColor,
+        actions = {
+            AdvancedSettingsToggleButton(
+                showAdvanced = showAdvanced,
+                onToggle = { viewModel.setShowAdvancedSettings(!showAdvanced) },
+            )
+        },
     ) { innerPadding ->
         LazyColumn(
             modifier = Modifier
@@ -121,54 +128,66 @@ fun LanguageSettingsScreen(
                     summary = { "Font size: ${preferences.subtitleStyle.fontSize}sp" },
                     modifier = Modifier.padding(vertical = 8.dp),
                 ) {
-                    val subTotal = 6
+                    var subIdx = 0
+                    val subTotal = if (showAdvanced) 6 else 3
                     SettingListItem(
                         icon = Tabler.Outline.Typography,
                         title = "Font Size",
                         subtitle = "Subtitle text size",
                         trailingText = "${preferences.subtitleStyle.fontSize}sp",
-                        index = 0, count = subTotal,
+                        index = subIdx++, count = subTotal,
                         onClick = { activeDialog = LanguageSettingsDialog.SubtitleFontPicker },
                     )
-                    SettingListItem(
-                        icon = Tabler.Outline.Palette,
-                        title = "Text Color",
-                        subtitle = "Subtitle text color",
-                        trailingText = preferences.subtitleStyle.fontColor.name,
-                        index = 1, count = subTotal,
-                        onClick = { activeDialog = LanguageSettingsDialog.SubtitleColorPicker },
-                    )
-                    SettingListItem(
-                        icon = Tabler.Outline.Background,
-                        title = "Background",
-                        subtitle = "Subtitle background color and opacity",
-                        trailingText = preferences.subtitleStyle.backgroundColor.name,
-                        index = 2, count = subTotal,
-                        onClick = { activeDialog = LanguageSettingsDialog.SubtitleBgColorPicker },
-                    )
-                    SettingListItem(
-                        icon = Tabler.Outline.BorderAll,
-                        title = "Edge Style",
-                        subtitle = "Subtitle outline style",
-                        trailingText = preferences.subtitleStyle.edgeType.name,
-                        index = 3, count = subTotal,
-                        onClick = { activeDialog = LanguageSettingsDialog.SubtitleEdgePicker },
-                    )
-                    SettingListItem(
-                        icon = Tabler.Outline.Clock,
-                        title = "Sync Offset",
-                        subtitle = if (preferences.subtitleStyle.offsetMs == 0L) "No offset" else "${preferences.subtitleStyle.offsetMs}ms",
-                        trailingText = "${preferences.subtitleStyle.offsetMs}ms",
-                        index = 4, count = subTotal,
-                        onClick = { activeDialog = LanguageSettingsDialog.SubtitleOffsetPicker },
-                    )
-                    SettingListItem(
-                        icon = Tabler.Outline.ArrowBarDown,
-                        title = "Vertical Position",
-                        subtitle = "Subtitle vertical position on screen",
-                        trailingText = "${(preferences.subtitleStyle.verticalPosition * 100).toInt()}%",
-                        index = 5, count = subTotal,
-                        onClick = { activeDialog = LanguageSettingsDialog.SubtitlePositionPicker },
+                    if (showAdvanced) {
+                        SettingListItem(
+                            icon = Tabler.Outline.Palette,
+                            title = "Text Color",
+                            subtitle = "Subtitle text color",
+                            trailingText = preferences.subtitleStyle.fontColor.name,
+                            index = subIdx++, count = subTotal,
+                            onClick = { activeDialog = LanguageSettingsDialog.SubtitleColorPicker },
+                        )
+                        SettingListItem(
+                            icon = Tabler.Outline.Background,
+                            title = "Background",
+                            subtitle = "Subtitle background color and opacity",
+                            trailingText = preferences.subtitleStyle.backgroundColor.name,
+                            index = subIdx++, count = subTotal,
+                            onClick = { activeDialog = LanguageSettingsDialog.SubtitleBgColorPicker },
+                        )
+                        SettingListItem(
+                            icon = Tabler.Outline.BorderAll,
+                            title = "Edge Style",
+                            subtitle = "Subtitle outline style",
+                            trailingText = preferences.subtitleStyle.edgeType.name,
+                            index = subIdx++, count = subTotal,
+                            onClick = { activeDialog = LanguageSettingsDialog.SubtitleEdgePicker },
+                        )
+                        SettingListItem(
+                            icon = Tabler.Outline.Clock,
+                            title = "Sync Offset",
+                            subtitle = if (preferences.subtitleStyle.offsetMs == 0L) "No offset" else "${preferences.subtitleStyle.offsetMs}ms",
+                            trailingText = "${preferences.subtitleStyle.offsetMs}ms",
+                            index = subIdx++, count = subTotal,
+                            onClick = { activeDialog = LanguageSettingsDialog.SubtitleOffsetPicker },
+                        )
+                        SettingListItem(
+                            icon = Tabler.Outline.ArrowBarDown,
+                            title = "Vertical Position",
+                            subtitle = "Subtitle vertical position on screen",
+                            trailingText = "${(preferences.subtitleStyle.verticalPosition * 100).toInt()}%",
+                            index = subIdx, count = subTotal,
+                            onClick = { activeDialog = LanguageSettingsDialog.SubtitlePositionPicker },
+                        )
+                    }
+                }
+            }
+
+            if (!showAdvanced) {
+                item {
+                    HiddenSettingsHint(
+                        hiddenCount = 5,
+                        onShowAdvanced = { viewModel.setShowAdvancedSettings(true) },
                     )
                 }
             }

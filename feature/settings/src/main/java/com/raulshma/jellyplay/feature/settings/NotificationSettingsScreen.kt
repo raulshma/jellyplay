@@ -62,6 +62,7 @@ fun NotificationSettingsScreen(
     viewModel: SettingsViewModel = hiltViewModel(),
 ) {
     val preferences = viewModel.preferences
+    val showAdvanced = preferences.showAdvancedSettings
     val adaptiveInfo = LocalAdaptiveInfo.current
     val isTv = LocalTvMode.current
     var activeDialog by remember { mutableStateOf<NotificationSettingsDialog>(NotificationSettingsDialog.None) }
@@ -71,6 +72,12 @@ fun NotificationSettingsScreen(
         title = "Notifications",
         onBack = onBack,
         backgroundColor = backgroundColor,
+        actions = {
+            AdvancedSettingsToggleButton(
+                showAdvanced = showAdvanced,
+                onToggle = { viewModel.setShowAdvancedSettings(!showAdvanced) },
+            )
+        },
     ) { innerPadding ->
         val notifPrefs = preferences.notificationPreferences
 
@@ -95,13 +102,27 @@ fun NotificationSettingsScreen(
                     modifier = Modifier.padding(vertical = 8.dp),
                     initiallyExpanded = true,
                 ) {
-                    val baseCount = 9
+                    var notifIdx = 0
+                    val notifBaseTotal = run {
+                        var c = 2
+                        if (notifPrefs.enabled) {
+                            c += 2
+                            if (showAdvanced) {
+                                c += 1
+                                if (notifPrefs.quietHoursEnabled) c += 2
+                                c += 2
+                            }
+                        }
+                        c
+                    }
+                    val notifTotal = notifBaseTotal
+
                     SettingToggleItem(
                         icon = Tabler.Outline.Bell,
                         title = "Enable Notifications",
                         subtitle = "Get notified when new media is added to your server",
                         checked = notifPrefs.enabled,
-                        index = 0, count = baseCount,
+                        index = notifIdx++, count = notifTotal,
                         onCheckedChange = { enabled ->
                             viewModel.updateNotificationPreferences { it.copy(enabled = enabled) }
                         },
@@ -112,44 +133,45 @@ fun NotificationSettingsScreen(
                             title = "Check Frequency",
                             subtitle = "How often to check for new media",
                             trailingText = notifPrefs.checkFrequency.displayName,
-                            index = 1, count = baseCount,
+                            index = notifIdx++, count = notifTotal,
                             onClick = { activeDialog = NotificationSettingsDialog.FrequencyPicker },
                         )
-                        SettingToggleItem(
-                            icon = Tabler.Outline.Moon,
-                            title = "Quiet Hours",
-                            subtitle = "Suppress notifications during set hours",
-                            checked = notifPrefs.quietHoursEnabled,
-                            index = 2, count = baseCount,
-                            onCheckedChange = { enabled ->
-                                viewModel.updateNotificationPreferences { it.copy(quietHoursEnabled = enabled) }
-                            },
-                        )
-                        if (notifPrefs.quietHoursEnabled) {
-                            SettingListItem(
-                                icon = Tabler.Outline.Sunset,
-                                title = "Quiet Start",
-                                subtitle = "Begin quiet hours",
-                                trailingText = formatMinutes(notifPrefs.quietHoursStart),
-                                index = 3, count = baseCount,
-                                onClick = { activeDialog = NotificationSettingsDialog.QuietStartPicker },
+                        if (showAdvanced) {
+                            SettingToggleItem(
+                                icon = Tabler.Outline.Moon,
+                                title = "Quiet Hours",
+                                subtitle = "Suppress notifications during set hours",
+                                checked = notifPrefs.quietHoursEnabled,
+                                index = notifIdx++, count = notifTotal,
+                                onCheckedChange = { enabled ->
+                                    viewModel.updateNotificationPreferences { it.copy(quietHoursEnabled = enabled) }
+                                },
                             )
-                            SettingListItem(
-                                icon = Tabler.Outline.Sunrise,
-                                title = "Quiet End",
-                                subtitle = "End quiet hours",
-                                trailingText = formatMinutes(notifPrefs.quietHoursEnd),
-                                index = 4, count = baseCount,
-                                onClick = { activeDialog = NotificationSettingsDialog.QuietEndPicker },
-                            )
+                            if (notifPrefs.quietHoursEnabled) {
+                                SettingListItem(
+                                    icon = Tabler.Outline.Sunset,
+                                    title = "Quiet Start",
+                                    subtitle = "Begin quiet hours",
+                                    trailingText = formatMinutes(notifPrefs.quietHoursStart),
+                                    index = notifIdx++, count = notifTotal,
+                                    onClick = { activeDialog = NotificationSettingsDialog.QuietStartPicker },
+                                )
+                                SettingListItem(
+                                    icon = Tabler.Outline.Sunrise,
+                                    title = "Quiet End",
+                                    subtitle = "End quiet hours",
+                                    trailingText = formatMinutes(notifPrefs.quietHoursEnd),
+                                    index = notifIdx++, count = notifTotal,
+                                    onClick = { activeDialog = NotificationSettingsDialog.QuietEndPicker },
+                                )
+                            }
                         }
                         SettingToggleItem(
                             icon = Tabler.Outline.Volume,
                             title = "Sound",
                             subtitle = "Play notification sound",
                             checked = notifPrefs.soundEnabled,
-                            index = if (notifPrefs.quietHoursEnabled) 5 else 3,
-                            count = baseCount,
+                            index = notifIdx++, count = notifTotal,
                             onCheckedChange = { enabled ->
                                 viewModel.updateNotificationPreferences { it.copy(soundEnabled = enabled) }
                             },
@@ -159,34 +181,42 @@ fun NotificationSettingsScreen(
                             title = "Vibrate",
                             subtitle = "Vibrate on notification",
                             checked = notifPrefs.vibrateEnabled,
-                            index = if (notifPrefs.quietHoursEnabled) 6 else 4,
-                            count = baseCount,
+                            index = notifIdx++, count = notifTotal,
                             onCheckedChange = { enabled ->
                                 viewModel.updateNotificationPreferences { it.copy(vibrateEnabled = enabled) }
                             },
                         )
-                        SettingListItem(
-                            icon = Tabler.Outline.LetterCase,
-                            title = "Max Per Check",
-                            subtitle = "Maximum items per notification batch",
-                            trailingText = "${notifPrefs.maxPerCheck}",
-                            index = if (notifPrefs.quietHoursEnabled) 7 else 5,
-                            count = baseCount,
-                            onClick = { },
-                        )
-                        val libraryCount = viewModel.libraryFolders.size
-                        val enabledLibraries = viewModel.libraryFolders.count { folder ->
-                            notifPrefs.libraryConfigs[folder.id]?.enabled ?: true
+                        if (showAdvanced) {
+                            SettingListItem(
+                                icon = Tabler.Outline.LetterCase,
+                                title = "Max Per Check",
+                                subtitle = "Maximum items per notification batch",
+                                trailingText = "${notifPrefs.maxPerCheck}",
+                                index = notifIdx++, count = notifTotal,
+                                onClick = { },
+                            )
+                            val libraryCount = viewModel.libraryFolders.size
+                            val enabledLibraries = viewModel.libraryFolders.count { folder ->
+                                notifPrefs.libraryConfigs[folder.id]?.enabled ?: true
+                            }
+                            SettingListItem(
+                                icon = Tabler.Outline.Folders,
+                                title = "Libraries",
+                                subtitle = "$enabledLibraries of $libraryCount libraries monitored",
+                                index = notifIdx, count = notifTotal,
+                                onClick = { },
+                            )
                         }
-                        SettingListItem(
-                            icon = Tabler.Outline.Folders,
-                            title = "Libraries",
-                            subtitle = "$enabledLibraries of $libraryCount libraries monitored",
-                            index = if (notifPrefs.quietHoursEnabled) 8 else 6,
-                            count = baseCount,
-                            onClick = { },
-                        )
                     }
+                }
+            }
+
+            if (!showAdvanced) {
+                item {
+                    HiddenSettingsHint(
+                        hiddenCount = if (notifPrefs.enabled) 4 else 0,
+                        onShowAdvanced = { viewModel.setShowAdvancedSettings(true) },
+                    )
                 }
             }
         }
