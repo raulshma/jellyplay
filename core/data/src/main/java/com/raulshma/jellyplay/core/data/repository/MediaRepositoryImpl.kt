@@ -113,13 +113,17 @@ class MediaRepositoryImpl @Inject constructor(
     )
 
     override suspend fun getMediaDetail(itemId: String): Result<MediaDetail> {
+        val now = android.os.SystemClock.elapsedRealtime()
         val cached = detailCache[itemId]
-        if (cached != null && android.os.SystemClock.elapsedRealtime() - cached.fetchedAt < DETAIL_CACHE_TTL_MS) {
+        if (cached != null && now - cached.fetchedAt < DETAIL_CACHE_TTL_MS) {
             return Result.success(cached.detail)
         }
         return apiClient.getMediaDetail(itemId).also { result ->
             result.getOrNull()?.let { detail ->
-                detailCache[itemId] = CachedDetail(detail, android.os.SystemClock.elapsedRealtime())
+                val existing = detailCache[itemId]
+                if (existing == null || existing.fetchedAt < now) {
+                    detailCache[itemId] = CachedDetail(detail, android.os.SystemClock.elapsedRealtime())
+                }
             }
         }
     }

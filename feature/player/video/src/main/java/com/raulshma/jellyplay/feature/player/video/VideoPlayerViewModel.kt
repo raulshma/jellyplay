@@ -425,6 +425,10 @@ class VideoPlayerViewModel @Inject constructor(
             val source = sessionState.currentMediaSource
             val detail = sessionState.mediaDetail
 
+            if (sessionState.streamUrl != null) {
+                _uiState.update { it.copy(streamUrl = sessionState.streamUrl) }
+            }
+
             createVideoMediaSession(itemId, sessionState.title, sessionState.subtitle)
 
             if (detail != null) {
@@ -1410,9 +1414,10 @@ class VideoPlayerViewModel @Inject constructor(
         } else {
             val itemId = playerSessionManager.sessionState.value.currentItemId
             if (itemId != null) {
-                val stored = preferencesStore.preferences.value.mediaStreamSelections[itemId]
+                val currentPrefs = preferencesStore.preferences.value
+                val stored = currentPrefs.mediaStreamSelections[itemId]
                 val audioIdx = stored?.audioStreamIndex
-                val prefLang = preferencesStore.preferences.value.preferredAudioLanguage
+                val prefAudioLang = currentPrefs.preferredAudioLanguage
                 if (audioIdx != null) {
                     val targetStream = streams.firstOrNull {
                         it.type == com.raulshma.jellyplay.core.model.StreamType.AUDIO && it.index == audioIdx
@@ -1421,8 +1426,8 @@ class VideoPlayerViewModel @Inject constructor(
                     if (targetLabel != null) {
                         audioTracks.firstOrNull { it.index >= 0 && it.label == targetLabel }?.let { selectAudioTrack(it) }
                     }
-                } else if (prefLang != null) {
-                    audioTracks.firstOrNull { it.index >= 0 && it.language.equals(prefLang, ignoreCase = true) }?.let { selectAudioTrack(it) }
+                } else if (prefAudioLang != null) {
+                    audioTracks.firstOrNull { it.index >= 0 && it.language.equals(prefAudioLang, ignoreCase = true) }?.let { selectAudioTrack(it) }
                 }
             }
         }
@@ -1430,8 +1435,8 @@ class VideoPlayerViewModel @Inject constructor(
         val pending = pendingSubtitleStreamIndex
         if (pending != null) {
             pendingSubtitleStreamIndex = null
-            val streams = _uiState.value.mediaStreams
-            val targetStream = streams.firstOrNull { it.type == com.raulshma.jellyplay.core.model.StreamType.SUBTITLE && it.index == pending }
+            val subStreams = _uiState.value.mediaStreams
+            val targetStream = subStreams.firstOrNull { it.type == com.raulshma.jellyplay.core.model.StreamType.SUBTITLE && it.index == pending }
             if (targetStream != null) {
                 val targetLabel = targetStream.displayTitle ?: targetStream.title ?: targetStream.language
                 val match = subtitleTracks.firstOrNull { it.index >= 0 && it.label == targetLabel }
@@ -1442,9 +1447,10 @@ class VideoPlayerViewModel @Inject constructor(
         } else {
             val itemId = playerSessionManager.sessionState.value.currentItemId
             if (itemId != null) {
-                val stored = preferencesStore.preferences.value.mediaStreamSelections[itemId]
+                val currentPrefs = preferencesStore.preferences.value
+                val stored = currentPrefs.mediaStreamSelections[itemId]
                 val subIdx = stored?.subtitleStreamIndex
-                val prefLang = preferencesStore.preferences.value.preferredSubtitleLanguage
+                val prefSubLang = currentPrefs.preferredSubtitleLanguage
                 if (subIdx != null) {
                     val targetStream = streams.firstOrNull {
                         it.type == com.raulshma.jellyplay.core.model.StreamType.SUBTITLE && it.index == subIdx
@@ -1453,8 +1459,8 @@ class VideoPlayerViewModel @Inject constructor(
                     if (targetLabel != null) {
                         subtitleTracks.firstOrNull { it.index >= 0 && it.label == targetLabel }?.let { selectSubtitleTrack(it) }
                     }
-                } else if (prefLang != null) {
-                    subtitleTracks.firstOrNull { it.index >= 0 && it.language.equals(prefLang, ignoreCase = true) }?.let { selectSubtitleTrack(it) }
+                } else if (prefSubLang != null) {
+                    subtitleTracks.firstOrNull { it.index >= 0 && it.language.equals(prefSubLang, ignoreCase = true) }?.let { selectSubtitleTrack(it) }
                 }
             }
         }

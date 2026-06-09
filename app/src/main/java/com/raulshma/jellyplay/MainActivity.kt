@@ -29,7 +29,9 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
-import androidx.compose.runtime.SideEffect
+import androidx.compose.runtime.derivedStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.LaunchedEffect
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.lifecycleScope
@@ -161,17 +163,26 @@ class MainActivity : FragmentActivity() {
                 }
             }
 
-            val hasLockEnabled = preferences.pinLockEnabled || preferences.biometricLockEnabled
-            val showLockScreen = hasLockEnabled && !isPinUnlocked.value
+            val isSystemDark = isSystemInDarkTheme()
+            val hasLockEnabled by remember {
+                derivedStateOf { preferences.pinLockEnabled || preferences.biometricLockEnabled }
+            }
+            val showLockScreen by remember {
+                derivedStateOf { hasLockEnabled && !isPinUnlocked.value }
+            }
 
-            val darkTheme = preferences.synthwaveMode || when (preferences.themeMode) {
-                ThemeMode.DARK -> true
-                ThemeMode.LIGHT -> false
-                ThemeMode.SYSTEM -> isSystemInDarkTheme()
+            val darkTheme by remember {
+                derivedStateOf {
+                    preferences.synthwaveMode || when (preferences.themeMode) {
+                        ThemeMode.DARK -> true
+                        ThemeMode.LIGHT -> false
+                        ThemeMode.SYSTEM -> isSystemDark
+                    }
+                }
             }
 
             val activity = this
-            SideEffect {
+            LaunchedEffect(darkTheme) {
                 activity.enableEdgeToEdge(
                     statusBarStyle = if (darkTheme) {
                         SystemBarStyle.dark(Color.TRANSPARENT)

@@ -32,7 +32,7 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.collectAsState
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
@@ -87,7 +87,7 @@ fun UserStatisticsDetailScreen(
     viewModel: UserStatisticsDetailViewModel = hiltViewModel(),
 ) {
     LaunchedEffect(userId) { viewModel.loadUser(userId) }
-    val state by viewModel.state.collectAsState()
+    val state by viewModel.state.collectAsStateWithLifecycle()
     val adaptiveInfo = LocalAdaptiveInfo.current
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
