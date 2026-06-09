@@ -602,8 +602,14 @@ private fun FullImageDialog(
                 },
             contentAlignment = Alignment.Center,
         ) {
+            val context = LocalContext.current
             AsyncImage(
-                model = imageUrl,
+                model = remember(imageUrl) {
+                    ImageRequest.Builder(context)
+                        .data(imageUrl)
+                        .size(1024, 1024)
+                        .build()
+                },
                 contentDescription = imageInfo.imageType,
                 modifier = Modifier
                     .fillMaxWidth()

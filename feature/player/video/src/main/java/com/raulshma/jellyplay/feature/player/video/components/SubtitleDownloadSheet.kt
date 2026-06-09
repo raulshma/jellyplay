@@ -91,7 +91,7 @@ fun SubtitleDownloadSheet(
                 )
             } else {
                 LazyColumn {
-                    itemsIndexed(subtitles, contentType = { _, _ -> "subtitle" }) { index, sub ->
+                    itemsIndexed(subtitles, key = { _, sub -> sub.id }, contentType = { _, _ -> "subtitle" }) { index, sub ->
                         val shape = when {
                             subtitles.size == 1 -> ShapeCache.smooth16
                             index == 0 -> com.raulshma.jellyplay.core.designsystem.theme.expressiveListShape(0, subtitles.size)
