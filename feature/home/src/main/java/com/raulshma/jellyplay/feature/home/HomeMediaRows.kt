@@ -12,6 +12,7 @@ import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.aspectRatio
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
@@ -255,6 +256,23 @@ fun WideMediaCard(
                         buttonSize = playButtonSize,
                     )
                 }
+
+                if (hasProgress && progressPercent > 0f) {
+                    Box(
+                        modifier = Modifier
+                            .align(Alignment.BottomCenter)
+                            .fillMaxWidth()
+                            .height(4.dp)
+                            .background(MaterialTheme.colorScheme.onSurface.copy(alpha = 0.2f))
+                    ) {
+                        Box(
+                            modifier = Modifier
+                                .fillMaxHeight()
+                                .fillMaxWidth(progressPercent)
+                                .background(MaterialTheme.colorScheme.primary)
+                        )
+                    }
+                }
             }
         }
 
@@ -272,49 +290,63 @@ fun WideMediaCard(
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
             )
-            if (item.seriesName != null) {
-                Text(
-                    text = item.seriesName!!,
-                    style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f),
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                )
-            } else {
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(4.dp),
-                ) {
-                    if (item.year != null) {
-                        Text(
-                            text = item.year.toString(),
-                            style = MaterialTheme.typography.labelSmall,
-                            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.55f),
-                        )
-                    }
-                    val isSeries = item.mediaType == MediaType.SERIES
-                    val hasValidDuration = item.runTimeTicks != null && item.runTimeTicks!! > 0 && !isSeries
-                    val hasWatchProgress = item.playbackPositionTicks != null && item.playbackPositionTicks!! > 0 && !item.isPlayed
-                    val remainingTime = if (hasWatchProgress && hasValidDuration) {
-                        formatRemainingTimeFromTicks(item.runTimeTicks!!, item.playbackPositionTicks!!)
-                    } else null
-                    val totalTime = if (hasValidDuration && !hasWatchProgress) {
-                        formatDurationFromTicks(item.runTimeTicks!!)
-                    } else null
+            val isSeries = item.mediaType == MediaType.SERIES
+            val hasValidDuration = item.runTimeTicks != null && item.runTimeTicks!! > 0 && !isSeries
+            val hasWatchProgress = item.playbackPositionTicks != null && item.playbackPositionTicks!! > 0 && !item.isPlayed
+            val remainingTime = if (hasWatchProgress && hasValidDuration) {
+                formatRemainingTimeFromTicks(item.runTimeTicks!!, item.playbackPositionTicks!!)
+            } else null
+            val totalTime = if (hasValidDuration && !hasWatchProgress) {
+                formatDurationFromTicks(item.runTimeTicks!!)
+            } else null
 
-                    val timeText = remainingTime ?: totalTime
-                    if (timeText != null) {
+            val timeText = remainingTime ?: totalTime
+
+            val subtitleText = remember(item) {
+                val parts = mutableListOf<String>()
+                item.seriesName?.takeIf { it.isNotBlank() }?.let { parts.add(it) }
+                item.seasonNumber?.let { season ->
+                    item.episodeNumber?.let { ep ->
+                        parts.add("S${season}E${ep.toString().padStart(2, '0')}")
+                    } ?: parts.add("S$season")
+                }
+                parts.joinToString(" · ")
+            }
+
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(4.dp),
+            ) {
+                if (subtitleText.isNotEmpty()) {
+                    Text(
+                        text = subtitleText,
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f),
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier.weight(1f, fill = false),
+                    )
+                } else if (item.year != null) {
+                    Text(
+                        text = item.year.toString(),
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.55f),
+                    )
+                }
+
+                if (timeText != null) {
+                    if (subtitleText.isNotEmpty() || item.year != null) {
                         Text(
                             text = "•",
                             style = MaterialTheme.typography.labelSmall,
                             color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.4f),
                         )
-                        Text(
-                            text = if (remainingTime != null) "$timeText left" else timeText,
-                            style = MaterialTheme.typography.labelSmall,
-                            color = if (remainingTime != null) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.55f),
-                        )
                     }
+                    Text(
+                        text = if (remainingTime != null) "$timeText left" else timeText,
+                        style = MaterialTheme.typography.labelSmall,
+                        color = if (remainingTime != null) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.55f),
+                    )
                 }
             }
         }
