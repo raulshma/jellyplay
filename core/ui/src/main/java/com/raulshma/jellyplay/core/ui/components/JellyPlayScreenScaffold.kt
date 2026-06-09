@@ -44,6 +44,8 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Brush
+import com.raulshma.jellyplay.core.designsystem.theme.LocalIsSynthwave
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.input.nestedscroll.nestedScroll
@@ -66,6 +68,9 @@ fun rememberScreenBackgroundColor(
     artworkColor: Color? = null,
     isLightTheme: Boolean = isLightColor(MaterialTheme.colorScheme.background),
 ): Color {
+    val isSynthwave = LocalIsSynthwave.current
+    if (isSynthwave) return Color.Transparent
+
     val baseColor = artworkColor
         ?: MaterialTheme.colorScheme.background
     val targetBackgroundColor = if (isLightTheme) {
@@ -108,10 +113,21 @@ fun JellyPlayScreenScaffold(
 
     val isTv = LocalTvMode.current
 
+    val isSynthwave = LocalIsSynthwave.current
+    val backgroundModifier = if (isSynthwave) {
+        Modifier.background(
+            Brush.verticalGradient(
+                colors = listOf(Color(0xFF0D061A), Color(0xFF1B0B3A))
+            )
+        )
+    } else {
+        Modifier.background(backgroundColor)
+    }
+
     Box(
         modifier = Modifier
             .fillMaxSize()
-            .background(backgroundColor)
+            .then(backgroundModifier)
             .then(
                 if (scrollBehavior != null) Modifier.nestedScroll(scrollBehavior.nestedScrollConnection)
                 else Modifier

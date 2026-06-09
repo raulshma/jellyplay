@@ -164,7 +164,7 @@ class MainActivity : FragmentActivity() {
             val hasLockEnabled = preferences.pinLockEnabled || preferences.biometricLockEnabled
             val showLockScreen = hasLockEnabled && !isPinUnlocked.value
 
-            val darkTheme = when (preferences.themeMode) {
+            val darkTheme = preferences.synthwaveMode || when (preferences.themeMode) {
                 ThemeMode.DARK -> true
                 ThemeMode.LIGHT -> false
                 ThemeMode.SYSTEM -> isSystemInDarkTheme()
@@ -195,6 +195,10 @@ class MainActivity : FragmentActivity() {
                 performanceMode = preferences.performanceMode,
                 accentColorSwatch = preferences.accentColorSwatch,
                 colorStyle = preferences.colorStyle,
+                synthwaveMode = preferences.synthwaveMode,
+                synthwaveAccent = preferences.synthwaveAccent,
+                soothingMode = preferences.soothingMode,
+                soothingAccent = preferences.soothingAccent,
             ) {
                 if (showLockScreen) {
                     AuthChallengeScreen(

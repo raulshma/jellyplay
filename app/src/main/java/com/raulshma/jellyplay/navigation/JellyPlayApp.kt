@@ -89,6 +89,9 @@ import com.raulshma.jellyplay.core.ui.adaptive.LocalAdaptiveInfo
 import com.raulshma.jellyplay.core.ui.adaptive.WindowSizeClass
 import com.raulshma.jellyplay.core.ui.adaptive.rememberAdaptiveInfo
 import com.raulshma.jellyplay.core.designsystem.theme.TvTypography
+import com.raulshma.jellyplay.core.designsystem.theme.LocalIsSynthwave
+import com.raulshma.jellyplay.core.designsystem.theme.LocalIsSoothingTheme
+import com.raulshma.jellyplay.core.designsystem.theme.ShapeCache
 import com.raulshma.jellyplay.core.ui.components.LocalNavigationBarColor
 import com.raulshma.jellyplay.core.ui.components.MiniPlayer
 import com.raulshma.jellyplay.core.ui.components.LocalPerformanceMode
@@ -249,6 +252,8 @@ private fun MainContent(
 ) {
     val preferences by viewModel.preferences.collectAsStateWithLifecycle()
     val homeMode = preferences.homeMode
+    val isSynthwave = com.raulshma.jellyplay.core.designsystem.theme.LocalIsSynthwave.current
+    val isSoothing = com.raulshma.jellyplay.core.designsystem.theme.LocalIsSoothingTheme.current
 
     val navigationState = rememberNavigationState(
         startRoute = Route.Home,
@@ -505,10 +510,20 @@ private fun MainContent(
                             navigationRailContainerColor = animatedNavBarColor,
                         ),
                     ) {
+                        val appBackgroundModifier = if (isSynthwave) {
+                            Modifier.background(
+                                androidx.compose.ui.graphics.Brush.verticalGradient(
+                                    colors = listOf(Color(0xFF0D061A), Color(0xFF1B0B3A))
+                                )
+                            )
+                        } else {
+                            Modifier.background(MaterialTheme.colorScheme.background)
+                        }
+
                         Box(
                             modifier = Modifier
                                 .fillMaxSize()
-                                .background(MaterialTheme.colorScheme.background)
+                                .then(appBackgroundModifier)
                                 .then(if (!isExpanded) Modifier.nestedScroll(nestedScrollConnection) else Modifier)
                         ) {
                             Box(modifier = Modifier.fillMaxSize()) {
@@ -1104,12 +1119,55 @@ private fun FloatingNavigationBar(
     containerColor: Color = MaterialTheme.colorScheme.surfaceContainer,
     modifier: Modifier = Modifier,
 ) {
+    val isSynthwave = LocalIsSynthwave.current
+    val isSoothing = LocalIsSoothingTheme.current
+
+    val synthwaveTint = Color(0xFF160C2D).copy(alpha = 0.92f)
+    val soothingTint = if (androidx.compose.foundation.isSystemInDarkTheme()) {
+        Color(0xFF161B22).copy(alpha = 0.88f)
+    } else {
+        Color(0xFFFFFFFF).copy(alpha = 0.88f)
+    }
+    val resolvedColor = when {
+        isSynthwave -> synthwaveTint
+        isSoothing -> soothingTint
+        else -> containerColor.copy(alpha = 0.90f)
+    }
+
+    val border = when {
+        isSynthwave -> {
+            androidx.compose.foundation.BorderStroke(
+                width = 1.5.dp,
+                brush = androidx.compose.ui.graphics.Brush.linearGradient(
+                    colors = listOf(
+                        MaterialTheme.colorScheme.primary,
+                        MaterialTheme.colorScheme.secondary
+                    )
+                )
+            )
+        }
+        isSoothing -> {
+            androidx.compose.foundation.BorderStroke(
+                width = 0.5.dp,
+                color = MaterialTheme.colorScheme.outline.copy(alpha = 0.3f)
+            )
+        }
+        else -> null
+    }
+
+    val shape = when {
+        isSynthwave -> RoundedCornerShape(0.dp)
+        isSoothing -> ShapeCache.smoothPill
+        else -> RoundedCornerShape(24.dp)
+    }
+
     Surface(
         modifier = modifier,
-        shape = RoundedCornerShape(24.dp),
-        color = containerColor.copy(alpha = 0.90f),
-        tonalElevation = 4.dp,
-        shadowElevation = 8.dp,
+        shape = shape,
+        color = resolvedColor,
+        border = border,
+        tonalElevation = if (isSoothing) 0.dp else 4.dp,
+        shadowElevation = if (isSoothing) 4.dp else if (isSynthwave) 0.dp else 8.dp,
     ) {
         androidx.compose.material3.NavigationBar(
             modifier = Modifier

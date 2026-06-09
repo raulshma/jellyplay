@@ -76,11 +76,17 @@ fun AppearanceSettingsScreen(
                     title = "Theme",
                     summary = {
                         val parts = mutableListOf<String>()
-                        parts.add(preferences.themeMode.name.lowercase().replaceFirstChar { it.uppercase() })
-                        val accentName = preferences.accentColorSwatch.lowercase().replaceFirstChar { it.uppercase() }
-                        parts.add("$accentName accent")
-                        parts.add(preferences.colorStyle.displayName)
-                        if (preferences.dynamicTheming) parts.add("Artwork dynamic")
+                        if (preferences.synthwaveMode) {
+                            parts.add("Synthwave (${preferences.synthwaveAccent.lowercase().replaceFirstChar { it.uppercase() }})")
+                        } else if (preferences.soothingMode) {
+                            parts.add("Soothing (${preferences.soothingAccent.lowercase().replaceFirstChar { it.uppercase() }})")
+                        } else {
+                            parts.add(preferences.themeMode.name.lowercase().replaceFirstChar { it.uppercase() })
+                            val accentName = preferences.accentColorSwatch.lowercase().replaceFirstChar { it.uppercase() }
+                            parts.add("$accentName accent")
+                            parts.add(preferences.colorStyle.displayName)
+                            if (preferences.dynamicTheming) parts.add("Artwork dynamic")
+                        }
                         if (preferences.oledMode) parts.add("OLED")
                         if (preferences.contrastLevel != ContrastLevel.DEFAULT) parts.add("${preferences.contrastLevel.name.lowercase().replaceFirstChar { it.uppercase() }} contrast")
                         parts.joinToString(", ")
@@ -97,10 +103,20 @@ fun AppearanceSettingsScreen(
 
                     val appearanceItems = buildList {
                         add("theme_mode")
-                        add("accent_color")
-                        add("color_style")
-                        if (isAndroid12) add("dynamic_theming")
-                        if (isDarkActive) add("oled_mode")
+                        add("synthwave_mode")
+                        if (preferences.synthwaveMode) {
+                            add("synthwave_accent")
+                        }
+                        add("soothing_mode")
+                        if (preferences.soothingMode) {
+                            add("soothing_accent")
+                        }
+                        if (!preferences.synthwaveMode && !preferences.soothingMode) {
+                            add("accent_color")
+                            add("color_style")
+                            if (isAndroid12) add("dynamic_theming")
+                        }
+                        if (isDarkActive && !preferences.synthwaveMode && !preferences.soothingMode) add("oled_mode")
                         if (showAdvanced) {
                             add("contrast")
                             add("library_view_mode")
@@ -118,22 +134,64 @@ fun AppearanceSettingsScreen(
                                 SettingListItem(
                                     icon = Tabler.Outline.Moon,
                                     title = "Theme Mode",
-                                    subtitle = when (preferences.themeMode) {
-                                        ThemeMode.SYSTEM -> "Follow system setting"
-                                        ThemeMode.LIGHT -> "Always light"
-                                        ThemeMode.DARK -> "Always dark"
+                                    subtitle = if (preferences.synthwaveMode) {
+                                        "Overridden by Synthwave Mode"
+                                    } else if (preferences.soothingMode) {
+                                        "Overridden by Soothing Mode"
+                                    } else {
+                                        when (preferences.themeMode) {
+                                            ThemeMode.SYSTEM -> "Follow system setting"
+                                            ThemeMode.LIGHT -> "Always light"
+                                            ThemeMode.DARK -> "Always dark"
+                                        }
                                     },
-                                    trailingText = preferences.themeMode.name,
+                                    trailingText = if (preferences.synthwaveMode) "-" else if (preferences.soothingMode) "-" else preferences.themeMode.name,
                                     index = currentIdx++, count = totalCount,
                                     onClick = {
-                                        val next = when (preferences.themeMode) {
-                                            ThemeMode.SYSTEM -> ThemeMode.LIGHT
-                                            ThemeMode.LIGHT -> ThemeMode.DARK
-                                            ThemeMode.DARK -> ThemeMode.SYSTEM
+                                        if (!preferences.synthwaveMode && !preferences.soothingMode) {
+                                            val next = when (preferences.themeMode) {
+                                                ThemeMode.SYSTEM -> ThemeMode.LIGHT
+                                                ThemeMode.LIGHT -> ThemeMode.DARK
+                                                ThemeMode.DARK -> ThemeMode.SYSTEM
+                                            }
+                                            viewModel.setThemeMode(next)
                                         }
-                                        viewModel.setThemeMode(next)
                                     },
                                 )
+                            }
+                            "synthwave_mode" -> {
+                                SettingToggleItem(
+                                    icon = Tabler.Outline.Palette,
+                                    title = "Synthwave Mode",
+                                    subtitle = "Apply retro-futuristic neon theme with sharp corners",
+                                    checked = preferences.synthwaveMode,
+                                    index = currentIdx++, count = totalCount,
+                                    onCheckedChange = { viewModel.setSynthwaveMode(it) },
+                                )
+                            }
+                            "synthwave_accent" -> {
+                                com.raulshma.jellyplay.core.ui.components.SynthwaveAccentPicker(
+                                    selectedAccent = preferences.synthwaveAccent,
+                                    onAccentSelected = { viewModel.setSynthwaveAccent(it) },
+                                )
+                                currentIdx++
+                            }
+                            "soothing_mode" -> {
+                                SettingToggleItem(
+                                    icon = Tabler.Outline.Palette,
+                                    title = "Soothing Mode",
+                                    subtitle = "Apply a calm, Facebook-inspired theme with soft rounded corners",
+                                    checked = preferences.soothingMode,
+                                    index = currentIdx++, count = totalCount,
+                                    onCheckedChange = { viewModel.setSoothingMode(it) },
+                                )
+                            }
+                            "soothing_accent" -> {
+                                com.raulshma.jellyplay.core.ui.components.SoothingAccentPicker(
+                                    selectedAccent = preferences.soothingAccent,
+                                    onAccentSelected = { viewModel.setSoothingAccent(it) },
+                                )
+                                currentIdx++
                             }
                             "accent_color" -> {
                                 com.raulshma.jellyplay.core.ui.components.AccentColorPicker(

@@ -30,6 +30,10 @@ import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.animation.slideOutVertically
 import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.foundation.BorderStroke
+import com.raulshma.jellyplay.core.designsystem.theme.LocalIsSynthwave
+import com.raulshma.jellyplay.core.designsystem.theme.LocalIsSoothingTheme
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsPressedAsState
@@ -558,10 +562,14 @@ private fun DetailContent(
         ?: artworkColors?.dominant
         ?: MaterialTheme.colorScheme.background
 
-    val targetBackgroundColor = if (isLightTheme) {
-        MaterialTheme.colorScheme.background
-    } else {
-        lerp(baseOverlayColor, Color.Black, 0.65f)
+    val isSynthwave = LocalIsSynthwave.current
+    val isSoothing = LocalIsSoothingTheme.current
+
+    val targetBackgroundColor = when {
+        isSynthwave -> Color(0xFF0C061A)
+        isSoothing -> MaterialTheme.colorScheme.background
+        isLightTheme -> MaterialTheme.colorScheme.background
+        else -> lerp(baseOverlayColor, Color.Black, 0.65f)
     }
     val backgroundColor by animateColorAsState(
         targetValue = targetBackgroundColor,
@@ -611,10 +619,20 @@ private fun DetailContent(
         }
     }
 
+    val backgroundModifier = if (isSynthwave) {
+        Modifier.background(
+            Brush.verticalGradient(
+                colors = listOf(Color(0xFF0D061A), Color(0xFF1B0B3A))
+            )
+        )
+    } else {
+        Modifier.background(backgroundColor)
+    }
+
     Box(
         modifier = Modifier
             .fillMaxSize()
-            .background(backgroundColor)
+            .then(backgroundModifier)
             .onKeyEvent { keyEvent ->
                 if (isTv && keyEvent.key == Key.Back && keyEvent.type == KeyEventType.KeyUp) {
                     onBack()
@@ -2655,9 +2673,31 @@ private fun EpisodeCard(
 
     val cardFocusState = rememberTvFocusState(focusedScale = 1.03f)
 
+    val isSynthwave = LocalIsSynthwave.current
+    val isSoothing = LocalIsSoothingTheme.current
+    val borderModifier = when {
+        isSynthwave -> Modifier.border(
+            width = 1.5.dp,
+            brush = Brush.linearGradient(
+                colors = listOf(
+                    MaterialTheme.colorScheme.primary,
+                    MaterialTheme.colorScheme.secondary
+                )
+            ),
+            shape = ShapeCache.smooth16
+        )
+        isSoothing -> Modifier.border(
+            width = 0.8.dp,
+            color = MaterialTheme.colorScheme.outline.copy(alpha = 0.35f),
+            shape = ShapeCache.smooth16
+        )
+        else -> Modifier
+    }
+
     Column(
         modifier = Modifier
             .width(280.dp)
+            .then(borderModifier)
             .clip(ShapeCache.smooth16)
             .background(
                 if (isCurrentEpisode) MaterialTheme.colorScheme.primary.copy(alpha = 0.15f)
@@ -3016,6 +3056,28 @@ private fun VideosSection(
 
                 val isTv = LocalTvMode.current
                 val videoCardFocusState = rememberTvFocusState(focusedScale = 1.05f)
+                val isSynthwave = LocalIsSynthwave.current
+                val isSoothing = LocalIsSoothingTheme.current
+                val videoCardBorder = when {
+                    isSynthwave -> {
+                        androidx.compose.foundation.BorderStroke(
+                            width = 1.5.dp,
+                            brush = Brush.linearGradient(
+                                colors = listOf(
+                                    MaterialTheme.colorScheme.primary,
+                                    MaterialTheme.colorScheme.secondary
+                                )
+                            )
+                        )
+                    }
+                    isSoothing -> {
+                        androidx.compose.foundation.BorderStroke(
+                            width = 0.8.dp,
+                            color = MaterialTheme.colorScheme.outline.copy(alpha = 0.35f)
+                        )
+                    }
+                    else -> null
+                }
 
                 FadingItem {
                     Card(
@@ -3027,7 +3089,8 @@ private fun VideosSection(
                             .clickable {
                                 onVideoClick(video)
                             },
-                        shape = ShapeCache.smooth8
+                        shape = ShapeCache.smooth8,
+                        border = videoCardBorder,
                     ) {
                         Box(modifier = Modifier.fillMaxSize()) {
                             if (thumbnailUrl != null) {

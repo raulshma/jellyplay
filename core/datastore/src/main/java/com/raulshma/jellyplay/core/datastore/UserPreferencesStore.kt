@@ -260,6 +260,10 @@ class UserPreferencesStore @Inject constructor(
         val DOWNLOAD_STORAGE_LOCATION = stringPreferencesKey("download_storage_location")
         val KIDS_MODE_ENABLED = booleanPreferencesKey("kids_mode_enabled")
         val KIDS_MODE_MAX_RATING = stringPreferencesKey("kids_mode_max_rating")
+        val SYNTHWAVE_MODE = booleanPreferencesKey("synthwave_mode")
+        val SYNTHWAVE_ACCENT = stringPreferencesKey("synthwave_accent")
+        val SOOTHING_MODE = booleanPreferencesKey("soothing_mode")
+        val SOOTHING_ACCENT = stringPreferencesKey("soothing_accent")
     }
 
     private val json = Json { ignoreUnknownKeys = true }
@@ -684,6 +688,10 @@ class UserPreferencesStore @Inject constructor(
             libraryViewMode = try {
                 LibraryViewMode.valueOf(prefs[Keys.LIBRARY_VIEW_MODE] ?: LibraryViewMode.GRID.name)
             } catch (_: Exception) { LibraryViewMode.GRID },
+            synthwaveMode = readBool(prefs, Keys.SYNTHWAVE_MODE, "synthwave_mode", false),
+            synthwaveAccent = prefs[Keys.SYNTHWAVE_ACCENT] ?: "magenta",
+            soothingMode = readBool(prefs, Keys.SOOTHING_MODE, "soothing_mode", false),
+            soothingAccent = prefs[Keys.SOOTHING_ACCENT] ?: "ocean",
             notificationPreferences = NotificationPreferences(
                 enabled = readBool(prefs, Keys.NOTIFICATIONS_ENABLED, "notifications_enabled", false),
                 checkFrequency = try {
@@ -1765,5 +1773,31 @@ class UserPreferencesStore @Inject constructor(
 
     suspend fun setKidsModeMaxRating(rating: String) {
         context.dataStore.edit { it[Keys.KIDS_MODE_MAX_RATING] = rating }
+    }
+
+    suspend fun setSynthwaveMode(enabled: Boolean) {
+        context.dataStore.edit { prefs ->
+            prefs[Keys.SYNTHWAVE_MODE] = enabled
+            if (enabled) {
+                prefs[Keys.SOOTHING_MODE] = false
+            }
+        }
+    }
+
+    suspend fun setSynthwaveAccent(accent: String) {
+        context.dataStore.edit { it[Keys.SYNTHWAVE_ACCENT] = accent }
+    }
+
+    suspend fun setSoothingMode(enabled: Boolean) {
+        context.dataStore.edit { prefs ->
+            prefs[Keys.SOOTHING_MODE] = enabled
+            if (enabled) {
+                prefs[Keys.SYNTHWAVE_MODE] = false
+            }
+        }
+    }
+
+    suspend fun setSoothingAccent(accent: String) {
+        context.dataStore.edit { it[Keys.SOOTHING_ACCENT] = accent }
     }
 }

@@ -9,6 +9,8 @@ import androidx.compose.animation.core.tween
 import com.raulshma.jellyplay.core.designsystem.theme.AlphaEasing
 import com.raulshma.jellyplay.core.designsystem.theme.FancyTransitionEasing
 import com.raulshma.jellyplay.core.designsystem.theme.ShapeCache
+import com.raulshma.jellyplay.core.designsystem.theme.LocalIsSynthwave
+import com.raulshma.jellyplay.core.designsystem.theme.LocalIsSoothingTheme
 import com.raulshma.jellyplay.core.ui.animation.AnimationTokens
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
@@ -77,8 +79,23 @@ fun VideoMiniPlayer(
         modifier = modifier,
     ) {
         val navBarColorState = LocalNavigationBarColor.current
+        val isSynthwave = LocalIsSynthwave.current
+        val isSoothing = LocalIsSoothingTheme.current
+
+        val synthwaveTint = Color(0xFF160C2D).copy(alpha = 0.82f)
+        val soothingTint = if (androidx.compose.foundation.isSystemInDarkTheme()) {
+            Color(0xFF161B22).copy(alpha = 0.88f)
+        } else {
+            Color(0xFFFFFFFF).copy(alpha = 0.88f)
+        }
+        val targetTint = when {
+            isSynthwave -> synthwaveTint
+            isSoothing -> soothingTint
+            else -> navBarColorState.value ?: MaterialTheme.colorScheme.surfaceContainerHigh
+        }
+
         val animatedColor by animateColorAsState(
-            targetValue = navBarColorState.value ?: MaterialTheme.colorScheme.surfaceContainerHigh,
+            targetValue = targetTint,
             animationSpec = tween(400),
             label = "videoMiniPlayerColor",
         )
@@ -88,18 +105,52 @@ fun VideoMiniPlayer(
             label = "videoMiniContentAlpha",
         )
 
+        val border = when {
+            isSynthwave -> {
+                androidx.compose.foundation.BorderStroke(
+                    width = 1.dp,
+                    brush = androidx.compose.ui.graphics.Brush.linearGradient(
+                        colors = listOf(
+                            MaterialTheme.colorScheme.primary,
+                            MaterialTheme.colorScheme.secondary
+                        )
+                    )
+                )
+            }
+            isSoothing -> {
+                androidx.compose.foundation.BorderStroke(
+                    width = 0.5.dp,
+                    color = MaterialTheme.colorScheme.outline.copy(alpha = 0.3f)
+                )
+            }
+            else -> null
+        }
+
+        val shape = when {
+            isSynthwave -> RoundedCornerShape(0.dp)
+            isSoothing -> ShapeCache.smooth16
+            else -> ShapeCache.smooth12
+        }
+
+        val videoShape = when {
+            isSynthwave -> RoundedCornerShape(0.dp)
+            isSoothing -> RoundedCornerShape(topStart = 16.dp, topEnd = 16.dp)
+            else -> RoundedCornerShape(topStart = 12.dp, topEnd = 12.dp)
+        }
+
         Surface(
-            shape = ShapeCache.smooth12,
+            shape = shape,
             color = animatedColor,
-            shadowElevation = 12.dp,
-            tonalElevation = 4.dp,
+            border = border,
+            shadowElevation = if (isSoothing) 4.dp else 12.dp,
+            tonalElevation = if (isSoothing) 0.dp else 4.dp,
         ) {
             Column(modifier = Modifier.fillMaxWidth()) {
                 Box(
                     modifier = Modifier
                         .fillMaxWidth()
                         .height(112.dp)
-                        .clip(RoundedCornerShape(topStart = 12.dp, topEnd = 12.dp))
+                        .clip(videoShape)
                         .background(Color.Black)
                         .tvFocusable().clickable(onClick = onClick),
                 ) {

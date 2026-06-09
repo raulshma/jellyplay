@@ -831,6 +831,22 @@ class SettingsViewModel @Inject constructor(
         launch { preferencesStore.setKidsModeMaxRating(rating) }
     }
 
+    fun setSynthwaveMode(enabled: Boolean) {
+        launch { preferencesStore.setSynthwaveMode(enabled) }
+    }
+
+    fun setSynthwaveAccent(accent: String) {
+        launch { preferencesStore.setSynthwaveAccent(accent) }
+    }
+
+    fun setSoothingMode(enabled: Boolean) {
+        launch { preferencesStore.setSoothingMode(enabled) }
+    }
+
+    fun setSoothingAccent(accent: String) {
+        launch { preferencesStore.setSoothingAccent(accent) }
+    }
+
     fun updateNotificationPreferences(transform: (NotificationPreferences) -> NotificationPreferences) {
         launch {
             preferencesStore.updateNotificationPreferences(transform)

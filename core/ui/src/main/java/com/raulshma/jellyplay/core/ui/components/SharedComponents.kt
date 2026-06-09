@@ -79,6 +79,8 @@ import com.raulshma.jellyplay.core.ui.adaptive.*
 import com.raulshma.jellyplay.core.ui.animation.defaultSpatialSpec
 import com.raulshma.jellyplay.core.ui.animation.fastEffectsSpec
 import com.raulshma.jellyplay.core.designsystem.theme.ShapeCache
+import com.raulshma.jellyplay.core.designsystem.theme.LocalIsSynthwave
+import com.raulshma.jellyplay.core.designsystem.theme.LocalIsSoothingTheme
 import com.raulshma.jellyplay.core.ui.image.MediaImage
 import com.raulshma.jellyplay.core.ui.tv.LocalTvMode
 import com.raulshma.jellyplay.core.ui.tv.tvFocusRestorer
@@ -306,10 +308,12 @@ fun PosterCard(
         label = "cardScale",
     )
     val scale = baseScale * tvFocusState.scale
+    val isSoothing = LocalIsSoothingTheme.current
     val elevation = when {
         isPressed -> 12.dp
         tvFocusState.isFocused -> 16.dp
         isTv -> 12.dp
+        isSoothing -> 1.5.dp
         else -> 4.dp
     }
     val shape = ShapeCache.smooth12
@@ -336,6 +340,28 @@ fun PosterCard(
         .then(sharedImageModifier)
 
     Column(modifier = modifier) {
+        val isSynthwave = LocalIsSynthwave.current
+        val border = when {
+            isSynthwave -> {
+                androidx.compose.foundation.BorderStroke(
+                    width = 1.5.dp,
+                    brush = Brush.linearGradient(
+                        colors = listOf(
+                            MaterialTheme.colorScheme.primary,
+                            MaterialTheme.colorScheme.secondary
+                        )
+                    )
+                )
+            }
+            isSoothing -> {
+                androidx.compose.foundation.BorderStroke(
+                    width = 0.8.dp,
+                    color = MaterialTheme.colorScheme.outline.copy(alpha = 0.35f)
+                )
+            }
+            else -> null
+        }
+
         Card(
             modifier = Modifier
                 .fillMaxWidth()
@@ -352,6 +378,7 @@ fun PosterCard(
                     onClick = onClick,
                 ),
             shape = shape,
+            border = border,
             elevation = CardDefaults.cardElevation(defaultElevation = 0.dp),
         ) {
             Box {

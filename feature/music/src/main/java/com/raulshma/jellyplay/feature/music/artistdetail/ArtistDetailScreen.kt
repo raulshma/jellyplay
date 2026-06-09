@@ -1,6 +1,10 @@
 package com.raulshma.jellyplay.feature.music.artistdetail
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.foundation.BorderStroke
+import com.raulshma.jellyplay.core.designsystem.theme.LocalIsSynthwave
+import com.raulshma.jellyplay.core.designsystem.theme.LocalIsSoothingTheme
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsPressedAsState
@@ -26,6 +30,7 @@ import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -282,6 +287,27 @@ private fun AlbumCard(
         label = "albumScale",
     )
 
+    val isSynthwave = LocalIsSynthwave.current
+    val isSoothing = LocalIsSoothingTheme.current
+    val borderModifier = when {
+        isSynthwave -> Modifier.border(
+            width = 1.5.dp,
+            brush = Brush.linearGradient(
+                colors = listOf(
+                    MaterialTheme.colorScheme.primary,
+                    MaterialTheme.colorScheme.secondary
+                )
+            ),
+            shape = ShapeCache.smooth8
+        )
+        isSoothing -> Modifier.border(
+            width = 0.8.dp,
+            color = MaterialTheme.colorScheme.outline.copy(alpha = 0.35f),
+            shape = ShapeCache.smooth8
+        )
+        else -> Modifier
+    }
+
     Column(
         modifier = Modifier
             .width(cardWidth)
@@ -292,6 +318,7 @@ private fun AlbumCard(
             modifier = Modifier
                 .fillMaxWidth()
                 .aspectRatio(1f)
+                .then(borderModifier)
                 .clip(ShapeCache.smooth8),
         ) {
             MediaImage(

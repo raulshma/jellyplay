@@ -17,6 +17,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.material3.Card
 import androidx.compose.material3.ElevatedCard
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ExtendedFloatingActionButton
@@ -26,6 +27,12 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
+import androidx.compose.material3.TopAppBarDefaults
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.Color
+import com.raulshma.jellyplay.core.designsystem.theme.LocalIsSynthwave
+import com.raulshma.jellyplay.core.designsystem.theme.LocalIsSoothingTheme
+import com.raulshma.jellyplay.core.designsystem.theme.ShapeCache
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -68,6 +75,7 @@ fun UserSelectionScreen(
         }
     }
 
+    val isSynthwave = LocalIsSynthwave.current
     val backgroundColor = rememberScreenBackgroundColor()
 
     Scaffold(
@@ -76,6 +84,9 @@ fun UserSelectionScreen(
             TopAppBar(
                 title = { Text(serverName) },
                 navigationIcon = { CircleBgBackButton(onClick = onBack) },
+                colors = TopAppBarDefaults.topAppBarColors(
+                    containerColor = if (isSynthwave) Color.Transparent else MaterialTheme.colorScheme.surface,
+                )
             )
         },
         floatingActionButton = {
@@ -151,10 +162,34 @@ private fun UserCard(
     onClick: () -> Unit,
     onRemove: () -> Unit,
 ) {
-    ElevatedCard(
+    val isSynthwave = LocalIsSynthwave.current
+    val isSoothing = LocalIsSoothingTheme.current
+    val border = when {
+        isSynthwave -> {
+            androidx.compose.foundation.BorderStroke(
+                width = 1.5.dp,
+                brush = Brush.linearGradient(
+                    colors = listOf(
+                        MaterialTheme.colorScheme.primary,
+                        MaterialTheme.colorScheme.secondary
+                    )
+                )
+            )
+        }
+        isSoothing -> {
+            androidx.compose.foundation.BorderStroke(
+                width = 0.8.dp,
+                color = MaterialTheme.colorScheme.outline.copy(alpha = 0.35f)
+            )
+        }
+        else -> null
+    }
+
+    Card(
         modifier = Modifier
             .fillMaxWidth()
             .tvFocusable().clickable(onClick = onClick),
+        border = border,
     ) {
         Row(
             modifier = Modifier
