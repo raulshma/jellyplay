@@ -34,6 +34,8 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.graphics.Color
+import com.raulshma.jellyplay.core.designsystem.theme.LocalIsSynthwave
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
@@ -75,16 +77,22 @@ fun CollectionDetailScreen(
         }
     }
 
+    val isSynthwave = LocalIsSynthwave.current
     val scrollBehavior = TopAppBarDefaults.exitUntilCollapsedScrollBehavior(rememberTopAppBarState())
 
     Scaffold(
         modifier = Modifier.nestedScroll(scrollBehavior.nestedScrollConnection),
+        containerColor = if (isSynthwave) Color.Transparent else MaterialTheme.colorScheme.background,
         topBar = {
             MediumTopAppBar(
                 title = { Text(collectionDetail?.item?.name ?: "Collection") },
                 navigationIcon = {
                     CircleBgBackButton(onClick = onBack)
                 },
+                colors = TopAppBarDefaults.mediumTopAppBarColors(
+                    containerColor = Color.Transparent,
+                    scrolledContainerColor = Color.Transparent
+                ),
                 scrollBehavior = scrollBehavior,
             )
         },

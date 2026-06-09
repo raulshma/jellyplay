@@ -342,3 +342,224 @@ fun ColorStylePicker(
         }
     }
 }
+
+@Composable
+fun SynthwaveAccentPicker(
+    selectedAccent: String,
+    onAccentSelected: (String) -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    Column(
+        modifier = modifier
+            .fillMaxWidth()
+            .clip(ShapeCache.smooth16)
+            .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f))
+            .padding(vertical = 12.dp, horizontal = 16.dp)
+    ) {
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            Icon(
+                imageVector = Tabler.Outline.Palette,
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.size(22.dp)
+            )
+            Spacer(modifier = Modifier.width(16.dp))
+            Column {
+                Text(
+                    text = "Synthwave Accent",
+                    style = MaterialTheme.typography.bodyLarge,
+                    fontWeight = FontWeight.Medium,
+                    color = MaterialTheme.colorScheme.onSurface
+                )
+                Text(
+                    text = "Select custom neon accent color swatch",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+        }
+
+        Spacer(modifier = Modifier.height(12.dp))
+
+        val accents = listOf(
+            "magenta" to Color(0xFFFF007F), // Neon Magenta
+            "cyan" to Color(0xFF00F0FF),    // Neon Cyan
+            "violet" to Color(0xFF9D00FF),  // Neon Violet
+            "orange" to Color(0xFFFF5E00)   // Neon Orange
+        )
+
+        LazyRow(
+            horizontalArrangement = Arrangement.spacedBy(10.dp),
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            items(accents.size) { i ->
+                val (accentName, color) = accents[i]
+                val isSelected = selectedAccent.lowercase() == accentName.lowercase()
+
+                val tvFocusState = rememberTvFocusState(focusedScale = 1.15f)
+                val interactionSource = remember { MutableInteractionSource() }
+                val isPressed by interactionSource.collectIsPressedAsState()
+
+                val scale by animateFloatAsState(
+                    targetValue = if (isPressed) 0.9f else if (isSelected) 1.1f else 1.0f,
+                    animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy, stiffness = Spring.StiffnessLow),
+                    label = "synthwaveSwatchScale"
+                )
+
+                val borderStroke = if (isSelected) {
+                    Modifier.border(2.dp, MaterialTheme.colorScheme.primary, CircleShape)
+                } else {
+                    Modifier.border(1.dp, MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.2f), CircleShape)
+                }
+
+                val isLight = (color.red * 0.299f + color.green * 0.587f + color.blue * 0.114f) > 0.5f
+                val checkTint = if (isLight) Color.Black else Color.White
+
+                Box(
+                    modifier = Modifier
+                        .size(44.dp)
+                        .graphicsLayer {
+                            scaleX = scale
+                            scaleY = scale
+                        }
+                        .then(borderStroke)
+                        .padding(4.dp)
+                        .clip(CircleShape)
+                        .background(color)
+                        .then(tvFocusState.focusModifier)
+                        .clickable(
+                            interactionSource = interactionSource,
+                            indication = null,
+                            onClick = { onAccentSelected(accentName) }
+                        ),
+                    contentAlignment = Alignment.Center
+                ) {
+                    if (isSelected) {
+                        Icon(
+                            imageVector = Tabler.Outline.Check,
+                            contentDescription = "Selected",
+                            tint = checkTint,
+                            modifier = Modifier.size(18.dp)
+                        )
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+fun SoothingAccentPicker(
+    selectedAccent: String,
+    onAccentSelected: (String) -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    Column(
+        modifier = modifier
+            .fillMaxWidth()
+            .clip(ShapeCache.smooth16)
+            .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f))
+            .padding(vertical = 12.dp, horizontal = 16.dp)
+    ) {
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            Icon(
+                imageVector = Tabler.Outline.Palette,
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.size(22.dp)
+            )
+            Spacer(modifier = Modifier.width(16.dp))
+            Column {
+                Text(
+                    text = "Soothing Accent",
+                    style = MaterialTheme.typography.bodyLarge,
+                    fontWeight = FontWeight.Medium,
+                    color = MaterialTheme.colorScheme.onSurface
+                )
+                Text(
+                    text = "Select a calming accent color",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+        }
+
+        Spacer(modifier = Modifier.height(12.dp))
+
+        val accents = listOf(
+            "ocean" to Color(0xFF1877F2),
+            "lavender" to Color(0xFF8B7FE8),
+            "sage" to Color(0xFF4CAF6E),
+            "coral" to Color(0xFFE85D5D),
+            "amber" to Color(0xFFE8A43A),
+            "rose" to Color(0xFFE85A8A)
+        )
+
+        LazyRow(
+            horizontalArrangement = Arrangement.spacedBy(10.dp),
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            items(accents.size) { i ->
+                val (accentName, color) = accents[i]
+                val isSelected = selectedAccent.lowercase() == accentName.lowercase()
+
+                val tvFocusState = rememberTvFocusState(focusedScale = 1.15f)
+                val interactionSource = remember { MutableInteractionSource() }
+                val isPressed by interactionSource.collectIsPressedAsState()
+
+                val scale by animateFloatAsState(
+                    targetValue = if (isPressed) 0.9f else if (isSelected) 1.1f else 1.0f,
+                    animationSpec = androidx.compose.animation.core.spring(
+                        dampingRatio = androidx.compose.animation.core.Spring.DampingRatioMediumBouncy,
+                        stiffness = androidx.compose.animation.core.Spring.StiffnessLow
+                    ),
+                    label = "soothingSwatchScale"
+                )
+
+                val borderStroke = if (isSelected) {
+                    Modifier.border(2.dp, MaterialTheme.colorScheme.primary, CircleShape)
+                } else {
+                    Modifier.border(1.dp, MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.2f), CircleShape)
+                }
+
+                val isLight = (color.red * 0.299f + color.green * 0.587f + color.blue * 0.114f) > 0.5f
+                val checkTint = if (isLight) Color.Black else Color.White
+
+                Box(
+                    modifier = Modifier
+                        .size(44.dp)
+                        .graphicsLayer {
+                            scaleX = scale
+                            scaleY = scale
+                        }
+                        .then(borderStroke)
+                        .padding(4.dp)
+                        .clip(CircleShape)
+                        .background(color)
+                        .then(tvFocusState.focusModifier)
+                        .clickable(
+                            interactionSource = interactionSource,
+                            indication = null,
+                            onClick = { onAccentSelected(accentName) }
+                        ),
+                    contentAlignment = Alignment.Center
+                ) {
+                    if (isSelected) {
+                        Icon(
+                            imageVector = Tabler.Outline.Check,
+                            contentDescription = "Selected",
+                            tint = checkTint,
+                            modifier = Modifier.size(18.dp)
+                        )
+                    }
+                }
+            }
+        }
+    }
+}
