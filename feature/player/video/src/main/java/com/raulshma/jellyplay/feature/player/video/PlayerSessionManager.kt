@@ -41,6 +41,7 @@ data class PlayerSessionState(
     val playMethod: PlayMethod = PlayMethod.DIRECT_PLAY,
     val isReady: Boolean = false,
     val offlineTrickplayDir: java.io.File? = null,
+    val streamUrl: String? = null,
 )
 
 class PlayerSessionManager(
@@ -102,6 +103,7 @@ class PlayerSessionManager(
                     subtitle = subtitle,
                     playMethodString = "Offline",
                     playMethod = PlayMethod.DIRECT_PLAY,
+                    streamUrl = url,
                 )
             }
 
@@ -187,7 +189,7 @@ class PlayerSessionManager(
         val playerType = prefs.preferredPlayer
         
         if (playerType == PlayerType.EXTERNAL) {
-            _sessionState.update { it.copy(isReady = true) }
+            _sessionState.update { it.copy(isReady = true, streamUrl = url) }
             return
         }
 

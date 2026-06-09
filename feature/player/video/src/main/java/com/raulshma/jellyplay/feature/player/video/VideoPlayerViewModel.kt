@@ -425,6 +425,10 @@ class VideoPlayerViewModel @Inject constructor(
             val source = sessionState.currentMediaSource
             val detail = sessionState.mediaDetail
 
+            if (sessionState.streamUrl != null) {
+                _uiState.update { it.copy(streamUrl = sessionState.streamUrl) }
+            }
+
             createVideoMediaSession(itemId, sessionState.title, sessionState.subtitle)
 
             if (detail != null) {

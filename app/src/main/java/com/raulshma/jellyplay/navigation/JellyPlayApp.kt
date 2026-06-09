@@ -184,10 +184,12 @@ private fun isDetailScene(scene: Scene<NavKey>): Boolean {
 fun JellyPlayApp(
     viewModel: MainViewModel,
 ) {
+    val isRestoring by viewModel.isRestoring.collectAsStateWithLifecycle()
     val isAuthenticated by viewModel.isAuthenticated.collectAsStateWithLifecycle()
     val preferences by viewModel.preferences.collectAsStateWithLifecycle()
 
     when {
+        isRestoring -> {}
         isAuthenticated && !preferences.onboardingCompleted -> {
             OnboardingContent(
                 onComplete = {},
@@ -259,7 +261,16 @@ private fun MainContent(
         startRoute = Route.Home,
         topLevelRoutes = ALL_TOP_LEVEL_ROUTE_KEYS,
     )
-    val navigator = Navigator(navigationState)
+    val scope = rememberCoroutineScope()
+    val context = LocalContext.current
+    val navigator = Navigator(navigationState, navigateFilter = { route ->
+        if (route is Route.VideoPlayer && preferences.preferredPlayer == com.raulshma.jellyplay.core.model.PlayerType.EXTERNAL) {
+            scope.launch { viewModel.launchExternalPlayer(route, context) }
+            false
+        } else {
+            true
+        }
+    })
     val currentTopLevel by navigationState.topLevelRoute
     val currentRoute = navigator.currentRoute()
 
@@ -276,7 +287,6 @@ private fun MainContent(
         HomeMode.MUSIC -> MUSIC_TOP_LEVEL_ROUTES
     }
 
-    val scope = rememberCoroutineScope()
     val onModeChange: (HomeMode) -> Unit = { mode ->
         scope.launch { viewModel.preferencesStore.setHomeMode(mode) }
     }
@@ -302,8 +312,6 @@ private fun MainContent(
     val videoMiniSubtitle by videoMiniPlayerState.subtitle.collectAsStateWithLifecycle()
     val videoMiniIsPlaying by videoMiniPlayerState.isPlaying.collectAsStateWithLifecycle()
     val videoMiniItemId by videoMiniPlayerState.itemId.collectAsStateWithLifecycle()
-
-    val context = LocalContext.current
 
     val pendingRoute by viewModel.pendingRoute.collectAsStateWithLifecycle()
     LaunchedEffect(pendingRoute) {
