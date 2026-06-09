@@ -39,6 +39,7 @@ import androidx.tv.material3.darkColorScheme as tvDarkColorScheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -70,7 +71,6 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.IntOffset
-import kotlin.math.roundToInt
 import androidx.compose.foundation.layout.offset
 import androidx.compose.ui.draw.scale
 import androidx.compose.foundation.layout.Row
@@ -203,6 +203,7 @@ fun JellyPlayApp(
                 MainContent(
                     onLogout = { viewModel.logout() },
                     viewModel = viewModel,
+                    preferences = preferences,
                 )
             }
         }
@@ -251,8 +252,8 @@ private fun OnboardingContent(
 private fun MainContent(
     onLogout: () -> Unit,
     viewModel: MainViewModel,
+    preferences: com.raulshma.jellyplay.core.model.UserPreferences,
 ) {
-    val preferences by viewModel.preferences.collectAsStateWithLifecycle()
     val homeMode = preferences.homeMode
     val isSynthwave = com.raulshma.jellyplay.core.designsystem.theme.LocalIsSynthwave.current
     val isSoothing = com.raulshma.jellyplay.core.designsystem.theme.LocalIsSoothingTheme.current
@@ -298,7 +299,9 @@ private fun MainContent(
     val audioArtist by audioPlaybackManager.artist.collectAsStateWithLifecycle()
     val audioArtworkUrl by audioPlaybackManager.albumArtUrl.collectAsStateWithLifecycle()
     var isMiniPlayerDismissed by remember { mutableStateOf(false) }
-    val showMiniPlayer = audioItemId != null && !isFullScreenRoute && !isMiniPlayerDismissed
+    val showMiniPlayer by remember {
+        derivedStateOf { audioItemId != null && !isFullScreenRoute && !isMiniPlayerDismissed }
+    }
 
     LaunchedEffect(audioItemId) {
         if (audioItemId != null) {

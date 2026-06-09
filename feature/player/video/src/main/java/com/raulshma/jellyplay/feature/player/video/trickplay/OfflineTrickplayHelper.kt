@@ -51,13 +51,13 @@ object OfflineTrickplayHelper {
         return File(parent, "trickplay")
     }
 
-    fun loadLocalTrickplayInfo(downloadPath: String): TrickplayInfo? {
+    suspend fun loadLocalTrickplayInfo(downloadPath: String): TrickplayInfo? {
         val trickplayDir = getLocalTrickplayDir(downloadPath) ?: return null
         val metaFile = File(trickplayDir, "meta.json")
         if (!metaFile.exists()) return null
 
         return try {
-            val text = metaFile.readText()
+            val text = withContext(Dispatchers.IO) { metaFile.readText() }
             val width = text.regexMatch("\"width\"\\s*:\\s*(\\d+)")?.toIntOrNull() ?: return null
             val height = text.regexMatch("\"height\"\\s*:\\s*(\\d+)")?.toIntOrNull() ?: return null
             val tileWidth = text.regexMatch("\"tileWidth\"\\s*:\\s*(\\d+)")?.toIntOrNull() ?: return null

@@ -64,6 +64,7 @@ import androidx.core.content.FileProvider
 import androidx.core.view.drawToBitmap
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.compose.ui.layout.ContentScale
 import coil3.compose.AsyncImage
 import coil3.request.ImageRequest
 import com.composables.icons.tabler.Tabler
@@ -792,8 +793,10 @@ private fun DayDetailSheet(
                         AsyncImage(
                             model = ImageRequest.Builder(LocalContext.current)
                                 .data(imageUrl)
+                                .size(128, 128)
                                 .build(),
                             contentDescription = name,
+                            contentScale = ContentScale.Crop,
                             modifier = Modifier
                                 .size(40.dp)
                                 .clip(RoundedCornerShape(4.dp)),

@@ -8,14 +8,11 @@ import java.util.concurrent.ConcurrentHashMap
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
-import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
-import kotlinx.coroutines.isActive
-import kotlinx.coroutines.launch
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -39,23 +36,10 @@ class SeerrRepositoryImpl @Inject constructor(
 
     private val detailCache = ConcurrentHashMap<String, CacheEntry<Any>>()
     private val CACHE_TTL_MS = 60_000L
-    private val EVICTION_INTERVAL_MS = 30_000L
-    private val CACHE_MAX_ENTRIES = 50
-
-    init {
-        cacheScope.launch {
-            while (isActive) {
-                delay(EVICTION_INTERVAL_MS)
-                evictExpired()
-                if (detailCache.size > CACHE_MAX_ENTRIES) {
-                    val excess = detailCache.size - CACHE_MAX_ENTRIES
-                    detailCache.keys.take(excess).forEach { detailCache.remove(it) }
-                }
-            }
-        }
-    }
 
     private fun <T> getCached(key: String): T? {
+        val now = System.currentTimeMillis()
+        detailCache.entries.removeIf { now - it.value.timestampMs > CACHE_TTL_MS }
         val entry = detailCache[key] ?: return null
         if (System.currentTimeMillis() - entry.timestampMs > CACHE_TTL_MS) {
             detailCache.remove(key, entry)
@@ -67,16 +51,6 @@ class SeerrRepositoryImpl @Inject constructor(
 
     private fun putCached(key: String, value: Any) {
         detailCache[key] = CacheEntry(value, System.currentTimeMillis())
-    }
-
-    private fun evictExpired() {
-        val now = System.currentTimeMillis()
-        val iter = detailCache.entries.iterator()
-        while (iter.hasNext()) {
-            if (now - iter.next().value.timestampMs > CACHE_TTL_MS) {
-                iter.remove()
-            }
-        }
     }
 
     private suspend fun getCredentials(): Pair<String, String>? {

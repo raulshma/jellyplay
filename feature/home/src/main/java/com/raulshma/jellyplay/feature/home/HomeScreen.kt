@@ -848,7 +848,7 @@ private fun HomeContentList(
                 item {
                     AnimatedHeroHeader(
                         featuredItem = featuredItem,
-                        getBackdropUrl = { viewModel.getBackdropUrl(it) },
+                        getBackdropUrl = remember { { viewModel.getBackdropUrl(it) } },
                         height = headerHeight,
                         backgroundColor = backgroundColor,
                         contentPadding = contentPad,

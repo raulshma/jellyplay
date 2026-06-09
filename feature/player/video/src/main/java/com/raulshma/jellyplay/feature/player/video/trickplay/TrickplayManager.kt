@@ -25,10 +25,32 @@ class TrickplayManager(
     private val maxThumbnailCacheBytes = if (lowRamDevice) LOW_RAM_THUMBNAIL_BYTES else MAX_THUMBNAIL_CACHE_BYTES
     private val maxSpriteSheetCacheBytes = if (lowRamDevice) LOW_RAM_SPRITE_SHEET_BYTES else MAX_SPRITE_SHEET_CACHE_BYTES
 
+    private val bitmapPool = java.util.ArrayDeque<Bitmap>(4)
+
+    private fun obtainTileBitmap(width: Int, height: Int): Bitmap {
+        val pooled: Bitmap? = bitmapPool.pollFirst()
+        if (pooled != null && !pooled.isRecycled && pooled.width == width && pooled.height == height) {
+            pooled.eraseColor(android.graphics.Color.TRANSPARENT)
+            return pooled
+        }
+        pooled?.recycle()
+        return Bitmap.createBitmap(width, height, Bitmap.Config.RGB_565)
+    }
+
+    private fun releaseToPool(bitmap: Bitmap) {
+        if (bitmap.isRecycled) return
+        if (!bitmap.isMutable) { bitmap.recycle(); return }
+        if (bitmapPool.size < 4) {
+            bitmapPool.addFirst(bitmap)
+        } else {
+            bitmap.recycle()
+        }
+    }
+
     private val thumbnailCache = object : LruCache<Int, Bitmap>((maxThumbnailCacheBytes / 1024).toInt()) {
         override fun sizeOf(key: Int, value: Bitmap): Int = value.allocationByteCount / 1024
         override fun entryRemoved(evictedBySize: Boolean, key: Int, oldValue: Bitmap, newValue: Bitmap?) {
-            if (!oldValue.isRecycled) oldValue.recycle()
+            releaseToPool(oldValue)
         }
     }
     private val spriteSheetCache = object : LruCache<Int, Bitmap>((maxSpriteSheetCacheBytes / 1024).toInt()) {
@@ -124,7 +146,10 @@ class TrickplayManager(
         val offsetX = tileCol * trickplayInfo.width
         val offsetY = tileRow * trickplayInfo.height
         return try {
-            Bitmap.createBitmap(sheet, offsetX, offsetY, trickplayInfo.width, trickplayInfo.height)
+            val tile = obtainTileBitmap(trickplayInfo.width, trickplayInfo.height)
+            val canvas = android.graphics.Canvas(tile)
+            canvas.drawBitmap(sheet, android.graphics.Rect(offsetX, offsetY, offsetX + trickplayInfo.width, offsetY + trickplayInfo.height), android.graphics.Rect(0, 0, trickplayInfo.width, trickplayInfo.height), null)
+            tile
         } catch (_: Exception) {
             null
         }
@@ -151,7 +176,9 @@ class TrickplayManager(
             val col = localIdx % trickplayInfo.tileWidth
             val row = localIdx / trickplayInfo.tileWidth
             try {
-                val tile = Bitmap.createBitmap(sheet, col * w, row * h, w, h)
+                val tile = obtainTileBitmap(w, h)
+                val canvas = android.graphics.Canvas(tile)
+                canvas.drawBitmap(sheet, android.graphics.Rect(col * w, row * h, col * w + w, row * h + h), android.graphics.Rect(0, 0, w, h), null)
                 thumbnailCache.put(globalIndex, tile)
             } catch (_: Exception) { }
         }

@@ -7,6 +7,8 @@ import okhttp3.Interceptor
 import okhttp3.Response
 import okio.buffer
 import java.io.IOException
+import java.util.concurrent.ConcurrentLinkedDeque
+import java.util.concurrent.locks.ReentrantLock
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -16,8 +18,9 @@ class BandwidthInterceptor @Inject constructor() : Interceptor {
     private val _estimatedBandwidthKbps = MutableStateFlow(0.0)
     val estimatedBandwidthKbps: StateFlow<Double> = _estimatedBandwidthKbps.asStateFlow()
 
-    private val samples = ArrayDeque<Sample>()
+    private val samples = ConcurrentLinkedDeque<Sample>()
     private val maxSamples = 10
+    private val lock = ReentrantLock()
 
     @Throws(IOException::class)
     override fun intercept(chain: Interceptor.Chain): Response {
@@ -41,7 +44,8 @@ class BandwidthInterceptor @Inject constructor() : Interceptor {
     private fun addSample(bytesTransferred: Long, contentLength: Long) {
         if (bytesTransferred <= 0) return
         val now = System.nanoTime()
-        synchronized(samples) {
+        if (!lock.tryLock()) return
+        try {
             samples.addLast(Sample(bytesTransferred, now))
             while (samples.size > maxSamples) {
                 samples.removeFirst()
@@ -58,6 +62,8 @@ class BandwidthInterceptor @Inject constructor() : Interceptor {
                     }
                 }
             }
+        } finally {
+            lock.unlock()
         }
     }
 

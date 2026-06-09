@@ -155,20 +155,24 @@ class AdminStatisticsRepositoryImpl @Inject constructor(
 
         val fallbackTrendData = buildFallbackTrendData(userId)
 
+        val moviePlayedCount = apiClient.getUserPlayedItemCount(userId, listOf("Movie")).getOrDefault(0)
+        val episodePlayedCount = apiClient.getUserPlayedItemCount(userId, listOf("Episode")).getOrDefault(0)
+        val songPlayedCount = apiClient.getUserPlayedItemCount(userId, listOf("Audio")).getOrDefault(0)
+
         val typeBreakdown = listOf(
             ContentBreakdown(
                 label = "Movies",
-                value = apiClient.getUserPlayedItemCount(userId, listOf("Movie")).getOrDefault(0).toLong(),
+                value = moviePlayedCount.toLong(),
                 colorIndex = 0,
             ),
             ContentBreakdown(
                 label = "Episodes",
-                value = apiClient.getUserPlayedItemCount(userId, listOf("Episode")).getOrDefault(0).toLong(),
+                value = episodePlayedCount.toLong(),
                 colorIndex = 1,
             ),
             ContentBreakdown(
                 label = "Songs",
-                value = apiClient.getUserPlayedItemCount(userId, listOf("Audio")).getOrDefault(0).toLong(),
+                value = songPlayedCount.toLong(),
                 colorIndex = 2,
             ),
         ).filter { it.value > 0 }
@@ -185,9 +189,9 @@ class AdminStatisticsRepositoryImpl @Inject constructor(
             apiClient.getPlaybackReportingBreakdown("ClientName", days = 30, filter = userId).getOrDefault(emptyList())
         } else emptyList()
 
-        val moviePlayed = apiClient.getUserPlayedItemCount(userId, listOf("Movie")).getOrDefault(0)
-        val episodePlayed = apiClient.getUserPlayedItemCount(userId, listOf("Episode")).getOrDefault(0)
-        val songPlayed = apiClient.getUserPlayedItemCount(userId, listOf("Audio")).getOrDefault(0)
+        val moviePlayed = moviePlayedCount
+        val episodePlayed = episodePlayedCount
+        val songPlayed = songPlayedCount
         val movieTotal = apiClient.getUserUnplayedItemCount(userId, listOf("Movie")).getOrDefault(0) + moviePlayed
         val completionRate = if (movieTotal > 0) moviePlayed.toFloat() / movieTotal else 0f
 
