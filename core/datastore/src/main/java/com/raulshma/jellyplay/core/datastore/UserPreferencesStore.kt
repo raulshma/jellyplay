@@ -58,6 +58,7 @@ import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
@@ -77,6 +78,7 @@ class UserPreferencesStore @Inject constructor(
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
 
     private val sharedPrefs: StateFlow<Preferences> = context.dataStore.data
+        .catch { _ -> emit(emptyPreferences()) }
         .stateIn(scope, SharingStarted.Eagerly, emptyPreferences())
 
     private object Keys {
@@ -1352,7 +1354,7 @@ class UserPreferencesStore @Inject constructor(
     }
 
     val continueWatching: kotlinx.coroutines.flow.Flow<List<com.raulshma.jellyplay.core.model.MediaItem>> =
-        context.dataStore.data.map { prefs ->
+        sharedPrefs.map { prefs ->
             prefs[Keys.CONTINUE_WATCHING]?.let {
                 try {
                     json.decodeFromString<List<com.raulshma.jellyplay.core.model.MediaItem>>(it)
@@ -1361,40 +1363,40 @@ class UserPreferencesStore @Inject constructor(
         }
 
     val widgetConfig: kotlinx.coroutines.flow.Flow<WidgetConfig> =
-        context.dataStore.data.map { prefs ->
+        sharedPrefs.map { prefs ->
             prefs[Keys.WIDGET_CONFIG]?.let {
                 try { json.decodeFromString<WidgetConfig>(it) } catch (_: Exception) { null }
             } ?: WidgetConfig()
         }
 
     val libraryWidgetItems: kotlinx.coroutines.flow.Flow<List<LibraryWidgetItem>> =
-        context.dataStore.data.map { prefs ->
+        sharedPrefs.map { prefs ->
             prefs[Keys.LIBRARY_WIDGET_ITEMS]?.let {
                 try { json.decodeFromString<List<LibraryWidgetItem>>(it) } catch (_: Exception) { emptyList() }
             } ?: emptyList()
         }
 
     val libraryWidgetVersion: kotlinx.coroutines.flow.Flow<Long> =
-        context.dataStore.data.map { it[Keys.LIBRARY_WIDGET_VERSION] ?: 0L }.distinctUntilChanged()
+        sharedPrefs.map { it[Keys.LIBRARY_WIDGET_VERSION] ?: 0L }.distinctUntilChanged()
 
     val libraryWidgetUpdatedAtMs: kotlinx.coroutines.flow.Flow<Long> =
-        context.dataStore.data.map { it[Keys.LIBRARY_WIDGET_UPDATED_AT_MS] ?: 0L }.distinctUntilChanged()
+        sharedPrefs.map { it[Keys.LIBRARY_WIDGET_UPDATED_AT_MS] ?: 0L }.distinctUntilChanged()
 
     val seerrWidgetItems: kotlinx.coroutines.flow.Flow<List<SeerrWidgetItem>> =
-        context.dataStore.data.map { prefs ->
+        sharedPrefs.map { prefs ->
             prefs[Keys.SEERR_WIDGET_ITEMS]?.let {
                 try { json.decodeFromString<List<SeerrWidgetItem>>(it) } catch (_: Exception) { emptyList() }
             } ?: emptyList()
         }
 
     val seerrWidgetVersion: kotlinx.coroutines.flow.Flow<Long> =
-        context.dataStore.data.map { it[Keys.SEERR_WIDGET_VERSION] ?: 0L }.distinctUntilChanged()
+        sharedPrefs.map { it[Keys.SEERR_WIDGET_VERSION] ?: 0L }.distinctUntilChanged()
 
     val seerrWidgetUpdatedAtMs: kotlinx.coroutines.flow.Flow<Long> =
-        context.dataStore.data.map { it[Keys.SEERR_WIDGET_UPDATED_AT_MS] ?: 0L }.distinctUntilChanged()
+        sharedPrefs.map { it[Keys.SEERR_WIDGET_UPDATED_AT_MS] ?: 0L }.distinctUntilChanged()
 
     val widgetLastRefreshMs: kotlinx.coroutines.flow.Flow<Long> =
-        context.dataStore.data.map { it[Keys.WIDGET_LAST_REFRESH_MS] ?: 0L }.distinctUntilChanged()
+        sharedPrefs.map { it[Keys.WIDGET_LAST_REFRESH_MS] ?: 0L }.distinctUntilChanged()
 
     suspend fun setWidgetConfig(config: WidgetConfig) {
         context.dataStore.edit { it[Keys.WIDGET_CONFIG] = json.encodeToString(config) }
@@ -1689,7 +1691,7 @@ class UserPreferencesStore @Inject constructor(
     }
 
     val recentDlnaDevices: Flow<List<DlnaDeviceRef>>
-        get() = context.dataStore.data.map { prefs ->
+        get() = sharedPrefs.map { prefs ->
             prefs[Keys.RECENT_DLNA_DEVICES]?.let {
                 try {
                     json.decodeFromString<List<DlnaDeviceRef>>(it)

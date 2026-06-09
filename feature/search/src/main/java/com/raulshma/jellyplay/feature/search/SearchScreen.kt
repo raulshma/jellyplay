@@ -425,7 +425,9 @@ fun SearchScreen(
                 val seerrResults by viewModel.seerrResults.collectAsStateWithLifecycle()
                 val isSeerrConnected by viewModel.isSeerrConnected.collectAsStateWithLifecycle()
                 val isSeerrSearchEnabled by viewModel.isSeerrSearchEnabled.collectAsStateWithLifecycle()
+                val seerrSearchError by viewModel.seerrSearchError.collectAsStateWithLifecycle()
                 val showSeerr = isSeerrConnected && isSeerrSearchEnabled && seerrResults.isNotEmpty()
+                val showSeerrError = isSeerrConnected && isSeerrSearchEnabled && seerrSearchError && !showSeerr
 
                 // Seerr results horizontal section (shown independently of library results)
                 if (showSeerr) {
@@ -470,10 +472,64 @@ fun SearchScreen(
                     }
                 }
 
+                if (showSeerrError) {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(start = contentPad, end = contentPad, top = 8.dp)
+                            .clip(ShapeCache.smooth12)
+                            .background(MaterialTheme.colorScheme.error.copy(alpha = 0.1f))
+                            .padding(horizontal = 14.dp, vertical = 10.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                    ) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                            modifier = Modifier.weight(1f),
+                        ) {
+                            Icon(
+                                Tabler.Outline.AlertCircle,
+                                contentDescription = null,
+                                modifier = Modifier.size(16.dp),
+                                tint = MaterialTheme.colorScheme.error.copy(alpha = 0.7f),
+                            )
+                            Text(
+                                text = "Seerr search failed",
+                                style = MaterialTheme.typography.labelMedium,
+                                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f),
+                            )
+                        }
+                        Row(
+                            modifier = Modifier
+                                .clip(ShapeCache.smooth8)
+                                .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.12f))
+                                .tvFocusable()
+                                .clickable { viewModel.retrySeerrSearch() }
+                                .padding(horizontal = 10.dp, vertical = 5.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(4.dp),
+                        ) {
+                            Icon(
+                                Tabler.Outline.Refresh,
+                                contentDescription = null,
+                                modifier = Modifier.size(13.dp),
+                                tint = MaterialTheme.colorScheme.primary,
+                            )
+                            Text(
+                                text = "Retry",
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.primary,
+                                fontWeight = FontWeight.SemiBold,
+                            )
+                        }
+                    }
+                }
+
                 // Library content (grid, empty state, or initial state)
                 Box(modifier = Modifier.fillMaxWidth().weight(1f)) {
                     when {
-                        pagedResults.itemCount == 0 && query.isNotBlank() && !isRefreshing && !showSeerr -> {
+                        pagedResults.itemCount == 0 && query.isNotBlank() && !isRefreshing && !showSeerr && !showSeerrError -> {
                             ScreenEmptyState(
                                 icon = Tabler.Outline.Search,
                                 title = "No results found",

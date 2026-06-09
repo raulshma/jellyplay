@@ -178,24 +178,24 @@ fun SeerrMediaCard(
     Column(modifier = modifier) {
         val isSynthwave = LocalIsSynthwave.current
         val isSoothing = LocalIsSoothingTheme.current
+        val primary = MaterialTheme.colorScheme.primary
+        val secondary = MaterialTheme.colorScheme.secondary
+        val synthwaveBorder = remember(primary, secondary) {
+            androidx.compose.foundation.BorderStroke(
+                width = 1.5.dp,
+                brush = Brush.linearGradient(colors = listOf(primary, secondary))
+            )
+        }
+        val outlineColor = MaterialTheme.colorScheme.outline
+        val soothingBorder = remember(outlineColor) {
+            androidx.compose.foundation.BorderStroke(
+                width = 0.8.dp,
+                color = outlineColor.copy(alpha = 0.35f)
+            )
+        }
         val border = when {
-            isSynthwave -> {
-                androidx.compose.foundation.BorderStroke(
-                    width = 1.5.dp,
-                    brush = Brush.linearGradient(
-                        colors = listOf(
-                            MaterialTheme.colorScheme.primary,
-                            MaterialTheme.colorScheme.secondary
-                        )
-                    )
-                )
-            }
-            isSoothing -> {
-                androidx.compose.foundation.BorderStroke(
-                    width = 0.8.dp,
-                    color = MaterialTheme.colorScheme.outline.copy(alpha = 0.35f)
-                )
-            }
+            isSynthwave -> synthwaveBorder
+            isSoothing -> soothingBorder
             else -> null
         }
 
@@ -291,19 +291,21 @@ fun SeerrMediaCard(
                 }
 
                 if (!isLoading) {
+                    val surface = MaterialTheme.colorScheme.surface
+                    val bottomGradient = remember(surface) {
+                        Brush.verticalGradient(
+                            colors = listOf(
+                                Color.Transparent,
+                                surface.copy(alpha = 0.5f),
+                            ),
+                        )
+                    }
                     Box(
                         modifier = Modifier
                             .align(Alignment.BottomCenter)
                             .fillMaxWidth()
                             .height(60.dp)
-                            .background(
-                                Brush.verticalGradient(
-                                    colors = listOf(
-                                        Color.Transparent,
-                                        MaterialTheme.colorScheme.surface.copy(alpha = 0.5f),
-                                    ),
-                                )
-                            )
+                            .background(bottomGradient)
                     )
                 }
 
@@ -337,23 +339,32 @@ fun SeerrMediaCard(
                 }
 
                 if (!isLoading) {
-                    val mediaLabel = when {
-                        isUpcoming -> "UPCOMING"
-                        item.mediaType.equals("tv", ignoreCase = true) -> "SERIES"
-                        item.mediaType.equals("movie", ignoreCase = true) -> "MOVIE"
-                        else -> item.mediaType.uppercase()
+                    val tertiaryContainer = MaterialTheme.colorScheme.tertiaryContainer
+                    val surface = MaterialTheme.colorScheme.surface
+                    val onTertiaryContainer = MaterialTheme.colorScheme.onTertiaryContainer
+                    val mediaLabel = remember(isUpcoming, item.mediaType) {
+                        when {
+                            isUpcoming -> "UPCOMING"
+                            item.mediaType.equals("tv", ignoreCase = true) -> "SERIES"
+                            item.mediaType.equals("movie", ignoreCase = true) -> "MOVIE"
+                            else -> item.mediaType.uppercase()
+                        }
                     }
 
-                    val labelColor = if (isUpcoming) {
-                        MaterialTheme.colorScheme.tertiaryContainer.copy(alpha = 0.9f)
-                    } else {
-                        MaterialTheme.colorScheme.surface.copy(alpha = 0.6f)
+                    val labelColor = remember(isUpcoming, tertiaryContainer, surface) {
+                        if (isUpcoming) {
+                            tertiaryContainer.copy(alpha = 0.9f)
+                        } else {
+                            surface.copy(alpha = 0.6f)
+                        }
                     }
 
-                    val textColor = if (isUpcoming) {
-                        MaterialTheme.colorScheme.onTertiaryContainer
-                    } else {
-                        Color.White.copy(alpha = 0.9f)
+                    val textColor = remember(isUpcoming, onTertiaryContainer) {
+                        if (isUpcoming) {
+                            onTertiaryContainer
+                        } else {
+                            Color.White.copy(alpha = 0.9f)
+                        }
                     }
 
                     Box(
@@ -379,11 +390,13 @@ fun SeerrMediaCard(
                 }
 
                 if (!isLoading) {
-                    val badgeColor = when {
-                        isAvailable -> StatusColors.available
-                        isPending -> StatusColors.pending
-                        hasRequest -> StatusColors.requested
-                        else -> Color.Transparent
+                    val badgeColor = remember(isAvailable, isPending, hasRequest) {
+                        when {
+                            isAvailable -> StatusColors.available
+                            isPending -> StatusColors.pending
+                            hasRequest -> StatusColors.requested
+                            else -> Color.Transparent
+                        }
                     }
 
                     if (badgeColor != Color.Transparent) {

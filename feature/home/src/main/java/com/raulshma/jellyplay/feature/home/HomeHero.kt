@@ -184,7 +184,7 @@ fun HeroHeader(
     val heroTransition = rememberInfiniteTransition(label = "hero_animations")
     val rawBreathScale by heroTransition.animateFloat(
         initialValue = 1.0f,
-        targetValue = 1.04f,
+        targetValue = if (isVisible) 1.04f else 1.0f,
         animationSpec = infiniteRepeatable(
             animation = tween(12000, easing = FancyTransitionEasing),
             repeatMode = RepeatMode.Reverse
@@ -195,7 +195,7 @@ fun HeroHeader(
 
     val rawPlayPulseScale by heroTransition.animateFloat(
         initialValue = 1.0f,
-        targetValue = 1.35f,
+        targetValue = if (isVisible) 1.35f else 1.0f,
         animationSpec = infiniteRepeatable(
             animation = tween(1800, easing = AlphaEasing),
             repeatMode = RepeatMode.Restart
@@ -205,7 +205,7 @@ fun HeroHeader(
     val playPulseScale = if (isVisible) rawPlayPulseScale else 1.0f
     val rawPlayPulseAlpha by heroTransition.animateFloat(
         initialValue = 0.45f,
-        targetValue = 0.0f,
+        targetValue = if (isVisible) 0.0f else 0.45f,
         animationSpec = infiniteRepeatable(
             animation = tween(1800, easing = AlphaEasing),
             repeatMode = RepeatMode.Restart
@@ -216,7 +216,7 @@ fun HeroHeader(
 
     val rawRatingPulse by heroTransition.animateFloat(
         initialValue = 0.9f,
-        targetValue = 1.1f,
+        targetValue = if (isVisible) 1.1f else 0.9f,
         animationSpec = infiniteRepeatable(
             animation = tween(2000, easing = FancyTransitionEasing),
             repeatMode = RepeatMode.Reverse
@@ -279,17 +279,19 @@ fun HeroHeader(
             modifier = Modifier
                 .fillMaxSize()
                 .background(
-                    Brush.verticalGradient(
-                        colors = listOf(
-                            Color.Black.copy(alpha = 0.45f),
-                            Color.Transparent,
-                            backgroundColor.copy(alpha = 0.3f),
-                            backgroundColor.copy(alpha = 0.85f),
-                            backgroundColor,
-                        ),
-                        startY = 0f,
-                        endY = Float.POSITIVE_INFINITY,
-                    )
+                    remember(backgroundColor) {
+                        Brush.verticalGradient(
+                            colors = listOf(
+                                Color.Black.copy(alpha = 0.45f),
+                                Color.Transparent,
+                                backgroundColor.copy(alpha = 0.3f),
+                                backgroundColor.copy(alpha = 0.85f),
+                                backgroundColor,
+                            ),
+                            startY = 0f,
+                            endY = Float.POSITIVE_INFINITY,
+                        )
+                    }
                 )
         )
 
@@ -441,18 +443,20 @@ fun HeroHeader(
                         )
                     }
 
+                    val primaryColor = MaterialTheme.colorScheme.primary
+                    val playGradientBrush = remember(primaryColor) {
+                        Brush.verticalGradient(
+                            colors = listOf(
+                                primaryColor,
+                                primaryColor.copy(alpha = 0.85f),
+                            )
+                        )
+                    }
                     Box(
                         modifier = Modifier
                             .fillMaxHeight()
                             .clip(ShapeCache.smoothPill)
-                            .background(
-                                Brush.verticalGradient(
-                                    colors = listOf(
-                                        MaterialTheme.colorScheme.primary,
-                                        MaterialTheme.colorScheme.primary.copy(alpha = 0.85f),
-                                    )
-                                )
-                            )
+                            .background(playGradientBrush)
                             .clickable(
                                 interactionSource = playInteractionSource,
                                 indication = null,

@@ -51,6 +51,7 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
+import kotlinx.coroutines.flow.conflate
 import kotlinx.coroutines.flow.distinctUntilChanged
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -990,6 +991,7 @@ fun VideoPlayerScreen(
 
     LaunchedEffect(Unit) {
         snapshotFlow { seekPositionMs }
+            .conflate()
             .collect { pos ->
                 if (isSeeking && uiState.trickplayEnabled && uiState.trickplayInfo != null) {
                     val bitmap = viewModel.getTrickplayThumbnail(pos)
@@ -1010,6 +1012,7 @@ fun VideoPlayerScreen(
 
     LaunchedEffect(Unit) {
         snapshotFlow { gestureSeekPositionMs }
+            .conflate()
             .collect { pos ->
                 if (isGestureSeeking && uiState.trickplayOnSeekGesture && uiState.trickplayInfo != null) {
                     gestureTrickplayVisible = true
