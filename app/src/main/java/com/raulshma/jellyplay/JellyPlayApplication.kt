@@ -62,15 +62,16 @@ class JellyPlayApplication : Application(), SingletonImageLoader.Factory, Config
                 }
             }
             audioPlaybackManager.start()
-        }
-        nowPlayingWidgetUpdater.start()
-        com.raulshma.jellyplay.widget.WidgetWorkScheduler.enqueuePeriodic(this)
-        applicationScope.launch {
+            nowPlayingWidgetUpdater.start()
+            com.raulshma.jellyplay.widget.WidgetWorkScheduler.enqueuePeriodic(this@JellyPlayApplication)
             recoverPendingDownloads()
             cleanupStuckDownloads()
+            notificationScheduler.scheduleOrUpdate()
+        }
+        applicationScope.launch {
+            kotlinx.coroutines.delay(10_000)
             mediaRepository.cleanupLyricsCache()
             offlineRepository.cleanupOrphans()
-            notificationScheduler.scheduleOrUpdate()
         }
     }
 
@@ -139,7 +140,6 @@ class JellyPlayApplication : Application(), SingletonImageLoader.Factory, Config
         okHttpClient.newBuilder()
             .connectTimeout(30, java.util.concurrent.TimeUnit.SECONDS)
             .readTimeout(30, java.util.concurrent.TimeUnit.SECONDS)
-            .connectionPool(okhttp3.ConnectionPool(8, 15, java.util.concurrent.TimeUnit.MINUTES))
             .build()
     }
 

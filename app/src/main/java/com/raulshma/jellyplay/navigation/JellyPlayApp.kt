@@ -39,6 +39,7 @@ import androidx.tv.material3.darkColorScheme as tvDarkColorScheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -70,7 +71,6 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.IntOffset
-import kotlin.math.roundToInt
 import androidx.compose.foundation.layout.offset
 import androidx.compose.ui.draw.scale
 import androidx.compose.foundation.layout.Row
@@ -184,10 +184,12 @@ private fun isDetailScene(scene: Scene<NavKey>): Boolean {
 fun JellyPlayApp(
     viewModel: MainViewModel,
 ) {
+    val isRestoring by viewModel.isRestoring.collectAsStateWithLifecycle()
     val isAuthenticated by viewModel.isAuthenticated.collectAsStateWithLifecycle()
     val preferences by viewModel.preferences.collectAsStateWithLifecycle()
 
     when {
+        isRestoring -> {}
         isAuthenticated && !preferences.onboardingCompleted -> {
             OnboardingContent(
                 onComplete = {},
@@ -201,6 +203,7 @@ fun JellyPlayApp(
                 MainContent(
                     onLogout = { viewModel.logout() },
                     viewModel = viewModel,
+                    preferences = preferences,
                 )
             }
         }
@@ -249,8 +252,8 @@ private fun OnboardingContent(
 private fun MainContent(
     onLogout: () -> Unit,
     viewModel: MainViewModel,
+    preferences: com.raulshma.jellyplay.core.model.UserPreferences,
 ) {
-    val preferences by viewModel.preferences.collectAsStateWithLifecycle()
     val homeMode = preferences.homeMode
     val isSynthwave = com.raulshma.jellyplay.core.designsystem.theme.LocalIsSynthwave.current
     val isSoothing = com.raulshma.jellyplay.core.designsystem.theme.LocalIsSoothingTheme.current
@@ -259,7 +262,16 @@ private fun MainContent(
         startRoute = Route.Home,
         topLevelRoutes = ALL_TOP_LEVEL_ROUTE_KEYS,
     )
-    val navigator = Navigator(navigationState)
+    val scope = rememberCoroutineScope()
+    val context = LocalContext.current
+    val navigator = Navigator(navigationState, navigateFilter = { route ->
+        if (route is Route.VideoPlayer && preferences.preferredPlayer == com.raulshma.jellyplay.core.model.PlayerType.EXTERNAL) {
+            scope.launch { viewModel.launchExternalPlayer(route, context) }
+            false
+        } else {
+            true
+        }
+    })
     val currentTopLevel by navigationState.topLevelRoute
     val currentRoute = navigator.currentRoute()
 
@@ -276,7 +288,6 @@ private fun MainContent(
         HomeMode.MUSIC -> MUSIC_TOP_LEVEL_ROUTES
     }
 
-    val scope = rememberCoroutineScope()
     val onModeChange: (HomeMode) -> Unit = { mode ->
         scope.launch { viewModel.preferencesStore.setHomeMode(mode) }
     }
@@ -288,7 +299,9 @@ private fun MainContent(
     val audioArtist by audioPlaybackManager.artist.collectAsStateWithLifecycle()
     val audioArtworkUrl by audioPlaybackManager.albumArtUrl.collectAsStateWithLifecycle()
     var isMiniPlayerDismissed by remember { mutableStateOf(false) }
-    val showMiniPlayer = audioItemId != null && !isFullScreenRoute && !isMiniPlayerDismissed
+    val showMiniPlayer by remember {
+        derivedStateOf { audioItemId != null && !isFullScreenRoute && !isMiniPlayerDismissed }
+    }
 
     LaunchedEffect(audioItemId) {
         if (audioItemId != null) {
@@ -302,8 +315,6 @@ private fun MainContent(
     val videoMiniSubtitle by videoMiniPlayerState.subtitle.collectAsStateWithLifecycle()
     val videoMiniIsPlaying by videoMiniPlayerState.isPlaying.collectAsStateWithLifecycle()
     val videoMiniItemId by videoMiniPlayerState.itemId.collectAsStateWithLifecycle()
-
-    val context = LocalContext.current
 
     val pendingRoute by viewModel.pendingRoute.collectAsStateWithLifecycle()
     LaunchedEffect(pendingRoute) {

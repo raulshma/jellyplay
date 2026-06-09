@@ -1,14 +1,22 @@
 package com.raulshma.jellyplay
 
 import android.content.Intent
+import android.net.Uri
 import android.os.Build
+import android.widget.Toast
 import com.raulshma.jellyplay.core.data.network.NetworkMonitor
 import com.raulshma.jellyplay.core.data.playback.AudioPlaybackManager
 import com.raulshma.jellyplay.core.data.remote.RemoteControlReceiver
 import com.raulshma.jellyplay.core.data.remote.RemoteNavigationBridge
 import com.raulshma.jellyplay.core.data.repository.AuthRepository
+import com.raulshma.jellyplay.core.data.repository.DownloadRepository
+import com.raulshma.jellyplay.core.data.repository.MediaRepository
+import com.raulshma.jellyplay.core.data.repository.OfflineRepository
+import com.raulshma.jellyplay.core.data.repository.PlaybackRepository
 import com.raulshma.jellyplay.core.data.shortcuts.AppShortcutManager
 import com.raulshma.jellyplay.core.datastore.UserPreferencesStore
+import com.raulshma.jellyplay.core.model.DownloadStatus
+import com.raulshma.jellyplay.core.model.PlayerType
 import com.raulshma.jellyplay.core.model.UserPreferences
 import com.raulshma.jellyplay.core.ui.navigation.Route
 import com.raulshma.jellyplay.core.ui.viewmodel.JellyPlayViewModel
@@ -39,6 +47,10 @@ class MainViewModel @Inject constructor(
     val remoteControlReceiver: RemoteControlReceiver,
     val remoteNavigationBridge: RemoteNavigationBridge,
     private val deepLinkHandler: DeepLinkHandler,
+    private val downloadRepository: DownloadRepository,
+    private val mediaRepository: MediaRepository,
+    private val playbackRepository: PlaybackRepository,
+    private val offlineRepository: OfflineRepository,
 ) : JellyPlayViewModel() {
 
     private val _isRestoring = stateFlow(true)
@@ -65,9 +77,15 @@ class MainViewModel @Inject constructor(
             coroutineScope {
                 val authDeferred = async { authRepository.restoreSession() }
                 val prefsDeferred = async { preferences.first() }
-                authDeferred.await()
+                val result = authDeferred.await()
                 prefsDeferred.await()
-                isAuthenticated.first()
+                if (result.isSuccess) {
+                    val server = authRepository.currentServer.first()
+                    val user = authRepository.currentUser.first()
+                    if (server != null && user != null) {
+                        isAuthenticated.first { it }
+                    }
+                }
             }
             _isRestoring.set(false)
         }
@@ -152,5 +170,50 @@ class MainViewModel @Inject constructor(
         val name = userName.take(20)
         val full = if (name.isNotBlank()) "JellyPlay on $model ($name)" else "JellyPlay on $model"
         return if (full.length > 60) full.take(60) else full
+    }
+
+    suspend fun launchExternalPlayer(
+        route: Route.VideoPlayer,
+        context: android.content.Context,
+    ) {
+        val download = downloadRepository.getDownloadByMediaItemId(route.itemId)
+        val localFile = download?.let {
+            java.io.File(it.downloadPath).takeIf { f -> f.exists() }
+        }
+
+        val url: String
+        val title: String
+
+        if (download != null && localFile != null && download.status == DownloadStatus.COMPLETED) {
+            url = Uri.fromFile(localFile).toString()
+            val offlineItem = offlineRepository.getOfflineItem(route.itemId)
+            title = offlineItem?.name ?: download.name
+        } else {
+            val detail = mediaRepository.getMediaDetail(route.itemId).getOrNull() ?: return
+            val source = if (route.mediaSourceId != null) {
+                detail.mediaSources.find { it.id == route.mediaSourceId }
+            } else {
+                detail.mediaSources.firstOrNull()
+            }
+            url = playbackRepository.getStreamUrl(
+                route.itemId,
+                source?.id ?: "",
+                route.startPositionTicks,
+            )
+            title = detail.item.name
+        }
+
+        val intent = Intent(Intent.ACTION_VIEW).apply {
+            setDataAndType(Uri.parse(url), "video/*")
+            putExtra("title", title)
+            val startMs = route.startPositionTicks / 10_000
+            if (startMs > 0) putExtra("position", startMs)
+        }
+
+        try {
+            context.startActivity(Intent.createChooser(intent, "Open with…"))
+        } catch (_: Exception) {
+            Toast.makeText(context, "No video player found", Toast.LENGTH_LONG).show()
+        }
     }
 }

@@ -117,9 +117,11 @@ fun SyncPlayScreen(
 
     LaunchedEffect(isInGroup) {
         if (!isInGroup) {
+            var pollInterval = 5000L
             while (true) {
-                delay(5000)
+                delay(pollInterval)
                 viewModel.refreshGroups()
+                pollInterval = (pollInterval * 1.5).toLong().coerceAtMost(30_000L)
             }
         }
     }

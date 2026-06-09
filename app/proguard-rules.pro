@@ -99,3 +99,9 @@
 
 -dontwarn okio.**
 -dontwarn org.conscrypt.**
+
+# Strip debug/verbose logs in release builds
+-assumenosideeffects class android.util.Log {
+    public static *** d(...);
+    public static *** v(...);
+}
