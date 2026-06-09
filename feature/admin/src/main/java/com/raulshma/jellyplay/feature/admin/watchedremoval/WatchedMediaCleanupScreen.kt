@@ -331,7 +331,7 @@ private fun WatchedScanResultsTab(
                 contentPadding = PaddingValues(start = 16.dp, end = 16.dp, bottom = bottomPadding),
                 verticalArrangement = Arrangement.spacedBy(6.dp),
             ) {
-                items(state.scanResults, key = { it.itemId }) { item ->
+                items(state.scanResults, key = { it.itemId }, contentType = { "watchedItem" }) { item ->
                     WatchedItemCard(
                         item = item,
                         isSelected = state.selectedItems.contains(item.itemId),
@@ -467,7 +467,7 @@ private fun WatchedDeleteConfirmationSheet(
                 contentPadding = PaddingValues(horizontal = 24.dp),
                 verticalArrangement = Arrangement.spacedBy(4.dp),
             ) {
-                items(items, key = { it.itemId }) { item ->
+                items(items, key = { it.itemId }, contentType = { "watchedItem" }) { item ->
                     Card(shape = ShapeCache.smooth12, colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerLow)) {
                         Row(modifier = Modifier.fillMaxWidth().padding(10.dp), verticalAlignment = Alignment.CenterVertically) {
                             Column(modifier = Modifier.weight(1f)) {

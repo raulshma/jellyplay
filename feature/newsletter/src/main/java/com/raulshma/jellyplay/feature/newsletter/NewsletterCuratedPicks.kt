@@ -112,7 +112,7 @@ fun NewsletterCuratedPicks(
                 horizontalArrangement = Arrangement.spacedBy(12.dp),
                 contentPadding = PaddingValues(horizontal = 16.dp),
             ) {
-                items(dropItems, key = { it.id }) { item ->
+                items(dropItems, key = { it.id }, contentType = { "curatedPick" }) { item ->
                     CuratedPickCard(
                         item = item,
                         imageUrl = imageUrlBuilder(item.id),

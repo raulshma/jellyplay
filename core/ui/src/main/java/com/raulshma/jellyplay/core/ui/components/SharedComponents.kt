@@ -432,6 +432,7 @@ fun PosterCard(
                 }
 
                 if (item.communityRating != null) {
+                    val ratingText = remember(item.communityRating) { "%.1f".format(item.communityRating) }
                     Box(
                         modifier = Modifier
                             .align(Alignment.TopStart)
@@ -452,7 +453,7 @@ fun PosterCard(
                                 color = RatingColors.star,
                             )
                             Text(
-                                text = "%.1f".format(item.communityRating),
+                                text = ratingText,
                                 style = MaterialTheme.typography.labelSmall,
                                 color = Color.White,
                             )

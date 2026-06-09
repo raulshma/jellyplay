@@ -2104,6 +2104,7 @@ private fun DetailContentBody(
                             }
                         }
                         item.communityRating?.let { rating ->
+                            val ratingText = remember(rating) { String.format("%.1f", rating) }
                             Row(verticalAlignment = Alignment.CenterVertically) {
                                 Icon(
                                     Tabler.Outline.Heart,
@@ -2113,7 +2114,7 @@ private fun DetailContentBody(
                                 )
                                 Spacer(Modifier.width(4.dp))
                                 Text(
-                                    text = String.format("%.1f", rating),
+                                    text = ratingText,
                                     style = MaterialTheme.typography.titleMedium,
                                     color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f),
                                 )
@@ -2219,16 +2220,15 @@ private fun DetailContentBody(
                     verticalArrangement = Arrangement.spacedBy(4.dp),
                 ) {
                     albumTracks.forEachIndexed { index, track ->
+                        val trackClick = remember(track.id) { { onItemClick(track.id) } }
+                        val trackPlayClick = remember(track.id, index) { { onPlayAlbumTrack(index); onItemClick(track.id) } }
                         FadingItem {
                             AlbumTrackItem(
                                 track = track,
                                 index = index + 1,
                                 imageUrl = getImageUrl(track.id),
-                                onClick = { onItemClick(track.id) },
-                                onPlayClick = {
-                                    onPlayAlbumTrack(index)
-                                    onItemClick(track.id)
-                                },
+                                onClick = trackClick,
+                                onPlayClick = trackPlayClick,
                             )
                         }
                     }
@@ -2280,11 +2280,12 @@ private fun DetailContentBody(
                         horizontalArrangement = Arrangement.spacedBy(12.dp),
                     ) {
                         items(collectionItems, key = { "collection_${it.id}" }, contentType = { "mediaItem" }) { collectionItem ->
+                            val collectionClick = remember(collectionItem.id) { { onItemClick(collectionItem.id) } }
                             FadingItem {
                                 PosterCard(
                                     item = collectionItem,
                                     imageUrl = getImageUrl(collectionItem.id),
-                                    onClick = { onItemClick(collectionItem.id) },
+                                    onClick = collectionClick,
                                     showProgress = collectionItem.playbackPositionTicks != null && collectionItem.playbackPositionTicks!! > 0,
                                     progressPercent = if (collectionItem.runTimeTicks != null && collectionItem.runTimeTicks!! > 0) {
                                         (collectionItem.playbackPositionTicks?.toFloat() ?: 0f) / collectionItem.runTimeTicks!!.toFloat()
@@ -2319,11 +2320,12 @@ private fun DetailContentBody(
                                 .tvFocusExitHandler(),
                         ) {
                             items(detail.people, key = { "person_${it.id}" }, contentType = { "person" }) { person ->
+                                val personClick = remember(person.id) { { onPersonClick(person.id) } }
                                 FadingItem {
                                     PersonItem(
                                         person = person,
                                         imageUrl = getImageUrl(person.id),
-                                        onClick = { onPersonClick(person.id) },
+                                        onClick = personClick,
                                     )
                                 }
                 }
@@ -2360,12 +2362,13 @@ private fun DetailContentBody(
                             .tvFocusExitHandler(),
                     ) {
                         items(detail.relatedItems, key = { "related_${it.id}" }, contentType = { "mediaItem" }) { related ->
+                            val relatedClick = remember(related.id) { { onItemClick(related.id) } }
                             val adaptiveInfo = LocalAdaptiveInfo.current
                             FadingItem {
                                 PosterCard(
                                     item = related,
                                     imageUrl = getImageUrl(related.id),
-                                    onClick = { onItemClick(related.id) },
+                                    onClick = relatedClick,
                                     modifier = Modifier.width(
                                         if (adaptiveInfo.windowSizeClass != WindowSizeClass.Compact) 200.dp else 160.dp
                                     ),

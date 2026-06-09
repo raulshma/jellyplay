@@ -39,10 +39,10 @@ interface OfflineMediaDao {
     @Query("DELETE FROM offline_media WHERE seasonId = :seasonId")
     suspend fun deleteBySeasonId(seasonId: String)
 
-    @Query("DELETE FROM offline_media WHERE mediaType = 'SEASON' AND id NOT IN (SELECT DISTINCT seasonId FROM offline_media WHERE mediaType = 'EPISODE' AND seasonId IS NOT NULL)")
+    @Query("DELETE FROM offline_media WHERE mediaType = 'SEASON' AND NOT EXISTS (SELECT 1 FROM offline_media ep WHERE ep.mediaType = 'EPISODE' AND ep.seasonId = offline_media.id AND ep.seasonId IS NOT NULL)")
     suspend fun deleteOrphanedSeasons()
 
-    @Query("DELETE FROM offline_media WHERE mediaType = 'SERIES' AND id NOT IN (SELECT DISTINCT seriesId FROM offline_media WHERE mediaType IN ('SEASON', 'EPISODE') AND seriesId IS NOT NULL)")
+    @Query("DELETE FROM offline_media WHERE mediaType = 'SERIES' AND NOT EXISTS (SELECT 1 FROM offline_media sub WHERE sub.mediaType IN ('SEASON', 'EPISODE') AND sub.seriesId = offline_media.id AND sub.seriesId IS NOT NULL)")
     suspend fun deleteOrphanedSeries()
 
     @Transaction
