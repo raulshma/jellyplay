@@ -37,7 +37,7 @@ class VideoMiniPlayerState @Inject constructor() {
 
     private var job: Job? = null
     private var timeoutJob: Job? = null
-    private var miniScope: CoroutineScope? = null
+    private val miniScope = CoroutineScope(Dispatchers.Main + SupervisorJob())
 
     private val _itemId = MutableStateFlow<String?>(null)
     val itemId: StateFlow<String?> = _itemId.asStateFlow()
@@ -61,12 +61,10 @@ class VideoMiniPlayerState @Inject constructor() {
         
         job?.cancel()
         timeoutJob?.cancel()
-        miniScope?.cancel()
-        miniScope = CoroutineScope(Dispatchers.Main + SupervisorJob())
-        job = miniScope!!.launch {
+        job = miniScope.launch {
             engine.isPlaying.collect { _isPlaying.value = it }
         }
-        timeoutJob = miniScope!!.launch {
+        timeoutJob = miniScope.launch {
             delay(AUTO_RELEASE_TIMEOUT_MS)
             release()
         }
@@ -81,8 +79,6 @@ class VideoMiniPlayerState @Inject constructor() {
         timeoutJob?.cancel()
         job = null
         timeoutJob = null
-        miniScope?.cancel()
-        miniScope = null
         _isMiniMode.value = false
         _engine = null
         _itemId.value = null
@@ -101,8 +97,6 @@ class VideoMiniPlayerState @Inject constructor() {
         timeoutJob?.cancel()
         job = null
         timeoutJob = null
-        miniScope?.cancel()
-        miniScope = null
         engine?.release()
         _engine = null
         _itemId.value = null

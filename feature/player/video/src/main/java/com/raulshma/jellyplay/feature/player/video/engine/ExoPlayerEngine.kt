@@ -70,6 +70,7 @@ import kotlinx.coroutines.cancel
 
 class ExoPlayerEngine(
     private val context: Context,
+    bandwidthMeter: DefaultBandwidthMeter? = null,
 ) : MediaEngine {
 
     private val engineScope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
@@ -133,7 +134,7 @@ class ExoPlayerEngine(
     private var trackSelector: DefaultTrackSelector? = null
     private var playerView: PlayerView? = null
     private var currentMediaItem: MediaItem? = null
-    private val bandwidthMeter = DefaultBandwidthMeter.Builder(context).build()
+    private val bandwidthMeter = bandwidthMeter ?: DefaultBandwidthMeter.Builder(context).build()
     private val currentSubtitleConfigs = mutableListOf<MediaItem.SubtitleConfiguration>()
 
     override val underlyingPlayer: androidx.media3.common.Player? get() = player
