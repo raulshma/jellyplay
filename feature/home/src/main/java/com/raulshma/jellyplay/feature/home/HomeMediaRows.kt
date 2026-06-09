@@ -145,7 +145,7 @@ fun WideMediaCard(
         label = "wideCardBrightness",
     )
 
-    val dominantColor = rememberDominantColor(backdropUrl.ifBlank { imageUrl })
+    val dominantColor = rememberDominantColor(backdropUrl.ifBlank { imageUrl }, itemId = item.id)
     val hasProgress = item.playbackPositionTicks != null && item.runTimeTicks != null && item.runTimeTicks!! > 0
     val progressPercent = if (hasProgress) {
         (item.playbackPositionTicks!!.toFloat() / item.runTimeTicks!!.toFloat()).coerceIn(0f, 1f)

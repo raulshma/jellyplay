@@ -15,6 +15,8 @@ import com.raulshma.jellyplay.core.data.repository.DownloadRepository
 import com.raulshma.jellyplay.core.data.seerr.SeerrRequestDelegate
 import com.raulshma.jellyplay.core.datastore.SeerrPreferencesStore
 import com.raulshma.jellyplay.core.datastore.UserPreferencesStore
+import com.raulshma.jellyplay.core.data.repository.AuthRepository
+import com.raulshma.jellyplay.core.model.UserInfo
 import com.raulshma.jellyplay.core.model.seerr.DiscoverSectionType
 import com.raulshma.jellyplay.core.model.seerr.SeerrSearchResponse
 import com.raulshma.jellyplay.core.model.HomeSectionType
@@ -55,6 +57,7 @@ class HomeViewModel @Inject constructor(
     private val seerrRepository: SeerrRepository,
     private val seerrRequestDelegate: SeerrRequestDelegate,
     private val seerrPreferencesStore: SeerrPreferencesStore,
+    private val authRepository: AuthRepository,
     @param:dagger.hilt.android.qualifiers.ApplicationContext private val context: android.content.Context,
 ) : JellyPlayViewModel(), DefaultLifecycleObserver {
 
@@ -91,6 +94,12 @@ class HomeViewModel @Inject constructor(
 
     init {
         ProcessLifecycleOwner.get().lifecycle.addObserver(this)
+
+        launch {
+            authRepository.currentUser.collect { user ->
+                _uiState.update { it.copy(currentUser = user) }
+            }
+        }
 
         launch {
             var previousUserId: String? = null

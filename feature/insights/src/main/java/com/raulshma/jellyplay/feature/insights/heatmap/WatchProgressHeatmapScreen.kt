@@ -24,6 +24,8 @@ import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.FilterChipDefaults
@@ -39,7 +41,9 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.Immutable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -63,8 +67,10 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import coil3.compose.AsyncImage
 import coil3.request.ImageRequest
 import com.composables.icons.tabler.Tabler
+import com.composables.icons.tabler.outline.Check
 import com.composables.icons.tabler.outline.ChevronLeft
 import com.composables.icons.tabler.outline.ChevronRight
+import com.composables.icons.tabler.outline.Filter
 import com.composables.icons.tabler.outline.PlayerPlay
 import com.composables.icons.tabler.outline.Share
 import com.raulshma.jellyplay.core.data.repository.DailyWatchActivity
@@ -114,6 +120,65 @@ fun WatchProgressHeatmapScreen(
         actions = {
             IconButton(onClick = { viewModel.onEvent(HeatmapEvent.RequestShare) }) {
                 Icon(Tabler.Outline.Share, contentDescription = "Share")
+            }
+            var menuExpanded by remember { mutableStateOf(false) }
+            Box {
+                IconButton(onClick = { menuExpanded = true }) {
+                    Icon(Tabler.Outline.Filter, contentDescription = "Configure Heatmap")
+                }
+                DropdownMenu(
+                    expanded = menuExpanded,
+                    onDismissRequest = { menuExpanded = false },
+                ) {
+                    Text(
+                        text = "Filter Type",
+                        style = MaterialTheme.typography.labelSmall,
+                        modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
+                        color = MaterialTheme.colorScheme.primary,
+                        fontWeight = FontWeight.Bold,
+                    )
+                    HeatmapFilter.entries.forEach { filter ->
+                        DropdownMenuItem(
+                            text = { Text(filter.label) },
+                            onClick = {
+                                viewModel.onEvent(HeatmapEvent.SetFilter(filter))
+                                menuExpanded = false
+                            },
+                            leadingIcon = {
+                                if (state.filter == filter) {
+                                    Icon(Tabler.Outline.Check, contentDescription = null, modifier = Modifier.size(18.dp))
+                                } else {
+                                    Spacer(modifier = Modifier.size(18.dp))
+                                }
+                            }
+                        )
+                    }
+                    HorizontalDivider(modifier = Modifier.padding(vertical = 4.dp))
+                    Text(
+                        text = "Select Year",
+                        style = MaterialTheme.typography.labelSmall,
+                        modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
+                        color = MaterialTheme.colorScheme.primary,
+                        fontWeight = FontWeight.Bold,
+                    )
+                    val currentYear = java.time.LocalDate.now().year
+                    for (y in currentYear downTo (currentYear - 4)) {
+                        DropdownMenuItem(
+                            text = { Text(y.toString()) },
+                            onClick = {
+                                viewModel.onEvent(HeatmapEvent.SetYear(y))
+                                menuExpanded = false
+                            },
+                            leadingIcon = {
+                                if (state.year == y) {
+                                    Icon(Tabler.Outline.Check, contentDescription = null, modifier = Modifier.size(18.dp))
+                                } else {
+                                    Spacer(modifier = Modifier.size(18.dp))
+                                }
+                            }
+                        )
+                    }
+                }
             }
         },
     ) { innerPadding ->
@@ -172,6 +237,7 @@ fun WatchProgressHeatmapScreen(
                     HeatmapGrid(
                         year = state.year,
                         dailyActivities = state.dailyActivities,
+                        minActivityDate = state.minActivityDate,
                         onDayClick = { viewModel.onEvent(HeatmapEvent.SelectDay(it)) },
                     )
                 }
@@ -232,6 +298,7 @@ fun WatchProgressHeatmapScreen(
                         HeatmapGrid(
                             year = state.year,
                             dailyActivities = state.dailyActivities,
+                            minActivityDate = state.minActivityDate,
                             onDayClick = { viewModel.onEvent(HeatmapEvent.SelectDay(it)) },
                         )
                     }
@@ -379,8 +446,13 @@ private fun LocalDate.dayOfWeekIndex(): Int = when (dayOfWeek) {
 private fun calculateGrid(
     year: Int,
     dailyActivities: List<DailyWatchActivity>,
+    minActivityDate: LocalDate?,
 ): Pair<Array<HeatmapCell?>, Int> {
-    val startDate = LocalDate.of(year, 1, 1)
+    val startDate = if (minActivityDate != null && minActivityDate.year == year) {
+        minActivityDate.minusDays(minActivityDate.dayOfWeekIndex().toLong())
+    } else {
+        LocalDate.of(year, 1, 1)
+    }
     val endDate = LocalDate.of(year, 12, 31)
     val today = LocalDate.now()
     val formatter = DateTimeFormatter.ISO_LOCAL_DATE
@@ -431,10 +503,11 @@ private fun calculateGrid(
 private fun HeatmapGrid(
     year: Int,
     dailyActivities: List<DailyWatchActivity>,
+    minActivityDate: LocalDate?,
     onDayClick: (LocalDate?) -> Unit,
 ) {
-    val (grid, numWeeks) = remember(year, dailyActivities) {
-        calculateGrid(year, dailyActivities)
+    val (grid, numWeeks) = remember(year, dailyActivities, minActivityDate) {
+        calculateGrid(year, dailyActivities, minActivityDate)
     }
 
     val cellSize = 11.dp
@@ -469,15 +542,24 @@ private fun HeatmapGrid(
         }
     }
 
-    val startDate = LocalDate.of(year, 1, 1)
-    val monthPositions = remember(year) {
+    val gridStartDate = remember(year, minActivityDate) {
+        if (minActivityDate != null && minActivityDate.year == year) {
+            minActivityDate.minusDays(minActivityDate.dayOfWeekIndex().toLong())
+        } else {
+            LocalDate.of(year, 1, 1)
+        }
+    }
+
+    val monthPositions = remember(year, gridStartDate) {
         val months = mutableMapOf<Int, String>()
-        for (month in 1..12) {
+        val startMonth = gridStartDate.monthValue
+        for (month in startMonth..12) {
             val firstOfMonth = LocalDate.of(year, month, 1)
             if (firstOfMonth.isAfter(LocalDate.now())) break
+            val targetDate = if (firstOfMonth.isBefore(gridStartDate)) gridStartDate else firstOfMonth
             val weekIndex = ChronoUnit.WEEKS.between(
-                startDate.with(DayOfWeek.SUNDAY),
-                firstOfMonth.with(DayOfWeek.SUNDAY),
+                gridStartDate.with(DayOfWeek.SUNDAY),
+                targetDate.with(DayOfWeek.SUNDAY),
             ).toInt()
             months[weekIndex] = firstOfMonth.month.name.take(3)
                 .lowercase()

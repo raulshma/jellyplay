@@ -88,7 +88,7 @@ class MediaRepositoryImplTest {
 
         assertTrue(result.isSuccess)
         assertEquals("From API", result.getOrNull()!!.lines[0].text)
-        coVerify { lyricsCacheDao.insert(any()) }
+        coVerify { lyricsCacheDao.upsert(any()) }
     }
 
     @Test

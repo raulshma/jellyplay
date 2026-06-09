@@ -60,6 +60,8 @@ import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.raulshma.jellyplay.core.designsystem.theme.ArtworkThemeWrapper
+import com.raulshma.jellyplay.core.designsystem.theme.LocalIsSynthwave
+import com.raulshma.jellyplay.core.designsystem.theme.LocalIsSoothingTheme
 import com.raulshma.jellyplay.core.ui.components.InlineTrailerPlayer
 import com.raulshma.jellyplay.core.designsystem.theme.LocalArtworkColors
 import com.raulshma.jellyplay.core.model.MediaType
@@ -322,6 +324,29 @@ private fun SeerrDetailContent(
     val density = LocalDensity.current
     val artworkColors = LocalArtworkColors.current
 
+    val isSynthwave = LocalIsSynthwave.current
+    val isSoothing = LocalIsSoothingTheme.current
+    val cardBorder = when {
+        isSynthwave -> {
+            androidx.compose.foundation.BorderStroke(
+                width = 1.5.dp,
+                brush = Brush.linearGradient(
+                    colors = listOf(
+                        MaterialTheme.colorScheme.primary,
+                        MaterialTheme.colorScheme.secondary
+                    )
+                )
+            )
+        }
+        isSoothing -> {
+            androidx.compose.foundation.BorderStroke(
+                width = 0.8.dp,
+                color = MaterialTheme.colorScheme.outline.copy(alpha = 0.35f)
+            )
+        }
+        else -> null
+    }
+
     val backdropUrl = movieDetail?.backdropUrl ?: tvDetail?.backdropUrl
     val title = movieDetail?.title ?: tvDetail?.name ?: ""
     val posterUrl = movieDetail?.posterUrl ?: tvDetail?.posterUrl
@@ -357,10 +382,11 @@ private fun SeerrDetailContent(
         ?: artworkColors?.dominant
         ?: MaterialTheme.colorScheme.background
 
-    val targetBackgroundColor = if (isLightTheme) {
-        MaterialTheme.colorScheme.background
-    } else {
-        lerp(baseOverlayColor, Color.Black, 0.65f)
+    val targetBackgroundColor = when {
+        isSynthwave -> Color(0xFF0C061A)
+        isSoothing -> MaterialTheme.colorScheme.background
+        isLightTheme -> MaterialTheme.colorScheme.background
+        else -> lerp(baseOverlayColor, Color.Black, 0.65f)
     }
     val backgroundColor by animateColorAsState(
         targetValue = targetBackgroundColor,
@@ -390,10 +416,20 @@ private fun SeerrDetailContent(
         }
     }
 
+    val backgroundModifier = if (isSynthwave) {
+        Modifier.background(
+            Brush.verticalGradient(
+                colors = listOf(Color(0xFF0D061A), Color(0xFF1B0B3A))
+            )
+        )
+    } else {
+        Modifier.background(backgroundColor)
+    }
+
     Box(
         modifier = Modifier
             .fillMaxSize()
-            .background(backgroundColor)
+            .then(backgroundModifier)
             .onKeyEvent { keyEvent ->
                 if (isTv && keyEvent.key == Key.Back && keyEvent.type == KeyEventType.KeyUp) {
                     onBack()
@@ -504,7 +540,8 @@ private fun SeerrDetailContent(
                                     .fillMaxWidth()
                                     .aspectRatio(2f / 3f),
                                 shape = ShapeCache.smooth12,
-                                elevation = CardDefaults.cardElevation(defaultElevation = 12.dp)
+                                border = cardBorder,
+                                elevation = CardDefaults.cardElevation(defaultElevation = if (isSoothing) 1.5.dp else 12.dp)
                             ) {
                                 MediaImage(
                                     url = posterUrl ?: "",
@@ -574,7 +611,8 @@ private fun SeerrDetailContent(
                                     .width(120.dp)
                                     .aspectRatio(2f / 3f),
                                 shape = ShapeCache.smooth8,
-                                elevation = CardDefaults.cardElevation(defaultElevation = 8.dp)
+                                border = cardBorder,
+                                elevation = CardDefaults.cardElevation(defaultElevation = if (isSoothing) 1.5.dp else 8.dp)
                             ) {
                                 MediaImage(
                                     url = posterUrl ?: "",

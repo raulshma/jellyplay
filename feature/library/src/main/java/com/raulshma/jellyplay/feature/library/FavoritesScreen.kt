@@ -127,12 +127,15 @@ fun FavoritesScreen(
                         horizontalArrangement = Arrangement.spacedBy(if (isTv) 16.dp else 12.dp),
                         verticalArrangement = Arrangement.spacedBy(if (isTv) 20.dp else 16.dp),
                     ) {
-                        items(pagingItems.itemCount) { index ->
+                        items(
+                            count = pagingItems.itemCount,
+                            key = { index -> pagingItems[index]?.id ?: index }
+                        ) { index ->
                             val item = pagingItems[index]
                             if (item != null) {
                                 PosterCard(
                                     item = item,
-                                    imageUrl = viewModel.getImageUrl(item.id),
+                                    imageUrl = remember(item.id) { viewModel.getImageUrl(item.id) },
                                     blurHash = item.blurHashes.primary,
                                     onClick = { onItemClick(item.id) },
                                 )

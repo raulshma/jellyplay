@@ -32,6 +32,27 @@ internal val displayFontFamily = FontFamily(
     ),
 )
 
+internal val synthwaveDisplayFontFamily = FontFamily(
+    Font(
+        googleFont = GoogleFont("Orbitron"),
+        fontProvider = fontProvider,
+    ),
+)
+
+internal val soothingFontFamily = FontFamily(
+    Font(
+        googleFont = GoogleFont("Nunito Sans"),
+        fontProvider = fontProvider,
+    ),
+)
+
+internal val synthwaveBodyFontFamily = FontFamily(
+    Font(
+        googleFont = GoogleFont("Share Tech Mono"),
+        fontProvider = fontProvider,
+    ),
+)
+
 /**
  * Expressive Material Design 3 Typography for JellyPlay.
  *
@@ -187,4 +208,40 @@ val JellyPlayExpressiveTitles = Typography(
         textGeometricTransform = TextGeometricTransform(scaleX = 1.05f),
         platformStyle = PlatformTextStyle(includeFontPadding = false),
     ),
+)
+
+val SynthwaveTypography = Typography(
+    displayLarge = JellyPlayTypography.displayLarge.copy(fontFamily = synthwaveDisplayFontFamily),
+    displayMedium = JellyPlayTypography.displayMedium.copy(fontFamily = synthwaveDisplayFontFamily),
+    displaySmall = JellyPlayTypography.displaySmall.copy(fontFamily = synthwaveDisplayFontFamily),
+    headlineLarge = JellyPlayTypography.headlineLarge.copy(fontFamily = synthwaveDisplayFontFamily),
+    headlineMedium = JellyPlayTypography.headlineMedium.copy(fontFamily = synthwaveDisplayFontFamily),
+    headlineSmall = JellyPlayTypography.headlineSmall.copy(fontFamily = synthwaveDisplayFontFamily),
+    titleLarge = JellyPlayTypography.titleLarge.copy(fontFamily = synthwaveDisplayFontFamily),
+    titleMedium = JellyPlayTypography.titleMedium.copy(fontFamily = synthwaveDisplayFontFamily),
+    titleSmall = JellyPlayTypography.titleSmall.copy(fontFamily = synthwaveDisplayFontFamily),
+    bodyLarge = JellyPlayTypography.bodyLarge.copy(fontFamily = synthwaveBodyFontFamily),
+    bodyMedium = JellyPlayTypography.bodyMedium.copy(fontFamily = synthwaveBodyFontFamily),
+    bodySmall = JellyPlayTypography.bodySmall.copy(fontFamily = synthwaveBodyFontFamily),
+    labelLarge = JellyPlayTypography.labelLarge.copy(fontFamily = synthwaveBodyFontFamily),
+    labelMedium = JellyPlayTypography.labelMedium.copy(fontFamily = synthwaveBodyFontFamily),
+    labelSmall = JellyPlayTypography.labelSmall.copy(fontFamily = synthwaveBodyFontFamily),
+)
+
+val SoothingTypography = Typography(
+    displayLarge = JellyPlayTypography.displayLarge.copy(fontFamily = soothingFontFamily, letterSpacing = (-0.01).em),
+    displayMedium = JellyPlayTypography.displayMedium.copy(fontFamily = soothingFontFamily, letterSpacing = (-0.01).em),
+    displaySmall = JellyPlayTypography.displaySmall.copy(fontFamily = soothingFontFamily, letterSpacing = (-0.01).em),
+    headlineLarge = JellyPlayTypography.headlineLarge.copy(fontFamily = soothingFontFamily, fontWeight = FontWeight.Bold, letterSpacing = (-0.005).em),
+    headlineMedium = JellyPlayTypography.headlineMedium.copy(fontFamily = soothingFontFamily, fontWeight = FontWeight.Bold, letterSpacing = (-0.005).em),
+    headlineSmall = JellyPlayTypography.headlineSmall.copy(fontFamily = soothingFontFamily, fontWeight = FontWeight.SemiBold, letterSpacing = (-0.005).em),
+    titleLarge = JellyPlayTypography.titleLarge.copy(fontFamily = soothingFontFamily, fontWeight = FontWeight.Bold, letterSpacing = 0.em),
+    titleMedium = JellyPlayTypography.titleMedium.copy(fontFamily = soothingFontFamily, fontWeight = FontWeight.SemiBold, letterSpacing = 0.em),
+    titleSmall = JellyPlayTypography.titleSmall.copy(fontFamily = soothingFontFamily, fontWeight = FontWeight.SemiBold, letterSpacing = 0.em),
+    bodyLarge = JellyPlayTypography.bodyLarge.copy(fontFamily = soothingFontFamily, letterSpacing = 0.1.sp),
+    bodyMedium = JellyPlayTypography.bodyMedium.copy(fontFamily = soothingFontFamily, letterSpacing = 0.1.sp),
+    bodySmall = JellyPlayTypography.bodySmall.copy(fontFamily = soothingFontFamily, letterSpacing = 0.1.sp),
+    labelLarge = JellyPlayTypography.labelLarge.copy(fontFamily = soothingFontFamily, fontWeight = FontWeight.SemiBold),
+    labelMedium = JellyPlayTypography.labelMedium.copy(fontFamily = soothingFontFamily, fontWeight = FontWeight.SemiBold),
+    labelSmall = JellyPlayTypography.labelSmall.copy(fontFamily = soothingFontFamily, fontWeight = FontWeight.Medium),
 )

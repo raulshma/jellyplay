@@ -7,7 +7,12 @@ object Converters {
 
     @TypeConverter
     @JvmStatic
-    fun fromStringList(value: List<String>?): String? = value?.joinToString(",")
+    fun fromStringList(value: List<String>?): String? {
+        if (value == null) return null
+        val array = JSONArray()
+        value.forEach { array.put(it) }
+        return array.toString()
+    }
 
     @TypeConverter
     @JvmStatic

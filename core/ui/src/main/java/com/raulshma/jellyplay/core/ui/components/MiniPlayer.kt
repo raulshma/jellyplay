@@ -46,6 +46,9 @@ import androidx.compose.ui.unit.dp
 
 import com.raulshma.jellyplay.core.designsystem.theme.AlphaEasing
 import com.raulshma.jellyplay.core.designsystem.theme.ShapeCache
+import com.raulshma.jellyplay.core.designsystem.theme.LocalIsSynthwave
+import com.raulshma.jellyplay.core.designsystem.theme.LocalIsSoothingTheme
+import androidx.compose.ui.graphics.Brush
 import com.raulshma.jellyplay.core.ui.animation.AnimationTokens
 import com.raulshma.jellyplay.core.ui.image.MediaImage
 import com.composables.icons.tabler.Tabler
@@ -103,8 +106,22 @@ fun MiniPlayer(
             blue = (baseColor.blue * 0.55f + 0.08f).coerceIn(0f, 1f),
             alpha = 0.92f,
         )
+        val isSynthwave = LocalIsSynthwave.current
+        val isSoothing = LocalIsSoothingTheme.current
+        val synthwaveTint = Color(0xFF160C2D).copy(alpha = 0.82f)
+        val soothingTint = if (androidx.compose.foundation.isSystemInDarkTheme()) {
+            Color(0xFF161B22).copy(alpha = 0.88f)
+        } else {
+            Color(0xFFFFFFFF).copy(alpha = 0.88f)
+        }
+        val targetTint = when {
+            isSynthwave -> synthwaveTint
+            isSoothing -> soothingTint
+            else -> pixelTint
+        }
+
         val animatedColor by animateColorAsState(
-            targetValue = pixelTint,
+            targetValue = targetTint,
             animationSpec = MaterialTheme.motionScheme.defaultEffectsSpec(),
             label = "miniPlayerColor",
         )
@@ -131,11 +148,35 @@ fun MiniPlayer(
             }
         } else Modifier
 
+        val border = when {
+            isSynthwave -> {
+                androidx.compose.foundation.BorderStroke(
+                    width = 1.dp,
+                    brush = Brush.linearGradient(
+                        colors = listOf(
+                            MaterialTheme.colorScheme.primary,
+                            MaterialTheme.colorScheme.secondary
+                        )
+                    )
+                )
+            }
+            isSoothing -> {
+                androidx.compose.foundation.BorderStroke(
+                    width = 0.5.dp,
+                    color = MaterialTheme.colorScheme.outline.copy(alpha = 0.3f)
+                )
+            }
+            else -> null
+        }
+
+        val shape = if (isSoothing) ShapeCache.smooth16 else ShapeCache.smoothPill
+
         Surface(
-            shape = ShapeCache.smoothPill,
+            shape = shape,
             color = animatedColor,
-            shadowElevation = 8.dp,
-            tonalElevation = 2.dp,
+            border = border,
+            shadowElevation = if (isSoothing) 4.dp else 8.dp,
+            tonalElevation = if (isSoothing) 0.dp else 2.dp,
             modifier = Modifier
                 .fillMaxWidth()
                 .padding(horizontal = 8.dp, vertical = 4.dp)

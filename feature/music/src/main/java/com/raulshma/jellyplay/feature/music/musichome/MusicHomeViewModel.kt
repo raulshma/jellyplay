@@ -87,7 +87,7 @@ class MusicHomeViewModel @Inject constructor(
         offlineModeManager.toggleManualOffline()
     }
 
-    suspend fun loadSections() {
+    fun loadSections() {
         launch {
             if (offlineMode != OfflineMode.ONLINE) {
                 _isLoading.value = false

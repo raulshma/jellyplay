@@ -459,7 +459,7 @@ fun LibraryScreen(
                                                             append(typeLabel)
                                                         }
                                                     },
-                                                    imageUrl = viewModel.getImageUrl(item.id),
+                                                    imageUrl = remember(item.id) { viewModel.getImageUrl(item.id) },
                                                     blurHash = item.blurHashes.primary,
                                                     onClick = { onItemClick(item.id) },
                                                 )
@@ -484,7 +484,7 @@ fun LibraryScreen(
                                             if (item != null) {
                                                 PosterCard(
                                                     item = item,
-                                                    imageUrl = viewModel.getImageUrl(item.id),
+                                                    imageUrl = remember(item.id) { viewModel.getImageUrl(item.id) },
                                                     onClick = { onItemClick(item.id) },
                                                     showProgress = item.playbackPositionTicks != null && item.playbackPositionTicks!! > 0,
                                                     progressPercent = if (item.runTimeTicks != null && item.runTimeTicks!! > 0) {

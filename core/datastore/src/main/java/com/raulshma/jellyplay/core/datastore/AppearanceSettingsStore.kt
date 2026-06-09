@@ -23,6 +23,10 @@ data class AppearanceSettings(
     val colorStyle: ColorStyle = ColorStyle.TONAL_SPOT,
     val navBarShowLabels: Boolean = true,
     val homeHeroEnabled: Boolean = true,
+    val synthwaveMode: Boolean = false,
+    val synthwaveAccent: String = "magenta",
+    val soothingMode: Boolean = false,
+    val soothingAccent: String = "ocean",
 )
 
 /**
@@ -49,6 +53,10 @@ class AppearanceSettingsStore @Inject constructor(
                 colorStyle = prefs.colorStyle,
                 navBarShowLabels = prefs.navBarShowLabels,
                 homeHeroEnabled = prefs.homeHeroEnabled,
+                synthwaveMode = prefs.synthwaveMode,
+                synthwaveAccent = prefs.synthwaveAccent,
+                soothingMode = prefs.soothingMode,
+                soothingAccent = prefs.soothingAccent,
             )
         }
         .distinctUntilChanged()
@@ -69,4 +77,12 @@ class AppearanceSettingsStore @Inject constructor(
     suspend fun setNavBarShowLabels(enabled: Boolean) = userPreferencesStore.setNavBarShowLabels(enabled)
 
     suspend fun setHomeHeroEnabled(enabled: Boolean) = userPreferencesStore.setHomeHeroEnabled(enabled)
+
+    suspend fun setSynthwaveMode(enabled: Boolean) = userPreferencesStore.setSynthwaveMode(enabled)
+
+    suspend fun setSynthwaveAccent(accent: String) = userPreferencesStore.setSynthwaveAccent(accent)
+
+    suspend fun setSoothingMode(enabled: Boolean) = userPreferencesStore.setSoothingMode(enabled)
+
+    suspend fun setSoothingAccent(accent: String) = userPreferencesStore.setSoothingAccent(accent)
 }

@@ -131,16 +131,13 @@ fun AudioPlayerScreen(
 
     val snackbarHostState = remember { SnackbarHostState() }
 
-    LaunchedEffect(viewModel.playbackError) {
-        viewModel.playbackError?.let { error ->
-            snackbarHostState.showSnackbar(error, duration = SnackbarDuration.Short)
-        }
-    }
-
     var showErrorOverlay by remember { mutableStateOf(false) }
 
     LaunchedEffect(viewModel.playbackError) {
         showErrorOverlay = viewModel.playbackError != null
+        viewModel.playbackError?.let { error ->
+            snackbarHostState.showSnackbar(error, duration = SnackbarDuration.Short)
+        }
     }
 
     val artworkScale = remember { Animatable(0.8f) }

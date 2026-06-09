@@ -4,33 +4,40 @@ import androidx.room.Dao
 import androidx.room.Insert
 import androidx.room.OnConflictStrategy
 import androidx.room.Query
+import androidx.room.Transaction
 import com.raulshma.jellyplay.core.database.entity.AudioQueueEntity
 import com.raulshma.jellyplay.core.database.entity.AudioQueueStateEntity
 import kotlinx.coroutines.flow.Flow
 
 @Dao
-interface AudioQueueDao {
+abstract class AudioQueueDao {
     @Query("SELECT * FROM audio_queue ORDER BY position ASC")
-    fun observeQueue(): Flow<List<AudioQueueEntity>>
+    abstract fun observeQueue(): Flow<List<AudioQueueEntity>>
 
     @Query("SELECT * FROM audio_queue ORDER BY position ASC")
-    suspend fun getQueue(): List<AudioQueueEntity>
+    abstract suspend fun getQueue(): List<AudioQueueEntity>
 
     @Insert(onConflict = OnConflictStrategy.REPLACE)
-    suspend fun insertAll(items: List<AudioQueueEntity>)
+    abstract suspend fun insertAll(items: List<AudioQueueEntity>)
 
     @Query("DELETE FROM audio_queue")
-    suspend fun clearQueue()
+    abstract suspend fun clearQueue()
 
     @Query("DELETE FROM audio_queue WHERE id = :itemId")
-    suspend fun deleteById(itemId: String)
+    abstract suspend fun deleteById(itemId: String)
 
     @Query("SELECT * FROM audio_queue_state WHERE id = 1")
-    fun observeState(): Flow<AudioQueueStateEntity?>
+    abstract fun observeState(): Flow<AudioQueueStateEntity?>
 
     @Query("SELECT * FROM audio_queue_state WHERE id = 1")
-    suspend fun getState(): AudioQueueStateEntity?
+    abstract suspend fun getState(): AudioQueueStateEntity?
 
     @Insert(onConflict = OnConflictStrategy.REPLACE)
-    suspend fun saveState(state: AudioQueueStateEntity)
+    abstract suspend fun saveState(state: AudioQueueStateEntity)
+
+    @Transaction
+    open suspend fun replaceQueue(items: List<AudioQueueEntity>) {
+        clearQueue()
+        insertAll(items)
+    }
 }

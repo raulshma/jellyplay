@@ -50,7 +50,7 @@ class PlaybackApiClientImpl @Inject constructor(
         positionTicks: Long,
         isPaused: Boolean,
         playMethod: com.raulshma.jellyplay.core.model.PlayMethod,
-    ): Result<Unit> = engine.apiResult {
+    ): Result<Unit> = engine.apiResultWithRetry {
         val uuid = itemId.toUUID()
         val sdkPlayMethod = when (playMethod) {
             com.raulshma.jellyplay.core.model.PlayMethod.DIRECT_PLAY -> org.jellyfin.sdk.model.api.PlayMethod.DIRECT_PLAY
@@ -76,7 +76,7 @@ class PlaybackApiClientImpl @Inject constructor(
         itemId: String,
         sessionId: String,
         positionTicks: Long,
-    ): Result<Unit> = engine.apiResult {
+    ): Result<Unit> = engine.apiResultWithRetry {
         val uuid = itemId.toUUID()
         engine.requireApi().playStateApi.reportPlaybackStopped(
             org.jellyfin.sdk.model.api.PlaybackStopInfo(
@@ -151,7 +151,7 @@ class PlaybackApiClientImpl @Inject constructor(
         return "${server.address}/Videos/$itemId/$mediaSourceId/Subtitles/$index/Stream.$format?api_key=${user.accessToken}"
     }
 
-    override suspend fun getIntroTimestamps(itemId: String): Result<IntroTimestamps> = engine.apiResult {
+    override suspend fun getIntroTimestamps(itemId: String): Result<IntroTimestamps> = engine.apiResultWithRetry {
         val server = engine._currentServer.value ?: throw IllegalStateException("No server")
         val user = engine._currentUser.value ?: throw IllegalStateException("No user")
         val url = "${server.address}/Items/$itemId/IntroSkipTimestamps"
@@ -163,13 +163,13 @@ class PlaybackApiClientImpl @Inject constructor(
             if (!response.isSuccessful) {
                 IntroTimestamps(itemId)
             } else {
-                val body = response.body?.string() ?: return@apiResult IntroTimestamps(itemId)
+                val body = response.body?.string() ?: return@apiResultWithRetry IntroTimestamps(itemId)
                 JellyfinApiEngine.sharedJson.decodeFromString<IntroTimestamps>(body)
             }
         }
     }
 
-    override suspend fun getCreditTimestamps(itemId: String): Result<CreditTimestamps> = engine.apiResult {
+    override suspend fun getCreditTimestamps(itemId: String): Result<CreditTimestamps> = engine.apiResultWithRetry {
         val server = engine._currentServer.value ?: throw IllegalStateException("No server")
         val user = engine._currentUser.value ?: throw IllegalStateException("No user")
         val url = "${server.address}/Items/$itemId/CreditTimestamps"
@@ -181,16 +181,16 @@ class PlaybackApiClientImpl @Inject constructor(
             if (!response.isSuccessful) {
                 CreditTimestamps(itemId)
             } else {
-                val body = response.body?.string() ?: return@apiResult CreditTimestamps(itemId)
+                val body = response.body?.string() ?: return@apiResultWithRetry CreditTimestamps(itemId)
                 JellyfinApiEngine.sharedJson.decodeFromString<CreditTimestamps>(body)
             }
         }
     }
 
-    override suspend fun getMediaSegments(itemId: String): Result<List<MediaSegment>> = engine.apiResult {
+    override suspend fun getMediaSegments(itemId: String): Result<List<MediaSegment>> = engine.apiResultWithRetry {
         val segments = runCatching {
             engine.requireApi().mediaSegmentsApi.getItemSegments(itemId = itemId.toUUID()).content
-        }.getOrNull() ?: return@apiResult emptyList()
+        }.getOrNull() ?: return@apiResultWithRetry emptyList()
         segments.items.orEmpty().map { dto ->
             MediaSegment(
                 id = dto.id?.toString() ?: "",
@@ -202,7 +202,7 @@ class PlaybackApiClientImpl @Inject constructor(
         }
     }
 
-    override suspend fun getRemoteSubtitles(itemId: String): Result<List<RemoteSubtitleInfo>> = engine.apiResult {
+    override suspend fun getRemoteSubtitles(itemId: String): Result<List<RemoteSubtitleInfo>> = engine.apiResultWithRetry {
         val server = engine._currentServer.value ?: throw IllegalStateException("No server")
         val user = engine._currentUser.value ?: throw IllegalStateException("No user")
         val url = "${server.address}/Items/$itemId/RemoteSearch/Subtitles"
@@ -211,13 +211,13 @@ class PlaybackApiClientImpl @Inject constructor(
             .header("X-Emby-Token", user.accessToken)
             .build()
         engine.okHttpClient.newCall(request).execute().use { response ->
-            if (!response.isSuccessful) return@apiResult emptyList<RemoteSubtitleInfo>()
-            val body = response.body?.string() ?: return@apiResult emptyList<RemoteSubtitleInfo>()
+            if (!response.isSuccessful) return@apiResultWithRetry emptyList<RemoteSubtitleInfo>()
+            val body = response.body?.string() ?: return@apiResultWithRetry emptyList<RemoteSubtitleInfo>()
             JellyfinApiEngine.sharedJson.decodeFromString<List<RemoteSubtitleInfo>>(body)
         }
     }
 
-    override suspend fun downloadRemoteSubtitle(itemId: String, subtitleId: String): Result<Unit> = engine.apiResult {
+    override suspend fun downloadRemoteSubtitle(itemId: String, subtitleId: String): Result<Unit> = engine.apiResultWithRetry {
         engine.requireApi().subtitleApi.downloadRemoteSubtitles(
             itemId = itemId.toUUID(),
             subtitleId = subtitleId,
@@ -237,7 +237,7 @@ class PlaybackApiClientImpl @Inject constructor(
             null
         }
 
-    override suspend fun getServerTime(): Result<com.raulshma.jellyplay.core.model.UtcTimeResponse> = engine.apiResult {
+    override suspend fun getServerTime(): Result<com.raulshma.jellyplay.core.model.UtcTimeResponse> = engine.apiResultWithRetry {
         val response = engine.requireApi().timeSyncApi.getUtcTime().content
         com.raulshma.jellyplay.core.model.UtcTimeResponse(
             requestReceptionTime = response.requestReceptionTime?.toString() ?: "",

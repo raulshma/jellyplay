@@ -21,6 +21,8 @@ import androidx.compose.material3.MediumTopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.material3.rememberTopAppBarState
 import androidx.compose.runtime.Composable
+import androidx.compose.ui.graphics.Color
+import com.raulshma.jellyplay.core.designsystem.theme.LocalIsSynthwave
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -51,10 +53,12 @@ fun PersonDetailScreen(
         viewModel.loadPerson(personId)
     }
 
+    val isSynthwave = LocalIsSynthwave.current
     val scrollBehavior = TopAppBarDefaults.exitUntilCollapsedScrollBehavior(rememberTopAppBarState())
 
     Scaffold(
         modifier = Modifier.nestedScroll(scrollBehavior.nestedScrollConnection),
+        containerColor = if (isSynthwave) Color.Transparent else MaterialTheme.colorScheme.background,
         topBar = {
             MediumTopAppBar(
                 title = { Text(viewModel.name) },
@@ -70,6 +74,10 @@ fun PersonDetailScreen(
                         )
                     }
                 },
+                colors = TopAppBarDefaults.mediumTopAppBarColors(
+                    containerColor = Color.Transparent,
+                    scrolledContainerColor = Color.Transparent
+                ),
                 scrollBehavior = scrollBehavior,
             )
         },

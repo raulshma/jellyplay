@@ -251,6 +251,14 @@ internal fun SettingsSliderSheet(
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
             }
+            Spacer(Modifier.height(24.dp))
+            androidx.compose.material3.Button(
+                onClick = { onConfirm(sliderValue) },
+                modifier = Modifier.fillMaxWidth(),
+                shape = ShapeCache.smoothPill,
+            ) {
+                Text("Confirm")
+            }
         }
     }
 }

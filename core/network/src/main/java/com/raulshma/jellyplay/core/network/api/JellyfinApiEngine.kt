@@ -5,12 +5,23 @@ import com.raulshma.jellyplay.core.model.MediaType
 import com.raulshma.jellyplay.core.model.ServerInfo
 import com.raulshma.jellyplay.core.model.UserInfo
 import dagger.hilt.android.qualifiers.ApplicationContext
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import okhttp3.OkHttpClient
+import java.io.IOException
+import java.net.ConnectException
+import java.net.SocketTimeoutException
+import java.net.UnknownHostException
+import kotlin.math.min
+import kotlin.math.pow
+import kotlin.random.Random
 import org.jellyfin.sdk.Jellyfin
 import org.jellyfin.sdk.api.client.ApiClient
 import org.jellyfin.sdk.model.api.ClientCapabilitiesDto
@@ -34,6 +45,8 @@ class JellyfinApiEngine @Inject constructor(
     val _currentUser = MutableStateFlow<UserInfo?>(null)
     val currentUser: Flow<UserInfo?> = _currentUser.asStateFlow()
 
+    val authMutex = Mutex()
+
     @Volatile
     var api: ApiClient? = null
 
@@ -42,6 +55,44 @@ class JellyfinApiEngine @Inject constructor(
 
     suspend fun <T> apiResult(block: suspend () -> T): Result<T> =
         runCatching { withContext(Dispatchers.IO) { block() } }
+
+    suspend fun <T> apiResultWithRetry(
+        maxRetries: Int = 3,
+        block: suspend () -> T,
+    ): Result<T> {
+        var lastResult = apiResult(block)
+        repeat(maxRetries) { attempt ->
+            if (lastResult.isSuccess) return lastResult
+            val exception = lastResult.exceptionOrNull() ?: return lastResult
+            if (!isRetryable(exception)) return lastResult
+            val backoffMs = calculateRetryBackoff(attempt)
+            delay(backoffMs)
+            lastResult = apiResult(block)
+        }
+        return lastResult
+    }
+
+    private fun isRetryable(exception: Throwable): Boolean {
+        if (exception is CancellationException) return false
+        when (exception) {
+            is SocketTimeoutException -> return true
+            is ConnectException -> return true
+            is UnknownHostException -> return true
+            is IOException -> return true
+        }
+        val message = exception.message ?: return false
+        return setOf(429, 500, 502, 503, 504).any { code ->
+            message.contains("HTTP $code")
+        }
+    }
+
+    private fun calculateRetryBackoff(attempt: Int): Long {
+        val baseDelayMs = 1_000L
+        val maxDelayMs = 8_000L
+        val exponentialDelay = (baseDelayMs * 2.0.pow(attempt)).toLong()
+        val capped = min(exponentialDelay, maxDelayMs)
+        return Random.nextLong(0, capped + 1)
+    }
 
     val currentMaxParentalRating: Int?
         get() = _currentUser.value?.maxParentalAgeRating

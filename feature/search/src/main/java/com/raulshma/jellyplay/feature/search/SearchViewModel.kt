@@ -93,7 +93,8 @@ class SearchViewModel @Inject constructor(
                 flowOf(PagingData.empty())
             } else {
                 seerrSearchJob = launch { searchSeerr(currentQuery) }
-                launch { saveQueryIfNeeded(currentQuery) }
+                val hasResults = mediaRepository.search(currentQuery, limit = 1).getOrNull()?.items?.isNotEmpty() == true
+                launch { saveQueryIfNeeded(currentQuery, hasResults) }
                 mediaRepository.searchPaged(
                     query = currentQuery,
                     mediaTypes = filters.mediaTypes.ifEmpty { null },
@@ -163,10 +164,9 @@ class SearchViewModel @Inject constructor(
         }
     }
 
-    private suspend fun saveQueryIfNeeded(query: String) {
+    private suspend fun saveQueryIfNeeded(query: String, hasResults: Boolean) {
         if (query.trim().length < 2) return
         val userId = preferencesStore.activeUserId.first() ?: return
-        val hasResults = mediaRepository.search(query, limit = 1).getOrNull()?.items?.isNotEmpty() == true
         if (hasResults) {
             searchHistoryRepository.saveQuery(query, userId)
         }
