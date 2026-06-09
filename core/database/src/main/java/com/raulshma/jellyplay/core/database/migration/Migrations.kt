@@ -362,6 +362,15 @@ val MIGRATION_19_20 = object : Migration(19, 20) {
     }
 }
 
+val MIGRATION_20_21 = object : Migration(20, 21) {
+    override fun migrate(db: SupportSQLiteDatabase) {
+        db.execSQL("CREATE INDEX IF NOT EXISTS index_offline_media_seriesId_mediaType ON offline_media(seriesId, mediaType)")
+        db.execSQL("CREATE INDEX IF NOT EXISTS index_offline_media_seasonId_mediaType ON offline_media(seasonId, mediaType)")
+        db.execSQL("CREATE INDEX IF NOT EXISTS index_downloads_seriesId_status ON downloads(seriesId, status)")
+        db.execSQL("CREATE INDEX IF NOT EXISTS index_downloads_seasonId_status ON downloads(seasonId, status)")
+    }
+}
+
 val ALL_MIGRATIONS = listOf(
     MIGRATION_1_2,
     MIGRATION_2_3,
@@ -382,4 +391,5 @@ val ALL_MIGRATIONS = listOf(
     MIGRATION_17_18,
     MIGRATION_18_19,
     MIGRATION_19_20,
+    MIGRATION_20_21,
 )

@@ -30,6 +30,7 @@
 -keep class com.raulshma.jellyplay.core.data.worker.DownloadWorker { *; }
 
 -keep class com.raulshma.jellyplay.core.data.playback.JellyPlayPlaybackService { *; }
+-keep class com.raulshma.jellyplay.core.data.playback.*Helper { *; }
 -keep class com.raulshma.jellyplay.screensaver.JellyPlayDreamService { *; }
 
 -keep @androidx.room.Entity class * { *; }
@@ -41,10 +42,6 @@
     @androidx.room.Update <methods>;
     @androidx.room.Delete <methods>;
 }
-
--keepnames class kotlinx.serialization.internal.EnumSerializer { *; }
--keepnames class kotlinx.serialization.internal.CollectionSerializer { *; }
--keepnames class kotlinx.serialization.internal.MapSerializer { *; }
 
 -keepclassmembers class * {
     @dagger.hilt.android.lifecycle.HiltViewModel <init>(...);
@@ -68,16 +65,10 @@
 # Coil - consumer rules provided by library
 -dontwarn coil3.**
 
-# Paging
--keep class androidx.paging.**$* { *; }
+# Paging - consumer rules provided by library
 -dontwarn androidx.paging.**
 
-# Compose runtime
--keep class androidx.compose.runtime.**$Composable { *; }
--dontwarn androidx.compose.runtime.**
-
 # Navigation 3
--keep class androidx.navigation3.**$Composable { *; }
 -dontwarn androidx.navigation3.**
 
 # DataStore
@@ -88,10 +79,10 @@
     <init>(android.content.Context,androidx.work.WorkerParameters);
 }
 
-# Hilt
--keep class dagger.hilt.** { *; }
--keep class * extends dagger.hilt.internal.GeneratedComponent { *; }
--keepclassmembers @dagger.hilt.android.HiltAndroidApp class * { *; }
+# Hilt - consumer rules provided by library
+-keepclassmembers class * {
+    @dagger.hilt.android.lifecycle.HiltViewModel <init>(...);
+}
 
 # Kotlin coroutines
 -keepnames class kotlinx.coroutines.internal.MainDispatcherFactory {}
@@ -103,10 +94,8 @@
 -dontwarn io.github.oshai.kotlinlogging.**
 
 -keep class com.google.mlkit.** { *; }
--keep class com.google.android.gms.internal.** { *; }
 -dontwarn com.google.mlkit.**
 -dontwarn com.google.android.gms.internal.**
 
 -dontwarn okio.**
--keep class okio.** { *; }
 -dontwarn org.conscrypt.**

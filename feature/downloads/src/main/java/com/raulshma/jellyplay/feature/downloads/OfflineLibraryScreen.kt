@@ -127,7 +127,7 @@ fun OfflineLibraryScreen(
                         verticalArrangement = Arrangement.spacedBy(12.dp),
                         modifier = Modifier.weight(1f)
                     ) {
-                        items(filteredItems, key = { it.id }) { item ->
+                        items(filteredItems, key = { it.id }, contentType = { "offlineItem" }) { item ->
                             OfflineMediaCard(
                                 item = item,
                                 onClick = {

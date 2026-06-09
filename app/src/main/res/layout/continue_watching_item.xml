@@ -61,7 +61,7 @@
                 android:max="100"
                 android:progress="0"
                 android:progressBackgroundTint="#33FFFFFF"
-                android:progressTint="#FFFFFFFF" />
+                android:progressTint="@color/widget_accent" />
 
             <TextView
                 android:id="@+id/cw_item_remaining"
@@ -70,7 +70,7 @@
                 android:layout_marginTop="2dp"
                 android:fontFamily="monospace"
                 android:maxLines="1"
-                android:textColor="#80FFFFFF"
+                android:textColor="@color/widget_accent"
                 android:textSize="11sp" />
         </LinearLayout>
     </LinearLayout>

@@ -124,15 +124,22 @@ data class VideoPlayerUiState(
             MediaSegmentType.RECAP to RECAP_CHAPTER_NAMES,
             MediaSegmentType.COMMERCIAL to COMMERCIAL_CHAPTER_NAMES,
         )
+
+        private var cachedSegmentPosition: Long = Long.MIN_VALUE
+        private var cachedSegmentResult: MediaSegment? = null
+        private var cachedSegmentKey: Pair<List<MediaSegment>, List<ChapterInfo>>? = null
     }
 
     fun behaviorForType(type: MediaSegmentType): SegmentBehavior =
         segmentBehaviors[type] ?: SegmentBehavior.IGNORE
 
-    private var cachedSegmentPosition: Long = Long.MIN_VALUE
-    private var cachedSegmentResult: MediaSegment? = null
-
     fun computeActiveSegment(): MediaSegment? {
+        val currentKey = Pair(segments, chapters)
+        if (cachedSegmentKey != currentKey) {
+            cachedSegmentPosition = Long.MIN_VALUE
+            cachedSegmentResult = null
+            cachedSegmentKey = currentKey
+        }
         if (cachedSegmentPosition == currentPosition && cachedSegmentResult != null) return cachedSegmentResult
         cachedSegmentPosition = currentPosition
         cachedSegmentResult = computeActiveSegmentInternal()

@@ -8,6 +8,10 @@ import com.raulshma.jellyplay.core.ui.viewmodel.StateFlowHandle
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
+import kotlinx.coroutines.coroutineScope
+import java.util.concurrent.ConcurrentHashMap
 import javax.inject.Inject
 
 @HiltViewModel
@@ -48,14 +52,16 @@ class OfflineLibraryViewModel @Inject constructor(
             offlineRepository.getSeasonsForSeries(seriesId).collect { seasonList ->
                 _seasons.set(seasonList)
 
-                val episodesMap = mutableMapOf<String, List<OfflineMediaItem>>()
-                for (season in seasonList) {
-                    launch {
-                        offlineRepository.getEpisodesForSeason(season.id).collect { episodeList ->
-                            episodesMap[season.id] = episodeList
-                            _episodes.set(episodesMap.toMap())
+                val episodesMap = ConcurrentHashMap<String, List<OfflineMediaItem>>()
+                coroutineScope {
+                    seasonList.map { season ->
+                        async {
+                            offlineRepository.getEpisodesForSeason(season.id).collect { episodeList ->
+                                episodesMap[season.id] = episodeList
+                                _episodes.set(episodesMap.toMap())
+                            }
                         }
-                    }
+                    }.awaitAll()
                 }
             }
         }

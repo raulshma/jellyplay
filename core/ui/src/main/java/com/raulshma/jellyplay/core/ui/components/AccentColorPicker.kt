@@ -96,7 +96,7 @@ fun AccentColorPicker(
             horizontalArrangement = Arrangement.spacedBy(10.dp),
             modifier = Modifier.fillMaxWidth()
         ) {
-            items(swatches.size) { i ->
+            items(count = swatches.size, contentType = { "swatch" }) { i ->
                 val swatch = swatches[i]
                 val isSelected = (selectedSwatch.lowercase() == swatch.name.lowercase()) ||
                     (selectedSwatch == "dynamic" && swatch == AccentColorSwatch.DYNAMIC)
@@ -287,7 +287,7 @@ fun ColorStylePicker(
             horizontalArrangement = Arrangement.spacedBy(8.dp),
             modifier = Modifier.fillMaxWidth()
         ) {
-            items(styles.size) { i ->
+            items(count = styles.size, contentType = { "style" }) { i ->
                 val style = styles[i]
                 val isSelected = style == selectedStyle
 
@@ -395,7 +395,7 @@ fun SynthwaveAccentPicker(
             horizontalArrangement = Arrangement.spacedBy(10.dp),
             modifier = Modifier.fillMaxWidth()
         ) {
-            items(accents.size) { i ->
+            items(count = accents.size, contentType = { "accent" }) { i ->
                 val (accentName, color) = accents[i]
                 val isSelected = selectedAccent.lowercase() == accentName.lowercase()
 
@@ -505,7 +505,7 @@ fun SoothingAccentPicker(
             horizontalArrangement = Arrangement.spacedBy(10.dp),
             modifier = Modifier.fillMaxWidth()
         ) {
-            items(accents.size) { i ->
+            items(count = accents.size, contentType = { "accent" }) { i ->
                 val (accentName, color) = accents[i]
                 val isSelected = selectedAccent.lowercase() == accentName.lowercase()
 

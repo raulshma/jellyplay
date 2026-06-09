@@ -245,6 +245,7 @@ private fun LogFilesTab(
                     items(
                         items = selectedLogFileLines,
                         key = { line -> line.index },
+                        contentType = { "logLine" },
                     ) { line ->
                         val annotatedLine = remember(line.text) { parseLogLine(line.text) }
                         
@@ -302,7 +303,7 @@ private fun LogFilesTab(
                 ),
                 verticalArrangement = Arrangement.spacedBy(6.dp),
             ) {
-                items(items = logFiles, key = { it.name }) { file ->
+                items(items = logFiles, key = { it.name }, contentType = { "logFile" }) { file ->
                     LogFileItem(file = file, onClick = { onFileClick(file.name) })
                 }
             }
@@ -432,7 +433,7 @@ private fun ActivityLogTab(
             ),
             verticalArrangement = Arrangement.spacedBy(4.dp),
         ) {
-            items(items = entries, key = { it.id }) { entry ->
+            items(items = entries, key = { it.id }, contentType = { "activityEntry" }) { entry ->
                 ActivityEntryItem(
                     entry = entry,
                     isNew = entry.id in liveEntryIds,

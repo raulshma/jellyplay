@@ -190,7 +190,7 @@ fun OfflineSeriesScreen(
                     ),
                     verticalArrangement = Arrangement.spacedBy(8.dp),
                 ) {
-                    items(seasonEpisodes, key = { it.id }) { episode ->
+                    items(seasonEpisodes, key = { it.id }, contentType = { "episode" }) { episode ->
                         OfflineEpisodeRow(
                             episode = episode,
                             onPlay = {
