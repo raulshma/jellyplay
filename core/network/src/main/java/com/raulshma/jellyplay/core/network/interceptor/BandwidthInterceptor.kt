@@ -52,7 +52,10 @@ class BandwidthInterceptor @Inject constructor() : Interceptor {
                 if (elapsedNs > 0) {
                     val elapsedSec = elapsedNs / 1_000_000_000.0
                     val kbps = (totalBytes * 8.0) / elapsedSec / 1000.0
-                    _estimatedBandwidthKbps.value = kbps
+                    val current = _estimatedBandwidthKbps.value
+                    if (current == 0.0 || kotlin.math.abs(kbps - current) / current > 0.05) {
+                        _estimatedBandwidthKbps.value = kbps
+                    }
                 }
             }
         }

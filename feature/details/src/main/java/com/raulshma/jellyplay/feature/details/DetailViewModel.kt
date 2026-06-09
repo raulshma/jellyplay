@@ -36,6 +36,7 @@ import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -93,6 +94,8 @@ class DetailViewModel @Inject constructor(
 
     private val _seerrTvSeasons = stateFlow<List<SeerrSeason>>(emptyList())
     val seerrTvSeasons: StateFlow<List<SeerrSeason>> = _seerrTvSeasons.flow
+
+    private var loadJob: Job? = null
 
     private val _isLoading = composeState(false)
     val isLoading: androidx.compose.runtime.State<Boolean> get() = _isLoading.asState()
@@ -180,8 +183,10 @@ class DetailViewModel @Inject constructor(
         downloadRepository.getDownloadByMediaItemIdFlow(itemId)
 
     fun loadItem(itemId: String) {
-        launch {
+        loadJob?.cancel()
+        loadJob = launch {
             Snapshot.withMutableSnapshot {
+                _detail.value = null
                 _isLoading.value = true
                 _error.value = null
                 seasons = emptyList()
@@ -641,8 +646,9 @@ class DetailViewModel @Inject constructor(
         )
     }
 
-    private fun loadSeerrData(detail: MediaDetail) {
+    private fun loadSeerrData(detail: MediaDetail, generation: Long) {
         launch {
+            if (generation != seerrDataGeneration) return@launch
             _seerrRecommendations.set(emptyList())
             _seerrSimilar.set(emptyList())
             _relatedVideos.set(emptyList())
@@ -655,6 +661,7 @@ class DetailViewModel @Inject constructor(
 
             val connected = try { seerrRepository.isConnected().first() } catch (_: Exception) { false }
 
+            if (generation != seerrDataGeneration) return@launch
             // 1. Fetch related videos (trailers)
             if (connected) {
                 val videosResult = if (mediaType == MediaType.MOVIE) {
@@ -662,15 +669,19 @@ class DetailViewModel @Inject constructor(
                 } else {
                     seerrRepository.getTvDetails(tmdbId).map { it.relatedVideos }
                 }
-                _relatedVideos.set(videosResult.getOrElse { emptyList() })
+                if (generation == seerrDataGeneration) {
+                    _relatedVideos.set(videosResult.getOrElse { emptyList() })
+                }
             } else {
                 val videosResult = tmdbApiClient.getVideos(tmdbId, mediaType == MediaType.MOVIE)
-                _relatedVideos.set(videosResult.getOrElse { emptyList() })
+                if (generation == seerrDataGeneration) {
+                    _relatedVideos.set(videosResult.getOrElse { emptyList() })
+                }
             }
 
             // 2. Fetch recommendations and similar if enabled
             val enabled = try { seerrRepository.isRecommendationsEnabled().first() } catch (_: Exception) { false }
-            if (connected && enabled) {
+            if (connected && enabled && generation == seerrDataGeneration) {
                 coroutineScope {
                     val recsDeferred = async {
                         seerrRepository.getRecommendations(tmdbId, mediaType)
@@ -680,19 +691,25 @@ class DetailViewModel @Inject constructor(
                         seerrRepository.getSimilar(tmdbId, mediaType)
                             .getOrElse { com.raulshma.jellyplay.core.model.seerr.SeerrSearchResponse() }
                     }
-                    _seerrRecommendations.set(recsDeferred.await().results.take(20))
-                    _seerrSimilar.set(similarDeferred.await().results.take(20))
+                    val recs = recsDeferred.await()
+                    val similar = similarDeferred.await()
+                    if (generation == seerrDataGeneration) {
+                        _seerrRecommendations.set(recs.results.take(20))
+                        _seerrSimilar.set(similar.results.take(20))
+                    }
                 }
             }
         }
     }
 
     private var seerrDataLoaded = false
+    private var seerrDataGeneration = 0L
 
     fun loadSeerrDataIfNeeded(detail: MediaDetail) {
         if (seerrDataLoaded) return
         seerrDataLoaded = true
-        loadSeerrData(detail)
+        val generation = ++seerrDataGeneration
+        loadSeerrData(detail, generation)
     }
 
     private fun resolveTmdbId(detail: MediaDetail): Int? {

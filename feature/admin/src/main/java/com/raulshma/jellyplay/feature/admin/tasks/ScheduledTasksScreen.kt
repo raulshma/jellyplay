@@ -120,7 +120,7 @@ fun ScheduledTasksScreen(
                                     modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
                                 )
                             }
-                            items(items = tasks, key = { "${category}_${it.id}_${it.name}" }) { task ->
+                            items(items = tasks, key = { "${category}_${it.id}_${it.name}" }, contentType = { "task" }) { task ->
                                 TaskItem(
                                     task = task,
                                     onStart = { viewModel.startTask(task.id) },

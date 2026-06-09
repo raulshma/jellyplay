@@ -5,12 +5,20 @@ import androidx.datastore.core.DataStore
 import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.datastore.preferences.core.edit
+import androidx.datastore.preferences.core.emptyPreferences
 import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
 import com.raulshma.jellyplay.core.model.seerr.SeerrPreferences
 import dagger.hilt.android.qualifiers.ApplicationContext
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.SharingStarted
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.stateIn
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -20,6 +28,8 @@ private val Context.seerrDataStore: DataStore<Preferences> by preferencesDataSto
 class SeerrPreferencesStore @Inject constructor(
     @ApplicationContext private val context: Context,
 ) {
+    private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+
     private object Keys {
         val SERVER_URL = stringPreferencesKey("seerr_server_url")
         val API_KEY = stringPreferencesKey("seerr_api_key")
@@ -36,23 +46,26 @@ class SeerrPreferencesStore @Inject constructor(
         val DISCOVER_REGION = stringPreferencesKey("seerr_discover_region")
     }
 
-    val preferences: Flow<SeerrPreferences> = context.seerrDataStore.data.map { prefs ->
-        SeerrPreferences(
-            serverUrl = prefs[Keys.SERVER_URL] ?: "",
-            apiKey = prefs[Keys.API_KEY] ?: "",
-            enabled = prefs[Keys.ENABLED] ?: false,
-            searchEnabled = prefs[Keys.SEARCH_ENABLED] ?: false,
-            recommendationsEnabled = prefs[Keys.RECOMMENDATIONS_ENABLED] ?: false,
-            discoverEnabled = prefs[Keys.DISCOVER_ENABLED] ?: false,
-            discoverTrending = prefs[Keys.DISCOVER_TRENDING] ?: true,
-            discoverPopularMovies = prefs[Keys.DISCOVER_POPULAR_MOVIES] ?: true,
-            discoverPopularTv = prefs[Keys.DISCOVER_POPULAR_TV] ?: true,
-            discoverUpcomingMovies = prefs[Keys.DISCOVER_UPCOMING_MOVIES] ?: true,
-            discoverUpcomingTv = prefs[Keys.DISCOVER_UPCOMING_TV] ?: true,
-            streamingRegion = prefs[Keys.STREAMING_REGION] ?: "US",
-            discoverRegion = prefs[Keys.DISCOVER_REGION] ?: "US",
-        )
-    }
+    val preferences: StateFlow<SeerrPreferences> = context.seerrDataStore.data
+        .catch { _ -> emit(emptyPreferences()) }
+        .map { prefs ->
+            SeerrPreferences(
+                serverUrl = prefs[Keys.SERVER_URL] ?: "",
+                apiKey = prefs[Keys.API_KEY] ?: "",
+                enabled = prefs[Keys.ENABLED] ?: false,
+                searchEnabled = prefs[Keys.SEARCH_ENABLED] ?: false,
+                recommendationsEnabled = prefs[Keys.RECOMMENDATIONS_ENABLED] ?: false,
+                discoverEnabled = prefs[Keys.DISCOVER_ENABLED] ?: false,
+                discoverTrending = prefs[Keys.DISCOVER_TRENDING] ?: true,
+                discoverPopularMovies = prefs[Keys.DISCOVER_POPULAR_MOVIES] ?: true,
+                discoverPopularTv = prefs[Keys.DISCOVER_POPULAR_TV] ?: true,
+                discoverUpcomingMovies = prefs[Keys.DISCOVER_UPCOMING_MOVIES] ?: true,
+                discoverUpcomingTv = prefs[Keys.DISCOVER_UPCOMING_TV] ?: true,
+                streamingRegion = prefs[Keys.STREAMING_REGION] ?: "US",
+                discoverRegion = prefs[Keys.DISCOVER_REGION] ?: "US",
+            )
+        }
+        .stateIn(scope, SharingStarted.Eagerly, SeerrPreferences())
 
     val isConnected: Flow<Boolean> = preferences.map { it.serverUrl.isNotBlank() && it.apiKey.isNotBlank() }
 

@@ -32,6 +32,7 @@ import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.flowOf
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import javax.inject.Inject
 
@@ -69,14 +70,22 @@ class SearchViewModel @Inject constructor(
     private val _seerrResults = stateFlow<List<SeerrSearchItem>>(emptyList())
     val seerrResults: StateFlow<List<SeerrSearchItem>> = _seerrResults.flow
 
+    private val _seerrSearchError = stateFlow(false)
+    val seerrSearchError: StateFlow<Boolean> = _seerrSearchError.flow
+
     private val _searchHistory = stateFlow<List<SearchHistoryItem>>(emptyList())
     val searchHistory: StateFlow<List<SearchHistoryItem>> = _searchHistory.flow
 
-    val isSeerrConnected: StateFlow<Boolean> = seerrRepository.isConnected()
-        .stateIn(scope, SharingStarted.WhileSubscribed(5_000), false)
+    private val seerrPrefs: StateFlow<com.raulshma.jellyplay.core.model.seerr.SeerrPreferences> =
+        seerrRepository.getPreferences() as StateFlow
 
-    val isSeerrSearchEnabled: StateFlow<Boolean> = seerrRepository.isSearchEnabled()
-        .stateIn(scope, SharingStarted.WhileSubscribed(5_000), false)
+    val isSeerrConnected: StateFlow<Boolean> = seerrPrefs.map {
+        it.serverUrl.isNotBlank() && it.apiKey.isNotBlank()
+    }.stateIn(scope, SharingStarted.Lazily, false)
+
+    val isSeerrSearchEnabled: StateFlow<Boolean> = seerrPrefs.map {
+        it.searchEnabled
+    }.stateIn(scope, SharingStarted.Lazily, false)
 
     private val queryFlow = stateFlow("")
 
@@ -88,13 +97,13 @@ class SearchViewModel @Inject constructor(
     ) { q, f -> q to f }
         .flatMapLatest { (currentQuery, filters) ->
             seerrSearchJob?.cancel()
+            _seerrResults.set(emptyList())
+            _seerrSearchError.set(false)
             if (currentQuery.isBlank()) {
-                _seerrResults.set(emptyList())
                 flowOf(PagingData.empty())
             } else {
                 seerrSearchJob = launch { searchSeerr(currentQuery) }
-                val hasResults = mediaRepository.search(currentQuery, limit = 1).getOrNull()?.items?.isNotEmpty() == true
-                launch { saveQueryIfNeeded(currentQuery, hasResults) }
+                launch { saveQueryIfNeeded(currentQuery, true) }
                 mediaRepository.searchPaged(
                     query = currentQuery,
                     mediaTypes = filters.mediaTypes.ifEmpty { null },
@@ -110,13 +119,12 @@ class SearchViewModel @Inject constructor(
 
     private fun loadSearchHistory() {
         launch {
-            preferencesStore.activeUserId.collect { userId ->
-                if (userId != null) {
-                    searchHistoryRepository.getRecent(userId).collect { history ->
-                        _searchHistory.set(history)
-                    }
+            preferencesStore.activeUserId
+                .flatMapLatest { userId ->
+                    if (userId != null) searchHistoryRepository.getRecent(userId)
+                    else flowOf(emptyList())
                 }
-            }
+                .collect { history -> _searchHistory.set(history) }
         }
     }
 
@@ -180,23 +188,38 @@ class SearchViewModel @Inject constructor(
 
     private suspend fun searchSeerr(query: String) {
         try {
-            val connected = seerrRepository.isConnected().first()
-            val enabled = seerrRepository.isSearchEnabled().first()
+            val prefs = seerrPrefs.value
+            val connected = prefs.serverUrl.isNotBlank() && prefs.apiKey.isNotBlank()
+            val enabled = prefs.searchEnabled
             if (!connected || !enabled) {
                 _seerrResults.set(emptyList())
+                _seerrSearchError.set(false)
                 return
             }
             seerrRepository.search(query)
                 .onSuccess { response ->
                     _seerrResults.set(response.results.take(10))
+                    _seerrSearchError.set(false)
                 }
                 .onFailure {
                     _seerrResults.set(emptyList())
+                    _seerrSearchError.set(true)
                 }
         } catch (e: kotlinx.coroutines.CancellationException) {
             throw e
         } catch (_: Exception) {
             _seerrResults.set(emptyList())
+            _seerrSearchError.set(true)
+        }
+    }
+
+    fun retrySeerrSearch() {
+        val currentQuery = query
+        if (currentQuery.isBlank()) return
+        seerrSearchJob?.cancel()
+        seerrSearchJob = launch {
+            _seerrSearchError.set(false)
+            searchSeerr(currentQuery)
         }
     }
 

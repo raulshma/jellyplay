@@ -6,6 +6,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -15,6 +16,10 @@ import javax.inject.Singleton
 
 @Singleton
 class VideoMiniPlayerState @Inject constructor() {
+    companion object {
+        private const val AUTO_RELEASE_TIMEOUT_MS = 30 * 60 * 1000L
+    }
+
     private val _isMiniMode = MutableStateFlow(false)
     val isMiniMode: StateFlow<Boolean> = _isMiniMode.asStateFlow()
 
@@ -31,6 +36,7 @@ class VideoMiniPlayerState @Inject constructor() {
     val engine: MediaEngine? get() = _engine
 
     private var job: Job? = null
+    private var timeoutJob: Job? = null
     private var miniScope: CoroutineScope? = null
 
     private val _itemId = MutableStateFlow<String?>(null)
@@ -54,10 +60,15 @@ class VideoMiniPlayerState @Inject constructor() {
         _isPlaying.value = engine.isPlaying.value
         
         job?.cancel()
+        timeoutJob?.cancel()
         miniScope?.cancel()
         miniScope = CoroutineScope(Dispatchers.Main + SupervisorJob())
         job = miniScope!!.launch {
             engine.isPlaying.collect { _isPlaying.value = it }
+        }
+        timeoutJob = miniScope!!.launch {
+            delay(AUTO_RELEASE_TIMEOUT_MS)
+            release()
         }
         _isMiniMode.value = true
     }
@@ -67,7 +78,9 @@ class VideoMiniPlayerState @Inject constructor() {
         if (_itemId.value != itemId) return null
         val engine = _engine
         job?.cancel()
+        timeoutJob?.cancel()
         job = null
+        timeoutJob = null
         miniScope?.cancel()
         miniScope = null
         _isMiniMode.value = false
@@ -85,7 +98,9 @@ class VideoMiniPlayerState @Inject constructor() {
     fun release() {
         val engine = _engine
         job?.cancel()
+        timeoutJob?.cancel()
         job = null
+        timeoutJob = null
         miniScope?.cancel()
         miniScope = null
         engine?.release()

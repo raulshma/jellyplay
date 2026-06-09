@@ -68,7 +68,6 @@ class ScheduledTasksViewModel @Inject constructor(
                 while (running) {
                     delay(3000)
                     fetchTasks()
-                    break
                 }
             }
         }

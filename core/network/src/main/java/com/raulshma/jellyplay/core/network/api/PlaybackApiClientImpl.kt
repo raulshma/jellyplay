@@ -23,7 +23,7 @@ class PlaybackApiClientImpl @Inject constructor(
         sessionId: String,
         playMethod: com.raulshma.jellyplay.core.model.PlayMethod,
     ): Result<Unit> =
-        runCatching {
+        engine.apiResultWithRetry {
             val uuid = itemId.toUUID()
             val sdkPlayMethod = when (playMethod) {
                 com.raulshma.jellyplay.core.model.PlayMethod.DIRECT_PLAY -> org.jellyfin.sdk.model.api.PlayMethod.DIRECT_PLAY

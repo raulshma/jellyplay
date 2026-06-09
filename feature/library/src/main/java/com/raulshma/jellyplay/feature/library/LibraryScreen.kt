@@ -442,9 +442,9 @@ fun LibraryScreen(
                                         ) { index ->
                                             val item = pagedItems[index]
                                             if (item != null) {
-                                                LibraryListItem(
-                                                    title = item.name,
-                                                    subtitle = buildString {
+                                                val memoizedClick = remember(item.id) { { onItemClick(item.id) } }
+                                                val subtitle = remember(item.year, item.mediaType) {
+                                                    buildString {
                                                         if (item.year != null) append("${item.year}")
                                                         val typeLabel = when (item.mediaType) {
                                                             com.raulshma.jellyplay.core.model.MediaType.EPISODE -> "Episode"
@@ -458,10 +458,14 @@ fun LibraryScreen(
                                                             if (isNotEmpty()) append(" · ")
                                                             append(typeLabel)
                                                         }
-                                                    },
+                                                    }
+                                                }
+                                                LibraryListItem(
+                                                    title = item.name,
+                                                    subtitle = subtitle,
                                                     imageUrl = remember(item.id) { viewModel.getImageUrl(item.id) },
                                                     blurHash = item.blurHashes.primary,
-                                                    onClick = { onItemClick(item.id) },
+                                                    onClick = memoizedClick,
                                                 )
                                             }
                                         }
@@ -482,10 +486,11 @@ fun LibraryScreen(
                                         ) { index ->
                                             val item = pagedItems[index]
                                             if (item != null) {
+                                                val memoizedClick = remember(item.id) { { onItemClick(item.id) } }
                                                 PosterCard(
                                                     item = item,
                                                     imageUrl = remember(item.id) { viewModel.getImageUrl(item.id) },
-                                                    onClick = { onItemClick(item.id) },
+                                                    onClick = memoizedClick,
                                                     showProgress = item.playbackPositionTicks != null && item.playbackPositionTicks!! > 0,
                                                     progressPercent = if (item.runTimeTicks != null && item.runTimeTicks!! > 0) {
                                                         (item.playbackPositionTicks?.toFloat()

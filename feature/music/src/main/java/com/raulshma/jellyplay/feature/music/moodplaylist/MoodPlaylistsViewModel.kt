@@ -124,10 +124,14 @@ class MoodPlaylistsViewModel @Inject constructor(
                 limit = 300,
                 sortBy = "Random",
             ).onSuccess { result ->
-                var items = result.items
-                items = applyMoodFilter(items, playlist)
-                items = applySort(items, playlist.sortBy)
-                _generatedItems.value = items.take(playlist.maxItems)
+                kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Default) {
+                    var items = result.items
+                    items = applyMoodFilter(items, playlist)
+                    items = applySort(items, playlist.sortBy)
+                    items.take(playlist.maxItems)
+                }.also { items ->
+                    _generatedItems.value = items
+                }
             }.onFailure {
                 _error.value = it.message ?: "Failed to generate playlist"
             }
