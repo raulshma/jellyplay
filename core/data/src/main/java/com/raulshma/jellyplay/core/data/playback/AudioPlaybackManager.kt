@@ -82,7 +82,25 @@ class AudioPlaybackManager @Inject constructor(
     init {
         scope.launch {
             preferencesStore.preferences.collect { prefs ->
+                val prevVisualizer = currentPreferences.audioVisualizerEnabled
+                val prevPreset = currentPreferences.equalizerPreset
+                val prevBalance = currentPreferences.lrBalance
+                val prevPitch = currentPreferences.pitchSemitones
+
                 currentPreferences = prefs
+
+                if (prefs.audioVisualizerEnabled != prevVisualizer) {
+                    enableVisualizer(prefs.audioVisualizerEnabled)
+                }
+                if (prefs.equalizerPreset != prevPreset) {
+                    setEqualizerPreset(prefs.equalizerPreset)
+                }
+                if (prefs.lrBalance != prevBalance) {
+                    setLrBalance(prefs.lrBalance)
+                }
+                if (prefs.pitchSemitones != prevPitch) {
+                    setPitchSemitones(prefs.pitchSemitones)
+                }
             }
         }
     }
@@ -101,7 +119,7 @@ class AudioPlaybackManager @Inject constructor(
     private var positionJob: Job? = null
     private var queueLoadingJob: Job? = null
     private var loudnessEnhancer: LoudnessEnhancer? = null
-    private val mediaItemCache = android.util.LruCache<String, MediaItem>(50)
+    private val mediaItemCache = android.util.LruCache<String, MediaItem>(25)
     private val dialogueBoost = DialogueBoostHelper()
     private val equalizerHelper = EqualizerHelper()
     private val bassBoostHelper = BassBoostHelper()

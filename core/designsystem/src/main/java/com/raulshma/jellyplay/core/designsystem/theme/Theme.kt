@@ -2,6 +2,7 @@ package com.raulshma.jellyplay.core.designsystem.theme
 
 import android.os.Build
 import androidx.compose.foundation.isSystemInDarkTheme
+import racra.compose.smooth_corner_rect_library.AbsoluteSmoothCornerShape
 import androidx.compose.material3.ColorScheme
 import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
 import androidx.compose.material3.MaterialExpressiveTheme
@@ -15,6 +16,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.ui.unit.dp
 import com.raulshma.jellyplay.core.model.ContrastLevel
 import com.raulshma.jellyplay.core.model.ColorStyle
 
@@ -259,16 +261,18 @@ private val OledColorScheme = darkColorScheme(
 )
 
 private val DefaultShapes = Shapes(
-    extraSmall = ShapeCache.smooth12,
-    small = ShapeCache.smooth14,
-    medium = ShapeCache.smooth20,
-    large = ShapeCache.smooth28,
-    extraLarge = ShapeCache.smooth36,
+    extraSmall = AbsoluteSmoothCornerShape(12.dp, 60),
+    small = AbsoluteSmoothCornerShape(14.dp, 60),
+    medium = AbsoluteSmoothCornerShape(20.dp, 60),
+    large = AbsoluteSmoothCornerShape(28.dp, 60),
+    extraLarge = AbsoluteSmoothCornerShape(36.dp, 60),
 )
 
 val LocalJellyPlayColorScheme = staticCompositionLocalOf<ColorScheme> { error("No ColorScheme provided") }
 val LocalJellyPlayTypography = staticCompositionLocalOf<androidx.compose.material3.Typography> { error("No Typography provided") }
 val LocalJellyPlayShapes = staticCompositionLocalOf<Shapes> { error("No Shapes provided") }
+val LocalIsSynthwave = staticCompositionLocalOf { false }
+val LocalIsSoothingTheme = staticCompositionLocalOf { false }
 
 @OptIn(ExperimentalMaterial3ExpressiveApi::class)
 @Composable
@@ -281,12 +285,24 @@ fun JellyPlayTheme(
     performanceMode: Boolean = false,
     accentColorSwatch: String = "dynamic",
     colorStyle: ColorStyle = ColorStyle.TONAL_SPOT,
+    synthwaveMode: Boolean = false,
+    synthwaveAccent: String = "magenta",
+    soothingMode: Boolean = false,
+    soothingAccent: String = "ocean",
     content: @Composable () -> Unit,
 ) {
-    val effectiveDarkTheme = darkTheme || isTv
-    val effectiveOledMode = oledMode && effectiveDarkTheme
+    val effectiveDarkTheme = darkTheme || isTv || synthwaveMode
+    val effectiveOledMode = oledMode && effectiveDarkTheme && !synthwaveMode && !soothingMode
+
+    isSynthwaveActiveGlobal = synthwaveMode
 
     val colorScheme = when {
+        synthwaveMode -> {
+            getSynthwaveColorScheme(synthwaveAccent)
+        }
+        soothingMode -> {
+            getSoothingColorScheme(soothingAccent, effectiveDarkTheme)
+        }
         accentColorSwatch == "dynamic" && dynamicColor && !isTv && Build.VERSION.SDK_INT >= Build.VERSION_CODES.S -> {
             val context = LocalContext.current
             if (effectiveDarkTheme) {
@@ -326,12 +342,35 @@ fun JellyPlayTheme(
         }
     }
 
-    val shapes = DefaultShapes
+    val shapes = when {
+        synthwaveMode -> {
+            Shapes(
+                extraSmall = androidx.compose.foundation.shape.RoundedCornerShape(0.dp),
+                small = androidx.compose.foundation.shape.RoundedCornerShape(0.dp),
+                medium = androidx.compose.foundation.shape.RoundedCornerShape(0.dp),
+                large = androidx.compose.foundation.shape.RoundedCornerShape(0.dp),
+                extraLarge = androidx.compose.foundation.shape.RoundedCornerShape(0.dp),
+            )
+        }
+        soothingMode -> {
+            Shapes(
+                extraSmall = androidx.compose.foundation.shape.RoundedCornerShape(10.dp),
+                small = androidx.compose.foundation.shape.RoundedCornerShape(12.dp),
+                medium = androidx.compose.foundation.shape.RoundedCornerShape(16.dp),
+                large = androidx.compose.foundation.shape.RoundedCornerShape(22.dp),
+                extraLarge = androidx.compose.foundation.shape.RoundedCornerShape(28.dp),
+            )
+        }
+        else -> {
+            DefaultShapes
+        }
+    }
 
-    val typography = if (isTv) {
-        TvTypography
-    } else {
-        JellyPlayTypography
+    val typography = when {
+        synthwaveMode -> SynthwaveTypography
+        soothingMode -> SoothingTypography
+        isTv -> TvTypography
+        else -> JellyPlayTypography
     }
 
     CompositionLocalProvider(
@@ -340,6 +379,8 @@ fun JellyPlayTheme(
         LocalJellyPlayShapes provides shapes,
         LocalIsLightTheme provides isLightColor(colorScheme.background),
         LocalExtendedColors provides ExtendedColors(),
+        LocalIsSynthwave provides synthwaveMode,
+        LocalIsSoothingTheme provides soothingMode,
     ) {
         MaterialExpressiveTheme(
             colorScheme = colorScheme,
@@ -360,3 +401,120 @@ private fun ColorScheme.withOledSurfaces(): ColorScheme = copy(
     surfaceContainerHigh = Color(0xFF1A1A1A),
     surfaceContainerHighest = Color(0xFF222222),
 )
+
+fun getSynthwaveColorScheme(accent: String): ColorScheme {
+    val primaryColor = when (accent.lowercase()) {
+        "cyan" -> Color(0xFF00F0FF)
+        "violet" -> Color(0xFF9D00FF)
+        "orange" -> Color(0xFFFF5E00)
+        else -> Color(0xFFFF007F) // magenta
+    }
+    val secondaryColor = when (accent.lowercase()) {
+        "cyan" -> Color(0xFFFF007F)
+        "violet" -> Color(0xFFFF007F)
+        "orange" -> Color(0xFF00F0FF)
+        else -> Color(0xFF00F0FF) // magenta -> cyan
+    }
+    val tertiaryColor = when (accent.lowercase()) {
+        "cyan" -> Color(0xFF9D00FF)
+        "violet" -> Color(0xFF00F0FF)
+        "orange" -> Color(0xFFFF007F)
+        else -> Color(0xFFFFE600) // magenta -> yellow
+    }
+
+    return darkColorScheme(
+        primary = primaryColor,
+        onPrimary = Color(0xFF0C061A),
+        primaryContainer = primaryColor.copy(alpha = 0.2f),
+        onPrimaryContainer = primaryColor,
+        secondary = secondaryColor,
+        onSecondary = Color(0xFF0C061A),
+        secondaryContainer = secondaryColor.copy(alpha = 0.2f),
+        onSecondaryContainer = secondaryColor,
+        tertiary = tertiaryColor,
+        onTertiary = Color(0xFF0C061A),
+        tertiaryContainer = tertiaryColor.copy(alpha = 0.2f),
+        onTertiaryContainer = tertiaryColor,
+        background = Color(0xFF0C061A),
+        onBackground = Color(0xFFF5EEFC),
+        surface = Color(0xFF120926),
+        onSurface = Color(0xFFF5EEFC),
+        surfaceVariant = Color(0xFF241542),
+        onSurfaceVariant = Color(0xFFD8C8F0),
+        outline = primaryColor,
+        outlineVariant = Color(0xFF462C75),
+        surfaceContainerLowest = Color(0xFF06030D),
+        surfaceContainerLow = Color(0xFF0F0720),
+        surfaceContainer = Color(0xFF160C2D),
+        surfaceContainerHigh = Color(0xFF20123E),
+        surfaceContainerHighest = Color(0xFF2B1952),
+    )
+}
+
+fun getSoothingColorScheme(accent: String, isDark: Boolean): ColorScheme {
+    val accentColor = if (isDark) {
+        when (accent.lowercase()) {
+            "lavender" -> Color(0xFFB4A7FF)
+            "sage" -> Color(0xFF7ECFA0)
+            "coral" -> Color(0xFFFF8A80)
+            "amber" -> Color(0xFFFFD180)
+            "rose" -> Color(0xFFFF80AB)
+            else -> Color(0xFF6CACDE)
+        }
+    } else {
+        when (accent.lowercase()) {
+            "lavender" -> Color(0xFF8B7FE8)
+            "sage" -> Color(0xFF4CAF6E)
+            "coral" -> Color(0xFFE85D5D)
+            "amber" -> Color(0xFFE8A43A)
+            "rose" -> Color(0xFFE85A8A)
+            else -> Color(0xFF1877F2)
+        }
+    }
+
+    return if (isDark) {
+        darkColorScheme(
+            primary = accentColor,
+            onPrimary = Color(0xFF0D1117),
+            primaryContainer = accentColor.copy(alpha = 0.18f),
+            onPrimaryContainer = accentColor,
+            secondary = accentColor.copy(alpha = 0.7f),
+            onSecondary = Color(0xFFE6EDF3),
+            background = Color(0xFF0D1117),
+            onBackground = Color(0xFFE6EDF3),
+            surface = Color(0xFF161B22),
+            onSurface = Color(0xFFE6EDF3),
+            surfaceVariant = Color(0xFF21262D),
+            onSurfaceVariant = Color(0xFFB1BAC4),
+            outline = Color(0xFF30363D),
+            outlineVariant = Color(0xFF21262D),
+            surfaceContainerLowest = Color(0xFF0A0E14),
+            surfaceContainerLow = Color(0xFF161B22),
+            surfaceContainer = Color(0xFF1C2128),
+            surfaceContainerHigh = Color(0xFF21262D),
+            surfaceContainerHighest = Color(0xFF2D333B),
+        )
+    } else {
+        lightColorScheme(
+            primary = accentColor,
+            onPrimary = Color.White,
+            primaryContainer = accentColor.copy(alpha = 0.12f),
+            onPrimaryContainer = accentColor,
+            secondary = accentColor.copy(alpha = 0.65f),
+            onSecondary = Color.White,
+            background = Color(0xFFF0F2F5),
+            onBackground = Color(0xFF1C1E21),
+            surface = Color(0xFFFFFFFF),
+            onSurface = Color(0xFF1C1E21),
+            surfaceVariant = Color(0xFFE4E6EB),
+            onSurfaceVariant = Color(0xFF606770),
+            outline = Color(0xFFCED0D4),
+            outlineVariant = Color(0xFFD8DADF),
+            surfaceContainerLowest = Color(0xFFFFFFFF),
+            surfaceContainerLow = Color(0xFFF0F2F5),
+            surfaceContainer = Color(0xFFFFFFFF),
+            surfaceContainerHigh = Color(0xFFE4E6EB),
+            surfaceContainerHighest = Color(0xFFCED0D4),
+        )
+    }
+}

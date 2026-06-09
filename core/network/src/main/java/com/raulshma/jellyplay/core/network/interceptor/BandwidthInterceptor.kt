@@ -71,14 +71,17 @@ class BandwidthInterceptor @Inject constructor() : Interceptor {
             val raw = delegate.source()
             val forwarding = object : okio.ForwardingSource(raw) {
                 private var totalBytesRead = 0L
+                private var lastSampleBytes = 0L
+                private val sampleIntervalBytes = 256L * 1024L
 
                 override fun read(sink: okio.Buffer, byteCount: Long): Long {
                     val bytesRead = super.read(sink, byteCount)
                     if (bytesRead != -1L) {
                         totalBytesRead += bytesRead
                     }
-                    if (bytesRead == -1L || (contentLength() > 0 && totalBytesRead >= contentLength())) {
+                    if (bytesRead == -1L || totalBytesRead - lastSampleBytes >= sampleIntervalBytes) {
                         onComplete(totalBytesRead)
+                        lastSampleBytes = totalBytesRead
                     }
                     return bytesRead
                 }

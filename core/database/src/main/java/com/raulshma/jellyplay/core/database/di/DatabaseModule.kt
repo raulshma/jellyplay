@@ -26,6 +26,7 @@ object DatabaseModule {
         "jellyplay.db",
     )
         .addMigrations(*ALL_MIGRATIONS.toTypedArray())
+        .fallbackToDestructiveMigration()
         .setJournalMode(RoomDatabase.JournalMode.WRITE_AHEAD_LOGGING)
         .build()
 

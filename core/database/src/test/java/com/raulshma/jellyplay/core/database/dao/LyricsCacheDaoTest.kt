@@ -55,7 +55,7 @@ class LyricsCacheDaoTest {
     @Test
     fun `insert and getByItemId`() = runTest {
         val entry = createEntry()
-        lyricsCacheDao.insert(entry)
+        lyricsCacheDao.upsert(entry)
 
         val result = lyricsCacheDao.getByItemId("item-1")
         assertNotNull(result)
@@ -69,7 +69,7 @@ class LyricsCacheDaoTest {
 
     @Test
     fun `getByItemAndProvider finds matching entry`() = runTest {
-        lyricsCacheDao.insert(createEntry(provider = "LRCLIB"))
+        lyricsCacheDao.upsert(createEntry(provider = "LRCLIB"))
 
         val result = lyricsCacheDao.getByItemAndProvider("item-1", "LRCLIB")
         assertNotNull(result)
@@ -77,15 +77,15 @@ class LyricsCacheDaoTest {
 
     @Test
     fun `getByItemAndProvider returns null for different provider`() = runTest {
-        lyricsCacheDao.insert(createEntry(provider = "LRCLIB"))
+        lyricsCacheDao.upsert(createEntry(provider = "LRCLIB"))
 
         assertNull(lyricsCacheDao.getByItemAndProvider("item-1", "EMBEDDED"))
     }
 
     @Test
     fun `insert replaces on conflict`() = runTest {
-        lyricsCacheDao.insert(createEntry(provider = "LRCLIB"))
-        lyricsCacheDao.insert(createEntry(provider = "EMBEDDED"))
+        lyricsCacheDao.upsert(createEntry(provider = "LRCLIB"))
+        lyricsCacheDao.upsert(createEntry(provider = "EMBEDDED"))
 
         val result = lyricsCacheDao.getByItemId("item-1")
         assertEquals("EMBEDDED", result!!.provider)
@@ -93,7 +93,7 @@ class LyricsCacheDaoTest {
 
     @Test
     fun `deleteByItemId removes entry`() = runTest {
-        lyricsCacheDao.insert(createEntry())
+        lyricsCacheDao.upsert(createEntry())
         lyricsCacheDao.deleteByItemId("item-1")
 
         assertNull(lyricsCacheDao.getByItemId("item-1"))
@@ -102,8 +102,8 @@ class LyricsCacheDaoTest {
     @Test
     fun `deleteOlderThan removes old entries`() = runTest {
         val oldTimestamp = System.currentTimeMillis() - 100_000L
-        lyricsCacheDao.insert(createEntry(itemId = "old").copy(fetchedAt = oldTimestamp))
-        lyricsCacheDao.insert(createEntry(itemId = "new").copy(fetchedAt = System.currentTimeMillis()))
+        lyricsCacheDao.upsert(createEntry(itemId = "old").copy(fetchedAt = oldTimestamp))
+        lyricsCacheDao.upsert(createEntry(itemId = "new").copy(fetchedAt = System.currentTimeMillis()))
 
         val deleted = lyricsCacheDao.deleteOlderThan(System.currentTimeMillis() - 50_000L)
         assertEquals(1, deleted)

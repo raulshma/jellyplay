@@ -15,22 +15,8 @@ interface LyricsCacheDao {
     @Query("SELECT * FROM lyrics_cache WHERE itemId = :itemId AND provider = :provider LIMIT 1")
     suspend fun getByItemAndProvider(itemId: String, provider: String): LyricsCacheEntity?
 
-    @Insert(onConflict = OnConflictStrategy.IGNORE)
-    suspend fun insert(entry: LyricsCacheEntity)
-
-    @Query("""
-        UPDATE lyrics_cache
-        SET artistName = :artistName, trackName = :trackName,
-            syncedLyrics = :syncedLyrics, plainLyrics = :plainLyrics,
-            duration = :duration, lrcLibId = :lrcLibId, fetchedAt = :fetchedAt
-        WHERE itemId = :itemId AND provider = :provider
-    """)
-    suspend fun update(
-        itemId: String, provider: String,
-        artistName: String?, trackName: String?,
-        syncedLyrics: String?, plainLyrics: String?,
-        duration: Double?, lrcLibId: Long?, fetchedAt: Long,
-    )
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun upsert(entry: LyricsCacheEntity)
 
     @Query("DELETE FROM lyrics_cache WHERE itemId = :itemId")
     suspend fun deleteByItemId(itemId: String)

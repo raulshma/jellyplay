@@ -27,6 +27,7 @@ data class WatchProgressHeatmapUiState(
     val selectedDay: SelectedDayInfo? = null,
     val shareRequested: Boolean = false,
     val isPluginAvailable: Boolean = false,
+    val minActivityDate: LocalDate? = null,
 )
 
 @Immutable
@@ -68,6 +69,11 @@ class WatchProgressHeatmapViewModel @Inject constructor(
     init {
         launch {
             watchHistoryRepository.refreshPlaybackReportingStatus()
+            val minDateStr = watchHistoryRepository.getMinimumActivityDate()
+            val minDate = minDateStr?.take(10)?.let {
+                runCatching { LocalDate.parse(it, DateTimeFormatter.ISO_LOCAL_DATE) }.getOrNull()
+            }
+            _uiState.update { it.copy(minActivityDate = minDate) }
             loadHeatmapData()
         }
     }

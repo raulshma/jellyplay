@@ -5,6 +5,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import javax.inject.Inject
 import javax.inject.Singleton
+import com.raulshma.jellyplay.core.datastore.UserPreferencesStore
 
 /**
  * Lifecycle callbacks for the active player engine.
@@ -24,7 +25,9 @@ interface PlayerLifecycleCallbacks {
  * active engine — no StateFlow indirection for pause/resume.
  */
 @Singleton
-class PlayerLifecycleManager @Inject constructor() {
+class PlayerLifecycleManager @Inject constructor(
+    private val preferencesStore: UserPreferencesStore
+) {
 
     // ── PiP state ──
 
@@ -67,6 +70,13 @@ class PlayerLifecycleManager @Inject constructor() {
         _pipDismissed.value = false
     }
 
+    fun reset() {
+        activeCallbacks = null
+        _isInPipMode.value = false
+        _shouldAutoEnterPip.value = false
+        _pipDismissed.value = false
+    }
+
     // ── Activity lifecycle ──
     // Called by MainActivity. Delegates directly to the engine's callbacks:
     // - ExoPlayer: no-op (PlayerView handles lifecycle)
@@ -74,7 +84,9 @@ class PlayerLifecycleManager @Inject constructor() {
 
     /** Called from Activity.onPause() when NOT in PiP mode */
     fun onActivityPause() {
-        activeCallbacks?.onActivityPause()
+        if (!preferencesStore.preferences.value.backgroundVideoAudioEnabled) {
+            activeCallbacks?.onActivityPause()
+        }
     }
 
     /** Called from Activity.onResume() */

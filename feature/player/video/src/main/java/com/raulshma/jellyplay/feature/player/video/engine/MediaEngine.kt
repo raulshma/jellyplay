@@ -58,6 +58,7 @@ data class EngineConfig(
     val audioEffects: AudioEffectsConfig = AudioEffectsConfig(),
     val videoEffects: VideoEffectsConfig = VideoEffectsConfig(),
     val engineSpecific: EngineSpecificConfig? = null,
+    val pauseOnAudioFocusLoss: Boolean = true,
 )
 
 data class AudioEffectsConfig(
@@ -77,6 +78,8 @@ data class AudioEffectsConfig(
     val virtualizerEnabled: Boolean = false,
     val virtualizerStrength: Int = 500,
     val reverbPreset: com.raulshma.jellyplay.core.model.ReverbPreset = com.raulshma.jellyplay.core.model.ReverbPreset.NONE,
+    val volumeBoostEnabled: Boolean = false,
+    val volumeBoostGain: Int = 0,
 )
 
 data class EngineCapabilities(

@@ -30,7 +30,7 @@ class ArtistDetailViewModel @Inject constructor(
     private val _error = composeState<String?>(null)
     val error: String? get() = _error.value
 
-    suspend fun loadArtist(artistId: String) {
+    fun loadArtist(artistId: String) {
         launch {
             _isLoading.value = true
             _error.value = null

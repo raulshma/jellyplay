@@ -43,6 +43,11 @@ import com.raulshma.jellyplay.core.model.SubtitleStyle
 import com.raulshma.jellyplay.core.model.ThemeMode
 import com.raulshma.jellyplay.core.model.NotificationPreferences
 import com.raulshma.jellyplay.core.model.UserPreferences
+import com.raulshma.jellyplay.core.model.CastingStrategy
+import com.raulshma.jellyplay.core.model.SyncPlayJoinBehavior
+import com.raulshma.jellyplay.core.model.MeteredNetworkBehavior
+import com.raulshma.jellyplay.core.model.NewsletterSectionType
+import com.raulshma.jellyplay.core.model.DownloadQuality
 import com.raulshma.jellyplay.core.model.LibraryWidgetItem
 import com.raulshma.jellyplay.core.model.SeerrWidgetItem
 import com.raulshma.jellyplay.core.model.WidgetConfig
@@ -203,6 +208,62 @@ class UserPreferencesStore @Inject constructor(
         val NOTIFICATIONS_LIBRARY_CONFIGS = stringPreferencesKey("notifications_library_configs")
 
         val RECENT_DLNA_DEVICES = stringPreferencesKey("recent_dlna_devices")
+
+        val SHOW_ADVANCED_SETTINGS = booleanPreferencesKey("show_advanced_settings")
+        val AUDIO_VISUALIZER_ENABLED = booleanPreferencesKey("audio_visualizer_enabled")
+
+        val SYNC_PLAY_JOIN_BEHAVIOR = stringPreferencesKey("sync_play_join_behavior")
+        val SYNC_PLAY_TOLERANCE_MS = longPreferencesKey("sync_play_tolerance_ms")
+        val SYNC_PLAY_AUTO_ACCEPT_INVITES = booleanPreferencesKey("sync_play_auto_accept_invites")
+        val DEFAULT_CASTING_STRATEGY = stringPreferencesKey("default_casting_strategy")
+        val BACKGROUND_CASTING_ENABLED = booleanPreferencesKey("background_casting_enabled")
+        val PREFERRED_RENDERER = stringPreferencesKey("preferred_renderer")
+        val DVR_PRE_PADDING_MINUTES = intPreferencesKey("dvr_pre_padding_minutes")
+        val DVR_POST_PADDING_MINUTES = intPreferencesKey("dvr_post_padding_minutes")
+        val DVR_RECORDING_QUALITY = stringPreferencesKey("dvr_recording_quality")
+        val FAVORITE_CHANNELS = stringPreferencesKey("favorite_channels")
+        val ENABLED_NEWSLETTER_SECTIONS = stringPreferencesKey("enabled_newsletter_sections")
+        val NEWSLETTER_SECTION_ORDER = stringPreferencesKey("newsletter_section_order")
+        val MANUAL_OFFLINE_ENABLED = booleanPreferencesKey("manual_offline_enabled")
+        val AUTO_OFFLINE_ENABLED = booleanPreferencesKey("auto_offline_enabled")
+        val MANUAL_BANDWIDTH_CAP = longPreferencesKey("manual_bandwidth_cap")
+        val METERED_NETWORK_BEHAVIOR = stringPreferencesKey("metered_network_behavior")
+        val ADAPTIVE_BITRATE_ENABLED = booleanPreferencesKey("adaptive_bitrate_enabled")
+        val BACKGROUND_VIDEO_AUDIO_ENABLED = booleanPreferencesKey("background_video_audio_enabled")
+        val AUTO_PLAY_COUNTDOWN_SEC = intPreferencesKey("auto_play_countdown_sec")
+        val SHOW_UNWATCHED_BADGE = booleanPreferencesKey("show_unwatched_badge")
+        val HIDE_WATCHED_ITEMS = booleanPreferencesKey("hide_watched_items")
+        val CELLULAR_STREAMING_QUALITY = stringPreferencesKey("cellular_streaming_quality")
+        val SHOW_WATCHED_CHECKMARK = booleanPreferencesKey("show_watched_checkmark")
+        val DEFAULT_LIBRARY_SORT_ORDERS = stringPreferencesKey("default_library_sort_orders")
+        val KEEP_SCREEN_ON_DURING_VIDEO = booleanPreferencesKey("keep_screen_on_during_video")
+        val DOWNLOAD_QUALITY = stringPreferencesKey("download_quality")
+        val SMART_DOWNLOADS_ENABLED = booleanPreferencesKey("smart_downloads_enabled")
+        val AUTO_DOWNLOAD_NEW_EPISODES = booleanPreferencesKey("auto_download_new_episodes")
+        val INCOGNITO_MODE_ENABLED = booleanPreferencesKey("incognito_mode_enabled")
+        val SHOW_TIME_REMAINING = booleanPreferencesKey("show_time_remaining")
+        val PAUSE_ON_AUDIO_FOCUS_LOSS = booleanPreferencesKey("pause_on_audio_focus_loss")
+        val VOLUME_BOOST_ENABLED = booleanPreferencesKey("volume_boost_enabled")
+        val VOLUME_BOOST_GAIN = intPreferencesKey("volume_boost_gain")
+        val SHOW_SHARE_MEDIA_OPTION = booleanPreferencesKey("show_share_media_option")
+        val SHOW_EXTERNAL_RATINGS = booleanPreferencesKey("show_external_ratings")
+        val DATA_SAVER_ENABLED = booleanPreferencesKey("data_saver_enabled")
+        val REDUCE_MOTION_ENABLED = booleanPreferencesKey("reduce_motion_enabled")
+        val PREFER_AUDIO_DESCRIPTION = booleanPreferencesKey("prefer_audio_description")
+        val HIGH_CONTRAST_SUBTITLES = booleanPreferencesKey("high_contrast_subtitles")
+        val HIDE_SEARCH_HISTORY = booleanPreferencesKey("hide_search_history")
+        val BLUE_LIGHT_FILTER_ENABLED = booleanPreferencesKey("blue_light_filter_enabled")
+        val BLUE_LIGHT_FILTER_STRENGTH = floatPreferencesKey("blue_light_filter_strength")
+        val TV_ZOOM_MODE_PERCENT = floatPreferencesKey("tv_zoom_mode_percent")
+        val REMOTE_CONTROL_ENABLED = booleanPreferencesKey("remote_control_enabled")
+        val MAX_DOWNLOAD_STORAGE_GB = intPreferencesKey("max_download_storage_gb")
+        val DOWNLOAD_STORAGE_LOCATION = stringPreferencesKey("download_storage_location")
+        val KIDS_MODE_ENABLED = booleanPreferencesKey("kids_mode_enabled")
+        val KIDS_MODE_MAX_RATING = stringPreferencesKey("kids_mode_max_rating")
+        val SYNTHWAVE_MODE = booleanPreferencesKey("synthwave_mode")
+        val SYNTHWAVE_ACCENT = stringPreferencesKey("synthwave_accent")
+        val SOOTHING_MODE = booleanPreferencesKey("soothing_mode")
+        val SOOTHING_ACCENT = stringPreferencesKey("soothing_accent")
     }
 
     private val json = Json { ignoreUnknownKeys = true }
@@ -316,12 +377,14 @@ class UserPreferencesStore @Inject constructor(
         if (raw != null) {
             return try {
                 val stored = json.decodeFromString<Map<String, String>>(raw)
-                stored.mapNotNull { (typeStr, behaviorStr) ->
+                val parsed = stored.mapNotNull { (typeStr, behaviorStr) ->
                     try {
                         MediaSegmentType.valueOf(typeStr) to SegmentBehavior.valueOf(behaviorStr)
                     } catch (_: Exception) { null }
                 }.toMap()
-            } catch (_: Exception) { emptyMap() }
+                // Merge: defaults fill in any types not explicitly saved, stored values override
+                SegmentBehavior.DEFAULT_BEHAVIORS + parsed
+            } catch (_: Exception) { SegmentBehavior.DEFAULT_BEHAVIORS }
         }
 
         val hasLegacyKeys = prefs.contains(Keys.SKIP_INTRO_ENABLED) ||
@@ -367,18 +430,130 @@ class UserPreferencesStore @Inject constructor(
         }
     }
 
+    private data class ParsedCache<T>(
+        val raw: String?,
+        val value: T,
+    )
+
+    private var cachedSubtitleStyle: ParsedCache<SubtitleStyle?> = ParsedCache(null, null)
+    private var cachedEqualizerSettings: ParsedCache<EqualizerSettings?> = ParsedCache(null, null)
+    private var cachedMpvConfig: ParsedCache<MpvEngineConfig> = ParsedCache(null, MpvEngineConfig())
+    private var cachedLibVlcConfig: ParsedCache<LibVlcEngineConfig> = ParsedCache(null, LibVlcEngineConfig())
+    private var cachedExoPlayerConfig: ParsedCache<ExoPlayerEngineConfig> = ParsedCache(null, ExoPlayerEngineConfig())
+    private var cachedDreamImageCategories: ParsedCache<Set<DreamImageCategory>> = ParsedCache(null, setOf(DreamImageCategory.MOVIES, DreamImageCategory.SERIES))
+    private var cachedEnabledHomeSectionTypes: ParsedCache<Set<HomeSectionType>> = ParsedCache(null, HomeSectionType.CONFIGURABLE.toSet())
+    private var cachedHomeSectionOrder: ParsedCache<List<HomeSectionType>> = ParsedCache(null, HomeSectionType.CONFIGURABLE)
+    private var cachedHiddenLibrarySectionIds: ParsedCache<Set<String>> = ParsedCache(null, emptySet())
+    private var cachedMediaStreamSelections: ParsedCache<Map<String, MediaStreamSelection>> = ParsedCache(null, emptyMap())
+    private var cachedSegmentBehaviors: ParsedCache<Map<MediaSegmentType, SegmentBehavior>> = ParsedCache(null, SegmentBehavior.DEFAULT_BEHAVIORS)
+    private var cachedNotificationLibraryConfigs: ParsedCache<Map<String, LibraryNotificationConfig>> = ParsedCache(null, emptyMap())
+
     val preferences: StateFlow<UserPreferences> = sharedPrefs.map { prefs ->
-        val subtitleStyle = try {
-            prefs[Keys.SUBTITLE_STYLE]?.let { json.decodeFromString<SubtitleStyle>(it) }
-        } catch (_: Exception) { null }
+        val subtitleStyleRaw = prefs[Keys.SUBTITLE_STYLE]
+        val subtitleStyle = if (subtitleStyleRaw != cachedSubtitleStyle.raw) {
+            try {
+                subtitleStyleRaw?.let { json.decodeFromString<SubtitleStyle>(it) }
+            } catch (_: Exception) { null }.also { cachedSubtitleStyle = ParsedCache(subtitleStyleRaw, it) }
+        } else cachedSubtitleStyle.value
 
-        val streamingQuality = try {
-            StreamingQuality.valueOf(prefs[Keys.STREAMING_QUALITY] ?: StreamingQuality.AUTO.name)
-        } catch (_: Exception) { StreamingQuality.AUTO }
+        val equalizerSettingsRaw = prefs[Keys.EQUALIZER_SETTINGS]
+        val equalizerSettings = if (equalizerSettingsRaw != cachedEqualizerSettings.raw) {
+            try {
+                equalizerSettingsRaw?.let { json.decodeFromString<EqualizerSettings>(it) }
+            } catch (_: Exception) { null }.also { cachedEqualizerSettings = ParsedCache(equalizerSettingsRaw, it) }
+        } else cachedEqualizerSettings.value
 
-        val equalizerSettings = try {
-            prefs[Keys.EQUALIZER_SETTINGS]?.let { json.decodeFromString<EqualizerSettings>(it) }
-        } catch (_: Exception) { null }
+        val mpvConfigRaw = prefs[Keys.MPV_CONFIG]
+        val mpvConfig = if (mpvConfigRaw != cachedMpvConfig.raw) {
+            try {
+                mpvConfigRaw?.let { json.decodeFromString<MpvEngineConfig>(it) } ?: MpvEngineConfig()
+            } catch (_: Exception) { MpvEngineConfig() }.also { cachedMpvConfig = ParsedCache(mpvConfigRaw, it) }
+        } else cachedMpvConfig.value
+
+        val libVlcConfigRaw = prefs[Keys.LIBVLC_CONFIG]
+        val libVlcConfig = if (libVlcConfigRaw != cachedLibVlcConfig.raw) {
+            try {
+                libVlcConfigRaw?.let { json.decodeFromString<LibVlcEngineConfig>(it) } ?: LibVlcEngineConfig()
+            } catch (_: Exception) { LibVlcEngineConfig() }.also { cachedLibVlcConfig = ParsedCache(libVlcConfigRaw, it) }
+        } else cachedLibVlcConfig.value
+
+        val exoPlayerConfigRaw = prefs[Keys.EXO_CONFIG]
+        val exoPlayerConfig = if (exoPlayerConfigRaw != cachedExoPlayerConfig.raw) {
+            try {
+                exoPlayerConfigRaw?.let { json.decodeFromString<ExoPlayerEngineConfig>(it) } ?: ExoPlayerEngineConfig()
+            } catch (_: Exception) { ExoPlayerEngineConfig() }.also { cachedExoPlayerConfig = ParsedCache(exoPlayerConfigRaw, it) }
+        } else cachedExoPlayerConfig.value
+
+        val dreamImageCategoriesRaw = prefs[Keys.DREAM_IMAGE_CATEGORIES]
+        val dreamImageCategories = if (dreamImageCategoriesRaw != cachedDreamImageCategories.raw) {
+            try {
+                dreamImageCategoriesRaw?.let { json.decodeFromString<Set<DreamImageCategory>>(it) }
+                    ?: setOf(DreamImageCategory.MOVIES, DreamImageCategory.SERIES)
+            } catch (_: Exception) { setOf(DreamImageCategory.MOVIES, DreamImageCategory.SERIES) }
+                .also { cachedDreamImageCategories = ParsedCache(dreamImageCategoriesRaw, it) }
+        } else cachedDreamImageCategories.value
+
+        val enabledHomeSectionTypesRaw = prefs[Keys.HOME_ENABLED_SECTION_TYPES]
+        val enabledHomeSectionTypes = if (enabledHomeSectionTypesRaw != cachedEnabledHomeSectionTypes.raw) {
+            try {
+                enabledHomeSectionTypesRaw?.let {
+                    json.decodeFromString<Set<String>>(it)
+                        .mapNotNull { name -> HomeSectionType.entries.find { e -> e.name == name } }
+                        .toSet()
+                } ?: HomeSectionType.CONFIGURABLE.toSet()
+            } catch (_: Exception) { HomeSectionType.CONFIGURABLE.toSet() }
+                .also { cachedEnabledHomeSectionTypes = ParsedCache(enabledHomeSectionTypesRaw, it) }
+        } else cachedEnabledHomeSectionTypes.value
+
+        val homeSectionOrderRaw = prefs[Keys.HOME_SECTION_ORDER]
+        val homeSectionOrder = if (homeSectionOrderRaw != cachedHomeSectionOrder.raw) {
+            try {
+                homeSectionOrderRaw?.let {
+                    val parsed = try {
+                        json.decodeFromString<List<String>>(it)
+                    } catch (_: Exception) {
+                        json.decodeFromString<Set<String>>(it).toList()
+                    }
+                    val mapped = parsed.mapNotNull { name -> HomeSectionType.entries.find { e -> e.name == name } }
+                    buildList {
+                        addAll(mapped)
+                        addAll(HomeSectionType.CONFIGURABLE.filterNot { it in mapped })
+                    }
+                } ?: HomeSectionType.CONFIGURABLE
+            } catch (_: Exception) { HomeSectionType.CONFIGURABLE }
+                .also { cachedHomeSectionOrder = ParsedCache(homeSectionOrderRaw, it) }
+        } else cachedHomeSectionOrder.value
+
+        val hiddenLibrarySectionIdsRaw = prefs[Keys.HOME_HIDDEN_LIBRARY_SECTION_IDS]
+        val hiddenLibrarySectionIds = if (hiddenLibrarySectionIdsRaw != cachedHiddenLibrarySectionIds.raw) {
+            try {
+                hiddenLibrarySectionIdsRaw?.let { json.decodeFromString<Set<String>>(it) } ?: emptySet()
+            } catch (_: Exception) { emptySet() }
+                .also { cachedHiddenLibrarySectionIds = ParsedCache(hiddenLibrarySectionIdsRaw, it) }
+        } else cachedHiddenLibrarySectionIds.value
+
+        val mediaStreamSelectionsRaw = prefs[Keys.MEDIA_STREAM_SELECTIONS]
+        val mediaStreamSelections = if (mediaStreamSelectionsRaw != cachedMediaStreamSelections.raw) {
+            try {
+                mediaStreamSelectionsRaw?.let { json.decodeFromString<Map<String, MediaStreamSelection>>(it) } ?: emptyMap()
+            } catch (_: Exception) { emptyMap() }
+                .also { cachedMediaStreamSelections = ParsedCache(mediaStreamSelectionsRaw, it) }
+        } else cachedMediaStreamSelections.value
+
+        val segmentBehaviorsRaw = prefs[Keys.SEGMENT_BEHAVIORS]
+        val segmentBehaviors = if (segmentBehaviorsRaw != cachedSegmentBehaviors.raw) {
+            readSegmentBehaviors(prefs).also { cachedSegmentBehaviors = ParsedCache(segmentBehaviorsRaw, it) }
+        } else cachedSegmentBehaviors.value
+
+        val notificationLibraryConfigsRaw = prefs[Keys.NOTIFICATIONS_LIBRARY_CONFIGS]
+        val notificationLibraryConfigs = if (notificationLibraryConfigsRaw != cachedNotificationLibraryConfigs.raw) {
+            try {
+                notificationLibraryConfigsRaw?.let {
+                    json.decodeFromString<Map<String, LibraryNotificationConfig>>(it)
+                } ?: emptyMap()
+            } catch (_: Exception) { emptyMap() }
+                .also { cachedNotificationLibraryConfigs = ParsedCache(notificationLibraryConfigsRaw, it) }
+        } else cachedNotificationLibraryConfigs.value
 
         UserPreferences(
             preferredPlayer = try {
@@ -386,7 +561,7 @@ class UserPreferencesStore @Inject constructor(
             } catch (_: Exception) { PlayerType.EXO_PLAYER },
             preferredSubtitleLanguage = prefs[Keys.PREFERRED_SUBTITLE_LANG],
             preferredAudioLanguage = prefs[Keys.PREFERRED_AUDIO_LANG],
-            mediaStreamSelections = readMediaStreamSelections(prefs),
+            mediaStreamSelections = mediaStreamSelections,
             dynamicTheming = readBool(prefs, Keys.DYNAMIC_THEMING, "dynamic_theming", true),
             themeMode = try {
                 ThemeMode.valueOf(prefs[Keys.THEME_MODE] ?: ThemeMode.SYSTEM.name)
@@ -396,7 +571,9 @@ class UserPreferencesStore @Inject constructor(
             } catch (_: Exception) { ContrastLevel.DEFAULT },
             oledMode = readBool(prefs, Keys.OLED_MODE, "oled_mode", false),
             subtitleStyle = subtitleStyle ?: SubtitleStyle(),
-            streamingQuality = streamingQuality,
+            streamingQuality = try {
+                StreamingQuality.valueOf(prefs[Keys.STREAMING_QUALITY] ?: StreamingQuality.AUTO.name)
+            } catch (_: Exception) { StreamingQuality.AUTO },
             maxCacheSizeMb = readInt(prefs, Keys.MAX_CACHE_SIZE_MB, "max_cache_size_mb", 0),
             autoDeleteCache = readBool(prefs, Keys.AUTO_DELETE_CACHE, "auto_delete_cache", true),
             pinLockEnabled = readBool(prefs, Keys.PIN_LOCK_ENABLED, "pin_lock_enabled", false),
@@ -442,7 +619,7 @@ class UserPreferencesStore @Inject constructor(
             audioAutoplayNext = readBool(prefs, Keys.AUDIO_AUTOPLAY_NEXT, "audio_autoplay_next", true),
             trickplayEnabled = readBool(prefs, Keys.TRICKPLAY_ENABLED, "trickplay_enabled", true),
             trickplayOnSeekGesture = readBool(prefs, Keys.TRICKPLAY_ON_SEEK_GESTURE, "trickplay_on_seek_gesture", true),
-            segmentBehaviors = readSegmentBehaviors(prefs),
+            segmentBehaviors = segmentBehaviors,
             videoEpisodeBrowserEnabled = readBool(prefs, Keys.VIDEO_EPISODE_BROWSER_ENABLED, "video_episode_browser_enabled", true),
             videoShowPlaybackMetadata = readBool(prefs, Keys.VIDEO_SHOW_PLAYBACK_METADATA, "video_show_playback_metadata", true),
             videoPreloadBufferSize = try {
@@ -467,11 +644,7 @@ class UserPreferencesStore @Inject constructor(
             audioCrossfadeDurationMs = readLong(prefs, Keys.AUDIO_CROSSFADE_DURATION_MS, "audio_crossfade_duration_ms", 0L),
             sleepTimerDurationMs = readLong(prefs, Keys.SLEEP_TIMER_DURATION_MS, "sleep_timer_duration_ms", 0L),
             sleepTimerEndOfEpisode = readBool(prefs, Keys.SLEEP_TIMER_END_OF_EPISODE, "sleep_timer_end_of_episode", false),
-            dreamImageCategories = try {
-                prefs[Keys.DREAM_IMAGE_CATEGORIES]?.let {
-                    json.decodeFromString<Set<DreamImageCategory>>(it)
-                } ?: setOf(DreamImageCategory.MOVIES, DreamImageCategory.SERIES)
-            } catch (_: Exception) { setOf(DreamImageCategory.MOVIES, DreamImageCategory.SERIES) },
+            dreamImageCategories = dreamImageCategories,
             dreamSlideshowIntervalMs = readLong(prefs, Keys.DREAM_SLIDESHOW_INTERVAL_MS, "dream_slideshow_interval_ms", 15_000L),
             dreamKenBurnsEnabled = readBool(prefs, Keys.DREAM_KEN_BURNS_ENABLED, "dream_ken_burns_enabled", true),
             dreamTransitionStyle = try {
@@ -495,44 +668,15 @@ class UserPreferencesStore @Inject constructor(
             pitchSemitones = readFloat(prefs, Keys.PITCH_SEMITONES, "pitch_semitones", 0f),
             wifiOnlyDownloads = readBool(prefs, Keys.WIFI_ONLY_DOWNLOADS, "wifi_only_downloads", true),
             downloadConnections = readInt(prefs, Keys.DOWNLOAD_CONNECTIONS, "download_connections", 4),
-            enabledHomeSectionTypes = try {
-                prefs[Keys.HOME_ENABLED_SECTION_TYPES]?.let {
-                    json.decodeFromString<Set<String>>(it)
-                        .mapNotNull { name -> HomeSectionType.entries.find { e -> e.name == name } }
-                        .toSet()
-                } ?: HomeSectionType.CONFIGURABLE.toSet()
-            } catch (_: Exception) { HomeSectionType.CONFIGURABLE.toSet() },
-            homeSectionOrder = try {
-                prefs[Keys.HOME_SECTION_ORDER]?.let {
-                    val parsed = try {
-                        json.decodeFromString<List<String>>(it)
-                    } catch (_: Exception) {
-                        json.decodeFromString<Set<String>>(it).toList()
-                    }
-                    val mapped = parsed.mapNotNull { name -> HomeSectionType.entries.find { e -> e.name == name } }
-                    buildList {
-                        addAll(mapped)
-                        addAll(HomeSectionType.CONFIGURABLE.filterNot { it in mapped })
-                    }
-                } ?: HomeSectionType.CONFIGURABLE
-            } catch (_: Exception) { HomeSectionType.CONFIGURABLE },
-            hiddenLibrarySectionIds = try {
-                prefs[Keys.HOME_HIDDEN_LIBRARY_SECTION_IDS]?.let {
-                    json.decodeFromString<Set<String>>(it)
-                } ?: emptySet()
-            } catch (_: Exception) { emptySet() },
+            enabledHomeSectionTypes = enabledHomeSectionTypes,
+            homeSectionOrder = homeSectionOrder,
+            hiddenLibrarySectionIds = hiddenLibrarySectionIds,
             navBarShowLabels = readBool(prefs, Keys.NAV_BAR_SHOW_LABELS, "nav_bar_show_labels", true),
             homeHeroEnabled = readBool(prefs, Keys.HOME_HERO_ENABLED, "home_hero_enabled", true),
             onboardingCompleted = readBool(prefs, Keys.ONBOARDING_COMPLETED, "onboarding_completed", false),
-            mpvConfig = try {
-                prefs[Keys.MPV_CONFIG]?.let { json.decodeFromString<MpvEngineConfig>(it) } ?: MpvEngineConfig()
-            } catch (_: Exception) { MpvEngineConfig() },
-            libVlcConfig = try {
-                prefs[Keys.LIBVLC_CONFIG]?.let { json.decodeFromString<LibVlcEngineConfig>(it) } ?: LibVlcEngineConfig()
-            } catch (_: Exception) { LibVlcEngineConfig() },
-            exoPlayerConfig = try {
-                prefs[Keys.EXO_CONFIG]?.let { json.decodeFromString<ExoPlayerEngineConfig>(it) } ?: ExoPlayerEngineConfig()
-            } catch (_: Exception) { ExoPlayerEngineConfig() },
+            mpvConfig = mpvConfig,
+            libVlcConfig = libVlcConfig,
+            exoPlayerConfig = exoPlayerConfig,
             performanceMode = readBool(prefs, Keys.PERFORMANCE_MODE, "performance_mode", false),
             newsletterEnabled = readBool(prefs, Keys.NEWSLETTER_ENABLED, "newsletter_enabled", true),
             newsletterDayOfWeek = readInt(prefs, Keys.NEWSLETTER_DAY_OF_WEEK, "newsletter_day_of_week", 7),
@@ -544,6 +688,10 @@ class UserPreferencesStore @Inject constructor(
             libraryViewMode = try {
                 LibraryViewMode.valueOf(prefs[Keys.LIBRARY_VIEW_MODE] ?: LibraryViewMode.GRID.name)
             } catch (_: Exception) { LibraryViewMode.GRID },
+            synthwaveMode = readBool(prefs, Keys.SYNTHWAVE_MODE, "synthwave_mode", false),
+            synthwaveAccent = prefs[Keys.SYNTHWAVE_ACCENT] ?: "magenta",
+            soothingMode = readBool(prefs, Keys.SOOTHING_MODE, "soothing_mode", false),
+            soothingAccent = prefs[Keys.SOOTHING_ACCENT] ?: "ocean",
             notificationPreferences = NotificationPreferences(
                 enabled = readBool(prefs, Keys.NOTIFICATIONS_ENABLED, "notifications_enabled", false),
                 checkFrequency = try {
@@ -556,12 +704,80 @@ class UserPreferencesStore @Inject constructor(
                 vibrateEnabled = readBool(prefs, Keys.NOTIFICATIONS_VIBRATE_ENABLED, "notifications_vibrate_enabled", true),
                 lightsEnabled = readBool(prefs, Keys.NOTIFICATIONS_LIGHTS_ENABLED, "notifications_lights_enabled", true),
                 maxPerCheck = readInt(prefs, Keys.NOTIFICATIONS_MAX_PER_CHECK, "notifications_max_per_check", 10),
-                libraryConfigs = try {
-                    prefs[Keys.NOTIFICATIONS_LIBRARY_CONFIGS]?.let {
-                        json.decodeFromString<Map<String, LibraryNotificationConfig>>(it)
-                    } ?: emptyMap()
-                } catch (_: Exception) { emptyMap() },
+                libraryConfigs = notificationLibraryConfigs,
             ),
+            showAdvancedSettings = readBool(prefs, Keys.SHOW_ADVANCED_SETTINGS, "show_advanced_settings", false),
+            audioVisualizerEnabled = readBool(prefs, Keys.AUDIO_VISUALIZER_ENABLED, "audio_visualizer_enabled", false),
+            syncPlayJoinBehavior = try {
+                SyncPlayJoinBehavior.valueOf(prefs[Keys.SYNC_PLAY_JOIN_BEHAVIOR] ?: SyncPlayJoinBehavior.ASK.name)
+            } catch (_: Exception) { SyncPlayJoinBehavior.ASK },
+            syncPlayToleranceMs = prefs[Keys.SYNC_PLAY_TOLERANCE_MS] ?: 100L,
+            syncPlayAutoAcceptInvites = readBool(prefs, Keys.SYNC_PLAY_AUTO_ACCEPT_INVITES, "sync_play_auto_accept_invites", false),
+            defaultCastingStrategy = try {
+                CastingStrategy.valueOf(prefs[Keys.DEFAULT_CASTING_STRATEGY] ?: CastingStrategy.ASK.name)
+            } catch (_: Exception) { CastingStrategy.ASK },
+            backgroundCastingEnabled = readBool(prefs, Keys.BACKGROUND_CASTING_ENABLED, "background_casting_enabled", true),
+            preferredRenderer = prefs[Keys.PREFERRED_RENDERER],
+            dvrPrePaddingMinutes = readInt(prefs, Keys.DVR_PRE_PADDING_MINUTES, "dvr_pre_padding_minutes", 0),
+            dvrPostPaddingMinutes = readInt(prefs, Keys.DVR_POST_PADDING_MINUTES, "dvr_post_padding_minutes", 0),
+            dvrRecordingQuality = prefs[Keys.DVR_RECORDING_QUALITY] ?: "AUTO",
+            favoriteChannels = prefs[Keys.FAVORITE_CHANNELS]?.let {
+                try { json.decodeFromString<Set<String>>(it) } catch(_: Exception) { emptySet() }
+            } ?: emptySet(),
+            enabledNewsletterSections = prefs[Keys.ENABLED_NEWSLETTER_SECTIONS]?.let {
+                try { json.decodeFromString<Set<NewsletterSectionType>>(it) } catch(_: Exception) {
+                    NewsletterSectionType.entries.toSet()
+                }
+            } ?: NewsletterSectionType.entries.toSet(),
+            newsletterSectionOrder = prefs[Keys.NEWSLETTER_SECTION_ORDER]?.let {
+                try { json.decodeFromString<List<NewsletterSectionType>>(it) } catch(_: Exception) {
+                    NewsletterSectionType.DEFAULT_ORDER
+                }
+            } ?: NewsletterSectionType.DEFAULT_ORDER,
+            manualOfflineEnabled = readBool(prefs, Keys.MANUAL_OFFLINE_ENABLED, "manual_offline_enabled", false),
+            autoOfflineEnabled = readBool(prefs, Keys.AUTO_OFFLINE_ENABLED, "auto_offline_enabled", true),
+            manualBandwidthCap = prefs[Keys.MANUAL_BANDWIDTH_CAP] ?: 0L,
+            meteredNetworkBehavior = try {
+                MeteredNetworkBehavior.valueOf(prefs[Keys.METERED_NETWORK_BEHAVIOR] ?: MeteredNetworkBehavior.WARN.name)
+            } catch (_: Exception) { MeteredNetworkBehavior.WARN },
+            adaptiveBitrateEnabled = readBool(prefs, Keys.ADAPTIVE_BITRATE_ENABLED, "adaptive_bitrate_enabled", true),
+            backgroundVideoAudioEnabled = readBool(prefs, Keys.BACKGROUND_VIDEO_AUDIO_ENABLED, "background_video_audio_enabled", false),
+            autoPlayCountdownSec = readInt(prefs, Keys.AUTO_PLAY_COUNTDOWN_SEC, "auto_play_countdown_sec", 10),
+            showUnwatchedBadge = readBool(prefs, Keys.SHOW_UNWATCHED_BADGE, "show_unwatched_badge", true),
+            hideWatchedItems = readBool(prefs, Keys.HIDE_WATCHED_ITEMS, "hide_watched_items", false),
+            cellularStreamingQuality = try {
+                StreamingQuality.valueOf(prefs[Keys.CELLULAR_STREAMING_QUALITY] ?: StreamingQuality.AUTO.name)
+            } catch (_: Exception) { StreamingQuality.AUTO },
+            showWatchedCheckmark = readBool(prefs, Keys.SHOW_WATCHED_CHECKMARK, "show_watched_checkmark", true),
+            defaultLibrarySortOrders = prefs[Keys.DEFAULT_LIBRARY_SORT_ORDERS]?.let {
+                try { json.decodeFromString<Map<String, String>>(it) } catch (_: Exception) { emptyMap() }
+            } ?: emptyMap(),
+            keepScreenOnDuringVideo = readBool(prefs, Keys.KEEP_SCREEN_ON_DURING_VIDEO, "keep_screen_on_during_video", true),
+            downloadQuality = try {
+                DownloadQuality.valueOf(prefs[Keys.DOWNLOAD_QUALITY] ?: DownloadQuality.ORIGINAL.name)
+            } catch (_: Exception) { DownloadQuality.ORIGINAL },
+            smartDownloadsEnabled = readBool(prefs, Keys.SMART_DOWNLOADS_ENABLED, "smart_downloads_enabled", false),
+            autoDownloadNewEpisodes = readBool(prefs, Keys.AUTO_DOWNLOAD_NEW_EPISODES, "auto_download_new_episodes", false),
+            incognitoModeEnabled = readBool(prefs, Keys.INCOGNITO_MODE_ENABLED, "incognito_mode_enabled", false),
+            showTimeRemaining = readBool(prefs, Keys.SHOW_TIME_REMAINING, "show_time_remaining", false),
+            pauseOnAudioFocusLoss = readBool(prefs, Keys.PAUSE_ON_AUDIO_FOCUS_LOSS, "pause_on_audio_focus_loss", true),
+            volumeBoostEnabled = readBool(prefs, Keys.VOLUME_BOOST_ENABLED, "volume_boost_enabled", false),
+            volumeBoostGain = readInt(prefs, Keys.VOLUME_BOOST_GAIN, "volume_boost_gain", 0),
+            showShareMediaOption = readBool(prefs, Keys.SHOW_SHARE_MEDIA_OPTION, "show_share_media_option", true),
+            showExternalRatings = readBool(prefs, Keys.SHOW_EXTERNAL_RATINGS, "show_external_ratings", true),
+            dataSaverEnabled = readBool(prefs, Keys.DATA_SAVER_ENABLED, "data_saver_enabled", false),
+            reduceMotionEnabled = readBool(prefs, Keys.REDUCE_MOTION_ENABLED, "reduce_motion_enabled", false),
+            preferAudioDescription = readBool(prefs, Keys.PREFER_AUDIO_DESCRIPTION, "prefer_audio_description", false),
+            highContrastSubtitles = readBool(prefs, Keys.HIGH_CONTRAST_SUBTITLES, "high_contrast_subtitles", false),
+            hideSearchHistory = readBool(prefs, Keys.HIDE_SEARCH_HISTORY, "hide_search_history", false),
+            blueLightFilterEnabled = readBool(prefs, Keys.BLUE_LIGHT_FILTER_ENABLED, "blue_light_filter_enabled", false),
+            blueLightFilterStrength = readFloat(prefs, Keys.BLUE_LIGHT_FILTER_STRENGTH, "blue_light_filter_strength", 0.3f),
+            tvZoomModePercent = readFloat(prefs, Keys.TV_ZOOM_MODE_PERCENT, "tv_zoom_mode_percent", 0f),
+            remoteControlEnabled = readBool(prefs, Keys.REMOTE_CONTROL_ENABLED, "remote_control_enabled", true),
+            maxDownloadStorageGb = readInt(prefs, Keys.MAX_DOWNLOAD_STORAGE_GB, "max_download_storage_gb", 0),
+            downloadStorageLocation = prefs[Keys.DOWNLOAD_STORAGE_LOCATION] ?: "INTERNAL",
+            kidsModeEnabled = readBool(prefs, Keys.KIDS_MODE_ENABLED, "kids_mode_enabled", false),
+            kidsModeMaxRating = prefs[Keys.KIDS_MODE_MAX_RATING] ?: "G",
         )
     }.distinctUntilChanged().stateIn(scope, SharingStarted.Eagerly, UserPreferences())
 
@@ -660,6 +876,163 @@ class UserPreferencesStore @Inject constructor(
 
     suspend fun setBiometricLockEnabled(enabled: Boolean) {
         context.dataStore.edit { it[Keys.BIOMETRIC_LOCK_ENABLED] = enabled }
+    }
+
+    suspend fun setShowAdvancedSettings(enabled: Boolean) {
+        context.dataStore.edit { it[Keys.SHOW_ADVANCED_SETTINGS] = enabled }
+    }
+
+    suspend fun setAudioVisualizerEnabled(enabled: Boolean) {
+        context.dataStore.edit { it[Keys.AUDIO_VISUALIZER_ENABLED] = enabled }
+    }
+
+    suspend fun setSyncPlayJoinBehavior(behavior: SyncPlayJoinBehavior) {
+        context.dataStore.edit { it[Keys.SYNC_PLAY_JOIN_BEHAVIOR] = behavior.name }
+    }
+
+    suspend fun setSyncPlayToleranceMs(ms: Long) {
+        context.dataStore.edit { it[Keys.SYNC_PLAY_TOLERANCE_MS] = ms }
+    }
+
+    suspend fun setSyncPlayAutoAcceptInvites(enabled: Boolean) {
+        context.dataStore.edit { it[Keys.SYNC_PLAY_AUTO_ACCEPT_INVITES] = enabled }
+    }
+
+    suspend fun setDefaultCastingStrategy(strategy: CastingStrategy) {
+        context.dataStore.edit { it[Keys.DEFAULT_CASTING_STRATEGY] = strategy.name }
+    }
+
+    suspend fun setBackgroundCastingEnabled(enabled: Boolean) {
+        context.dataStore.edit { it[Keys.BACKGROUND_CASTING_ENABLED] = enabled }
+    }
+
+    suspend fun setPreferredRenderer(renderer: String?) {
+        context.dataStore.edit {
+            if (renderer != null) it[Keys.PREFERRED_RENDERER] = renderer else it.remove(Keys.PREFERRED_RENDERER)
+        }
+    }
+
+    suspend fun setDvrPrePaddingMinutes(minutes: Int) {
+        context.dataStore.edit { it[Keys.DVR_PRE_PADDING_MINUTES] = minutes }
+    }
+
+    suspend fun setDvrPostPaddingMinutes(minutes: Int) {
+        context.dataStore.edit { it[Keys.DVR_POST_PADDING_MINUTES] = minutes }
+    }
+
+    suspend fun setDvrRecordingQuality(quality: String) {
+        context.dataStore.edit { it[Keys.DVR_RECORDING_QUALITY] = quality }
+    }
+
+    suspend fun setFavoriteChannels(channels: Set<String>) {
+        context.dataStore.edit { it[Keys.FAVORITE_CHANNELS] = json.encodeToString(channels) }
+    }
+
+    suspend fun setEnabledNewsletterSections(sections: Set<NewsletterSectionType>) {
+        context.dataStore.edit { it[Keys.ENABLED_NEWSLETTER_SECTIONS] = json.encodeToString(sections) }
+    }
+
+    suspend fun setNewsletterSectionOrder(order: List<NewsletterSectionType>) {
+        context.dataStore.edit { it[Keys.NEWSLETTER_SECTION_ORDER] = json.encodeToString(order) }
+    }
+
+    suspend fun setManualOffline(enabled: Boolean) {
+        context.dataStore.edit { it[Keys.MANUAL_OFFLINE_ENABLED] = enabled }
+    }
+
+    suspend fun setAutoOfflineEnabled(enabled: Boolean) {
+        context.dataStore.edit { it[Keys.AUTO_OFFLINE_ENABLED] = enabled }
+    }
+
+    suspend fun setManualBandwidthCap(cap: Long) {
+        context.dataStore.edit { it[Keys.MANUAL_BANDWIDTH_CAP] = cap }
+    }
+
+    suspend fun setMeteredNetworkBehavior(behavior: MeteredNetworkBehavior) {
+        context.dataStore.edit { it[Keys.METERED_NETWORK_BEHAVIOR] = behavior.name }
+    }
+
+    suspend fun setAdaptiveBitrateEnabled(enabled: Boolean) {
+        context.dataStore.edit { it[Keys.ADAPTIVE_BITRATE_ENABLED] = enabled }
+    }
+
+
+    suspend fun setBackgroundVideoAudioEnabled(enabled: Boolean) {
+        context.dataStore.edit { it[Keys.BACKGROUND_VIDEO_AUDIO_ENABLED] = enabled }
+    }
+
+    suspend fun setAutoPlayCountdownSec(sec: Int) {
+        context.dataStore.edit { it[Keys.AUTO_PLAY_COUNTDOWN_SEC] = sec }
+    }
+
+    suspend fun setShowUnwatchedBadge(enabled: Boolean) {
+        context.dataStore.edit { it[Keys.SHOW_UNWATCHED_BADGE] = enabled }
+    }
+
+    suspend fun setHideWatchedItems(enabled: Boolean) {
+        context.dataStore.edit { it[Keys.HIDE_WATCHED_ITEMS] = enabled }
+    }
+
+    suspend fun setCellularStreamingQuality(quality: StreamingQuality) {
+        context.dataStore.edit { it[Keys.CELLULAR_STREAMING_QUALITY] = quality.name }
+    }
+
+    suspend fun setShowWatchedCheckmark(enabled: Boolean) {
+        context.dataStore.edit { it[Keys.SHOW_WATCHED_CHECKMARK] = enabled }
+    }
+
+    suspend fun setDefaultLibrarySortOrder(libraryId: String, order: String) {
+        context.dataStore.edit { prefs ->
+            val current = prefs[Keys.DEFAULT_LIBRARY_SORT_ORDERS]?.let {
+                try { json.decodeFromString<Map<String, String>>(it) } catch (_: Exception) { emptyMap() }
+            } ?: emptyMap()
+            val next = current.toMutableMap().apply { put(libraryId, order) }
+            prefs[Keys.DEFAULT_LIBRARY_SORT_ORDERS] = json.encodeToString(next)
+        }
+    }
+
+    suspend fun setKeepScreenOnDuringVideo(enabled: Boolean) {
+        context.dataStore.edit { it[Keys.KEEP_SCREEN_ON_DURING_VIDEO] = enabled }
+    }
+
+    suspend fun setDownloadQuality(quality: DownloadQuality) {
+        context.dataStore.edit { it[Keys.DOWNLOAD_QUALITY] = quality.name }
+    }
+
+    suspend fun setSmartDownloadsEnabled(enabled: Boolean) {
+        context.dataStore.edit { it[Keys.SMART_DOWNLOADS_ENABLED] = enabled }
+    }
+
+    suspend fun setAutoDownloadNewEpisodes(enabled: Boolean) {
+        context.dataStore.edit { it[Keys.AUTO_DOWNLOAD_NEW_EPISODES] = enabled }
+    }
+
+    suspend fun setIncognitoModeEnabled(enabled: Boolean) {
+        context.dataStore.edit { it[Keys.INCOGNITO_MODE_ENABLED] = enabled }
+    }
+
+    suspend fun setShowTimeRemaining(enabled: Boolean) {
+        context.dataStore.edit { it[Keys.SHOW_TIME_REMAINING] = enabled }
+    }
+
+    suspend fun setPauseOnAudioFocusLoss(enabled: Boolean) {
+        context.dataStore.edit { it[Keys.PAUSE_ON_AUDIO_FOCUS_LOSS] = enabled }
+    }
+
+    suspend fun setVolumeBoostEnabled(enabled: Boolean) {
+        context.dataStore.edit { it[Keys.VOLUME_BOOST_ENABLED] = enabled }
+    }
+
+    suspend fun setVolumeBoostGain(gain: Int) {
+        context.dataStore.edit { it[Keys.VOLUME_BOOST_GAIN] = gain }
+    }
+
+    suspend fun setShowShareMediaOption(enabled: Boolean) {
+        context.dataStore.edit { it[Keys.SHOW_SHARE_MEDIA_OPTION] = enabled }
+    }
+
+    suspend fun setShowExternalRatings(enabled: Boolean) {
+        context.dataStore.edit { it[Keys.SHOW_EXTERNAL_RATINGS] = enabled }
     }
 
     suspend fun clearAll() {
@@ -1220,6 +1593,57 @@ class UserPreferencesStore @Inject constructor(
                 kotlinx.serialization.serializer<Map<String, LibraryNotificationConfig>>(),
                 np.libraryConfigs,
             )
+            settings[Keys.SHOW_ADVANCED_SETTINGS] = prefs.showAdvancedSettings
+            settings[Keys.AUDIO_VISUALIZER_ENABLED] = prefs.audioVisualizerEnabled
+
+            settings[Keys.SYNC_PLAY_JOIN_BEHAVIOR] = prefs.syncPlayJoinBehavior.name
+            settings[Keys.SYNC_PLAY_TOLERANCE_MS] = prefs.syncPlayToleranceMs
+            settings[Keys.SYNC_PLAY_AUTO_ACCEPT_INVITES] = prefs.syncPlayAutoAcceptInvites
+            settings[Keys.DEFAULT_CASTING_STRATEGY] = prefs.defaultCastingStrategy.name
+            settings[Keys.BACKGROUND_CASTING_ENABLED] = prefs.backgroundCastingEnabled
+            prefs.preferredRenderer?.let { settings[Keys.PREFERRED_RENDERER] = it }
+            settings[Keys.DVR_PRE_PADDING_MINUTES] = prefs.dvrPrePaddingMinutes
+            settings[Keys.DVR_POST_PADDING_MINUTES] = prefs.dvrPostPaddingMinutes
+            settings[Keys.DVR_RECORDING_QUALITY] = prefs.dvrRecordingQuality
+            settings[Keys.FAVORITE_CHANNELS] = json.encodeToString(prefs.favoriteChannels)
+            settings[Keys.ENABLED_NEWSLETTER_SECTIONS] = json.encodeToString(prefs.enabledNewsletterSections)
+            settings[Keys.NEWSLETTER_SECTION_ORDER] = json.encodeToString(prefs.newsletterSectionOrder)
+            settings[Keys.MANUAL_OFFLINE_ENABLED] = prefs.manualOfflineEnabled
+            settings[Keys.AUTO_OFFLINE_ENABLED] = prefs.autoOfflineEnabled
+            settings[Keys.MANUAL_BANDWIDTH_CAP] = prefs.manualBandwidthCap
+            settings[Keys.METERED_NETWORK_BEHAVIOR] = prefs.meteredNetworkBehavior.name
+            settings[Keys.ADAPTIVE_BITRATE_ENABLED] = prefs.adaptiveBitrateEnabled
+            settings[Keys.BACKGROUND_VIDEO_AUDIO_ENABLED] = prefs.backgroundVideoAudioEnabled
+            settings[Keys.AUTO_PLAY_COUNTDOWN_SEC] = prefs.autoPlayCountdownSec
+            settings[Keys.SHOW_UNWATCHED_BADGE] = prefs.showUnwatchedBadge
+            settings[Keys.HIDE_WATCHED_ITEMS] = prefs.hideWatchedItems
+            settings[Keys.CELLULAR_STREAMING_QUALITY] = prefs.cellularStreamingQuality.name
+            settings[Keys.SHOW_WATCHED_CHECKMARK] = prefs.showWatchedCheckmark
+            settings[Keys.DEFAULT_LIBRARY_SORT_ORDERS] = json.encodeToString(prefs.defaultLibrarySortOrders)
+            settings[Keys.KEEP_SCREEN_ON_DURING_VIDEO] = prefs.keepScreenOnDuringVideo
+            settings[Keys.DOWNLOAD_QUALITY] = prefs.downloadQuality.name
+            settings[Keys.SMART_DOWNLOADS_ENABLED] = prefs.smartDownloadsEnabled
+            settings[Keys.AUTO_DOWNLOAD_NEW_EPISODES] = prefs.autoDownloadNewEpisodes
+            settings[Keys.INCOGNITO_MODE_ENABLED] = prefs.incognitoModeEnabled
+            settings[Keys.SHOW_TIME_REMAINING] = prefs.showTimeRemaining
+            settings[Keys.PAUSE_ON_AUDIO_FOCUS_LOSS] = prefs.pauseOnAudioFocusLoss
+            settings[Keys.VOLUME_BOOST_ENABLED] = prefs.volumeBoostEnabled
+            settings[Keys.VOLUME_BOOST_GAIN] = prefs.volumeBoostGain
+            settings[Keys.SHOW_SHARE_MEDIA_OPTION] = prefs.showShareMediaOption
+            settings[Keys.SHOW_EXTERNAL_RATINGS] = prefs.showExternalRatings
+            settings[Keys.DATA_SAVER_ENABLED] = prefs.dataSaverEnabled
+            settings[Keys.REDUCE_MOTION_ENABLED] = prefs.reduceMotionEnabled
+            settings[Keys.PREFER_AUDIO_DESCRIPTION] = prefs.preferAudioDescription
+            settings[Keys.HIGH_CONTRAST_SUBTITLES] = prefs.highContrastSubtitles
+            settings[Keys.HIDE_SEARCH_HISTORY] = prefs.hideSearchHistory
+            settings[Keys.BLUE_LIGHT_FILTER_ENABLED] = prefs.blueLightFilterEnabled
+            settings[Keys.BLUE_LIGHT_FILTER_STRENGTH] = prefs.blueLightFilterStrength
+            settings[Keys.TV_ZOOM_MODE_PERCENT] = prefs.tvZoomModePercent
+            settings[Keys.REMOTE_CONTROL_ENABLED] = prefs.remoteControlEnabled
+            settings[Keys.MAX_DOWNLOAD_STORAGE_GB] = prefs.maxDownloadStorageGb
+            settings[Keys.DOWNLOAD_STORAGE_LOCATION] = prefs.downloadStorageLocation
+            settings[Keys.KIDS_MODE_ENABLED] = prefs.kidsModeEnabled
+            settings[Keys.KIDS_MODE_MAX_RATING] = prefs.kidsModeMaxRating
         }
     }
 
@@ -1297,5 +1721,83 @@ class UserPreferencesStore @Inject constructor(
             } catch (_: Exception) { emptyList() }
             prefs[Keys.RECENT_DLNA_DEVICES] = json.encodeToString(current.filter { it.id != deviceId })
         }
+    }
+
+    suspend fun setDataSaverEnabled(enabled: Boolean) {
+        context.dataStore.edit { it[Keys.DATA_SAVER_ENABLED] = enabled }
+    }
+
+    suspend fun setReduceMotionEnabled(enabled: Boolean) {
+        context.dataStore.edit { it[Keys.REDUCE_MOTION_ENABLED] = enabled }
+    }
+
+    suspend fun setPreferAudioDescription(enabled: Boolean) {
+        context.dataStore.edit { it[Keys.PREFER_AUDIO_DESCRIPTION] = enabled }
+    }
+
+    suspend fun setHighContrastSubtitles(enabled: Boolean) {
+        context.dataStore.edit { it[Keys.HIGH_CONTRAST_SUBTITLES] = enabled }
+    }
+
+    suspend fun setHideSearchHistory(enabled: Boolean) {
+        context.dataStore.edit { it[Keys.HIDE_SEARCH_HISTORY] = enabled }
+    }
+
+    suspend fun setBlueLightFilterEnabled(enabled: Boolean) {
+        context.dataStore.edit { it[Keys.BLUE_LIGHT_FILTER_ENABLED] = enabled }
+    }
+
+    suspend fun setBlueLightFilterStrength(strength: Float) {
+        context.dataStore.edit { it[Keys.BLUE_LIGHT_FILTER_STRENGTH] = strength }
+    }
+
+    suspend fun setTvZoomModePercent(percent: Float) {
+        context.dataStore.edit { it[Keys.TV_ZOOM_MODE_PERCENT] = percent }
+    }
+
+    suspend fun setRemoteControlEnabled(enabled: Boolean) {
+        context.dataStore.edit { it[Keys.REMOTE_CONTROL_ENABLED] = enabled }
+    }
+
+    suspend fun setMaxDownloadStorageGb(gb: Int) {
+        context.dataStore.edit { it[Keys.MAX_DOWNLOAD_STORAGE_GB] = gb }
+    }
+
+    suspend fun setDownloadStorageLocation(location: String) {
+        context.dataStore.edit { it[Keys.DOWNLOAD_STORAGE_LOCATION] = location }
+    }
+
+    suspend fun setKidsModeEnabled(enabled: Boolean) {
+        context.dataStore.edit { it[Keys.KIDS_MODE_ENABLED] = enabled }
+    }
+
+    suspend fun setKidsModeMaxRating(rating: String) {
+        context.dataStore.edit { it[Keys.KIDS_MODE_MAX_RATING] = rating }
+    }
+
+    suspend fun setSynthwaveMode(enabled: Boolean) {
+        context.dataStore.edit { prefs ->
+            prefs[Keys.SYNTHWAVE_MODE] = enabled
+            if (enabled) {
+                prefs[Keys.SOOTHING_MODE] = false
+            }
+        }
+    }
+
+    suspend fun setSynthwaveAccent(accent: String) {
+        context.dataStore.edit { it[Keys.SYNTHWAVE_ACCENT] = accent }
+    }
+
+    suspend fun setSoothingMode(enabled: Boolean) {
+        context.dataStore.edit { prefs ->
+            prefs[Keys.SOOTHING_MODE] = enabled
+            if (enabled) {
+                prefs[Keys.SYNTHWAVE_MODE] = false
+            }
+        }
+    }
+
+    suspend fun setSoothingAccent(accent: String) {
+        context.dataStore.edit { it[Keys.SOOTHING_ACCENT] = accent }
     }
 }

@@ -1,0 +1,329 @@
+package com.raulshma.jellyplay.feature.settings
+
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.expandVertically
+import androidx.compose.animation.shrinkVertically
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.text.input.PasswordVisualTransformation
+import androidx.compose.ui.unit.dp
+import androidx.fragment.app.FragmentActivity
+import androidx.hilt.navigation.compose.hiltViewModel
+import com.raulshma.jellyplay.core.ui.adaptive.LocalAdaptiveInfo
+import com.raulshma.jellyplay.core.ui.adaptive.bottomPadding
+import com.raulshma.jellyplay.core.ui.adaptive.contentPadding
+import com.raulshma.jellyplay.core.ui.components.BiometricAuthHelper
+import com.raulshma.jellyplay.core.ui.components.JellyPlayScreenScaffold
+import com.raulshma.jellyplay.core.ui.components.findFragmentActivity
+import com.raulshma.jellyplay.core.ui.components.rememberBiometricAvailability
+import com.raulshma.jellyplay.core.ui.tv.LocalTvMode
+import com.composables.icons.tabler.Tabler
+import com.composables.icons.tabler.outline.*
+
+sealed class SecuritySettingsDialog {
+    object None : SecuritySettingsDialog()
+    object PinDialog : SecuritySettingsDialog()
+    object PinDisableAuth : SecuritySettingsDialog()
+}
+
+@OptIn(ExperimentalMaterial3Api::class, androidx.compose.material3.ExperimentalMaterial3ExpressiveApi::class)
+@Composable
+fun SecuritySettingsScreen(
+    onBack: () -> Unit,
+    viewModel: SettingsViewModel = hiltViewModel(),
+) {
+    val preferences = viewModel.preferences
+    val showAdvanced = preferences.showAdvancedSettings
+    val adaptiveInfo = LocalAdaptiveInfo.current
+    val isTv = LocalTvMode.current
+    var activeDialog by remember { mutableStateOf<SecuritySettingsDialog>(SecuritySettingsDialog.None) }
+    var pinInput by remember { mutableStateOf("") }
+    var pinConfirm by remember { mutableStateOf("") }
+    var pinError by remember { mutableStateOf<String?>(null) }
+    var pinDisableAuthError by remember { mutableStateOf<String?>(null) }
+
+    val biometricAvailability = rememberBiometricAvailability()
+    val canShowBiometric = biometricAvailability == BiometricAuthHelper.Availability.AVAILABLE
+    val backgroundColor = com.raulshma.jellyplay.core.ui.components.rememberScreenBackgroundColor()
+
+    JellyPlayScreenScaffold(
+        title = "Security",
+        onBack = onBack,
+        backgroundColor = backgroundColor,
+        actions = {
+            AdvancedSettingsToggleButton(
+                showAdvanced = showAdvanced,
+                onToggle = { viewModel.setShowAdvancedSettings(!showAdvanced) },
+            )
+        },
+    ) { innerPadding ->
+        LazyColumn(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(innerPadding),
+            contentPadding = PaddingValues(
+                start = adaptiveInfo.contentPadding(isTv),
+                end = adaptiveInfo.contentPadding(isTv),
+                bottom = adaptiveInfo.bottomPadding(isTv),
+            ),
+        ) {
+            item {
+                SettingsGroup(
+                    icon = Tabler.Outline.Lock,
+                    title = "Security",
+                    summary = {
+                        when {
+                            preferences.pinLockEnabled && preferences.biometricLockEnabled -> "PIN + Biometric lock: On"
+                            preferences.biometricLockEnabled -> "Biometric lock: On"
+                            preferences.pinLockEnabled -> "PIN lock: On"
+                            else -> "Lock: Off"
+                        }
+                    },
+                    modifier = Modifier.padding(vertical = 8.dp),
+                    initiallyExpanded = true,
+                ) {
+                    val baseSecTotal = if (canShowBiometric) 2 else 1
+                    val secTotal = if (showAdvanced) baseSecTotal + 1 else baseSecTotal
+                    var secIdx = 0
+                    SettingToggleItem(
+                        icon = if (preferences.pinLockEnabled) Tabler.Outline.Lock else Tabler.Outline.LockOpen,
+                        title = "PIN Lock",
+                        subtitle = if (preferences.pinLockEnabled) "App locked with PIN" else "No PIN set",
+                        checked = preferences.pinLockEnabled,
+                        index = secIdx++, count = secTotal,
+                        onCheckedChange = { enabled ->
+                            if (enabled) activeDialog = SecuritySettingsDialog.PinDialog
+                            else activeDialog = SecuritySettingsDialog.PinDisableAuth
+                        },
+                        onClick = {
+                            if (preferences.pinLockEnabled) activeDialog = SecuritySettingsDialog.PinDisableAuth
+                            else activeDialog = SecuritySettingsDialog.PinDialog
+                        },
+                    )
+                    if (canShowBiometric) {
+                        val bioContext = LocalContext.current
+                        val bioActivity = remember(bioContext) { bioContext.findFragmentActivity() }
+                        SettingToggleItem(
+                            icon = Tabler.Outline.Fingerprint,
+                            title = "Biometric Unlock",
+                            subtitle = if (preferences.biometricLockEnabled) "Use fingerprint, face, or device credential" else "Disabled",
+                            checked = preferences.biometricLockEnabled,
+                            index = secIdx++, count = secTotal,
+                            onCheckedChange = { enabled ->
+                                if (enabled && bioActivity != null) {
+                                    BiometricAuthHelper.authenticate(
+                                        activity = bioActivity,
+                                        title = "Enable Biometric Unlock",
+                                        subtitle = "Verify your identity to enable biometric lock",
+                                        onSuccess = { viewModel.setBiometricLockEnabled(true) },
+                                        onError = {},
+                                        onFailed = {},
+                                    )
+                                } else {
+                                    viewModel.setBiometricLockEnabled(false)
+                                }
+                            },
+                        )
+                    }
+                    if (showAdvanced) {
+                        val lockTimerOptions = listOf(0L, 30_000L, 60_000L, 300_000L, 600_000L)
+                        val lockTimerLabels = listOf("Immediately", "30 seconds", "1 minute", "5 minutes", "10 minutes")
+                        SettingListItem(
+                            icon = Tabler.Outline.Clock,
+                            title = "Auto-Lock Timer",
+                            subtitle = "Time before app locks after leaving",
+                            trailingText = lockTimerLabels[lockTimerOptions.indexOf(preferences.autoLockTimerMs).coerceAtMost(lockTimerOptions.lastIndex)],
+                            index = secIdx, count = secTotal,
+                            onClick = {
+                                val currentIdx = lockTimerOptions.indexOf(preferences.autoLockTimerMs).coerceAtMost(lockTimerOptions.lastIndex)
+                                val nextIdx = (currentIdx + 1) % lockTimerOptions.size
+                                viewModel.setAutoLockTimerMs(lockTimerOptions[nextIdx])
+                            },
+                        )
+                    }
+                }
+            }
+
+            if (!showAdvanced) {
+                item {
+                    HiddenSettingsHint(
+                        hiddenCount = 1,
+                        onShowAdvanced = { viewModel.setShowAdvancedSettings(true) },
+                    )
+                }
+            }
+        }
+    }
+
+    if (activeDialog is SecuritySettingsDialog.PinDialog) {
+        AlertDialog(
+            onDismissRequest = {
+                activeDialog = SecuritySettingsDialog.None
+                pinInput = ""
+                pinConfirm = ""
+                pinError = null
+            },
+            title = { Text("Set PIN Lock") },
+            text = {
+                Column {
+                    androidx.compose.material3.OutlinedTextField(
+                        value = pinInput,
+                        onValueChange = {
+                            if (it.length <= 4 && it.all { c -> c.isDigit() }) {
+                                pinInput = it
+                                pinError = null
+                            }
+                        },
+                        label = { Text("4-digit PIN") },
+                        visualTransformation = PasswordVisualTransformation(),
+                        singleLine = true,
+                        isError = pinError != null,
+                        keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(keyboardType = KeyboardType.NumberPassword),
+                        modifier = Modifier.fillMaxWidth(),
+                    )
+                    Spacer(Modifier.height(12.dp))
+                    androidx.compose.material3.OutlinedTextField(
+                        value = pinConfirm,
+                        onValueChange = {
+                            if (it.length <= 4 && it.all { c -> c.isDigit() }) {
+                                pinConfirm = it
+                                pinError = null
+                            }
+                        },
+                        label = { Text("Confirm PIN") },
+                        visualTransformation = PasswordVisualTransformation(),
+                        singleLine = true,
+                        isError = pinError != null,
+                        keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(keyboardType = KeyboardType.NumberPassword),
+                        modifier = Modifier.fillMaxWidth(),
+                    )
+                    AnimatedVisibility(
+                        visible = pinError != null,
+                        enter = expandVertically(animationSpec = MaterialTheme.motionScheme.defaultEffectsSpec()),
+                        exit = shrinkVertically(animationSpec = MaterialTheme.motionScheme.fastEffectsSpec()),
+                    ) {
+                        pinError?.let { error ->
+                            Text(
+                                error,
+                                color = MaterialTheme.colorScheme.error,
+                                style = MaterialTheme.typography.bodySmall,
+                                modifier = Modifier.padding(top = 8.dp),
+                            )
+                        }
+                    }
+                }
+            },
+            confirmButton = {
+                TextButton(onClick = {
+                    when {
+                        pinInput.length != 4 -> pinError = "PIN must be 4 digits"
+                        pinInput != pinConfirm -> pinError = "PINs do not match"
+                        else -> {
+                            viewModel.setPin(pinInput)
+                            activeDialog = SecuritySettingsDialog.None
+                            pinInput = ""
+                            pinConfirm = ""
+                            pinError = null
+                        }
+                    }
+                }) { Text("Set PIN") }
+            },
+            dismissButton = {
+                TextButton(onClick = {
+                    activeDialog = SecuritySettingsDialog.None
+                    pinInput = ""
+                    pinConfirm = ""
+                    pinError = null
+                }) { Text("Cancel") }
+            },
+        )
+    }
+
+    if (activeDialog is SecuritySettingsDialog.PinDisableAuth) {
+        AlertDialog(
+            onDismissRequest = {
+                activeDialog = SecuritySettingsDialog.None
+                pinDisableAuthError = null
+            },
+            title = { Text("Disable PIN Lock") },
+            text = {
+                Column {
+                    Text(
+                        "Enter your current PIN to disable PIN lock.",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                    Spacer(Modifier.height(16.dp))
+                    androidx.compose.material3.OutlinedTextField(
+                        value = pinInput,
+                        onValueChange = {
+                            if (it.length <= 4 && it.all { c -> c.isDigit() }) {
+                                pinInput = it
+                                pinDisableAuthError = null
+                            }
+                        },
+                        label = { Text("Current PIN") },
+                        visualTransformation = PasswordVisualTransformation(),
+                        singleLine = true,
+                        isError = pinDisableAuthError != null,
+                        keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(keyboardType = KeyboardType.NumberPassword),
+                        modifier = Modifier.fillMaxWidth(),
+                    )
+                    AnimatedVisibility(
+                        visible = pinDisableAuthError != null,
+                        enter = expandVertically(animationSpec = MaterialTheme.motionScheme.defaultEffectsSpec()),
+                        exit = shrinkVertically(animationSpec = MaterialTheme.motionScheme.fastEffectsSpec()),
+                    ) {
+                        pinDisableAuthError?.let { error ->
+                            Text(
+                                error,
+                                color = MaterialTheme.colorScheme.error,
+                                style = MaterialTheme.typography.bodySmall,
+                                modifier = Modifier.padding(top = 8.dp),
+                            )
+                        }
+                    }
+                }
+            },
+            confirmButton = {
+                TextButton(onClick = {
+                    val valid = viewModel.verifyPin(pinInput)
+                    if (valid) {
+                        viewModel.clearPin()
+                        activeDialog = SecuritySettingsDialog.None
+                        pinInput = ""
+                        pinDisableAuthError = null
+                    } else {
+                        pinDisableAuthError = "Incorrect PIN"
+                    }
+                }) { Text("Confirm") }
+            },
+            dismissButton = {
+                TextButton(onClick = {
+                    activeDialog = SecuritySettingsDialog.None
+                    pinInput = ""
+                    pinDisableAuthError = null
+                }) { Text("Cancel") }
+            },
+        )
+    }
+}

@@ -36,7 +36,7 @@ class MediaInfoApiClientImpl @Inject constructor(
     private val engine: JellyfinApiEngine,
 ) : MediaInfoApiClient {
 
-    override suspend fun getNewsletterData(sinceDate: String, limit: Int): Result<NewsletterData> = engine.apiResult {
+    override suspend fun getNewsletterData(sinceDate: String, limit: Int): Result<NewsletterData> = engine.apiResultWithRetry {
         coroutineScope {
             val serverName = async {
                 try {
@@ -147,7 +147,7 @@ class MediaInfoApiClientImpl @Inject constructor(
         }
     }
 
-    override suspend fun getUsers(): Result<List<JellyfinUser>> = engine.apiResult {
+    override suspend fun getUsers(): Result<List<JellyfinUser>> = engine.apiResultWithRetry {
         val api = engine.requireApi()
         val response = api.userApi.getUsers().content ?: emptyList()
         response.map { dto ->
@@ -165,7 +165,7 @@ class MediaInfoApiClientImpl @Inject constructor(
         }
     }
 
-    override suspend fun getUserPlayedItemCount(userId: String, includeItemTypes: List<String>?): Result<Int> = engine.apiResult {
+    override suspend fun getUserPlayedItemCount(userId: String, includeItemTypes: List<String>?): Result<Int> = engine.apiResultWithRetry {
         val api = engine.requireApi()
         val types = includeItemTypes?.mapNotNull { parseItemKind(it) } ?: emptyList()
         val response = api.itemsApi.getItems(
@@ -179,7 +179,7 @@ class MediaInfoApiClientImpl @Inject constructor(
         response?.totalRecordCount ?: 0
     }
 
-    override suspend fun getUserUnplayedItemCount(userId: String, includeItemTypes: List<String>?): Result<Int> = engine.apiResult {
+    override suspend fun getUserUnplayedItemCount(userId: String, includeItemTypes: List<String>?): Result<Int> = engine.apiResultWithRetry {
         val api = engine.requireApi()
         val types = includeItemTypes?.mapNotNull { parseItemKind(it) } ?: emptyList()
         val response = api.itemsApi.getItems(
@@ -201,7 +201,7 @@ class MediaInfoApiClientImpl @Inject constructor(
         sortOrder: String,
         startIndex: Int,
         limit: Int,
-    ): Result<Pair<Int, List<MediaItem>>> = engine.apiResult {
+    ): Result<Pair<Int, List<MediaItem>>> = engine.apiResultWithRetry {
         val api = engine.requireApi()
         val types = includeItemTypes?.mapNotNull { parseItemKind(it) } ?: emptyList()
         val sort = parseItemSortBy(sortBy)
@@ -234,7 +234,7 @@ class MediaInfoApiClientImpl @Inject constructor(
         startIndex: Int,
         limit: Int,
         useDateAdded: Boolean,
-    ): Result<Pair<Int, List<StaleMediaItem>>> = engine.apiResult {
+    ): Result<Pair<Int, List<StaleMediaItem>>> = engine.apiResultWithRetry {
         val api = engine.requireApi()
         val types = includeItemTypes.mapNotNull { parseItemKind(it) }
         val allItems = mutableListOf<StaleMediaItem>()
@@ -369,7 +369,7 @@ class MediaInfoApiClientImpl @Inject constructor(
         parentId: String?,
         startIndex: Int,
         limit: Int,
-    ): Result<Pair<Int, List<WatchedMediaItem>>> = engine.apiResult {
+    ): Result<Pair<Int, List<WatchedMediaItem>>> = engine.apiResultWithRetry {
         val api = engine.requireApi()
         val types = includeItemTypes.mapNotNull { parseItemKind(it) }
         val response = api.itemsApi.getItems(
@@ -432,18 +432,18 @@ class MediaInfoApiClientImpl @Inject constructor(
         Pair(total, watchedItems)
     }
 
-    override suspend fun deleteItem(itemId: String): Result<Unit> = engine.apiResult {
+    override suspend fun deleteItem(itemId: String): Result<Unit> = engine.apiResultWithRetry {
         engine.requireApi().libraryApi.deleteItem(itemId = java.util.UUID.fromString(itemId))
     }
 
-    override suspend fun deleteItems(itemIds: List<String>): Result<Int> = engine.apiResult {
+    override suspend fun deleteItems(itemIds: List<String>): Result<Int> = engine.apiResultWithRetry {
         engine.requireApi().libraryApi.deleteItems(
             ids = itemIds.map { java.util.UUID.fromString(it) },
         )
         itemIds.size
     }
 
-    override suspend fun checkPlaybackReportingPlugin(): Result<PlaybackReportingStatus> = engine.apiResult {
+    override suspend fun checkPlaybackReportingPlugin(): Result<PlaybackReportingStatus> = engine.apiResultWithRetry {
         val server = engine._currentServer.value?.address ?: throw IllegalStateException("Not connected")
         val token = engine._currentUser.value?.accessToken ?: throw IllegalStateException("Not authenticated")
         val url = "${server}/user_usage_stats/type_filter_list"
@@ -451,16 +451,16 @@ class MediaInfoApiClientImpl @Inject constructor(
             .url(url)
             .header("X-Emby-Token", token)
             .build()
-        val response = engine.okHttpClient.newCall(request).execute()
-        response.close()
-        if (response.isSuccessful) {
-            PlaybackReportingStatus.AVAILABLE
-        } else {
-            PlaybackReportingStatus.UNAVAILABLE
+        engine.okHttpClient.newCall(request).execute().use { response ->
+            if (response.isSuccessful) {
+                PlaybackReportingStatus.AVAILABLE
+            } else {
+                PlaybackReportingStatus.UNAVAILABLE
+            }
         }
     }
 
-    override suspend fun getPlaybackReportingUserActivity(days: Int): Result<List<PlaybackReportingActivity>> = engine.apiResult {
+    override suspend fun getPlaybackReportingUserActivity(days: Int): Result<List<PlaybackReportingActivity>> = engine.apiResultWithRetry {
         val server = engine._currentServer.value?.address ?: throw IllegalStateException("Not connected")
         val token = engine._currentUser.value?.accessToken ?: throw IllegalStateException("Not authenticated")
         val url = "${server}/user_usage_stats/user_activity?days=$days"
@@ -468,55 +468,114 @@ class MediaInfoApiClientImpl @Inject constructor(
             .url(url)
             .header("X-Emby-Token", token)
             .build()
-        val response = engine.okHttpClient.newCall(request).execute()
-        val body = response.body?.string() ?: ""
-        if (!response.isSuccessful) throw Exception("Plugin request failed: ${response.code}")
-        val json = JellyfinApiEngine.sharedJson.decodeFromString<JsonArray>(body)
-        json.mapNotNull { element ->
-            val obj = element.jsonObject
-            PlaybackReportingActivity(
-                userId = obj["user_id"]?.jsonPrimitive?.content ?: "",
-                userName = obj["user_name"]?.jsonPrimitive?.content ?: "",
-                totalTime = obj["total_time"]?.jsonPrimitive?.content?.toLongOrNull() ?: 0,
-                latestDate = obj["latest_date"]?.jsonPrimitive?.content ?: "",
-                totalPlayTime = obj["total_play_time"]?.jsonPrimitive?.content?.toLongOrNull() ?: 0,
-                hasImage = obj["has_image"]?.jsonPrimitive?.content?.toBoolean() ?: false,
-            )
+        engine.okHttpClient.newCall(request).execute().use { response ->
+            val body = response.body?.string() ?: ""
+            if (!response.isSuccessful) throw Exception("Plugin request failed: ${response.code}")
+            val json = JellyfinApiEngine.sharedJson.decodeFromString<JsonArray>(body)
+            json.mapNotNull { element ->
+                val obj = element.jsonObject
+                PlaybackReportingActivity(
+                    userId = obj["user_id"]?.jsonPrimitive?.content ?: "",
+                    userName = obj["user_name"]?.jsonPrimitive?.content ?: "",
+                    totalTime = obj["total_time"]?.jsonPrimitive?.content?.toLongOrNull() ?: 0,
+                    latestDate = obj["latest_date"]?.jsonPrimitive?.content ?: "",
+                    totalPlayTime = obj["total_play_time"]?.jsonPrimitive?.content?.toLongOrNull() ?: 0,
+                    hasImage = obj["has_image"]?.jsonPrimitive?.content?.toBoolean() ?: false,
+                )
+            }
         }
     }
 
-    override suspend fun getPlaybackReportingPlayActivity(days: Int, dataType: String, filter: String?): Result<List<PlaybackActivityPoint>> = engine.apiResult {
-        val server = engine._currentServer.value?.address ?: throw IllegalStateException("Not connected")
-        val token = engine._currentUser.value?.accessToken ?: throw IllegalStateException("Not authenticated")
-        val filterParam = filter?.let { "&filter=$it" } ?: ""
-        val url = "${server}/user_usage_stats/PlayActivity?days=$days&dataType=$dataType$filterParam"
+    private suspend fun getPlaybackReportingTypeFilterList(server: String, token: String): List<String> {
+        val url = "${server}/user_usage_stats/type_filter_list"
         val request = Request.Builder()
             .url(url)
             .header("X-Emby-Token", token)
             .build()
-        val response = engine.okHttpClient.newCall(request).execute()
-        val body = response.body?.string() ?: ""
-        if (!response.isSuccessful) throw Exception("Plugin request failed: ${response.code}")
-        val json = JellyfinApiEngine.sharedJson.decodeFromString<JsonArray>(body)
-        val points = mutableListOf<PlaybackActivityPoint>()
-        for (element in json) {
-            val obj = element.jsonObject
-            val usage = obj["user_usage"]?.jsonObject
-            if (usage != null) {
-                for ((date, value) in usage) {
-                    points.add(
-                        PlaybackActivityPoint(
-                            date = date,
-                            value = (value as? JsonPrimitive)?.content?.toLongOrNull() ?: 0,
-                        )
-                    )
+        return try {
+            engine.okHttpClient.newCall(request).execute().use { response ->
+                if (response.isSuccessful) {
+                    val body = response.body?.string() ?: ""
+                    JellyfinApiEngine.sharedJson.decodeFromString<List<String>>(body)
+                } else emptyList()
+            }
+        } catch (_: Exception) {
+            emptyList()
+        }
+    }
+
+    override suspend fun getPlaybackReportingPlayActivity(days: Int, dataType: String, filter: String?): Result<List<PlaybackActivityPoint>> = engine.apiResultWithRetry {
+        val server = engine._currentServer.value?.address ?: throw IllegalStateException("Not connected")
+        val token = engine._currentUser.value?.accessToken ?: throw IllegalStateException("Not authenticated")
+
+        val currentUserId = engine._currentUser.value?.id
+        var targetUserId: String? = null
+        val mediaTypes = mutableListOf<String>()
+
+        if (filter != null) {
+            val tokens = filter.split(",")
+            for (tokenStr in tokens) {
+                val trimmed = tokenStr.trim()
+                if (trimmed.length in 32..36 && (trimmed.contains("-") || trimmed.all { it.isLetterOrDigit() })) {
+                    targetUserId = trimmed
+                } else if (trimmed.isNotEmpty()) {
+                    mediaTypes.add(trimmed)
                 }
             }
         }
-        points.sortedBy { it.date }
+
+        if (targetUserId == null) {
+            targetUserId = currentUserId
+        }
+
+        val serverFilter = if (mediaTypes.isNotEmpty()) {
+            mediaTypes.joinToString(",")
+        } else {
+            val fetchedTypes = getPlaybackReportingTypeFilterList(server, token)
+            if (fetchedTypes.isNotEmpty()) {
+                fetchedTypes.joinToString(",")
+            } else {
+                "Movie,Episode,Audio,Video,MusicVideo,TvChannel,Recording"
+            }
+        }
+
+        val url = "${server}/user_usage_stats/PlayActivity?days=$days&dataType=$dataType&filter=$serverFilter"
+        val request = Request.Builder()
+            .url(url)
+            .header("X-Emby-Token", token)
+            .build()
+        engine.okHttpClient.newCall(request).execute().use { response ->
+            val body = response.body?.string() ?: ""
+            if (!response.isSuccessful) throw Exception("Plugin request failed: ${response.code}")
+            val json = JellyfinApiEngine.sharedJson.decodeFromString<JsonArray>(body)
+            val points = mutableListOf<PlaybackActivityPoint>()
+            
+            val targetClean = targetUserId?.replace("-", "")?.lowercase()
+
+            for (element in json) {
+                val obj = element.jsonObject
+                val entryId = obj["user_id"]?.jsonPrimitive?.content ?: ""
+                val entryClean = entryId.replace("-", "").lowercase()
+                
+                if (targetClean == null || entryClean == targetClean) {
+                    val usage = obj["user_usage"]?.jsonObject
+                    if (usage != null) {
+                        for ((date, value) in usage) {
+                            points.add(
+                                PlaybackActivityPoint(
+                                    date = date,
+                                    value = (value as? JsonPrimitive)?.content?.toLongOrNull() ?: 0,
+                                )
+                            )
+                        }
+                    }
+                }
+            }
+            points.sortedBy { it.date }
+        }
     }
 
-    override suspend fun getPlaybackReportingUserItems(userId: String, date: String, filter: String?): Result<List<PlaybackReportingDetail>> = engine.apiResult {
+    override suspend fun getPlaybackReportingUserItems(userId: String, date: String, filter: String?): Result<List<PlaybackReportingDetail>> = engine.apiResultWithRetry {
         val server = engine._currentServer.value?.address ?: throw IllegalStateException("Not connected")
         val token = engine._currentUser.value?.accessToken ?: throw IllegalStateException("Not authenticated")
         val filterParam = filter?.let { "&filter=$it" } ?: ""
@@ -525,26 +584,27 @@ class MediaInfoApiClientImpl @Inject constructor(
             .url(url)
             .header("X-Emby-Token", token)
             .build()
-        val response = engine.okHttpClient.newCall(request).execute()
-        val body = response.body?.string() ?: ""
-        if (!response.isSuccessful) throw Exception("Plugin request failed: ${response.code}")
-        val json = JellyfinApiEngine.sharedJson.decodeFromString<JsonArray>(body)
-        json.mapNotNull { element ->
-            val obj = element.jsonObject
-            PlaybackReportingDetail(
-                time = obj["Time"]?.jsonPrimitive?.content ?: "",
-                itemId = obj["Id"]?.jsonPrimitive?.content ?: "",
-                name = obj["Name"]?.jsonPrimitive?.content ?: "",
-                type = obj["Type"]?.jsonPrimitive?.content ?: "",
-                client = obj["Client"]?.jsonPrimitive?.content ?: "",
-                method = obj["Method"]?.jsonPrimitive?.content ?: "",
-                device = obj["Device"]?.jsonPrimitive?.content ?: "",
-                duration = obj["Duration"]?.jsonPrimitive?.content?.toLongOrNull() ?: 0,
-            )
+        engine.okHttpClient.newCall(request).execute().use { response ->
+            val body = response.body?.string() ?: ""
+            if (!response.isSuccessful) throw Exception("Plugin request failed: ${response.code}")
+            val json = JellyfinApiEngine.sharedJson.decodeFromString<JsonArray>(body)
+            json.mapNotNull { element ->
+                val obj = element.jsonObject
+                PlaybackReportingDetail(
+                    time = obj["Time"]?.jsonPrimitive?.content ?: "",
+                    itemId = obj["Id"]?.jsonPrimitive?.content ?: "",
+                    name = obj["Name"]?.jsonPrimitive?.content ?: "",
+                    type = obj["Type"]?.jsonPrimitive?.content ?: "",
+                    client = obj["Client"]?.jsonPrimitive?.content ?: "",
+                    method = obj["Method"]?.jsonPrimitive?.content ?: "",
+                    device = obj["Device"]?.jsonPrimitive?.content ?: "",
+                    duration = obj["Duration"]?.jsonPrimitive?.content?.toLongOrNull() ?: 0,
+                )
+            }
         }
     }
 
-    override suspend fun getPlaybackReportingBreakdown(breakdownType: String, days: Int, filter: String?): Result<List<ContentBreakdown>> = engine.apiResult {
+    override suspend fun getPlaybackReportingBreakdown(breakdownType: String, days: Int, filter: String?): Result<List<ContentBreakdown>> = engine.apiResultWithRetry {
         val server = engine._currentServer.value?.address ?: throw IllegalStateException("Not connected")
         val token = engine._currentUser.value?.accessToken ?: throw IllegalStateException("Not authenticated")
         val filterParam = filter?.let { "&filter=$it" } ?: ""
@@ -553,26 +613,27 @@ class MediaInfoApiClientImpl @Inject constructor(
             .url(url)
             .header("X-Emby-Token", token)
             .build()
-        val response = engine.okHttpClient.newCall(request).execute()
-        val body = response.body?.string() ?: ""
-        if (!response.isSuccessful) throw Exception("Plugin request failed: ${response.code}")
-        val json = JellyfinApiEngine.sharedJson.decodeFromString<JsonArray>(body)
-        json.mapIndexed { index, element ->
-            val obj = element.jsonObject
-            ContentBreakdown(
-                label = obj["label"]?.jsonPrimitive?.content
-                    ?: obj["name"]?.jsonPrimitive?.content
-                    ?: "",
-                value = obj["total"]?.jsonPrimitive?.content?.toLongOrNull()
-                    ?: obj["count"]?.jsonPrimitive?.content?.toLongOrNull()
-                    ?: obj["value"]?.jsonPrimitive?.content?.toLongOrNull()
-                    ?: 0,
-                colorIndex = index,
-            )
+        engine.okHttpClient.newCall(request).execute().use { response ->
+            val body = response.body?.string() ?: ""
+            if (!response.isSuccessful) throw Exception("Plugin request failed: ${response.code}")
+            val json = JellyfinApiEngine.sharedJson.decodeFromString<JsonArray>(body)
+            json.mapIndexed { index, element ->
+                val obj = element.jsonObject
+                ContentBreakdown(
+                    label = obj["label"]?.jsonPrimitive?.content
+                        ?: obj["name"]?.jsonPrimitive?.content
+                        ?: "",
+                    value = obj["total"]?.jsonPrimitive?.content?.toLongOrNull()
+                        ?: obj["count"]?.jsonPrimitive?.content?.toLongOrNull()
+                        ?: obj["value"]?.jsonPrimitive?.content?.toLongOrNull()
+                        ?: 0,
+                    colorIndex = index,
+                )
+            }
         }
     }
 
-    override suspend fun getPlaybackReportingArtistBreakdown(days: Int, filter: String?): Result<List<ContentBreakdown>> = engine.apiResult {
+    override suspend fun getPlaybackReportingArtistBreakdown(days: Int, filter: String?): Result<List<ContentBreakdown>> = engine.apiResultWithRetry {
         val server = engine._currentServer.value?.address ?: throw IllegalStateException("Not connected")
         val token = engine._currentUser.value?.accessToken ?: throw IllegalStateException("Not authenticated")
         val filterParam = filter?.let { "&filter=$it" } ?: ""
@@ -581,22 +642,23 @@ class MediaInfoApiClientImpl @Inject constructor(
             .url(url)
             .header("X-Emby-Token", token)
             .build()
-        val response = engine.okHttpClient.newCall(request).execute()
-        val body = response.body?.string() ?: ""
-        if (!response.isSuccessful) throw Exception("Plugin request failed: ${response.code}")
-        val json = JellyfinApiEngine.sharedJson.decodeFromString<JsonArray>(body)
-        json.mapIndexed { index, element ->
-            val obj = element.jsonObject
-            ContentBreakdown(
-                label = obj["label"]?.jsonPrimitive?.content
-                    ?: obj["name"]?.jsonPrimitive?.content
-                    ?: "",
-                value = obj["total"]?.jsonPrimitive?.content?.toLongOrNull()
-                    ?: obj["count"]?.jsonPrimitive?.content?.toLongOrNull()
-                    ?: obj["value"]?.jsonPrimitive?.content?.toLongOrNull()
-                    ?: 0,
-                colorIndex = index,
-            )
+        engine.okHttpClient.newCall(request).execute().use { response ->
+            val body = response.body?.string() ?: ""
+            if (!response.isSuccessful) throw Exception("Plugin request failed: ${response.code}")
+            val json = JellyfinApiEngine.sharedJson.decodeFromString<JsonArray>(body)
+            json.mapIndexed { index, element ->
+                val obj = element.jsonObject
+                ContentBreakdown(
+                    label = obj["label"]?.jsonPrimitive?.content
+                        ?: obj["name"]?.jsonPrimitive?.content
+                        ?: "",
+                    value = obj["total"]?.jsonPrimitive?.content?.toLongOrNull()
+                        ?: obj["count"]?.jsonPrimitive?.content?.toLongOrNull()
+                        ?: obj["value"]?.jsonPrimitive?.content?.toLongOrNull()
+                        ?: 0,
+                    colorIndex = index,
+                )
+            }
         }
     }
 }

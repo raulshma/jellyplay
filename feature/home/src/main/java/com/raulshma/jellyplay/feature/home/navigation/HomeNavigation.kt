@@ -35,6 +35,14 @@ fun EntryProviderScope<NavKey>.homeSection(
             onModeChange = onModeChange,
             musicContent = musicContent,
             onNewsletterClick = { navigator.navigate(Route.Newsletter) },
+            onServerManagementClick = { navigator.navigate(Route.ServerManagement) },
+            onUserManagementClick = { navigator.navigate(Route.UserManagement) },
+            onSeerrSettingsClick = { navigator.navigate(Route.SeerrSettings) },
+            onAdminDashboardClick = { navigator.navigate(Route.AdminDashboard) },
+            onSetupWizardClick = { navigator.navigate(Route.Onboarding) },
+            onFavoritesClick = { navigator.navigate(Route.Favorites) },
+            onAboutClick = { navigator.navigate(Route.About) },
+            onWatchProgressHeatmapClick = { navigator.navigate(Route.WatchProgressHeatmap) },
         )
     }
 }

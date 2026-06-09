@@ -337,10 +337,10 @@ fun VideoPlayerScreen(
         }
     }
 
-    LaunchedEffect(uiState.isPlaying) {
+    LaunchedEffect(uiState.isPlaying, uiState.keepScreenOnDuringVideo) {
         activity?.let {
             if (!it.isDestroyed && !it.isFinishing) {
-                if (uiState.isPlaying) {
+                if (uiState.isPlaying && uiState.keepScreenOnDuringVideo) {
                     it.window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
                 } else {
                     it.window.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
@@ -377,7 +377,6 @@ fun VideoPlayerScreen(
                     val layout = act.window.attributes
                     layout.screenBrightness = uiState.brightnessLevel
                     act.window.attributes = layout
-                    brightnessOverlay = uiState.brightnessLevel
                 }
             }
         }
@@ -471,7 +470,7 @@ fun VideoPlayerScreen(
         { ms ->
             if (isInSyncPlaySession) viewModel.syncPlaySeekTo(ms)
             else if (isCastConnected) viewModel.castSeekTo(ms)
-            else engine?.seekTo(ms)
+            else viewModel.seekTo(ms)
         }
     }
     val doSeekBack: () -> Unit = remember(engine, uiState.seekDurationMs, doSeekTo, isCastConnected) {
@@ -802,6 +801,7 @@ fun VideoPlayerScreen(
             )
         }
 
+
         if (uiState.showVideoStats) {
             VideoStatsOverlay(
                 stats = uiState.videoStats,
@@ -992,7 +992,11 @@ fun VideoPlayerScreen(
         snapshotFlow { seekPositionMs }
             .collect { pos ->
                 if (isSeeking && uiState.trickplayEnabled && uiState.trickplayInfo != null) {
-                    seekTrickplayBitmap = viewModel.getTrickplayThumbnail(pos)
+                    val bitmap = viewModel.getTrickplayThumbnail(pos)
+                    seekTrickplayBitmap = bitmap
+                    if (isTv) {
+                        tvTrickplayBitmap = bitmap
+                    }
                 }
             }
     }
@@ -1000,6 +1004,7 @@ fun VideoPlayerScreen(
     LaunchedEffect(isSeeking) {
         if (!isSeeking) {
             seekTrickplayBitmap = null
+            tvTrickplayBitmap = null
         }
     }
 
@@ -1018,21 +1023,6 @@ fun VideoPlayerScreen(
             delay(1000)
             gestureTrickplayVisible = false
             gestureTrickplayBitmap = null
-        }
-    }
-
-    LaunchedEffect(Unit) {
-        snapshotFlow { seekPositionMs }
-            .collect { pos ->
-                if (isTv && isSeeking && uiState.trickplayEnabled && uiState.trickplayInfo != null) {
-                    tvTrickplayBitmap = viewModel.getTrickplayThumbnail(pos)
-                }
-            }
-    }
-
-    LaunchedEffect(isSeeking) {
-        if (!isSeeking) {
-            tvTrickplayBitmap = null
         }
     }
 

@@ -19,7 +19,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.CardDefaults
-import androidx.compose.material3.ElevatedCard
+import androidx.compose.material3.Card
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -51,6 +51,8 @@ import com.raulshma.jellyplay.core.model.seerr.SeerrSearchItem
 import com.raulshma.jellyplay.core.ui.animation.defaultSpatialSpec
 import com.raulshma.jellyplay.core.ui.animation.fastEffectsSpec
 import com.raulshma.jellyplay.core.designsystem.theme.ShapeCache
+import com.raulshma.jellyplay.core.designsystem.theme.LocalIsSynthwave
+import com.raulshma.jellyplay.core.designsystem.theme.LocalIsSoothingTheme
 import com.raulshma.jellyplay.core.ui.image.MediaImage
 import com.raulshma.jellyplay.core.ui.tv.LocalTvMode
 import com.raulshma.jellyplay.core.ui.tv.rememberTvFocusState
@@ -174,7 +176,30 @@ fun SeerrMediaCard(
         .aspectRatio(2f / 3f)
 
     Column(modifier = modifier) {
-        ElevatedCard(
+        val isSynthwave = LocalIsSynthwave.current
+        val isSoothing = LocalIsSoothingTheme.current
+        val border = when {
+            isSynthwave -> {
+                androidx.compose.foundation.BorderStroke(
+                    width = 1.5.dp,
+                    brush = Brush.linearGradient(
+                        colors = listOf(
+                            MaterialTheme.colorScheme.primary,
+                            MaterialTheme.colorScheme.secondary
+                        )
+                    )
+                )
+            }
+            isSoothing -> {
+                androidx.compose.foundation.BorderStroke(
+                    width = 0.8.dp,
+                    color = MaterialTheme.colorScheme.outline.copy(alpha = 0.35f)
+                )
+            }
+            else -> null
+        }
+
+        Card(
             modifier = Modifier
                 .fillMaxWidth()
                 .then(tvFocusState.focusModifier)
@@ -209,6 +234,7 @@ fun SeerrMediaCard(
                     enabled = !isLoading,
                 ),
             shape = cardShape,
+            border = border,
             elevation = CardDefaults.cardElevation(
                 defaultElevation = if (isLoading) 12.dp else 0.dp
             ),

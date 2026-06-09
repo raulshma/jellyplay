@@ -20,7 +20,7 @@ class AdminApiClientImpl @Inject constructor(
     private val engine: JellyfinApiEngine,
 ) : AdminApiClient {
 
-    override suspend fun getSystemInfo(): Result<SystemInfo> = engine.apiResult {
+    override suspend fun getSystemInfo(): Result<SystemInfo> = engine.apiResultWithRetry {
         val dto = engine.requireApi().systemApi.getSystemInfo().content
         SystemInfo(
             serverName = dto.serverName ?: "",
@@ -45,7 +45,7 @@ class AdminApiClientImpl @Inject constructor(
         )
     }
 
-    override suspend fun getItemCounts(): Result<ItemCounts> = engine.apiResult {
+    override suspend fun getItemCounts(): Result<ItemCounts> = engine.apiResultWithRetry {
         val dto = engine.requireApi().libraryApi.getItemCounts().content
         ItemCounts(
             movieCount = dto.movieCount.toLong(),
@@ -62,15 +62,15 @@ class AdminApiClientImpl @Inject constructor(
         )
     }
 
-    override suspend fun restartServer(): Result<Unit> = engine.apiResult {
+    override suspend fun restartServer(): Result<Unit> = engine.apiResultWithRetry {
         engine.requireApi().systemApi.restartApplication()
     }
 
-    override suspend fun shutdownServer(): Result<Unit> = engine.apiResult {
+    override suspend fun shutdownServer(): Result<Unit> = engine.apiResultWithRetry {
         engine.requireApi().systemApi.shutdownApplication()
     }
 
-    override suspend fun getScheduledTasks(isHidden: Boolean?, isEnabled: Boolean?): Result<List<ScheduledTaskInfo>> = engine.apiResult {
+    override suspend fun getScheduledTasks(isHidden: Boolean?, isEnabled: Boolean?): Result<List<ScheduledTaskInfo>> = engine.apiResultWithRetry {
         val response = engine.requireApi().scheduledTasksApi.getTasks(
             isHidden = isHidden,
             isEnabled = isEnabled,
@@ -80,19 +80,19 @@ class AdminApiClientImpl @Inject constructor(
         }
     }
 
-    override suspend fun getScheduledTask(taskId: String): Result<ScheduledTaskInfo> = engine.apiResult {
+    override suspend fun getScheduledTask(taskId: String): Result<ScheduledTaskInfo> = engine.apiResultWithRetry {
         engine.requireApi().scheduledTasksApi.getTask(taskId = taskId).content.toTaskModel()
     }
 
-    override suspend fun startTask(taskId: String): Result<Unit> = engine.apiResult {
+    override suspend fun startTask(taskId: String): Result<Unit> = engine.apiResultWithRetry {
         engine.requireApi().scheduledTasksApi.startTask(taskId = taskId)
     }
 
-    override suspend fun cancelTask(taskId: String): Result<Unit> = engine.apiResult {
+    override suspend fun cancelTask(taskId: String): Result<Unit> = engine.apiResultWithRetry {
         engine.requireApi().scheduledTasksApi.stopTask(taskId = taskId)
     }
 
-    override suspend fun updateTaskTriggers(taskId: String, triggers: List<TaskTriggerInfo>): Result<Unit> = engine.apiResult {
+    override suspend fun updateTaskTriggers(taskId: String, triggers: List<TaskTriggerInfo>): Result<Unit> = engine.apiResultWithRetry {
         val sdkTriggers = triggers.map { trigger ->
             org.jellyfin.sdk.model.api.TaskTriggerInfo(
                 type = TaskTriggerInfoType.entries.find { it.serialName.equals(trigger.type, ignoreCase = true) }
@@ -108,7 +108,7 @@ class AdminApiClientImpl @Inject constructor(
         engine.requireApi().scheduledTasksApi.updateTask(taskId = taskId, data = sdkTriggers)
     }
 
-    override suspend fun getDevices(userId: String?): Result<List<DeviceInfo>> = engine.apiResult {
+    override suspend fun getDevices(userId: String?): Result<List<DeviceInfo>> = engine.apiResultWithRetry {
         val response = engine.requireApi().devicesApi.getDevices(
             userId = userId?.toUUID(),
         ).content
@@ -117,11 +117,11 @@ class AdminApiClientImpl @Inject constructor(
         }
     }
 
-    override suspend fun getDeviceInfo(deviceId: String): Result<DeviceInfo> = engine.apiResult {
+    override suspend fun getDeviceInfo(deviceId: String): Result<DeviceInfo> = engine.apiResultWithRetry {
         engine.requireApi().devicesApi.getDeviceInfo(id = deviceId).content.toDeviceModel()
     }
 
-    override suspend fun updateDeviceOptions(deviceId: String, customName: String?): Result<Unit> = engine.apiResult {
+    override suspend fun updateDeviceOptions(deviceId: String, customName: String?): Result<Unit> = engine.apiResultWithRetry {
         engine.requireApi().devicesApi.updateDeviceOptions(
             id = deviceId,
             data = org.jellyfin.sdk.model.api.DeviceOptionsDto(
@@ -132,23 +132,23 @@ class AdminApiClientImpl @Inject constructor(
         )
     }
 
-    override suspend fun deleteDevice(deviceId: String): Result<Unit> = engine.apiResult {
+    override suspend fun deleteDevice(deviceId: String): Result<Unit> = engine.apiResultWithRetry {
         engine.requireApi().devicesApi.deleteDevice(id = deviceId)
     }
 
-    override suspend fun getLogFiles(): Result<List<LogFile>> = engine.apiResult {
+    override suspend fun getLogFiles(): Result<List<LogFile>> = engine.apiResultWithRetry {
         val logs = engine.requireApi().systemApi.getServerLogs().content
         logs.map { it.toLogFileModel() }
     }
 
-    override suspend fun getLogFileContent(fileName: String): Result<String> = engine.apiResult {
+    override suspend fun getLogFileContent(fileName: String): Result<String> = engine.apiResultWithRetry {
         engine.requireApi()
             .request(pathTemplate = "/System/Logs/Log", queryParameters = mapOf("name" to fileName))
             .body
             .decodeToString()
     }
 
-    override suspend fun getActivityLogEntries(startIndex: Int?, limit: Int?, minDate: String?, hasUserId: Boolean?): Result<List<ActivityLogEntry>> = engine.apiResult {
+    override suspend fun getActivityLogEntries(startIndex: Int?, limit: Int?, minDate: String?, hasUserId: Boolean?): Result<List<ActivityLogEntry>> = engine.apiResultWithRetry {
         val result = engine.requireApi().activityLogApi.getLogEntries(
             startIndex = startIndex,
             limit = limit,
@@ -158,12 +158,12 @@ class AdminApiClientImpl @Inject constructor(
         result.items.map { it.toActivityModel() }
     }
 
-    override suspend fun getSessions(): Result<List<SessionInfo>> = engine.apiResult {
+    override suspend fun getSessions(): Result<List<SessionInfo>> = engine.apiResultWithRetry {
         val sessions = engine.requireApi().sessionApi.getSessions().content
         sessions.map { it.toSessionModel() }
     }
 
-    override suspend fun sendMessageToSession(sessionId: String, header: String, text: String, timeoutMs: Long): Result<Unit> = engine.apiResult {
+    override suspend fun sendMessageToSession(sessionId: String, header: String, text: String, timeoutMs: Long): Result<Unit> = engine.apiResultWithRetry {
         engine.requireApi().sessionApi.sendMessageCommand(
             sessionId = sessionId,
             data = org.jellyfin.sdk.model.api.MessageCommand(

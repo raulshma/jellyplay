@@ -4,6 +4,7 @@ import android.content.Context
 import androidx.compose.runtime.Immutable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.snapshots.Snapshot
 import androidx.work.Constraints
 import androidx.work.Data
 import androidx.work.ExistingWorkPolicy
@@ -180,24 +181,26 @@ class DetailViewModel @Inject constructor(
 
     fun loadItem(itemId: String) {
         launch {
-            _isLoading.value = true
-            _error.value = null
-            seasons = emptyList()
-            episodes = emptyMap()
-            episodesMap.clear()
-            fetchedSeasonIds = emptySet()
-            collectionItems = emptyList()
-            smartPlayTarget = null
-            selectedSubtitleIndex = null
-            selectedAudioIndex = null
-            seerrDataLoaded = false
-            _seerrRecommendations.set(emptyList())
-            _seerrSimilar.set(emptyList())
-            _relatedVideos.set(emptyList())
-            isDownloading = false
-            isDownloadingSeries = false
-            downloadError = null
-            seriesDownloadResult = null
+            Snapshot.withMutableSnapshot {
+                _isLoading.value = true
+                _error.value = null
+                seasons = emptyList()
+                episodes = emptyMap()
+                episodesMap.clear()
+                fetchedSeasonIds = emptySet()
+                collectionItems = emptyList()
+                smartPlayTarget = null
+                selectedSubtitleIndex = null
+                selectedAudioIndex = null
+                seerrDataLoaded = false
+                _seerrRecommendations.set(emptyList())
+                _seerrSimilar.set(emptyList())
+                _relatedVideos.set(emptyList())
+                isDownloading = false
+                isDownloadingSeries = false
+                downloadError = null
+                seriesDownloadResult = null
+            }
             mediaRepository.getMediaDetail(itemId)
                 .onSuccess { detail ->
                     _detail.value = detail

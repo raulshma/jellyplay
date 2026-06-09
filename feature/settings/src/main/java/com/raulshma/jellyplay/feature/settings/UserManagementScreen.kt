@@ -76,10 +76,12 @@ fun UserManagementScreen(
     val contentPad = adaptiveInfo.contentPadding(isTv)
     val spacing = adaptiveInfo.itemSpacing(isTv)
     val navOffsetPx = com.raulshma.jellyplay.core.ui.components.LocalFloatingNavOffset.current
+    val backgroundColor = com.raulshma.jellyplay.core.ui.components.rememberScreenBackgroundColor()
 
     JellyPlayScreenScaffold(
         title = "Switch User",
         onBack = onBack,
+        backgroundColor = backgroundColor,
         actions = {
             HeaderStatusIndicator(
                 status = headerStatus,

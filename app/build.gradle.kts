@@ -39,7 +39,10 @@ android {
         abi {
             isEnable = true
             reset()
-            include("arm64-v8a", "x86_64")
+            include("arm64-v8a")
+            if (gradle.startParameter.taskNames.any { it.contains("debug", ignoreCase = true) }) {
+                include("x86_64")
+            }
             isUniversalApk = true
         }
     }

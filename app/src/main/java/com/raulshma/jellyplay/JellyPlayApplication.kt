@@ -61,8 +61,6 @@ class JellyPlayApplication : Application(), SingletonImageLoader.Factory, Config
                     }
                 }
             }
-        }
-        applicationScope.launch {
             audioPlaybackManager.start()
         }
         nowPlayingWidgetUpdater.start()
@@ -155,7 +153,7 @@ class JellyPlayApplication : Application(), SingletonImageLoader.Factory, Config
             }
             .memoryCache {
                 MemoryCache.Builder()
-                    .maxSizePercent(this@JellyPlayApplication, 0.15)
+                    .maxSizePercent(this@JellyPlayApplication, 0.20)
                     .build()
             }
             .diskCache {
