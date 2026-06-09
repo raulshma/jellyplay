@@ -63,7 +63,7 @@ interface DownloadDao {
     @Query("SELECT * FROM downloads WHERE mediaItemId = :mediaItemId AND status = 'COMPLETED'")
     suspend fun getCompletedDownloadByMediaItemId(mediaItemId: String): DownloadEntity?
 
-    @Query("SELECT * FROM downloads WHERE status = :status")
+    @Query("SELECT * FROM downloads WHERE status = :status LIMIT 500")
     suspend fun getDownloadsByStatus(status: String): List<DownloadEntity>
 
     @Query("SELECT * FROM downloads WHERE seriesId = :seriesId")
@@ -78,6 +78,6 @@ interface DownloadDao {
     @Query("UPDATE downloads SET status = 'PENDING' WHERE status = 'DOWNLOADING'")
     suspend fun resetStuckDownloading()
 
-    @Query("SELECT * FROM downloads WHERE status = 'FAILED'")
+    @Query("SELECT * FROM downloads WHERE status = 'FAILED' LIMIT 100")
     suspend fun getFailedDownloads(): List<DownloadEntity>
 }

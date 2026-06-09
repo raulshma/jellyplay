@@ -9,6 +9,9 @@ import com.raulshma.jellyplay.core.model.remote.PlayRequest
 import com.raulshma.jellyplay.core.model.remote.PlaybackDomain
 import com.raulshma.jellyplay.core.model.remote.PlaystateCommand
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.withContext
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -115,20 +118,23 @@ class AudioRemoteControlDispatcher @Inject constructor(
         }
     }
 
-    private suspend fun buildQueueItems(itemIds: List<String>): List<AudioQueueItem> {
-        return itemIds.mapNotNull { id ->
-            val detail = mediaRepository.getMediaDetail(id).getOrNull() ?: return@mapNotNull null
-            AudioQueueItem(
-                id = id,
-                name = detail.item.name,
-                artist = detail.item.albumArtist ?: detail.item.artistItems.firstOrNull()?.name ?: "",
-                album = detail.item.album,
-                imageUrl = null,
-                mediaSourceId = detail.mediaSources.firstOrNull()?.id,
-                durationMs = detail.item.runTimeTicks?.div(10_000L) ?: 0L,
-                normalizationGain = detail.item.normalizationGain,
-            )
-        }
+    private suspend fun buildQueueItems(itemIds: List<String>): List<AudioQueueItem> = coroutineScope {
+        itemIds.map { id ->
+            async {
+                mediaRepository.getMediaDetail(id).getOrNull()?.let { detail ->
+                    AudioQueueItem(
+                        id = id,
+                        name = detail.item.name,
+                        artist = detail.item.albumArtist ?: detail.item.artistItems.firstOrNull()?.name ?: "",
+                        album = detail.item.album,
+                        imageUrl = null,
+                        mediaSourceId = detail.mediaSources.firstOrNull()?.id,
+                        durationMs = detail.item.runTimeTicks?.div(10_000L) ?: 0L,
+                        normalizationGain = detail.item.normalizationGain,
+                    )
+                }
+            }
+        }.awaitAll().filterNotNull()
     }
 
     companion object {

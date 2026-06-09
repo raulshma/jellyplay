@@ -16,7 +16,7 @@ interface AuditLogDao {
     @Query("SELECT * FROM media_audit_log ORDER BY timestamp DESC LIMIT 500")
     fun getAll(): Flow<List<MediaAuditLogEntity>>
 
-    @Query("SELECT * FROM media_audit_log WHERE actionType = :actionType ORDER BY timestamp DESC")
+    @Query("SELECT * FROM media_audit_log WHERE actionType = :actionType ORDER BY timestamp DESC LIMIT 500")
     fun getByActionType(actionType: String): Flow<List<MediaAuditLogEntity>>
 
     @Query("DELETE FROM media_audit_log WHERE timestamp < :timestamp")

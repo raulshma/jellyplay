@@ -37,6 +37,8 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.debounce
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.flatMapLatest
+import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.sync.Mutex
 import java.time.LocalDate
@@ -181,13 +183,12 @@ class HomeViewModel @Inject constructor(
         }
 
         launch {
-            preferencesStore.activeUserId.collect { userId ->
-                if (userId != null) {
-                    searchHistoryRepository.getRecent(userId).collect { history ->
-                        _searchHistory.value = history
-                    }
+            preferencesStore.activeUserId
+                .flatMapLatest { userId ->
+                    if (userId != null) searchHistoryRepository.getRecent(userId)
+                    else kotlinx.coroutines.flow.flowOf(emptyList())
                 }
-            }
+                .collect { history -> _searchHistory.value = history }
         }
 
         @OptIn(FlowPreview::class)
@@ -378,15 +379,17 @@ class HomeViewModel @Inject constructor(
             val hiddenLibIds = hiddenLibrarySectionIds
             mediaRepository.getHomeSections(enabledSections, hiddenLibIds)
                 .onSuccess { fetchedSections ->
-                    val orderIndex = homeSectionOrder.withIndex().associate { it.value to it.index }
-                    val orderedSections = fetchedSections
-                        .mapIndexed { index, section -> index to section }
-                        .sortedWith(
-                            compareBy<Pair<Int, com.raulshma.jellyplay.core.model.HomeSection>> {
-                                orderIndex[it.second.type] ?: Int.MAX_VALUE
-                            }.thenBy { it.first },
-                        )
-                        .map { it.second }
+                    val orderedSections = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Default) {
+                        val orderIndex = homeSectionOrder.withIndex().associate { it.value to it.index }
+                        fetchedSections
+                            .mapIndexed { index, section -> index to section }
+                            .sortedWith(
+                                compareBy<Pair<Int, com.raulshma.jellyplay.core.model.HomeSection>> {
+                                    orderIndex[it.second.type] ?: Int.MAX_VALUE
+                                }.thenBy { it.first },
+                            )
+                            .map { it.second }
+                    }
 
                     _uiState.update { it.copy(sections = orderedSections) }
 

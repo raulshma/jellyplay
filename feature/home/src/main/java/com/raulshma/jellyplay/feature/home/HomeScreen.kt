@@ -79,6 +79,7 @@ import com.raulshma.jellyplay.core.model.HomeMode
 import com.raulshma.jellyplay.core.model.HomeSectionType
 import com.raulshma.jellyplay.core.model.MediaType
 import com.raulshma.jellyplay.core.model.OfflineMode
+import com.raulshma.jellyplay.core.model.OfflineMediaItem
 import com.raulshma.jellyplay.core.model.seerr.DiscoverSectionType
 import com.raulshma.jellyplay.core.model.seerr.SeerrSearchItem
 import com.raulshma.jellyplay.core.ui.adaptive.AdaptiveHeroHeight
@@ -188,13 +189,18 @@ private fun MainHomeContent(
     val focusManager = LocalFocusManager.current
 
     val networkStatus by LocalNetworkStatus.current.collectAsStateWithLifecycle()
-    val headerStatus = resolveHeaderStatus(
-        isLoading = state.isLoading,
-        hasError = state.error != null,
-        networkStatus = networkStatus,
-    )
+    val headerStatus by remember {
+        derivedStateOf {
+            resolveHeaderStatus(
+                isLoading = state.isLoading,
+                hasError = state.error != null,
+                networkStatus = networkStatus,
+            )
+        }
+    }
 
     val activeDownloadCount by viewModel.activeDownloadCount.collectAsStateWithLifecycle()
+    val searchHistory by viewModel.searchHistory.collectAsStateWithLifecycle()
 
     val seerrCardLoadingState = rememberSeerrCardLoadingState()
     val seerrPrefetch: (Int, String, () -> Unit) -> Unit = remember(viewModel) {
@@ -244,11 +250,13 @@ private fun MainHomeContent(
         )
     }
 
-    val headerHeight = when {
-        isTv -> AdaptiveHeroHeight.Tv
-        adaptiveInfo.isLandscape && adaptiveInfo.windowSizeClass != WindowSizeClass.Compact ->
-            AdaptiveHeroHeight.LandscapeMedium
-        else -> AdaptiveHeroHeight.PortraitCompact
+    val headerHeight = remember(isTv, adaptiveInfo.isLandscape, adaptiveInfo.windowSizeClass) {
+        when {
+            isTv -> AdaptiveHeroHeight.Tv
+            adaptiveInfo.isLandscape && adaptiveInfo.windowSizeClass != WindowSizeClass.Compact ->
+                AdaptiveHeroHeight.LandscapeMedium
+            else -> AdaptiveHeroHeight.PortraitCompact
+        }
     }
 
     LaunchedEffect(state.sections) {
@@ -300,8 +308,7 @@ private fun MainHomeContent(
     val navBarColor = LocalNavigationBarColor.current
     LaunchedEffect(backgroundColor) { navBarColor.value = backgroundColor }
 
-    val transitionRange = 140.dp
-    val transitionRangePx = with(density) { transitionRange.toPx() }
+    val transitionRangePx = remember(density) { with(density) { 140.dp.toPx() } }
     val scrollFraction by remember {
         derivedStateOf {
             if (listState.firstVisibleItemIndex > 0) 1f
@@ -314,7 +321,7 @@ private fun MainHomeContent(
     val appBarIconColorFaded = appBarIconColor.copy(alpha = 0.9f)
     val dockScale = 1f - (0.04f * scrollFraction)
 
-    val contentPad = adaptiveInfo.contentPadding(isTv)
+    val contentPad = remember(adaptiveInfo, isTv) { adaptiveInfo.contentPadding(isTv) }
 
     val mediaImageUrlBuilder = remember { { item: com.raulshma.jellyplay.core.model.MediaItem -> viewModel.getImageUrl(item.id) } }
     val mediaBackdropUrlBuilder = remember { { item: com.raulshma.jellyplay.core.model.MediaItem -> viewModel.getBackdropUrl(item.id) } }
@@ -596,7 +603,11 @@ private fun MainHomeContent(
                 }
                 else -> {
                     HomeContentList(
-                        state = state,
+                        isLoading = state.isLoading,
+                        homeHeroEnabled = state.homeHeroEnabled,
+                        newsletterBannerVisible = state.newsletterBannerVisible,
+                        discoverEnabled = state.discoverEnabled,
+                        offlineLibrary = state.offlineLibrary,
                         sections = state.sections,
                         featuredItem = featuredItem,
                         viewModel = viewModel,
@@ -626,7 +637,9 @@ private fun MainHomeContent(
             }
 
                 HomeTopDock(
-                    scrollFraction = scrollFraction,
+                    listState = listState,
+                    transitionRangePx = transitionRangePx,
+                    baseIconColor = baseIconColor,
                     isSearchFocused = isSearchFocused,
                     searchQuery = state.searchState.query,
                     offlineMode = state.offlineMode,
@@ -659,7 +672,7 @@ private fun MainHomeContent(
                                 focusManager.clearFocus()
                                 onSearchSeerrClick(item.id, item.mediaType)
                             },
-                            searchHistory = viewModel.searchHistory.collectAsStateWithLifecycle().value,
+                            searchHistory = searchHistory,
                             onHistoryClick = { query ->
                                 viewModel.onEvent(HomeUiEvent.UpdateSearchQuery(query))
                             },
@@ -773,7 +786,11 @@ private fun MainHomeContent(
 
 @Composable
 private fun HomeContentList(
-    state: HomeUiState,
+    isLoading: Boolean,
+    homeHeroEnabled: Boolean,
+    newsletterBannerVisible: Boolean,
+    discoverEnabled: Boolean,
+    offlineLibrary: List<com.raulshma.jellyplay.core.model.OfflineMediaItem>,
     sections: List<com.raulshma.jellyplay.core.model.HomeSection>,
     featuredItem: com.raulshma.jellyplay.core.model.MediaItem?,
     viewModel: HomeViewModel,
@@ -808,7 +825,7 @@ private fun HomeContentList(
             contentAlignment = Alignment.Center,
         ) {
             Text(
-                if (state.isLoading) "" else "No content available. Check your Jellyfin libraries.",
+                if (isLoading) "" else "No content available. Check your Jellyfin libraries.",
                 style = MaterialTheme.typography.bodyLarge,
                 color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f),
             )
@@ -827,7 +844,7 @@ private fun HomeContentList(
             modifier = Modifier.fillMaxSize(),
             contentPadding = PaddingValues(bottom = adaptiveInfo.bottomPadding(isTv)),
         ) {
-            if (featuredItem != null && state.homeHeroEnabled) {
+            if (featuredItem != null && homeHeroEnabled) {
                 item {
                     AnimatedHeroHeader(
                         featuredItem = featuredItem,
@@ -845,7 +862,7 @@ private fun HomeContentList(
                 item { Spacer(Modifier.height(100.dp)) }
             }
 
-            if (state.newsletterBannerVisible) {
+            if (newsletterBannerVisible) {
                 item(key = "newsletter_banner") {
                     NewsletterBanner(
                         onClick = onNewsletterClick,
@@ -856,8 +873,8 @@ private fun HomeContentList(
 
             items(count = sections.size, key = { sections[it].id }, contentType = { "homeSection_${sections[it].type}" }) { index ->
                 val section = sections[index]
-                val isFirstAfterHero = index == 0 && featuredItem != null && state.homeHeroEnabled
-                val sectionIndexInList = index + (if (featuredItem != null && state.homeHeroEnabled) 1 else 0)
+                val isFirstAfterHero = index == 0 && featuredItem != null && homeHeroEnabled
+                val sectionIndexInList = index + (if (featuredItem != null && homeHeroEnabled) 1 else 0)
                 val isCurrentlyVisible = sectionIndexInList in visibleItemRange
 
                 var hasBeenVisible by rememberSaveable { mutableStateOf(false) }
@@ -915,7 +932,7 @@ private fun HomeContentList(
                 }
             }
 
-            if (state.discoverEnabled && allDiscoverItems.isNotEmpty()) {
+            if (discoverEnabled && allDiscoverItems.isNotEmpty()) {
                 item(key = "seerr_discover_header") {
                     Text(
                         text = "Discover",
@@ -984,7 +1001,7 @@ private fun HomeContentList(
                 }
             }
 
-            if (state.offlineLibrary.isNotEmpty()) {
+            if (offlineLibrary.isNotEmpty()) {
                 item(key = "downloaded_header") {
                     Text(
                         text = "Downloaded",
@@ -999,7 +1016,7 @@ private fun HomeContentList(
 
                 item(key = "downloaded_row") {
                     DownloadedSection(
-                        offlineLibrary = state.offlineLibrary,
+                        offlineLibrary = offlineLibrary,
                         onOfflineLibraryClick = onOfflineLibraryClick,
                         contentPad = contentPad,
                         backgroundColor = backgroundColor,

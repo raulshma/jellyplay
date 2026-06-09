@@ -194,18 +194,21 @@ fun WideMediaCard(
                     )
                 }
 
+                val surfaceColor = MaterialTheme.colorScheme.surface
                 Box(
                     modifier = Modifier
                         .align(Alignment.BottomCenter)
                         .fillMaxWidth()
                         .height(50.dp)
                         .background(
-                            Brush.verticalGradient(
-                                colors = listOf(
-                                    Color.Transparent,
-                                    MaterialTheme.colorScheme.surface.copy(alpha = 0.4f),
-                                ),
-                            )
+                            remember(surfaceColor) {
+                                Brush.verticalGradient(
+                                    colors = listOf(
+                                        Color.Transparent,
+                                        surfaceColor.copy(alpha = 0.4f),
+                                    ),
+                                )
+                            }
                         )
                 )
 

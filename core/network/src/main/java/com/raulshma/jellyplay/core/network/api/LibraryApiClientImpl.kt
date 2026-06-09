@@ -162,7 +162,7 @@ class LibraryApiClientImpl @Inject constructor(
     }
 
     override suspend fun getLatestMedia(parentId: String, limit: Int): Result<List<MediaItem>> =
-        runCatching {
+        engine.apiResultWithRetry {
             val response = engine.requireApi().userLibraryApi.getLatestMedia(
                 parentId = parentId.toUUID(),
                 limit = limit,
@@ -467,7 +467,7 @@ class LibraryApiClientImpl @Inject constructor(
     }
 
     override suspend fun getSimilarItems(itemId: String, limit: Int): Result<List<MediaItem>> =
-        runCatching {
+        engine.apiResultWithRetry {
             engine.run {
                 engine.requireApi().libraryApi.getSimilarItems(
                     itemId = itemId.toUUID(),
@@ -505,7 +505,7 @@ class LibraryApiClientImpl @Inject constructor(
     }
 
     override suspend fun getItemsByPerson(personId: String, limit: Int): Result<List<MediaItem>> =
-        runCatching {
+        engine.apiResultWithRetry {
             val response = engine.requireApi().itemsApi.getItems(
                 personIds = listOf(personId.toUUID()),
                 limit = limit,
@@ -735,7 +735,7 @@ class LibraryApiClientImpl @Inject constructor(
         Unit
     }
 
-    override suspend fun markPlayed(itemId: String): Result<Unit> = runCatching {
+    override suspend fun markPlayed(itemId: String): Result<Unit> = engine.apiResultWithRetry {
         val userId = engine._currentUser.value?.id
             ?: throw IllegalStateException("Not authenticated")
         engine.requireApi().playStateApi.markPlayedItem(
@@ -744,7 +744,7 @@ class LibraryApiClientImpl @Inject constructor(
         )
     }
 
-    override suspend fun markUnplayed(itemId: String): Result<Unit> = runCatching {
+    override suspend fun markUnplayed(itemId: String): Result<Unit> = engine.apiResultWithRetry {
         val userId = engine._currentUser.value?.id
             ?: throw IllegalStateException("Not authenticated")
         engine.requireApi().playStateApi.markUnplayedItem(
@@ -753,7 +753,7 @@ class LibraryApiClientImpl @Inject constructor(
         )
     }
 
-    override suspend fun toggleFavorite(itemId: String, currentIsFavorite: Boolean?): Result<Boolean> = runCatching {
+    override suspend fun toggleFavorite(itemId: String, currentIsFavorite: Boolean?): Result<Boolean> = engine.apiResultWithRetry {
         val userId = engine._currentUser.value?.id
             ?: throw IllegalStateException("Not authenticated")
         val uuid = itemId.toUUID()

@@ -20,6 +20,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.wrapContentWidth
+import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Badge
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -35,6 +36,7 @@ import androidx.compose.material3.ToggleFloatingActionButton
 import androidx.compose.material3.ToggleFloatingActionButtonDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
@@ -68,7 +70,9 @@ import com.composables.icons.tabler.outline.X
 
 @Composable
 fun HomeTopDock(
-    scrollFraction: Float,
+    listState: LazyListState,
+    transitionRangePx: Float,
+    baseIconColor: Color,
     isSearchFocused: Boolean,
     searchQuery: String,
     offlineMode: OfflineMode,
@@ -83,10 +87,12 @@ fun HomeTopDock(
     searchResultsContent: @Composable () -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    val isLightTheme = MaterialTheme.colorScheme.background.let { bg ->
-        (bg.red * 0.299f + bg.green * 0.587f + bg.blue * 0.114f) > 0.5f
+    val scrollFraction by remember {
+        derivedStateOf {
+            if (listState.firstVisibleItemIndex > 0) 1f
+            else (listState.firstVisibleItemScrollOffset.toFloat() / transitionRangePx).coerceIn(0f, 1f)
+        }
     }
-    val baseIconColor = if (isLightTheme) MaterialTheme.colorScheme.onSurface else Color.White
     val appBarIconColor = lerp(baseIconColor, MaterialTheme.colorScheme.onSurface, scrollFraction)
     val appBarIconColorFaded = appBarIconColor.copy(alpha = 0.9f)
     val dockScale = 1f - (0.04f * scrollFraction)

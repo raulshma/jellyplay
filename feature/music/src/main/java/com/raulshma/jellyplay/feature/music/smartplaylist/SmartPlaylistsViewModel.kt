@@ -128,15 +128,19 @@ class SmartPlaylistsViewModel @Inject constructor(
             }
 
             result.onSuccess { searchResult ->
-                var items = searchResult.items
-                if (unplayedOnly) {
-                    items = items.filter { !it.isPlayed }
+                kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Default) {
+                    var items = searchResult.items
+                    if (unplayedOnly) {
+                        items = items.filter { !it.isPlayed }
+                    }
+                    items = applyCriteria(items, nonPlayCountCriteria)
+                    if (!hasDateAddedSort && !hasPlayCountSort) {
+                        items = applySort(items, playlist.sortBy)
+                    }
+                    items.take(playlist.maxItems)
+                }.also { items ->
+                    _generatedItems.value = items
                 }
-                items = applyCriteria(items, nonPlayCountCriteria)
-                if (!hasDateAddedSort && !hasPlayCountSort) {
-                    items = applySort(items, playlist.sortBy)
-                }
-                _generatedItems.value = items.take(playlist.maxItems)
             }.onFailure {
                 _error.value = it.message ?: "Failed to generate playlist"
             }

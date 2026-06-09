@@ -10,10 +10,9 @@ import com.raulshma.jellyplay.core.model.MediaType
 import com.raulshma.jellyplay.core.model.OfflineMediaItem
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.Flow
-import kotlinx.coroutines.flow.combine
-import kotlinx.coroutines.flow.conflate
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.flatMapLatest
+import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.map
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -53,19 +52,20 @@ class OfflineRepositoryImpl @Inject constructor(
         }
 
     override fun getEpisodesForSeason(seasonId: String): Flow<List<OfflineMediaItem>> =
-        combine(
-            offlineMediaDao.getEpisodesForSeason(seasonId),
-            downloadDao.getAllDownloads().conflate(),
-        ) { episodes, downloads ->
-            val downloadMap = downloads.associateBy { it.mediaItemId }
-            episodes.map { entity ->
-                val download = downloadMap[entity.id]
-                entity.toOfflineMediaItem().copy(
-                    downloadPath = download?.downloadPath,
-                    downloadStatus = download?.status?.let { safeDownloadStatusOf(it) },
-                    downloadedBytes = download?.downloadedBytes ?: 0L,
-                    totalSizeBytes = download?.totalSizeBytes ?: 0L,
-                )
+        offlineMediaDao.getEpisodesForSeason(seasonId).flatMapLatest { episodes ->
+            val ids = episodes.map { it.id }
+            if (ids.isEmpty()) kotlinx.coroutines.flow.flowOf(emptyList())
+            else downloadDao.getDownloadsByMediaItemIdsFlow(ids).map { downloads ->
+                val downloadMap = downloads.associateBy { it.mediaItemId }
+                episodes.map { entity ->
+                    val download = downloadMap[entity.id]
+                    entity.toOfflineMediaItem().copy(
+                        downloadPath = download?.downloadPath,
+                        downloadStatus = download?.status?.let { safeDownloadStatusOf(it) },
+                        downloadedBytes = download?.downloadedBytes ?: 0L,
+                        totalSizeBytes = download?.totalSizeBytes ?: 0L,
+                    )
+                }
             }
         }.distinctUntilChanged()
 

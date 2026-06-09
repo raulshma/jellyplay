@@ -309,12 +309,15 @@ fun PosterCard(
     )
     val scale = baseScale * tvFocusState.scale
     val isSoothing = LocalIsSoothingTheme.current
-    val elevation = when {
-        isPressed -> 12.dp
-        tvFocusState.isFocused -> 16.dp
-        isTv -> 12.dp
-        isSoothing -> 1.5.dp
-        else -> 4.dp
+    val isSynthwave = LocalIsSynthwave.current
+    val elevation = remember(isPressed, tvFocusState.isFocused, isTv, isSoothing) {
+        when {
+            isPressed -> 12.dp
+            tvFocusState.isFocused -> 16.dp
+            isTv -> 12.dp
+            isSoothing -> 1.5.dp
+            else -> 4.dp
+        }
     }
     val shape = ShapeCache.smooth12
 
@@ -340,26 +343,35 @@ fun PosterCard(
         .then(sharedImageModifier)
 
     Column(modifier = modifier) {
-        val isSynthwave = LocalIsSynthwave.current
+        val primary = MaterialTheme.colorScheme.primary
+        val secondary = MaterialTheme.colorScheme.secondary
+        val synthwaveBorder = remember(primary, secondary) {
+            androidx.compose.foundation.BorderStroke(
+                width = 1.5.dp,
+                brush = Brush.linearGradient(colors = listOf(primary, secondary))
+            )
+        }
+        val outlineColor = MaterialTheme.colorScheme.outline
+        val soothingBorder = remember(outlineColor) {
+            androidx.compose.foundation.BorderStroke(
+                width = 0.8.dp,
+                color = outlineColor.copy(alpha = 0.35f)
+            )
+        }
         val border = when {
-            isSynthwave -> {
-                androidx.compose.foundation.BorderStroke(
-                    width = 1.5.dp,
-                    brush = Brush.linearGradient(
-                        colors = listOf(
-                            MaterialTheme.colorScheme.primary,
-                            MaterialTheme.colorScheme.secondary
-                        )
-                    )
-                )
-            }
-            isSoothing -> {
-                androidx.compose.foundation.BorderStroke(
-                    width = 0.8.dp,
-                    color = MaterialTheme.colorScheme.outline.copy(alpha = 0.35f)
-                )
-            }
+            isSynthwave -> synthwaveBorder
+            isSoothing -> soothingBorder
             else -> null
+        }
+
+        val surfaceColor = MaterialTheme.colorScheme.surface
+        val gradientBrush = remember(surfaceColor) {
+            Brush.verticalGradient(
+                colors = listOf(
+                    Color.Transparent,
+                    surfaceColor.copy(alpha = 0.45f),
+                ),
+            )
         }
 
         Card(
@@ -397,14 +409,7 @@ fun PosterCard(
                         .align(Alignment.BottomCenter)
                         .fillMaxWidth()
                         .height(60.dp)
-                        .background(
-                                Brush.verticalGradient(
-                                    colors = listOf(
-                                        Color.Transparent,
-                                        MaterialTheme.colorScheme.surface.copy(alpha = 0.45f),
-                                    ),
-                                )
-                            )
+                        .background(gradientBrush)
                 )
 
                 if (item.isPlayed) {
@@ -556,11 +561,12 @@ fun MediaRow(
             modifier = Modifier.tvFocusRestorer(),
         ) {
             items(items, key = { "${title}_${it.id}" }, contentType = { "mediaItem" }) { item ->
+                val memoizedClick = remember(item) { { onItemClick(item) } }
                 PosterCard(
                     item = item,
                     imageUrl = imageUrlBuilder(item),
                     fallbackUrls = fallbackImageUrlBuilder(item),
-                    onClick = { onItemClick(item) },
+                    onClick = memoizedClick,
                     modifier = Modifier.width(cardWidth),
                     showProgress = item.playbackPositionTicks != null && item.playbackPositionTicks!! > 0,
                     progressPercent = if (item.runTimeTicks != null && item.runTimeTicks!! > 0) {

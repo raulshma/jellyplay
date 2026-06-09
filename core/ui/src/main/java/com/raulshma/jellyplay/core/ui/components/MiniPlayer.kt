@@ -48,8 +48,8 @@ import com.raulshma.jellyplay.core.designsystem.theme.AlphaEasing
 import com.raulshma.jellyplay.core.designsystem.theme.ShapeCache
 import com.raulshma.jellyplay.core.designsystem.theme.LocalIsSynthwave
 import com.raulshma.jellyplay.core.designsystem.theme.LocalIsSoothingTheme
+import coil3.size.Size as CoilSize
 import androidx.compose.ui.graphics.Brush
-import com.raulshma.jellyplay.core.ui.animation.AnimationTokens
 import com.raulshma.jellyplay.core.ui.image.MediaImage
 import com.composables.icons.tabler.Tabler
 import com.composables.icons.tabler.outline.*
@@ -148,24 +148,24 @@ fun MiniPlayer(
             }
         } else Modifier
 
+        val primary = MaterialTheme.colorScheme.primary
+        val secondary = MaterialTheme.colorScheme.secondary
+        val synthwaveBorder = remember(primary, secondary) {
+            androidx.compose.foundation.BorderStroke(
+                width = 1.dp,
+                brush = Brush.linearGradient(colors = listOf(primary, secondary))
+            )
+        }
+        val outlineColor = MaterialTheme.colorScheme.outline
+        val soothingBorder = remember(outlineColor) {
+            androidx.compose.foundation.BorderStroke(
+                width = 0.5.dp,
+                color = outlineColor.copy(alpha = 0.3f)
+            )
+        }
         val border = when {
-            isSynthwave -> {
-                androidx.compose.foundation.BorderStroke(
-                    width = 1.dp,
-                    brush = Brush.linearGradient(
-                        colors = listOf(
-                            MaterialTheme.colorScheme.primary,
-                            MaterialTheme.colorScheme.secondary
-                        )
-                    )
-                )
-            }
-            isSoothing -> {
-                androidx.compose.foundation.BorderStroke(
-                    width = 0.5.dp,
-                    color = MaterialTheme.colorScheme.outline.copy(alpha = 0.3f)
-                )
-            }
+            isSynthwave -> synthwaveBorder
+            isSoothing -> soothingBorder
             else -> null
         }
 
@@ -210,6 +210,7 @@ fun MiniPlayer(
                             .clip(CircleShape)
                             .then(sharedArtModifier),
                         contentScale = ContentScale.Crop,
+                        size = CoilSize(128, 128),
                     )
                 } else {
                     Box(
