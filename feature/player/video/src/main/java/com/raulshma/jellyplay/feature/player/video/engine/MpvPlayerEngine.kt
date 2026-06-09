@@ -9,8 +9,6 @@ import android.view.View
 import `is`.xyz.mpv.BaseMPVView
 import `is`.xyz.mpv.MPV
 import `is`.xyz.mpv.MPVNode
-import com.raulshma.jellyplay.core.data.playback.AudioNormalizationHelper
-import com.raulshma.jellyplay.core.data.playback.ChannelMixHelper
 import com.raulshma.jellyplay.core.data.playback.DialogueBoostHelper
 import com.raulshma.jellyplay.core.data.playback.MediaStreamVolume
 import com.raulshma.jellyplay.core.data.playback.NightModeHelper
@@ -117,8 +115,6 @@ class MpvPlayerEngine(
     private var currentConfig = EngineConfig()
     private val dialogueBoost = DialogueBoostHelper()
     private val nightMode = NightModeHelper()
-    private val audioNormalization = AudioNormalizationHelper()
-    private val channelMix = ChannelMixHelper()
 
     private var wasPlayingBeforeActivityPause = false
 
@@ -339,8 +335,6 @@ class MpvPlayerEngine(
         mainHandler.removeCallbacksAndMessages(null)
         dialogueBoost.detach()
         nightMode.detach()
-        audioNormalization.detach()
-        channelMix.detach()
         engineScope.cancel()
         val view = mpvView
         mpvView = null
@@ -502,20 +496,6 @@ class MpvPlayerEngine(
                     nightMode.attach(sid)
                     nightMode.setStrength(newAudioFx.nightModeStrength)
                     nightMode.setEnabled(newAudioFx.nightModeEnabled)
-                }
-                if (oldAudioFx.audioNormalizationMode != newAudioFx.audioNormalizationMode ||
-                    oldAudioFx.audioNormalizationEnabled != newAudioFx.audioNormalizationEnabled
-                ) {
-                    audioNormalization.attach(sid)
-                    audioNormalization.setMode(newAudioFx.audioNormalizationMode)
-                    audioNormalization.setEnabled(newAudioFx.audioNormalizationEnabled)
-                }
-                if (oldAudioFx.channelMixMode != newAudioFx.channelMixMode ||
-                    oldAudioFx.channelMixEnabled != newAudioFx.channelMixEnabled
-                ) {
-                    channelMix.attach(sid)
-                    channelMix.setMode(newAudioFx.channelMixMode)
-                    channelMix.setEnabled(newAudioFx.channelMixEnabled)
                 }
             }
         } catch (_: Exception) {}

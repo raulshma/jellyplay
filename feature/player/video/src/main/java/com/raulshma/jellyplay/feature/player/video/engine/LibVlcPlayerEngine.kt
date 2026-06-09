@@ -7,11 +7,7 @@ import android.os.Handler
 import android.os.Looper
 import android.util.Log
 import android.view.View
-import com.raulshma.jellyplay.core.data.playback.AudioNormalizationHelper
-import com.raulshma.jellyplay.core.data.playback.ChannelMixHelper
-import com.raulshma.jellyplay.core.data.playback.DialogueBoostHelper
 import com.raulshma.jellyplay.core.data.playback.MediaStreamVolume
-import com.raulshma.jellyplay.core.data.playback.NightModeHelper
 import com.raulshma.jellyplay.core.model.AudioNormalizationMode
 import com.raulshma.jellyplay.core.model.ChannelMixMode
 import com.raulshma.jellyplay.core.model.DecoderMode
@@ -101,10 +97,6 @@ class LibVlcPlayerEngine(
     private var currentPlaybackRequest: PlaybackRequest? = null
     
     private var currentConfig = EngineConfig()
-    private val dialogueBoost = DialogueBoostHelper()
-    private val nightMode = NightModeHelper()
-    private val audioNormalization = AudioNormalizationHelper()
-    private val channelMix = ChannelMixHelper()
 
     private var pendingPlay = false
     private var wasPlayingBeforeActivityPause = false
@@ -139,18 +131,6 @@ class LibVlcPlayerEngine(
             MediaPlayer.Event.Playing -> {
                 _isPlaying.value = true
                 _playbackState.value = EnginePlaybackState.READY
-                if (currentConfig.audioEffects.dialogueBoostEnabled) {
-                    applyDialogueBoost()
-                }
-                if (currentConfig.audioEffects.nightModeEnabled) {
-                    applyNightMode()
-                }
-                if (currentConfig.audioEffects.audioNormalizationEnabled) {
-                    applyAudioNormalization()
-                }
-                if (currentConfig.audioEffects.channelMixEnabled) {
-                    applyChannelMix()
-                }
             }
             MediaPlayer.Event.Paused -> {
                 _isPlaying.value = false
@@ -338,10 +318,6 @@ class LibVlcPlayerEngine(
         mainHandler.removeCallbacksAndMessages(null)
         pendingPlay = false
         currentPlaybackRequest = null
-        dialogueBoost.detach()
-        nightMode.detach()
-        audioNormalization.detach()
-        channelMix.detach()
         mediaPlayer?.let { mp ->
             mediaPlayer = null
             mp.setEventListener(null)
@@ -398,36 +374,6 @@ class LibVlcPlayerEngine(
                 mp.setSpuDelay(config.subtitleDelayMs * 1000L)
             }
             
-            if (oldConfig.audioEffects.dialogueBoostEnabled != config.audioEffects.dialogueBoostEnabled
-                || oldConfig.audioEffects.dialogueBoostStrength != config.audioEffects.dialogueBoostStrength
-            ) {
-                if (_isPlaying.value) {
-                    applyDialogueBoost()
-                }
-            }
-
-            if (oldConfig.audioEffects.nightModeEnabled != config.audioEffects.nightModeEnabled
-                || oldConfig.audioEffects.nightModeStrength != config.audioEffects.nightModeStrength
-            ) {
-                if (_isPlaying.value) {
-                    applyNightMode()
-                }
-            }
-
-            if (oldConfig.audioEffects.audioNormalizationEnabled != config.audioEffects.audioNormalizationEnabled
-                || oldConfig.audioEffects.audioNormalizationMode != config.audioEffects.audioNormalizationMode
-            ) {
-                if (_isPlaying.value) {
-                    applyAudioNormalization()
-                }
-            }
-
-            if (oldConfig.audioEffects.channelMixMode != config.audioEffects.channelMixMode) {
-                if (_isPlaying.value) {
-                    applyChannelMix()
-                }
-            }
-
             if (oldConfig.subtitleStyle != config.subtitleStyle) {
                 reloadMediaForSubtitleStyleChange()
             }
@@ -868,39 +814,4 @@ class LibVlcPlayerEngine(
         return result
     }
 
-    private fun applyDialogueBoost() {
-        val sid = audioSessionId
-        if (sid != 0) {
-            dialogueBoost.attach(sid)
-            dialogueBoost.setStrength(currentConfig.audioEffects.dialogueBoostStrength)
-            dialogueBoost.setEnabled(currentConfig.audioEffects.dialogueBoostEnabled)
-        }
-    }
-
-    private fun applyNightMode() {
-        val sid = audioSessionId
-        if (sid != 0) {
-            nightMode.attach(sid)
-            nightMode.setStrength(currentConfig.audioEffects.nightModeStrength)
-            nightMode.setEnabled(currentConfig.audioEffects.nightModeEnabled)
-        }
-    }
-
-    private fun applyAudioNormalization() {
-        val sid = audioSessionId
-        if (sid != 0) {
-            audioNormalization.attach(sid)
-            audioNormalization.setMode(currentConfig.audioEffects.audioNormalizationMode)
-            audioNormalization.setEnabled(currentConfig.audioEffects.audioNormalizationEnabled)
-        }
-    }
-
-    private fun applyChannelMix() {
-        val sid = audioSessionId
-        if (sid != 0) {
-            channelMix.attach(sid)
-            channelMix.setMode(currentConfig.audioEffects.channelMixMode)
-            channelMix.setEnabled(currentConfig.audioEffects.channelMixEnabled)
-        }
-    }
 }
