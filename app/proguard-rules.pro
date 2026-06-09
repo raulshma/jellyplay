@@ -30,6 +30,7 @@
 -keep class com.raulshma.jellyplay.core.data.worker.DownloadWorker { *; }
 
 -keep class com.raulshma.jellyplay.core.data.playback.JellyPlayPlaybackService { *; }
+-keep class com.raulshma.jellyplay.core.data.playback.*Helper { *; }
 -keep class com.raulshma.jellyplay.screensaver.JellyPlayDreamService { *; }
 
 -keep @androidx.room.Entity class * { *; }

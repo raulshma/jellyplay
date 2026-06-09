@@ -91,7 +91,7 @@ class JellyfinApiEngine @Inject constructor(
         val maxDelayMs = 8_000L
         val exponentialDelay = (baseDelayMs * 2.0.pow(attempt)).toLong()
         val capped = min(exponentialDelay, maxDelayMs)
-        return Random.nextLong(0, capped + 1)
+        return Random.nextLong(200, capped + 1)
     }
 
     val currentMaxParentalRating: Int?

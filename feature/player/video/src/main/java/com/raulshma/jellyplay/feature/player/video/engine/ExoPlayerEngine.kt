@@ -66,7 +66,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
-import kotlinx.coroutines.cancelChildren
+import kotlinx.coroutines.cancel
 
 class ExoPlayerEngine(
     private val context: Context,
@@ -344,7 +344,7 @@ class ExoPlayerEngine(
     }
 
     override fun release() {
-        engineScope.coroutineContext.cancelChildren()
+        engineScope.cancel()
         player?.removeListener(listener)
         playerView?.player = null
         playerView = null

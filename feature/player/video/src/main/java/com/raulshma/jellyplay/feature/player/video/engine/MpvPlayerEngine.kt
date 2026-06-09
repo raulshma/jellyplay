@@ -43,7 +43,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
-import kotlinx.coroutines.cancelChildren
+import kotlinx.coroutines.cancel
 
 class MpvPlayerEngine(
     private val context: Context,
@@ -341,7 +341,7 @@ class MpvPlayerEngine(
         nightMode.detach()
         audioNormalization.detach()
         channelMix.detach()
-        engineScope.coroutineContext.cancelChildren()
+        engineScope.cancel()
         val view = mpvView
         mpvView = null
         view?.let {

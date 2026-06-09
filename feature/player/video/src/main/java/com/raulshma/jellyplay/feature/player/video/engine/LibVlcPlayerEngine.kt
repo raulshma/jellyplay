@@ -33,7 +33,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
-import kotlinx.coroutines.cancelChildren
+import kotlinx.coroutines.cancel
 import org.videolan.libvlc.LibVLC
 import org.videolan.libvlc.Media
 import org.videolan.libvlc.MediaPlayer
@@ -322,7 +322,7 @@ class LibVlcPlayerEngine(
     }
 
     override fun release() {
-        engineScope.coroutineContext.cancelChildren()
+        engineScope.cancel()
         releaseInternal(releaseVlc = true)
         hasRenderer = false
         pendingRendererItem = null

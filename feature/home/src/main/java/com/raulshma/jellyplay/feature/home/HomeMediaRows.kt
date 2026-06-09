@@ -95,12 +95,14 @@ fun ContinueWatchingRow(
             modifier = Modifier.tvFocusRestorer(),
         ) { index ->
             val item = items[index]
+            val memoizedClick = remember(item) { { onItemClick(item) } }
+            val memoizedPlayClick = onPlayClick?.let { click -> remember(item, click) { { click(item) } } }
             WideMediaCard(
                 item = item,
                 imageUrl = imageUrlBuilder(item),
                 backdropUrl = backdropUrlBuilder(item),
-                onClick = { onItemClick(item) },
-                onPlayClick = onPlayClick?.let { { it(item) } },
+                onClick = memoizedClick,
+                onPlayClick = memoizedPlayClick,
                 cardWidth = cardWidth,
             )
         }
@@ -213,6 +215,7 @@ fun WideMediaCard(
                 )
 
                 if (item.communityRating != null) {
+                    val ratingText = remember(item.communityRating) { "%.1f".format(item.communityRating) }
                     Box(
                         modifier = Modifier
                             .align(Alignment.TopStart)
@@ -233,7 +236,7 @@ fun WideMediaCard(
                                 color = RatingColors.star,
                             )
                             Text(
-                                text = "%.1f".format(item.communityRating),
+                                text = ratingText,
                                 style = MaterialTheme.typography.labelSmall,
                                 color = MaterialTheme.colorScheme.onSurface,
                             )
@@ -350,18 +353,20 @@ fun HomeMediaRow(
             modifier = Modifier.tvFocusRestorer(),
         ) { index ->
             val item = items[index]
+            val memoizedClick = remember(item) { { onItemClick(item) } }
+            val memoizedPlayClick = onPlayClick?.let { click -> remember(item, click) { { click(item) } } }
             PosterCard(
                 item = item,
                 imageUrl = imageUrlBuilder(item),
                 fallbackUrls = fallbackImageUrlBuilder(item),
-                onClick = { onItemClick(item) },
+                onClick = memoizedClick,
                 modifier = Modifier.width(cardWidth),
                 showProgress = item.playbackPositionTicks != null && item.playbackPositionTicks!! > 0,
                 progressPercent = if (item.runTimeTicks != null && item.runTimeTicks!! > 0) {
                     (item.playbackPositionTicks?.toFloat() ?: 0f) / item.runTimeTicks!!.toFloat()
                 } else 0f,
                 blurHash = item.blurHashes.primary,
-                onPlayClick = onPlayClick?.let { { it(item) } },
+                onPlayClick = memoizedPlayClick,
                 sharedElementKey = "poster_${item.id}",
             )
         }
