@@ -1,6 +1,7 @@
 package com.raulshma.jellyplay.core.data.repository
 
 import com.raulshma.jellyplay.core.datastore.SeerrPreferencesStore
+import com.raulshma.jellyplay.core.datastore.SeerrSecureCredentialsStore
 import com.raulshma.jellyplay.core.model.MediaType
 import com.raulshma.jellyplay.core.model.seerr.*
 import com.raulshma.jellyplay.core.network.seerr.SeerrApiClient
@@ -22,12 +23,13 @@ private data class CacheEntry<T>(val value: T, val timestampMs: Long)
 class SeerrRepositoryImpl @Inject constructor(
     private val seerrApiClient: SeerrApiClient,
     private val seerrPreferencesStore: SeerrPreferencesStore,
+    private val secureCredentialsStore: SeerrSecureCredentialsStore,
 ) : SeerrRepository {
 
     @Volatile
-    private var cachedCredentials: Pair<String, String>? = null
+    private var cachedCredentials: SeerrCredentials? = null
     @Volatile
-    private var lastPrefsHash: Int = 0
+    private var lastCredsHash: Int = 0
 
     private val cacheScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
 
@@ -53,67 +55,116 @@ class SeerrRepositoryImpl @Inject constructor(
         detailCache[key] = CacheEntry(value, System.currentTimeMillis())
     }
 
-    private suspend fun getCredentials(): Pair<String, String>? {
+    private suspend fun getCredentials(): SeerrCredentials? {
         val prefs = cachedPrefs.value ?: seerrPreferencesStore.preferences.first()
-        val prefsHash = 31 * prefs.serverUrl.hashCode() + prefs.apiKey.hashCode()
-        if (prefsHash == lastPrefsHash) {
+        val apiKey = secureCredentialsStore.getApiKey()
+        val cookie = secureCredentialsStore.getSessionCookie()
+        val hash = 31 * prefs.serverUrl.hashCode() + apiKey.hashCode() + cookie.hashCode() + prefs.authMethod.hashCode()
+        if (hash == lastCredsHash) {
             cachedCredentials?.let { return it }
         }
-        if (prefs.serverUrl.isBlank() || prefs.apiKey.isBlank()) return null
-        val creds = Pair(prefs.serverUrl, prefs.apiKey)
+        if (prefs.serverUrl.isBlank()) return null
+        val creds = when (prefs.authMethod) {
+            SeerrAuthMethod.API_KEY -> {
+                if (apiKey.isBlank()) return null
+                SeerrCredentials.ApiKey(apiKey)
+            }
+            SeerrAuthMethod.JELLYFIN,
+            SeerrAuthMethod.LOCAL -> {
+                if (cookie.isBlank()) return null
+                SeerrCredentials.SessionCookie(cookie)
+            }
+        }
         cachedCredentials = creds
-        lastPrefsHash = prefsHash
+        lastCredsHash = hash
         return creds
     }
 
+    private fun serverUrl(): String? {
+        val prefs = cachedPrefs.value ?: return null
+        return prefs.serverUrl.ifBlank { null }
+    }
+
     override suspend fun testConnection(): Result<SeerrStatusResponse> {
-        val (serverUrl, apiKey) = getCredentials()
-            ?: return Result.failure(Exception("Server URL and API key are required"))
-        return seerrApiClient.testConnection(serverUrl, apiKey)
+        val url = serverUrl() ?: return Result.failure(Exception("Server URL is required"))
+        val credentials = getCredentials()
+            ?: return Result.failure(Exception("Authentication credentials are required"))
+        return seerrApiClient.testConnection(url, credentials)
+    }
+
+    override suspend fun loginJellyfin(username: String, password: String): Result<SeerrStatusResponse> {
+        val url = serverUrl() ?: return Result.failure(Exception("Server URL is required"))
+        seerrApiClient.loginJellyfin(url, username, password)
+            .onSuccess { cookie ->
+                secureCredentialsStore.setSessionCookie(cookie)
+                cachedCredentials = SeerrCredentials.SessionCookie(cookie)
+                lastCredsHash = 0
+            }
+            .onFailure { return Result.failure(it) }
+        return seerrApiClient.testConnection(url, SeerrCredentials.SessionCookie(secureCredentialsStore.getSessionCookie()))
+    }
+
+    override suspend fun loginLocal(email: String, password: String): Result<SeerrStatusResponse> {
+        val url = serverUrl() ?: return Result.failure(Exception("Server URL is required"))
+        seerrApiClient.loginLocal(url, email, password)
+            .onSuccess { cookie ->
+                secureCredentialsStore.setSessionCookie(cookie)
+                cachedCredentials = SeerrCredentials.SessionCookie(cookie)
+                lastCredsHash = 0
+            }
+            .onFailure { return Result.failure(it) }
+        return seerrApiClient.testConnection(url, SeerrCredentials.SessionCookie(secureCredentialsStore.getSessionCookie()))
+    }
+
+    override suspend fun testApiKeyConnection(): Result<SeerrStatusResponse> {
+        val url = serverUrl() ?: return Result.failure(Exception("Server URL is required"))
+        val apiKey = secureCredentialsStore.getApiKey()
+        if (apiKey.isBlank()) return Result.failure(Exception("API key is required"))
+        return seerrApiClient.testConnection(url, SeerrCredentials.ApiKey(apiKey))
     }
 
     override suspend fun search(query: String, page: Int): Result<SeerrSearchResponse> {
-        val (serverUrl, apiKey) = getCredentials()
-            ?: return Result.failure(Exception("Seerr not configured"))
-        return seerrApiClient.search(serverUrl, apiKey, query, page)
+        val url = serverUrl() ?: return Result.failure(Exception("Seerr not configured"))
+        val credentials = getCredentials() ?: return Result.failure(Exception("Seerr not configured"))
+        return seerrApiClient.search(url, credentials, query, page)
     }
 
     override suspend fun getMovieDetails(tmdbId: Int): Result<SeerrMovieDetails> {
         getCached<SeerrMovieDetails>("movie_details_$tmdbId")?.let { return Result.success(it) }
-        val (serverUrl, apiKey) = getCredentials()
-            ?: return Result.failure(Exception("Seerr not configured"))
-        return seerrApiClient.getMovieDetails(serverUrl, apiKey, tmdbId).also { result ->
+        val url = serverUrl() ?: return Result.failure(Exception("Seerr not configured"))
+        val credentials = getCredentials() ?: return Result.failure(Exception("Seerr not configured"))
+        return seerrApiClient.getMovieDetails(url, credentials, tmdbId).also { result ->
             result.getOrNull()?.let { putCached("movie_details_$tmdbId", it) }
         }
     }
 
     override suspend fun getTvDetails(tmdbId: Int): Result<SeerrTvDetails> {
         getCached<SeerrTvDetails>("tv_details_$tmdbId")?.let { return Result.success(it) }
-        val (serverUrl, apiKey) = getCredentials()
-            ?: return Result.failure(Exception("Seerr not configured"))
-        return seerrApiClient.getTvDetails(serverUrl, apiKey, tmdbId).also { result ->
+        val url = serverUrl() ?: return Result.failure(Exception("Seerr not configured"))
+        val credentials = getCredentials() ?: return Result.failure(Exception("Seerr not configured"))
+        return seerrApiClient.getTvDetails(url, credentials, tmdbId).also { result ->
             result.getOrNull()?.let { putCached("tv_details_$tmdbId", it) }
         }
     }
 
     override suspend fun getTvSeasonDetails(tvId: Int, seasonNumber: Int): Result<SeerrSeasonDetail> {
         getCached<SeerrSeasonDetail>("tv_season_${tvId}_$seasonNumber")?.let { return Result.success(it) }
-        val (serverUrl, apiKey) = getCredentials()
-            ?: return Result.failure(Exception("Seerr not configured"))
-        return seerrApiClient.getTvSeasonDetails(serverUrl, apiKey, tvId, seasonNumber).also { result ->
+        val url = serverUrl() ?: return Result.failure(Exception("Seerr not configured"))
+        val credentials = getCredentials() ?: return Result.failure(Exception("Seerr not configured"))
+        return seerrApiClient.getTvSeasonDetails(url, credentials, tvId, seasonNumber).also { result ->
             result.getOrNull()?.let { putCached("tv_season_${tvId}_$seasonNumber", it) }
         }
     }
 
     override suspend fun getRatings(tmdbId: Int, mediaType: String): Result<SeerrRatings> {
         getCached<SeerrRatings>("ratings_${tmdbId}_$mediaType")?.let { return Result.success(it) }
-        val (serverUrl, apiKey) = getCredentials()
-            ?: return Result.failure(Exception("Seerr not configured"))
+        val url = serverUrl() ?: return Result.failure(Exception("Seerr not configured"))
+        val credentials = getCredentials() ?: return Result.failure(Exception("Seerr not configured"))
 
         return (if (mediaType == "movie") {
-            seerrApiClient.getMovieRatingsCombined(serverUrl, apiKey, tmdbId)
+            seerrApiClient.getMovieRatingsCombined(url, credentials, tmdbId)
         } else {
-            seerrApiClient.getTvRatings(serverUrl, apiKey, tmdbId)
+            seerrApiClient.getTvRatings(url, credentials, tmdbId)
         }).also { result ->
             result.getOrNull()?.let { putCached("ratings_${tmdbId}_$mediaType", it) }
         }
@@ -121,12 +172,12 @@ class SeerrRepositoryImpl @Inject constructor(
 
     override suspend fun getRecommendations(tmdbId: Int, mediaType: MediaType): Result<SeerrSearchResponse> {
         getCached<SeerrSearchResponse>("recommendations_${tmdbId}_${mediaType.name}")?.let { return Result.success(it) }
-        val (serverUrl, apiKey) = getCredentials()
-            ?: return Result.failure(Exception("Seerr not configured"))
+        val url = serverUrl() ?: return Result.failure(Exception("Seerr not configured"))
+        val credentials = getCredentials() ?: return Result.failure(Exception("Seerr not configured"))
         val typeStr = if (mediaType == MediaType.MOVIE) "movie" else "tv"
         return (when (mediaType) {
-            MediaType.MOVIE -> seerrApiClient.getMovieRecommendations(serverUrl, apiKey, tmdbId)
-            MediaType.SERIES -> seerrApiClient.getTvRecommendations(serverUrl, apiKey, tmdbId)
+            MediaType.MOVIE -> seerrApiClient.getMovieRecommendations(url, credentials, tmdbId)
+            MediaType.SERIES -> seerrApiClient.getTvRecommendations(url, credentials, tmdbId)
             else -> Result.failure(Exception("Unsupported media type for recommendations"))
         }).map { response ->
             response.copy(
@@ -141,12 +192,12 @@ class SeerrRepositoryImpl @Inject constructor(
 
     override suspend fun getSimilar(tmdbId: Int, mediaType: MediaType): Result<SeerrSearchResponse> {
         getCached<SeerrSearchResponse>("similar_${tmdbId}_${mediaType.name}")?.let { return Result.success(it) }
-        val (serverUrl, apiKey) = getCredentials()
-            ?: return Result.failure(Exception("Seerr not configured"))
+        val url = serverUrl() ?: return Result.failure(Exception("Seerr not configured"))
+        val credentials = getCredentials() ?: return Result.failure(Exception("Seerr not configured"))
         val typeStr = if (mediaType == MediaType.MOVIE) "movie" else "tv"
         return (when (mediaType) {
-            MediaType.MOVIE -> seerrApiClient.getMovieSimilar(serverUrl, apiKey, tmdbId)
-            MediaType.SERIES -> seerrApiClient.getTvSimilar(serverUrl, apiKey, tmdbId)
+            MediaType.MOVIE -> seerrApiClient.getMovieSimilar(url, credentials, tmdbId)
+            MediaType.SERIES -> seerrApiClient.getTvSimilar(url, credentials, tmdbId)
             else -> Result.failure(Exception("Unsupported media type for similar items"))
         }).map { response ->
             response.copy(
@@ -168,63 +219,61 @@ class SeerrRepositoryImpl @Inject constructor(
         rootFolder: String?,
         tags: List<Int>?,
     ): Result<SeerrMediaRequest> {
-        val (serverUrl, apiKey) = getCredentials()
-            ?: return Result.failure(Exception("Seerr not configured"))
+        val url = serverUrl() ?: return Result.failure(Exception("Seerr not configured"))
+        val credentials = getCredentials() ?: return Result.failure(Exception("Seerr not configured"))
         return seerrApiClient.requestMedia(
-            serverUrl, apiKey, mediaType, tmdbId,
+            url, credentials, mediaType, tmdbId,
             seasons = seasons, serverId = serverId, profileId = profileId,
             rootFolder = rootFolder, tags = tags,
         )
     }
 
     override suspend fun getRadarrSettings(): Result<List<SeerrRadarrSettings>> {
-        val (serverUrl, apiKey) = getCredentials()
-            ?: return Result.failure(Exception("Seerr not configured"))
-        return seerrApiClient.getRadarrSettings(serverUrl, apiKey)
+        val url = serverUrl() ?: return Result.failure(Exception("Seerr not configured"))
+        val credentials = getCredentials() ?: return Result.failure(Exception("Seerr not configured"))
+        return seerrApiClient.getRadarrSettings(url, credentials)
     }
 
     override suspend fun getSonarrSettings(): Result<List<SeerrSonarrSettings>> {
-        val (serverUrl, apiKey) = getCredentials()
-            ?: return Result.failure(Exception("Seerr not configured"))
-        return seerrApiClient.getSonarrSettings(serverUrl, apiKey)
+        val url = serverUrl() ?: return Result.failure(Exception("Seerr not configured"))
+        val credentials = getCredentials() ?: return Result.failure(Exception("Seerr not configured"))
+        return seerrApiClient.getSonarrSettings(url, credentials)
     }
 
     override suspend fun getRadarrServiceDetail(id: Int): Result<SeerrRadarrServiceDetail> {
-        val (serverUrl, apiKey) = getCredentials()
-            ?: return Result.failure(Exception("Seerr not configured"))
-        return seerrApiClient.getRadarrServiceDetail(serverUrl, apiKey, id)
+        val url = serverUrl() ?: return Result.failure(Exception("Seerr not configured"))
+        val credentials = getCredentials() ?: return Result.failure(Exception("Seerr not configured"))
+        return seerrApiClient.getRadarrServiceDetail(url, credentials, id)
     }
 
     override suspend fun getSonarrServiceDetail(id: Int): Result<SeerrSonarrServiceDetail> {
-        val (serverUrl, apiKey) = getCredentials()
-            ?: return Result.failure(Exception("Seerr not configured"))
-        return seerrApiClient.getSonarrServiceDetail(serverUrl, apiKey, id)
+        val url = serverUrl() ?: return Result.failure(Exception("Seerr not configured"))
+        val credentials = getCredentials() ?: return Result.failure(Exception("Seerr not configured"))
+        return seerrApiClient.getSonarrServiceDetail(url, credentials, id)
     }
 
-    // ── /service/ endpoints ──
-
     override suspend fun getServiceRadarrServers(): Result<List<SeerrServiceServer>> {
-        val (serverUrl, apiKey) = getCredentials()
-            ?: return Result.failure(Exception("Seerr not configured"))
-        return seerrApiClient.getServiceRadarrServers(serverUrl, apiKey)
+        val url = serverUrl() ?: return Result.failure(Exception("Seerr not configured"))
+        val credentials = getCredentials() ?: return Result.failure(Exception("Seerr not configured"))
+        return seerrApiClient.getServiceRadarrServers(url, credentials)
     }
 
     override suspend fun getServiceSonarrServers(): Result<List<SeerrServiceServer>> {
-        val (serverUrl, apiKey) = getCredentials()
-            ?: return Result.failure(Exception("Seerr not configured"))
-        return seerrApiClient.getServiceSonarrServers(serverUrl, apiKey)
+        val url = serverUrl() ?: return Result.failure(Exception("Seerr not configured"))
+        val credentials = getCredentials() ?: return Result.failure(Exception("Seerr not configured"))
+        return seerrApiClient.getServiceSonarrServers(url, credentials)
     }
 
     override suspend fun getServiceRadarrDetail(id: Int): Result<SeerrRadarrServiceDetail> {
-        val (serverUrl, apiKey) = getCredentials()
-            ?: return Result.failure(Exception("Seerr not configured"))
-        return seerrApiClient.getServiceRadarrDetail(serverUrl, apiKey, id)
+        val url = serverUrl() ?: return Result.failure(Exception("Seerr not configured"))
+        val credentials = getCredentials() ?: return Result.failure(Exception("Seerr not configured"))
+        return seerrApiClient.getServiceRadarrDetail(url, credentials, id)
     }
 
     override suspend fun getServiceSonarrDetail(id: Int): Result<SeerrSonarrServiceDetail> {
-        val (serverUrl, apiKey) = getCredentials()
-            ?: return Result.failure(Exception("Seerr not configured"))
-        return seerrApiClient.getServiceSonarrDetail(serverUrl, apiKey, id)
+        val url = serverUrl() ?: return Result.failure(Exception("Seerr not configured"))
+        val credentials = getCredentials() ?: return Result.failure(Exception("Seerr not configured"))
+        return seerrApiClient.getServiceSonarrDetail(url, credentials, id)
     }
 
     override fun isConnected(): Flow<Boolean> = seerrPreferencesStore.isConnected
@@ -239,18 +288,16 @@ class SeerrRepositoryImpl @Inject constructor(
 
     override fun getPreferences(): Flow<SeerrPreferences> = seerrPreferencesStore.preferences
 
-    // ── Discover endpoints ──
-
     override suspend fun getTrending(page: Int): Result<SeerrSearchResponse> {
-        val (serverUrl, apiKey) = getCredentials()
-            ?: return Result.failure(Exception("Seerr not configured"))
-        return seerrApiClient.getTrending(serverUrl, apiKey, page)
+        val url = serverUrl() ?: return Result.failure(Exception("Seerr not configured"))
+        val credentials = getCredentials() ?: return Result.failure(Exception("Seerr not configured"))
+        return seerrApiClient.getTrending(url, credentials, page)
     }
 
     override suspend fun getDiscoverMovies(page: Int, primaryReleaseDateGte: String?): Result<SeerrSearchResponse> {
-        val (serverUrl, apiKey) = getCredentials()
-            ?: return Result.failure(Exception("Seerr not configured"))
-        return seerrApiClient.getDiscoverMovies(serverUrl, apiKey, page, primaryReleaseDateGte).map { response ->
+        val url = serverUrl() ?: return Result.failure(Exception("Seerr not configured"))
+        val credentials = getCredentials() ?: return Result.failure(Exception("Seerr not configured"))
+        return seerrApiClient.getDiscoverMovies(url, credentials, page, primaryReleaseDateGte).map { response ->
             response.copy(
                 results = response.results.map { item ->
                     if (item.mediaType.isBlank()) item.copy(mediaType = "movie") else item
@@ -260,9 +307,9 @@ class SeerrRepositoryImpl @Inject constructor(
     }
 
     override suspend fun getDiscoverTv(page: Int, firstAirDateGte: String?): Result<SeerrSearchResponse> {
-        val (serverUrl, apiKey) = getCredentials()
-            ?: return Result.failure(Exception("Seerr not configured"))
-        return seerrApiClient.getDiscoverTv(serverUrl, apiKey, page, firstAirDateGte).map { response ->
+        val url = serverUrl() ?: return Result.failure(Exception("Seerr not configured"))
+        val credentials = getCredentials() ?: return Result.failure(Exception("Seerr not configured"))
+        return seerrApiClient.getDiscoverTv(url, credentials, page, firstAirDateGte).map { response ->
             response.copy(
                 results = response.results.map { item ->
                     if (item.mediaType.isBlank()) item.copy(mediaType = "tv") else item

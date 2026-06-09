@@ -80,7 +80,7 @@ class SearchViewModel @Inject constructor(
         seerrRepository.getPreferences() as StateFlow
 
     val isSeerrConnected: StateFlow<Boolean> = seerrPrefs.map {
-        it.serverUrl.isNotBlank() && it.apiKey.isNotBlank()
+        it.serverUrl.isNotBlank()
     }.stateIn(scope, SharingStarted.Lazily, false)
 
     val isSeerrSearchEnabled: StateFlow<Boolean> = seerrPrefs.map {
@@ -189,7 +189,7 @@ class SearchViewModel @Inject constructor(
     private suspend fun searchSeerr(query: String) {
         try {
             val prefs = seerrPrefs.value
-            val connected = prefs.serverUrl.isNotBlank() && prefs.apiKey.isNotBlank()
+            val connected = prefs.serverUrl.isNotBlank()
             val enabled = prefs.searchEnabled
             if (!connected || !enabled) {
                 _seerrResults.set(emptyList())

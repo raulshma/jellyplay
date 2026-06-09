@@ -45,6 +45,7 @@ smoothCornerRect = "v1.0.0"
 tvMaterial = "1.1.0"
 tablerIcons = "2.2.1"
 biometric = "1.4.0-alpha07"
+security = "1.1.0-alpha06"
 sentry = "8.14.0"
 benchmarkMacro = "1.4.0-beta02"
 
@@ -164,6 +165,9 @@ tv-material = { group = "androidx.tv", name = "tv-material", version.ref = "tvMa
 
 # Biometric
 biometric-ktx = { group = "androidx.biometric", name = "biometric", version.ref = "biometric" }
+
+# Security (encrypted prefs)
+security-crypto = { group = "androidx.security", name = "security-crypto", version.ref = "security" }
 
 # Sentry
 sentry-android = { group = "io.sentry", name = "sentry-android", version.ref = "sentry" }
