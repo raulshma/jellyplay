@@ -121,7 +121,7 @@ class SeerrRecommendationsWidget : AppWidgetProvider() {
             val isConnected = runCatching {
                 runBlocking {
                     val prefs = entryPoint.seerrPreferencesStore().preferences.first()
-                    prefs.serverUrl.isNotBlank() && prefs.apiKey.isNotBlank()
+                    prefs.serverUrl.isNotBlank()
                 }
             }.getOrDefault(false)
 

@@ -33,8 +33,11 @@ class SeerrApiClientImpl @Inject constructor(
         return "$base/api/v1${path}"
     }
 
-    private fun Request.Builder.withApiKey(apiKey: String): Request.Builder {
-        return this.header("X-Api-Key", apiKey)
+    private fun Request.Builder.withAuth(credentials: SeerrCredentials): Request.Builder {
+        return when (credentials) {
+            is SeerrCredentials.ApiKey -> this.header("X-Api-Key", credentials.apiKey)
+            is SeerrCredentials.SessionCookie -> this.header("Cookie", credentials.cookie)
+        }
     }
 
     private suspend fun executeRequest(request: Request): Result<String> {
@@ -50,6 +53,25 @@ class SeerrApiClientImpl @Inject constructor(
                     }
                     Result.success(body)
                 }
+            }
+        } catch (e: Exception) {
+            Result.failure(Exception(formatNetworkError(e)))
+        }
+    }
+
+    private fun executeRequestWithCookie(request: Request): Result<Pair<String, String?>> {
+        return try {
+            okHttpClient.newCall(request).execute().use { response ->
+                val body = response.body?.string()
+                    ?: return Result.failure(Exception("Empty response body (HTTP ${response.code})"))
+                if (!response.isSuccessful) {
+                    val errorMsg = parseErrorMessage(response.code, body)
+                    return Result.failure(Exception(errorMsg))
+                }
+                val cookieHeader = response.headers("Set-Cookie").joinToString("; ") {
+                    it.substringBefore(";")
+                }
+                Result.success(body to cookieHeader.ifBlank { null })
             }
         } catch (e: Exception) {
             Result.failure(Exception(formatNetworkError(e)))
@@ -82,10 +104,40 @@ class SeerrApiClientImpl @Inject constructor(
         }
     }
 
-    override suspend fun testConnection(baseUrl: String, apiKey: String): Result<SeerrStatusResponse> {
+    override suspend fun loginJellyfin(
+        baseUrl: String,
+        username: String,
+        password: String,
+    ): Result<String> = withContext(Dispatchers.IO) {
+        val payload = json.encodeToString(SeerrAuthJellyfinRequest(username, password))
+        val request = Request.Builder()
+            .url(buildUrl(baseUrl, "/auth/jellyfin"))
+            .post(payload.toRequestBody("application/json".toMediaType()))
+            .build()
+        executeRequestWithCookie(request).mapCatching { (_, cookie) ->
+            cookie ?: throw Exception("No session cookie received from server")
+        }
+    }
+
+    override suspend fun loginLocal(
+        baseUrl: String,
+        email: String,
+        password: String,
+    ): Result<String> = withContext(Dispatchers.IO) {
+        val payload = json.encodeToString(SeerrAuthLocalRequest(email, password))
+        val request = Request.Builder()
+            .url(buildUrl(baseUrl, "/auth/local"))
+            .post(payload.toRequestBody("application/json".toMediaType()))
+            .build()
+        executeRequestWithCookie(request).mapCatching { (_, cookie) ->
+            cookie ?: throw Exception("No session cookie received from server")
+        }
+    }
+
+    override suspend fun testConnection(baseUrl: String, credentials: SeerrCredentials): Result<SeerrStatusResponse> {
         val request = Request.Builder()
             .url(buildUrl(baseUrl, "/status"))
-            .withApiKey(apiKey)
+            .withAuth(credentials)
             .get()
             .build()
 
@@ -94,12 +146,10 @@ class SeerrApiClientImpl @Inject constructor(
 
     override suspend fun search(
         baseUrl: String,
-        apiKey: String,
+        credentials: SeerrCredentials,
         query: String,
         page: Int,
     ): Result<SeerrSearchResponse> {
-        // Use Request.Builder to parse the base URL, then HttpUrl.Builder
-        // for proper query parameter encoding (%20 for spaces, not +)
         val base = Request.Builder()
             .url(buildUrl(baseUrl, "/search"))
             .build().url.newBuilder()
@@ -108,7 +158,7 @@ class SeerrApiClientImpl @Inject constructor(
             .build()
         val request = Request.Builder()
             .url(base)
-            .withApiKey(apiKey)
+            .withAuth(credentials)
             .get()
             .build()
 
@@ -117,12 +167,12 @@ class SeerrApiClientImpl @Inject constructor(
 
     override suspend fun getMovieDetails(
         baseUrl: String,
-        apiKey: String,
+        credentials: SeerrCredentials,
         tmdbId: Int,
     ): Result<SeerrMovieDetails> {
         val request = Request.Builder()
             .url(buildUrl(baseUrl, "/movie/$tmdbId"))
-            .withApiKey(apiKey)
+            .withAuth(credentials)
             .get()
             .build()
 
@@ -131,12 +181,12 @@ class SeerrApiClientImpl @Inject constructor(
 
     override suspend fun getTvDetails(
         baseUrl: String,
-        apiKey: String,
+        credentials: SeerrCredentials,
         tmdbId: Int,
     ): Result<SeerrTvDetails> {
         val request = Request.Builder()
             .url(buildUrl(baseUrl, "/tv/$tmdbId"))
-            .withApiKey(apiKey)
+            .withAuth(credentials)
             .get()
             .build()
 
@@ -145,13 +195,13 @@ class SeerrApiClientImpl @Inject constructor(
 
     override suspend fun getTvSeasonDetails(
         baseUrl: String,
-        apiKey: String,
+        credentials: SeerrCredentials,
         tvId: Int,
         seasonNumber: Int,
     ): Result<SeerrSeasonDetail> {
         val request = Request.Builder()
             .url(buildUrl(baseUrl, "/tv/$tvId/season/$seasonNumber"))
-            .withApiKey(apiKey)
+            .withAuth(credentials)
             .get()
             .build()
 
@@ -160,12 +210,12 @@ class SeerrApiClientImpl @Inject constructor(
 
     override suspend fun getMovieRatings(
         baseUrl: String,
-        apiKey: String,
+        credentials: SeerrCredentials,
         tmdbId: Int,
     ): Result<SeerrRatings> {
         val request = Request.Builder()
             .url(buildUrl(baseUrl, "/movie/$tmdbId/ratings"))
-            .withApiKey(apiKey)
+            .withAuth(credentials)
             .get()
             .build()
 
@@ -174,12 +224,12 @@ class SeerrApiClientImpl @Inject constructor(
 
     override suspend fun getTvRatings(
         baseUrl: String,
-        apiKey: String,
+        credentials: SeerrCredentials,
         tmdbId: Int,
     ): Result<SeerrRatings> {
         val request = Request.Builder()
             .url(buildUrl(baseUrl, "/tv/$tmdbId/ratings"))
-            .withApiKey(apiKey)
+            .withAuth(credentials)
             .get()
             .build()
 
@@ -188,12 +238,12 @@ class SeerrApiClientImpl @Inject constructor(
 
     override suspend fun getMovieRatingsCombined(
         baseUrl: String,
-        apiKey: String,
+        credentials: SeerrCredentials,
         tmdbId: Int,
     ): Result<SeerrRatings> {
         val request = Request.Builder()
             .url(buildUrl(baseUrl, "/movie/$tmdbId/ratingscombined"))
-            .withApiKey(apiKey)
+            .withAuth(credentials)
             .get()
             .build()
 
@@ -202,13 +252,13 @@ class SeerrApiClientImpl @Inject constructor(
 
     override suspend fun getMovieRecommendations(
         baseUrl: String,
-        apiKey: String,
+        credentials: SeerrCredentials,
         tmdbId: Int,
         page: Int,
     ): Result<SeerrSearchResponse> {
         val request = Request.Builder()
             .url(buildUrl(baseUrl, "/movie/$tmdbId/recommendations?page=$page"))
-            .withApiKey(apiKey)
+            .withAuth(credentials)
             .get()
             .build()
 
@@ -217,13 +267,13 @@ class SeerrApiClientImpl @Inject constructor(
 
     override suspend fun getMovieSimilar(
         baseUrl: String,
-        apiKey: String,
+        credentials: SeerrCredentials,
         tmdbId: Int,
         page: Int,
     ): Result<SeerrSearchResponse> {
         val request = Request.Builder()
             .url(buildUrl(baseUrl, "/movie/$tmdbId/similar?page=$page"))
-            .withApiKey(apiKey)
+            .withAuth(credentials)
             .get()
             .build()
 
@@ -232,13 +282,13 @@ class SeerrApiClientImpl @Inject constructor(
 
     override suspend fun getTvRecommendations(
         baseUrl: String,
-        apiKey: String,
+        credentials: SeerrCredentials,
         tmdbId: Int,
         page: Int,
     ): Result<SeerrSearchResponse> {
         val request = Request.Builder()
             .url(buildUrl(baseUrl, "/tv/$tmdbId/recommendations?page=$page"))
-            .withApiKey(apiKey)
+            .withAuth(credentials)
             .get()
             .build()
 
@@ -247,13 +297,13 @@ class SeerrApiClientImpl @Inject constructor(
 
     override suspend fun getTvSimilar(
         baseUrl: String,
-        apiKey: String,
+        credentials: SeerrCredentials,
         tmdbId: Int,
         page: Int,
     ): Result<SeerrSearchResponse> {
         val request = Request.Builder()
             .url(buildUrl(baseUrl, "/tv/$tmdbId/similar?page=$page"))
-            .withApiKey(apiKey)
+            .withAuth(credentials)
             .get()
             .build()
 
@@ -262,7 +312,7 @@ class SeerrApiClientImpl @Inject constructor(
 
     override suspend fun requestMedia(
         baseUrl: String,
-        apiKey: String,
+        credentials: SeerrCredentials,
         mediaType: String,
         mediaId: Int,
         tvdbId: Int?,
@@ -287,7 +337,7 @@ class SeerrApiClientImpl @Inject constructor(
 
         val request = Request.Builder()
             .url(buildUrl(baseUrl, "/request"))
-            .withApiKey(apiKey)
+            .withAuth(credentials)
             .post(body)
             .build()
 
@@ -296,11 +346,11 @@ class SeerrApiClientImpl @Inject constructor(
 
     override suspend fun getRadarrSettings(
         baseUrl: String,
-        apiKey: String,
+        credentials: SeerrCredentials,
     ): Result<List<SeerrRadarrSettings>> {
         val request = Request.Builder()
             .url(buildUrl(baseUrl, "/settings/radarr"))
-            .withApiKey(apiKey)
+            .withAuth(credentials)
             .get()
             .build()
 
@@ -309,11 +359,11 @@ class SeerrApiClientImpl @Inject constructor(
 
     override suspend fun getSonarrSettings(
         baseUrl: String,
-        apiKey: String,
+        credentials: SeerrCredentials,
     ): Result<List<SeerrSonarrSettings>> {
         val request = Request.Builder()
             .url(buildUrl(baseUrl, "/settings/sonarr"))
-            .withApiKey(apiKey)
+            .withAuth(credentials)
             .get()
             .build()
 
@@ -322,12 +372,12 @@ class SeerrApiClientImpl @Inject constructor(
 
     override suspend fun getRadarrServiceDetail(
         baseUrl: String,
-        apiKey: String,
+        credentials: SeerrCredentials,
         id: Int,
     ): Result<SeerrRadarrServiceDetail> {
         val request = Request.Builder()
             .url(buildUrl(baseUrl, "/settings/radarr/$id"))
-            .withApiKey(apiKey)
+            .withAuth(credentials)
             .get()
             .build()
 
@@ -336,27 +386,25 @@ class SeerrApiClientImpl @Inject constructor(
 
     override suspend fun getSonarrServiceDetail(
         baseUrl: String,
-        apiKey: String,
+        credentials: SeerrCredentials,
         id: Int,
     ): Result<SeerrSonarrServiceDetail> {
         val request = Request.Builder()
             .url(buildUrl(baseUrl, "/settings/sonarr/$id"))
-            .withApiKey(apiKey)
+            .withAuth(credentials)
             .get()
             .build()
 
         return parseAndMap(executeRequest(request))
     }
 
-    // ── /service/ endpoints (used by request modal) ──
-
     override suspend fun getServiceRadarrServers(
         baseUrl: String,
-        apiKey: String,
+        credentials: SeerrCredentials,
     ): Result<List<SeerrServiceServer>> {
         val request = Request.Builder()
             .url(buildUrl(baseUrl, "/service/radarr"))
-            .withApiKey(apiKey)
+            .withAuth(credentials)
             .get()
             .build()
 
@@ -365,11 +413,11 @@ class SeerrApiClientImpl @Inject constructor(
 
     override suspend fun getServiceSonarrServers(
         baseUrl: String,
-        apiKey: String,
+        credentials: SeerrCredentials,
     ): Result<List<SeerrServiceServer>> {
         val request = Request.Builder()
             .url(buildUrl(baseUrl, "/service/sonarr"))
-            .withApiKey(apiKey)
+            .withAuth(credentials)
             .get()
             .build()
 
@@ -378,12 +426,12 @@ class SeerrApiClientImpl @Inject constructor(
 
     override suspend fun getServiceRadarrDetail(
         baseUrl: String,
-        apiKey: String,
+        credentials: SeerrCredentials,
         id: Int,
     ): Result<SeerrRadarrServiceDetail> {
         val request = Request.Builder()
             .url(buildUrl(baseUrl, "/service/radarr/$id"))
-            .withApiKey(apiKey)
+            .withAuth(credentials)
             .get()
             .build()
 
@@ -392,28 +440,26 @@ class SeerrApiClientImpl @Inject constructor(
 
     override suspend fun getServiceSonarrDetail(
         baseUrl: String,
-        apiKey: String,
+        credentials: SeerrCredentials,
         id: Int,
     ): Result<SeerrSonarrServiceDetail> {
         val request = Request.Builder()
             .url(buildUrl(baseUrl, "/service/sonarr/$id"))
-            .withApiKey(apiKey)
+            .withAuth(credentials)
             .get()
             .build()
 
         return parseAndMap(executeRequest(request))
     }
 
-    // ── Discover endpoints ──
-
     override suspend fun getTrending(
         baseUrl: String,
-        apiKey: String,
+        credentials: SeerrCredentials,
         page: Int,
     ): Result<SeerrSearchResponse> {
         val request = Request.Builder()
             .url(buildUrl(baseUrl, "/discover/trending?page=$page"))
-            .withApiKey(apiKey)
+            .withAuth(credentials)
             .get()
             .build()
 
@@ -422,7 +468,7 @@ class SeerrApiClientImpl @Inject constructor(
 
     override suspend fun getDiscoverMovies(
         baseUrl: String,
-        apiKey: String,
+        credentials: SeerrCredentials,
         page: Int,
         primaryReleaseDateGte: String?,
     ): Result<SeerrSearchResponse> {
@@ -435,7 +481,7 @@ class SeerrApiClientImpl @Inject constructor(
         }
         val request = Request.Builder()
             .url(buildUrl(baseUrl, path))
-            .withApiKey(apiKey)
+            .withAuth(credentials)
             .get()
             .build()
 
@@ -444,7 +490,7 @@ class SeerrApiClientImpl @Inject constructor(
 
     override suspend fun getDiscoverTv(
         baseUrl: String,
-        apiKey: String,
+        credentials: SeerrCredentials,
         page: Int,
         firstAirDateGte: String?,
     ): Result<SeerrSearchResponse> {
@@ -457,7 +503,7 @@ class SeerrApiClientImpl @Inject constructor(
         }
         val request = Request.Builder()
             .url(buildUrl(baseUrl, path))
-            .withApiKey(apiKey)
+            .withAuth(credentials)
             .get()
             .build()
 

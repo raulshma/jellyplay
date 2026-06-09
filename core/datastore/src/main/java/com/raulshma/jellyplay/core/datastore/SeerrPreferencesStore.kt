@@ -8,6 +8,7 @@ import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.emptyPreferences
 import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
+import com.raulshma.jellyplay.core.model.seerr.SeerrAuthMethod
 import com.raulshma.jellyplay.core.model.seerr.SeerrPreferences
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.CoroutineScope
@@ -27,12 +28,15 @@ private val Context.seerrDataStore: DataStore<Preferences> by preferencesDataSto
 @Singleton
 class SeerrPreferencesStore @Inject constructor(
     @ApplicationContext private val context: Context,
+    private val secureCredentialsStore: SeerrSecureCredentialsStore,
 ) {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
 
     private object Keys {
         val SERVER_URL = stringPreferencesKey("seerr_server_url")
-        val API_KEY = stringPreferencesKey("seerr_api_key")
+        val AUTH_METHOD = stringPreferencesKey("seerr_auth_method")
+        val USERNAME = stringPreferencesKey("seerr_username")
+        val EMAIL = stringPreferencesKey("seerr_email")
         val ENABLED = booleanPreferencesKey("seerr_enabled")
         val SEARCH_ENABLED = booleanPreferencesKey("seerr_search_enabled")
         val RECOMMENDATIONS_ENABLED = booleanPreferencesKey("seerr_recommendations_enabled")
@@ -51,7 +55,11 @@ class SeerrPreferencesStore @Inject constructor(
         .map { prefs ->
             SeerrPreferences(
                 serverUrl = prefs[Keys.SERVER_URL] ?: "",
-                apiKey = prefs[Keys.API_KEY] ?: "",
+                authMethod = try {
+                    SeerrAuthMethod.valueOf(prefs[Keys.AUTH_METHOD] ?: SeerrAuthMethod.API_KEY.name)
+                } catch (_: Exception) { SeerrAuthMethod.API_KEY },
+                username = prefs[Keys.USERNAME] ?: "",
+                email = prefs[Keys.EMAIL] ?: "",
                 enabled = prefs[Keys.ENABLED] ?: false,
                 searchEnabled = prefs[Keys.SEARCH_ENABLED] ?: false,
                 recommendationsEnabled = prefs[Keys.RECOMMENDATIONS_ENABLED] ?: false,
@@ -67,14 +75,22 @@ class SeerrPreferencesStore @Inject constructor(
         }
         .stateIn(scope, SharingStarted.Eagerly, SeerrPreferences())
 
-    val isConnected: Flow<Boolean> = preferences.map { it.serverUrl.isNotBlank() && it.apiKey.isNotBlank() }
+    val isConnected: Flow<Boolean> = preferences.map { it.serverUrl.isNotBlank() }
 
     suspend fun setServerUrl(url: String) {
         context.seerrDataStore.edit { it[Keys.SERVER_URL] = url.trim() }
     }
 
-    suspend fun setApiKey(key: String) {
-        context.seerrDataStore.edit { it[Keys.API_KEY] = key.trim() }
+    suspend fun setAuthMethod(method: SeerrAuthMethod) {
+        context.seerrDataStore.edit { it[Keys.AUTH_METHOD] = method.name }
+    }
+
+    suspend fun setUsername(username: String) {
+        context.seerrDataStore.edit { it[Keys.USERNAME] = username.trim() }
+    }
+
+    suspend fun setEmail(email: String) {
+        context.seerrDataStore.edit { it[Keys.EMAIL] = email.trim() }
     }
 
     suspend fun setEnabled(enabled: Boolean) {
@@ -122,9 +138,12 @@ class SeerrPreferencesStore @Inject constructor(
     }
 
     suspend fun disconnect() {
+        secureCredentialsStore.clearAll()
         context.seerrDataStore.edit { prefs ->
             prefs.remove(Keys.SERVER_URL)
-            prefs.remove(Keys.API_KEY)
+            prefs.remove(Keys.AUTH_METHOD)
+            prefs.remove(Keys.USERNAME)
+            prefs.remove(Keys.EMAIL)
             prefs[Keys.ENABLED] = false
             prefs[Keys.SEARCH_ENABLED] = false
             prefs[Keys.RECOMMENDATIONS_ENABLED] = false

@@ -1,5 +1,6 @@
 package com.raulshma.jellyplay.core.network.seerr
 
+import com.raulshma.jellyplay.core.model.seerr.SeerrCredentials
 import com.raulshma.jellyplay.core.model.seerr.SeerrRadarrSettings
 import kotlinx.coroutines.runBlocking
 import okhttp3.OkHttpClient
@@ -49,7 +50,7 @@ class SeerrApiClientTest {
         mockWebServer.enqueue(MockResponse().setBody(jsonResponse).setResponseCode(200))
 
         val baseUrl = mockWebServer.url("/").toString()
-        val result = apiClient.getRadarrSettings(baseUrl, "apikey")
+        val result = apiClient.getRadarrSettings(baseUrl, SeerrCredentials.ApiKey("apikey"))
 
         assertTrue(result.isSuccess)
         val settings = result.getOrThrow()
@@ -68,7 +69,7 @@ class SeerrApiClientTest {
         mockWebServer.enqueue(MockResponse().setResponseCode(401).setBody("{\"message\": \"Unauthorized\"}"))
 
         val baseUrl = mockWebServer.url("/").toString()
-        val result = apiClient.getRadarrSettings(baseUrl, "wrongkey")
+        val result = apiClient.getRadarrSettings(baseUrl, SeerrCredentials.ApiKey("wrongkey"))
 
         assertTrue(result.isFailure)
         assertTrue(result.exceptionOrNull()?.message?.contains("401") == true)

@@ -34,6 +34,9 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.SegmentedButton
+import androidx.compose.material3.SegmentedButtonDefaults
+import androidx.compose.material3.SingleChoiceSegmentedButtonRow
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -52,6 +55,7 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
+import com.raulshma.jellyplay.core.model.seerr.SeerrAuthMethod
 import com.raulshma.jellyplay.core.ui.adaptive.LocalAdaptiveInfo
 import com.raulshma.jellyplay.core.ui.adaptive.bottomPadding
 import com.raulshma.jellyplay.core.ui.adaptive.contentPadding
@@ -114,24 +118,50 @@ fun SeerrSettingsScreen(
             }
 
             item {
-                Spacer(Modifier.height(4.dp))
+                Spacer(Modifier.height(12.dp))
             }
 
             item {
-                OutlinedTextField(
-                    value = viewModel.apiKey,
-                    onValueChange = viewModel::onApiKeyChanged,
-                    label = { Text("API Key") },
-                    placeholder = { Text("Enter your Seerr API key") },
-                    leadingIcon = {
-                        Icon(Tabler.Outline.Key, contentDescription = null)
-                    },
-                    visualTransformation = PasswordVisualTransformation(),
-                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
-                    singleLine = true,
+                SingleChoiceSegmentedButtonRow(
                     modifier = Modifier.fillMaxWidth(),
-                    enabled = !isTesting,
-                )
+                ) {
+                    SegmentedButton(
+                        shape = SegmentedButtonDefaults.itemShape(index = 0, count = 3),
+                        onClick = { viewModel.onAuthMethodChanged(SeerrAuthMethod.API_KEY) },
+                        selected = viewModel.authMethod == SeerrAuthMethod.API_KEY,
+                        icon = {},
+                    ) {
+                        Text("API Key")
+                    }
+                    SegmentedButton(
+                        shape = SegmentedButtonDefaults.itemShape(index = 1, count = 3),
+                        onClick = { viewModel.onAuthMethodChanged(SeerrAuthMethod.JELLYFIN) },
+                        selected = viewModel.authMethod == SeerrAuthMethod.JELLYFIN,
+                        icon = {},
+                    ) {
+                        Text("Jellyfin")
+                    }
+                    SegmentedButton(
+                        shape = SegmentedButtonDefaults.itemShape(index = 2, count = 3),
+                        onClick = { viewModel.onAuthMethodChanged(SeerrAuthMethod.LOCAL) },
+                        selected = viewModel.authMethod == SeerrAuthMethod.LOCAL,
+                        icon = {},
+                    ) {
+                        Text("Local")
+                    }
+                }
+            }
+
+            item {
+                Spacer(Modifier.height(8.dp))
+            }
+
+            item {
+                when (viewModel.authMethod) {
+                    SeerrAuthMethod.API_KEY -> ApiKeyFields(viewModel)
+                    SeerrAuthMethod.JELLYFIN -> JellyfinAuthFields(viewModel)
+                    SeerrAuthMethod.LOCAL -> LocalAuthFields(viewModel)
+                }
             }
 
             item {
@@ -145,7 +175,11 @@ fun SeerrSettingsScreen(
                 ) {
                     Button(
                         onClick = { viewModel.testConnection() },
-                        enabled = !isTesting && viewModel.serverUrl.isNotBlank() && viewModel.apiKey.isNotBlank(),
+                        enabled = !isTesting && viewModel.serverUrl.isNotBlank() && when (viewModel.authMethod) {
+                            SeerrAuthMethod.API_KEY -> viewModel.apiKey.isNotBlank()
+                            SeerrAuthMethod.JELLYFIN -> viewModel.username.isNotBlank() && viewModel.password.isNotBlank()
+                            SeerrAuthMethod.LOCAL -> viewModel.email.isNotBlank() && viewModel.password.isNotBlank()
+                        },
                         modifier = Modifier.tvFocusable(),
                         shape = ShapeCache.smooth12,
                     ) {
@@ -155,7 +189,13 @@ fun SeerrSettingsScreen(
                             )
                             Spacer(Modifier.width(8.dp))
                         }
-                        Text("Test Connection")
+                        Text(
+                            when (viewModel.authMethod) {
+                                SeerrAuthMethod.API_KEY -> "Test Connection"
+                                SeerrAuthMethod.JELLYFIN,
+                                SeerrAuthMethod.LOCAL -> "Sign In"
+                            }
+                        )
                     }
 
                     if (isConnected) {
@@ -322,6 +362,87 @@ fun SeerrSettingsScreen(
             }
         }
     }
+}
+
+@Composable
+private fun ApiKeyFields(viewModel: SeerrSettingsViewModel) {
+    OutlinedTextField(
+        value = viewModel.apiKey,
+        onValueChange = viewModel::onApiKeyChanged,
+        label = { Text("API Key") },
+        placeholder = { Text("Enter your Seerr API key") },
+        leadingIcon = {
+            Icon(Tabler.Outline.Key, contentDescription = null)
+        },
+        visualTransformation = PasswordVisualTransformation(),
+        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
+        singleLine = true,
+        modifier = Modifier.fillMaxWidth(),
+        enabled = !viewModel.isTesting,
+    )
+}
+
+@Composable
+private fun JellyfinAuthFields(viewModel: SeerrSettingsViewModel) {
+    OutlinedTextField(
+        value = viewModel.username,
+        onValueChange = viewModel::onUsernameChanged,
+        label = { Text("Username") },
+        placeholder = { Text("Jellyfin username") },
+        leadingIcon = {
+            Icon(Tabler.Outline.User, contentDescription = null)
+        },
+        singleLine = true,
+        modifier = Modifier.fillMaxWidth(),
+        enabled = !viewModel.isTesting,
+    )
+    Spacer(Modifier.height(4.dp))
+    OutlinedTextField(
+        value = viewModel.password,
+        onValueChange = viewModel::onPasswordChanged,
+        label = { Text("Password") },
+        placeholder = { Text("Jellyfin password") },
+        leadingIcon = {
+            Icon(Tabler.Outline.Lock, contentDescription = null)
+        },
+        visualTransformation = PasswordVisualTransformation(),
+        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
+        singleLine = true,
+        modifier = Modifier.fillMaxWidth(),
+        enabled = !viewModel.isTesting,
+    )
+}
+
+@Composable
+private fun LocalAuthFields(viewModel: SeerrSettingsViewModel) {
+    OutlinedTextField(
+        value = viewModel.email,
+        onValueChange = viewModel::onEmailChanged,
+        label = { Text("Email") },
+        placeholder = { Text("Seerr account email") },
+        leadingIcon = {
+            Icon(Tabler.Outline.Mail, contentDescription = null)
+        },
+        singleLine = true,
+        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Email),
+        modifier = Modifier.fillMaxWidth(),
+        enabled = !viewModel.isTesting,
+    )
+    Spacer(Modifier.height(4.dp))
+    OutlinedTextField(
+        value = viewModel.password,
+        onValueChange = viewModel::onPasswordChanged,
+        label = { Text("Password") },
+        placeholder = { Text("Seerr account password") },
+        leadingIcon = {
+            Icon(Tabler.Outline.Lock, contentDescription = null)
+        },
+        visualTransformation = PasswordVisualTransformation(),
+        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
+        singleLine = true,
+        modifier = Modifier.fillMaxWidth(),
+        enabled = !viewModel.isTesting,
+    )
 }
 
 @Composable

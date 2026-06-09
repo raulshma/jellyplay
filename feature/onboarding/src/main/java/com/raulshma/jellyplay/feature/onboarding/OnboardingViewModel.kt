@@ -1,6 +1,8 @@
 package com.raulshma.jellyplay.feature.onboarding
 
 import com.raulshma.jellyplay.core.datastore.SeerrPreferencesStore
+import com.raulshma.jellyplay.core.datastore.SeerrSecureCredentialsStore
+import com.raulshma.jellyplay.core.model.seerr.SeerrAuthMethod
 import com.raulshma.jellyplay.core.datastore.UserPreferencesStore
 import com.raulshma.jellyplay.core.model.ColorStyle
 import com.raulshma.jellyplay.core.model.ContrastLevel
@@ -22,6 +24,7 @@ import javax.inject.Inject
 class OnboardingViewModel @Inject constructor(
     val preferencesStore: UserPreferencesStore,
     val seerrPreferencesStore: SeerrPreferencesStore,
+    private val seerrSecureCredentialsStore: SeerrSecureCredentialsStore,
 ) : JellyPlayViewModel() {
 
     val preferences = preferencesStore.preferences
@@ -170,7 +173,23 @@ class OnboardingViewModel @Inject constructor(
     }
 
     fun setSeerrApiKey(key: String) {
-        launch { seerrPreferencesStore.setApiKey(key) }
+        launch { seerrSecureCredentialsStore.setApiKey(key) }
+    }
+
+    fun setSeerrAuthMethod(method: SeerrAuthMethod) {
+        launch { seerrPreferencesStore.setAuthMethod(method) }
+    }
+
+    fun setSeerrUsername(username: String) {
+        launch { seerrPreferencesStore.setUsername(username) }
+    }
+
+    fun setSeerrEmail(email: String) {
+        launch { seerrPreferencesStore.setEmail(email) }
+    }
+
+    fun setSeerrPassword(password: String) {
+        launch { seerrSecureCredentialsStore.setPassword(password) }
     }
 
     fun setSeerrEnabled(enabled: Boolean) {
