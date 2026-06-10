@@ -34,7 +34,6 @@ class PlayerControlsTest {
         supportsNightMode: Boolean = false,
         supportsAudioDelay: Boolean = false,
         supportsAudioPassthrough: Boolean = false,
-        supportsOcr: Boolean = false,
         currentAspectRatio: AspectRatio = AspectRatio.AUTO,
         detectedAspectRatio: AspectRatio? = null,
         dialogueBoostEnabled: Boolean = false,
@@ -42,7 +41,6 @@ class PlayerControlsTest {
         nightModeEnabled: Boolean = false,
         nightModeStrength: EffectStrength = EffectStrength.MODERATE,
         audioPassthrough: Boolean = false,
-        isOcrRunning: Boolean = false,
     ) {
         composeTestRule.setContent {
             MaterialTheme {
@@ -59,7 +57,6 @@ class PlayerControlsTest {
                     nightModeEnabled = nightModeEnabled,
                     nightModeStrength = nightModeStrength,
                     audioPassthrough = audioPassthrough,
-                    isOcrRunning = isOcrRunning,
                     currentAspectRatio = currentAspectRatio,
                     detectedAspectRatio = detectedAspectRatio,
                     isVisible = isVisible,
@@ -68,7 +65,6 @@ class PlayerControlsTest {
                     supportsNightMode = supportsNightMode,
                     supportsAudioDelay = supportsAudioDelay,
                     supportsAudioPassthrough = supportsAudioPassthrough,
-                    supportsOcr = supportsOcr,
                     onPlayPause = {},
                     onSeekBack = {},
                     onSeekForward = {},
@@ -281,21 +277,6 @@ class PlayerControlsTest {
     }
 
     @Test
-    fun playerControls_supportsOcr_showsOcrInOverflow() {
-        setContent(supportsOcr = true)
-        composeTestRule.onNodeWithContentDescription("More options").performClick()
-        composeTestRule.waitUntil(5000L) { composeTestRule.onNodeWithText("OCR Subtitle").fetchSemanticsNodes().isNotEmpty() }
-        composeTestRule.onNodeWithText("OCR Subtitle").assertIsDisplayed()
-    }
-
-    @Test
-    fun playerControls_noOcr_hidesOcrFromOverflow() {
-        setContent(supportsOcr = false)
-        composeTestRule.onNodeWithContentDescription("More options").performClick()
-        composeTestRule.onNodeWithText("OCR Subtitle").assertDoesNotExist()
-    }
-
-    @Test
     fun playerControls_backButton_callsOnBack() {
         var backClicked = false
         composeTestRule.setContent {
@@ -313,7 +294,6 @@ class PlayerControlsTest {
                     nightModeEnabled = false,
                     nightModeStrength = EffectStrength.MODERATE,
                     audioPassthrough = false,
-                    isOcrRunning = false,
                     currentAspectRatio = AspectRatio.AUTO,
                     detectedAspectRatio = null,
                     isVisible = true,
@@ -339,7 +319,6 @@ class PlayerControlsTest {
                     onAudioDelayClick = {},
                     onDecoderClick = {},
                     onPassthroughClick = {},
-                    onOcrClick = {},
                     onSubtitleDownloadClick = {},
                 )
             }
@@ -366,7 +345,6 @@ class PlayerControlsTest {
                     nightModeEnabled = false,
                     nightModeStrength = EffectStrength.MODERATE,
                     audioPassthrough = false,
-                    isOcrRunning = false,
                     currentAspectRatio = AspectRatio.AUTO,
                     detectedAspectRatio = null,
                     isVisible = true,
@@ -392,7 +370,6 @@ class PlayerControlsTest {
                     onAudioDelayClick = {},
                     onDecoderClick = {},
                     onPassthroughClick = {},
-                    onOcrClick = {},
                     onSubtitleDownloadClick = {},
                 )
             }

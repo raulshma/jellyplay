@@ -373,7 +373,7 @@ fun AudioSettingsScreen(
                         SettingToggleItem(
                             icon = Tabler.Outline.Speakerphone,
                             title = "Volume Boost",
-                            subtitle = if (preferences.volumeBoostEnabled) "+${preferences.volumeBoostGain / 100} dB gain" else "Off",
+                            subtitle = if (preferences.volumeBoostEnabled) "+${"%.1f".format(preferences.volumeBoostGain / 100.0)} dB gain" else "Off",
                             checked = preferences.volumeBoostEnabled,
                             highlighted = highlightSettingId == "volume_boost",
                             index = idx++, count = total,
@@ -384,7 +384,7 @@ fun AudioSettingsScreen(
                                 icon = Tabler.Outline.Speakerphone,
                                 title = "Volume Boost Gain",
                                 subtitle = "Loudness boost level",
-                                trailingText = "+${preferences.volumeBoostGain / 100} dB",
+                                trailingText = "+${"%.1f".format(preferences.volumeBoostGain / 100.0)} dB",
                                 index = idx++, count = total,
                                 onClick = { activeDialog = AudioSettingsDialog.VolumeBoostGainPicker },
                             )
@@ -723,11 +723,11 @@ fun AudioSettingsScreen(
         SettingsSliderSheet(
             title = "Volume Boost Gain",
             value = preferences.volumeBoostGain.toFloat(),
-            valueRange = 0f..1500f,
-            steps = 15,
+            valueRange = 0f..3000f,
+            steps = 30,
             valueLabel = { "+${it.toInt() / 100} dB" },
             rangeStartLabel = "0 dB",
-            rangeEndLabel = "+15 dB",
+            rangeEndLabel = "+30 dB",
             onDismiss = { activeDialog = AudioSettingsDialog.None },
             onConfirm = {
                 viewModel.setVolumeBoostGain(it.toInt())
