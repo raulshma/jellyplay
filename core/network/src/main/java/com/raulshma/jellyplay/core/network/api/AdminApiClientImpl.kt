@@ -173,4 +173,59 @@ class AdminApiClientImpl @Inject constructor(
             ),
         )
     }
+
+    override suspend fun play(
+        sessionId: String,
+        playCommand: String,
+        itemIds: List<String>,
+        startPositionTicks: Long?,
+        mediaSourceId: String?,
+        audioStreamIndex: Int?,
+        subtitleStreamIndex: Int?,
+        startIndex: Int?,
+    ): Result<Unit> = engine.apiResultWithRetry {
+        engine.requireApi().sessionApi.play(
+            sessionId = sessionId,
+            playCommand = org.jellyfin.sdk.model.api.PlayCommand.entries.find { it.serialName.equals(playCommand, ignoreCase = true) }
+                ?: org.jellyfin.sdk.model.api.PlayCommand.PLAY_NOW,
+            itemIds = itemIds.map { it.toUUID() },
+            startPositionTicks = startPositionTicks,
+            mediaSourceId = mediaSourceId,
+            audioStreamIndex = audioStreamIndex,
+            subtitleStreamIndex = subtitleStreamIndex,
+            startIndex = startIndex,
+        )
+    }
+
+    override suspend fun sendPlaystateCommand(
+        sessionId: String,
+        command: String,
+        seekPositionTicks: Long?,
+        controllingUserId: String?,
+    ): Result<Unit> = engine.apiResultWithRetry {
+        engine.requireApi().sessionApi.sendPlaystateCommand(
+            sessionId = sessionId,
+            command = org.jellyfin.sdk.model.api.PlaystateCommand.entries.find { it.serialName.equals(command, ignoreCase = true) }
+                ?: org.jellyfin.sdk.model.api.PlaystateCommand.PAUSE,
+            seekPositionTicks = seekPositionTicks,
+            controllingUserId = controllingUserId,
+        )
+    }
+
+    override suspend fun sendGeneralCommand(
+        sessionId: String,
+        commandName: String,
+        controllingUserId: String?,
+        arguments: Map<String, String>?,
+    ): Result<Unit> = engine.apiResultWithRetry {
+        engine.requireApi().sessionApi.sendFullGeneralCommand(
+            sessionId,
+            org.jellyfin.sdk.model.api.GeneralCommand(
+                name = org.jellyfin.sdk.model.api.GeneralCommandType.entries.find { it.serialName.equals(commandName, ignoreCase = true) }
+                    ?: org.jellyfin.sdk.model.api.GeneralCommandType.SET_VOLUME,
+                controllingUserId = controllingUserId?.toUUID() ?: java.util.UUID(0L, 0L),
+                arguments = arguments ?: emptyMap(),
+            )
+        )
+    }
 }

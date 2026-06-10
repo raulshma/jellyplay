@@ -11,6 +11,7 @@ import com.google.android.gms.cast.framework.CastContext
 import com.google.android.gms.cast.framework.CastSession
 import com.google.android.gms.cast.framework.SessionManagerListener
 import com.raulshma.jellyplay.core.data.cast.dlna.DlnaCastStrategy
+import com.raulshma.jellyplay.core.data.cast.remote.JellyfinRemotePlayCastStrategy
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -43,12 +44,14 @@ class CastManager @Inject constructor(
     @ApplicationContext private val context: Context,
     private val googleCastStrategy: GoogleCastStrategy,
     private val dlnaCastStrategy: DlnaCastStrategy,
+    private val jellyfinRemotePlayCastStrategy: JellyfinRemotePlayCastStrategy,
 ) {
     companion object {
         private const val TAG = "CastManager"
         const val STRATEGY_GOOGLE = "google"
         const val STRATEGY_LIBVLC = "libvlc"
         const val STRATEGY_DLNA = "dlna"
+        const val STRATEGY_JELLYFIN = "jellyfin"
     }
 
     private val strategies = mutableMapOf<String, CastStrategy>()
@@ -92,6 +95,10 @@ class CastManager @Inject constructor(
     fun setVolume(volume: Float) {
         if (activeStrategyName == STRATEGY_DLNA) {
             dlnaCastStrategy.setRendererVolume(volume)
+            return
+        }
+        if (activeStrategyName == STRATEGY_JELLYFIN) {
+            jellyfinRemotePlayCastStrategy.setRendererVolume(volume)
             return
         }
         val player = castPlayer ?: return
@@ -142,6 +149,14 @@ class CastManager @Inject constructor(
             _castVolume.value = dlnaCastStrategy.rendererVolume.value
             return
         }
+        if (activeStrategyName == STRATEGY_JELLYFIN) {
+            jellyfinRemotePlayCastStrategy.refreshPlaybackState()
+            _castPositionMs.value = jellyfinRemotePlayCastStrategy.positionMs.value
+            _castDurationMs.value = jellyfinRemotePlayCastStrategy.durationMs.value
+            _castIsPlaying.value = jellyfinRemotePlayCastStrategy.isPlaying.value
+            _castVolume.value = jellyfinRemotePlayCastStrategy.volume.value
+            return
+        }
         val player = castPlayer ?: return
         val snapshot = withContext(Dispatchers.Default) {
             CastPlayerSnapshot(
@@ -162,13 +177,14 @@ class CastManager @Inject constructor(
     private fun toggleTicker() {
         tickerJob?.cancel()
         val isDlna = activeStrategyName == STRATEGY_DLNA
-        val shouldTick = if (isDlna) {
-            dlnaCastStrategy.isConnected.value
-        } else {
-            castPlayer != null && castPlayer?.isPlaying == true
+        val isJellyfin = activeStrategyName == STRATEGY_JELLYFIN
+        val shouldTick = when {
+            isDlna -> dlnaCastStrategy.isConnected.value
+            isJellyfin -> jellyfinRemotePlayCastStrategy.isConnected.value
+            else -> castPlayer != null && castPlayer?.isPlaying == true
         }
         if (shouldTick) {
-            val interval = if (isDlna) 1000L else 500L
+            val interval = if (isDlna || isJellyfin) 1000L else 500L
             tickerJob = coroutineScope.launch {
                 while (isActive) {
                     delay(interval)
@@ -206,6 +222,7 @@ class CastManager @Inject constructor(
     init {
         strategies[STRATEGY_GOOGLE] = googleCastStrategy
         strategies[STRATEGY_DLNA] = dlnaCastStrategy
+        strategies[STRATEGY_JELLYFIN] = jellyfinRemotePlayCastStrategy
         ensureGoogleSessionListener()
         startDeviceMerge()
     }
@@ -308,26 +325,26 @@ class CastManager @Inject constructor(
     }
 
     fun play() {
-        if (activeStrategyName == STRATEGY_DLNA) {
-            dlnaCastStrategy.play()
-        } else {
-            castPlayer?.play()
+        when (activeStrategyName) {
+            STRATEGY_DLNA -> dlnaCastStrategy.play()
+            STRATEGY_JELLYFIN -> jellyfinRemotePlayCastStrategy.play()
+            else -> castPlayer?.play()
         }
     }
 
     fun pause() {
-        if (activeStrategyName == STRATEGY_DLNA) {
-            dlnaCastStrategy.pause()
-        } else {
-            castPlayer?.pause()
+        when (activeStrategyName) {
+            STRATEGY_DLNA -> dlnaCastStrategy.pause()
+            STRATEGY_JELLYFIN -> jellyfinRemotePlayCastStrategy.pause()
+            else -> castPlayer?.pause()
         }
     }
 
     fun seekTo(positionMs: Long) {
-        if (activeStrategyName == STRATEGY_DLNA) {
-            dlnaCastStrategy.seekTo(positionMs)
-        } else {
-            castPlayer?.seekTo(positionMs)
+        when (activeStrategyName) {
+            STRATEGY_DLNA -> dlnaCastStrategy.seekTo(positionMs)
+            STRATEGY_JELLYFIN -> jellyfinRemotePlayCastStrategy.seekTo(positionMs)
+            else -> castPlayer?.seekTo(positionMs)
         }
     }
 
@@ -371,6 +388,10 @@ class CastManager @Inject constructor(
             loadDlnaMedia(mediaItem, startPositionMs)
             return
         }
+        if (activeStrategyName == STRATEGY_JELLYFIN) {
+            loadJellyfinMedia(mediaItem, startPositionMs)
+            return
+        }
         ensureGoogleSessionListener()
         externalListener?.let { castPlayer?.removeListener(it) }
         externalListener = listener
@@ -387,6 +408,15 @@ class CastManager @Inject constructor(
         val url = mediaItem.localConfiguration?.uri?.toString() ?: return
         val title = mediaItem.mediaMetadata.title?.toString() ?: ""
         dlnaCastStrategy.loadMedia(url, title, startPositionMs)
+        externalListener?.let { castPlayer?.removeListener(it) }
+        externalListener = null
+        coroutineScope.launch { updateCastState() }
+        toggleTicker()
+    }
+
+    private fun loadJellyfinMedia(mediaItem: MediaItem, startPositionMs: Long) {
+        val itemId = mediaItem.mediaId
+        jellyfinRemotePlayCastStrategy.loadMedia(itemId, startPositionMs)
         externalListener?.let { castPlayer?.removeListener(it) }
         externalListener = null
         coroutineScope.launch { updateCastState() }

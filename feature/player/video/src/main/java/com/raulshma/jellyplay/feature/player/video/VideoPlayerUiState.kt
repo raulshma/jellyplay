@@ -25,6 +25,9 @@ import com.raulshma.jellyplay.feature.player.video.components.AspectRatio
 import com.raulshma.jellyplay.feature.player.video.engine.EngineCapabilities
 import com.raulshma.jellyplay.feature.player.video.engine.EngineVideoStats
 import com.raulshma.jellyplay.feature.player.video.engine.VideoEffectsConfig
+import com.raulshma.jellyplay.core.model.PersonInfo
+import com.raulshma.jellyplay.core.model.LyricsLine
+
 data class VideoPlayerUiState(
     val title: String = "",
     val subtitle: String = "",
@@ -33,6 +36,10 @@ data class VideoPlayerUiState(
     val duration: Long = 0L,
     val playbackSpeed: Float = 1.0f,
     val audioTracks: List<TrackOption> = emptyList(),
+    val overview: String = "",
+    val people: List<PersonInfo> = emptyList(),
+    val artworkUrl: String? = null,
+    val lyricsLines: List<LyricsLine> = emptyList(),
     val subtitleTracks: List<TrackOption> = emptyList(),
     val currentSubtitleCues: List<String> = emptyList(),
     val chapters: List<ChapterInfo> = emptyList(),

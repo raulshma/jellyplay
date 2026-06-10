@@ -36,6 +36,8 @@ import com.raulshma.jellyplay.core.model.ReverbPreset
 import com.raulshma.jellyplay.core.model.StreamType
 import com.raulshma.jellyplay.core.model.StreamingQuality
 import com.raulshma.jellyplay.core.model.SubtitleStyle
+import com.raulshma.jellyplay.core.model.isAudioType
+import com.raulshma.jellyplay.core.model.isMusicTrack
 import com.raulshma.jellyplay.core.ui.viewmodel.JellyPlayViewModel
 import com.raulshma.jellyplay.feature.player.video.components.AspectRatio
 import com.raulshma.jellyplay.feature.player.video.engine.MpvPlayerEngine
@@ -1013,7 +1015,30 @@ class VideoPlayerViewModel @Inject constructor(
                 chapters = detail.chapters,
                 seriesId = detail.item.seriesId,
                 currentSeasonId = detail.item.seasonId ?: state.currentSeasonId,
+                overview = detail.item.overview ?: "",
+                people = detail.people,
+                artworkUrl = getImageUrl(detail.item.id, 400),
             )
+        }
+        fetchCompanionLyrics(detail)
+    }
+
+    private fun fetchCompanionLyrics(detail: MediaDetail) {
+        val item = detail.item
+        if (item.mediaType.isAudioType || item.mediaType.isMusicTrack) {
+            launch {
+                val artist = item.albumArtist ?: item.artistItems.firstOrNull()?.name ?: ""
+                val durationSec = (item.runTimeTicks ?: 0L) / 10_000_000L
+                val lyricsResult = mediaRepository.getLyricsWithFallback(
+                    itemId = item.id,
+                    artistName = artist,
+                    trackName = item.name,
+                    duration = durationSec.toDouble()
+                ).getOrNull()
+                _uiState.update { it.copy(lyricsLines = lyricsResult?.lines ?: emptyList()) }
+            }
+        } else {
+            _uiState.update { it.copy(lyricsLines = emptyList()) }
         }
     }
 
@@ -1155,6 +1180,7 @@ class VideoPlayerViewModel @Inject constructor(
         )
 
         val mediaItem = MediaItem.Builder()
+            .setMediaId(currentItemId)
             .setUri(url)
             .setMediaMetadata(
                 MediaMetadata.Builder()
