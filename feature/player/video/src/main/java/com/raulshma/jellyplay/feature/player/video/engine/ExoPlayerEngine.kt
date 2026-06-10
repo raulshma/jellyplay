@@ -72,7 +72,7 @@ class ExoPlayerEngine(
     bandwidthMeter: DefaultBandwidthMeter? = null,
 ) : MediaEngine {
 
-    private val engineScope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
+    private var engineScope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
 
     private val mainHandler = Handler(Looper.getMainLooper())
 
@@ -200,6 +200,7 @@ class ExoPlayerEngine(
 
     override fun load(request: PlaybackRequest) {
         release()
+        engineScope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
 
         val exoCfg = (currentConfig.engineSpecific as? ExoPlayerEngineConfig) ?: ExoPlayerEngineConfig()
 
