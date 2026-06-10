@@ -2,6 +2,7 @@ package com.raulshma.jellyplay.core.network.seerr
 
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.runBlocking
+import com.raulshma.jellyplay.core.model.seerr.SeerrCredentials
 import okhttp3.OkHttpClient
 import okhttp3.mockwebserver.MockResponse
 import okhttp3.mockwebserver.MockWebServer
@@ -31,8 +32,6 @@ class ResilientSeerrApiClientTest {
         mockWebServer.shutdown()
     }
 
-    // ── Backoff calculation tests ──
-
     @Test
     fun `calculateBackoff returns value within expected range`() {
         repeat(100) {
@@ -54,8 +53,6 @@ class ResilientSeerrApiClientTest {
             )
         }
     }
-
-    // ── isRetryable tests ──
 
     @Test
     fun `isRetryable returns true for SocketTimeoutException`() {
@@ -126,16 +123,13 @@ class ResilientSeerrApiClientTest {
         assertTrue(!result)
     }
 
-    // ── Integration tests with MockWebServer ──
-
     @Test
     fun `retries on HTTP 503 and succeeds on second attempt`() = runBlocking {
-        // First attempt: 503, second attempt: 200
         mockWebServer.enqueue(MockResponse().setResponseCode(503).setBody("{\"message\":\"Service Unavailable\"}"))
         mockWebServer.enqueue(MockResponse().setResponseCode(200).setBody("{\"version\":\"1.0.0\"}"))
 
         val baseUrl = mockWebServer.url("/").toString()
-        val result = resilientClient.testConnection(baseUrl, "apikey")
+        val result = resilientClient.testConnection(baseUrl, SeerrCredentials.ApiKey("apikey"))
 
         assertTrue("Expected success after retry", result.isSuccess)
         assertEquals("1.0.0", result.getOrThrow().version)
@@ -144,13 +138,12 @@ class ResilientSeerrApiClientTest {
 
     @Test
     fun `retries on HTTP 500 up to MAX_RETRIES times`() = runBlocking {
-        // Enqueue MAX_RETRIES + 1 failures to exhaust retries
         repeat(ResilientSeerrApiClient.MAX_RETRIES) {
             mockWebServer.enqueue(MockResponse().setResponseCode(500).setBody("{\"message\":\"Internal Server Error\"}"))
         }
 
         val baseUrl = mockWebServer.url("/").toString()
-        val result = resilientClient.testConnection(baseUrl, "apikey")
+        val result = resilientClient.testConnection(baseUrl, SeerrCredentials.ApiKey("apikey"))
 
         assertTrue("Expected failure after exhausting retries", result.isFailure)
         assertEquals(ResilientSeerrApiClient.MAX_RETRIES, mockWebServer.requestCount)
@@ -161,7 +154,7 @@ class ResilientSeerrApiClientTest {
         mockWebServer.enqueue(MockResponse().setResponseCode(401).setBody("{\"message\":\"Unauthorized\"}"))
 
         val baseUrl = mockWebServer.url("/").toString()
-        val result = resilientClient.testConnection(baseUrl, "wrongkey")
+        val result = resilientClient.testConnection(baseUrl, SeerrCredentials.ApiKey("wrongkey"))
 
         assertTrue("Expected failure for 401", result.isFailure)
         assertEquals("Should not retry 401", 1, mockWebServer.requestCount)
@@ -172,7 +165,7 @@ class ResilientSeerrApiClientTest {
         mockWebServer.enqueue(MockResponse().setResponseCode(200).setBody("{\"version\":\"2.0.0\"}"))
 
         val baseUrl = mockWebServer.url("/").toString()
-        val result = resilientClient.testConnection(baseUrl, "apikey")
+        val result = resilientClient.testConnection(baseUrl, SeerrCredentials.ApiKey("apikey"))
 
         assertTrue("Expected success", result.isSuccess)
         assertEquals("2.0.0", result.getOrThrow().version)

@@ -30,7 +30,7 @@ class SeerrRecommendationsWidgetWorker @AssistedInject constructor(
 
     override suspend fun doWork(): Result = runCatching {
         val seerrPrefs = seerrPreferencesStore.preferences.first()
-        if (seerrPrefs.serverUrl.isBlank() || seerrPrefs.apiKey.isBlank()) {
+        if (seerrPrefs.serverUrl.isBlank()) {
             WidgetPersistHelper.persistSeerrItems(applicationContext, userPreferencesStore, emptyList(), versionBumpOnly = true)
             return@runCatching
         }

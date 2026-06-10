@@ -49,6 +49,20 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.activity.compose.BackHandler
+import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.material3.DockedSearchBar
+import androidx.compose.material3.IconButton
+import androidx.compose.material3.SearchBarDefaults
+import androidx.compose.ui.focus.onFocusEvent
+import com.raulshma.jellyplay.core.ui.components.TopBarStyle
+import androidx.compose.material3.ListItem
+import androidx.compose.material3.ListItemDefaults
+import com.raulshma.jellyplay.core.ui.navigation.Route
+import androidx.compose.foundation.layout.statusBarsPadding
+import com.raulshma.jellyplay.core.ui.tv.tvFocusable
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.raulshma.jellyplay.core.designsystem.theme.ShapeCache
@@ -73,23 +87,23 @@ private val LocalAnimateSettingsEntrance = staticCompositionLocalOf { false }
 fun SettingsScreen(
     onBack: () -> Unit,
     onLogout: () -> Unit,
-    onServerManagement: () -> Unit = {},
-    onUserManagement: () -> Unit = {},
-    onSeerrSettings: () -> Unit = {},
+    onServerManagement: (String?) -> Unit = {},
+    onUserManagement: (String?) -> Unit = {},
+    onSeerrSettings: (String?) -> Unit = {},
     onAdminDashboard: () -> Unit = {},
     onSetupWizard: () -> Unit = {},
     onNewsletterClick: () -> Unit = {},
     onFavoritesClick: () -> Unit = {},
     onAboutClick: () -> Unit = {},
     onWatchProgressHeatmapClick: () -> Unit = {},
-    onAppearanceSettings: () -> Unit = {},
-    onPlaybackSettings: () -> Unit = {},
-    onAudioSettings: () -> Unit = {},
-    onLanguageSettings: () -> Unit = {},
-    onNotificationSettings: () -> Unit = {},
-    onStorageSettings: () -> Unit = {},
-    onSecuritySettings: () -> Unit = {},
-    onBackupSettings: () -> Unit = {},
+    onAppearanceSettings: (String?) -> Unit = {},
+    onPlaybackSettings: (String?) -> Unit = {},
+    onAudioSettings: (String?) -> Unit = {},
+    onLanguageSettings: (String?) -> Unit = {},
+    onNotificationSettings: (String?) -> Unit = {},
+    onStorageSettings: (String?) -> Unit = {},
+    onSecuritySettings: (String?) -> Unit = {},
+    onBackupSettings: (String?) -> Unit = {},
     viewModel: SettingsViewModel = hiltViewModel(),
 ) {
     val preferences = viewModel.preferences
@@ -98,6 +112,7 @@ fun SettingsScreen(
     val isTv = LocalTvMode.current
 
     val listFocusRequester = remember { FocusRequester() }
+    val searchFocusRequester = remember { FocusRequester() }
 
     var animateEntrance by androidx.compose.runtime.saveable.rememberSaveable { mutableStateOf(false) }
     LaunchedEffect(Unit) {
@@ -115,24 +130,34 @@ fun SettingsScreen(
 
     val backgroundColor = com.raulshma.jellyplay.core.ui.components.rememberScreenBackgroundColor()
 
+    var searchQuery by remember { mutableStateOf("") }
+    var isSearchActive by remember { mutableStateOf(false) }
+    var isSearchFocused by remember { mutableStateOf(false) }
+
+    val filteredItems = remember(searchQuery) {
+        if (searchQuery.isBlank()) {
+            emptyList()
+        } else {
+            SettingsSearchRegistry.items.filter { item ->
+                item.title.contains(searchQuery, ignoreCase = true) ||
+                item.subtitle.contains(searchQuery, ignoreCase = true) ||
+                item.category.contains(searchQuery, ignoreCase = true) ||
+                item.keywords.any { it.contains(searchQuery, ignoreCase = true) }
+            }
+        }
+    }
+
+    BackHandler(enabled = isSearchActive) {
+        isSearchActive = false
+        searchQuery = ""
+    }
+
     com.raulshma.jellyplay.core.ui.components.JellyPlayScreenScaffold(
         title = "Settings",
         onBack = onBack,
         backgroundColor = backgroundColor,
-        actions = {
-            AdvancedSettingsToggleButton(
-                showAdvanced = preferences.showAdvancedSettings,
-                onToggle = { viewModel.setShowAdvancedSettings(!preferences.showAdvancedSettings) },
-            )
-            androidx.compose.material3.IconButton(onClick = onNewsletterClick) {
-                Icon(
-                    Tabler.Outline.Mail,
-                    contentDescription = "Newsletter",
-                    modifier = Modifier.size(22.dp),
-                )
-            }
-        },
-    ) {
+        topBarStyle = TopBarStyle.None,
+    ) { paddingValues ->
         val context = LocalContext.current
 
         LaunchedEffect(viewModel.messageSentEvent) {
@@ -142,33 +167,291 @@ fun SettingsScreen(
             }
         }
 
-        CompositionLocalProvider(LocalAnimateSettingsEntrance provides animateEntrance) {
-            LazyColumn(
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(paddingValues)
+        ) {
+            Column(
                 modifier = Modifier
                     .fillMaxSize()
-                    .imePadding()
-                    .then(if (isTv) Modifier
-                        .tvFocusRestorer()
-                        .focusRequester(listFocusRequester)
-                        .onKeyEvent { keyEvent ->
-                            if (keyEvent.key == Key.Back && keyEvent.type == KeyEventType.KeyUp) {
-                                onBack()
-                                true
-                            } else false
-                        }
-                    else Modifier),
-                state = rememberLazyListState(),
-                verticalArrangement = Arrangement.spacedBy(8.dp),
-                contentPadding = PaddingValues(
-                    start = adaptiveInfo.contentPadding(LocalTvMode.current),
-                    end = adaptiveInfo.contentPadding(LocalTvMode.current),
-                    bottom = adaptiveInfo.bottomPadding(LocalTvMode.current),
-                ),
+                    .statusBarsPadding()
             ) {
-                item {
-                    AnimatedSettingsEntrance(0) {
-                        if (userName.isNotBlank()) {
-                            SettingsProfileBanner(
+                // Floating Toolbar / Search Bar Section (MD3 expressive DockedSearchBar)
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(
+                            start = adaptiveInfo.contentPadding(LocalTvMode.current),
+                            end = adaptiveInfo.contentPadding(LocalTvMode.current),
+                            top = 16.dp,
+                            bottom = 8.dp
+                        )
+                ) {
+                    DockedSearchBar(
+                        inputField = {
+                            SearchBarDefaults.InputField(
+                                query = searchQuery,
+                                onQueryChange = { searchQuery = it },
+                                onSearch = { },
+                                expanded = isSearchActive,
+                                onExpandedChange = { isSearchActive = it },
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .focusRequester(searchFocusRequester)
+                                    .onFocusEvent { isSearchFocused = it.isFocused }
+                                    .then(if (isTv) Modifier.tvFocusable() else Modifier),
+                                placeholder = {
+                                    Text(
+                                        "Search settings...",
+                                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.4f),
+                                    )
+                                },
+                                leadingIcon = {
+                                    IconButton(
+                                        onClick = {
+                                            if (isSearchActive) {
+                                                isSearchActive = false
+                                                searchQuery = ""
+                                            } else {
+                                                onBack()
+                                            }
+                                        }
+                                    ) {
+                                        Icon(
+                                            imageVector = if (isSearchActive) Tabler.Outline.ArrowLeft else Tabler.Outline.Search,
+                                            contentDescription = "Search / Back",
+                                            tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
+                                            modifier = Modifier.size(20.dp),
+                                        )
+                                    }
+                                },
+                                trailingIcon = {
+                                    Row(
+                                        verticalAlignment = Alignment.CenterVertically,
+                                        modifier = Modifier.padding(end = 4.dp)
+                                    ) {
+                                        if (searchQuery.isNotBlank() || isSearchActive) {
+                                            IconButton(onClick = { searchQuery = "" }) {
+                                                Icon(
+                                                    imageVector = Tabler.Outline.X,
+                                                    contentDescription = "Clear search",
+                                                    tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
+                                                    modifier = Modifier.size(18.dp)
+                                                )
+                                            }
+                                        } else {
+                                            IconButton(onClick = onNewsletterClick) {
+                                                Icon(
+                                                    imageVector = Tabler.Outline.Mail,
+                                                    contentDescription = "Newsletter",
+                                                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                                                    modifier = Modifier.size(20.dp),
+                                                )
+                                            }
+                                            AdvancedSettingsToggleButton(
+                                                showAdvanced = preferences.showAdvancedSettings,
+                                                onToggle = { viewModel.setShowAdvancedSettings(!preferences.showAdvancedSettings) },
+                                            )
+                                            Spacer(Modifier.width(4.dp))
+                                            Box(
+                                                modifier = Modifier
+                                                    .size(28.dp)
+                                                    .clip(CircleShape)
+                                                    .background(MaterialTheme.colorScheme.primaryContainer),
+                                                contentAlignment = Alignment.Center,
+                                            ) {
+                                                Text(
+                                                    text = if (userName.isNotBlank()) userName.take(1).uppercase() else "U",
+                                                    style = MaterialTheme.typography.labelMedium,
+                                                    color = MaterialTheme.colorScheme.onPrimaryContainer,
+                                                    fontWeight = FontWeight.Bold,
+                                                )
+                                            }
+                                            Spacer(Modifier.width(4.dp))
+                                        }
+                                    }
+                                },
+                            )
+                        },
+                        expanded = isSearchActive,
+                        onExpandedChange = { isSearchActive = it },
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .border(
+                                width = 1.dp,
+                                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.08f),
+                                shape = ShapeCache.smooth16
+                            ),
+                        shape = ShapeCache.smooth16,
+                        colors = SearchBarDefaults.colors(
+                            containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f),
+                        ),
+                    ) {
+                        if (filteredItems.isNotEmpty()) {
+                            LazyColumn(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(vertical = 8.dp),
+                                verticalArrangement = Arrangement.spacedBy(4.dp),
+                                contentPadding = PaddingValues(horizontal = 16.dp)
+                            ) {
+                                itemsIndexed(filteredItems, key = { _, item -> item.id }) { index, item ->
+                                    val shape = com.raulshma.jellyplay.core.designsystem.theme.expressiveListShape(index, filteredItems.size, innerRadius = 0.dp)
+                                    ListItem(
+                                        headlineContent = {
+                                            Text(
+                                                text = item.title,
+                                                style = MaterialTheme.typography.bodyLarge,
+                                                fontWeight = FontWeight.Medium,
+                                                color = MaterialTheme.colorScheme.onSurface
+                                            )
+                                        },
+                                        supportingContent = {
+                                            Text(
+                                                text = item.subtitle,
+                                                style = MaterialTheme.typography.bodySmall,
+                                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                                            )
+                                        },
+                                        leadingContent = {
+                                            Box(
+                                                modifier = Modifier
+                                                    .size(36.dp)
+                                                    .clip(ShapeCache.smooth8)
+                                                    .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.1f)),
+                                                contentAlignment = Alignment.Center
+                                            ) {
+                                                Icon(
+                                                    imageVector = item.icon,
+                                                    contentDescription = null,
+                                                    tint = MaterialTheme.colorScheme.primary,
+                                                    modifier = Modifier.size(18.dp)
+                                                )
+                                            }
+                                        },
+                                        trailingContent = {
+                                            Row(
+                                                verticalAlignment = Alignment.CenterVertically,
+                                                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                                            ) {
+                                                Box(
+                                                    modifier = Modifier
+                                                        .clip(CircleShape)
+                                                        .background(MaterialTheme.colorScheme.secondaryContainer)
+                                                        .padding(horizontal = 8.dp, vertical = 2.dp)
+                                                ) {
+                                                    Text(
+                                                        text = item.category,
+                                                        style = MaterialTheme.typography.labelSmall,
+                                                        color = MaterialTheme.colorScheme.onSecondaryContainer,
+                                                        fontWeight = FontWeight.SemiBold
+                                                    )
+                                                }
+                                                if (item.isAdvanced) {
+                                                    Box(
+                                                        modifier = Modifier
+                                                            .clip(CircleShape)
+                                                            .background(MaterialTheme.colorScheme.tertiaryContainer)
+                                                            .padding(horizontal = 6.dp, vertical = 2.dp)
+                                                    ) {
+                                                        Text(
+                                                            text = "Adv",
+                                                            style = MaterialTheme.typography.labelSmall,
+                                                            color = MaterialTheme.colorScheme.onTertiaryContainer,
+                                                            fontWeight = FontWeight.SemiBold
+                                                        )
+                                                    }
+                                                }
+                                                Icon(
+                                                    imageVector = Tabler.Outline.ChevronRight,
+                                                    contentDescription = null,
+                                                    tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.4f),
+                                                    modifier = Modifier.size(16.dp)
+                                                )
+                                            }
+                                        },
+                                        colors = ListItemDefaults.colors(
+                                            containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f)
+                                        ),
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .clip(shape)
+                                            .clickable {
+                                                if (item.isAdvanced && !preferences.showAdvancedSettings) {
+                                                    viewModel.setShowAdvancedSettings(true)
+                                                    Toast.makeText(context, "Advanced settings enabled", Toast.LENGTH_SHORT).show()
+                                                }
+                                                isSearchActive = false
+                                                searchQuery = ""
+                                                if (item.id == "logout") {
+                                                    viewModel.logout()
+                                                    onLogout()
+                                                } else {
+                                                    when (item.route) {
+                                                        is Route.ServerManagement -> onServerManagement(item.id)
+                                                        is Route.UserManagement -> onUserManagement(item.id)
+                                                        is Route.SeerrSettings -> onSeerrSettings(item.id)
+                                                        is Route.AppearanceSettings -> onAppearanceSettings(item.id)
+                                                        is Route.PlaybackSettings -> onPlaybackSettings(item.id)
+                                                        is Route.AudioSettings -> onAudioSettings(item.id)
+                                                        is Route.LanguageSettings -> onLanguageSettings(item.id)
+                                                        is Route.NotificationSettings -> onNotificationSettings(item.id)
+                                                        is Route.StorageSettings -> onStorageSettings(item.id)
+                                                        is Route.SecuritySettings -> onSecuritySettings(item.id)
+                                                        is Route.BackupSettings -> onBackupSettings(item.id)
+                                                        Route.About -> onAboutClick()
+                                                        else -> {}
+                                                    }
+                                                }
+                                            }
+                                    )
+                                }
+                            }
+                        } else {
+                            Box(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(32.dp),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Text(
+                                    text = "No matching settings found",
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            }
+                        }
+                    }
+                }
+
+                CompositionLocalProvider(LocalAnimateSettingsEntrance provides animateEntrance) {
+                    LazyColumn(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .imePadding()
+                            .then(if (isTv) Modifier
+                                .tvFocusRestorer()
+                                .focusRequester(listFocusRequester)
+                                .onKeyEvent { keyEvent ->
+                                    if (keyEvent.key == Key.Back && keyEvent.type == KeyEventType.KeyUp) {
+                                        onBack()
+                                        true
+                                    } else false
+                                }
+                            else Modifier),
+                        state = rememberLazyListState(),
+                        verticalArrangement = Arrangement.spacedBy(8.dp),
+                        contentPadding = PaddingValues(
+                            start = adaptiveInfo.contentPadding(LocalTvMode.current),
+                            end = adaptiveInfo.contentPadding(LocalTvMode.current),
+                            bottom = adaptiveInfo.bottomPadding(LocalTvMode.current),
+                        ),
+                    ) {
+                        item {
+                            AnimatedSettingsEntrance(0) {
+                                if (userName.isNotBlank()) {
+                                    SettingsProfileBanner(
                                 userName = userName,
                             )
                         }
@@ -217,7 +500,7 @@ fun SettingsScreen(
                             title = "Appearance",
                             subtitle = buildAppearanceSummary(preferences),
                             index = 0, count = 1,
-                            onClick = onAppearanceSettings,
+                            onClick = { onAppearanceSettings(null) },
                         )
                     }
                 }
@@ -229,7 +512,7 @@ fun SettingsScreen(
                             title = "Playback",
                             subtitle = "Player Engine: ${preferences.preferredPlayer.displayName}",
                             index = 0, count = 1,
-                            onClick = onPlaybackSettings,
+                            onClick = { onPlaybackSettings(null) },
                         )
                     }
                 }
@@ -241,7 +524,7 @@ fun SettingsScreen(
                             title = "Audio Player",
                             subtitle = "Default speed: ${if (preferences.audioDefaultSpeed == 1.0f) "1x" else "${preferences.audioDefaultSpeed}x"}",
                             index = 0, count = 1,
-                            onClick = onAudioSettings,
+                            onClick = { onAudioSettings(null) },
                         )
                     }
                 }
@@ -253,7 +536,7 @@ fun SettingsScreen(
                             title = "Language & Subtitles",
                             subtitle = "Audio: ${preferences.preferredAudioLanguage ?: "Default"}",
                             index = 0, count = 1,
-                            onClick = onLanguageSettings,
+                            onClick = { onLanguageSettings(null) },
                         )
                     }
                 }
@@ -266,7 +549,7 @@ fun SettingsScreen(
                             title = "Notifications",
                             subtitle = if (notifPrefs.enabled) "Checking ${notifPrefs.checkFrequency.displayName.lowercase()}" else "Disabled",
                             index = 0, count = 1,
-                            onClick = onNotificationSettings,
+                            onClick = { onNotificationSettings(null) },
                         )
                     }
                 }
@@ -278,7 +561,7 @@ fun SettingsScreen(
                             title = "Storage",
                             subtitle = "Cache: ${viewModel.cacheSizeMb} MB",
                             index = 0, count = 1,
-                            onClick = onStorageSettings,
+                            onClick = { onStorageSettings(null) },
                         )
                     }
                 }
@@ -295,7 +578,7 @@ fun SettingsScreen(
                                 else -> "Lock: Off"
                             },
                             index = 0, count = 1,
-                            onClick = onSecuritySettings,
+                            onClick = { onSecuritySettings(null) },
                         )
                     }
                 }
@@ -307,7 +590,7 @@ fun SettingsScreen(
                             title = "Backup & Restore",
                             subtitle = "Export or import app settings",
                             index = 0, count = 1,
-                            onClick = onBackupSettings,
+                            onClick = { onBackupSettings(null) },
                         )
                     }
                 }
@@ -410,6 +693,8 @@ fun SettingsScreen(
             }
         }
     }
+}
+}
 }
 
 private fun buildAppearanceSummary(preferences: com.raulshma.jellyplay.core.model.UserPreferences): String {

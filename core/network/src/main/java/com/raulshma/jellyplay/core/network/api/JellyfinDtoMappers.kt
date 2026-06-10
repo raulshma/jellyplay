@@ -260,6 +260,7 @@ internal fun org.jellyfin.sdk.model.api.ActivityLogEntry.toActivityModel() = Act
 
 internal fun org.jellyfin.sdk.model.api.SessionInfoDto.toSessionModel() = SessionInfo(
     id = id?.toString() ?: "",
+    deviceId = deviceId ?: "",
     userId = userId.toString(),
     userName = userName ?: "",
     client = client ?: "",

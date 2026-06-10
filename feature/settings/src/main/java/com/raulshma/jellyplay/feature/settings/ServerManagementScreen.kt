@@ -50,6 +50,7 @@ fun ServerManagementScreen(
     onAddServer: () -> Unit,
     onBack: () -> Unit,
     onServerSwitched: () -> Unit,
+    highlightSettingId: String? = null,
     viewModel: ServerManagementViewModel = hiltViewModel(),
 ) {
     val servers = viewModel.servers

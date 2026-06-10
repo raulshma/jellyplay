@@ -189,14 +189,12 @@ private fun MainHomeContent(
     val focusManager = LocalFocusManager.current
 
     val networkStatus by LocalNetworkStatus.current.collectAsStateWithLifecycle()
-    val headerStatus by remember {
-        derivedStateOf {
-            resolveHeaderStatus(
-                isLoading = state.isLoading,
-                hasError = state.error != null,
-                networkStatus = networkStatus,
-            )
-        }
+    val headerStatus = remember(state.isLoading, state.error != null, networkStatus) {
+        resolveHeaderStatus(
+            isLoading = state.isLoading,
+            hasError = state.error != null,
+            networkStatus = networkStatus,
+        )
     }
 
     val activeDownloadCount by viewModel.activeDownloadCount.collectAsStateWithLifecycle()

@@ -2,6 +2,8 @@ package com.raulshma.jellyplay.feature.settings
 
 import com.raulshma.jellyplay.core.data.repository.SeerrRepository
 import com.raulshma.jellyplay.core.datastore.SeerrPreferencesStore
+import com.raulshma.jellyplay.core.datastore.SeerrSecureCredentialsStore
+import com.raulshma.jellyplay.core.model.seerr.SeerrAuthMethod
 import com.raulshma.jellyplay.core.model.seerr.SeerrPreferences
 import com.raulshma.jellyplay.core.ui.viewmodel.JellyPlayViewModel
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -14,6 +16,7 @@ import javax.inject.Inject
 class SeerrSettingsViewModel @Inject constructor(
     private val seerrRepository: SeerrRepository,
     private val seerrPreferencesStore: SeerrPreferencesStore,
+    private val secureCredentialsStore: SeerrSecureCredentialsStore,
 ) : JellyPlayViewModel() {
 
     val preferences = seerrPreferencesStore.preferences
@@ -24,6 +27,18 @@ class SeerrSettingsViewModel @Inject constructor(
 
     private val _apiKey = composeState("")
     val apiKey: String get() = _apiKey.value
+
+    private val _username = composeState("")
+    val username: String get() = _username.value
+
+    private val _email = composeState("")
+    val email: String get() = _email.value
+
+    private val _password = composeState("")
+    val password: String get() = _password.value
+
+    private val _authMethod = composeState(SeerrAuthMethod.API_KEY)
+    val authMethod: SeerrAuthMethod get() = _authMethod.value
 
     private val _connectionStatus = composeState<ConnectionStatus>(ConnectionStatus.Idle)
     val connectionStatus: ConnectionStatus get() = _connectionStatus.value
@@ -38,10 +53,21 @@ class SeerrSettingsViewModel @Inject constructor(
         launch {
             val prefs = seerrPreferencesStore.preferences.first()
             _serverUrl.value = prefs.serverUrl
-            _apiKey.value = prefs.apiKey
+            _authMethod.value = prefs.authMethod
+            _username.value = prefs.username
+            _email.value = prefs.email
+            _apiKey.value = secureCredentialsStore.getApiKey()
+            _password.value = secureCredentialsStore.getPassword()
             _isChecked.value = prefs.serverUrl.isNotBlank()
-            if (prefs.serverUrl.isNotBlank() && prefs.apiKey.isNotBlank()) {
-                _connectionStatus.value = ConnectionStatus.Connected("", true)
+            if (prefs.serverUrl.isNotBlank()) {
+                val hasCreds = when (prefs.authMethod) {
+                    SeerrAuthMethod.API_KEY -> secureCredentialsStore.getApiKey().isNotBlank()
+                    SeerrAuthMethod.JELLYFIN,
+                    SeerrAuthMethod.LOCAL -> secureCredentialsStore.getSessionCookie().isNotBlank()
+                }
+                if (hasCreds) {
+                    _connectionStatus.value = ConnectionStatus.Connected("", true)
+                }
             }
         }
     }
@@ -60,24 +86,127 @@ class SeerrSettingsViewModel @Inject constructor(
         }
     }
 
+    fun onUsernameChanged(value: String) {
+        _username.value = value
+        if (connectionStatus is ConnectionStatus.Connected) {
+            _connectionStatus.value = ConnectionStatus.Idle
+        }
+    }
+
+    fun onEmailChanged(value: String) {
+        _email.value = value
+        if (connectionStatus is ConnectionStatus.Connected) {
+            _connectionStatus.value = ConnectionStatus.Idle
+        }
+    }
+
+    fun onPasswordChanged(value: String) {
+        _password.value = value
+        if (connectionStatus is ConnectionStatus.Connected) {
+            _connectionStatus.value = ConnectionStatus.Idle
+        }
+    }
+
+    fun onAuthMethodChanged(method: SeerrAuthMethod) {
+        _authMethod.value = method
+        if (connectionStatus is ConnectionStatus.Connected) {
+            _connectionStatus.value = ConnectionStatus.Idle
+        }
+    }
+
     fun testConnection() {
-        if (serverUrl.isBlank() || apiKey.isBlank()) {
-            _connectionStatus.value = ConnectionStatus.Error("Server URL and API key are required")
+        if (serverUrl.isBlank()) {
+            _connectionStatus.value = ConnectionStatus.Error("Server URL is required")
+            return
+        }
+        when (authMethod) {
+            SeerrAuthMethod.API_KEY -> testApiKeyConnection()
+            SeerrAuthMethod.JELLYFIN -> loginJellyfin()
+            SeerrAuthMethod.LOCAL -> loginLocal()
+        }
+    }
+
+    private fun testApiKeyConnection() {
+        if (apiKey.isBlank()) {
+            _connectionStatus.value = ConnectionStatus.Error("API key is required")
             return
         }
         launch {
             _isTesting.value = true
             try {
                 seerrPreferencesStore.setServerUrl(serverUrl)
-                seerrPreferencesStore.setApiKey(apiKey)
+                seerrPreferencesStore.setAuthMethod(SeerrAuthMethod.API_KEY)
+                secureCredentialsStore.setApiKey(apiKey)
 
-                seerrRepository.testConnection()
+                seerrRepository.testApiKeyConnection()
                     .onSuccess { response ->
                         _connectionStatus.value = ConnectionStatus.Connected(response.version, true)
                     }
                     .onFailure { error ->
                         _connectionStatus.value = ConnectionStatus.Error(
                             error.message ?: "Connection failed"
+                        )
+                    }
+            } catch (e: Exception) {
+                _connectionStatus.value = ConnectionStatus.Error(
+                    e.message ?: "Unexpected error occurred"
+                )
+            }
+            _isTesting.value = false
+        }
+    }
+
+    private fun loginJellyfin() {
+        if (username.isBlank() || password.isBlank()) {
+            _connectionStatus.value = ConnectionStatus.Error("Username and password are required")
+            return
+        }
+        launch {
+            _isTesting.value = true
+            try {
+                seerrPreferencesStore.setServerUrl(serverUrl)
+                seerrPreferencesStore.setAuthMethod(SeerrAuthMethod.JELLYFIN)
+                seerrPreferencesStore.setUsername(username)
+                secureCredentialsStore.setPassword(password)
+
+                seerrRepository.loginJellyfin(username, password)
+                    .onSuccess { response ->
+                        _connectionStatus.value = ConnectionStatus.Connected(response.version, true)
+                    }
+                    .onFailure { error ->
+                        _connectionStatus.value = ConnectionStatus.Error(
+                            error.message ?: "Login failed"
+                        )
+                    }
+            } catch (e: Exception) {
+                _connectionStatus.value = ConnectionStatus.Error(
+                    e.message ?: "Unexpected error occurred"
+                )
+            }
+            _isTesting.value = false
+        }
+    }
+
+    private fun loginLocal() {
+        if (email.isBlank() || password.isBlank()) {
+            _connectionStatus.value = ConnectionStatus.Error("Email and password are required")
+            return
+        }
+        launch {
+            _isTesting.value = true
+            try {
+                seerrPreferencesStore.setServerUrl(serverUrl)
+                seerrPreferencesStore.setAuthMethod(SeerrAuthMethod.LOCAL)
+                seerrPreferencesStore.setEmail(email)
+                secureCredentialsStore.setPassword(password)
+
+                seerrRepository.loginLocal(email, password)
+                    .onSuccess { response ->
+                        _connectionStatus.value = ConnectionStatus.Connected(response.version, true)
+                    }
+                    .onFailure { error ->
+                        _connectionStatus.value = ConnectionStatus.Error(
+                            error.message ?: "Login failed"
                         )
                     }
             } catch (e: Exception) {
@@ -138,6 +267,10 @@ class SeerrSettingsViewModel @Inject constructor(
             seerrPreferencesStore.disconnect()
             _serverUrl.value = ""
             _apiKey.value = ""
+            _username.value = ""
+            _email.value = ""
+            _password.value = ""
+            _authMethod.value = SeerrAuthMethod.API_KEY
             _connectionStatus.value = ConnectionStatus.Idle
         }
     }

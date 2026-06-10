@@ -8,6 +8,12 @@ interface SeerrRepository {
 
     suspend fun testConnection(): Result<SeerrStatusResponse>
 
+    suspend fun loginJellyfin(username: String, password: String): Result<SeerrStatusResponse>
+
+    suspend fun loginLocal(email: String, password: String): Result<SeerrStatusResponse>
+
+    suspend fun testApiKeyConnection(): Result<SeerrStatusResponse>
+
     suspend fun search(query: String, page: Int = 1): Result<SeerrSearchResponse>
 
     suspend fun getMovieDetails(tmdbId: Int): Result<SeerrMovieDetails>

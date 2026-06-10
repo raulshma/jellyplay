@@ -64,6 +64,7 @@ sealed class NotificationSettingsDialog {
 @Composable
 fun NotificationSettingsScreen(
     onBack: () -> Unit,
+    highlightSettingId: String? = null,
     viewModel: SettingsViewModel = hiltViewModel(),
 ) {
     val preferences = viewModel.preferences
@@ -126,6 +127,7 @@ fun NotificationSettingsScreen(
                         title = "Enable Notifications",
                         subtitle = "Get notified when new media is added to your server",
                         checked = notifPrefs.enabled,
+                        highlighted = highlightSettingId == "notifications_enable",
                         index = notifIdx++, count = notifTotal,
                         onCheckedChange = { enabled ->
                             viewModel.updateNotificationPreferences { it.copy(enabled = enabled) }

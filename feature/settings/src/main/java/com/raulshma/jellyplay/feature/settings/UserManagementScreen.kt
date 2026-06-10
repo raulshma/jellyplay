@@ -58,6 +58,7 @@ import com.composables.icons.tabler.outline.*
 fun UserManagementScreen(
     onBack: () -> Unit,
     onAddUser: () -> Unit,
+    highlightSettingId: String? = null,
     viewModel: SettingsViewModel = hiltViewModel(),
 ) {
     val currentUser = viewModel.currentUser

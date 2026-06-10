@@ -20,10 +20,14 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.SegmentedButton
+import androidx.compose.material3.SegmentedButtonDefaults
+import androidx.compose.material3.SingleChoiceSegmentedButtonRow
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -41,13 +45,19 @@ import androidx.compose.ui.unit.dp
 import com.composables.icons.tabler.Tabler
 import com.composables.icons.tabler.outline.*
 import com.raulshma.jellyplay.core.designsystem.theme.ShapeCache
+import com.raulshma.jellyplay.core.model.seerr.SeerrAuthMethod
 import com.raulshma.jellyplay.core.model.seerr.SeerrPreferences
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun SeerrStep(
     seerrPreferences: SeerrPreferences,
     onSetServerUrl: (String) -> Unit,
     onSetApiKey: (String) -> Unit,
+    onSetAuthMethod: (SeerrAuthMethod) -> Unit,
+    onSetUsername: (String) -> Unit,
+    onSetEmail: (String) -> Unit,
+    onSetPassword: (String) -> Unit,
     onSetEnabled: (Boolean) -> Unit,
     onSetSearchEnabled: (Boolean) -> Unit,
     onSetRecommendationsEnabled: (Boolean) -> Unit,
@@ -58,8 +68,12 @@ fun SeerrStep(
     modifier: Modifier = Modifier,
 ) {
     var serverUrl by remember(seerrPreferences.serverUrl) { mutableStateOf(seerrPreferences.serverUrl) }
-    var apiKey by remember(seerrPreferences.apiKey) { mutableStateOf(seerrPreferences.apiKey) }
-    val isConnected = seerrPreferences.serverUrl.isNotBlank() && seerrPreferences.apiKey.isNotBlank()
+    var authMethod by remember(seerrPreferences.authMethod) { mutableStateOf(seerrPreferences.authMethod) }
+    var apiKey by remember { mutableStateOf("") }
+    var username by remember(seerrPreferences.username) { mutableStateOf(seerrPreferences.username) }
+    var email by remember(seerrPreferences.email) { mutableStateOf(seerrPreferences.email) }
+    var password by remember { mutableStateOf("") }
+    val isConnected = seerrPreferences.serverUrl.isNotBlank()
     val focusManager = LocalFocusManager.current
 
     Column(
@@ -95,22 +109,125 @@ fun SeerrStep(
                 modifier = Modifier.fillMaxWidth(),
             )
 
+            Spacer(Modifier.height(8.dp))
+
+            SingleChoiceSegmentedButtonRow(
+                modifier = Modifier.fillMaxWidth(),
+            ) {
+                SegmentedButton(
+                    shape = SegmentedButtonDefaults.itemShape(index = 0, count = 3),
+                    onClick = {
+                        authMethod = SeerrAuthMethod.API_KEY
+                        onSetAuthMethod(SeerrAuthMethod.API_KEY)
+                    },
+                    selected = authMethod == SeerrAuthMethod.API_KEY,
+                    icon = {},
+                ) {
+                    Text("API Key")
+                }
+                SegmentedButton(
+                    shape = SegmentedButtonDefaults.itemShape(index = 1, count = 3),
+                    onClick = {
+                        authMethod = SeerrAuthMethod.JELLYFIN
+                        onSetAuthMethod(SeerrAuthMethod.JELLYFIN)
+                    },
+                    selected = authMethod == SeerrAuthMethod.JELLYFIN,
+                    icon = {},
+                ) {
+                    Text("Jellyfin")
+                }
+                SegmentedButton(
+                    shape = SegmentedButtonDefaults.itemShape(index = 2, count = 3),
+                    onClick = {
+                        authMethod = SeerrAuthMethod.LOCAL
+                        onSetAuthMethod(SeerrAuthMethod.LOCAL)
+                    },
+                    selected = authMethod == SeerrAuthMethod.LOCAL,
+                    icon = {},
+                ) {
+                    Text("Local")
+                }
+            }
+
             Spacer(Modifier.height(4.dp))
 
-            OutlinedTextField(
-                value = apiKey,
-                onValueChange = {
-                    apiKey = it
-                    onSetApiKey(it.trim())
-                },
-                label = { Text("API Key") },
-                placeholder = { Text("Enter your Seerr API key") },
-                leadingIcon = { Icon(Tabler.Outline.Key, contentDescription = null, modifier = Modifier.size(20.dp)) },
-                visualTransformation = PasswordVisualTransformation(),
-                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
-                singleLine = true,
-                modifier = Modifier.fillMaxWidth(),
-            )
+            when (authMethod) {
+                SeerrAuthMethod.API_KEY -> {
+                    OutlinedTextField(
+                        value = apiKey,
+                        onValueChange = {
+                            apiKey = it
+                            onSetApiKey(it.trim())
+                        },
+                        label = { Text("API Key") },
+                        placeholder = { Text("Enter your Seerr API key") },
+                        leadingIcon = { Icon(Tabler.Outline.Key, contentDescription = null, modifier = Modifier.size(20.dp)) },
+                        visualTransformation = PasswordVisualTransformation(),
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
+                        singleLine = true,
+                        modifier = Modifier.fillMaxWidth(),
+                    )
+                }
+                SeerrAuthMethod.JELLYFIN -> {
+                    OutlinedTextField(
+                        value = username,
+                        onValueChange = {
+                            username = it
+                            onSetUsername(it.trim())
+                        },
+                        label = { Text("Username") },
+                        placeholder = { Text("Jellyfin username") },
+                        leadingIcon = { Icon(Tabler.Outline.User, contentDescription = null, modifier = Modifier.size(20.dp)) },
+                        singleLine = true,
+                        modifier = Modifier.fillMaxWidth(),
+                    )
+                    Spacer(Modifier.height(4.dp))
+                    OutlinedTextField(
+                        value = password,
+                        onValueChange = {
+                            password = it
+                            onSetPassword(it)
+                        },
+                        label = { Text("Password") },
+                        placeholder = { Text("Jellyfin password") },
+                        leadingIcon = { Icon(Tabler.Outline.Lock, contentDescription = null, modifier = Modifier.size(20.dp)) },
+                        visualTransformation = PasswordVisualTransformation(),
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
+                        singleLine = true,
+                        modifier = Modifier.fillMaxWidth(),
+                    )
+                }
+                SeerrAuthMethod.LOCAL -> {
+                    OutlinedTextField(
+                        value = email,
+                        onValueChange = {
+                            email = it
+                            onSetEmail(it.trim())
+                        },
+                        label = { Text("Email") },
+                        placeholder = { Text("Seerr account email") },
+                        leadingIcon = { Icon(Tabler.Outline.Mail, contentDescription = null, modifier = Modifier.size(20.dp)) },
+                        singleLine = true,
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Email),
+                        modifier = Modifier.fillMaxWidth(),
+                    )
+                    Spacer(Modifier.height(4.dp))
+                    OutlinedTextField(
+                        value = password,
+                        onValueChange = {
+                            password = it
+                            onSetPassword(it)
+                        },
+                        label = { Text("Password") },
+                        placeholder = { Text("Seerr account password") },
+                        leadingIcon = { Icon(Tabler.Outline.Lock, contentDescription = null, modifier = Modifier.size(20.dp)) },
+                        visualTransformation = PasswordVisualTransformation(),
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
+                        singleLine = true,
+                        modifier = Modifier.fillMaxWidth(),
+                    )
+                }
+            }
 
             if (isConnected) {
                 Spacer(Modifier.height(4.dp))
@@ -136,6 +253,9 @@ fun SeerrStep(
                             onDisconnect()
                             serverUrl = ""
                             apiKey = ""
+                            username = ""
+                            email = ""
+                            password = ""
                         },
                         colors = ButtonDefaults.outlinedButtonColors(
                             contentColor = MaterialTheme.colorScheme.error,

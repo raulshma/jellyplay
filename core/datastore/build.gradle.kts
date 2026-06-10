@@ -27,6 +27,7 @@ dependencies {
     implementation(project(":core:model"))
 
     implementation(libs.datastore.preferences)
+    implementation(libs.security.crypto)
     implementation(libs.hilt.android)
     ksp(libs.hilt.android.compiler)
     implementation(libs.kotlinx.serialization.json)
