@@ -202,9 +202,18 @@ fun JellyPlayApp(
     val isAuthenticated by viewModel.isAuthenticated.collectAsStateWithLifecycle()
     val preferences by viewModel.preferences.collectAsStateWithLifecycle()
 
+    val context = LocalContext.current
+    val isTv = context.isTv()
+
+    LaunchedEffect(Unit) {
+        if (isTv && isAuthenticated && !preferences.onboardingCompleted) {
+            viewModel.preferencesStore.setOnboardingCompleted(true)
+        }
+    }
+
     when {
         isRestoring -> {}
-        isAuthenticated && !preferences.onboardingCompleted -> {
+        isAuthenticated && !preferences.onboardingCompleted && !isTv -> {
             OnboardingContent(
                 onComplete = {},
                 viewModel = viewModel,
