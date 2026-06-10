@@ -10,10 +10,13 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
+import kotlinx.coroutines.launch
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -32,6 +35,12 @@ class SeerrRepositoryImpl @Inject constructor(
     private var lastCredsHash: Int = 0
 
     private val cacheScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+
+    private val _currentUser = MutableStateFlow<SeerrCurrentUser?>(null)
+    override val currentUser: StateFlow<SeerrCurrentUser?> = _currentUser
+
+    private val _pendingRequestCount = MutableStateFlow(0)
+    override val pendingRequestCount: StateFlow<Int> = _pendingRequestCount
 
     private val cachedPrefs = seerrPreferencesStore.preferences
         .stateIn(cacheScope, SharingStarted.Eagerly, null)
@@ -316,5 +325,109 @@ class SeerrRepositoryImpl @Inject constructor(
                 }
             )
         }
+    }
+
+    override suspend fun getRequests(
+        take: Int,
+        skip: Int,
+        filter: String,
+        sort: String,
+        sortDirection: String,
+        requestedBy: Int?,
+        mediaType: String?,
+    ): Result<SeerrRequestListResponse> {
+        val url = serverUrl() ?: return Result.failure(Exception("Seerr not configured"))
+        val credentials = getCredentials() ?: return Result.failure(Exception("Seerr not configured"))
+        return seerrApiClient.getRequests(url, credentials, take, skip, filter, sort, sortDirection, requestedBy, mediaType)
+    }
+
+    override suspend fun getRequest(id: Int): Result<SeerrRequestItem> {
+        val url = serverUrl() ?: return Result.failure(Exception("Seerr not configured"))
+        val credentials = getCredentials() ?: return Result.failure(Exception("Seerr not configured"))
+        return seerrApiClient.getRequest(url, credentials, id)
+    }
+
+    override suspend fun approveRequest(id: Int): Result<SeerrRequestItem> {
+        val url = serverUrl() ?: return Result.failure(Exception("Seerr not configured"))
+        val credentials = getCredentials() ?: return Result.failure(Exception("Seerr not configured"))
+        return seerrApiClient.approveRequest(url, credentials, id)
+    }
+
+    override suspend fun declineRequest(id: Int): Result<SeerrRequestItem> {
+        val url = serverUrl() ?: return Result.failure(Exception("Seerr not configured"))
+        val credentials = getCredentials() ?: return Result.failure(Exception("Seerr not configured"))
+        return seerrApiClient.declineRequest(url, credentials, id)
+    }
+
+    override suspend fun retryRequest(id: Int): Result<SeerrRequestItem> {
+        val url = serverUrl() ?: return Result.failure(Exception("Seerr not configured"))
+        val credentials = getCredentials() ?: return Result.failure(Exception("Seerr not configured"))
+        return seerrApiClient.retryRequest(url, credentials, id)
+    }
+
+    override suspend fun deleteRequest(id: Int): Result<Unit> {
+        val url = serverUrl() ?: return Result.failure(Exception("Seerr not configured"))
+        val credentials = getCredentials() ?: return Result.failure(Exception("Seerr not configured"))
+        return seerrApiClient.deleteRequest(url, credentials, id)
+    }
+
+    override suspend fun deleteMedia(mediaId: Int, is4k: Boolean): Result<Unit> {
+        val url = serverUrl() ?: return Result.failure(Exception("Seerr not configured"))
+        val credentials = getCredentials() ?: return Result.failure(Exception("Seerr not configured"))
+        return seerrApiClient.deleteMedia(url, credentials, mediaId, is4k)
+    }
+
+    override suspend fun editRequest(
+        id: Int,
+        mediaType: String,
+        mediaId: Int,
+        serverId: Int?,
+        profileId: Int?,
+        rootFolder: String?,
+        tags: List<Int>?,
+        seasons: List<Int>?,
+    ): Result<SeerrRequestItem> {
+        val url = serverUrl() ?: return Result.failure(Exception("Seerr not configured"))
+        val credentials = getCredentials() ?: return Result.failure(Exception("Seerr not configured"))
+        return seerrApiClient.editRequest(url, credentials, id, mediaType, mediaId, serverId, profileId, rootFolder, tags, seasons)
+    }
+
+    override suspend fun getRequestCount(): Result<SeerrRequestCount> {
+        val url = serverUrl() ?: return Result.failure(Exception("Seerr not configured"))
+        val credentials = getCredentials() ?: return Result.failure(Exception("Seerr not configured"))
+        return seerrApiClient.getRequestCount(url, credentials)
+    }
+
+    override suspend fun getCurrentUser(): Result<SeerrCurrentUser> {
+        val url = serverUrl() ?: return Result.failure(Exception("Seerr not configured"))
+        val credentials = getCredentials() ?: return Result.failure(Exception("Seerr not configured"))
+        return seerrApiClient.getCurrentUser(url, credentials).also { result ->
+            result.getOrNull()?.let { _currentUser.value = it }
+        }
+    }
+
+    override fun isAdmin(): Flow<Boolean> = _currentUser.map { user ->
+        user?.canManageRequests == true
+    }
+
+    fun startPolling() {
+        cacheScope.launch {
+            seerrPreferencesStore.preferences.collect { prefs ->
+                if (!prefs.enabled) return@collect
+                while (true) {
+                    getRequestCount().onSuccess { count ->
+                        _pendingRequestCount.value = count.pending
+                    }
+                    if (_currentUser.value == null) {
+                        getCurrentUser()
+                    }
+                    kotlinx.coroutines.delay(60_000)
+                }
+            }
+        }
+    }
+
+    init {
+        startPolling()
     }
 }
