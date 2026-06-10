@@ -40,7 +40,16 @@ import com.raulshma.jellyplay.core.ui.tv.rememberTvFocusState
 import com.raulshma.jellyplay.core.ui.tv.tvFocusIndicator
 import com.composables.icons.tabler.Tabler
 import com.composables.icons.tabler.outline.*
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
+import androidx.compose.foundation.background
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.ui.graphics.Color
+import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.foundation.relocation.BringIntoViewRequester
+import androidx.compose.foundation.relocation.bringIntoViewRequester
 
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 internal fun SettingListItem(
     icon: ImageVector,
@@ -50,6 +59,8 @@ internal fun SettingListItem(
     count: Int = 1,
     trailingText: String? = null,
     isDestructive: Boolean = false,
+    highlighted: Boolean = false,
+    modifier: Modifier = Modifier,
     onClick: () -> Unit,
 ) {
     val tvFocusState = rememberTvFocusState(focusedScale = 1.01f)
@@ -74,6 +85,30 @@ internal fun SettingListItem(
     else MaterialTheme.colorScheme.onSurfaceVariant
 
     val shape = expressiveListShape(index, count, innerRadius = 0.dp)
+
+    val focusRequester = remember { FocusRequester() }
+    val bringIntoViewRequester = remember { BringIntoViewRequester() }
+    val highlightColor = remember { androidx.compose.animation.Animatable(Color.Transparent) }
+    val primaryColor = MaterialTheme.colorScheme.primary
+
+    LaunchedEffect(highlighted) {
+        if (highlighted) {
+            highlightColor.snapTo(primaryColor.copy(alpha = 0.25f))
+            highlightColor.animateTo(
+                targetValue = Color.Transparent,
+                animationSpec = androidx.compose.animation.core.tween(durationMillis = 1500)
+            )
+        }
+    }
+
+    LaunchedEffect(highlighted) {
+        if (highlighted) {
+            try {
+                focusRequester.requestFocus()
+                bringIntoViewRequester.bringIntoView()
+            } catch (_: Exception) {}
+        }
+    }
 
     ListItem(
         headlineContent = {
@@ -130,12 +165,16 @@ internal fun SettingListItem(
         ),
         modifier = Modifier
             .fillMaxWidth()
+            .then(modifier)
             .graphicsLayer {
                 scaleX = scale
                 scaleY = scale
                 this.alpha = pressAlpha
             }
             .clip(shape)
+            .background(highlightColor.value)
+            .focusRequester(focusRequester)
+            .bringIntoViewRequester(bringIntoViewRequester)
             .then(tvFocusState.focusModifier)
             .tvFocusIndicator(tvFocusState, shape)
             .clickable(
@@ -146,6 +185,7 @@ internal fun SettingListItem(
     )
 }
 
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 internal fun SettingToggleItem(
     icon: ImageVector,
@@ -154,6 +194,8 @@ internal fun SettingToggleItem(
     checked: Boolean,
     index: Int = 0,
     count: Int = 1,
+    highlighted: Boolean = false,
+    modifier: Modifier = Modifier,
     onCheckedChange: (Boolean) -> Unit,
     onClick: (() -> Unit)? = null,
 ) {
@@ -178,6 +220,30 @@ internal fun SettingToggleItem(
     )
 
     val shape = expressiveListShape(index, count, innerRadius = 0.dp)
+
+    val focusRequester = remember { FocusRequester() }
+    val bringIntoViewRequester = remember { BringIntoViewRequester() }
+    val highlightColor = remember { androidx.compose.animation.Animatable(Color.Transparent) }
+    val primaryColor = MaterialTheme.colorScheme.primary
+
+    LaunchedEffect(highlighted) {
+        if (highlighted) {
+            highlightColor.snapTo(primaryColor.copy(alpha = 0.25f))
+            highlightColor.animateTo(
+                targetValue = Color.Transparent,
+                animationSpec = androidx.compose.animation.core.tween(durationMillis = 1500)
+            )
+        }
+    }
+
+    LaunchedEffect(highlighted) {
+        if (highlighted) {
+            try {
+                focusRequester.requestFocus()
+                bringIntoViewRequester.bringIntoView()
+            } catch (_: Exception) {}
+        }
+    }
 
     ListItem(
         headlineContent = {
@@ -220,12 +286,16 @@ internal fun SettingToggleItem(
         ),
         modifier = Modifier
             .fillMaxWidth()
+            .then(modifier)
             .graphicsLayer {
                 scaleX = scale
                 scaleY = scale
                 this.alpha = pressAlpha
             }
             .clip(shape)
+            .background(highlightColor.value)
+            .focusRequester(focusRequester)
+            .bringIntoViewRequester(bringIntoViewRequester)
             .then(tvFocusState.focusModifier)
             .tvFocusIndicator(tvFocusState, shape)
             .clickable(

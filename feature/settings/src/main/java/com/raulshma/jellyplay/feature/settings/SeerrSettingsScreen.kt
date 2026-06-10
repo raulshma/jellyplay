@@ -21,6 +21,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.Button
@@ -81,6 +82,7 @@ sealed class SeerrSettingsDialog {
 @Composable
 fun SeerrSettingsScreen(
     onBack: () -> Unit,
+    highlightSettingId: String? = null,
     viewModel: SeerrSettingsViewModel = hiltViewModel(),
 ) {
     val preferences by viewModel.preferences.collectAsStateWithLifecycle()
@@ -100,12 +102,29 @@ fun SeerrSettingsScreen(
         animateEntrance = true
     }
 
+    val scrollState = rememberLazyListState()
+    val scrollIndex = remember(highlightSettingId) {
+        when (highlightSettingId) {
+            "seerr_settings" -> 2
+            else -> -1
+        }
+    }
+
+    LaunchedEffect(scrollIndex) {
+        if (scrollIndex >= 0) {
+            try {
+                scrollState.animateScrollToItem(scrollIndex)
+            } catch (_: Exception) {}
+        }
+    }
+
     JellyPlayScreenScaffold(
         title = "Seerr Settings",
         onBack = onBack,
         backgroundColor = backgroundColor,
     ) {
         LazyColumn(
+            state = scrollState,
             modifier = Modifier
                 .fillMaxSize()
                 .imePadding(),
@@ -282,7 +301,7 @@ fun SeerrSettingsScreen(
                                 }
                             },
                             modifier = Modifier.padding(vertical = 4.dp),
-                            initiallyExpanded = preferences.enabled,
+                            initiallyExpanded = preferences.enabled || highlightSettingId == "seerr_settings",
                         ) {
                             val showSubFeatures = preferences.enabled
                             val featTotal = if (showSubFeatures) 4 else 1
@@ -294,6 +313,7 @@ fun SeerrSettingsScreen(
                                 checked = preferences.enabled,
                                 index = 0,
                                 count = featTotal,
+                                highlighted = highlightSettingId == "seerr_settings",
                                 onCheckedChange = viewModel::setEnabled,
                             )
 

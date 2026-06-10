@@ -4,10 +4,12 @@ import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -126,6 +128,7 @@ sealed class PlaybackSettingsDialog {
 @Composable
 fun PlaybackSettingsScreen(
     onBack: () -> Unit,
+    highlightSettingId: String? = null,
     viewModel: SettingsViewModel = hiltViewModel(),
 ) {
     val preferences = viewModel.preferences
@@ -134,6 +137,23 @@ fun PlaybackSettingsScreen(
     val isTv = LocalTvMode.current
     var activeDialog by remember { mutableStateOf<PlaybackSettingsDialog>(PlaybackSettingsDialog.None) }
     val backgroundColor = com.raulshma.jellyplay.core.ui.components.rememberScreenBackgroundColor()
+
+    val scrollState = rememberLazyListState()
+    val scrollIndex = remember(highlightSettingId) {
+        when (highlightSettingId) {
+            in listOf("player_engine", "seek_duration", "orientation", "gestures", "default_speed", "default_aspect", "video_autoplay_next", "autoplay_countdown") -> 0
+            in listOf("dialogue_boost", "decoder", "audio_passthrough", "frame_rate_matching", "streaming_quality", "audio_delay") -> 1
+            else -> -1
+        }
+    }
+
+    LaunchedEffect(scrollIndex) {
+        if (scrollIndex >= 0) {
+            try {
+                scrollState.animateScrollToItem(scrollIndex)
+            } catch (_: Exception) {}
+        }
+    }
 
     JellyPlayScreenScaffold(
         title = "Playback",
@@ -147,6 +167,7 @@ fun PlaybackSettingsScreen(
         },
     ) { innerPadding ->
         LazyColumn(
+            state = scrollState,
             modifier = Modifier
                 .fillMaxSize()
                 .padding(innerPadding),
@@ -172,6 +193,7 @@ fun PlaybackSettingsScreen(
                         title = "Player Engine",
                         subtitle = "Choose media playback engine",
                         trailingText = preferences.preferredPlayer.displayName,
+                        highlighted = highlightSettingId == "player_engine",
                         index = idx++, count = total,
                         onClick = { activeDialog = PlaybackSettingsDialog.PlayerPicker },
                     )
@@ -180,6 +202,7 @@ fun PlaybackSettingsScreen(
                         title = "Seek Duration",
                         subtitle = "Double-tap to seek",
                         trailingText = "${preferences.videoSeekDurationMs / 1000}s",
+                        highlighted = highlightSettingId == "seek_duration",
                         index = idx++, count = total,
                         onClick = { activeDialog = PlaybackSettingsDialog.VideoSeekDurationPicker },
                     )
@@ -188,6 +211,7 @@ fun PlaybackSettingsScreen(
                         title = "Orientation",
                         subtitle = "Default screen orientation",
                         trailingText = preferences.videoDefaultOrientation.displayName,
+                        highlighted = highlightSettingId == "orientation",
                         index = idx++, count = total,
                         onClick = { activeDialog = PlaybackSettingsDialog.OrientationPicker },
                     )
@@ -196,6 +220,7 @@ fun PlaybackSettingsScreen(
                         title = "Gestures",
                         subtitle = if (preferences.videoGesturesEnabled) "Swipe and tap gestures active" else "Touch gestures disabled",
                         checked = preferences.videoGesturesEnabled,
+                        highlighted = highlightSettingId == "gestures",
                         index = idx++, count = total,
                         onCheckedChange = { viewModel.setVideoGesturesEnabled(it) },
                     )
@@ -204,6 +229,7 @@ fun PlaybackSettingsScreen(
                         title = "Default Speed",
                         subtitle = "Initial playback speed",
                         trailingText = if (preferences.videoDefaultSpeed == 1.0f) "1x" else "${preferences.videoDefaultSpeed}x",
+                        highlighted = highlightSettingId == "default_speed",
                         index = idx++, count = total,
                         onClick = { activeDialog = PlaybackSettingsDialog.VideoSpeedPicker },
                     )
@@ -212,6 +238,7 @@ fun PlaybackSettingsScreen(
                         title = "Default Aspect",
                         subtitle = "Video aspect ratio",
                         trailingText = preferences.videoDefaultAspectRatio,
+                        highlighted = highlightSettingId == "default_aspect",
                         index = idx++, count = total,
                         onClick = { activeDialog = PlaybackSettingsDialog.AspectRatioPicker },
                     )
@@ -220,6 +247,7 @@ fun PlaybackSettingsScreen(
                         title = "Auto-play Next",
                         subtitle = if (preferences.videoAutoplayNext) "Automatically plays next episode" else "Manual episode selection",
                         checked = preferences.videoAutoplayNext,
+                        highlighted = highlightSettingId == "video_autoplay_next",
                         index = idx++, count = total,
                         onCheckedChange = { viewModel.setVideoAutoplayNext(it) },
                     )
@@ -229,6 +257,7 @@ fun PlaybackSettingsScreen(
                         title = "Auto-Play Countdown",
                         subtitle = "Countdown duration before auto-playing next episode",
                         trailingText = countdownLabel,
+                        highlighted = highlightSettingId == "autoplay_countdown",
                         index = idx++, count = total,
                         onClick = { activeDialog = PlaybackSettingsDialog.AutoPlayCountdownPicker },
                     )
@@ -238,6 +267,7 @@ fun PlaybackSettingsScreen(
                             title = "Controls Timeout",
                             subtitle = "Auto-hide player controls",
                             trailingText = "${preferences.videoControlsTimeoutMs / 1000}s",
+                            highlighted = highlightSettingId == "controls_timeout",
                             index = idx++, count = total,
                             onClick = { activeDialog = PlaybackSettingsDialog.ControlsTimeoutPicker },
                         )
@@ -246,6 +276,7 @@ fun PlaybackSettingsScreen(
                             title = "Autoplay Trailers",
                             subtitle = if (preferences.trailerAutoplay) "Trailers play automatically" else "Trailers require manual play",
                             checked = preferences.trailerAutoplay,
+                            highlighted = highlightSettingId == "autoplay_trailers",
                             index = idx++, count = total,
                             onCheckedChange = { viewModel.setTrailerAutoplay(it) },
                         )
@@ -254,6 +285,7 @@ fun PlaybackSettingsScreen(
                             title = "Episode Browser",
                             subtitle = if (preferences.videoEpisodeBrowserEnabled) "Show episode list during playback" else "Hide episode list",
                             checked = preferences.videoEpisodeBrowserEnabled,
+                            highlighted = highlightSettingId == "episode_browser",
                             index = idx++, count = total,
                             onCheckedChange = { viewModel.setVideoEpisodeBrowserEnabled(it) },
                         )
@@ -262,6 +294,7 @@ fun PlaybackSettingsScreen(
                             title = "Playback Metadata",
                             subtitle = if (preferences.videoShowPlaybackMetadata) "Show codec and stream info" else "Hide codec info",
                             checked = preferences.videoShowPlaybackMetadata,
+                            highlighted = highlightSettingId == "playback_metadata",
                             index = idx++, count = total,
                             onCheckedChange = { viewModel.setVideoShowPlaybackMetadata(it) },
                         )
@@ -270,6 +303,7 @@ fun PlaybackSettingsScreen(
                             title = "Swipe Seek Range",
                             subtitle = "Maximum seek range for swipe gesture",
                             trailingText = "${preferences.videoSwipeSeekMaxMs / 1000}s",
+                            highlighted = highlightSettingId == "swipe_seek_range",
                             index = idx++, count = total,
                             onClick = { activeDialog = PlaybackSettingsDialog.SwipeSeekPicker },
                         )
@@ -278,6 +312,7 @@ fun PlaybackSettingsScreen(
                             title = "Remember Brightness",
                             subtitle = if (preferences.videoRememberBrightness) "Brightness saved between sessions" else "Reset brightness each session",
                             checked = preferences.videoRememberBrightness,
+                            highlighted = highlightSettingId == "remember_brightness",
                             index = idx++, count = total,
                             onCheckedChange = { enabled ->
                                 viewModel.setVideoRememberBrightness(enabled)
@@ -296,6 +331,7 @@ fun PlaybackSettingsScreen(
                             title = "Trickplay Preview",
                             subtitle = if (preferences.trickplayEnabled) "Show thumbnails on seek bar" else "No seek bar thumbnails",
                             checked = preferences.trickplayEnabled,
+                            highlighted = highlightSettingId == "trickplay_preview",
                             index = idx++, count = total,
                             onCheckedChange = { viewModel.setTrickplayEnabled(it) },
                         )
@@ -312,6 +348,7 @@ fun PlaybackSettingsScreen(
                             title = "Preload Buffer",
                             subtitle = "Amount to buffer ahead during playback",
                             trailingText = preferences.videoPreloadBufferSize.displayName,
+                            highlighted = highlightSettingId == "preload_buffer",
                             index = idx++, count = total,
                             onClick = { activeDialog = PlaybackSettingsDialog.PreloadBufferPicker },
                         )
@@ -320,6 +357,7 @@ fun PlaybackSettingsScreen(
                             title = "Background Audio",
                             subtitle = "Keep audio playing when switching apps during video playback",
                             checked = preferences.backgroundVideoAudioEnabled,
+                            highlighted = highlightSettingId == "background_audio",
                             index = idx++, count = total,
                             onCheckedChange = { viewModel.setBackgroundVideoAudioEnabled(it) },
                         )
@@ -328,6 +366,7 @@ fun PlaybackSettingsScreen(
                             title = "Keep Screen On",
                             subtitle = "Prevent screen from turning off during video playback",
                             checked = preferences.keepScreenOnDuringVideo,
+                            highlighted = highlightSettingId == "keep_screen_on",
                             index = idx++, count = total,
                             onCheckedChange = { viewModel.setKeepScreenOnDuringVideo(it) },
                         )
@@ -336,6 +375,7 @@ fun PlaybackSettingsScreen(
                             title = "Incognito Mode",
                             subtitle = if (preferences.incognitoModeEnabled) "Bypasses reporting playback progress to server" else "Reports playback progress to server",
                             checked = preferences.incognitoModeEnabled,
+                            highlighted = highlightSettingId == "incognito_mode",
                             index = idx++, count = total,
                             onCheckedChange = { viewModel.setIncognitoModeEnabled(it) },
                         )
@@ -366,6 +406,7 @@ fun PlaybackSettingsScreen(
                     title = "Advanced Video",
                     summary = { "Decoder: ${preferences.decoderMode.displayName}" },
                     modifier = Modifier.padding(vertical = 8.dp),
+                    initiallyExpanded = highlightSettingId in listOf("dialogue_boost", "decoder", "audio_passthrough", "frame_rate_matching", "streaming_quality", "audio_delay"),
                 ) {
                     val advancedItems = mutableListOf<Pair<String, Int>>()
                     advancedItems.add("dialogue" to 0)
@@ -385,6 +426,7 @@ fun PlaybackSettingsScreen(
                         title = "Dialogue Boost",
                         subtitle = if (preferences.dialogueBoostEnabled) preferences.dialogueBoostStrength.displayName else "Off",
                         checked = preferences.dialogueBoostEnabled,
+                        highlighted = highlightSettingId == "dialogue_boost",
                         index = idx++, count = total,
                         onCheckedChange = { viewModel.setDialogueBoostEnabled(it) },
                     )
@@ -408,6 +450,7 @@ fun PlaybackSettingsScreen(
                         title = "Decoder",
                         subtitle = preferences.decoderMode.displayName,
                         trailingText = preferences.decoderMode.displayName.split(" ").first(),
+                        highlighted = highlightSettingId == "decoder",
                         index = idx++, count = total,
                         onClick = {
                             val modes = DecoderMode.entries
@@ -421,6 +464,7 @@ fun PlaybackSettingsScreen(
                         title = "Audio Passthrough",
                         subtitle = if (preferences.audioPassthrough) "Direct audio to receiver" else "Software audio processing",
                         checked = preferences.audioPassthrough,
+                        highlighted = highlightSettingId == "audio_passthrough",
                         index = idx++, count = total,
                         onCheckedChange = { viewModel.setAudioPassthrough(it) },
                     )
@@ -429,6 +473,7 @@ fun PlaybackSettingsScreen(
                         title = "Frame Rate Match",
                         subtitle = if (preferences.frameRateMatching) "Display refresh matches content" else "Fixed display refresh rate",
                         checked = preferences.frameRateMatching,
+                        highlighted = highlightSettingId == "frame_rate_matching",
                         index = idx++, count = total,
                         onCheckedChange = { viewModel.setFrameRateMatching(it) },
                     )
@@ -437,6 +482,7 @@ fun PlaybackSettingsScreen(
                         title = "Streaming Quality",
                         subtitle = streamingQualityLabel(preferences.streamingQuality),
                         trailingText = streamingQualityShort(preferences.streamingQuality),
+                        highlighted = highlightSettingId == "streaming_quality",
                         index = idx++, count = total,
                         onClick = {
                             val qualities = StreamingQuality.entries
@@ -450,6 +496,7 @@ fun PlaybackSettingsScreen(
                         title = "Audio Delay",
                         subtitle = if (preferences.audioDelayMs == 0L) "No audio delay" else "${preferences.audioDelayMs}ms delay",
                         trailingText = if (preferences.audioDelayMs == 0L) "Off" else "${preferences.audioDelayMs}ms",
+                        highlighted = highlightSettingId == "audio_delay",
                         index = idx, count = total,
                         onClick = { activeDialog = PlaybackSettingsDialog.AudioDelayPicker },
                     )

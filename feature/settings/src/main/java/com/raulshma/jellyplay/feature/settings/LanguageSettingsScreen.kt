@@ -16,6 +16,7 @@ import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.MaterialTheme
@@ -23,6 +24,7 @@ import androidx.compose.material3.Slider
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -62,6 +64,7 @@ sealed class LanguageSettingsDialog {
 @Composable
 fun LanguageSettingsScreen(
     onBack: () -> Unit,
+    highlightSettingId: String? = null,
     viewModel: SettingsViewModel = hiltViewModel(),
 ) {
     val preferences = viewModel.preferences
@@ -72,6 +75,23 @@ fun LanguageSettingsScreen(
     val backgroundColor = com.raulshma.jellyplay.core.ui.components.rememberScreenBackgroundColor()
 
     val langs = languages
+
+    val scrollState = rememberLazyListState()
+    val scrollIndex = remember(highlightSettingId) {
+        when (highlightSettingId) {
+            in listOf("audio_language", "subtitle_language") -> 0
+            in listOf("subtitle_font_size", "subtitle_color", "subtitle_background", "subtitle_edge_style", "subtitle_sync_offset", "subtitle_vertical_position") -> 1
+            else -> -1
+        }
+    }
+
+    LaunchedEffect(scrollIndex) {
+        if (scrollIndex >= 0) {
+            try {
+                scrollState.animateScrollToItem(scrollIndex)
+            } catch (_: Exception) {}
+        }
+    }
 
     JellyPlayScreenScaffold(
         title = "Language & Subtitles",
@@ -85,6 +105,7 @@ fun LanguageSettingsScreen(
         },
     ) { innerPadding ->
         LazyColumn(
+            state = scrollState,
             modifier = Modifier
                 .fillMaxSize()
                 .padding(innerPadding),
@@ -107,6 +128,7 @@ fun LanguageSettingsScreen(
                         title = "Audio Language",
                         subtitle = "Preferred audio track language",
                         trailingText = preferences.preferredAudioLanguage ?: "Default",
+                        highlighted = highlightSettingId == "audio_language",
                         index = 0, count = 2,
                         onClick = { activeDialog = LanguageSettingsDialog.AudioLanguagePicker },
                     )
@@ -115,6 +137,7 @@ fun LanguageSettingsScreen(
                         title = "Subtitle Language",
                         subtitle = "Preferred subtitle language",
                         trailingText = preferences.preferredSubtitleLanguage ?: "Default",
+                        highlighted = highlightSettingId == "subtitle_language",
                         index = 1, count = 2,
                         onClick = { activeDialog = LanguageSettingsDialog.SubtitleLanguagePicker },
                     )
@@ -127,6 +150,7 @@ fun LanguageSettingsScreen(
                     title = "Subtitles",
                     summary = { "Font size: ${preferences.subtitleStyle.fontSize}sp" },
                     modifier = Modifier.padding(vertical = 8.dp),
+                    initiallyExpanded = highlightSettingId in listOf("subtitle_font_size", "subtitle_color", "subtitle_background", "subtitle_edge_style", "subtitle_sync_offset", "subtitle_vertical_position"),
                 ) {
                     var subIdx = 0
                     val subTotal = if (showAdvanced) 6 else 3
@@ -135,6 +159,7 @@ fun LanguageSettingsScreen(
                         title = "Font Size",
                         subtitle = "Subtitle text size",
                         trailingText = "${preferences.subtitleStyle.fontSize}sp",
+                        highlighted = highlightSettingId == "subtitle_font_size",
                         index = subIdx++, count = subTotal,
                         onClick = { activeDialog = LanguageSettingsDialog.SubtitleFontPicker },
                     )
@@ -144,6 +169,7 @@ fun LanguageSettingsScreen(
                             title = "Text Color",
                             subtitle = "Subtitle text color",
                             trailingText = preferences.subtitleStyle.fontColor.name,
+                            highlighted = highlightSettingId == "subtitle_color",
                             index = subIdx++, count = subTotal,
                             onClick = { activeDialog = LanguageSettingsDialog.SubtitleColorPicker },
                         )
@@ -152,6 +178,7 @@ fun LanguageSettingsScreen(
                             title = "Background",
                             subtitle = "Subtitle background color and opacity",
                             trailingText = preferences.subtitleStyle.backgroundColor.name,
+                            highlighted = highlightSettingId == "subtitle_background",
                             index = subIdx++, count = subTotal,
                             onClick = { activeDialog = LanguageSettingsDialog.SubtitleBgColorPicker },
                         )
@@ -160,6 +187,7 @@ fun LanguageSettingsScreen(
                             title = "Edge Style",
                             subtitle = "Subtitle outline style",
                             trailingText = preferences.subtitleStyle.edgeType.name,
+                            highlighted = highlightSettingId == "subtitle_edge_style",
                             index = subIdx++, count = subTotal,
                             onClick = { activeDialog = LanguageSettingsDialog.SubtitleEdgePicker },
                         )
@@ -168,6 +196,7 @@ fun LanguageSettingsScreen(
                             title = "Sync Offset",
                             subtitle = if (preferences.subtitleStyle.offsetMs == 0L) "No offset" else "${preferences.subtitleStyle.offsetMs}ms",
                             trailingText = "${preferences.subtitleStyle.offsetMs}ms",
+                            highlighted = highlightSettingId == "subtitle_sync_offset",
                             index = subIdx++, count = subTotal,
                             onClick = { activeDialog = LanguageSettingsDialog.SubtitleOffsetPicker },
                         )
@@ -176,6 +205,7 @@ fun LanguageSettingsScreen(
                             title = "Vertical Position",
                             subtitle = "Subtitle vertical position on screen",
                             trailingText = "${(preferences.subtitleStyle.verticalPosition * 100).toInt()}%",
+                            highlighted = highlightSettingId == "subtitle_vertical_position",
                             index = subIdx, count = subTotal,
                             onClick = { activeDialog = LanguageSettingsDialog.SubtitlePositionPicker },
                         )
