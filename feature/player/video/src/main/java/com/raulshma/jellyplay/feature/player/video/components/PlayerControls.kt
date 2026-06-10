@@ -96,6 +96,11 @@ import com.raulshma.jellyplay.core.model.StreamType
 import com.raulshma.jellyplay.feature.player.video.engine.EngineVideoStats
 import com.raulshma.jellyplay.feature.player.video.TrackOption
 import com.raulshma.jellyplay.core.designsystem.theme.HdrColors
+import androidx.compose.ui.platform.LocalContext
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
+
 
 @Composable
 internal fun PlayerControls(
@@ -374,6 +379,7 @@ internal fun PlayerControls(
                     segments = segments,
                     bufferedPosition = bufferedPosition,
                     trickplayBitmap = tvTrickplayBitmap,
+                    playbackSpeed = playbackSpeed,
                     onSeek = { fraction ->
                         onSeek(fraction)
                         onSeekPositionChange((fraction * duration).toLong())
@@ -631,6 +637,7 @@ private fun TvControllableSeekBar(
     segments: List<MediaSegment> = emptyList(),
     bufferedPosition: Long = 0L,
     trickplayBitmap: Bitmap? = null,
+    playbackSpeed: Float = 1.0f,
     onSeek: (Float) -> Unit,
     onSeekStart: () -> Unit,
     onSeekEnd: () -> Unit,
@@ -873,30 +880,61 @@ private fun TvControllableSeekBar(
                 }
             }
 
-            Text(
-                formatDuration(displayMs),
-                style = MaterialTheme.typography.labelSmall.copy(
-                    fontFamily = FontFamily.Monospace,
-                    fontWeight = FontWeight.Medium,
-                ),
-                color = MaterialTheme.colorScheme.onSurface,
+            Row(
                 modifier = Modifier
                     .align(Alignment.Start)
                     .padding(start = 4.dp),
-            )
-        } else {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
             ) {
                 Text(
-                    formatDuration(currentPosition),
+                    formatDuration(displayMs),
                     style = MaterialTheme.typography.labelSmall.copy(
                         fontFamily = FontFamily.Monospace,
                         fontWeight = FontWeight.Medium,
                     ),
-                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f),
+                    color = MaterialTheme.colorScheme.onSurface,
                 )
+                if (duration > 0) {
+                    val remainingMs = (duration - displayMs).coerceAtLeast(0)
+                    val realRemainingMs = if (playbackSpeed > 0f) (remainingMs / playbackSpeed).toLong() else remainingMs
+                    val endsAt = rememberEndsAtTime(realRemainingMs)
+                    Text(
+                        text = " • Ends at $endsAt",
+                        style = MaterialTheme.typography.labelSmall.copy(
+                            fontWeight = FontWeight.Normal,
+                        ),
+                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f),
+                    )
+                }
+            }
+        } else {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text(
+                        formatDuration(currentPosition),
+                        style = MaterialTheme.typography.labelSmall.copy(
+                            fontFamily = FontFamily.Monospace,
+                            fontWeight = FontWeight.Medium,
+                        ),
+                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f),
+                    )
+                    if (duration > 0) {
+                        val remainingMs = (duration - currentPosition).coerceAtLeast(0)
+                        val realRemainingMs = if (playbackSpeed > 0f) (remainingMs / playbackSpeed).toLong() else remainingMs
+                        val endsAt = rememberEndsAtTime(realRemainingMs)
+                        Text(
+                            text = " • Ends at $endsAt",
+                            style = MaterialTheme.typography.labelSmall.copy(
+                                fontWeight = FontWeight.Normal,
+                            ),
+                            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f),
+                        )
+                    }
+                }
                 Text(
                     if (duration > 0) formatDuration(duration) else "--:--",
                     style = MaterialTheme.typography.labelSmall.copy(
@@ -1365,3 +1403,22 @@ private data class MetadataItem(
     val text: String,
     val color: Color
 )
+
+@Composable
+private fun rememberEndsAtTime(remainingMs: Long): String {
+    val context = LocalContext.current
+    val is24Hour = remember(context) { android.text.format.DateFormat.is24HourFormat(context) }
+    val pattern = if (is24Hour) "HH:mm" else "h:mm a"
+    val formatter = remember(pattern) { SimpleDateFormat(pattern, Locale.getDefault()) }
+    var currentSystemTime by remember { mutableStateOf(System.currentTimeMillis()) }
+    LaunchedEffect(Unit) {
+        while (true) {
+            kotlinx.coroutines.delay(5000)
+            currentSystemTime = System.currentTimeMillis()
+        }
+    }
+    return remember(currentSystemTime, remainingMs, formatter) {
+        val endsAtDate = Date(currentSystemTime + remainingMs)
+        formatter.format(endsAtDate)
+    }
+}
