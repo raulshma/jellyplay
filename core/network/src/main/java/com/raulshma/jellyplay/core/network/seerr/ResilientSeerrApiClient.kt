@@ -252,4 +252,78 @@ class ResilientSeerrApiClient @Inject constructor(
         firstAirDateGte: String?,
     ): Result<SeerrSearchResponse> =
         withRetry { delegate.getDiscoverTv(baseUrl, credentials, page, firstAirDateGte) }
+
+    override suspend fun getRequests(
+        baseUrl: String,
+        credentials: SeerrCredentials,
+        take: Int,
+        skip: Int,
+        filter: String,
+        sort: String,
+        sortDirection: String,
+        requestedBy: Int?,
+        mediaType: String?,
+    ): Result<SeerrRequestListResponse> =
+        withRetry { delegate.getRequests(baseUrl, credentials, take, skip, filter, sort, sortDirection, requestedBy, mediaType) }
+
+    override suspend fun getRequest(
+        baseUrl: String,
+        credentials: SeerrCredentials,
+        id: Int,
+    ): Result<SeerrRequestItem> =
+        withRetry { delegate.getRequest(baseUrl, credentials, id) }
+
+    override suspend fun approveRequest(
+        baseUrl: String,
+        credentials: SeerrCredentials,
+        id: Int,
+    ): Result<SeerrRequestItem> =
+        withRetry { delegate.approveRequest(baseUrl, credentials, id) }
+
+    override suspend fun declineRequest(
+        baseUrl: String,
+        credentials: SeerrCredentials,
+        id: Int,
+    ): Result<SeerrRequestItem> =
+        withRetry { delegate.declineRequest(baseUrl, credentials, id) }
+
+    override suspend fun retryRequest(
+        baseUrl: String,
+        credentials: SeerrCredentials,
+        id: Int,
+    ): Result<SeerrRequestItem> =
+        withRetry { delegate.retryRequest(baseUrl, credentials, id) }
+
+    override suspend fun deleteRequest(
+        baseUrl: String,
+        credentials: SeerrCredentials,
+        id: Int,
+    ): Result<Unit> =
+        withRetry { delegate.deleteRequest(baseUrl, credentials, id) }
+
+    override suspend fun editRequest(
+        baseUrl: String,
+        credentials: SeerrCredentials,
+        id: Int,
+        mediaType: String,
+        mediaId: Int,
+        serverId: Int?,
+        profileId: Int?,
+        rootFolder: String?,
+        tags: List<Int>?,
+        seasons: List<Int>?,
+    ): Result<SeerrRequestItem> =
+        withRetry { delegate.editRequest(baseUrl, credentials, id, mediaType, mediaId, serverId, profileId, rootFolder, tags, seasons) }
+
+    override suspend fun getRequestCount(
+        baseUrl: String,
+        credentials: SeerrCredentials,
+    ): Result<SeerrRequestCount> =
+        withRetry { delegate.getRequestCount(baseUrl, credentials) }
+
+    override suspend fun getCurrentUser(
+        baseUrl: String,
+        credentials: SeerrCredentials,
+    ): Result<SeerrCurrentUser> =
+        withRetry { delegate.getCurrentUser(baseUrl, credentials) }
 }

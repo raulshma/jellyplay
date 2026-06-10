@@ -744,12 +744,142 @@ enum class SeerrMediaStatus(val value: Int) {
 @Immutable
 @Serializable
 enum class SeerrRequestStatus(val value: Int) {
-    PENDING_APPROVAL(1),
+    PENDING(1),
     APPROVED(2),
-    DECLINED(3);
+    DECLINED(3),
+    FAILED(4),
+    COMPLETED(5);
 
     companion object {
         fun fromValue(value: Int): SeerrRequestStatus =
-            entries.find { it.value == value } ?: PENDING_APPROVAL
+            entries.find { it.value == value } ?: PENDING
     }
 }
+
+@Immutable
+@Serializable
+data class SeerrRequestListResponse(
+    val pageInfo: SeerrPageInfo = SeerrPageInfo(),
+    val results: List<SeerrRequestItem> = emptyList(),
+)
+
+@Immutable
+@Serializable
+data class SeerrPageInfo(
+    val pages: Int = 0,
+    val results: Int = 0,
+)
+
+@Immutable
+@Serializable
+data class SeerrRequestItem(
+    val id: Int = 0,
+    val status: Int = 0,
+    val type: String = "",
+    val createdAt: String = "",
+    val updatedAt: String = "",
+    val media: SeerrRequestMedia = SeerrRequestMedia(),
+    val requestedBy: SeerrUser = SeerrUser(),
+    val modifiedBy: SeerrUser? = null,
+    val is4k: Boolean = false,
+    val canRemove: Boolean = false,
+    val serverId: Int? = null,
+    val profileId: Int? = null,
+    val profileName: String? = null,
+    val rootFolder: String? = null,
+    val seasons: List<SeerrRequestSeason> = emptyList(),
+)
+
+@Immutable
+@Serializable
+data class SeerrRequestMedia(
+    val id: Int = 0,
+    val tmdbId: Int = 0,
+    val tvdbId: Int? = null,
+    val status: Int = 0,
+    val status4k: Int = 0,
+    val mediaUrl: String? = null,
+    val serviceUrl: String? = null,
+    val downloadStatus: List<SeerrDownloadStatus> = emptyList(),
+    val downloadStatus4k: List<SeerrDownloadStatus> = emptyList(),
+)
+
+@Immutable
+@Serializable
+data class SeerrRequestSeason(
+    val id: Int = 0,
+    val seasonNumber: Int = 0,
+)
+
+@Immutable
+@Serializable
+data class SeerrDownloadStatus(
+    val externalId: String? = null,
+    val status: String? = null,
+)
+
+@Immutable
+@Serializable
+data class SeerrRequestCount(
+    val pending: Int = 0,
+    val approved: Int = 0,
+    val declined: Int = 0,
+    val processing: Int = 0,
+    val available: Int = 0,
+)
+
+@Immutable
+@Serializable
+data class SeerrCurrentUser(
+    val id: Int = 0,
+    val email: String = "",
+    val username: String? = null,
+    val displayName: String? = null,
+    val avatar: String? = null,
+    val permissions: Long = 0,
+    val userType: Int = 0,
+) {
+    val canManageRequests: Boolean get() = isAdmin || (permissions and PERMISSION_MANAGE_REQUESTS) != 0L
+    val canViewRequests: Boolean get() = isAdmin || (permissions and PERMISSION_REQUEST_VIEW) != 0L
+    val canRequestAdvanced: Boolean get() = isAdmin || (permissions and PERMISSION_REQUEST_ADVANCED) != 0L
+    val isAdmin: Boolean get() = (permissions and PERMISSION_ADMIN) != 0L
+
+    companion object {
+        const val PERMISSION_ADMIN = 2L
+        const val PERMISSION_MANAGE_REQUESTS = 16L
+        const val PERMISSION_REQUEST_VIEW = 16384L
+        const val PERMISSION_REQUEST_ADVANCED = 8192L
+    }
+}
+
+@Immutable
+@Serializable
+enum class SeerrRequestFilter(val value: String) {
+    ALL("all"),
+    PENDING("pending"),
+    APPROVED("approved"),
+    PROCESSING("processing"),
+    AVAILABLE("available"),
+    UNAVAILABLE("unavailable"),
+    FAILED("failed"),
+}
+
+@Immutable
+@Serializable
+enum class SeerrRequestSort(val value: String) {
+    ADDED("added"),
+    MODIFIED("modified"),
+}
+
+@Immutable
+@Serializable
+data class SeerrEditRequestPayload(
+    val mediaType: String,
+    val mediaId: Int,
+    val is4k: Boolean = false,
+    val serverId: Int? = null,
+    val profileId: Int? = null,
+    val rootFolder: String? = null,
+    val tags: List<Int>? = null,
+    val seasons: List<Int>? = null,
+)

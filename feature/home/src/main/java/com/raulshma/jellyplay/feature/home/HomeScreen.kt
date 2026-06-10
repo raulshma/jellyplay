@@ -127,6 +127,7 @@ fun HomeScreen(
     onFavoritesClick: () -> Unit = {},
     onAboutClick: () -> Unit = {},
     onWatchProgressHeatmapClick: () -> Unit = {},
+    onRequestsClick: () -> Unit = {},
     viewModel: HomeViewModel = hiltViewModel(),
 ) {
     val state by viewModel.uiState.collectAsStateWithLifecycle()
@@ -153,6 +154,7 @@ fun HomeScreen(
         onFavoritesClick = onFavoritesClick,
         onAboutClick = onAboutClick,
         onWatchProgressHeatmapClick = onWatchProgressHeatmapClick,
+        onRequestsClick = onRequestsClick,
         musicContent = musicContent,
     )
 }
@@ -180,6 +182,7 @@ private fun MainHomeContent(
     onFavoritesClick: () -> Unit,
     onAboutClick: () -> Unit,
     onWatchProgressHeatmapClick: () -> Unit,
+    onRequestsClick: () -> Unit,
     musicContent: @Composable () -> Unit,
 ) {
     val density = LocalDensity.current
@@ -488,6 +491,19 @@ private fun MainHomeContent(
                         onClick = {
                             scope.launch { drawerState.close() }
                             onWatchProgressHeatmapClick()
+                        },
+                        colors = NavigationDrawerItemDefaults.colors(
+                            unselectedContainerColor = Color.Transparent
+                        )
+                    )
+
+                    NavigationDrawerItem(
+                        icon = { Icon(Tabler.Outline.Inbox, contentDescription = null, modifier = Modifier.size(20.dp)) },
+                        label = { Text("Seerr Requests") },
+                        selected = false,
+                        onClick = {
+                            scope.launch { drawerState.close() }
+                            onRequestsClick()
                         },
                         colors = NavigationDrawerItemDefaults.colors(
                             unselectedContainerColor = Color.Transparent
