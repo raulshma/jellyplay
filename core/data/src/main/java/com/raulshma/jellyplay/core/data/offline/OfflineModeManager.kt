@@ -38,6 +38,8 @@ class OfflineModeManager @Inject constructor(
 
     val isOffline: Boolean get() = _offlineMode.value != OfflineMode.ONLINE
 
+    val networkStatus: StateFlow<NetworkStatus> = networkMonitor.networkStatus
+
     init {
         scope.launch {
             combine(
@@ -106,7 +108,7 @@ class OfflineModeManager @Inject constructor(
             if (prefs.autoOfflineEnabled && _offlineMode.value == OfflineMode.ONLINE) {
                 _offlineMode.value = OfflineMode.OFFLINE_AUTO
             }
-        } else if (isValidated && _offlineMode.value == OfflineMode.OFFLINE_AUTO) {
+        } else if (hasInternet && _offlineMode.value == OfflineMode.OFFLINE_AUTO) {
             _offlineMode.value = OfflineMode.ONLINE
         }
     }

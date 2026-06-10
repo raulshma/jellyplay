@@ -6,12 +6,16 @@ import com.raulshma.jellyplay.core.model.LyricsLine
 import com.raulshma.jellyplay.core.model.LyricsResult
 import com.raulshma.jellyplay.core.model.LyricsSource
 import com.raulshma.jellyplay.core.model.LrcLibTrack
+import com.raulshma.jellyplay.core.model.NetworkStatus
 import com.raulshma.jellyplay.core.network.JellyfinApiClient
+import com.raulshma.jellyplay.core.data.network.NetworkMonitor
 import com.raulshma.jellyplay.core.network.LrcLibApi
 import io.mockk.coEvery
 import io.mockk.coVerify
 import io.mockk.every
+import io.mockk.every
 import io.mockk.mockk
+import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
@@ -23,12 +27,14 @@ class MediaRepositoryImplTest {
     private val apiClient: JellyfinApiClient = mockk(relaxed = true)
     private val lrcLibApi: LrcLibApi = mockk(relaxed = true)
     private val lyricsCacheDao: LyricsCacheDao = mockk(relaxed = true)
+    private val networkMonitor: NetworkMonitor = mockk(relaxed = true)
 
     private lateinit var repository: MediaRepositoryImpl
 
     @Before
     fun setup() {
-        repository = MediaRepositoryImpl(apiClient, lrcLibApi, lyricsCacheDao)
+        every { networkMonitor.networkStatus } returns MutableStateFlow(NetworkStatus.Online)
+        repository = MediaRepositoryImpl(apiClient, lrcLibApi, lyricsCacheDao, networkMonitor)
     }
 
     @Test
@@ -146,6 +152,22 @@ class MediaRepositoryImplTest {
         assertTrue(result.isSuccess)
         assertEquals(0, result.getOrNull()!!.lines.size)
         assertEquals(LyricsSource.LRCLIB, result.getOrNull()!!.source)
+    }
+
+    @Test
+    fun `getLyricsWithFallback skips LrcLib in Local mode`() = runTest {
+        every { networkMonitor.networkStatus } returns MutableStateFlow(NetworkStatus.Local)
+        coEvery { lyricsCacheDao.getByItemId("item-1") } returns null
+        coEvery { apiClient.getLyrics("item-1") } returns Result.success(
+            LyricsResult(lines = emptyList(), source = LyricsSource.UNKNOWN)
+        )
+
+        val result = repository.getLyricsWithFallback("item-1", "Artist", "Track", null)
+
+        assertTrue(result.isSuccess)
+        assertEquals(0, result.getOrNull()!!.lines.size)
+        assertEquals(LyricsSource.UNKNOWN, result.getOrNull()!!.source)
+        coVerify(exactly = 0) { lrcLibApi.getBestMatch(any(), any(), any()) }
     }
 
     @Test
