@@ -17,21 +17,12 @@ class PlayerSheetTest {
             PlayerSheet.PlaybackInfo,
             PlayerSheet.AspectRatio,
             PlayerSheet.SubtitleStyle,
-            PlayerSheet.TapToTranslate("hello"),
-            PlayerSheet.OcrResult,
             PlayerSheet.AudioDelay,
             PlayerSheet.Decoder,
             PlayerSheet.SubtitleDownload,
         )
         val uniqueTypes = sheets.map { it::class }.distinct()
         assertTrue(uniqueTypes.size >= sheets.size - 1)
-    }
-
-    @Test
-    fun playerSheet_tapToTranslate_holdsText() {
-        val sheet = PlayerSheet.TapToTranslate("extracted text")
-        assertTrue(sheet is PlayerSheet.TapToTranslate)
-        assertTrue((sheet as PlayerSheet.TapToTranslate).text == "extracted text")
     }
 
     @Test
@@ -43,19 +34,5 @@ class PlayerSheetTest {
     @Test
     fun playerSheet_speedIsNotNone() {
         assertFalse(PlayerSheet.Speed is PlayerSheet.None)
-    }
-
-    @Test
-    fun playerSheet_equality_sameTapToTranslate() {
-        val a = PlayerSheet.TapToTranslate("test")
-        val b = PlayerSheet.TapToTranslate("test")
-        assertTrue(a == b)
-    }
-
-    @Test
-    fun playerSheet_inequality_differentTapToTranslate() {
-        val a = PlayerSheet.TapToTranslate("a")
-        val b = PlayerSheet.TapToTranslate("b")
-        assertFalse(a == b)
     }
 }

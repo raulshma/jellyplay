@@ -33,9 +33,7 @@ class VideoPlayerUiStateTest {
         assertFalse(state.nightModeEnabled)
         assertEquals(EffectStrength.MODERATE, state.nightModeStrength)
         assertFalse(state.audioPassthrough)
-        assertFalse(state.isOcrRunning)
         assertNull(state.detectedAspectRatio)
-        assertNull(state.ocrText)
         assertNull(state.streamUrl)
     }
 

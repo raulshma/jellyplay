@@ -1,7 +1,6 @@
 package com.raulshma.jellyplay.feature.player.video.engine
 
 import android.content.Context
-import android.graphics.Bitmap
 import android.view.View
 import com.raulshma.jellyplay.core.data.playback.PlayerLifecycleCallbacks
 import com.raulshma.jellyplay.core.model.AudioNormalizationMode
@@ -85,7 +84,6 @@ data class AudioEffectsConfig(
 data class EngineCapabilities(
     val supportsPip: Boolean = false,
     val supportsMiniMode: Boolean = false,
-    val supportsOcr: Boolean = false,
     val supportsCues: Boolean = false,
     val supportsAudioDelay: Boolean = false,
     val supportsSubtitleDelay: Boolean = false,
@@ -180,7 +178,6 @@ interface MediaEngine : PlayerLifecycleCallbacks, com.raulshma.jellyplay.core.da
     fun createSurfaceView(context: Context): View
     fun applySubtitleStyleToView(view: View, style: SubtitleStyle)
     fun setAspectRatio(mode: Int, ratio: Float? = null)
-    fun captureViewBitmap(): Bitmap?
 
     // Internal state access (needed for some specific features, but keep to a minimum)
     val playbackSpeed: Float

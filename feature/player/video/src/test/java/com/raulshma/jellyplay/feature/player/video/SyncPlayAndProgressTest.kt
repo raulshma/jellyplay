@@ -242,7 +242,6 @@ class EngineCapabilitiesDefaultTest {
         val caps = EngineCapabilities()
         assertFalse(caps.supportsPip)
         assertFalse(caps.supportsMiniMode)
-        assertFalse(caps.supportsOcr)
         assertFalse(caps.supportsCues)
         assertFalse(caps.supportsAudioDelay)
         assertFalse(caps.supportsSubtitleDelay)
@@ -257,10 +256,9 @@ class EngineCapabilitiesDefaultTest {
     @Test
     fun capabilities_dataClassCopy() {
         val caps = EngineCapabilities()
-        val modified = caps.copy(supportsPip = true, supportsOcr = true)
+        val modified = caps.copy(supportsPip = true)
         assertFalse(caps.supportsPip)
         assertTrue(modified.supportsPip)
-        assertTrue(modified.supportsOcr)
         assertFalse(modified.supportsMiniMode)
     }
 }

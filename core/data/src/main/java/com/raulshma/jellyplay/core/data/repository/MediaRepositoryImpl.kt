@@ -19,6 +19,7 @@ import com.raulshma.jellyplay.core.model.LibraryFolder
 import com.raulshma.jellyplay.core.model.LiveTvChannel
 import com.raulshma.jellyplay.core.model.LiveTvProgram
 import com.raulshma.jellyplay.core.model.LrcLibTrack
+import com.raulshma.jellyplay.core.data.network.NetworkMonitor
 import com.raulshma.jellyplay.core.model.LyricsLine
 import com.raulshma.jellyplay.core.model.LyricsResult
 import com.raulshma.jellyplay.core.model.LyricsSource
@@ -26,6 +27,7 @@ import com.raulshma.jellyplay.core.model.MediaDetail
 import com.raulshma.jellyplay.core.model.Playlist
 import com.raulshma.jellyplay.core.model.PlaylistItem
 import com.raulshma.jellyplay.core.model.MediaItem
+import com.raulshma.jellyplay.core.model.NetworkStatus
 import com.raulshma.jellyplay.core.model.MediaType
 import com.raulshma.jellyplay.core.model.SearchResult
 import com.raulshma.jellyplay.core.model.SyncPlayGroup
@@ -44,6 +46,7 @@ class MediaRepositoryImpl @Inject constructor(
     private val apiClient: JellyfinApiClient,
     private val lrcLibApi: LrcLibApi,
     private val lyricsCacheDao: LyricsCacheDao,
+    private val networkMonitor: NetworkMonitor,
 ) : MediaRepository {
 
     // Short-lived in-process cache for MediaDetail. Prevents redundant network calls
@@ -280,35 +283,55 @@ class MediaRepositoryImpl @Inject constructor(
             return@runCatching LyricsResult(lines = emptyList(), source = LyricsSource.UNKNOWN)
         }
 
-        val lrcLibResult = lrcLibApi.getBestMatch(artistName, trackName, duration)
-        if (lrcLibResult.isSuccess) {
-            val track = lrcLibResult.getOrThrow()
-            val trackSynced = track.syncedLyrics
-            val trackPlain = track.plainLyrics
-            if (track.instrumental) {
-                lyricsCacheDao.upsert(
-                    LyricsCacheEntity(
-                        itemId = itemId,
-                        provider = LyricsSource.LRCLIB.name,
-                        artistName = artistName,
-                        trackName = trackName,
-                        duration = duration,
-                        lrcLibId = track.id,
-                        fetchedAt = System.currentTimeMillis(),
-                    )
-                )
-                return@runCatching LyricsResult(lines = emptyList(), source = LyricsSource.LRCLIB)
-            }
-            if (!trackSynced.isNullOrBlank()) {
-                val lines = parseLrc(trackSynced)
-                if (lines.isNotEmpty()) {
+        val isLocal = networkMonitor.networkStatus.value == NetworkStatus.Local
+        if (!isLocal) {
+            val lrcLibResult = lrcLibApi.getBestMatch(artistName, trackName, duration)
+            if (lrcLibResult.isSuccess) {
+                val track = lrcLibResult.getOrThrow()
+                val trackSynced = track.syncedLyrics
+                val trackPlain = track.plainLyrics
+                if (track.instrumental) {
                     lyricsCacheDao.upsert(
                         LyricsCacheEntity(
                             itemId = itemId,
                             provider = LyricsSource.LRCLIB.name,
                             artistName = artistName,
                             trackName = trackName,
-                            syncedLyrics = trackSynced,
+                            duration = duration,
+                            lrcLibId = track.id,
+                            fetchedAt = System.currentTimeMillis(),
+                        )
+                    )
+                    return@runCatching LyricsResult(lines = emptyList(), source = LyricsSource.LRCLIB)
+                }
+                if (!trackSynced.isNullOrBlank()) {
+                    val lines = parseLrc(trackSynced)
+                    if (lines.isNotEmpty()) {
+                        lyricsCacheDao.upsert(
+                            LyricsCacheEntity(
+                                itemId = itemId,
+                                provider = LyricsSource.LRCLIB.name,
+                                artistName = artistName,
+                                trackName = trackName,
+                                syncedLyrics = trackSynced,
+                                plainLyrics = trackPlain,
+                                duration = duration,
+                                lrcLibId = track.id,
+                                fetchedAt = System.currentTimeMillis(),
+                            )
+                        )
+                        return@runCatching LyricsResult(lines = lines, source = LyricsSource.LRCLIB)
+                    }
+                }
+                if (!trackPlain.isNullOrBlank()) {
+                    val lines = trackPlain.lineSequence().filter { it.isNotBlank() }
+                        .map { LyricsLine(timeMs = 0L, text = it.trim()) }.toList()
+                    lyricsCacheDao.upsert(
+                        LyricsCacheEntity(
+                            itemId = itemId,
+                            provider = LyricsSource.LRCLIB.name,
+                            artistName = artistName,
+                            trackName = trackName,
                             plainLyrics = trackPlain,
                             duration = duration,
                             lrcLibId = track.id,
@@ -317,23 +340,6 @@ class MediaRepositoryImpl @Inject constructor(
                     )
                     return@runCatching LyricsResult(lines = lines, source = LyricsSource.LRCLIB)
                 }
-            }
-            if (!trackPlain.isNullOrBlank()) {
-                val lines = trackPlain.lineSequence().filter { it.isNotBlank() }
-                    .map { LyricsLine(timeMs = 0L, text = it.trim()) }.toList()
-                lyricsCacheDao.upsert(
-                    LyricsCacheEntity(
-                        itemId = itemId,
-                        provider = LyricsSource.LRCLIB.name,
-                        artistName = artistName,
-                        trackName = trackName,
-                        plainLyrics = trackPlain,
-                        duration = duration,
-                        lrcLibId = track.id,
-                        fetchedAt = System.currentTimeMillis(),
-                    )
-                )
-                return@runCatching LyricsResult(lines = lines, source = LyricsSource.LRCLIB)
             }
         }
 

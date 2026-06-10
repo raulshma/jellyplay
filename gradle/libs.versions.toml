@@ -36,7 +36,6 @@ roomTesting = "2.8.4"
 androidxTestCore = "1.6.1"
 playServicesCast = "22.3.1"
 mediarouter = "1.9.0-alpha01"
-mlkitTextRecognition = "16.0.1"
 slf4j = "2.0.17"
 libmpv = "0.1.12"
 libvlc = "3.7.1"
@@ -141,9 +140,6 @@ androidx-test-core = { group = "androidx.test", name = "core", version.ref = "an
 # Google Cast
 play-services-cast-framework = { group = "com.google.android.gms", name = "play-services-cast-framework", version.ref = "playServicesCast" }
 mediarouter = { group = "androidx.mediarouter", name = "mediarouter", version.ref = "mediarouter" }
-
-# ML Kit
-mlkit-text-recognition = { group = "com.google.mlkit", name = "text-recognition", version.ref = "mlkitTextRecognition" }
 
 # SLF4J
 slf4j-api = { group = "org.slf4j", name = "slf4j-api", version.ref = "slf4j" }

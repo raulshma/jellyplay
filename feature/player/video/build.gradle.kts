@@ -83,8 +83,6 @@ dependencies {
     implementation(libs.coil.network.okhttp)
     implementation(libs.okhttp)
 
-    implementation(libs.mlkit.text.recognition)
-
     implementation(libs.libmpv)
     implementation(libs.libvlc.all)
     implementation(libs.hilt.android)

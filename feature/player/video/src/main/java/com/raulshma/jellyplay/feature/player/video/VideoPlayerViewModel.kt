@@ -407,6 +407,8 @@ class VideoPlayerViewModel @Inject constructor(
                 defaultOrientation = prefs.videoDefaultOrientation,
                 controlsTimeoutMs = prefs.videoControlsTimeoutMs,
                 gesturesEnabled = prefs.videoGesturesEnabled,
+                holdSpeedEnabled = prefs.videoHoldSpeedEnabled,
+                holdSpeedMultiplier = prefs.videoHoldSpeedMultiplier,
                 defaultSpeed = prefs.videoDefaultSpeed,
                 swipeSeekMaxMs = prefs.videoSwipeSeekMaxMs,
                 rememberBrightness = prefs.videoRememberBrightness,
@@ -528,6 +530,24 @@ class VideoPlayerViewModel @Inject constructor(
         playerSessionManager.engine?.setPlaybackSpeed(speed)
     }
 
+    private var speedBeforeHold: Float? = null
+
+    fun startHoldSpeed() {
+        if (_uiState.value.isHoldSpeedActive) return
+        speedBeforeHold = _uiState.value.playbackSpeed
+        val targetSpeed = _uiState.value.holdSpeedMultiplier
+        playerSessionManager.engine?.setPlaybackSpeed(targetSpeed)
+        _uiState.update { it.copy(playbackSpeed = targetSpeed, isHoldSpeedActive = true) }
+    }
+
+    fun stopHoldSpeed() {
+        if (!_uiState.value.isHoldSpeedActive) return
+        val restoreSpeed = speedBeforeHold ?: _uiState.value.defaultSpeed
+        speedBeforeHold = null
+        playerSessionManager.engine?.setPlaybackSpeed(restoreSpeed)
+        _uiState.update { it.copy(playbackSpeed = restoreSpeed, isHoldSpeedActive = false) }
+    }
+
     fun selectAudioTrack(option: TrackOption) {
         val engine = playerSessionManager.engine ?: return
         engine.selectTrack(com.raulshma.jellyplay.core.model.TrackType.AUDIO, option.index, option.trackGroup)
@@ -613,13 +633,6 @@ class VideoPlayerViewModel @Inject constructor(
         return typedStreams.firstOrNull {
             it.displayTitle == trackLabel || it.title == trackLabel || it.language == trackLabel
         }?.index ?: typedStreams.firstOrNull { it.index >= 0 }?.index
-    }
-
-    fun getCurrentPrimarySubtitleText(): String? {
-        val engine = playerSessionManager.engine ?: return null
-        val cues = engine.currentCues.value
-        if (cues.isEmpty()) return null
-        return cues.firstOrNull() ?: return null
     }
 
     fun setAspectRatio(ratio: AspectRatio) {
@@ -1296,37 +1309,6 @@ class VideoPlayerViewModel @Inject constructor(
 
     val isBackgroundCasting: Boolean
         get() = castManager.isBackgroundCasting
-
-    fun captureOcrSubtitle(bitmap: android.graphics.Bitmap?) {
-        if (_uiState.value.isOcrRunning) return
-        if (bitmap == null) {
-            _uiState.update { it.copy(ocrText = null) }
-            return
-        }
-        _uiState.update { it.copy(isOcrRunning = true) }
-        launch {
-            try {
-                val text = withContext(Dispatchers.Default) {
-                    com.raulshma.jellyplay.feature.player.video.subtitle.SubtitleOcrHelper
-                        .extractSubtitleTextFromFrame(bitmap)
-                }
-                _uiState.update { it.copy(ocrText = text) }
-            } catch (_: Exception) {
-                _uiState.update { it.copy(ocrText = null) }
-            } finally {
-                if (!bitmap.isRecycled) bitmap.recycle()
-                _uiState.update { it.copy(isOcrRunning = false) }
-            }
-        }
-    }
-
-    fun capturePlayerViewBitmap(): android.graphics.Bitmap? {
-        return playerSessionManager.engine?.captureViewBitmap()
-    }
-
-    fun clearOcrText() {
-        _uiState.update { it.copy(ocrText = null) }
-    }
 
     fun toggleVideoStats() {
         val newValue = !_uiState.value.showVideoStats

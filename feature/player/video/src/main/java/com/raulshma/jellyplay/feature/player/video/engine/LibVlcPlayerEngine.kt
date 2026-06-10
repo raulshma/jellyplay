@@ -1,7 +1,7 @@
 package com.raulshma.jellyplay.feature.player.video.engine
 
 import android.content.Context
-import android.graphics.Bitmap
+
 import android.net.Uri
 import android.os.Handler
 import android.os.Looper
@@ -51,7 +51,6 @@ class LibVlcPlayerEngine(
     override val capabilities = EngineCapabilities(
         supportsPip = true,
         supportsMiniMode = false,
-        supportsOcr = false,
         supportsCues = false,
         supportsAudioDelay = true,
         supportsSubtitleDelay = true,
@@ -437,36 +436,36 @@ class LibVlcPlayerEngine(
 
     override val volume: Float
         get() = try {
-            (mediaPlayer?.volume ?: 100).coerceIn(0, 100) / 100f
+            (mediaPlayer?.volume ?: 100).coerceIn(0, 200) / 100f
         } catch (_: Exception) { 1f }
 
     override fun setVolume(value: Float) {
         try {
-            val clamped = value.coerceIn(0f, 1f)
-            val v = (clamped * 100).toInt().coerceIn(0, 100)
+            val clamped = value.coerceIn(0f, 2f)
+            val v = (clamped * 100).toInt().coerceIn(0, 200)
             if (v > 0) lastUnmuteVolume = v / 100f
             mediaPlayer?.volume = v
-            MediaStreamVolume.setNormalized(context, clamped)
+            MediaStreamVolume.setNormalized(context, clamped.coerceIn(0f, 1f))
         } catch (_: Exception) {}
     }
 
     override fun increaseVolume(delta: Float) {
         try {
             val mp = mediaPlayer ?: return
-            val next = (mp.volume + (delta * 100).toInt()).coerceIn(0, 100)
+            val next = (mp.volume + (delta * 100).toInt()).coerceIn(0, 200)
             if (next > 0) lastUnmuteVolume = next / 100f
             mp.volume = next
-            MediaStreamVolume.setNormalized(context, next / 100f)
+            MediaStreamVolume.setNormalized(context, (next / 100f).coerceIn(0f, 1f))
         } catch (_: Exception) {}
     }
 
     override fun decreaseVolume(delta: Float) {
         try {
             val mp = mediaPlayer ?: return
-            val next = (mp.volume - (delta * 100).toInt()).coerceIn(0, 100)
+            val next = (mp.volume - (delta * 100).toInt()).coerceIn(0, 200)
             if (next > 0) lastUnmuteVolume = next / 100f
             mp.volume = next
-            MediaStreamVolume.setNormalized(context, next / 100f)
+            MediaStreamVolume.setNormalized(context, (next / 100f).coerceIn(0f, 1f))
         } catch (_: Exception) {}
     }
 
@@ -689,8 +688,6 @@ class LibVlcPlayerEngine(
             }
         } catch (_: Exception) {}
     }
-
-    override fun captureViewBitmap(): Bitmap? = null
 
     val vlcMediaPlayer: MediaPlayer? get() = mediaPlayer
 
