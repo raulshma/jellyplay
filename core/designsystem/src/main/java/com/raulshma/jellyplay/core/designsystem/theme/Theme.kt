@@ -274,6 +274,7 @@ val LocalJellyPlayTypography = staticCompositionLocalOf<androidx.compose.materia
 val LocalJellyPlayShapes = staticCompositionLocalOf<Shapes> { error("No Shapes provided") }
 val LocalIsSynthwave = staticCompositionLocalOf { false }
 val LocalIsSoothingTheme = staticCompositionLocalOf { false }
+val LocalIsMonochromeTheme = staticCompositionLocalOf { false }
 
 @OptIn(ExperimentalMaterial3ExpressiveApi::class)
 @Composable
@@ -290,10 +291,11 @@ fun JellyPlayTheme(
     synthwaveAccent: String = "magenta",
     soothingMode: Boolean = false,
     soothingAccent: String = "ocean",
+    monochromeMode: Boolean = false,
     content: @Composable () -> Unit,
 ) {
     val effectiveDarkTheme = darkTheme || isTv || synthwaveMode
-    val effectiveOledMode = oledMode && effectiveDarkTheme && !synthwaveMode && !soothingMode
+    val effectiveOledMode = (oledMode || monochromeMode) && effectiveDarkTheme && !synthwaveMode && !soothingMode
 
     _isSynthwaveActive.value = synthwaveMode
 
@@ -303,6 +305,9 @@ fun JellyPlayTheme(
         }
         soothingMode -> {
             remember(soothingAccent, effectiveDarkTheme) { getSoothingColorScheme(soothingAccent, effectiveDarkTheme) }
+        }
+        monochromeMode -> {
+            remember(effectiveDarkTheme) { getMonochromeColorScheme(effectiveDarkTheme) }
         }
         accentColorSwatch == "dynamic" && dynamicColor && !isTv && Build.VERSION.SDK_INT >= Build.VERSION_CODES.S -> {
             val context = LocalContext.current
@@ -362,6 +367,15 @@ fun JellyPlayTheme(
                 extraLarge = androidx.compose.foundation.shape.RoundedCornerShape(28.dp),
             )
         }
+        monochromeMode -> {
+            Shapes(
+                extraSmall = androidx.compose.foundation.shape.RoundedCornerShape(8.dp),
+                small = androidx.compose.foundation.shape.RoundedCornerShape(12.dp),
+                medium = androidx.compose.foundation.shape.RoundedCornerShape(16.dp),
+                large = androidx.compose.foundation.shape.RoundedCornerShape(24.dp),
+                extraLarge = androidx.compose.foundation.shape.RoundedCornerShape(32.dp),
+            )
+        }
         else -> {
             DefaultShapes
         }
@@ -370,6 +384,7 @@ fun JellyPlayTheme(
     val typography = when {
         synthwaveMode -> SynthwaveTypography
         soothingMode -> SoothingTypography
+        monochromeMode -> MonochromeTypography
         isTv -> TvTypography
         else -> JellyPlayTypography
     }
@@ -382,6 +397,7 @@ fun JellyPlayTheme(
         LocalExtendedColors provides ExtendedColors(),
         LocalIsSynthwave provides synthwaveMode,
         LocalIsSoothingTheme provides soothingMode,
+        LocalIsMonochromeTheme provides monochromeMode,
     ) {
         MaterialExpressiveTheme(
             colorScheme = colorScheme,
@@ -516,6 +532,74 @@ fun getSoothingColorScheme(accent: String, isDark: Boolean): ColorScheme {
             surfaceContainer = Color(0xFFFFFFFF),
             surfaceContainerHigh = Color(0xFFE4E6EB),
             surfaceContainerHighest = Color(0xFFCED0D4),
+        )
+    }
+}
+
+fun getMonochromeColorScheme(isDark: Boolean): ColorScheme {
+    return if (isDark) {
+        darkColorScheme(
+            primary = Color.White,
+            onPrimary = Color.Black,
+            primaryContainer = Color(0xFF1C1C1C),
+            onPrimaryContainer = Color.White,
+            secondary = Color.White,
+            onSecondary = Color.Black,
+            secondaryContainer = Color(0xFF1E1E1E),
+            onSecondaryContainer = Color.White,
+            tertiary = Color(0xFFE51937),
+            onTertiary = Color.White,
+            tertiaryContainer = Color(0xFF2E0509),
+            onTertiaryContainer = Color(0xFFFFB4B5),
+            error = Color(0xFFE51937),
+            onError = Color.White,
+            errorContainer = Color(0xFF4C0008),
+            onErrorContainer = Color(0xFFFFDADA),
+            background = Color.Black,
+            onBackground = Color.White,
+            surface = Color(0xFF0C0C0C),
+            onSurface = Color.White,
+            surfaceVariant = Color(0xFF1A1A1A),
+            onSurfaceVariant = Color(0xFFCCCCCC),
+            outline = Color(0xFF2C2C2C),
+            outlineVariant = Color(0xFF1A1A1A),
+            surfaceContainerLowest = Color(0xFF000000),
+            surfaceContainerLow = Color(0xFF0A0A0A),
+            surfaceContainer = Color(0xFF111111),
+            surfaceContainerHigh = Color(0xFF1A1A1A),
+            surfaceContainerHighest = Color(0xFF262626),
+        )
+    } else {
+        lightColorScheme(
+            primary = Color.Black,
+            onPrimary = Color.White,
+            primaryContainer = Color(0xFFEEEEEE),
+            onPrimaryContainer = Color.Black,
+            secondary = Color.Black,
+            onSecondary = Color.White,
+            secondaryContainer = Color(0xFFEAEAEA),
+            onSecondaryContainer = Color.Black,
+            tertiary = Color(0xFFE51937),
+            onTertiary = Color.White,
+            tertiaryContainer = Color(0xFFFFECEE),
+            onTertiaryContainer = Color(0xFFE51937),
+            error = Color(0xFFE51937),
+            onError = Color.White,
+            errorContainer = Color(0xFFFFDADA),
+            onErrorContainer = Color(0xFF4C0008),
+            background = Color.White,
+            onBackground = Color.Black,
+            surface = Color(0xFFF9F9F9),
+            onSurface = Color.Black,
+            surfaceVariant = Color(0xFFEAEAEA),
+            onSurfaceVariant = Color(0xFF333333),
+            outline = Color(0xFFCCCCCC),
+            outlineVariant = Color(0xFFE0E0E0),
+            surfaceContainerLowest = Color(0xFFFFFFFF),
+            surfaceContainerLow = Color(0xFFF9F9F9),
+            surfaceContainer = Color(0xFFF0F0F0),
+            surfaceContainerHigh = Color(0xFFE5E5E5),
+            surfaceContainerHighest = Color(0xFFDCDCDC),
         )
     }
 }

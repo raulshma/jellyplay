@@ -847,6 +847,10 @@ class SettingsViewModel @Inject constructor(
         launch { preferencesStore.setSoothingAccent(accent) }
     }
 
+    fun setMonochromeMode(enabled: Boolean) {
+        launch { preferencesStore.setMonochromeMode(enabled) }
+    }
+
     fun updateNotificationPreferences(transform: (NotificationPreferences) -> NotificationPreferences) {
         launch {
             preferencesStore.updateNotificationPreferences(transform)

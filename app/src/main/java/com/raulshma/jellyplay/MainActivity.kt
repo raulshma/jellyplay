@@ -212,6 +212,7 @@ class MainActivity : FragmentActivity() {
                 synthwaveAccent = preferences.synthwaveAccent,
                 soothingMode = preferences.soothingMode,
                 soothingAccent = preferences.soothingAccent,
+                monochromeMode = preferences.monochromeMode,
             ) {
                 if (showLockScreen) {
                     AuthChallengeScreen(

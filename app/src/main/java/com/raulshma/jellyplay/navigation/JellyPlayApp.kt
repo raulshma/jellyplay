@@ -101,6 +101,7 @@ import com.raulshma.jellyplay.core.ui.adaptive.rememberAdaptiveInfo
 import com.raulshma.jellyplay.core.designsystem.theme.TvTypography
 import com.raulshma.jellyplay.core.designsystem.theme.LocalIsSynthwave
 import com.raulshma.jellyplay.core.designsystem.theme.LocalIsSoothingTheme
+import com.raulshma.jellyplay.core.designsystem.theme.LocalIsMonochromeTheme
 import com.raulshma.jellyplay.core.designsystem.theme.ShapeCache
 import com.raulshma.jellyplay.core.ui.components.LocalNavigationBarColor
 import com.raulshma.jellyplay.core.ui.components.MiniPlayer
@@ -270,6 +271,7 @@ private fun MainContent(
     val homeMode = preferences.homeMode
     val isSynthwave = com.raulshma.jellyplay.core.designsystem.theme.LocalIsSynthwave.current
     val isSoothing = com.raulshma.jellyplay.core.designsystem.theme.LocalIsSoothingTheme.current
+    val isMonochrome = com.raulshma.jellyplay.core.designsystem.theme.LocalIsMonochromeTheme.current
 
     val navigationState = rememberNavigationState(
         startRoute = Route.Home,
@@ -1205,6 +1207,7 @@ private fun FloatingNavigationBar(
 ) {
     val isSynthwave = LocalIsSynthwave.current
     val isSoothing = LocalIsSoothingTheme.current
+    val isMonochrome = LocalIsMonochromeTheme.current
 
     val synthwaveTint = Color(0xFF160C2D).copy(alpha = 0.92f)
     val soothingTint = if (androidx.compose.foundation.isSystemInDarkTheme()) {
@@ -1212,9 +1215,15 @@ private fun FloatingNavigationBar(
     } else {
         Color(0xFFFFFFFF).copy(alpha = 0.88f)
     }
+    val monochromeTint = if (androidx.compose.foundation.isSystemInDarkTheme()) {
+        Color(0xFF000000).copy(alpha = 0.95f)
+    } else {
+        Color(0xFFFFFFFF).copy(alpha = 0.95f)
+    }
     val resolvedColor = when {
         isSynthwave -> synthwaveTint
         isSoothing -> soothingTint
+        isMonochrome -> monochromeTint
         else -> containerColor.copy(alpha = 0.90f)
     }
 
@@ -1236,12 +1245,19 @@ private fun FloatingNavigationBar(
                 color = MaterialTheme.colorScheme.outline.copy(alpha = 0.3f)
             )
         }
+        isMonochrome -> {
+            androidx.compose.foundation.BorderStroke(
+                width = 1.dp,
+                color = MaterialTheme.colorScheme.outline.copy(alpha = 0.45f)
+            )
+        }
         else -> null
     }
 
     val shape = when {
         isSynthwave -> RoundedCornerShape(0.dp)
         isSoothing -> ShapeCache.smoothPill
+        isMonochrome -> RoundedCornerShape(16.dp)
         else -> RoundedCornerShape(24.dp)
     }
 
