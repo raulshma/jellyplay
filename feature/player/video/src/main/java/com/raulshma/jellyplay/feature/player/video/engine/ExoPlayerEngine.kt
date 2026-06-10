@@ -1,8 +1,7 @@
 package com.raulshma.jellyplay.feature.player.video.engine
 
 import android.content.Context
-import android.graphics.Bitmap
-import android.graphics.Canvas
+
 import android.graphics.Color
 import android.net.Uri
 import android.os.Handler
@@ -97,7 +96,6 @@ class ExoPlayerEngine(
     override val capabilities = EngineCapabilities(
         supportsPip = true,
         supportsMiniMode = true,
-        supportsOcr = true,
         supportsCues = true,
         supportsAudioDelay = false,
         supportsSubtitleDelay = true,
@@ -552,24 +550,6 @@ class ExoPlayerEngine(
         } else if (ratio == null || ratio == 0f) {
             (playerView as? AspectRatioFrameLayout)?.setAspectRatio(0f)
         }
-    }
-
-    override fun captureViewBitmap(): Bitmap? {
-        val pv = playerView ?: return null
-        if (pv.width <= 0 || pv.height <= 0) return null
-        return try {
-            val maxDim = 1080
-            val scale = if (pv.width > maxDim || pv.height > maxDim) {
-                minOf(maxDim.toFloat() / pv.width, maxDim.toFloat() / pv.height)
-            } else 1f
-            val w = (pv.width * scale).toInt().coerceAtLeast(1)
-            val h = (pv.height * scale).toInt().coerceAtLeast(1)
-            Bitmap.createBitmap(w, h, Bitmap.Config.RGB_565).also {
-                val canvas = Canvas(it)
-                if (scale < 1f) canvas.scale(scale, scale)
-                pv.draw(canvas)
-            }
-        } catch (_: Exception) { null }
     }
 
     override val currentPositionMs: Long get() = player?.currentPosition ?: 0L

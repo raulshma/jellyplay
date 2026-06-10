@@ -93,8 +93,6 @@
 -dontwarn org.slf4j.**
 -dontwarn io.github.oshai.kotlinlogging.**
 
--keep class com.google.mlkit.** { *; }
--dontwarn com.google.mlkit.**
 -dontwarn com.google.android.gms.internal.**
 
 -dontwarn okio.**

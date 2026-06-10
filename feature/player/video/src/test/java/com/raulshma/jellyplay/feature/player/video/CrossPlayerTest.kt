@@ -90,12 +90,6 @@ class EngineCapabilitiesCrossPlayerTest {
     }
 
     @Test
-    fun exoPlayerCapabilities_ocrSupported() {
-        val caps = getCapabilitiesForType(PlayerType.EXO_PLAYER)
-        assertTrue(caps.supportsOcr)
-    }
-
-    @Test
     fun exoPlayerCapabilities_cuesSupported() {
         val caps = getCapabilitiesForType(PlayerType.EXO_PLAYER)
         assertTrue(caps.supportsCues)
@@ -144,12 +138,6 @@ class EngineCapabilitiesCrossPlayerTest {
     }
 
     @Test
-    fun mpvCapabilities_ocrNotSupported() {
-        val caps = getCapabilitiesForType(PlayerType.MPV)
-        assertFalse(caps.supportsOcr)
-    }
-
-    @Test
     fun mpvCapabilities_cuesNotSupported() {
         val caps = getCapabilitiesForType(PlayerType.MPV)
         assertFalse(caps.supportsCues)
@@ -186,12 +174,6 @@ class EngineCapabilitiesCrossPlayerTest {
     }
 
     @Test
-    fun libvlcCapabilities_ocrNotSupported() {
-        val caps = getCapabilitiesForType(PlayerType.LIBVLC)
-        assertFalse(caps.supportsOcr)
-    }
-
-    @Test
     fun libvlcCapabilities_cuesNotSupported() {
         val caps = getCapabilitiesForType(PlayerType.LIBVLC)
         assertFalse(caps.supportsCues)
@@ -207,7 +189,6 @@ class EngineCapabilitiesCrossPlayerTest {
         assertEquals(mpvCaps.supportsSubtitleStyle, vlcCaps.supportsSubtitleStyle)
         assertEquals(mpvCaps.supportsDialogueBoost, vlcCaps.supportsDialogueBoost)
         assertEquals(mpvCaps.supportsNightMode, vlcCaps.supportsNightMode)
-        assertEquals(mpvCaps.supportsOcr, vlcCaps.supportsOcr)
         assertEquals(mpvCaps.supportsCues, vlcCaps.supportsCues)
     }
 
@@ -218,7 +199,6 @@ class EngineCapabilitiesCrossPlayerTest {
 
         assertFalse(exoCaps.supportsAudioDelay == mpvCaps.supportsAudioDelay)
         assertFalse(exoCaps.supportsAudioPassthrough == mpvCaps.supportsAudioPassthrough)
-        assertFalse(exoCaps.supportsOcr == mpvCaps.supportsOcr)
         assertFalse(exoCaps.supportsCues == mpvCaps.supportsCues)
         assertTrue(exoCaps.supportsNightMode == mpvCaps.supportsNightMode)
     }
@@ -228,7 +208,6 @@ class EngineCapabilitiesCrossPlayerTest {
             PlayerType.EXO_PLAYER -> EngineCapabilities(
                 supportsPip = true,
                 supportsMiniMode = true,
-                supportsOcr = true,
                 supportsCues = true,
                 supportsAudioDelay = false,
                 supportsSubtitleDelay = true,
@@ -240,7 +219,6 @@ class EngineCapabilitiesCrossPlayerTest {
             PlayerType.MPV -> EngineCapabilities(
                 supportsPip = true,
                 supportsMiniMode = false,
-                supportsOcr = false,
                 supportsCues = false,
                 supportsAudioDelay = true,
                 supportsSubtitleDelay = true,
@@ -252,7 +230,6 @@ class EngineCapabilitiesCrossPlayerTest {
             PlayerType.LIBVLC -> EngineCapabilities(
                 supportsPip = true,
                 supportsMiniMode = false,
-                supportsOcr = false,
                 supportsCues = false,
                 supportsAudioDelay = true,
                 supportsSubtitleDelay = true,

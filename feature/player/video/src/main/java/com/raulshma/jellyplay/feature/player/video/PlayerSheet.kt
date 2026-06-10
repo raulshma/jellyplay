@@ -10,8 +10,6 @@ sealed class PlayerSheet {
     data object AspectRatio : PlayerSheet()
     data object SubtitleStyle : PlayerSheet()
     
-    data class TapToTranslate(val text: String) : PlayerSheet()
-    data object OcrResult : PlayerSheet()
     data object AudioDelay : PlayerSheet()
     data object Decoder : PlayerSheet()
     data object SubtitleDownload : PlayerSheet()

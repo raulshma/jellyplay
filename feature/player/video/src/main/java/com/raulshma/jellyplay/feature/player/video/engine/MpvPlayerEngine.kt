@@ -1,7 +1,7 @@
 package com.raulshma.jellyplay.feature.player.video.engine
 
 import android.content.Context
-import android.graphics.Bitmap
+
 import android.os.Handler
 import android.os.Looper
 import android.util.Log
@@ -67,7 +67,6 @@ class MpvPlayerEngine(
     override val capabilities = EngineCapabilities(
         supportsPip = true,
         supportsMiniMode = false,
-        supportsOcr = false,
         supportsCues = true,
         supportsAudioDelay = true,
         supportsSubtitleDelay = true,
@@ -562,7 +561,7 @@ class MpvPlayerEngine(
     override fun setVolume(value: Float) {
         try {
             val clamped = value.coerceIn(0f, 1f)
-            val pct = (clamped * 100.0).coerceIn(0.0, 130.0)
+            val pct = (clamped * 100.0).coerceIn(0.0, 200.0)
             mpvView?.mpv?.setPropertyDouble("volume", pct)
             MediaStreamVolume.setNormalized(context, clamped)
         } catch (_: Exception) {}
@@ -572,7 +571,7 @@ class MpvPlayerEngine(
         try {
             val m = mpvView?.mpv ?: return
             val current = m.getPropertyDouble("volume") ?: 100.0
-            val next = (current + delta * 100.0).coerceIn(0.0, 130.0)
+            val next = (current + delta * 100.0).coerceIn(0.0, 200.0)
             m.setPropertyDouble("volume", next)
             MediaStreamVolume.setNormalized(context, (next / 100.0).toFloat().coerceIn(0f, 1f))
         } catch (_: Exception) {}
@@ -657,8 +656,6 @@ class MpvPlayerEngine(
         }
         try { mpvView?.mpv?.setPropertyString("video-aspect-override", aspectValue) } catch (_: Exception) {}
     }
-
-    override fun captureViewBitmap(): Bitmap? = null
 
     override val currentPositionMs: Long
         get() = try {

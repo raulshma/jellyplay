@@ -2,7 +2,6 @@ package com.raulshma.jellyplay.feature.player.video
 
 import android.app.Activity
 import android.content.Context
-import android.content.Intent
 import android.content.pm.ActivityInfo
 import android.os.Build
 import android.view.WindowManager
@@ -26,6 +25,7 @@ import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.ui.draw.clip
 import com.raulshma.jellyplay.core.ui.components.JellyPlayLoadingIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilledTonalButton
@@ -65,6 +65,7 @@ import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.AnnotatedString
+import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.drawText
 import androidx.compose.ui.text.rememberTextMeasurer
@@ -114,7 +115,6 @@ import com.raulshma.jellyplay.feature.player.video.components.SubtitleStyleSheet
 import com.raulshma.jellyplay.feature.player.video.components.VideoStatsOverlay
 import com.raulshma.jellyplay.feature.player.video.components.SyncPlayPlayerSheet
 
-import com.raulshma.jellyplay.feature.player.video.components.TapToTranslateSheet
 import com.raulshma.jellyplay.feature.player.video.components.TrackPickerSheet
 import com.raulshma.jellyplay.feature.player.video.components.TrickplayOverlay
 import com.raulshma.jellyplay.feature.player.video.components.VideoFilterSheet
@@ -620,7 +620,16 @@ fun VideoPlayerScreen(
                     if (isScreenLocked) return@pointerInput
                     if (!uiState.gesturesEnabled) return@pointerInput
                     detectTapGestures(
-                        onTap = { showControls = !showControls },
+                        onTap = {
+                            if (uiState.isHoldSpeedActive) {
+                                viewModel.stopHoldSpeed()
+                            } else {
+                                showControls = !showControls
+                            }
+                        },
+                        onLongPress = {
+                            if (uiState.holdSpeedEnabled) viewModel.startHoldSpeed()
+                        },
                         onDoubleTap = { offset ->
                             val width = size.width
                             when {
@@ -641,13 +650,6 @@ fun VideoPlayerScreen(
                                 }
                             }
                         },
-                        onLongPress = {
-                                if (!uiState.gesturesEnabled) return@detectTapGestures
-                                if (!uiState.engineCapabilities.supportsOcr) return@detectTapGestures
-                                val primaryText = viewModel.getCurrentPrimarySubtitleText() ?: return@detectTapGestures
-                                val text = primaryText.takeIf { it.isNotBlank() } ?: return@detectTapGestures
-                                currentSheet = PlayerSheet.TapToTranslate(text)
-                            },
                     )
                 },
         ) {
@@ -784,6 +786,36 @@ fun VideoPlayerScreen(
                 },
             )
 
+            AnimatedVisibility(
+                visible = uiState.isHoldSpeedActive,
+                enter = fadeIn(tween(100)),
+                exit = fadeOut(tween(150)),
+            ) {
+                Box(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .padding(bottom = 180.dp),
+                    contentAlignment = Alignment.BottomCenter,
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .clip(ShapeCache.smoothPill)
+                            .background(Color.Black.copy(alpha = 0.7f))
+                            .padding(horizontal = 16.dp, vertical = 8.dp),
+                        contentAlignment = Alignment.Center,
+                    ) {
+                        Text(
+                            text = "${uiState.playbackSpeed}x",
+                            color = MaterialTheme.colorScheme.primary,
+                            style = MaterialTheme.typography.titleMedium.copy(
+                                fontWeight = FontWeight.Bold,
+                                fontFamily = FontFamily.Monospace,
+                            ),
+                        )
+                    }
+                }
+            }
+
             // Trickplay overlay for seek gestures
             AnimatedVisibility(
                 visible = uiState.trickplayOnSeekGesture && gestureTrickplayVisible,
@@ -918,7 +950,6 @@ fun VideoPlayerScreen(
                 nightModeEnabled = uiState.nightModeEnabled,
                 nightModeStrength = uiState.nightModeStrength,
                 audioPassthrough = uiState.audioPassthrough,
-                isOcrRunning = uiState.isOcrRunning,
                 segments = uiState.segments,
                 playMethod = uiState.playMethod,
                 hdrType = uiState.hdrType,
@@ -934,7 +965,6 @@ fun VideoPlayerScreen(
                 supportsNightMode = uiState.engineCapabilities.supportsNightMode,
                 supportsAudioDelay = uiState.engineCapabilities.supportsAudioDelay,
                 supportsAudioPassthrough = uiState.engineCapabilities.supportsAudioPassthrough,
-                supportsOcr = uiState.engineCapabilities.supportsOcr,
                 hasEpisodes = hasEpisodes,
                 episodeBrowserEnabled = episodeBrowserEnabled,
                 onPlayPause = { doTogglePlayPause() },
@@ -964,11 +994,6 @@ fun VideoPlayerScreen(
                 onAudioDelayClick = { currentSheet = PlayerSheet.AudioDelay },
                 onDecoderClick = { currentSheet = PlayerSheet.Decoder },
                 onPassthroughClick = { viewModel.setAudioPassthrough(!uiState.audioPassthrough) },
-                onOcrClick = {
-                    val bitmap = viewModel.capturePlayerViewBitmap()
-                    viewModel.captureOcrSubtitle(bitmap)
-                    currentSheet = PlayerSheet.OcrResult
-                },
                 onSubtitleDownloadClick = {
                     viewModel.loadRemoteSubtitles()
                     currentSheet = PlayerSheet.SubtitleDownload
@@ -1411,13 +1436,6 @@ private fun PlayerSheetRouter(
                 onDismiss = dismissSheet,
             )
         }
-        
-        is PlayerSheet.TapToTranslate -> {
-            TapToTranslateSheet(
-                text = sheet.text,
-                onDismiss = dismissSheet,
-            )
-        }
         is PlayerSheet.AudioDelay -> {
             AudioDelaySheet(
                 currentDelayMs = uiState.audioDelayMs,
@@ -1442,17 +1460,6 @@ private fun PlayerSheetRouter(
                 },
                 onLoadLocalFile = onLoadLocalSubtitle,
                 onDismiss = dismissSheet,
-            )
-        }
-        is PlayerSheet.OcrResult -> {
-            OcrResultSheet(
-                ocrText = uiState.ocrText,
-                isOcrRunning = uiState.isOcrRunning,
-                onDismiss = {
-                    onSheetChange(PlayerSheet.None)
-                    viewModel.clearOcrText()
-                },
-                context = context,
             )
         }
         is PlayerSheet.Episodes -> {
@@ -1519,79 +1526,5 @@ private fun PlayerSheetRouter(
             )
         }
         PlayerSheet.None -> { }
-    }
-}
-
-@OptIn(ExperimentalMaterial3Api::class, androidx.compose.material3.ExperimentalMaterial3ExpressiveApi::class)
-@Composable
-private fun OcrResultSheet(
-    ocrText: String?,
-    isOcrRunning: Boolean,
-    onDismiss: () -> Unit,
-    context: Context,
-) {
-    PlayerModalBottomSheet(
-        onDismissRequest = onDismiss,
-        sheetState = rememberModalBottomSheetState(),
-    ) {
-        Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 24.dp)
-                .padding(bottom = 32.dp),
-        ) {
-            Text(
-                "OCR Subtitle Text",
-                style = MaterialTheme.typography.titleLarge,
-                fontWeight = FontWeight.Bold,
-            )
-            Spacer(Modifier.height(12.dp))
-            if (isOcrRunning) {
-                JellyPlayLoadingIndicator(
-                    modifier = Modifier.align(Alignment.CenterHorizontally),
-                )
-            } else if (ocrText != null) {
-                Text(
-                    ocrText,
-                    style = MaterialTheme.typography.bodyLarge,
-                    modifier = Modifier.fillMaxWidth(),
-                )
-            } else {
-                Text(
-                    "No subtitle text detected in current frame.",
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-            }
-            if (ocrText != null) {
-                Spacer(Modifier.height(12.dp))
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
-                ) {
-                    FilledTonalButton(
-                        onClick = {
-                            val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as android.content.ClipboardManager
-                            clipboard.setPrimaryClip(
-                                android.content.ClipData.newPlainText("OCR Subtitle", ocrText)
-                            )
-                        },
-                        modifier = Modifier.weight(1f),
-                        shape = ShapeCache.smoothPill,
-                    ) { Text("Copy") }
-                    FilledTonalButton(
-                        onClick = {
-                            val intent = Intent(Intent.ACTION_SEND).apply {
-                                type = "text/plain"
-                                putExtra(Intent.EXTRA_TEXT, ocrText)
-                            }
-                            context.startActivity(Intent.createChooser(intent, "Share"))
-                        },
-                        modifier = Modifier.weight(1f),
-                        shape = ShapeCache.smoothPill,
-                    ) { Text("Share") }
-                }
-            }
-        }
     }
 }
