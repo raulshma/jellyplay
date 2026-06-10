@@ -20,6 +20,7 @@ import com.raulshma.jellyplay.core.model.UserInfo
 import com.raulshma.jellyplay.core.model.seerr.DiscoverSectionType
 import com.raulshma.jellyplay.core.model.seerr.SeerrSearchResponse
 import com.raulshma.jellyplay.core.model.HomeSectionType
+import com.raulshma.jellyplay.core.model.NetworkStatus
 import com.raulshma.jellyplay.core.model.OfflineMode
 import com.raulshma.jellyplay.core.model.seerr.SeerrPreferences
 import com.raulshma.jellyplay.core.model.seerr.SeerrSearchItem
@@ -426,6 +427,7 @@ class HomeViewModel @Inject constructor(
 
     private suspend fun fetchDiscoverSections(prefs: SeerrPreferences) {
         if (!prefs.enabled || !prefs.discoverEnabled) return
+        if (offlineModeManager.networkStatus.value == NetworkStatus.Local) return
 
         val today = LocalDate.now(ZoneOffset.systemDefault())
             .atStartOfDay(ZoneOffset.systemDefault())
@@ -508,11 +510,15 @@ class HomeViewModel @Inject constructor(
                 val jellyfinDeferred = async { mediaRepository.search(query, limit = 8) }
                 val seerrDeferred = async {
                     try {
-                        val connected = seerrRepository.isConnected().first()
-                        val enabled = seerrRepository.isSearchEnabled().first()
-                        if (connected && enabled) {
-                            seerrRepository.search(query).getOrNull()?.results?.take(8)
-                        } else null
+                        if (offlineModeManager.networkStatus.value == NetworkStatus.Local) {
+                            null
+                        } else {
+                            val connected = seerrRepository.isConnected().first()
+                            val enabled = seerrRepository.isSearchEnabled().first()
+                            if (connected && enabled) {
+                                seerrRepository.search(query).getOrNull()?.results?.take(8)
+                            } else null
+                        }
                     } catch (e: CancellationException) {
                         throw e
                     } catch (_: Exception) {
