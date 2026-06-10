@@ -11,6 +11,7 @@ import androidx.work.ExistingWorkPolicy
 import androidx.work.NetworkType
 import androidx.work.OneTimeWorkRequestBuilder
 import androidx.work.WorkManager
+import com.raulshma.jellyplay.core.data.offline.OfflineModeManager
 import com.raulshma.jellyplay.core.data.repository.DownloadRepository
 import com.raulshma.jellyplay.core.data.repository.MediaRepository
 import com.raulshma.jellyplay.core.data.repository.PlaybackRepository
@@ -21,6 +22,7 @@ import com.raulshma.jellyplay.core.datastore.UserPreferencesStore
 import com.raulshma.jellyplay.core.model.MediaDetail
 import com.raulshma.jellyplay.core.model.MediaItem
 import com.raulshma.jellyplay.core.model.MediaType
+import com.raulshma.jellyplay.core.model.NetworkStatus
 import com.raulshma.jellyplay.core.model.UserPreferences
 import com.raulshma.jellyplay.core.model.seerr.SeerrRadarrServiceDetail
 import com.raulshma.jellyplay.core.model.seerr.SeerrSearchItem
@@ -53,6 +55,7 @@ class DetailViewModel @Inject constructor(
     private val playbackRepository: PlaybackRepository,
     private val downloadRepository: DownloadRepository,
     private val preferencesStore: UserPreferencesStore,
+    private val offlineModeManager: OfflineModeManager,
     private val seerrRepository: SeerrRepository,
     private val seerrRequestDelegate: SeerrRequestDelegate,
     private val audioPlaybackManager: com.raulshma.jellyplay.core.data.playback.AudioPlaybackManager,
@@ -652,6 +655,8 @@ class DetailViewModel @Inject constructor(
             _seerrRecommendations.set(emptyList())
             _seerrSimilar.set(emptyList())
             _relatedVideos.set(emptyList())
+
+            if (offlineModeManager.networkStatus.value == NetworkStatus.Local) return@launch
 
             val mediaType = detail.item.mediaType
             if (mediaType != MediaType.MOVIE && mediaType != MediaType.SERIES) return@launch

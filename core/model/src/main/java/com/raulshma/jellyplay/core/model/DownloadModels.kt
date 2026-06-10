@@ -73,6 +73,8 @@ data class UserPreferences(
     val videoDefaultOrientation: OrientationMode = OrientationMode.SENSOR_LANDSCAPE,
     val videoControlsTimeoutMs: Long = 5_000L,
     val videoGesturesEnabled: Boolean = true,
+    val videoHoldSpeedEnabled: Boolean = true,
+    val videoHoldSpeedMultiplier: Float = 2.0f,
     val videoDefaultSpeed: Float = 1.0f,
     val videoDefaultAspectRatio: String = "AUTO",
     val videoAutoplayNext: Boolean = false,

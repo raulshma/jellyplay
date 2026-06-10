@@ -137,6 +137,8 @@ class UserPreferencesStore @Inject constructor(
         val FRAME_RATE_MATCHING = booleanPreferencesKey("frame_rate_matching")
         val NIGHT_MODE_ENABLED = booleanPreferencesKey("night_mode_enabled")
         val VIDEO_GESTURES_ENABLED = booleanPreferencesKey("video_gestures_enabled")
+        val VIDEO_HOLD_SPEED_ENABLED = booleanPreferencesKey("video_hold_speed_enabled")
+        val VIDEO_HOLD_SPEED_MULTIPLIER = floatPreferencesKey("video_hold_speed_multiplier")
         val VIDEO_AUTOPLAY_NEXT = booleanPreferencesKey("video_autoplay_next")
         val TRAILER_AUTOPLAY = booleanPreferencesKey("trailer_autoplay")
         val VIDEO_REMEMBER_BRIGHTNESS = booleanPreferencesKey("video_remember_brightness")
@@ -607,6 +609,8 @@ class UserPreferencesStore @Inject constructor(
             } catch (_: Exception) { OrientationMode.SENSOR_LANDSCAPE },
             videoControlsTimeoutMs = readLong(prefs, Keys.VIDEO_CONTROLS_TIMEOUT_MS, "video_controls_timeout_ms", 5_000L),
             videoGesturesEnabled = readBool(prefs, Keys.VIDEO_GESTURES_ENABLED, "video_gestures_enabled", true),
+            videoHoldSpeedEnabled = readBool(prefs, Keys.VIDEO_HOLD_SPEED_ENABLED, "video_hold_speed_enabled", true),
+            videoHoldSpeedMultiplier = readFloat(prefs, Keys.VIDEO_HOLD_SPEED_MULTIPLIER, "video_hold_speed_multiplier", 2.0f),
             videoDefaultSpeed = readFloat(prefs, Keys.VIDEO_DEFAULT_SPEED, "video_default_speed", 1.0f),
             videoDefaultAspectRatio = prefs[Keys.VIDEO_DEFAULT_ASPECT_RATIO] ?: "AUTO",
             videoAutoplayNext = readBool(prefs, Keys.VIDEO_AUTOPLAY_NEXT, "video_autoplay_next", false),
@@ -1121,6 +1125,14 @@ class UserPreferencesStore @Inject constructor(
         context.dataStore.edit { it[Keys.VIDEO_GESTURES_ENABLED] = enabled }
     }
 
+    suspend fun setVideoHoldSpeedEnabled(enabled: Boolean) {
+        context.dataStore.edit { it[Keys.VIDEO_HOLD_SPEED_ENABLED] = enabled }
+    }
+
+    suspend fun setVideoHoldSpeedMultiplier(multiplier: Float) {
+        context.dataStore.edit { it[Keys.VIDEO_HOLD_SPEED_MULTIPLIER] = multiplier }
+    }
+
     suspend fun setVideoDefaultSpeed(speed: Float) {
         context.dataStore.edit { it[Keys.VIDEO_DEFAULT_SPEED] = speed }
     }
@@ -1497,6 +1509,8 @@ class UserPreferencesStore @Inject constructor(
             settings[Keys.VIDEO_DEFAULT_ORIENTATION] = prefs.videoDefaultOrientation.name
             settings[Keys.VIDEO_CONTROLS_TIMEOUT_MS] = prefs.videoControlsTimeoutMs
             settings[Keys.VIDEO_GESTURES_ENABLED] = prefs.videoGesturesEnabled
+            settings[Keys.VIDEO_HOLD_SPEED_ENABLED] = prefs.videoHoldSpeedEnabled
+            settings[Keys.VIDEO_HOLD_SPEED_MULTIPLIER] = prefs.videoHoldSpeedMultiplier
             settings[Keys.VIDEO_DEFAULT_SPEED] = prefs.videoDefaultSpeed
             settings[Keys.VIDEO_DEFAULT_ASPECT_RATIO] = prefs.videoDefaultAspectRatio
             settings[Keys.VIDEO_AUTOPLAY_NEXT] = prefs.videoAutoplayNext

@@ -111,7 +111,6 @@ internal fun PlayerControls(
     nightModeEnabled: Boolean,
     nightModeStrength: EffectStrength,
     audioPassthrough: Boolean,
-    isOcrRunning: Boolean,
     segments: List<MediaSegment> = emptyList(),
 
     currentAspectRatio: AspectRatio,
@@ -122,7 +121,6 @@ internal fun PlayerControls(
     supportsNightMode: Boolean = false,
     supportsAudioDelay: Boolean = false,
     supportsAudioPassthrough: Boolean = false,
-    supportsOcr: Boolean = false,
     hasEpisodes: Boolean = false,
     episodeBrowserEnabled: Boolean = true,
     onPlayPause: () -> Unit,
@@ -148,7 +146,6 @@ internal fun PlayerControls(
     onAudioDelayClick: () -> Unit,
     onDecoderClick: () -> Unit,
     onPassthroughClick: () -> Unit,
-    onOcrClick: () -> Unit,
     onSubtitleDownloadClick: () -> Unit,
     onEpisodesClick: () -> Unit = {},
     onSyncPlayClick: () -> Unit = {},
@@ -481,7 +478,6 @@ internal fun PlayerControls(
                                 supportsNightMode = supportsNightMode,
                                 supportsAudioDelay = supportsAudioDelay,
                                 supportsAudioPassthrough = supportsAudioPassthrough,
-                                supportsOcr = supportsOcr,
                                 supportsAudioNormalization = supportsAudioNormalization,
                                 supportsChannelMixing = supportsChannelMixing,
                                 dialogueBoostEnabled = dialogueBoostEnabled,
@@ -489,7 +485,6 @@ internal fun PlayerControls(
                                 nightModeEnabled = nightModeEnabled,
                                 nightModeStrength = nightModeStrength,
                                 audioPassthrough = audioPassthrough,
-                                isOcrRunning = isOcrRunning,
                                 showVideoStats = showVideoStats,
                                 audioNormalizationMode = audioNormalizationMode,
                                 audioNormalizationEnabled = audioNormalizationEnabled,
@@ -525,10 +520,6 @@ internal fun PlayerControls(
                                 onSubtitleDownloadClick = {
                                     showOverflow = false
                                     onSubtitleDownloadClick()
-                                },
-                                onOcrClick = {
-                                    showOverflow = false
-                                    onOcrClick()
                                 },
                                 onVideoStatsClick = {
                                     showOverflow = false
@@ -928,7 +919,6 @@ private fun PlayerOverflowMenu(
     supportsNightMode: Boolean,
     supportsAudioDelay: Boolean,
     supportsAudioPassthrough: Boolean,
-    supportsOcr: Boolean,
     supportsAudioNormalization: Boolean,
     supportsChannelMixing: Boolean,
     dialogueBoostEnabled: Boolean,
@@ -936,7 +926,6 @@ private fun PlayerOverflowMenu(
     nightModeEnabled: Boolean,
     nightModeStrength: EffectStrength,
     audioPassthrough: Boolean,
-    isOcrRunning: Boolean,
     showVideoStats: Boolean = false,
     audioNormalizationMode: AudioNormalizationMode = AudioNormalizationMode.NONE,
     audioNormalizationEnabled: Boolean = false,
@@ -953,7 +942,6 @@ private fun PlayerOverflowMenu(
     onDecoderClick: () -> Unit,
     onPassthroughClick: () -> Unit,
     onSubtitleDownloadClick: () -> Unit,
-    onOcrClick: () -> Unit,
     onVideoStatsClick: () -> Unit = {},
     onAudioNormalizationClick: () -> Unit = {},
     onAudioNormalizationModeChange: (AudioNormalizationMode) -> Unit = {},
@@ -1174,14 +1162,6 @@ private fun PlayerOverflowMenu(
             label = "Download Subs",
             onClick = onSubtitleDownloadClick,
         )
-        if (supportsOcr) {
-            OverflowMenuItem(
-                icon = Tabler.Outline.InfoCircle,
-                label = "OCR Subtitle",
-                onClick = onOcrClick,
-                enabled = !isOcrRunning,
-            )
-        }
         OverflowMenuItem(
             icon = Tabler.Outline.InfoCircle,
             label = if (showVideoStats) "Stats for Nerds \u00B7 On" else "Stats for Nerds",

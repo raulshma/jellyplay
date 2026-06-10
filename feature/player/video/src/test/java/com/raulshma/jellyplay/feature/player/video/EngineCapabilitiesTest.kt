@@ -12,7 +12,6 @@ class EngineCapabilitiesTest {
         val caps = EngineCapabilities()
         assertFalse(caps.supportsPip)
         assertFalse(caps.supportsMiniMode)
-        assertFalse(caps.supportsOcr)
         assertFalse(caps.supportsCues)
         assertFalse(caps.supportsAudioDelay)
         assertFalse(caps.supportsSubtitleDelay)
@@ -27,7 +26,6 @@ class EngineCapabilitiesTest {
         val caps = EngineCapabilities(
             supportsPip = true,
             supportsMiniMode = true,
-            supportsOcr = true,
             supportsCues = true,
             supportsAudioDelay = true,
             supportsSubtitleDelay = true,
@@ -38,7 +36,6 @@ class EngineCapabilitiesTest {
         )
         assertTrue(caps.supportsPip)
         assertTrue(caps.supportsMiniMode)
-        assertTrue(caps.supportsOcr)
         assertTrue(caps.supportsCues)
         assertTrue(caps.supportsAudioDelay)
         assertTrue(caps.supportsSubtitleDelay)
@@ -62,9 +59,9 @@ class EngineCapabilitiesTest {
 
     @Test
     fun dataClass_equality() {
-        val caps1 = EngineCapabilities(supportsAudioDelay = true, supportsOcr = true)
-        val caps2 = EngineCapabilities(supportsAudioDelay = true, supportsOcr = true)
-        val caps3 = EngineCapabilities(supportsAudioDelay = true, supportsOcr = false)
+        val caps1 = EngineCapabilities(supportsAudioDelay = true, supportsCues = true)
+        val caps2 = EngineCapabilities(supportsAudioDelay = true, supportsCues = true)
+        val caps3 = EngineCapabilities(supportsAudioDelay = true, supportsCues = false)
 
         assertTrue(caps1 == caps2)
         assertFalse(caps1 == caps3)
