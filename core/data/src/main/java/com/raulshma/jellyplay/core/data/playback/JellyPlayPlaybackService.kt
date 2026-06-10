@@ -4,13 +4,14 @@ import android.content.Intent
 import androidx.media3.common.Player
 import androidx.media3.common.util.UnstableApi
 import androidx.media3.session.MediaSession
-import androidx.media3.session.MediaSessionService
+import androidx.media3.session.MediaLibraryService
+import androidx.media3.session.MediaLibraryService.MediaLibrarySession
 import dagger.hilt.android.AndroidEntryPoint
 import javax.inject.Inject
 
 @UnstableApi
 @AndroidEntryPoint
-class JellyPlayPlaybackService : MediaSessionService(), PlaybackSessionManager.Listener {
+class JellyPlayPlaybackService : MediaLibraryService(), PlaybackSessionManager.Listener {
 
     @Inject lateinit var sessionManager: PlaybackSessionManager
     @Inject lateinit var audioPlaybackManager: AudioPlaybackManager
@@ -33,8 +34,8 @@ class JellyPlayPlaybackService : MediaSessionService(), PlaybackSessionManager.L
         }
     }
 
-    override fun onGetSession(controllerInfo: MediaSession.ControllerInfo): MediaSession? {
-        return sessionManager.currentSession
+    override fun onGetSession(controllerInfo: MediaSession.ControllerInfo): MediaLibrarySession? {
+        return sessionManager.currentSession as? MediaLibrarySession
     }
 
     @UnstableApi

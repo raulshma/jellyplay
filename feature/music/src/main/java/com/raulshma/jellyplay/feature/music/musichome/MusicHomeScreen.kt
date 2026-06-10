@@ -100,7 +100,7 @@ fun MusicHomeScreen(
                         ),
                     ) {
                         item {
-                            Spacer(modifier = Modifier.height(8.dp))
+                            Spacer(modifier = Modifier.height(100.dp))
                             AudioPlayerScreensSection(
                                 onNowPlayingClick = onNowPlayingClick,
                                 onAmbientClick = onAmbientClick,
@@ -121,7 +121,7 @@ fun MusicHomeScreen(
                                         onItemClick(artistId)
                                     },
                                     onArtistPlayClick = { artistId ->
-                                        onItemClick(artistId)
+                                        viewModel.playArtist(artistId)
                                     },
                                     onViewAllClick = onArtistsClick,
                                     imageUrlBuilder = { viewModel.getImageUrl(it) },
@@ -177,6 +177,9 @@ fun MusicHomeScreen(
                                 RecentlyPlayedSection(
                                     tracks = recentlyPlayedSection.items,
                                     onTrackClick = onItemClick,
+                                    onTrackPlayClick = { index ->
+                                        viewModel.playAll(recentlyPlayedSection.items, index)
+                                    },
                                     onPlayAllClick = {
                                         viewModel.playAll(recentlyPlayedSection.items)
                                     },
@@ -194,6 +197,9 @@ fun MusicHomeScreen(
                                 RecentlyPlayedSection(
                                     tracks = favoriteTracksSection.items,
                                     onTrackClick = onItemClick,
+                                    onTrackPlayClick = { index ->
+                                        viewModel.playAll(favoriteTracksSection.items, index)
+                                    },
                                     onPlayAllClick = {
                                         viewModel.playAll(favoriteTracksSection.items)
                                     },

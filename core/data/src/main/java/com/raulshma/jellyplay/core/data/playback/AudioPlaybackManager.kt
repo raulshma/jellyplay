@@ -13,6 +13,14 @@ import androidx.media3.exoplayer.DefaultRenderersFactory
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.exoplayer.audio.DefaultAudioSink
 import androidx.media3.session.MediaSession
+import androidx.media3.session.MediaLibraryService
+import androidx.media3.session.MediaLibraryService.MediaLibrarySession
+import androidx.media3.session.LibraryResult
+import com.google.common.util.concurrent.SettableFuture
+import com.google.common.util.concurrent.ListenableFuture
+import com.google.common.util.concurrent.Futures
+import com.google.common.collect.ImmutableList
+import kotlinx.coroutines.flow.first
 import com.raulshma.jellyplay.core.data.repository.DownloadRepository
 import com.raulshma.jellyplay.core.data.repository.MediaRepository
 import com.raulshma.jellyplay.core.data.repository.OfflineRepository
@@ -79,31 +87,7 @@ class AudioPlaybackManager @Inject constructor(
     private var crossfadePlayer: ExoPlayer? = null
     private var currentPreferences = com.raulshma.jellyplay.core.model.UserPreferences()
 
-    init {
-        scope.launch {
-            preferencesStore.preferences.collect { prefs ->
-                val prevVisualizer = currentPreferences.audioVisualizerEnabled
-                val prevPreset = currentPreferences.equalizerPreset
-                val prevBalance = currentPreferences.lrBalance
-                val prevPitch = currentPreferences.pitchSemitones
 
-                currentPreferences = prefs
-
-                if (prefs.audioVisualizerEnabled != prevVisualizer) {
-                    enableVisualizer(prefs.audioVisualizerEnabled)
-                }
-                if (prefs.equalizerPreset != prevPreset) {
-                    setEqualizerPreset(prefs.equalizerPreset)
-                }
-                if (prefs.lrBalance != prevBalance) {
-                    setLrBalance(prefs.lrBalance)
-                }
-                if (prefs.pitchSemitones != prevPitch) {
-                    setPitchSemitones(prefs.pitchSemitones)
-                }
-            }
-        }
-    }
 
     fun start() {
         scope.launch(Dispatchers.IO) {
@@ -291,10 +275,52 @@ class AudioPlaybackManager @Inject constructor(
         override fun onMediaItemTransition(mediaItem: MediaItem?, reason: Int) {
             onTrackTransitioned()
         }
+
+        override fun onRepeatModeChanged(repeatMode: Int) {
+            val appMode = when (repeatMode) {
+                Player.REPEAT_MODE_ONE -> 2
+                Player.REPEAT_MODE_ALL -> 1
+                else -> 0
+            }
+            if (_repeatMode.value != appMode) {
+                _repeatMode.value = appMode
+            }
+        }
     }
 
     val hasActiveSession: Boolean
         get() = exoPlayer != null && currentItemId != null
+
+    init {
+        scope.launch {
+            preferencesStore.preferences.collect { prefs ->
+                val prevVisualizer = currentPreferences.audioVisualizerEnabled
+                val prevPreset = currentPreferences.equalizerPreset
+                val prevBalance = currentPreferences.lrBalance
+                val prevPitch = currentPreferences.pitchSemitones
+
+                currentPreferences = prefs
+
+                if (prefs.audioVisualizerEnabled != prevVisualizer) {
+                    enableVisualizer(prefs.audioVisualizerEnabled)
+                }
+                if (prefs.equalizerPreset != prevPreset) {
+                    setEqualizerPreset(prefs.equalizerPreset)
+                }
+                if (prefs.lrBalance != prevBalance) {
+                    setLrBalance(prefs.lrBalance)
+                }
+                if (prefs.pitchSemitones != prevPitch) {
+                    setPitchSemitones(prefs.pitchSemitones)
+                }
+            }
+        }
+        scope.launch {
+            _repeatMode.collect { mode ->
+                exoPlayer?.repeatMode = getExoPlayerRepeatMode(mode)
+            }
+        }
+    }
 
     fun setGaplessEnabled(enabled: Boolean) {
         _gaplessEnabled.value = enabled
@@ -357,9 +383,10 @@ class AudioPlaybackManager @Inject constructor(
             .setPauseAtEndOfMediaItems(false)
             .build()
         player.addListener(playerListener)
+        player.repeatMode = getExoPlayerRepeatMode(_repeatMode.value)
 
         exoPlayer = player
-        val session = MediaSession.Builder(context, player)
+        val session = MediaLibrarySession.Builder(context, player, mediaLibraryCallback)
             .setId(playSessionId)
             .build()
         mediaSession = session
@@ -440,62 +467,7 @@ class AudioPlaybackManager @Inject constructor(
     }
 
     private suspend fun buildMediaItemForQueueItem(queueItem: AudioQueueItem, startPositionMs: Long = 0L): MediaItem? {
-        val detail = mediaRepository.getMediaDetail(queueItem.id).getOrNull()
-        val localDownload = downloadRepository.getDownloadByMediaItemId(queueItem.id)
-        val file = localDownload?.let { dl ->
-            java.io.File(dl.downloadPath).takeIf { f -> f.exists() }
-        }
-
-        if (localDownload != null && file != null &&
-            localDownload.status == com.raulshma.jellyplay.core.model.DownloadStatus.COMPLETED
-        ) {
-            val name = detail?.item?.name ?: queueItem.name
-            val artist = detail?.item?.albumArtist ?: detail?.item?.artistItems?.firstOrNull()?.name ?: queueItem.artist
-            val album = detail?.item?.album ?: queueItem.album ?: ""
-            val artUri = try {
-                Uri.parse(playbackRepository.getImageUrl(queueItem.id, maxWidth = 600))
-            } catch (_: Exception) {
-                null
-            }
-            return MediaItem.Builder()
-                .setMediaId(queueItem.id)
-                .setUri(Uri.fromFile(file).toString())
-                .setMediaMetadata(
-                    MediaMetadata.Builder()
-                        .setTitle(name)
-                        .setArtist(artist)
-                        .setAlbumTitle(album)
-                        .setArtworkUri(artUri)
-                        .build()
-                )
-                .build()
-        }
-
-        if (detail == null) return null
-        val source = detail.mediaSources.firstOrNull()
-        val tier = adaptiveBitrateSelector.resolveBitrate(currentPreferences.streamingQuality)
-        _currentAudioBitrateTier.value = tier
-        val maxBitrate = tier.targetKbps * 1000
-        val url = playbackRepository.getStreamUrl(
-            itemId = queueItem.id,
-            mediaSourceId = source?.id ?: "",
-            startTimeTicks = if (startPositionMs > 0) startPositionMs * 10_000 else 0L,
-            maxBitrate = maxBitrate,
-            useAudioEndpoint = false,
-        )
-        val artUri = Uri.parse(playbackRepository.getImageUrl(queueItem.id, maxWidth = 600))
-        return MediaItem.Builder()
-            .setMediaId(queueItem.id)
-            .setUri(url)
-            .setMediaMetadata(
-                MediaMetadata.Builder()
-                    .setTitle(detail.item.name)
-                    .setArtist(detail.item.albumArtist ?: detail.item.artistItems.firstOrNull()?.name ?: "")
-                    .setAlbumTitle(detail.item.album ?: "")
-                    .setArtworkUri(artUri)
-                    .build()
-            )
-            .build()
+        return buildPlayableMediaItem(queueItem.id, startPositionMs)
     }
 
     fun play(itemId: String) {
@@ -849,7 +821,8 @@ class AudioPlaybackManager @Inject constructor(
     }
 
     fun cycleRepeatMode() {
-        _repeatMode.value = (_repeatMode.value + 1) % 3
+        val nextMode = (_repeatMode.value + 1) % 3
+        setRepeatMode(nextMode)
     }
 
     /**
@@ -857,7 +830,17 @@ class AudioPlaybackManager @Inject constructor(
      * @param mode 0 = RepeatNone, 1 = RepeatAll, 2 = RepeatOne.
      */
     fun setRepeatMode(mode: Int) {
-        _repeatMode.value = mode.coerceIn(0, 2)
+        val coerced = mode.coerceIn(0, 2)
+        _repeatMode.value = coerced
+        exoPlayer?.repeatMode = getExoPlayerRepeatMode(coerced)
+    }
+
+    private fun getExoPlayerRepeatMode(mode: Int): Int {
+        return when (mode) {
+            1 -> Player.REPEAT_MODE_ALL
+            2 -> Player.REPEAT_MODE_ONE
+            else -> Player.REPEAT_MODE_OFF
+        }
     }
 
     /**
@@ -1666,5 +1649,426 @@ class AudioPlaybackManager @Inject constructor(
             }
         }
         return (low - 1).coerceAtLeast(0)
+    }
+
+    private fun <T> resolveFuture(block: suspend () -> T): ListenableFuture<T> {
+        val future = SettableFuture.create<T>()
+        scope.launch {
+            try {
+                future.set(block())
+            } catch (e: Exception) {
+                future.setException(e)
+            }
+        }
+        return future
+    }
+
+    private val mediaLibraryCallback = object : MediaLibrarySession.Callback {
+        override fun onGetLibraryRoot(
+            session: MediaLibrarySession,
+            browser: MediaSession.ControllerInfo,
+            params: MediaLibraryService.LibraryParams?
+        ): ListenableFuture<LibraryResult<MediaItem>> {
+            val rootMetadata = MediaMetadata.Builder()
+                .setTitle("JellyPlay")
+                .setIsBrowsable(true)
+                .setIsPlayable(false)
+                .setMediaType(MediaMetadata.MEDIA_TYPE_FOLDER_MIXED)
+                .build()
+            val rootItem = MediaItem.Builder()
+                .setMediaId("ROOT")
+                .setMediaMetadata(rootMetadata)
+                .build()
+            return Futures.immediateFuture(LibraryResult.ofItem(rootItem, params))
+        }
+
+        override fun onGetChildren(
+            session: MediaLibrarySession,
+            browser: MediaSession.ControllerInfo,
+            parentId: String,
+            page: Int,
+            pageSize: Int,
+            params: MediaLibraryService.LibraryParams?
+        ): ListenableFuture<LibraryResult<ImmutableList<MediaItem>>> {
+            return resolveFuture {
+                val list = mutableListOf<MediaItem>()
+                when {
+                    parentId == "ROOT" -> {
+                        list.add(buildBrowsableFolder("ARTISTS", "Artists", MediaMetadata.MEDIA_TYPE_FOLDER_MIXED))
+                        list.add(buildBrowsableFolder("ALBUMS", "Albums", MediaMetadata.MEDIA_TYPE_FOLDER_MIXED))
+                        list.add(buildBrowsableFolder("PLAYLISTS", "Playlists", MediaMetadata.MEDIA_TYPE_FOLDER_MIXED))
+                        list.add(buildBrowsableFolder("FAVORITES", "Favorites", MediaMetadata.MEDIA_TYPE_FOLDER_MIXED))
+                        list.add(buildBrowsableFolder("DOWNLOADS", "Downloads", MediaMetadata.MEDIA_TYPE_FOLDER_MIXED))
+                    }
+                    parentId == "ARTISTS" -> {
+                        val result = mediaRepository.getMediaItems(
+                            mediaTypes = listOf(com.raulshma.jellyplay.core.model.MediaType.ARTIST),
+                            startIndex = page * pageSize,
+                            limit = pageSize
+                        ).getOrNull()
+                        result?.items?.forEach { artist ->
+                            list.add(mapArtistToMediaItem(artist))
+                        }
+                    }
+                    parentId == "ALBUMS" -> {
+                        val result = mediaRepository.getMediaItems(
+                            mediaTypes = listOf(com.raulshma.jellyplay.core.model.MediaType.ALBUM),
+                            startIndex = page * pageSize,
+                            limit = pageSize
+                        ).getOrNull()
+                        result?.items?.forEach { album ->
+                            list.add(mapAlbumToMediaItem(album))
+                        }
+                    }
+                    parentId == "PLAYLISTS" -> {
+                        val result = mediaRepository.getPlaylists(limit = pageSize).getOrNull()
+                        result?.forEach { playlist ->
+                            list.add(mapPlaylistToMediaItem(playlist))
+                        }
+                    }
+                    parentId == "FAVORITES" -> {
+                        val result = mediaRepository.getFavorites(
+                            mediaTypes = listOf(com.raulshma.jellyplay.core.model.MediaType.MUSIC, com.raulshma.jellyplay.core.model.MediaType.AUDIO),
+                            startIndex = page * pageSize,
+                            limit = pageSize
+                        ).getOrNull()
+                        result?.items?.forEach { track ->
+                            list.add(mapTrackToPlayableMediaItem(track))
+                        }
+                    }
+                    parentId == "DOWNLOADS" -> {
+                        val downloads = try {
+                            downloadRepository.getAllDownloads().first()
+                        } catch (_: Exception) {
+                            emptyList()
+                        }
+                        val completedAudioDownloads = downloads.filter {
+                            it.status == com.raulshma.jellyplay.core.model.DownloadStatus.COMPLETED &&
+                                    (it.mediaType == com.raulshma.jellyplay.core.model.MediaType.MUSIC ||
+                                     it.mediaType == com.raulshma.jellyplay.core.model.MediaType.AUDIO)
+                        }
+                        val start = (page * pageSize).coerceAtMost(completedAudioDownloads.size)
+                        val end = ((page + 1) * pageSize).coerceAtMost(completedAudioDownloads.size)
+                        if (start < end) {
+                            completedAudioDownloads.subList(start, end).forEach { dl ->
+                                list.add(mapDownloadToPlayableMediaItem(dl))
+                            }
+                        }
+                    }
+                    parentId.startsWith("ARTIST_|") -> {
+                        val artistId = parentId.removePrefix("ARTIST_|")
+                        val albums = mediaRepository.getArtistAlbums(artistId, limit = pageSize).getOrNull() ?: emptyList()
+                        albums.forEach { album ->
+                            list.add(mapAlbumToMediaItem(album))
+                        }
+                    }
+                    parentId.startsWith("ALBUM_|") -> {
+                        val albumId = parentId.removePrefix("ALBUM_|")
+                        val tracks = mediaRepository.getAlbumTracks(albumId).getOrNull() ?: emptyList()
+                        tracks.forEach { track ->
+                            list.add(mapTrackToPlayableMediaItem(track))
+                        }
+                    }
+                    parentId.startsWith("PLAYLIST_|") -> {
+                        val playlistId = parentId.removePrefix("PLAYLIST_|")
+                        val playlistItems = mediaRepository.getPlaylistItems(playlistId, startIndex = page * pageSize, limit = pageSize).getOrNull() ?: emptyList()
+                        playlistItems.forEach { pi ->
+                            list.add(mapPlaylistItemToPlayableMediaItem(pi))
+                        }
+                    }
+                }
+                LibraryResult.ofItemList(ImmutableList.copyOf(list), params)
+            }
+        }
+
+        override fun onGetItem(
+            session: MediaLibrarySession,
+            browser: MediaSession.ControllerInfo,
+            mediaId: String
+        ): ListenableFuture<LibraryResult<MediaItem>> {
+            return resolveFuture {
+                val playable = buildPlayableMediaItem(mediaId)
+                if (playable != null) {
+                    LibraryResult.ofItem(playable, null)
+                } else {
+                    val item = when {
+                        mediaId.startsWith("ARTIST_|") -> {
+                            val id = mediaId.removePrefix("ARTIST_|")
+                            mediaRepository.getMediaDetail(id).getOrNull()?.let { mapArtistToMediaItem(it.item) }
+                        }
+                        mediaId.startsWith("ALBUM_|") -> {
+                            val id = mediaId.removePrefix("ALBUM_|")
+                            mediaRepository.getMediaDetail(id).getOrNull()?.let { mapAlbumToMediaItem(it.item) }
+                        }
+                        mediaId.startsWith("PLAYLIST_|") -> {
+                            val id = mediaId.removePrefix("PLAYLIST_|")
+                            val playlists = mediaRepository.getPlaylists().getOrNull() ?: emptyList()
+                            playlists.find { it.id == id }?.let { mapPlaylistToMediaItem(it) }
+                        }
+                        else -> null
+                    }
+                    if (item != null) {
+                        LibraryResult.ofItem(item, null)
+                    } else {
+                        LibraryResult.ofError(LibraryResult.RESULT_ERROR_BAD_VALUE)
+                    }
+                }
+            }
+        }
+
+        override fun onAddMediaItems(
+            mediaSession: MediaSession,
+            controller: MediaSession.ControllerInfo,
+            mediaItems: List<MediaItem>
+        ): ListenableFuture<List<MediaItem>> {
+            return resolveFuture {
+                val resolvedList = mutableListOf<MediaItem>()
+                for (item in mediaItems) {
+                    val mediaId = item.mediaId
+                    when {
+                        mediaId.startsWith("ARTIST_|") -> {
+                            val artistId = mediaId.removePrefix("ARTIST_|")
+                            val albums = mediaRepository.getArtistAlbums(artistId).getOrNull() ?: emptyList()
+                            for (album in albums) {
+                                val tracks = mediaRepository.getAlbumTracks(album.id).getOrNull() ?: emptyList()
+                                for (track in tracks) {
+                                    buildPlayableMediaItem(track.id)?.let { resolvedList.add(it) }
+                                }
+                            }
+                        }
+                        mediaId.startsWith("ALBUM_|") -> {
+                            val albumId = mediaId.removePrefix("ALBUM_|")
+                            val tracks = mediaRepository.getAlbumTracks(albumId).getOrNull() ?: emptyList()
+                            for (track in tracks) {
+                                buildPlayableMediaItem(track.id)?.let { resolvedList.add(it) }
+                            }
+                        }
+                        mediaId.startsWith("PLAYLIST_|") -> {
+                            val playlistId = mediaId.removePrefix("PLAYLIST_|")
+                            val playlistItems = mediaRepository.getPlaylistItems(playlistId).getOrNull() ?: emptyList()
+                            for (pi in playlistItems) {
+                                buildPlayableMediaItem(pi.id)?.let { resolvedList.add(it) }
+                            }
+                        }
+                        mediaId.startsWith("TRACK_|") -> {
+                            val trackId = mediaId.removePrefix("TRACK_|")
+                            buildPlayableMediaItem(trackId)?.let { resolvedList.add(it) }
+                        }
+                        mediaId.startsWith("DOWNLOAD_|") -> {
+                            val downloadId = mediaId.removePrefix("DOWNLOAD_|")
+                            buildPlayableMediaItem(downloadId)?.let { resolvedList.add(it) }
+                        }
+                        else -> {
+                            buildPlayableMediaItem(mediaId)?.let { resolvedList.add(it) }
+                        }
+                    }
+                }
+                resolvedList
+            }
+        }
+    }
+
+    private fun buildBrowsableFolder(id: String, title: String, mediaType: Int): MediaItem {
+        return MediaItem.Builder()
+            .setMediaId(id)
+            .setMediaMetadata(
+                MediaMetadata.Builder()
+                    .setTitle(title)
+                    .setIsBrowsable(true)
+                    .setIsPlayable(false)
+                    .setMediaType(mediaType)
+                    .build()
+            )
+            .build()
+    }
+
+    private fun mapArtistToMediaItem(artist: com.raulshma.jellyplay.core.model.MediaItem): MediaItem {
+        val artUri = try {
+            Uri.parse(playbackRepository.getImageUrl(artist.id, maxWidth = 600))
+        } catch (_: Exception) {
+            null
+        }
+        return MediaItem.Builder()
+            .setMediaId("ARTIST_|${artist.id}")
+            .setMediaMetadata(
+                MediaMetadata.Builder()
+                    .setTitle(artist.name)
+                    .setIsBrowsable(true)
+                    .setIsPlayable(false)
+                    .setMediaType(MediaMetadata.MEDIA_TYPE_ARTIST)
+                    .setArtworkUri(artUri)
+                    .build()
+            )
+            .build()
+    }
+
+    private fun mapAlbumToMediaItem(album: com.raulshma.jellyplay.core.model.MediaItem): MediaItem {
+        val artUri = try {
+            Uri.parse(playbackRepository.getImageUrl(album.id, maxWidth = 600))
+        } catch (_: Exception) {
+            null
+        }
+        return MediaItem.Builder()
+            .setMediaId("ALBUM_|${album.id}")
+            .setMediaMetadata(
+                MediaMetadata.Builder()
+                    .setTitle(album.name)
+                    .setArtist(album.albumArtist ?: album.artistItems.firstOrNull()?.name ?: "")
+                    .setIsBrowsable(true)
+                    .setIsPlayable(false)
+                    .setMediaType(MediaMetadata.MEDIA_TYPE_ALBUM)
+                    .setArtworkUri(artUri)
+                    .build()
+            )
+            .build()
+    }
+
+    private fun mapPlaylistToMediaItem(playlist: com.raulshma.jellyplay.core.model.Playlist): MediaItem {
+        val artUri = try {
+            Uri.parse(playbackRepository.getImageUrl(playlist.id, maxWidth = 600))
+        } catch (_: Exception) {
+            null
+        }
+        return MediaItem.Builder()
+            .setMediaId("PLAYLIST_|${playlist.id}")
+            .setMediaMetadata(
+                MediaMetadata.Builder()
+                    .setTitle(playlist.name)
+                    .setIsBrowsable(true)
+                    .setIsPlayable(false)
+                    .setMediaType(MediaMetadata.MEDIA_TYPE_PLAYLIST)
+                    .setArtworkUri(artUri)
+                    .build()
+            )
+            .build()
+    }
+
+    private fun mapTrackToPlayableMediaItem(track: com.raulshma.jellyplay.core.model.MediaItem): MediaItem {
+        val artUri = try {
+            Uri.parse(playbackRepository.getImageUrl(track.id, maxWidth = 600))
+        } catch (_: Exception) {
+            null
+        }
+        return MediaItem.Builder()
+            .setMediaId("TRACK_|${track.id}")
+            .setMediaMetadata(
+                MediaMetadata.Builder()
+                    .setTitle(track.name)
+                    .setArtist(track.albumArtist ?: track.artistItems.firstOrNull()?.name ?: "")
+                    .setAlbumTitle(track.album ?: "")
+                    .setIsBrowsable(false)
+                    .setIsPlayable(true)
+                    .setMediaType(MediaMetadata.MEDIA_TYPE_MUSIC)
+                    .setArtworkUri(artUri)
+                    .build()
+            )
+            .build()
+    }
+
+    private fun mapPlaylistItemToPlayableMediaItem(pi: com.raulshma.jellyplay.core.model.PlaylistItem): MediaItem {
+        val artUri = try {
+            Uri.parse(playbackRepository.getImageUrl(pi.id, maxWidth = 600))
+        } catch (_: Exception) {
+            null
+        }
+        return MediaItem.Builder()
+            .setMediaId("TRACK_|${pi.id}")
+            .setMediaMetadata(
+                MediaMetadata.Builder()
+                    .setTitle(pi.name)
+                    .setArtist(pi.artist ?: "")
+                    .setAlbumTitle(pi.album ?: "")
+                    .setIsBrowsable(false)
+                    .setIsPlayable(true)
+                    .setMediaType(MediaMetadata.MEDIA_TYPE_MUSIC)
+                    .setArtworkUri(artUri)
+                    .build()
+            )
+            .build()
+    }
+
+    private fun mapDownloadToPlayableMediaItem(dl: com.raulshma.jellyplay.core.model.DownloadItem): MediaItem {
+        val artUri = try {
+            Uri.parse(playbackRepository.getImageUrl(dl.mediaItemId, maxWidth = 600))
+        } catch (_: Exception) {
+            null
+        }
+        return MediaItem.Builder()
+            .setMediaId("DOWNLOAD_|${dl.mediaItemId}")
+            .setMediaMetadata(
+                MediaMetadata.Builder()
+                    .setTitle(dl.name)
+                    .setArtist(dl.seriesName ?: "")
+                    .setIsBrowsable(false)
+                    .setIsPlayable(true)
+                    .setMediaType(MediaMetadata.MEDIA_TYPE_MUSIC)
+                    .setArtworkUri(artUri)
+                    .build()
+            )
+            .build()
+    }
+
+    private suspend fun buildPlayableMediaItem(itemId: String, startPositionMs: Long = 0L): MediaItem? {
+        val detail = mediaRepository.getMediaDetail(itemId).getOrNull()
+        val localDownload = downloadRepository.getDownloadByMediaItemId(itemId)
+        val file = localDownload?.let { dl ->
+            java.io.File(dl.downloadPath).takeIf { f -> f.exists() }
+        }
+
+        if (localDownload != null && file != null &&
+            localDownload.status == com.raulshma.jellyplay.core.model.DownloadStatus.COMPLETED
+        ) {
+            val name = detail?.item?.name ?: localDownload.name
+            val artist = detail?.item?.albumArtist ?: detail?.item?.artistItems?.firstOrNull()?.name ?: ""
+            val album = detail?.item?.album ?: ""
+            val artUri = try {
+                Uri.parse(playbackRepository.getImageUrl(itemId, maxWidth = 600))
+            } catch (_: Exception) {
+                null
+            }
+            return MediaItem.Builder()
+                .setMediaId(itemId)
+                .setUri(Uri.fromFile(file).toString())
+                .setMediaMetadata(
+                    MediaMetadata.Builder()
+                        .setTitle(name)
+                        .setArtist(artist)
+                        .setAlbumTitle(album)
+                        .setArtworkUri(artUri)
+                        .setIsBrowsable(false)
+                        .setIsPlayable(true)
+                        .setMediaType(MediaMetadata.MEDIA_TYPE_MUSIC)
+                        .build()
+                )
+                .build()
+        }
+
+        if (detail == null) return null
+        val source = detail.mediaSources.firstOrNull()
+        val tier = adaptiveBitrateSelector.resolveBitrate(currentPreferences.streamingQuality)
+        val maxBitrate = tier.targetKbps * 1000
+        val url = playbackRepository.getStreamUrl(
+            itemId = itemId,
+            mediaSourceId = source?.id ?: "",
+            startTimeTicks = if (startPositionMs > 0) startPositionMs * 10_000 else 0L,
+            maxBitrate = maxBitrate,
+            useAudioEndpoint = false,
+        )
+        val artUri = Uri.parse(playbackRepository.getImageUrl(itemId, maxWidth = 600))
+        return MediaItem.Builder()
+            .setMediaId(itemId)
+            .setUri(url)
+            .setMediaMetadata(
+                MediaMetadata.Builder()
+                    .setTitle(detail.item.name)
+                    .setArtist(detail.item.albumArtist ?: detail.item.artistItems.firstOrNull()?.name ?: "")
+                    .setAlbumTitle(detail.item.album ?: "")
+                    .setArtworkUri(artUri)
+                    .setIsBrowsable(false)
+                    .setIsPlayable(true)
+                    .setMediaType(MediaMetadata.MEDIA_TYPE_MUSIC)
+                    .build()
+            )
+            .build()
     }
 }
