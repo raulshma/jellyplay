@@ -281,7 +281,7 @@ private fun MainContent(
     val isAudioPlayerScreen = currentRoute is Route.AudioPlayer
 
     val isFullScreenRoute = isPlayerScreen || isAudioPlayerScreen ||
-            currentRoute is Route.Onboarding
+            currentRoute is Route.Ambient || currentRoute is Route.Onboarding
 
     val activeTopLevelRoutes: LinkedHashMap<Route, String> = when (homeMode) {
         HomeMode.VIDEO -> VIDEO_TOP_LEVEL_ROUTES
@@ -928,26 +928,28 @@ private fun MainNavDisplay(
                 transitionSpec = {
                     val targetLast = targetState
                     val initialLast = initialState
-                    val isModalRoute = targetLast == Route.Settings ||
-                            targetLast == Route.Downloads ||
-                            targetLast == Route.SyncPlay ||
-                            targetLast == Route.SeerrSettings ||
-                            targetLast == Route.AdminDashboard ||
-                            targetLast == Route.ScheduledTasks ||
-                            targetLast == Route.Devices ||
-                            targetLast == Route.Logs
-                    val isModalPop = initialLast == Route.Settings ||
-                            initialLast == Route.Downloads ||
-                            initialLast == Route.SyncPlay ||
-                            initialLast == Route.SeerrSettings ||
-                            initialLast == Route.AdminDashboard ||
-                            initialLast == Route.ScheduledTasks ||
-                            initialLast == Route.Devices ||
-                            initialLast == Route.Logs
-                    val isTabSwitch = targetLast is Route && initialLast is Route &&
-                            ALL_TOP_LEVEL_ROUTE_KEYS.contains(targetLast as Route) &&
-                            ALL_TOP_LEVEL_ROUTE_KEYS.contains(initialLast as Route)
-                    val isAmbient = targetLast == Route.Ambient || initialLast == Route.Ambient
+                    val targetRoute = targetLast.entries.lastOrNull()?.contentKey as? Route
+                    val initialRoute = initialLast.entries.lastOrNull()?.contentKey as? Route
+                    val isModalRoute = targetRoute == Route.Settings ||
+                            targetRoute == Route.Downloads ||
+                            targetRoute == Route.SyncPlay ||
+                            targetRoute == Route.SeerrSettings ||
+                            targetRoute == Route.AdminDashboard ||
+                            targetRoute == Route.ScheduledTasks ||
+                            targetRoute == Route.Devices ||
+                            targetRoute == Route.Logs
+                    val isModalPop = initialRoute == Route.Settings ||
+                            initialRoute == Route.Downloads ||
+                            initialRoute == Route.SyncPlay ||
+                            initialRoute == Route.SeerrSettings ||
+                            initialRoute == Route.AdminDashboard ||
+                            initialRoute == Route.ScheduledTasks ||
+                            initialRoute == Route.Devices ||
+                            initialRoute == Route.Logs
+                    val isTabSwitch = targetRoute != null && initialRoute != null &&
+                            ALL_TOP_LEVEL_ROUTE_KEYS.contains(targetRoute) &&
+                            ALL_TOP_LEVEL_ROUTE_KEYS.contains(initialRoute)
+                    val isAmbient = targetRoute is Route.Ambient || initialRoute is Route.Ambient
 
                     when {
                         isAmbient -> {
@@ -1007,14 +1009,15 @@ private fun MainNavDisplay(
                 popTransitionSpec = {
                     val targetLast = targetState
                     val initialLast = initialState
-                    val isModalPop = initialLast == Route.Settings ||
-                            initialLast == Route.Downloads ||
-                            initialLast == Route.SyncPlay ||
-                            initialLast == Route.SeerrSettings ||
-                            initialLast == Route.AdminDashboard ||
-                            initialLast == Route.ScheduledTasks ||
-                            initialLast == Route.Devices ||
-                            initialLast == Route.Logs
+                    val initialRoute = initialLast.entries.lastOrNull()?.contentKey as? Route
+                    val isModalPop = initialRoute == Route.Settings ||
+                            initialRoute == Route.Downloads ||
+                            initialRoute == Route.SyncPlay ||
+                            initialRoute == Route.SeerrSettings ||
+                            initialRoute == Route.AdminDashboard ||
+                            initialRoute == Route.ScheduledTasks ||
+                            initialRoute == Route.Devices ||
+                            initialRoute == Route.Logs
                     when {
                         isModalPop -> {
                             fadeIn(fastEffects) togetherWith fadeOut(

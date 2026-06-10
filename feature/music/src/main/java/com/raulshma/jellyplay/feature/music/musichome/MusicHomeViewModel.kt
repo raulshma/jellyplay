@@ -226,6 +226,17 @@ class MusicHomeViewModel @Inject constructor(
         }
     }
 
+    fun playArtist(artistId: String) {
+        launch {
+            mediaRepository.getArtistAlbums(artistId)
+                .onSuccess { albums ->
+                    if (albums.isNotEmpty()) {
+                        playAlbums(albums)
+                    }
+                }
+        }
+    }
+
     fun playAlbums(albums: List<MediaItem>) {
         launch {
             val allTracks = fetchAlbumTracksParallel(albums)
