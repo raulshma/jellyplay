@@ -16,6 +16,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
@@ -44,6 +45,7 @@ import androidx.compose.animation.core.tween
 fun RecentlyPlayedSection(
     tracks: List<MediaItem>,
     onTrackClick: (String) -> Unit,
+    onTrackPlayClick: (Int) -> Unit,
     onPlayAllClick: () -> Unit,
     onShuffleClick: () -> Unit,
     imageUrlBuilder: (String) -> String,
@@ -88,10 +90,11 @@ fun RecentlyPlayedSection(
             contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 24.dp),
             horizontalArrangement = Arrangement.spacedBy(12.dp),
         ) {
-            items(tracks, key = { it.id }, contentType = { "track" }) { track ->
+            itemsIndexed(tracks, key = { _, track -> track.id }) { index, track ->
                 RecentTrackCard(
                     track = track,
                     onClick = { onTrackClick(track.id) },
+                    onPlayClick = { onTrackPlayClick(index) },
                     imageUrl = imageUrlBuilder(track.id),
                 )
             }
@@ -103,6 +106,7 @@ fun RecentlyPlayedSection(
 private fun RecentTrackCard(
     track: MediaItem,
     onClick: () -> Unit,
+    onPlayClick: () -> Unit,
     imageUrl: String,
     modifier: Modifier = Modifier,
 ) {
@@ -157,7 +161,10 @@ private fun RecentTrackCard(
                     .padding(8.dp)
                     .size(32.dp)
                     .clip(CircleShape)
-                    .background(MaterialTheme.colorScheme.primary),
+                    .background(MaterialTheme.colorScheme.primary)
+                    .clickable(
+                        onClick = onPlayClick
+                    ),
                 contentAlignment = Alignment.Center,
             ) {
                 Icon(
