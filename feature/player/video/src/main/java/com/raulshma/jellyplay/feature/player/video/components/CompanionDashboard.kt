@@ -24,6 +24,7 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
@@ -70,10 +71,13 @@ fun CompanionDashboard(
     onSelectSubtitleTrack: (TrackOption) -> Unit,
     onPlayEpisode: (String) -> Unit,
     getImageUrl: (String) -> String,
+    onToggleOrientation: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val artworkColors = LocalArtworkColors.current
     val coroutineScope = rememberCoroutineScope()
+    val configuration = LocalConfiguration.current
+    val isPortrait = configuration.orientation == android.content.res.Configuration.ORIENTATION_PORTRAIT
 
     // Smooth backdrop colors derived from artwork
     val dominantColor = artworkColors?.dominant ?: MaterialTheme.colorScheme.primaryContainer
@@ -121,170 +125,388 @@ fun CompanionDashboard(
                 )
         )
 
-        Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .statusBarsPadding()
-                .navigationBarsPadding()
-        ) {
-            // Header Bar
-            Row(
+        if (isPortrait) {
+            LazyColumn(
                 modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 16.dp, vertical = 12.dp),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.SpaceBetween
+                    .fillMaxSize()
+                    .statusBarsPadding()
+                    .navigationBarsPadding(),
+                contentPadding = PaddingValues(bottom = 24.dp)
             ) {
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
-                ) {
-                    Icon(
-                        imageVector = Tabler.Outline.Cast,
-                        contentDescription = null,
-                        tint = MaterialTheme.colorScheme.primary,
-                        modifier = Modifier.size(24.dp)
-                    )
-                    Column {
-                        Text(
-                            text = if (isConnecting) "Connecting to device..." else "Connected / Streaming",
-                            style = MaterialTheme.typography.labelMedium,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                // Header Bar
+                item {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 16.dp, vertical = 12.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.SpaceBetween
+                    ) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            Icon(
+                                imageVector = Tabler.Outline.Cast,
+                                contentDescription = null,
+                                tint = MaterialTheme.colorScheme.primary,
+                                modifier = Modifier.size(24.dp)
+                            )
+                            Column {
+                                Text(
+                                    text = if (isConnecting) "Connecting to device..." else "Connected / Streaming",
+                                    style = MaterialTheme.typography.labelMedium,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                                Text(
+                                    text = "JellyPlay Companion",
+                                    style = MaterialTheme.typography.titleMedium,
+                                    fontWeight = FontWeight.Bold,
+                                    color = MaterialTheme.colorScheme.onSurface
+                                )
+                            }
+                        }
+
+                        Row(
+                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            IconButton(
+                                onClick = onToggleOrientation,
+                                colors = IconButtonDefaults.iconButtonColors(
+                                    containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
+                                    contentColor = MaterialTheme.colorScheme.onSurfaceVariant
+                                ),
+                                modifier = Modifier.size(36.dp)
+                            ) {
+                                Icon(
+                                    imageVector = Tabler.Outline.Rotate,
+                                    contentDescription = "Rotate Screen",
+                                    modifier = Modifier.size(18.dp)
+                                )
+                            }
+
+                            Button(
+                                onClick = onDisconnect,
+                                colors = ButtonDefaults.buttonColors(
+                                    containerColor = MaterialTheme.colorScheme.errorContainer,
+                                    contentColor = MaterialTheme.colorScheme.onErrorContainer
+                                ),
+                                shape = ShapeCache.smoothPill,
+                                contentPadding = PaddingValues(horizontal = 16.dp, vertical = 6.dp)
+                            ) {
+                                Icon(
+                                    imageVector = Tabler.Outline.X,
+                                    contentDescription = null,
+                                    modifier = Modifier.size(16.dp)
+                                )
+                                Spacer(Modifier.width(6.dp))
+                                Text("Disconnect", style = MaterialTheme.typography.labelLarge)
+                            }
+                        }
+                    }
+                }
+
+                // Poster & Metadata Stack
+                item {
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 20.dp, vertical = 10.dp),
+                        horizontalAlignment = Alignment.CenterHorizontally
+                    ) {
+                        AsyncImage(
+                            model = artworkUrl,
+                            contentDescription = "Poster",
+                            contentScale = ContentScale.Crop,
+                            modifier = Modifier
+                                .size(width = 135.dp, height = 202.dp)
+                                .clip(ShapeCache.smooth16)
+                                .border(1.dp, Color.White.copy(alpha = 0.12f), ShapeCache.smooth16)
                         )
+
+                        Spacer(Modifier.height(16.dp))
+
                         Text(
-                            text = "JellyPlay Companion",
-                            style = MaterialTheme.typography.titleMedium,
+                            text = title,
+                            style = MaterialTheme.typography.headlineSmall,
                             fontWeight = FontWeight.Bold,
-                            color = MaterialTheme.colorScheme.onSurface
+                            textAlign = TextAlign.Center,
+                            color = Color.White
                         )
-                    }
-                }
-
-                Button(
-                    onClick = onDisconnect,
-                    colors = ButtonDefaults.buttonColors(
-                        containerColor = MaterialTheme.colorScheme.errorContainer,
-                        contentColor = MaterialTheme.colorScheme.onErrorContainer
-                    ),
-                    shape = ShapeCache.smoothPill,
-                    contentPadding = PaddingValues(horizontal = 16.dp, vertical = 6.dp)
-                ) {
-                    Icon(
-                        imageVector = Tabler.Outline.X,
-                        contentDescription = null,
-                        modifier = Modifier.size(16.dp)
-                    )
-                    Spacer(Modifier.width(6.dp))
-                    Text("Disconnect", style = MaterialTheme.typography.labelLarge)
-                }
-            }
-
-            // Main Details and Metadata View
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 20.dp, vertical = 10.dp),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(20.dp)
-            ) {
-                // Media Poster Card
-                AsyncImage(
-                    model = artworkUrl,
-                    contentDescription = "Poster",
-                    contentScale = ContentScale.Crop,
-                    modifier = Modifier
-                        .size(width = 90.dp, height = 135.dp)
-                        .clip(ShapeCache.smooth16)
-                        .border(1.dp, Color.White.copy(alpha = 0.12f), ShapeCache.smooth16)
-                )
-
-                Column(
-                    modifier = Modifier.weight(1f)
-                ) {
-                    Text(
-                        text = title,
-                        style = MaterialTheme.typography.headlineSmall,
-                        fontWeight = FontWeight.Bold,
-                        maxLines = 2,
-                        overflow = TextOverflow.Ellipsis,
-                        color = Color.White
-                    )
-                    if (subtitle.isNotBlank()) {
-                        Spacer(Modifier.height(4.dp))
-                        Text(
-                            text = subtitle,
-                            style = MaterialTheme.typography.bodyLarge,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis
-                        )
-                    }
-                }
-            }
-
-            // Tab Rows
-            TabRow(
-                selectedTabIndex = selectedTab,
-                containerColor = Color.Transparent,
-                divider = {},
-                indicator = { tabPositions ->
-                    TabRowDefaults.SecondaryIndicator(
-                        Modifier.tabIndicatorOffset(tabPositions[selectedTab]),
-                        color = MaterialTheme.colorScheme.primary
-                    )
-                },
-                modifier = Modifier.padding(horizontal = 16.dp)
-            ) {
-                tabs.forEachIndexed { index, name ->
-                    Tab(
-                        selected = selectedTab == index,
-                        onClick = { selectedTab = index },
-                        text = {
+                        if (subtitle.isNotBlank()) {
+                            Spacer(Modifier.height(4.dp))
                             Text(
-                                name,
-                                fontWeight = if (selectedTab == index) FontWeight.Bold else FontWeight.Normal
+                                text = subtitle,
+                                style = MaterialTheme.typography.bodyLarge,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                textAlign = TextAlign.Center
                             )
                         }
-                    )
+                    }
+                }
+
+                // Controls panel
+                item {
+                    Box(
+                        modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)
+                    ) {
+                        CompanionControlBar(
+                            isPlaying = isPlaying,
+                            currentPositionMs = currentPositionMs,
+                            durationMs = durationMs,
+                            volume = volume,
+                            onPlayPause = onPlayPause,
+                            onSeekBack = onSeekBack,
+                            onSeekForward = onSeekForward,
+                            onSeekTo = onSeekTo,
+                            onVolumeChange = onVolumeChange
+                        )
+                    }
+                }
+
+                // Tabs
+                item {
+                    TabRow(
+                        selectedTabIndex = selectedTab,
+                        containerColor = Color.Transparent,
+                        divider = {},
+                        indicator = { tabPositions ->
+                            TabRowDefaults.SecondaryIndicator(
+                                Modifier.tabIndicatorOffset(tabPositions[selectedTab]),
+                                color = MaterialTheme.colorScheme.primary
+                            )
+                        },
+                        modifier = Modifier.padding(horizontal = 16.dp)
+                    ) {
+                        tabs.forEachIndexed { index, name ->
+                            Tab(
+                                selected = selectedTab == index,
+                                onClick = { selectedTab = index },
+                                text = {
+                                    Text(
+                                        name,
+                                        fontWeight = if (selectedTab == index) FontWeight.Bold else FontWeight.Normal
+                                    )
+                                }
+                            )
+                        }
+                    }
+                }
+
+                // Tab content frame
+                item {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(16.dp)
+                            .clip(ShapeCache.smooth24)
+                            .background(MaterialTheme.colorScheme.surfaceContainer.copy(alpha = 0.35f))
+                            .border(1.dp, Color.White.copy(alpha = 0.08f), ShapeCache.smooth24)
+                            .heightIn(min = 250.dp, max = 500.dp)
+                    ) {
+                        when (selectedTab) {
+                            0 -> OverviewTabContent(overview = overview, people = people, getImageUrl = getImageUrl)
+                            1 -> SubtitlesTabContent(
+                                lyricsLines = lyricsLines,
+                                currentPositionMs = currentPositionMs,
+                                audioTracks = audioTracks,
+                                subtitleTracks = subtitleTracks,
+                                onSelectAudioTrack = onSelectAudioTrack,
+                                onSelectSubtitleTrack = onSelectSubtitleTrack
+                            )
+                            2 -> EpisodesTabContent(episodes = episodes, onPlayEpisode = onPlayEpisode, getImageUrl = getImageUrl)
+                        }
+                    }
                 }
             }
-
-            // Tab Content Frame
-            Box(
+        } else {
+            // Landscape layout
+            Column(
                 modifier = Modifier
-                    .weight(1f)
-                    .fillMaxWidth()
-                    .padding(16.dp)
-                    .clip(ShapeCache.smooth24)
-                    .background(MaterialTheme.colorScheme.surfaceContainer.copy(alpha = 0.35f))
-                    .border(1.dp, Color.White.copy(alpha = 0.08f), ShapeCache.smooth24)
+                    .fillMaxSize()
+                    .statusBarsPadding()
+                    .navigationBarsPadding()
             ) {
-                when (selectedTab) {
-                    0 -> OverviewTabContent(overview = overview, people = people, getImageUrl = getImageUrl)
-                    1 -> SubtitlesTabContent(
-                        lyricsLines = lyricsLines,
-                        currentPositionMs = currentPositionMs,
-                        audioTracks = audioTracks,
-                        subtitleTracks = subtitleTracks,
-                        onSelectAudioTrack = onSelectAudioTrack,
-                        onSelectSubtitleTrack = onSelectSubtitleTrack
-                    )
-                    2 -> EpisodesTabContent(episodes = episodes, onPlayEpisode = onPlayEpisode, getImageUrl = getImageUrl)
-                }
-            }
+                // Header Bar
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 16.dp, vertical = 12.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.SpaceBetween
+                ) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        Icon(
+                            imageVector = Tabler.Outline.Cast,
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.primary,
+                            modifier = Modifier.size(24.dp)
+                        )
+                        Column {
+                            Text(
+                                text = if (isConnecting) "Connecting to device..." else "Connected / Streaming",
+                                style = MaterialTheme.typography.labelMedium,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                            Text(
+                                text = "JellyPlay Companion",
+                                style = MaterialTheme.typography.titleMedium,
+                                fontWeight = FontWeight.Bold,
+                                color = MaterialTheme.colorScheme.onSurface
+                            )
+                        }
+                    }
 
-            // Playback Controls Panel
-            CompanionControlBar(
-                isPlaying = isPlaying,
-                currentPositionMs = currentPositionMs,
-                durationMs = durationMs,
-                volume = volume,
-                onPlayPause = onPlayPause,
-                onSeekBack = onSeekBack,
-                onSeekForward = onSeekForward,
-                onSeekTo = onSeekTo,
-                onVolumeChange = onVolumeChange
-            )
+                    Row(
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        IconButton(
+                            onClick = onToggleOrientation,
+                            colors = IconButtonDefaults.iconButtonColors(
+                                containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
+                                contentColor = MaterialTheme.colorScheme.onSurfaceVariant
+                            ),
+                            modifier = Modifier.size(36.dp)
+                        ) {
+                            Icon(
+                                imageVector = Tabler.Outline.Rotate,
+                                contentDescription = "Rotate Screen",
+                                modifier = Modifier.size(18.dp)
+                            )
+                        }
+
+                        Button(
+                            onClick = onDisconnect,
+                            colors = ButtonDefaults.buttonColors(
+                                containerColor = MaterialTheme.colorScheme.errorContainer,
+                                contentColor = MaterialTheme.colorScheme.onErrorContainer
+                            ),
+                            shape = ShapeCache.smoothPill,
+                            contentPadding = PaddingValues(horizontal = 16.dp, vertical = 6.dp)
+                        ) {
+                            Icon(
+                                imageVector = Tabler.Outline.X,
+                                contentDescription = null,
+                                modifier = Modifier.size(16.dp)
+                            )
+                            Spacer(Modifier.width(6.dp))
+                            Text("Disconnect", style = MaterialTheme.typography.labelLarge)
+                        }
+                    }
+                }
+
+                // Main Details and Metadata View
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 20.dp, vertical = 10.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(20.dp)
+                ) {
+                    // Media Poster Card
+                    AsyncImage(
+                        model = artworkUrl,
+                        contentDescription = "Poster",
+                        contentScale = ContentScale.Crop,
+                        modifier = Modifier
+                            .size(width = 90.dp, height = 135.dp)
+                            .clip(ShapeCache.smooth16)
+                            .border(1.dp, Color.White.copy(alpha = 0.12f), ShapeCache.smooth16)
+                    )
+
+                    Column(
+                        modifier = Modifier.weight(1f)
+                    ) {
+                        Text(
+                            text = title,
+                            style = MaterialTheme.typography.headlineSmall,
+                            fontWeight = FontWeight.Bold,
+                            maxLines = 2,
+                            overflow = TextOverflow.Ellipsis,
+                            color = Color.White
+                        )
+                        if (subtitle.isNotBlank()) {
+                            Spacer(Modifier.height(4.dp))
+                            Text(
+                                text = subtitle,
+                                style = MaterialTheme.typography.bodyLarge,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis
+                            )
+                        }
+                    }
+                }
+
+                // Tab Rows
+                TabRow(
+                    selectedTabIndex = selectedTab,
+                    containerColor = Color.Transparent,
+                    divider = {},
+                    indicator = { tabPositions ->
+                        TabRowDefaults.SecondaryIndicator(
+                            Modifier.tabIndicatorOffset(tabPositions[selectedTab]),
+                            color = MaterialTheme.colorScheme.primary
+                        )
+                    },
+                    modifier = Modifier.padding(horizontal = 16.dp)
+                ) {
+                    tabs.forEachIndexed { index, name ->
+                        Tab(
+                            selected = selectedTab == index,
+                            onClick = { selectedTab = index },
+                            text = {
+                                Text(
+                                    name,
+                                    fontWeight = if (selectedTab == index) FontWeight.Bold else FontWeight.Normal
+                                )
+                            }
+                        )
+                    }
+                }
+
+                // Tab Content Frame
+                Box(
+                    modifier = Modifier
+                        .weight(1f)
+                        .fillMaxWidth()
+                        .padding(16.dp)
+                        .clip(ShapeCache.smooth24)
+                        .background(MaterialTheme.colorScheme.surfaceContainer.copy(alpha = 0.35f))
+                        .border(1.dp, Color.White.copy(alpha = 0.08f), ShapeCache.smooth24)
+                ) {
+                    when (selectedTab) {
+                        0 -> OverviewTabContent(overview = overview, people = people, getImageUrl = getImageUrl)
+                        1 -> SubtitlesTabContent(
+                            lyricsLines = lyricsLines,
+                            currentPositionMs = currentPositionMs,
+                            audioTracks = audioTracks,
+                            subtitleTracks = subtitleTracks,
+                            onSelectAudioTrack = onSelectAudioTrack,
+                            onSelectSubtitleTrack = onSelectSubtitleTrack
+                        )
+                        2 -> EpisodesTabContent(episodes = episodes, onPlayEpisode = onPlayEpisode, getImageUrl = getImageUrl)
+                    }
+                }
+
+                // Playback Controls Panel
+                CompanionControlBar(
+                    isPlaying = isPlaying,
+                    currentPositionMs = currentPositionMs,
+                    durationMs = durationMs,
+                    volume = volume,
+                    onPlayPause = onPlayPause,
+                    onSeekBack = onSeekBack,
+                    onSeekForward = onSeekForward,
+                    onSeekTo = onSeekTo,
+                    onVolumeChange = onVolumeChange
+                )
+            }
         }
     }
 }

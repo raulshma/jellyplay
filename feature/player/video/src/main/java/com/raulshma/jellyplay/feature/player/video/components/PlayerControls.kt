@@ -17,6 +17,8 @@ import androidx.compose.foundation.focusable
 import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsPressedAsState
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -187,6 +189,7 @@ internal fun PlayerControls(
     videoStats: EngineVideoStats = EngineVideoStats(),
     audioTracks: List<TrackOption> = emptyList(),
     showPlaybackMetadata: Boolean = true,
+    onToggleOrientation: () -> Unit = {},
     modifier: Modifier = Modifier,
 ) {
     val isTv = LocalTvMode.current
@@ -393,7 +396,12 @@ internal fun PlayerControls(
                     horizontalArrangement = Arrangement.SpaceBetween,
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
+                    Row(
+                        modifier = Modifier
+                            .weight(1f)
+                            .horizontalScroll(rememberScrollState()),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
                         PlayerQualityButton(
                             quality = streamingQuality,
                             onClick = onQualityClick,
@@ -436,6 +444,11 @@ internal fun PlayerControls(
                             contentDescription = "Aspect Ratio",
                             onClick = onAspectRatioClick,
                             tint = if (currentAspectRatio != AspectRatio.FIT) MaterialTheme.colorScheme.primary else Color.Unspecified,
+                        )
+                        PlayerIconButton(
+                            icon = Tabler.Outline.Rotate,
+                            contentDescription = "Rotate Screen",
+                            onClick = onToggleOrientation,
                         )
                         PlayerIconButton(
                             icon = Tabler.Outline.InfoCircle,
