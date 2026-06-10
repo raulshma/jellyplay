@@ -109,7 +109,7 @@ class DetailViewModel @Inject constructor(
         private set
     var episodes by composeState<Map<String, List<MediaItem>>>(emptyMap())
         private set
-    private val episodesMap = mutableMapOf<String, List<MediaItem>>()
+    private val episodesMap = java.util.Collections.synchronizedMap(mutableMapOf<String, List<MediaItem>>())
     var albumTracks by composeState<List<MediaItem>>(emptyList())
         private set
     var collectionItems by composeState<List<MediaItem>>(emptyList())
@@ -132,7 +132,7 @@ class DetailViewModel @Inject constructor(
 
     var downloadSheetEpisodes by composeState<Map<String, List<MediaItem>>>(emptyMap())
         private set
-    private val downloadSheetEpisodesMap = mutableMapOf<String, List<MediaItem>>()
+    private val downloadSheetEpisodesMap = java.util.Collections.synchronizedMap(mutableMapOf<String, List<MediaItem>>())
     var downloadSheetLoadingSeasons by composeState<Set<String>>(emptySet())
         private set
     private var downloadSheetFetchedSeasonIds by composeState<Set<String>>(emptySet())

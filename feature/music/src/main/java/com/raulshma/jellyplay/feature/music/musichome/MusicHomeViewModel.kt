@@ -18,6 +18,8 @@ import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.sync.Semaphore
+import kotlinx.coroutines.sync.withPermit
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.stateIn
 import javax.inject.Inject
@@ -255,11 +257,14 @@ class MusicHomeViewModel @Inject constructor(
         }
     }
 
+    private val fetchSemaphore = Semaphore(4)
+
     private suspend fun fetchAlbumTracksParallel(albums: List<MediaItem>): List<AudioQueueItem> {
         return coroutineScope {
             albums.map { album ->
                 async {
-                    mediaRepository.getAlbumTracks(album.id)
+                    fetchSemaphore.withPermit {
+                        mediaRepository.getAlbumTracks(album.id)
                         .getOrNull()
                         .orEmpty()
                         .map { track ->
@@ -274,6 +279,7 @@ class MusicHomeViewModel @Inject constructor(
                                 normalizationGain = track.normalizationGain,
                             )
                         }
+                    }
                 }
             }.awaitAll().flatten()
         }

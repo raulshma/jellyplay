@@ -2,6 +2,7 @@ package com.raulshma.jellyplay
 
 import android.app.Application
 import android.content.Context
+import android.util.Log
 import androidx.work.Data
 import androidx.work.ExistingWorkPolicy
 import androidx.work.OneTimeWorkRequestBuilder
@@ -33,6 +34,10 @@ import javax.inject.Inject
 @HiltAndroidApp
 class JellyPlayApplication : Application(), SingletonImageLoader.Factory, Configuration.Provider {
 
+    companion object {
+        private const val TAG = "JellyPlayApp"
+    }
+
     @Inject lateinit var workerFactory: HiltWorkerFactory
 
     override val workManagerConfiguration: Configuration
@@ -53,14 +58,14 @@ class JellyPlayApplication : Application(), SingletonImageLoader.Factory, Config
 
     override fun onCreate() {
         super.onCreate()
-        applicationScope.launch {
-            SentryAndroid.init(this@JellyPlayApplication) { options ->
-                options.dsn?.let { dsn ->
-                    if (dsn.isNotBlank()) {
-                        configureSentryUserContext()
-                    }
+        SentryAndroid.init(this) { options ->
+            options.dsn?.let { dsn ->
+                if (dsn.isNotBlank()) {
+                    configureSentryUserContext()
                 }
             }
+        }
+        applicationScope.launch {
             audioPlaybackManager.start()
             nowPlayingWidgetUpdater.start()
             com.raulshma.jellyplay.widget.WidgetWorkScheduler.enqueuePeriodic(this@JellyPlayApplication)
@@ -116,7 +121,8 @@ class JellyPlayApplication : Application(), SingletonImageLoader.Factory, Config
                     workRequest,
                 )
             }
-        } catch (_: Exception) {
+        } catch (e: Exception) {
+            Log.w(TAG, "Failed to recover pending downloads", e)
         }
     }
 
@@ -132,7 +138,8 @@ class JellyPlayApplication : Application(), SingletonImageLoader.Factory, Config
                     }
                 }
             }
-        } catch (_: Exception) {
+        } catch (e: Exception) {
+            Log.w(TAG, "Failed to cleanup stuck downloads", e)
         }
     }
 

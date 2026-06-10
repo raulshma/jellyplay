@@ -509,4 +509,170 @@ class SeerrApiClientImpl @Inject constructor(
 
         return parseAndMap(executeRequest(request))
     }
+
+    override suspend fun getRequests(
+        baseUrl: String,
+        credentials: SeerrCredentials,
+        take: Int,
+        skip: Int,
+        filter: String,
+        sort: String,
+        sortDirection: String,
+        requestedBy: Int?,
+        mediaType: String?,
+    ): Result<SeerrRequestListResponse> {
+        val path = buildString {
+            append("/request?take=$take&skip=$skip&filter=$filter&sort=$sort&sortDirection=$sortDirection")
+            requestedBy?.let { append("&requestedBy=$it") }
+            mediaType?.let { append("&mediaType=$it") }
+        }
+        val request = Request.Builder()
+            .url(buildUrl(baseUrl, path))
+            .withAuth(credentials)
+            .get()
+            .build()
+        return parseAndMap(executeRequest(request))
+    }
+
+    override suspend fun getRequest(
+        baseUrl: String,
+        credentials: SeerrCredentials,
+        id: Int,
+    ): Result<SeerrRequestItem> {
+        val request = Request.Builder()
+            .url(buildUrl(baseUrl, "/request/$id"))
+            .withAuth(credentials)
+            .get()
+            .build()
+        return parseAndMap(executeRequest(request))
+    }
+
+    override suspend fun approveRequest(
+        baseUrl: String,
+        credentials: SeerrCredentials,
+        id: Int,
+    ): Result<SeerrRequestItem> {
+        val request = Request.Builder()
+            .url(buildUrl(baseUrl, "/request/$id/approve"))
+            .withAuth(credentials)
+            .post("{}".toRequestBody("application/json".toMediaType()))
+            .build()
+        return parseAndMap(executeRequest(request))
+    }
+
+    override suspend fun declineRequest(
+        baseUrl: String,
+        credentials: SeerrCredentials,
+        id: Int,
+    ): Result<SeerrRequestItem> {
+        val request = Request.Builder()
+            .url(buildUrl(baseUrl, "/request/$id/decline"))
+            .withAuth(credentials)
+            .post("{}".toRequestBody("application/json".toMediaType()))
+            .build()
+        return parseAndMap(executeRequest(request))
+    }
+
+    override suspend fun retryRequest(
+        baseUrl: String,
+        credentials: SeerrCredentials,
+        id: Int,
+    ): Result<SeerrRequestItem> {
+        val request = Request.Builder()
+            .url(buildUrl(baseUrl, "/request/$id/retry"))
+            .withAuth(credentials)
+            .post("{}".toRequestBody("application/json".toMediaType()))
+            .build()
+        return parseAndMap(executeRequest(request))
+    }
+
+    override suspend fun deleteRequest(
+        baseUrl: String,
+        credentials: SeerrCredentials,
+        id: Int,
+    ): Result<Unit> {
+        val request = Request.Builder()
+            .url(buildUrl(baseUrl, "/request/$id"))
+            .withAuth(credentials)
+            .delete()
+            .build()
+        return executeRequest(request).map { }
+    }
+
+    override suspend fun deleteMedia(
+        baseUrl: String,
+        credentials: SeerrCredentials,
+        mediaId: Int,
+        is4k: Boolean,
+    ): Result<Unit> {
+        runCatching {
+            val fileRequest = Request.Builder()
+                .url(buildUrl(baseUrl, "/media/$mediaId/file?is4k=$is4k"))
+                .withAuth(credentials)
+                .delete()
+                .build()
+            executeRequest(fileRequest)
+        }
+        val request = Request.Builder()
+            .url(buildUrl(baseUrl, "/media/$mediaId"))
+            .withAuth(credentials)
+            .delete()
+            .build()
+        return executeRequest(request).map { }
+    }
+
+    override suspend fun editRequest(
+        baseUrl: String,
+        credentials: SeerrCredentials,
+        id: Int,
+        mediaType: String,
+        mediaId: Int,
+        serverId: Int?,
+        profileId: Int?,
+        rootFolder: String?,
+        tags: List<Int>?,
+        seasons: List<Int>?,
+    ): Result<SeerrRequestItem> {
+        val payload = SeerrEditRequestPayload(
+            mediaType = mediaType,
+            mediaId = mediaId,
+            serverId = serverId,
+            profileId = profileId,
+            rootFolder = rootFolder,
+            tags = tags,
+            seasons = seasons,
+        )
+        val body = json.encodeToString(payload)
+            .toRequestBody("application/json".toMediaType())
+        val request = Request.Builder()
+            .url(buildUrl(baseUrl, "/request/$id"))
+            .withAuth(credentials)
+            .put(body)
+            .build()
+        return parseAndMap(executeRequest(request))
+    }
+
+    override suspend fun getRequestCount(
+        baseUrl: String,
+        credentials: SeerrCredentials,
+    ): Result<SeerrRequestCount> {
+        val request = Request.Builder()
+            .url(buildUrl(baseUrl, "/request/count"))
+            .withAuth(credentials)
+            .get()
+            .build()
+        return parseAndMap(executeRequest(request))
+    }
+
+    override suspend fun getCurrentUser(
+        baseUrl: String,
+        credentials: SeerrCredentials,
+    ): Result<SeerrCurrentUser> {
+        val request = Request.Builder()
+            .url(buildUrl(baseUrl, "/auth/me"))
+            .withAuth(credentials)
+            .get()
+            .build()
+        return parseAndMap(executeRequest(request))
+    }
 }

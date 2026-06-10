@@ -1,6 +1,7 @@
 package com.raulshma.jellyplay.core.data.playback
 
 import android.media.audiofx.Visualizer
+import android.os.SystemClock
 import android.util.Log
 import androidx.media3.common.C
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -20,6 +21,7 @@ class AudioVisualizerHelper {
 
     private var lastFft: ByteArray? = null
     private var lastWaveform: ByteArray? = null
+    private var lastFftUpdateTime = 0L
 
     var isEnabled: Boolean = false
         private set
@@ -54,7 +56,11 @@ class AudioVisualizerHelper {
                         ) {
                             if (fft != null && !fft.contentEquals(lastFft)) {
                                 lastFft = fft
-                                _fftData.value = fft
+                                val now = SystemClock.elapsedRealtime()
+                                if (now - lastFftUpdateTime >= 33) {
+                                    lastFftUpdateTime = now
+                                    _fftData.value = fft
+                                }
                             }
                         }
                     },

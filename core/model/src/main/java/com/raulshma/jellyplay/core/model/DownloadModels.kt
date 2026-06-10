@@ -142,6 +142,7 @@ data class UserPreferences(
     val synthwaveAccent: String = "magenta",
     val soothingMode: Boolean = false,
     val soothingAccent: String = "ocean",
+    val monochromeMode: Boolean = false,
     val syncPlayJoinBehavior: SyncPlayJoinBehavior = SyncPlayJoinBehavior.ASK,
     val syncPlayToleranceMs: Long = 100L,
     val syncPlayAutoAcceptInvites: Boolean = false,

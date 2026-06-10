@@ -43,6 +43,7 @@ fun EntryProviderScope<NavKey>.homeSection(
             onFavoritesClick = { navigator.navigate(Route.Favorites) },
             onAboutClick = { navigator.navigate(Route.About) },
             onWatchProgressHeatmapClick = { navigator.navigate(Route.WatchProgressHeatmap) },
+            onRequestsClick = { navigator.navigate(Route.Requests) },
         )
     }
 }

@@ -48,6 +48,7 @@ import com.raulshma.jellyplay.core.designsystem.theme.AlphaEasing
 import com.raulshma.jellyplay.core.designsystem.theme.ShapeCache
 import com.raulshma.jellyplay.core.designsystem.theme.LocalIsSynthwave
 import com.raulshma.jellyplay.core.designsystem.theme.LocalIsSoothingTheme
+import com.raulshma.jellyplay.core.designsystem.theme.LocalIsMonochromeTheme
 import coil3.size.Size as CoilSize
 import androidx.compose.ui.graphics.Brush
 import com.raulshma.jellyplay.core.ui.image.MediaImage
@@ -108,15 +109,22 @@ fun MiniPlayer(
         )
         val isSynthwave = LocalIsSynthwave.current
         val isSoothing = LocalIsSoothingTheme.current
+        val isMonochrome = LocalIsMonochromeTheme.current
         val synthwaveTint = Color(0xFF160C2D).copy(alpha = 0.82f)
         val soothingTint = if (androidx.compose.foundation.isSystemInDarkTheme()) {
             Color(0xFF161B22).copy(alpha = 0.88f)
         } else {
             Color(0xFFFFFFFF).copy(alpha = 0.88f)
         }
+        val monochromeTint = if (androidx.compose.foundation.isSystemInDarkTheme()) {
+            Color(0xFF000000).copy(alpha = 0.95f)
+        } else {
+            Color(0xFFFFFFFF).copy(alpha = 0.95f)
+        }
         val targetTint = when {
             isSynthwave -> synthwaveTint
             isSoothing -> soothingTint
+            isMonochrome -> monochromeTint
             else -> pixelTint
         }
 
@@ -163,13 +171,24 @@ fun MiniPlayer(
                 color = outlineColor.copy(alpha = 0.3f)
             )
         }
+        val monochromeBorder = remember(outlineColor) {
+            androidx.compose.foundation.BorderStroke(
+                width = 1.dp,
+                color = outlineColor.copy(alpha = 0.45f)
+            )
+        }
         val border = when {
             isSynthwave -> synthwaveBorder
             isSoothing -> soothingBorder
+            isMonochrome -> monochromeBorder
             else -> null
         }
 
-        val shape = if (isSoothing) ShapeCache.smooth16 else ShapeCache.smoothPill
+        val shape = when {
+            isSoothing -> ShapeCache.smooth16
+            isMonochrome -> androidx.compose.foundation.shape.RoundedCornerShape(16.dp)
+            else -> ShapeCache.smoothPill
+        }
 
         Surface(
             shape = shape,

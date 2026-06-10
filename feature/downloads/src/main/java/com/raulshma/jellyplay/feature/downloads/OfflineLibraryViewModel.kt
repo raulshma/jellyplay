@@ -6,6 +6,7 @@ import com.raulshma.jellyplay.core.model.OfflineMediaItem
 import com.raulshma.jellyplay.core.ui.viewmodel.JellyPlayViewModel
 import com.raulshma.jellyplay.core.ui.viewmodel.StateFlowHandle
 import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.async
@@ -56,12 +57,11 @@ class OfflineLibraryViewModel @Inject constructor(
                 coroutineScope {
                     seasonList.map { season ->
                         async {
-                            offlineRepository.getEpisodesForSeason(season.id).collect { episodeList ->
-                                episodesMap[season.id] = episodeList
-                                _episodes.set(episodesMap.toMap())
-                            }
+                            val episodeList = offlineRepository.getEpisodesForSeason(season.id).first()
+                            episodesMap[season.id] = episodeList
                         }
                     }.awaitAll()
+                    _episodes.set(episodesMap.toMap())
                 }
             }
         }

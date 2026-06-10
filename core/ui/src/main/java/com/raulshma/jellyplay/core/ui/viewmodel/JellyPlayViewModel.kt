@@ -22,6 +22,7 @@ import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.stateIn
+import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.launch
 
@@ -207,7 +208,7 @@ class StateFlowHandle<T>(private val backing: MutableStateFlow<T>) {
     val flow: StateFlow<T> = backing.asStateFlow()
 
     fun update(transform: (T) -> T) {
-        backing.value = transform(backing.value)
+        backing.update(transform)
     }
 
     fun set(value: T) {
