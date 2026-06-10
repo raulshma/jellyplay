@@ -87,31 +87,7 @@ class AudioPlaybackManager @Inject constructor(
     private var crossfadePlayer: ExoPlayer? = null
     private var currentPreferences = com.raulshma.jellyplay.core.model.UserPreferences()
 
-    init {
-        scope.launch {
-            preferencesStore.preferences.collect { prefs ->
-                val prevVisualizer = currentPreferences.audioVisualizerEnabled
-                val prevPreset = currentPreferences.equalizerPreset
-                val prevBalance = currentPreferences.lrBalance
-                val prevPitch = currentPreferences.pitchSemitones
 
-                currentPreferences = prefs
-
-                if (prefs.audioVisualizerEnabled != prevVisualizer) {
-                    enableVisualizer(prefs.audioVisualizerEnabled)
-                }
-                if (prefs.equalizerPreset != prevPreset) {
-                    setEqualizerPreset(prefs.equalizerPreset)
-                }
-                if (prefs.lrBalance != prevBalance) {
-                    setLrBalance(prefs.lrBalance)
-                }
-                if (prefs.pitchSemitones != prevPitch) {
-                    setPitchSemitones(prefs.pitchSemitones)
-                }
-            }
-        }
-    }
 
     fun start() {
         scope.launch(Dispatchers.IO) {
@@ -299,10 +275,52 @@ class AudioPlaybackManager @Inject constructor(
         override fun onMediaItemTransition(mediaItem: MediaItem?, reason: Int) {
             onTrackTransitioned()
         }
+
+        override fun onRepeatModeChanged(repeatMode: Int) {
+            val appMode = when (repeatMode) {
+                Player.REPEAT_MODE_ONE -> 2
+                Player.REPEAT_MODE_ALL -> 1
+                else -> 0
+            }
+            if (_repeatMode.value != appMode) {
+                _repeatMode.value = appMode
+            }
+        }
     }
 
     val hasActiveSession: Boolean
         get() = exoPlayer != null && currentItemId != null
+
+    init {
+        scope.launch {
+            preferencesStore.preferences.collect { prefs ->
+                val prevVisualizer = currentPreferences.audioVisualizerEnabled
+                val prevPreset = currentPreferences.equalizerPreset
+                val prevBalance = currentPreferences.lrBalance
+                val prevPitch = currentPreferences.pitchSemitones
+
+                currentPreferences = prefs
+
+                if (prefs.audioVisualizerEnabled != prevVisualizer) {
+                    enableVisualizer(prefs.audioVisualizerEnabled)
+                }
+                if (prefs.equalizerPreset != prevPreset) {
+                    setEqualizerPreset(prefs.equalizerPreset)
+                }
+                if (prefs.lrBalance != prevBalance) {
+                    setLrBalance(prefs.lrBalance)
+                }
+                if (prefs.pitchSemitones != prevPitch) {
+                    setPitchSemitones(prefs.pitchSemitones)
+                }
+            }
+        }
+        scope.launch {
+            _repeatMode.collect { mode ->
+                exoPlayer?.repeatMode = getExoPlayerRepeatMode(mode)
+            }
+        }
+    }
 
     fun setGaplessEnabled(enabled: Boolean) {
         _gaplessEnabled.value = enabled
@@ -365,6 +383,7 @@ class AudioPlaybackManager @Inject constructor(
             .setPauseAtEndOfMediaItems(false)
             .build()
         player.addListener(playerListener)
+        player.repeatMode = getExoPlayerRepeatMode(_repeatMode.value)
 
         exoPlayer = player
         val session = MediaLibrarySession.Builder(context, player, mediaLibraryCallback)
@@ -802,7 +821,8 @@ class AudioPlaybackManager @Inject constructor(
     }
 
     fun cycleRepeatMode() {
-        _repeatMode.value = (_repeatMode.value + 1) % 3
+        val nextMode = (_repeatMode.value + 1) % 3
+        setRepeatMode(nextMode)
     }
 
     /**
@@ -810,7 +830,17 @@ class AudioPlaybackManager @Inject constructor(
      * @param mode 0 = RepeatNone, 1 = RepeatAll, 2 = RepeatOne.
      */
     fun setRepeatMode(mode: Int) {
-        _repeatMode.value = mode.coerceIn(0, 2)
+        val coerced = mode.coerceIn(0, 2)
+        _repeatMode.value = coerced
+        exoPlayer?.repeatMode = getExoPlayerRepeatMode(coerced)
+    }
+
+    private fun getExoPlayerRepeatMode(mode: Int): Int {
+        return when (mode) {
+            1 -> Player.REPEAT_MODE_ALL
+            2 -> Player.REPEAT_MODE_ONE
+            else -> Player.REPEAT_MODE_OFF
+        }
     }
 
     /**
