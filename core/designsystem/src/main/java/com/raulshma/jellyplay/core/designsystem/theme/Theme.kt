@@ -12,6 +12,7 @@ import androidx.compose.material3.dynamicDarkColorScheme
 import androidx.compose.material3.dynamicLightColorScheme
 import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.remember
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.runtime.staticCompositionLocalOf
@@ -294,14 +295,14 @@ fun JellyPlayTheme(
     val effectiveDarkTheme = darkTheme || isTv || synthwaveMode
     val effectiveOledMode = oledMode && effectiveDarkTheme && !synthwaveMode && !soothingMode
 
-    isSynthwaveActiveGlobal = synthwaveMode
+    _isSynthwaveActive.value = synthwaveMode
 
     val colorScheme = when {
         synthwaveMode -> {
-            getSynthwaveColorScheme(synthwaveAccent)
+            remember(synthwaveAccent) { getSynthwaveColorScheme(synthwaveAccent) }
         }
         soothingMode -> {
-            getSoothingColorScheme(soothingAccent, effectiveDarkTheme)
+            remember(soothingAccent, effectiveDarkTheme) { getSoothingColorScheme(soothingAccent, effectiveDarkTheme) }
         }
         accentColorSwatch == "dynamic" && dynamicColor && !isTv && Build.VERSION.SDK_INT >= Build.VERSION_CODES.S -> {
             val context = LocalContext.current

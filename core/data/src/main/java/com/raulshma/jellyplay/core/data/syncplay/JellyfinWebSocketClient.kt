@@ -34,11 +34,11 @@ class JellyfinWebSocketClient @Inject constructor(
     val events: SharedFlow<WebSocketEvent> = _events.asSharedFlow()
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
 
-    private var serverUrl: String? = null
-    private var token: String? = null
-    private var deviceId: String? = null
-    private var deviceName: String? = null
-    private var clientName: String? = null
+    @Volatile private var serverUrl: String? = null
+    @Volatile private var token: String? = null
+    @Volatile private var deviceId: String? = null
+    @Volatile private var deviceName: String? = null
+    @Volatile private var clientName: String? = null
     private val reconnectAttempts = AtomicInteger(0)
     private val maxReconnectAttempts = 5
     private var backgroundRetryJob: kotlinx.coroutines.Job? = null

@@ -1,5 +1,6 @@
 package com.raulshma.jellyplay.feature.player.video
 
+import androidx.compose.runtime.Immutable
 import com.raulshma.jellyplay.core.model.AudioNormalizationMode
 import com.raulshma.jellyplay.core.model.ChapterInfo
 import com.raulshma.jellyplay.core.model.ChannelMixMode
@@ -28,6 +29,7 @@ import com.raulshma.jellyplay.feature.player.video.engine.VideoEffectsConfig
 import com.raulshma.jellyplay.core.model.PersonInfo
 import com.raulshma.jellyplay.core.model.LyricsLine
 
+@Immutable
 data class VideoPlayerUiState(
     val title: String = "",
     val subtitle: String = "",
@@ -118,25 +120,12 @@ data class VideoPlayerUiState(
     val keepScreenOnDuringVideo: Boolean = true,
 ) {
 
-    companion object {
-        private val INTRO_CHAPTER_NAMES = setOf("intro", "introduction", "opening", "op")
-        private val OUTRO_CHAPTER_NAMES = setOf("outro", "credits", "end credits", "ending", "ed")
-        private val PREVIEW_CHAPTER_NAMES = setOf("preview", "coming up", "cold open", "teaser")
-        private val RECAP_CHAPTER_NAMES = setOf("recap", "previously on", "previously")
-        private val COMMERCIAL_CHAPTER_NAMES = setOf("commercial", "ad break", "advertisement")
-
-        val CHAPTER_NAME_MAP: Map<MediaSegmentType, Set<String>> = mapOf(
-            MediaSegmentType.INTRO to INTRO_CHAPTER_NAMES,
-            MediaSegmentType.OUTRO to OUTRO_CHAPTER_NAMES,
-            MediaSegmentType.PREVIEW to PREVIEW_CHAPTER_NAMES,
-            MediaSegmentType.RECAP to RECAP_CHAPTER_NAMES,
-            MediaSegmentType.COMMERCIAL to COMMERCIAL_CHAPTER_NAMES,
-        )
-
-        private var cachedSegmentPosition: Long = Long.MIN_VALUE
-        private var cachedSegmentResult: MediaSegment? = null
-        private var cachedSegmentKey: Pair<List<MediaSegment>, List<ChapterInfo>>? = null
-    }
+    @Transient
+    private var cachedSegmentPosition: Long = Long.MIN_VALUE
+    @Transient
+    private var cachedSegmentResult: MediaSegment? = null
+    @Transient
+    private var cachedSegmentKey: Pair<List<MediaSegment>, List<ChapterInfo>>? = null
 
     fun behaviorForType(type: MediaSegmentType): SegmentBehavior =
         segmentBehaviors[type] ?: SegmentBehavior.IGNORE
@@ -152,6 +141,22 @@ data class VideoPlayerUiState(
         cachedSegmentPosition = currentPosition
         cachedSegmentResult = computeActiveSegmentInternal()
         return cachedSegmentResult
+    }
+
+    companion object {
+        private val INTRO_CHAPTER_NAMES = setOf("intro", "introduction", "opening", "op")
+        private val OUTRO_CHAPTER_NAMES = setOf("outro", "credits", "end credits", "ending", "ed")
+        private val PREVIEW_CHAPTER_NAMES = setOf("preview", "coming up", "cold open", "teaser")
+        private val RECAP_CHAPTER_NAMES = setOf("recap", "previously on", "previously")
+        private val COMMERCIAL_CHAPTER_NAMES = setOf("commercial", "ad break", "advertisement")
+
+        val CHAPTER_NAME_MAP: Map<MediaSegmentType, Set<String>> = mapOf(
+            MediaSegmentType.INTRO to INTRO_CHAPTER_NAMES,
+            MediaSegmentType.OUTRO to OUTRO_CHAPTER_NAMES,
+            MediaSegmentType.PREVIEW to PREVIEW_CHAPTER_NAMES,
+            MediaSegmentType.RECAP to RECAP_CHAPTER_NAMES,
+            MediaSegmentType.COMMERCIAL to COMMERCIAL_CHAPTER_NAMES,
+        )
     }
 
     private fun computeActiveSegmentInternal(): MediaSegment? {

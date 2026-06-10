@@ -67,7 +67,9 @@ class MainActivity : FragmentActivity() {
         super.onCreate(savedInstanceState)
         // Initialize Cast SDK eagerly while the splash screen is still up, so the
         // first composition frame doesn't pay the JNI init cost.
-        runCatching { com.google.android.gms.cast.framework.CastContext.getSharedInstance(this) }
+        if (packageManager.hasSystemFeature("com.google.android.gms.cast")) {
+            runCatching { com.google.android.gms.cast.framework.CastContext.getSharedInstance(this) }
+        }
         splashScreen.setKeepOnScreenCondition { viewModel.isRestoring.value }
         splashScreen.setOnExitAnimationListener { splashScreenView ->
             val iconView = splashScreenView.iconView

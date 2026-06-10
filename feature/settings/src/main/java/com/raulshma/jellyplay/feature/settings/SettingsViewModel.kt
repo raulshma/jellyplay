@@ -169,7 +169,7 @@ class SettingsViewModel @Inject constructor(
         sessionRefreshJob?.cancel()
         sessionRefreshJob = launch {
             while (true) {
-                kotlinx.coroutines.delay(10_000)
+                kotlinx.coroutines.delay(30_000)
                 apiClient.getSessions()
                     .onSuccess { sessions ->
                         val cutoff = java.time.Instant.now().minusSeconds(5 * 60)
