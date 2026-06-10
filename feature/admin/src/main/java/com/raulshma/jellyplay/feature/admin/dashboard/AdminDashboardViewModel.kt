@@ -85,7 +85,7 @@ class AdminDashboardViewModel @Inject constructor(
         refreshJob?.cancel()
         refreshJob = launch {
             while (true) {
-                delay(5000)
+                delay(15000)
                 refreshRunningTasks()
             }
         }

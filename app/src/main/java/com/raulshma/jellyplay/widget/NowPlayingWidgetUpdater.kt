@@ -4,10 +4,6 @@ import android.appwidget.AppWidgetManager
 import android.content.ComponentName
 import android.content.Context
 import android.graphics.Bitmap
-import coil3.imageLoader
-import coil3.request.ImageRequest
-import coil3.request.allowHardware
-import coil3.toBitmap
 import com.raulshma.jellyplay.core.data.playback.AudioPlaybackManager
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.CoroutineScope
@@ -19,7 +15,6 @@ import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.sample
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.withContext
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -121,42 +116,7 @@ class NowPlayingWidgetUpdater @Inject constructor(
 
     private suspend fun loadArtwork(url: String?): Bitmap? {
         if (url.isNullOrBlank()) return null
-        return withContext(Dispatchers.IO) {
-            try {
-                val request = ImageRequest.Builder(context)
-                    .data(url)
-                    .size(ARTWORK_SIZE)
-                    .allowHardware(false)
-                    .build()
-                val result = context.imageLoader.execute(request)
-                val bitmap = result.image?.toBitmap()
-                if (bitmap != null) {
-                    val density = context.resources.displayMetrics.density
-                    val cornerRadiusPx = 12f * density
-                    getRoundedCornerBitmap(bitmap, cornerRadiusPx)
-                } else {
-                    null
-                }
-            } catch (_: Exception) {
-                null
-            }
-        }
-    }
-
-    private fun getRoundedCornerBitmap(bitmap: Bitmap, pixels: Float): Bitmap {
-        val output = Bitmap.createBitmap(bitmap.width, bitmap.height, Bitmap.Config.ARGB_8888)
-        val canvas = android.graphics.Canvas(output)
-        val paint = android.graphics.Paint().apply {
-            isAntiAlias = true
-            color = 0xff424242.toInt()
-        }
-        val rect = android.graphics.Rect(0, 0, bitmap.width, bitmap.height)
-        val rectF = android.graphics.RectF(rect)
-        canvas.drawARGB(0, 0, 0, 0)
-        canvas.drawRoundRect(rectF, pixels, pixels, paint)
-        paint.xfermode = android.graphics.PorterDuffXfermode(android.graphics.PorterDuff.Mode.SRC_IN)
-        canvas.drawBitmap(bitmap, rect, rect, paint)
-        return output
+        return WidgetImageLoader.loadPoster(context, url, cornerRadiusDp = 12f)
     }
 
     private fun pushUpdate(
@@ -187,8 +147,4 @@ class NowPlayingWidgetUpdater @Inject constructor(
         val artUrl: String?,
         val isPlaying: Boolean,
     )
-
-    private companion object {
-        const val ARTWORK_SIZE = 768
-    }
 }

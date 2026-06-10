@@ -27,6 +27,7 @@ data class AppearanceSettings(
     val synthwaveAccent: String = "magenta",
     val soothingMode: Boolean = false,
     val soothingAccent: String = "ocean",
+    val monochromeMode: Boolean = false,
 )
 
 /**
@@ -57,6 +58,7 @@ class AppearanceSettingsStore @Inject constructor(
                 synthwaveAccent = prefs.synthwaveAccent,
                 soothingMode = prefs.soothingMode,
                 soothingAccent = prefs.soothingAccent,
+                monochromeMode = prefs.monochromeMode,
             )
         }
         .distinctUntilChanged()
@@ -85,4 +87,6 @@ class AppearanceSettingsStore @Inject constructor(
     suspend fun setSoothingMode(enabled: Boolean) = userPreferencesStore.setSoothingMode(enabled)
 
     suspend fun setSoothingAccent(accent: String) = userPreferencesStore.setSoothingAccent(accent)
+
+    suspend fun setMonochromeMode(enabled: Boolean) = userPreferencesStore.setMonochromeMode(enabled)
 }

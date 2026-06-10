@@ -53,6 +53,20 @@ internal val synthwaveBodyFontFamily = FontFamily(
     ),
 )
 
+internal val monochromeDisplayFontFamily = FontFamily(
+    Font(
+        googleFont = GoogleFont("DotGothic16"),
+        fontProvider = fontProvider,
+    ),
+)
+
+internal val monochromeBodyFontFamily = FontFamily(
+    Font(
+        googleFont = GoogleFont("Space Grotesk"),
+        fontProvider = fontProvider,
+    ),
+)
+
 /**
  * Expressive Material Design 3 Typography for JellyPlay.
  *
@@ -244,4 +258,22 @@ val SoothingTypography = Typography(
     labelLarge = JellyPlayTypography.labelLarge.copy(fontFamily = soothingFontFamily, fontWeight = FontWeight.SemiBold),
     labelMedium = JellyPlayTypography.labelMedium.copy(fontFamily = soothingFontFamily, fontWeight = FontWeight.SemiBold),
     labelSmall = JellyPlayTypography.labelSmall.copy(fontFamily = soothingFontFamily, fontWeight = FontWeight.Medium),
+)
+
+val MonochromeTypography = Typography(
+    displayLarge = JellyPlayTypography.displayLarge.copy(fontFamily = monochromeDisplayFontFamily),
+    displayMedium = JellyPlayTypography.displayMedium.copy(fontFamily = monochromeDisplayFontFamily),
+    displaySmall = JellyPlayTypography.displaySmall.copy(fontFamily = monochromeDisplayFontFamily),
+    headlineLarge = JellyPlayTypography.headlineLarge.copy(fontFamily = monochromeDisplayFontFamily),
+    headlineMedium = JellyPlayTypography.headlineMedium.copy(fontFamily = monochromeDisplayFontFamily),
+    headlineSmall = JellyPlayTypography.headlineSmall.copy(fontFamily = monochromeDisplayFontFamily),
+    titleLarge = JellyPlayTypography.titleLarge.copy(fontFamily = monochromeDisplayFontFamily),
+    titleMedium = JellyPlayTypography.titleMedium.copy(fontFamily = monochromeDisplayFontFamily),
+    titleSmall = JellyPlayTypography.titleSmall.copy(fontFamily = monochromeDisplayFontFamily),
+    bodyLarge = JellyPlayTypography.bodyLarge.copy(fontFamily = monochromeBodyFontFamily),
+    bodyMedium = JellyPlayTypography.bodyMedium.copy(fontFamily = monochromeBodyFontFamily),
+    bodySmall = JellyPlayTypography.bodySmall.copy(fontFamily = monochromeBodyFontFamily),
+    labelLarge = JellyPlayTypography.labelLarge.copy(fontFamily = monochromeBodyFontFamily),
+    labelMedium = JellyPlayTypography.labelMedium.copy(fontFamily = monochromeBodyFontFamily),
+    labelSmall = JellyPlayTypography.labelSmall.copy(fontFamily = monochromeBodyFontFamily),
 )

@@ -17,13 +17,20 @@ import com.raulshma.jellyplay.core.designsystem.theme.AlphaEasing
 import com.raulshma.jellyplay.core.designsystem.theme.FancyTransitionEasing
 import com.raulshma.jellyplay.core.designsystem.theme.PointToPointEasing
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.focusable
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.selection.selectableGroup
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
@@ -32,6 +39,10 @@ import androidx.compose.material3.adaptive.navigationsuite.NavigationSuiteScaffo
 import androidx.compose.material3.adaptive.navigationsuite.NavigationSuiteDefaults
 import androidx.compose.material3.adaptive.navigationsuite.NavigationSuiteItem
 import androidx.compose.material3.adaptive.navigationsuite.NavigationSuiteType
+import androidx.compose.material3.DrawerValue
+import androidx.compose.material3.ModalDrawerSheet
+import androidx.compose.material3.ModalNavigationDrawer
+import androidx.compose.material3.rememberDrawerState
 import androidx.tv.material3.NavigationDrawer
 import androidx.tv.material3.NavigationDrawerItem
 import androidx.tv.material3.MaterialTheme as TvMaterial3Theme
@@ -73,13 +84,12 @@ import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.foundation.layout.offset
 import androidx.compose.ui.draw.scale
-import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.NavigationBarItem
 import androidx.compose.material3.NavigationBarItemDefaults
 import androidx.compose.material3.Surface
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.text.font.FontWeight
 import kotlin.math.roundToInt
 import com.raulshma.jellyplay.MainActivity
 import com.raulshma.jellyplay.MainViewModel
@@ -91,6 +101,7 @@ import com.raulshma.jellyplay.core.ui.adaptive.rememberAdaptiveInfo
 import com.raulshma.jellyplay.core.designsystem.theme.TvTypography
 import com.raulshma.jellyplay.core.designsystem.theme.LocalIsSynthwave
 import com.raulshma.jellyplay.core.designsystem.theme.LocalIsSoothingTheme
+import com.raulshma.jellyplay.core.designsystem.theme.LocalIsMonochromeTheme
 import com.raulshma.jellyplay.core.designsystem.theme.ShapeCache
 import com.raulshma.jellyplay.core.ui.components.LocalNavigationBarColor
 import com.raulshma.jellyplay.core.ui.components.MiniPlayer
@@ -133,9 +144,12 @@ import com.raulshma.jellyplay.feature.settings.navigation.settingsSection
 import com.raulshma.jellyplay.feature.syncplay.navigation.syncPlaySection
 import com.raulshma.jellyplay.feature.onboarding.navigation.onboardingSection
 import com.raulshma.jellyplay.feature.newsletter.navigation.newsletterSection
+import com.raulshma.jellyplay.feature.requests.navigation.requestsSection
 import kotlinx.coroutines.launch
 import com.composables.icons.tabler.Tabler
 import com.composables.icons.tabler.outline.*
+
+internal val LocalDrawerOpener = androidx.compose.runtime.compositionLocalOf { {} }
 
 private val DETAIL_ROUTE_CLASS_NAMES: Set<String> = setOf(
     "MediaDetail",
@@ -188,9 +202,18 @@ fun JellyPlayApp(
     val isAuthenticated by viewModel.isAuthenticated.collectAsStateWithLifecycle()
     val preferences by viewModel.preferences.collectAsStateWithLifecycle()
 
+    val context = LocalContext.current
+    val isTv = context.isTv()
+
+    LaunchedEffect(Unit) {
+        if (isTv && isAuthenticated && !preferences.onboardingCompleted) {
+            viewModel.preferencesStore.setOnboardingCompleted(true)
+        }
+    }
+
     when {
         isRestoring -> {}
-        isAuthenticated && !preferences.onboardingCompleted -> {
+        isAuthenticated && !preferences.onboardingCompleted && !isTv -> {
             OnboardingContent(
                 onComplete = {},
                 viewModel = viewModel,
@@ -257,6 +280,7 @@ private fun MainContent(
     val homeMode = preferences.homeMode
     val isSynthwave = com.raulshma.jellyplay.core.designsystem.theme.LocalIsSynthwave.current
     val isSoothing = com.raulshma.jellyplay.core.designsystem.theme.LocalIsSoothingTheme.current
+    val isMonochrome = com.raulshma.jellyplay.core.designsystem.theme.LocalIsMonochromeTheme.current
 
     val navigationState = rememberNavigationState(
         startRoute = Route.Home,
@@ -402,6 +426,9 @@ private fun MainContent(
 
     val isTv = context.isTv()
 
+    val drawerState = rememberDrawerState(DrawerValue.Closed)
+    val drawerScope = rememberCoroutineScope()
+
     val adaptiveInfo = rememberAdaptiveInfo()
 
     val tvTypography = if (isTv) TvTypography else null
@@ -425,6 +452,7 @@ private fun MainContent(
     }
 
     CompositionLocalProvider(
+        LocalDrawerOpener provides { drawerScope.launch { drawerState.open() } },
         LocalTvMode provides isTv,
         LocalAdaptiveInfo provides adaptiveInfo,
         LocalTvTypography provides tvTypography,
@@ -490,6 +518,54 @@ private fun MainContent(
                 val systemNavBarBottom = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()
                 val contentPadding = PaddingValues(0.dp)
                 if (!isFullScreenRoute) {
+                    ModalNavigationDrawer(
+                        drawerState = drawerState,
+                        drawerContent = {
+                            ModalDrawerSheet(
+                                drawerShape = RoundedCornerShape(topEnd = 28.dp, bottomEnd = 28.dp),
+                                drawerContainerColor = MaterialTheme.colorScheme.surfaceContainer,
+                            ) {
+                                Column(
+                                    modifier = Modifier
+                                        .fillMaxHeight()
+                                        .padding(vertical = 48.dp),
+                                ) {
+                                    Text(
+                                        "JellyPlay",
+                                        style = MaterialTheme.typography.headlineSmall,
+                                        fontWeight = FontWeight.Bold,
+                                        color = MaterialTheme.colorScheme.primary,
+                                        modifier = Modifier.padding(horizontal = 28.dp, vertical = 16.dp),
+                                    )
+                                    Spacer(Modifier.height(8.dp))
+                                    DrawerItem(
+                                        icon = Tabler.Outline.Inbox,
+                                        label = "Requests",
+                                        onClick = {
+                                            navigator.navigate(Route.Requests)
+                                            drawerScope.launch { drawerState.close() }
+                                        },
+                                    )
+                                    DrawerItem(
+                                        icon = Tabler.Outline.Settings,
+                                        label = "Settings",
+                                        onClick = {
+                                            navigator.navigate(Route.Settings)
+                                            drawerScope.launch { drawerState.close() }
+                                        },
+                                    )
+                                    DrawerItem(
+                                        icon = Tabler.Outline.InfoCircle,
+                                        label = "About",
+                                        onClick = {
+                                            navigator.navigate(Route.About)
+                                            drawerScope.launch { drawerState.close() }
+                                        },
+                                    )
+                                }
+                            }
+                        },
+                    ) {
                     val nestedScrollConnection = remember {
                         object : NestedScrollConnection {
                             override fun onPreScroll(available: Offset, source: NestedScrollSource): Offset {
@@ -672,6 +748,7 @@ private fun MainContent(
                                 )
                             }
                         }
+                    }
                     }
                 } else {
                     Box(
@@ -937,7 +1014,8 @@ private fun MainNavDisplay(
                             targetRoute == Route.AdminDashboard ||
                             targetRoute == Route.ScheduledTasks ||
                             targetRoute == Route.Devices ||
-                            targetRoute == Route.Logs
+                            targetRoute == Route.Logs ||
+                            targetRoute == Route.Requests
                     val isModalPop = initialRoute == Route.Settings ||
                             initialRoute == Route.Downloads ||
                             initialRoute == Route.SyncPlay ||
@@ -945,7 +1023,8 @@ private fun MainNavDisplay(
                             initialRoute == Route.AdminDashboard ||
                             initialRoute == Route.ScheduledTasks ||
                             initialRoute == Route.Devices ||
-                            initialRoute == Route.Logs
+                            initialRoute == Route.Logs ||
+                            initialRoute == Route.Requests
                     val isTabSwitch = targetRoute != null && initialRoute != null &&
                             ALL_TOP_LEVEL_ROUTE_KEYS.contains(targetRoute) &&
                             ALL_TOP_LEVEL_ROUTE_KEYS.contains(initialRoute)
@@ -1017,7 +1096,8 @@ private fun MainNavDisplay(
                             initialRoute == Route.AdminDashboard ||
                             initialRoute == Route.ScheduledTasks ||
                             initialRoute == Route.Devices ||
-                            initialRoute == Route.Logs
+                            initialRoute == Route.Logs ||
+                            initialRoute == Route.Requests
                     when {
                         isModalPop -> {
                             fadeIn(fastEffects) togetherWith fadeOut(
@@ -1119,6 +1199,7 @@ private fun MainNavDisplay(
             onboardingSection { navigator.goBack() }
             newsletterSection(navigator)
             insightsSection(navigator)
+            requestsSection(navigator)
         },
         modifier = modifier,
     )
@@ -1135,6 +1216,7 @@ private fun FloatingNavigationBar(
 ) {
     val isSynthwave = LocalIsSynthwave.current
     val isSoothing = LocalIsSoothingTheme.current
+    val isMonochrome = LocalIsMonochromeTheme.current
 
     val synthwaveTint = Color(0xFF160C2D).copy(alpha = 0.92f)
     val soothingTint = if (androidx.compose.foundation.isSystemInDarkTheme()) {
@@ -1142,9 +1224,15 @@ private fun FloatingNavigationBar(
     } else {
         Color(0xFFFFFFFF).copy(alpha = 0.88f)
     }
+    val monochromeTint = if (androidx.compose.foundation.isSystemInDarkTheme()) {
+        Color(0xFF000000).copy(alpha = 0.95f)
+    } else {
+        Color(0xFFFFFFFF).copy(alpha = 0.95f)
+    }
     val resolvedColor = when {
         isSynthwave -> synthwaveTint
         isSoothing -> soothingTint
+        isMonochrome -> monochromeTint
         else -> containerColor.copy(alpha = 0.90f)
     }
 
@@ -1166,12 +1254,19 @@ private fun FloatingNavigationBar(
                 color = MaterialTheme.colorScheme.outline.copy(alpha = 0.3f)
             )
         }
+        isMonochrome -> {
+            androidx.compose.foundation.BorderStroke(
+                width = 1.dp,
+                color = MaterialTheme.colorScheme.outline.copy(alpha = 0.45f)
+            )
+        }
         else -> null
     }
 
     val shape = when {
         isSynthwave -> RoundedCornerShape(0.dp)
         isSoothing -> ShapeCache.smoothPill
+        isMonochrome -> RoundedCornerShape(16.dp)
         else -> RoundedCornerShape(24.dp)
     }
 
@@ -1210,5 +1305,33 @@ private fun FloatingNavigationBar(
                 )
             }
         }
+    }
+}
+
+@Composable
+private fun DrawerItem(
+    icon: androidx.compose.ui.graphics.vector.ImageVector,
+    label: String,
+    onClick: () -> Unit,
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable { onClick() }
+            .padding(horizontal = 28.dp, vertical = 14.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Icon(
+            icon,
+            contentDescription = label,
+            modifier = Modifier.size(24.dp),
+            tint = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+        Spacer(Modifier.width(16.dp))
+        Text(
+            label,
+            style = MaterialTheme.typography.bodyLarge,
+            color = MaterialTheme.colorScheme.onSurface,
+        )
     }
 }

@@ -101,6 +101,8 @@ fun AppearanceSettingsScreen(
                             parts.add("Synthwave (${preferences.synthwaveAccent.lowercase().replaceFirstChar { it.uppercase() }})")
                         } else if (preferences.soothingMode) {
                             parts.add("Soothing (${preferences.soothingAccent.lowercase().replaceFirstChar { it.uppercase() }})")
+                        } else if (preferences.monochromeMode) {
+                            parts.add("Monochrome (Nothing Phone)")
                         } else {
                             parts.add(preferences.themeMode.name.lowercase().replaceFirstChar { it.uppercase() })
                             val accentName = preferences.accentColorSwatch.lowercase().replaceFirstChar { it.uppercase() }
@@ -132,12 +134,13 @@ fun AppearanceSettingsScreen(
                         if (preferences.soothingMode) {
                             add("soothing_accent")
                         }
-                        if (!preferences.synthwaveMode && !preferences.soothingMode) {
+                        add("monochrome_mode")
+                        if (!preferences.synthwaveMode && !preferences.soothingMode && !preferences.monochromeMode) {
                             add("accent_color")
                             add("color_style")
                             if (isAndroid12) add("dynamic_theming")
                         }
-                        if (isDarkActive && !preferences.synthwaveMode && !preferences.soothingMode) add("oled_mode")
+                        if (isDarkActive && !preferences.synthwaveMode && !preferences.soothingMode && !preferences.monochromeMode) add("oled_mode")
                         if (showAdvanced) {
                             add("contrast")
                             add("library_view_mode")
@@ -159,6 +162,8 @@ fun AppearanceSettingsScreen(
                                         "Overridden by Synthwave Mode"
                                     } else if (preferences.soothingMode) {
                                         "Overridden by Soothing Mode"
+                                    } else if (preferences.monochromeMode) {
+                                        "Overridden by Monochrome Mode"
                                     } else {
                                         when (preferences.themeMode) {
                                             ThemeMode.SYSTEM -> "Follow system setting"
@@ -166,11 +171,11 @@ fun AppearanceSettingsScreen(
                                             ThemeMode.DARK -> "Always dark"
                                         }
                                     },
-                                    trailingText = if (preferences.synthwaveMode) "-" else if (preferences.soothingMode) "-" else preferences.themeMode.name,
+                                    trailingText = if (preferences.synthwaveMode) "-" else if (preferences.soothingMode) "-" else if (preferences.monochromeMode) "-" else preferences.themeMode.name,
                                     highlighted = highlightSettingId == "theme_mode",
                                     index = currentIdx++, count = totalCount,
                                     onClick = {
-                                        if (!preferences.synthwaveMode && !preferences.soothingMode) {
+                                        if (!preferences.synthwaveMode && !preferences.soothingMode && !preferences.monochromeMode) {
                                             val next = when (preferences.themeMode) {
                                                 ThemeMode.SYSTEM -> ThemeMode.LIGHT
                                                 ThemeMode.LIGHT -> ThemeMode.DARK
@@ -216,6 +221,17 @@ fun AppearanceSettingsScreen(
                                     onAccentSelected = { viewModel.setSoothingAccent(it) },
                                 )
                                 currentIdx++
+                            }
+                            "monochrome_mode" -> {
+                                SettingToggleItem(
+                                    icon = Tabler.Outline.Palette,
+                                    title = "Monochrome Mode",
+                                    subtitle = "Apply strict black/white theme inspired by Nothing OS",
+                                    checked = preferences.monochromeMode,
+                                    highlighted = highlightSettingId == "monochrome_mode",
+                                    index = currentIdx++, count = totalCount,
+                                    onCheckedChange = { viewModel.setMonochromeMode(it) },
+                                )
                             }
                             "accent_color" -> {
                                 com.raulshma.jellyplay.core.ui.components.AccentColorPicker(

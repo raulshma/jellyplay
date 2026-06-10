@@ -494,7 +494,8 @@ class HomeViewModel @Inject constructor(
     override fun onStop(owner: LifecycleOwner) {
         super.onStop(owner)
         isAppInForeground = false
-        startPeriodicRefresh()
+        refreshJob?.cancel()
+        refreshJob = null
     }
 
     override fun onCleared() {

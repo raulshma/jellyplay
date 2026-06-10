@@ -1,6 +1,7 @@
 package com.raulshma.jellyplay.widget
 
 import android.content.Context
+import android.util.Log
 import androidx.hilt.work.HiltWorker
 import androidx.work.CoroutineWorker
 import androidx.work.WorkerParameters
@@ -47,8 +48,22 @@ class SeerrRecommendationsWidgetWorker @AssistedInject constructor(
         WidgetPersistHelper.persistSeerrItems(applicationContext, userPreferencesStore, mapped, versionBumpOnly = false)
     }.fold(
         onSuccess = { Result.success() },
-        onFailure = { Result.retry() },
+        onFailure = { e ->
+            if (isPermanentFailure(e)) {
+                Log.w(TAG, "Permanent failure, not retrying", e)
+                Result.failure()
+            } else {
+                Result.retry()
+            }
+        },
     )
+
+    private fun isPermanentFailure(throwable: Throwable): Boolean {
+        val message = throwable.message ?: return false
+        return message.contains("401") || message.contains("403") ||
+               message.contains("404") || message.contains("Unauthorized") ||
+               message.contains("Forbidden") || message.contains("Not Found")
+    }
 
     private suspend fun fetch(source: SeerrWidgetSource, region: String) = when (source) {
         SeerrWidgetSource.TRENDING -> seerrRepository.getTrending(page = 1)
@@ -87,6 +102,7 @@ class SeerrRecommendationsWidgetWorker @AssistedInject constructor(
     }
 
     companion object {
+        private const val TAG = "SeerrRecWidgetWorker"
         const val UNIQUE_PERIODIC_NAME = "seerr_recommendations_widget_periodic"
         const val UNIQUE_ONESHOT_NAME = "seerr_recommendations_widget_oneshot"
         private const val MAX_ITEMS = 9

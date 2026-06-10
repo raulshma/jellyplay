@@ -169,4 +169,76 @@ interface SeerrApiClient {
         page: Int = 1,
         firstAirDateGte: String? = null,
     ): Result<SeerrSearchResponse>
+
+    suspend fun getRequests(
+        baseUrl: String,
+        credentials: SeerrCredentials,
+        take: Int = 10,
+        skip: Int = 0,
+        filter: String = "pending",
+        sort: String = "added",
+        sortDirection: String = "desc",
+        requestedBy: Int? = null,
+        mediaType: String? = null,
+    ): Result<SeerrRequestListResponse>
+
+    suspend fun getRequest(
+        baseUrl: String,
+        credentials: SeerrCredentials,
+        id: Int,
+    ): Result<SeerrRequestItem>
+
+    suspend fun approveRequest(
+        baseUrl: String,
+        credentials: SeerrCredentials,
+        id: Int,
+    ): Result<SeerrRequestItem>
+
+    suspend fun declineRequest(
+        baseUrl: String,
+        credentials: SeerrCredentials,
+        id: Int,
+    ): Result<SeerrRequestItem>
+
+    suspend fun retryRequest(
+        baseUrl: String,
+        credentials: SeerrCredentials,
+        id: Int,
+    ): Result<SeerrRequestItem>
+
+    suspend fun deleteRequest(
+        baseUrl: String,
+        credentials: SeerrCredentials,
+        id: Int,
+    ): Result<Unit>
+
+    suspend fun deleteMedia(
+        baseUrl: String,
+        credentials: SeerrCredentials,
+        mediaId: Int,
+        is4k: Boolean = false,
+    ): Result<Unit>
+
+    suspend fun editRequest(
+        baseUrl: String,
+        credentials: SeerrCredentials,
+        id: Int,
+        mediaType: String,
+        mediaId: Int,
+        serverId: Int?,
+        profileId: Int?,
+        rootFolder: String?,
+        tags: List<Int>?,
+        seasons: List<Int>?,
+    ): Result<SeerrRequestItem>
+
+    suspend fun getRequestCount(
+        baseUrl: String,
+        credentials: SeerrCredentials,
+    ): Result<SeerrRequestCount>
+
+    suspend fun getCurrentUser(
+        baseUrl: String,
+        credentials: SeerrCredentials,
+    ): Result<SeerrCurrentUser>
 }

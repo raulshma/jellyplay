@@ -3,6 +3,7 @@ package com.raulshma.jellyplay.core.data.repository
 import com.raulshma.jellyplay.core.model.MediaType
 import com.raulshma.jellyplay.core.model.seerr.*
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.StateFlow
 
 interface SeerrRepository {
 
@@ -75,4 +76,47 @@ interface SeerrRepository {
     suspend fun getDiscoverMovies(page: Int = 1, primaryReleaseDateGte: String? = null): Result<SeerrSearchResponse>
 
     suspend fun getDiscoverTv(page: Int = 1, firstAirDateGte: String? = null): Result<SeerrSearchResponse>
+
+    suspend fun getRequests(
+        take: Int = 10,
+        skip: Int = 0,
+        filter: String = "pending",
+        sort: String = "added",
+        sortDirection: String = "desc",
+        requestedBy: Int? = null,
+        mediaType: String? = null,
+    ): Result<SeerrRequestListResponse>
+
+    suspend fun getRequest(id: Int): Result<SeerrRequestItem>
+
+    suspend fun approveRequest(id: Int): Result<SeerrRequestItem>
+
+    suspend fun declineRequest(id: Int): Result<SeerrRequestItem>
+
+    suspend fun retryRequest(id: Int): Result<SeerrRequestItem>
+
+    suspend fun deleteRequest(id: Int): Result<Unit>
+
+    suspend fun deleteMedia(mediaId: Int, is4k: Boolean = false): Result<Unit>
+
+    suspend fun editRequest(
+        id: Int,
+        mediaType: String,
+        mediaId: Int,
+        serverId: Int? = null,
+        profileId: Int? = null,
+        rootFolder: String? = null,
+        tags: List<Int>? = null,
+        seasons: List<Int>? = null,
+    ): Result<SeerrRequestItem>
+
+    suspend fun getRequestCount(): Result<SeerrRequestCount>
+
+    suspend fun getCurrentUser(): Result<SeerrCurrentUser>
+
+    fun isAdmin(): Flow<Boolean>
+
+    val currentUser: StateFlow<SeerrCurrentUser?>
+
+    val pendingRequestCount: StateFlow<Int>
 }

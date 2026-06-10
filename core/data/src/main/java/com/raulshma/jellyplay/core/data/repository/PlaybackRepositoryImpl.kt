@@ -10,6 +10,7 @@ import com.raulshma.jellyplay.core.model.RemoteSubtitleInfo
 import com.raulshma.jellyplay.core.network.JellyfinApiClient
 import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
+import java.util.Collections
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -23,10 +24,12 @@ class PlaybackRepositoryImpl @Inject constructor(
     // items are played in a single session. LinkedHashMap with accessOrder=true evicts
     // the least-recently-accessed entry when the limit is exceeded.
     private val segmentsCache: MutableMap<String, CachedSegments> =
-        object : LinkedHashMap<String, CachedSegments>(16, 0.75f, true) {
-            override fun removeEldestEntry(eldest: MutableMap.MutableEntry<String, CachedSegments>?): Boolean =
-                size > MAX_CACHE_ENTRIES
-        }
+        Collections.synchronizedMap(
+            object : LinkedHashMap<String, CachedSegments>(16, 0.75f, true) {
+                override fun removeEldestEntry(eldest: MutableMap.MutableEntry<String, CachedSegments>?): Boolean =
+                    size > MAX_CACHE_ENTRIES
+            }
+        )
 
     override suspend fun reportPlaybackStart(info: PlaybackStartInfo): Result<Unit> =
         apiClient.reportPlaybackStart(info.itemId, info.sessionId, info.playMethod)

@@ -14,14 +14,8 @@ import dagger.hilt.EntryPoint
 import dagger.hilt.InstallIn
 import dagger.hilt.android.EntryPointAccessors
 import dagger.hilt.components.SingletonComponent
-import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.runBlocking
-import android.graphics.Bitmap
-import coil3.imageLoader
-import coil3.request.ImageRequest
-import coil3.request.allowHardware
-import coil3.toBitmap
 import com.raulshma.jellyplay.core.data.repository.PlaybackRepository
 
 /**
@@ -95,33 +89,10 @@ class ContinueWatchingWidgetService : RemoteViewsService() {
                 view.setViewVisibility(R.id.cw_item_remaining, View.GONE)
             }
 
-            // Load poster image
             val imageId = item.seriesId ?: item.id
             val posterUrl = playbackRepository.getImageUrl(imageId, maxWidth = 300)
-            android.util.Log.d("ContinueWatchingWidget", "Poster URL for ${item.name} (ID: ${item.id}, ImageID: $imageId): $posterUrl")
             val posterBitmap = if (!posterUrl.isNullOrBlank()) {
-                runBlocking {
-                    try {
-                        val request = ImageRequest.Builder(context)
-                            .data(posterUrl)
-                            .size(300, 450)
-                            .allowHardware(false)
-                            .build()
-                        val result = context.imageLoader.execute(request)
-                        val bitmap = result.image?.toBitmap()
-                        if (bitmap != null) {
-                            val density = context.resources.displayMetrics.density
-                            val cornerRadiusPx = 8f * density
-                            getRoundedCornerBitmap(bitmap, cornerRadiusPx)
-                        } else {
-                            android.util.Log.w("ContinueWatchingWidget", "Result image is null for ${item.name}")
-                            null
-                        }
-                    } catch (e: Exception) {
-                        android.util.Log.e("ContinueWatchingWidget", "Exception loading poster for ${item.name}", e)
-                        null
-                    }
-                }
+                runBlocking { WidgetImageLoader.loadPoster(context, posterUrl) }
             } else null
 
             if (posterBitmap != null) {
@@ -186,22 +157,6 @@ class ContinueWatchingWidgetService : RemoteViewsService() {
             if (total <= 0L) return null
             val pct = (pos.toDouble() / total.toDouble() * 100.0).toInt()
             return pct.coerceIn(0, 100)
-        }
-
-        private fun getRoundedCornerBitmap(bitmap: Bitmap, pixels: Float): Bitmap {
-            val output = Bitmap.createBitmap(bitmap.width, bitmap.height, Bitmap.Config.ARGB_8888)
-            val canvas = android.graphics.Canvas(output)
-            val paint = android.graphics.Paint().apply {
-                isAntiAlias = true
-                color = 0xff424242.toInt()
-            }
-            val rect = android.graphics.Rect(0, 0, bitmap.width, bitmap.height)
-            val rectF = android.graphics.RectF(rect)
-            canvas.drawARGB(0, 0, 0, 0)
-            canvas.drawRoundRect(rectF, pixels, pixels, paint)
-            paint.xfermode = android.graphics.PorterDuffXfermode(android.graphics.PorterDuff.Mode.SRC_IN)
-            canvas.drawBitmap(bitmap, rect, rect, paint)
-            return output
         }
     }
 

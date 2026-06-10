@@ -124,6 +124,8 @@ sealed class Route : NavKey {
     @Serializable data object Licenses : Route()
 
     @Serializable data object WatchProgressHeatmap : Route()
+
+    @Serializable data object Requests : Route()
 }
 
 val VIDEO_TOP_LEVEL_ROUTES = linkedMapOf(
