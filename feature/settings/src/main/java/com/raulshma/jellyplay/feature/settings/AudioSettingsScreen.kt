@@ -67,6 +67,7 @@ sealed class AudioSettingsDialog {
 @Composable
 fun AudioSettingsScreen(
     onBack: () -> Unit,
+    highlightSettingId: String? = null,
     viewModel: SettingsViewModel = hiltViewModel(),
 ) {
     val preferences = viewModel.preferences
@@ -134,6 +135,7 @@ fun AudioSettingsScreen(
                         title = "Default Speed",
                         subtitle = if (preferences.audioDefaultSpeed == 1.0f) "Normal playback speed" else "${preferences.audioDefaultSpeed}x playback",
                         trailingText = if (preferences.audioDefaultSpeed == 1.0f) "1x" else "${preferences.audioDefaultSpeed}x",
+                        highlighted = highlightSettingId == "audio_default_speed",
                         index = idx++, count = total,
                         onClick = { activeDialog = AudioSettingsDialog.AudioSpeedPicker },
                     )
@@ -150,6 +152,7 @@ fun AudioSettingsScreen(
                         title = "Audio Visualizer",
                         subtitle = if (preferences.audioVisualizerEnabled) "Real-time FFT audio visualizer active" else "Visualizer disabled",
                         checked = preferences.audioVisualizerEnabled,
+                        highlighted = highlightSettingId == "audio_visualizer",
                         index = idx++, count = total,
                         onCheckedChange = { viewModel.setAudioVisualizerEnabled(it) },
                     )
@@ -158,6 +161,7 @@ fun AudioSettingsScreen(
                         title = "Sleep Timer",
                         subtitle = if (preferences.sleepTimerDurationMs == 0L) "No sleep timer set" else "${preferences.sleepTimerDurationMs / 60000} minutes",
                         trailingText = if (preferences.sleepTimerDurationMs == 0L) "Off" else "${preferences.sleepTimerDurationMs / 60000}m",
+                        highlighted = highlightSettingId == "sleep_timer",
                         index = idx++, count = total,
                         onClick = { activeDialog = AudioSettingsDialog.SleepTimerPicker },
                     )
@@ -166,6 +170,7 @@ fun AudioSettingsScreen(
                         title = "Audio Description",
                         subtitle = if (preferences.preferAudioDescription) "Prefer descriptive/narrated audio tracks" else "Standard audio tracks",
                         checked = preferences.preferAudioDescription,
+                        highlighted = highlightSettingId == "audio_description",
                         index = idx++, count = total,
                         onCheckedChange = { viewModel.setPreferAudioDescription(it) },
                     )
@@ -199,6 +204,7 @@ fun AudioSettingsScreen(
                             title = "Gapless Playback",
                             subtitle = if (preferences.audioGaplessEnabled) "Seamless track transitions" else "Brief pause between tracks",
                             checked = preferences.audioGaplessEnabled,
+                            highlighted = highlightSettingId == "gapless_playback",
                             index = idx++, count = total,
                             onCheckedChange = { viewModel.setGaplessEnabled(it) },
                         )
@@ -207,6 +213,7 @@ fun AudioSettingsScreen(
                             title = "Crossfade Duration",
                             subtitle = if (preferences.audioCrossfadeDurationMs > 0) "${preferences.audioCrossfadeDurationMs / 1000}s overlap between tracks" else "No crossfade",
                             trailingText = if (preferences.audioCrossfadeDurationMs > 0) "${preferences.audioCrossfadeDurationMs / 1000}s" else "Off",
+                            highlighted = highlightSettingId == "crossfade",
                             index = idx++, count = total,
                             onClick = { activeDialog = AudioSettingsDialog.CrossfadePicker },
                         )
@@ -233,6 +240,7 @@ fun AudioSettingsScreen(
                                 AudioNormalizationMode.TRACK -> "Track"
                                 AudioNormalizationMode.ALBUM -> "Album"
                             },
+                            highlighted = highlightSettingId == "volume_normalization",
                             index = idx++, count = total,
                             onClick = { activeDialog = AudioSettingsDialog.NormalizationModePicker },
                         )
@@ -253,6 +261,7 @@ fun AudioSettingsScreen(
                             title = "Equalizer",
                             subtitle = if (preferences.equalizerEnabled) "10-band equalizer active" else "Equalizer disabled",
                             checked = preferences.equalizerEnabled,
+                            highlighted = highlightSettingId == "equalizer",
                             index = idx++, count = total,
                             onCheckedChange = { viewModel.setEqualizerEnabled(it) },
                             onClick = { activeDialog = AudioSettingsDialog.EqualizerEditor },
@@ -318,6 +327,7 @@ fun AudioSettingsScreen(
                             title = "Bass Boost",
                             subtitle = if (preferences.bassBoostEnabled) preferences.bassBoostStrength.displayName else "Off",
                             checked = preferences.bassBoostEnabled,
+                            highlighted = highlightSettingId == "bass_boost",
                             index = idx++, count = total,
                             onCheckedChange = { viewModel.setBassBoostEnabled(it) },
                         )
@@ -341,6 +351,7 @@ fun AudioSettingsScreen(
                             title = "Virtualizer / Spatial Audio",
                             subtitle = if (preferences.virtualizerEnabled) "${preferences.virtualizerStrength / 10}% strength" else "Off",
                             checked = preferences.virtualizerEnabled,
+                            highlighted = highlightSettingId == "virtualizer",
                             index = idx++, count = total,
                             onCheckedChange = { viewModel.setVirtualizerEnabled(it) },
                         )
@@ -364,6 +375,7 @@ fun AudioSettingsScreen(
                             title = "Volume Boost",
                             subtitle = if (preferences.volumeBoostEnabled) "+${preferences.volumeBoostGain / 100} dB gain" else "Off",
                             checked = preferences.volumeBoostEnabled,
+                            highlighted = highlightSettingId == "volume_boost",
                             index = idx++, count = total,
                             onCheckedChange = { viewModel.setVolumeBoostEnabled(it) },
                         )
@@ -382,6 +394,7 @@ fun AudioSettingsScreen(
                             title = "Reverb",
                             subtitle = preferences.reverbPreset.displayName,
                             trailingText = preferences.reverbPreset.displayName,
+                            highlighted = highlightSettingId == "reverb",
                             index = idx++, count = total,
                             onClick = {
                                 val presets = com.raulshma.jellyplay.core.model.ReverbPreset.entries
@@ -403,6 +416,7 @@ fun AudioSettingsScreen(
                             title = "Channel Mixing",
                             subtitle = if (preferences.channelMixEnabled) "Surround mixing active" else "Stereo bypass",
                             checked = preferences.channelMixEnabled,
+                            highlighted = highlightSettingId == "channel_mixing",
                             index = idx++, count = total,
                             onCheckedChange = { viewModel.setChannelMixEnabled(it) },
                         )
@@ -421,6 +435,7 @@ fun AudioSettingsScreen(
                             title = "L/R Balance",
                             subtitle = if (preferences.lrBalance == 0f) "Center" else if (preferences.lrBalance < 0f) "Left" else "Right",
                             trailingText = if (preferences.lrBalance == 0f) "Center" else String.format("%.2f", preferences.lrBalance),
+                            highlighted = highlightSettingId == "lr_balance",
                             index = idx++, count = total,
                             onClick = { activeDialog = AudioSettingsDialog.LrBalancePicker },
                         )

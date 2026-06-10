@@ -12,15 +12,6 @@ import kotlin.math.min
 import kotlin.math.pow
 import kotlin.random.Random
 
-/**
- * Decorator that adds retry logic with exponential backoff and jitter to all
- * [SeerrApiClient] calls. Transient upstream failures (timeouts, 5xx errors,
- * connection resets) are automatically retried without surfacing errors to the
- * caller.
- *
- * Retries are applied **per-call** so that individual request failures do not
- * affect other in-flight requests.
- */
 @Singleton
 class ResilientSeerrApiClient @Inject constructor(
     private val delegate: SeerrApiClientImpl,
@@ -28,18 +19,13 @@ class ResilientSeerrApiClient @Inject constructor(
 
     companion object {
         internal const val MAX_RETRIES = 4
-        internal val BASE_DELAY_MS = 1_000L // 1 second
-        internal val MAX_DELAY_MS = 8_000L  // 8 seconds
+        internal val BASE_DELAY_MS = 1_000L
+        internal val MAX_DELAY_MS = 8_000L
         internal const val BACKOFF_FACTOR = 2.0
 
-        /** HTTP status codes that indicate a transient/retryable server error. */
         internal val RETRYABLE_STATUS_CODES = setOf(429, 500, 502, 503, 504)
     }
 
-    /**
-     * Executes [block] with retry logic. Retries up to [MAX_RETRIES] times on
-     * retryable errors with exponential backoff + full jitter.
-     */
     private suspend fun <T> withRetry(block: suspend () -> Result<T>): Result<T> {
         var lastResult = block()
 
@@ -58,17 +44,9 @@ class ResilientSeerrApiClient @Inject constructor(
         return lastResult
     }
 
-    /**
-     * Determines if an exception is worth retrying.
-     *
-     * Retryable: network-level transient failures and server errors (5xx, 429).
-     * Non-retryable: client errors (4xx), serialization issues, cancellation.
-     */
     internal fun isRetryable(exception: Throwable): Boolean {
-        // Never retry coroutine cancellation
         if (exception is kotlinx.coroutines.CancellationException) return false
 
-        // Retry transient network exceptions
         when (exception) {
             is SocketTimeoutException -> return true
             is ConnectException -> return true
@@ -76,121 +54,119 @@ class ResilientSeerrApiClient @Inject constructor(
             is IOException -> return true
         }
 
-        // Check if the error message indicates a retryable HTTP status code
         val message = exception.message ?: return false
         return RETRYABLE_STATUS_CODES.any { code ->
             message.contains("HTTP $code")
         }
     }
 
-    /**
-     * Calculates exponential backoff with full jitter.
-     *
-     * Formula: `random(0, min(MAX_DELAY, BASE_DELAY * 2^attempt))`
-     *
-     * Full jitter spreads retries evenly across the backoff window, reducing
-     * thundering-herd problems when multiple requests fail simultaneously.
-     */
     internal fun calculateBackoff(attempt: Int): Long {
         val exponentialDelay = (BASE_DELAY_MS * BACKOFF_FACTOR.pow(attempt)).toLong()
         val cappedDelay = min(exponentialDelay, MAX_DELAY_MS)
         return Random.nextLong(0, cappedDelay + 1)
     }
 
-    // ── Retry-wrapped API methods ──
-    // Only non-GET methods (like requestMedia) are truly idempotent concerns,
-    // but Seerr's POST /request is also safe to retry since duplicate requests
-    // are deduplicated server-side by TMDB ID. All GET methods are naturally safe.
+    override suspend fun loginJellyfin(
+        baseUrl: String,
+        username: String,
+        password: String,
+    ): Result<String> = withRetry { delegate.loginJellyfin(baseUrl, username, password) }
 
-    override suspend fun testConnection(baseUrl: String, apiKey: String): Result<SeerrStatusResponse> =
-        withRetry { delegate.testConnection(baseUrl, apiKey) }
+    override suspend fun loginLocal(
+        baseUrl: String,
+        email: String,
+        password: String,
+    ): Result<String> = withRetry { delegate.loginLocal(baseUrl, email, password) }
+
+    override suspend fun testConnection(baseUrl: String, credentials: SeerrCredentials): Result<SeerrStatusResponse> =
+        withRetry { delegate.testConnection(baseUrl, credentials) }
 
     override suspend fun search(
         baseUrl: String,
-        apiKey: String,
+        credentials: SeerrCredentials,
         query: String,
         page: Int,
     ): Result<SeerrSearchResponse> =
-        withRetry { delegate.search(baseUrl, apiKey, query, page) }
+        withRetry { delegate.search(baseUrl, credentials, query, page) }
 
     override suspend fun getMovieDetails(
         baseUrl: String,
-        apiKey: String,
+        credentials: SeerrCredentials,
         tmdbId: Int,
     ): Result<SeerrMovieDetails> =
-        withRetry { delegate.getMovieDetails(baseUrl, apiKey, tmdbId) }
+        withRetry { delegate.getMovieDetails(baseUrl, credentials, tmdbId) }
 
     override suspend fun getTvDetails(
         baseUrl: String,
-        apiKey: String,
+        credentials: SeerrCredentials,
         tmdbId: Int,
     ): Result<SeerrTvDetails> =
-        withRetry { delegate.getTvDetails(baseUrl, apiKey, tmdbId) }
+        withRetry { delegate.getTvDetails(baseUrl, credentials, tmdbId) }
 
     override suspend fun getTvSeasonDetails(
         baseUrl: String,
-        apiKey: String,
+        credentials: SeerrCredentials,
         tvId: Int,
         seasonNumber: Int,
     ): Result<SeerrSeasonDetail> =
-        withRetry { delegate.getTvSeasonDetails(baseUrl, apiKey, tvId, seasonNumber) }
+        withRetry { delegate.getTvSeasonDetails(baseUrl, credentials, tvId, seasonNumber) }
 
     override suspend fun getMovieRatings(
         baseUrl: String,
-        apiKey: String,
+        credentials: SeerrCredentials,
         tmdbId: Int,
     ): Result<SeerrRatings> =
-        withRetry { delegate.getMovieRatings(baseUrl, apiKey, tmdbId) }
+        withRetry { delegate.getMovieRatings(baseUrl, credentials, tmdbId) }
 
     override suspend fun getTvRatings(
         baseUrl: String,
-        apiKey: String,
+        credentials: SeerrCredentials,
         tmdbId: Int,
     ): Result<SeerrRatings> =
-        withRetry { delegate.getTvRatings(baseUrl, apiKey, tmdbId) }
+        withRetry { delegate.getTvRatings(baseUrl, credentials, tmdbId) }
 
     override suspend fun getMovieRatingsCombined(
         baseUrl: String,
-        apiKey: String,
+        credentials: SeerrCredentials,
         tmdbId: Int,
     ): Result<SeerrRatings> =
-        withRetry { delegate.getMovieRatingsCombined(baseUrl, apiKey, tmdbId) }
+        withRetry { delegate.getMovieRatingsCombined(baseUrl, credentials, tmdbId) }
 
     override suspend fun getMovieRecommendations(
         baseUrl: String,
-        apiKey: String,
+        credentials: SeerrCredentials,
         tmdbId: Int,
         page: Int,
     ): Result<SeerrSearchResponse> =
-        withRetry { delegate.getMovieRecommendations(baseUrl, apiKey, tmdbId, page) }
+        withRetry { delegate.getMovieRecommendations(baseUrl, credentials, tmdbId, page) }
 
     override suspend fun getMovieSimilar(
         baseUrl: String,
-        apiKey: String,
+        credentials: SeerrCredentials,
         tmdbId: Int,
         page: Int,
     ): Result<SeerrSearchResponse> =
-        withRetry { delegate.getMovieSimilar(baseUrl, apiKey, tmdbId, page) }
+        withRetry { delegate.getMovieSimilar(baseUrl, credentials, tmdbId, page) }
 
     override suspend fun getTvRecommendations(
         baseUrl: String,
-        apiKey: String,
+        credentials: SeerrCredentials,
         tmdbId: Int,
         page: Int,
     ): Result<SeerrSearchResponse> =
-        withRetry { delegate.getTvRecommendations(baseUrl, apiKey, tmdbId, page) }
+        withRetry { delegate.getTvRecommendations(baseUrl, credentials, tmdbId, page) }
 
     override suspend fun getTvSimilar(
         baseUrl: String,
-        apiKey: String,
+        credentials: SeerrCredentials,
         tmdbId: Int,
         page: Int,
     ): Result<SeerrSearchResponse> =
-        withRetry { delegate.getTvSimilar(baseUrl, apiKey, tmdbId, page) }
+        withRetry { delegate.getTvSimilar(baseUrl, credentials, tmdbId, page) }
 
     override suspend fun requestMedia(
         baseUrl: String,
-        apiKey: String,
+        credentials: SeerrCredentials,
         mediaType: String,
         mediaId: Int,
         tvdbId: Int?,
@@ -200,84 +176,80 @@ class ResilientSeerrApiClient @Inject constructor(
         rootFolder: String?,
         tags: List<Int>?,
     ): Result<SeerrMediaRequest> =
-        withRetry { delegate.requestMedia(baseUrl, apiKey, mediaType, mediaId, tvdbId, seasons, serverId, profileId, rootFolder, tags) }
+        withRetry { delegate.requestMedia(baseUrl, credentials, mediaType, mediaId, tvdbId, seasons, serverId, profileId, rootFolder, tags) }
 
     override suspend fun getRadarrSettings(
         baseUrl: String,
-        apiKey: String,
+        credentials: SeerrCredentials,
     ): Result<List<SeerrRadarrSettings>> =
-        withRetry { delegate.getRadarrSettings(baseUrl, apiKey) }
+        withRetry { delegate.getRadarrSettings(baseUrl, credentials) }
 
     override suspend fun getSonarrSettings(
         baseUrl: String,
-        apiKey: String,
+        credentials: SeerrCredentials,
     ): Result<List<SeerrSonarrSettings>> =
-        withRetry { delegate.getSonarrSettings(baseUrl, apiKey) }
+        withRetry { delegate.getSonarrSettings(baseUrl, credentials) }
 
     override suspend fun getRadarrServiceDetail(
         baseUrl: String,
-        apiKey: String,
+        credentials: SeerrCredentials,
         id: Int,
     ): Result<SeerrRadarrServiceDetail> =
-        withRetry { delegate.getRadarrServiceDetail(baseUrl, apiKey, id) }
+        withRetry { delegate.getRadarrServiceDetail(baseUrl, credentials, id) }
 
     override suspend fun getSonarrServiceDetail(
         baseUrl: String,
-        apiKey: String,
+        credentials: SeerrCredentials,
         id: Int,
     ): Result<SeerrSonarrServiceDetail> =
-        withRetry { delegate.getSonarrServiceDetail(baseUrl, apiKey, id) }
-
-    // ── /service/ endpoint retries ──
+        withRetry { delegate.getSonarrServiceDetail(baseUrl, credentials, id) }
 
     override suspend fun getServiceRadarrServers(
         baseUrl: String,
-        apiKey: String,
+        credentials: SeerrCredentials,
     ): Result<List<SeerrServiceServer>> =
-        withRetry { delegate.getServiceRadarrServers(baseUrl, apiKey) }
+        withRetry { delegate.getServiceRadarrServers(baseUrl, credentials) }
 
     override suspend fun getServiceSonarrServers(
         baseUrl: String,
-        apiKey: String,
+        credentials: SeerrCredentials,
     ): Result<List<SeerrServiceServer>> =
-        withRetry { delegate.getServiceSonarrServers(baseUrl, apiKey) }
+        withRetry { delegate.getServiceSonarrServers(baseUrl, credentials) }
 
     override suspend fun getServiceRadarrDetail(
         baseUrl: String,
-        apiKey: String,
+        credentials: SeerrCredentials,
         id: Int,
     ): Result<SeerrRadarrServiceDetail> =
-        withRetry { delegate.getServiceRadarrDetail(baseUrl, apiKey, id) }
+        withRetry { delegate.getServiceRadarrDetail(baseUrl, credentials, id) }
 
     override suspend fun getServiceSonarrDetail(
         baseUrl: String,
-        apiKey: String,
+        credentials: SeerrCredentials,
         id: Int,
     ): Result<SeerrSonarrServiceDetail> =
-        withRetry { delegate.getServiceSonarrDetail(baseUrl, apiKey, id) }
-
-    // ── Discover endpoints ──
+        withRetry { delegate.getServiceSonarrDetail(baseUrl, credentials, id) }
 
     override suspend fun getTrending(
         baseUrl: String,
-        apiKey: String,
+        credentials: SeerrCredentials,
         page: Int,
     ): Result<SeerrSearchResponse> =
-        withRetry { delegate.getTrending(baseUrl, apiKey, page) }
+        withRetry { delegate.getTrending(baseUrl, credentials, page) }
 
     override suspend fun getDiscoverMovies(
         baseUrl: String,
-        apiKey: String,
+        credentials: SeerrCredentials,
         page: Int,
         primaryReleaseDateGte: String?,
     ): Result<SeerrSearchResponse> =
-        withRetry { delegate.getDiscoverMovies(baseUrl, apiKey, page, primaryReleaseDateGte) }
+        withRetry { delegate.getDiscoverMovies(baseUrl, credentials, page, primaryReleaseDateGte) }
 
     override suspend fun getDiscoverTv(
         baseUrl: String,
-        apiKey: String,
+        credentials: SeerrCredentials,
         page: Int,
         firstAirDateGte: String?,
     ): Result<SeerrSearchResponse> =
-        withRetry { delegate.getDiscoverTv(baseUrl, apiKey, page, firstAirDateGte) }
+        withRetry { delegate.getDiscoverTv(baseUrl, credentials, page, firstAirDateGte) }
 }

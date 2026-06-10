@@ -4,9 +4,11 @@ import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -36,6 +38,7 @@ private fun streamingQualityLabel(quality: StreamingQuality): String = when (qua
 @Composable
 fun StorageSettingsScreen(
     onBack: () -> Unit,
+    highlightSettingId: String? = null,
     viewModel: SettingsViewModel = hiltViewModel(),
 ) {
     val preferences = viewModel.preferences
@@ -44,6 +47,24 @@ fun StorageSettingsScreen(
     val isTv = LocalTvMode.current
     val backgroundColor = com.raulshma.jellyplay.core.ui.components.rememberScreenBackgroundColor()
     var showQualityPicker by remember { mutableStateOf(false) }
+
+    val scrollState = rememberLazyListState()
+    val scrollIndex = remember(highlightSettingId) {
+        when (highlightSettingId) {
+            in listOf("clear_cache", "wifi_only_downloads", "auto_delete_cache", "max_cache_size") -> 0
+            in listOf("offline_mode", "adaptive_bitrate", "bandwidth_cap", "data_saver") -> 1
+            in listOf("download_quality", "smart_downloads") -> 2
+            else -> -1
+        }
+    }
+
+    LaunchedEffect(scrollIndex) {
+        if (scrollIndex >= 0) {
+            try {
+                scrollState.animateScrollToItem(scrollIndex)
+            } catch (_: Exception) {}
+        }
+    }
 
     JellyPlayScreenScaffold(
         title = "Storage",
@@ -57,6 +78,7 @@ fun StorageSettingsScreen(
         },
     ) { innerPadding ->
         LazyColumn(
+            state = scrollState,
             modifier = Modifier
                 .fillMaxSize()
                 .padding(innerPadding),
@@ -86,6 +108,7 @@ fun StorageSettingsScreen(
                         icon = Tabler.Outline.Trash,
                         title = "Clear Cache",
                         subtitle = "Free up storage space",
+                        highlighted = highlightSettingId == "clear_cache",
                         index = storageIdx++, count = storageTotal,
                         onClick = { viewModel.clearCache() },
                     )
@@ -95,6 +118,7 @@ fun StorageSettingsScreen(
                             title = "WiFi Only",
                             subtitle = if (preferences.wifiOnlyDownloads) "Downloads only on unmetered networks" else "Downloads on any network",
                             checked = preferences.wifiOnlyDownloads,
+                            highlighted = highlightSettingId == "wifi_only_downloads",
                             index = storageIdx++, count = storageTotal,
                             onCheckedChange = { viewModel.setWifiOnlyDownloads(it) },
                         )
@@ -116,6 +140,7 @@ fun StorageSettingsScreen(
                             title = "Auto-delete Cache",
                             subtitle = if (preferences.autoDeleteCache) "Automatically clears on low storage" else "Manual cache management",
                             checked = preferences.autoDeleteCache,
+                            highlighted = highlightSettingId == "auto_delete_cache",
                             index = storageIdx++, count = storageTotal,
                             onCheckedChange = { viewModel.setAutoDeleteCache(it) },
                         )
@@ -124,6 +149,7 @@ fun StorageSettingsScreen(
                             title = "Max Cache Size",
                             subtitle = "Maximum disk space for caching",
                             trailingText = if (preferences.maxCacheSizeMb == 0) "Unlimited" else "${preferences.maxCacheSizeMb} MB",
+                            highlighted = highlightSettingId == "max_cache_size",
                             index = storageIdx, count = storageTotal,
                             onClick = {
                                 val sizes = listOf(0, 250, 500, 1000, 2000, 5000)
@@ -145,6 +171,7 @@ fun StorageSettingsScreen(
                         "Status: $status"
                     },
                     modifier = Modifier.padding(vertical = 8.dp),
+                    initiallyExpanded = highlightSettingId in listOf("offline_mode", "adaptive_bitrate", "bandwidth_cap", "data_saver"),
                 ) {
                     val networkTotal = 7
                     var networkIdx = 0
@@ -154,6 +181,7 @@ fun StorageSettingsScreen(
                         title = "Offline Mode",
                         subtitle = "Force application to run offline",
                         checked = preferences.manualOfflineEnabled,
+                        highlighted = highlightSettingId == "offline_mode",
                         index = networkIdx++, count = networkTotal,
                         onCheckedChange = { viewModel.setManualOffline(it) },
                     )
@@ -172,6 +200,7 @@ fun StorageSettingsScreen(
                         title = "Adaptive Bitrate",
                         subtitle = "Dynamically adjust playback quality based on network bandwidth",
                         checked = preferences.adaptiveBitrateEnabled,
+                        highlighted = highlightSettingId == "adaptive_bitrate",
                         index = networkIdx++, count = networkTotal,
                         onCheckedChange = { viewModel.setAdaptiveBitrateEnabled(it) },
                     )
@@ -184,6 +213,7 @@ fun StorageSettingsScreen(
                         title = "Manual Bandwidth Cap",
                         subtitle = "Restrict maximum streaming bandwidth",
                         trailingText = capLabel,
+                        highlighted = highlightSettingId == "bandwidth_cap",
                         index = networkIdx++, count = networkTotal,
                         onClick = {
                             val currentIndex = caps.indexOf(preferences.manualBandwidthCap)
@@ -225,6 +255,7 @@ fun StorageSettingsScreen(
                         title = "Data Saver Mode",
                         subtitle = "Lower image resolutions, cellular cap, disable auto-downloads",
                         checked = preferences.dataSaverEnabled,
+                        highlighted = highlightSettingId == "data_saver",
                         index = networkIdx, count = networkTotal,
                         onCheckedChange = { viewModel.setDataSaverEnabled(it) },
                     )
@@ -237,7 +268,7 @@ fun StorageSettingsScreen(
                     title = "Downloads",
                     summary = { "Quality: ${preferences.downloadQuality.displayName}" },
                     modifier = Modifier.padding(vertical = 8.dp),
-                    initiallyExpanded = true,
+                    initiallyExpanded = true || highlightSettingId in listOf("download_quality", "smart_downloads"),
                 ) {
                     val downloadTotal = 5
                     var downloadIdx = 0
@@ -247,6 +278,7 @@ fun StorageSettingsScreen(
                         title = "Download Quality",
                         subtitle = "Preferred video quality for downloads",
                         trailingText = preferences.downloadQuality.displayName,
+                        highlighted = highlightSettingId == "download_quality",
                         index = downloadIdx++, count = downloadTotal,
                         onClick = { showQualityPicker = true }
                     )
@@ -256,6 +288,7 @@ fun StorageSettingsScreen(
                         title = "Smart Downloads",
                         subtitle = "Auto-delete watched episodes (>= 95%)",
                         checked = preferences.smartDownloadsEnabled,
+                        highlighted = highlightSettingId == "smart_downloads",
                         index = downloadIdx++, count = downloadTotal,
                         onCheckedChange = { viewModel.setSmartDownloadsEnabled(it) }
                     )

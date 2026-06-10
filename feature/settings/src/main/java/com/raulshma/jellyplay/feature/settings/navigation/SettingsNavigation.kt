@@ -28,92 +28,103 @@ fun EntryProviderScope<NavKey>.settingsSection(
         SettingsScreen(
             onBack = { navigator.goBack() },
             onLogout = onLogout,
-            onServerManagement = { navigator.navigate(Route.ServerManagement) },
-            onUserManagement = { navigator.navigate(Route.UserManagement) },
-            onSeerrSettings = { navigator.navigate(Route.SeerrSettings) },
+            onServerManagement = { id -> navigator.navigate(Route.ServerManagement(id)) },
+            onUserManagement = { id -> navigator.navigate(Route.UserManagement(id)) },
+            onSeerrSettings = { id -> navigator.navigate(Route.SeerrSettings(id)) },
             onAdminDashboard = { navigator.navigate(Route.AdminDashboard) },
             onSetupWizard = onSetupWizard,
             onNewsletterClick = { navigator.navigate(Route.Newsletter) },
             onFavoritesClick = { navigator.navigate(Route.Favorites) },
             onAboutClick = { navigator.navigate(Route.About) },
             onWatchProgressHeatmapClick = { navigator.navigate(Route.WatchProgressHeatmap) },
-            onAppearanceSettings = { navigator.navigate(Route.AppearanceSettings) },
-            onPlaybackSettings = { navigator.navigate(Route.PlaybackSettings) },
-            onAudioSettings = { navigator.navigate(Route.AudioSettings) },
-            onLanguageSettings = { navigator.navigate(Route.LanguageSettings) },
-            onNotificationSettings = { navigator.navigate(Route.NotificationSettings) },
-            onStorageSettings = { navigator.navigate(Route.StorageSettings) },
-            onSecuritySettings = { navigator.navigate(Route.SecuritySettings) },
-            onBackupSettings = { navigator.navigate(Route.BackupSettings) },
+            onAppearanceSettings = { id -> navigator.navigate(Route.AppearanceSettings(id)) },
+            onPlaybackSettings = { id -> navigator.navigate(Route.PlaybackSettings(id)) },
+            onAudioSettings = { id -> navigator.navigate(Route.AudioSettings(id)) },
+            onLanguageSettings = { id -> navigator.navigate(Route.LanguageSettings(id)) },
+            onNotificationSettings = { id -> navigator.navigate(Route.NotificationSettings(id)) },
+            onStorageSettings = { id -> navigator.navigate(Route.StorageSettings(id)) },
+            onSecuritySettings = { id -> navigator.navigate(Route.SecuritySettings(id)) },
+            onBackupSettings = { id -> navigator.navigate(Route.BackupSettings(id)) },
         )
     }
 
-    entry<Route.ServerManagement> {
+    entry<Route.ServerManagement> { entry ->
         ServerManagementScreen(
             onAddServer = { navigator.navigate(Route.AddServer) },
             onBack = { navigator.goBack() },
             onServerSwitched = { navigator.goBack() },
+            highlightSettingId = entry.highlightSettingId,
         )
     }
 
-    entry<Route.UserManagement> {
+    entry<Route.UserManagement> { entry ->
         UserManagementScreen(
             onBack = { navigator.goBack() },
             onAddUser = { navigator.navigate(Route.ServerList) },
+            highlightSettingId = entry.highlightSettingId,
         )
     }
 
-    entry<Route.SeerrSettings> {
+    entry<Route.SeerrSettings> { entry ->
         SeerrSettingsScreen(
             onBack = { navigator.goBack() },
+            highlightSettingId = entry.highlightSettingId,
         )
     }
 
-    entry<Route.AppearanceSettings> {
+    entry<Route.AppearanceSettings> { entry ->
         AppearanceSettingsScreen(
             onBack = { navigator.goBack() },
+            highlightSettingId = entry.highlightSettingId,
         )
     }
 
-    entry<Route.PlaybackSettings> {
+    entry<Route.PlaybackSettings> { entry ->
         PlaybackSettingsScreen(
             onBack = { navigator.goBack() },
+            highlightSettingId = entry.highlightSettingId,
         )
     }
 
-    entry<Route.AudioSettings> {
+    entry<Route.AudioSettings> { entry ->
         AudioSettingsScreen(
             onBack = { navigator.goBack() },
+            highlightSettingId = entry.highlightSettingId,
         )
     }
 
-    entry<Route.LanguageSettings> {
+    entry<Route.LanguageSettings> { entry ->
         LanguageSettingsScreen(
             onBack = { navigator.goBack() },
+            highlightSettingId = entry.highlightSettingId,
         )
     }
 
-    entry<Route.NotificationSettings> {
+    entry<Route.NotificationSettings> { entry ->
         NotificationSettingsScreen(
             onBack = { navigator.goBack() },
+            highlightSettingId = entry.highlightSettingId,
         )
     }
 
-    entry<Route.StorageSettings> {
+    entry<Route.StorageSettings> { entry ->
         StorageSettingsScreen(
             onBack = { navigator.goBack() },
+            highlightSettingId = entry.highlightSettingId,
         )
     }
 
-    entry<Route.SecuritySettings> {
+    entry<Route.SecuritySettings> { entry ->
         SecuritySettingsScreen(
             onBack = { navigator.goBack() },
+            highlightSettingId = entry.highlightSettingId,
         )
     }
 
-    entry<Route.BackupSettings> {
+    entry<Route.BackupSettings> { entry ->
         BackupSettingsScreen(
             onBack = { navigator.goBack() },
+            highlightSettingId = entry.highlightSettingId,
         )
     }
 

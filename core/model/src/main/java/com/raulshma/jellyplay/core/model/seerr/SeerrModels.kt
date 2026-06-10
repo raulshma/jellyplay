@@ -670,9 +670,38 @@ data class SeerrServiceLanguageProfile(
 
 @Immutable
 @Serializable
+enum class SeerrAuthMethod {
+    API_KEY,
+    JELLYFIN,
+    LOCAL,
+}
+
+sealed class SeerrCredentials {
+    data class ApiKey(val apiKey: String) : SeerrCredentials()
+    data class SessionCookie(val cookie: String) : SeerrCredentials()
+}
+
+@Immutable
+@Serializable
+data class SeerrAuthJellyfinRequest(
+    val username: String,
+    val password: String,
+)
+
+@Immutable
+@Serializable
+data class SeerrAuthLocalRequest(
+    val email: String,
+    val password: String,
+)
+
+@Immutable
+@Serializable
 data class SeerrPreferences(
     val serverUrl: String = "",
-    val apiKey: String = "",
+    val authMethod: SeerrAuthMethod = SeerrAuthMethod.API_KEY,
+    val username: String = "",
+    val email: String = "",
     val enabled: Boolean = false,
     val searchEnabled: Boolean = false,
     val recommendationsEnabled: Boolean = false,

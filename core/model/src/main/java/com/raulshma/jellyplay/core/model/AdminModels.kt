@@ -141,6 +141,7 @@ enum class TaskState {
 @Serializable
 data class SessionInfo(
     val id: String = "",
+    val deviceId: String = "",
     val userId: String = "",
     val userName: String = "",
     val client: String = "",

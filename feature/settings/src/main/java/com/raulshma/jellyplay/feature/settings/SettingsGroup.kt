@@ -1,6 +1,7 @@
 package com.raulshma.jellyplay.feature.settings
 
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.expandVertically
@@ -57,6 +58,11 @@ internal fun SettingsGroup(
     content: @Composable () -> Unit,
 ) {
     var expanded by remember { mutableStateOf(initiallyExpanded) }
+    LaunchedEffect(initiallyExpanded) {
+        if (initiallyExpanded) {
+            expanded = true
+        }
+    }
 
     val iconColor by animateColorAsState(
         targetValue = if (expanded) MaterialTheme.colorScheme.primary

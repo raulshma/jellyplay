@@ -49,6 +49,7 @@ sealed class SecuritySettingsDialog {
 @Composable
 fun SecuritySettingsScreen(
     onBack: () -> Unit,
+    highlightSettingId: String? = null,
     viewModel: SettingsViewModel = hiltViewModel(),
 ) {
     val preferences = viewModel.preferences
@@ -109,6 +110,7 @@ fun SecuritySettingsScreen(
                         title = "PIN Lock",
                         subtitle = if (preferences.pinLockEnabled) "App locked with PIN" else "No PIN set",
                         checked = preferences.pinLockEnabled,
+                        highlighted = highlightSettingId == "pin_lock",
                         index = secIdx++, count = secTotal,
                         onCheckedChange = { enabled ->
                             if (enabled) activeDialog = SecuritySettingsDialog.PinDialog
@@ -127,6 +129,7 @@ fun SecuritySettingsScreen(
                             title = "Biometric Unlock",
                             subtitle = if (preferences.biometricLockEnabled) "Use fingerprint, face, or device credential" else "Disabled",
                             checked = preferences.biometricLockEnabled,
+                            highlighted = highlightSettingId == "biometric_lock",
                             index = secIdx++, count = secTotal,
                             onCheckedChange = { enabled ->
                                 if (enabled && bioActivity != null) {
