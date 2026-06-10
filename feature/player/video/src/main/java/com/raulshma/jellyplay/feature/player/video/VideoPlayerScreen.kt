@@ -351,20 +351,7 @@ fun VideoPlayerScreen(
         }
     }
 
-    LaunchedEffect(Unit) {
-        delay(400)
-        activity?.let {
-            if (!it.isDestroyed && !it.isFinishing) {
-                it.requestedOrientation = when (uiState.defaultOrientation) {
-                    OrientationMode.SENSOR_LANDSCAPE -> ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE
-                    OrientationMode.SENSOR_PORTRAIT -> ActivityInfo.SCREEN_ORIENTATION_SENSOR_PORTRAIT
-                    OrientationMode.SENSOR -> ActivityInfo.SCREEN_ORIENTATION_SENSOR
-                    OrientationMode.LOCKED_LANDSCAPE -> ActivityInfo.SCREEN_ORIENTATION_LANDSCAPE
-                    OrientationMode.LOCKED_PORTRAIT -> ActivityInfo.SCREEN_ORIENTATION_PORTRAIT
-                }
-            }
-        }
-    }
+
 
     LaunchedEffect(uiState.frameRateMatching, uiState.videoFrameRate) {
         if (uiState.frameRateMatching && uiState.videoFrameRate != null) {
@@ -419,7 +406,40 @@ fun VideoPlayerScreen(
     val aspectRatio = uiState.aspectRatio
     val detectedAspectRatio = uiState.detectedAspectRatio
 
+    val toggleOrientation: () -> Unit = remember(activity) {
+        {
+            activity?.let { act ->
+                val current = act.requestedOrientation
+                act.requestedOrientation = if (current == ActivityInfo.SCREEN_ORIENTATION_LANDSCAPE ||
+                    current == ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE) {
+                    ActivityInfo.SCREEN_ORIENTATION_PORTRAIT
+                } else {
+                    ActivityInfo.SCREEN_ORIENTATION_LANDSCAPE
+                }
+            }
+        }
+    }
+
     val syncPlayIgnoreWait by viewModel.syncPlayIgnoreWait.collectAsStateWithLifecycle()
+
+    LaunchedEffect(isCastConnected, uiState.defaultOrientation) {
+        delay(400)
+        activity?.let {
+            if (!it.isDestroyed && !it.isFinishing) {
+                it.requestedOrientation = if (isCastConnected) {
+                    ActivityInfo.SCREEN_ORIENTATION_USER
+                } else {
+                    when (uiState.defaultOrientation) {
+                        OrientationMode.SENSOR_LANDSCAPE -> ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE
+                        OrientationMode.SENSOR_PORTRAIT -> ActivityInfo.SCREEN_ORIENTATION_SENSOR_PORTRAIT
+                        OrientationMode.SENSOR -> ActivityInfo.SCREEN_ORIENTATION_SENSOR
+                        OrientationMode.LOCKED_LANDSCAPE -> ActivityInfo.SCREEN_ORIENTATION_LANDSCAPE
+                        OrientationMode.LOCKED_PORTRAIT -> ActivityInfo.SCREEN_ORIENTATION_PORTRAIT
+                    }
+                }
+            }
+        }
+    }
 
     val isInIntro = uiState.isInIntro
     val isInCredits = uiState.isInCredits
@@ -525,6 +545,7 @@ fun VideoPlayerScreen(
             onSelectSubtitleTrack = { viewModel.selectSubtitleTrack(it) },
             onPlayEpisode = { epId -> viewModel.initialize(epId, null, 0L) },
             getImageUrl = { id -> viewModel.getImageUrl(id, 300) },
+            onToggleOrientation = toggleOrientation,
             modifier = Modifier.fillMaxSize()
         )
     } else {
@@ -927,6 +948,7 @@ fun VideoPlayerScreen(
                 },
                 onSeekPositionChange = { positionMs -> seekPositionMs = positionMs },
                 tvTrickplayBitmap = if (isTv) tvTrickplayBitmap else null,
+                onToggleOrientation = toggleOrientation,
                 onBack = onBack,
                 onSpeedClick = { currentSheet = PlayerSheet.Speed },
                 onAudioClick = { currentSheet = PlayerSheet.Audio },
