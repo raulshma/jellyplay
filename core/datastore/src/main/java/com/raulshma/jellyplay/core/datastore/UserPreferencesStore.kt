@@ -268,6 +268,7 @@ class UserPreferencesStore @Inject constructor(
         val SYNTHWAVE_ACCENT = stringPreferencesKey("synthwave_accent")
         val SOOTHING_MODE = booleanPreferencesKey("soothing_mode")
         val SOOTHING_ACCENT = stringPreferencesKey("soothing_accent")
+        val MONOCHROME_MODE = booleanPreferencesKey("monochrome_mode")
     }
 
     private val json = Json { ignoreUnknownKeys = true }
@@ -293,7 +294,7 @@ class UserPreferencesStore @Inject constructor(
                 "dream_ken_burns_enabled", "dream_show_title", "bass_boost_enabled",
                 "virtualizer_enabled", "auto_eq_by_genre", "home_hero_enabled",
                 "nav_bar_show_labels", "onboarding_completed", "performance_mode",
-                "newsletter_enabled", "wifi_only_downloads",
+                "newsletter_enabled", "wifi_only_downloads", "monochrome_mode",
             )
 
             migrateInts(prefs,
@@ -698,6 +699,7 @@ class UserPreferencesStore @Inject constructor(
             synthwaveAccent = prefs[Keys.SYNTHWAVE_ACCENT] ?: "magenta",
             soothingMode = readBool(prefs, Keys.SOOTHING_MODE, "soothing_mode", false),
             soothingAccent = prefs[Keys.SOOTHING_ACCENT] ?: "ocean",
+            monochromeMode = readBool(prefs, Keys.MONOCHROME_MODE, "monochrome_mode", false),
             notificationPreferences = NotificationPreferences(
                 enabled = readBool(prefs, Keys.NOTIFICATIONS_ENABLED, "notifications_enabled", false),
                 checkFrequency = try {
@@ -1796,6 +1798,7 @@ class UserPreferencesStore @Inject constructor(
             prefs[Keys.SYNTHWAVE_MODE] = enabled
             if (enabled) {
                 prefs[Keys.SOOTHING_MODE] = false
+                prefs[Keys.MONOCHROME_MODE] = false
             }
         }
     }
@@ -1809,11 +1812,22 @@ class UserPreferencesStore @Inject constructor(
             prefs[Keys.SOOTHING_MODE] = enabled
             if (enabled) {
                 prefs[Keys.SYNTHWAVE_MODE] = false
+                prefs[Keys.MONOCHROME_MODE] = false
             }
         }
     }
 
     suspend fun setSoothingAccent(accent: String) {
         context.dataStore.edit { it[Keys.SOOTHING_ACCENT] = accent }
+    }
+
+    suspend fun setMonochromeMode(enabled: Boolean) {
+        context.dataStore.edit { prefs ->
+            prefs[Keys.MONOCHROME_MODE] = enabled
+            if (enabled) {
+                prefs[Keys.SYNTHWAVE_MODE] = false
+                prefs[Keys.SOOTHING_MODE] = false
+            }
+        }
     }
 }

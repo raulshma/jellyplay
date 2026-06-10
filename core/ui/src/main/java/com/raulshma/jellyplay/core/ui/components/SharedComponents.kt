@@ -82,6 +82,7 @@ import com.raulshma.jellyplay.core.ui.animation.fastEffectsSpec
 import com.raulshma.jellyplay.core.designsystem.theme.ShapeCache
 import com.raulshma.jellyplay.core.designsystem.theme.LocalIsSynthwave
 import com.raulshma.jellyplay.core.designsystem.theme.LocalIsSoothingTheme
+import com.raulshma.jellyplay.core.designsystem.theme.LocalIsMonochromeTheme
 import com.raulshma.jellyplay.core.ui.image.MediaImage
 import com.raulshma.jellyplay.core.ui.tv.LocalTvMode
 import com.raulshma.jellyplay.core.ui.tv.tvFocusRestorer
@@ -311,6 +312,7 @@ fun PosterCard(
     val scale = baseScale * tvFocusState.scale
     val isSoothing = LocalIsSoothingTheme.current
     val isSynthwave = LocalIsSynthwave.current
+    val isMonochrome = LocalIsMonochromeTheme.current
     val elevation = remember(isPressed, tvFocusState.isFocused, isTv, isSoothing) {
         when {
             isPressed -> 12.dp
@@ -359,9 +361,16 @@ fun PosterCard(
                 color = outlineColor.copy(alpha = 0.35f)
             )
         }
+        val monochromeBorder = remember(outlineColor) {
+            androidx.compose.foundation.BorderStroke(
+                width = 1.dp,
+                color = outlineColor.copy(alpha = 0.45f)
+            )
+        }
         val border = when {
             isSynthwave -> synthwaveBorder
             isSoothing -> soothingBorder
+            isMonochrome -> monochromeBorder
             else -> null
         }
 
