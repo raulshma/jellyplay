@@ -31,7 +31,7 @@ object WidgetImageLoader {
 
     private const val WIDGET_IMAGE_TARGET = 480
 
-    suspend fun loadPoster(context: Context, url: String?): Bitmap? {
+    suspend fun loadPoster(context: Context, url: String?, cornerRadiusDp: Float = 10f): Bitmap? {
         if (url.isNullOrBlank()) return null
         return withContext(Dispatchers.IO) {
             runCatching {
@@ -41,14 +41,14 @@ object WidgetImageLoader {
                     .allowHardware(false)
                     .build()
                 val image = context.imageLoader.execute(request).image
-                image?.toBitmap()?.let { applyRoundedCorners(context, it) }
+                image?.toBitmap()?.let { applyRoundedCorners(context, it, cornerRadiusDp) }
             }.getOrNull()
         }
     }
 
-    private fun applyRoundedCorners(context: Context, bitmap: Bitmap): Bitmap {
+    private fun applyRoundedCorners(context: Context, bitmap: Bitmap, cornerRadiusDp: Float = 10f): Bitmap {
         val density = context.resources.displayMetrics.density
-        val cornerRadiusPx = 10f * density
+        val cornerRadiusPx = cornerRadiusDp * density
         val output = Bitmap.createBitmap(bitmap.width, bitmap.height, Bitmap.Config.ARGB_8888)
         val canvas = Canvas(output)
         val paint = Paint().apply {

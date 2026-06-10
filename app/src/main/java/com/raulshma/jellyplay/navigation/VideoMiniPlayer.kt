@@ -99,11 +99,6 @@ fun VideoMiniPlayer(
             animationSpec = tween(400),
             label = "videoMiniPlayerColor",
         )
-        val contentAlpha by animateFloatAsState(
-            targetValue = 1f,
-            animationSpec = tween(400),
-            label = "videoMiniContentAlpha",
-        )
 
         val border = when {
             isSynthwave -> {
@@ -182,7 +177,6 @@ fun VideoMiniPlayer(
                     modifier = Modifier
                         .fillMaxWidth()
                         .background(animatedColor)
-                        .graphicsLayer { alpha = contentAlpha }
                         .tvFocusable().clickable(onClick = onClick)
                         .padding(horizontal = 12.dp, vertical = 6.dp),
                     verticalAlignment = Alignment.CenterVertically,

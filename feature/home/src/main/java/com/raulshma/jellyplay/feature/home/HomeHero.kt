@@ -181,49 +181,62 @@ fun HeroHeader(
         }
     }
 
-    val heroTransition = rememberInfiniteTransition(label = "hero_animations")
-    val rawBreathScale by heroTransition.animateFloat(
-        initialValue = 1.0f,
-        targetValue = if (isVisible) 1.04f else 1.0f,
-        animationSpec = infiniteRepeatable(
-            animation = tween(12000, easing = FancyTransitionEasing),
-            repeatMode = RepeatMode.Reverse
-        ),
-        label = "breath"
-    )
-    val breathScale = if (isVisible) rawBreathScale else 1.0f
+    val breathScale: Float
+    val playPulseScale: Float
+    val playPulseAlpha: Float
+    val ratingPulse: Float
 
-    val rawPlayPulseScale by heroTransition.animateFloat(
-        initialValue = 1.0f,
-        targetValue = if (isVisible) 1.35f else 1.0f,
-        animationSpec = infiniteRepeatable(
-            animation = tween(1800, easing = AlphaEasing),
-            repeatMode = RepeatMode.Restart
-        ),
-        label = "playPulseScale"
-    )
-    val playPulseScale = if (isVisible) rawPlayPulseScale else 1.0f
-    val rawPlayPulseAlpha by heroTransition.animateFloat(
-        initialValue = 0.45f,
-        targetValue = if (isVisible) 0.0f else 0.45f,
-        animationSpec = infiniteRepeatable(
-            animation = tween(1800, easing = AlphaEasing),
-            repeatMode = RepeatMode.Restart
-        ),
-        label = "playPulseAlpha"
-    )
-    val playPulseAlpha = if (isVisible) rawPlayPulseAlpha else 0.45f
+    if (isVisible) {
+        val heroTransition = rememberInfiniteTransition(label = "hero_animations")
+        val rawBreathScale by heroTransition.animateFloat(
+            initialValue = 1.0f,
+            targetValue = 1.04f,
+            animationSpec = infiniteRepeatable(
+                animation = tween(12000, easing = FancyTransitionEasing),
+                repeatMode = RepeatMode.Reverse
+            ),
+            label = "breath"
+        )
+        breathScale = rawBreathScale
 
-    val rawRatingPulse by heroTransition.animateFloat(
-        initialValue = 0.9f,
-        targetValue = if (isVisible) 1.1f else 0.9f,
-        animationSpec = infiniteRepeatable(
-            animation = tween(2000, easing = FancyTransitionEasing),
-            repeatMode = RepeatMode.Reverse
-        ),
-        label = "ratingPulse"
-    )
-    val ratingPulse = if (isVisible) rawRatingPulse else 0.9f
+        val rawPlayPulseScale by heroTransition.animateFloat(
+            initialValue = 1.0f,
+            targetValue = 1.35f,
+            animationSpec = infiniteRepeatable(
+                animation = tween(1800, easing = AlphaEasing),
+                repeatMode = RepeatMode.Restart
+            ),
+            label = "playPulseScale"
+        )
+        playPulseScale = rawPlayPulseScale
+
+        val rawPlayPulseAlpha by heroTransition.animateFloat(
+            initialValue = 0.45f,
+            targetValue = 0.0f,
+            animationSpec = infiniteRepeatable(
+                animation = tween(1800, easing = AlphaEasing),
+                repeatMode = RepeatMode.Restart
+            ),
+            label = "playPulseAlpha"
+        )
+        playPulseAlpha = rawPlayPulseAlpha
+
+        val rawRatingPulse by heroTransition.animateFloat(
+            initialValue = 0.9f,
+            targetValue = 1.1f,
+            animationSpec = infiniteRepeatable(
+                animation = tween(2000, easing = FancyTransitionEasing),
+                repeatMode = RepeatMode.Reverse
+            ),
+            label = "ratingPulse"
+        )
+        ratingPulse = rawRatingPulse
+    } else {
+        breathScale = 1.0f
+        playPulseScale = 1.0f
+        playPulseAlpha = 0.45f
+        ratingPulse = 0.9f
+    }
 
     val heroShape = remember(isTv, adaptiveInfo.windowSizeClass) {
         if (!isTv && adaptiveInfo.windowSizeClass == WindowSizeClass.Compact) {

@@ -1,8 +1,5 @@
 package com.raulshma.jellyplay.core.designsystem.theme
 
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.setValue
-import androidx.compose.runtime.mutableStateOf
 import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.graphics.Outline
 import androidx.compose.ui.geometry.Size
@@ -12,11 +9,11 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.ui.unit.dp
 import racra.compose.smooth_corner_rect_library.AbsoluteSmoothCornerShape
 
-var isSynthwaveActiveGlobal by mutableStateOf(false)
+internal val _isSynthwaveActive = kotlinx.coroutines.flow.MutableStateFlow(false)
 
 class SynthwaveDynamicShape(val defaultShape: Shape) : Shape {
     override fun createOutline(size: Size, layoutDirection: LayoutDirection, density: Density): Outline {
-        return if (isSynthwaveActiveGlobal) {
+        return if (_isSynthwaveActive.value) {
             RoundedCornerShape(0.dp).createOutline(size, layoutDirection, density)
         } else {
             defaultShape.createOutline(size, layoutDirection, density)
