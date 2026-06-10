@@ -24,6 +24,7 @@ import com.composables.icons.tabler.outline.*
 @Composable
 fun BackupSettingsScreen(
     onBack: () -> Unit,
+    highlightSettingId: String? = null,
     viewModel: SettingsViewModel = hiltViewModel(),
 ) {
     val preferences = viewModel.preferences
@@ -72,6 +73,7 @@ fun BackupSettingsScreen(
                         title = "Export Settings",
                         subtitle = "Save current settings to a JSON file",
                         index = 0, count = 2,
+                        highlighted = highlightSettingId == "backup_export",
                         onClick = {
                             settingsLauncher.launch("jellyplay-settings.json")
                         },
@@ -81,6 +83,7 @@ fun BackupSettingsScreen(
                         title = "Import Settings",
                         subtitle = "Restore settings from a backup file",
                         index = 1, count = 2,
+                        highlighted = highlightSettingId == "backup_import",
                         onClick = {
                             importLauncher.launch(arrayOf("application/json"))
                         },

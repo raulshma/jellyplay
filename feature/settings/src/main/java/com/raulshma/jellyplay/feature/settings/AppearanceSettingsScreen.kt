@@ -8,6 +8,7 @@ import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
@@ -41,6 +42,7 @@ import com.composables.icons.tabler.outline.*
 @Composable
 fun AppearanceSettingsScreen(
     onBack: () -> Unit,
+    highlightSettingId: String? = null,
     viewModel: SettingsViewModel = hiltViewModel(),
 ) {
     val preferences = viewModel.preferences
@@ -48,6 +50,24 @@ fun AppearanceSettingsScreen(
     val adaptiveInfo = LocalAdaptiveInfo.current
     val isTv = LocalTvMode.current
     val backgroundColor = com.raulshma.jellyplay.core.ui.components.rememberScreenBackgroundColor()
+
+    val scrollState = rememberLazyListState()
+    val scrollIndex = remember(highlightSettingId) {
+        when (highlightSettingId) {
+            in listOf("theme_mode", "synthwave_mode", "soothing_mode", "dynamic_theming", "oled_mode", "contrast", "library_view_mode", "home_mode", "hero_section", "nav_labels") -> 0
+            in listOf("show_unwatched_badge", "show_watched_checkmark", "hide_watched_items", "show_share_media", "show_external_ratings") -> 1
+            in listOf("performance_mode", "reduce_motion") -> 2
+            else -> -1
+        }
+    }
+
+    LaunchedEffect(scrollIndex) {
+        if (scrollIndex >= 0) {
+            try {
+                scrollState.animateScrollToItem(scrollIndex)
+            } catch (_: Exception) {}
+        }
+    }
 
     JellyPlayScreenScaffold(
         title = "Appearance",
@@ -61,6 +81,7 @@ fun AppearanceSettingsScreen(
         },
     ) { innerPadding ->
         LazyColumn(
+            state = scrollState,
             modifier = Modifier
                 .fillMaxSize()
                 .padding(innerPadding),
@@ -146,6 +167,7 @@ fun AppearanceSettingsScreen(
                                         }
                                     },
                                     trailingText = if (preferences.synthwaveMode) "-" else if (preferences.soothingMode) "-" else preferences.themeMode.name,
+                                    highlighted = highlightSettingId == "theme_mode",
                                     index = currentIdx++, count = totalCount,
                                     onClick = {
                                         if (!preferences.synthwaveMode && !preferences.soothingMode) {
@@ -165,6 +187,7 @@ fun AppearanceSettingsScreen(
                                     title = "Synthwave Mode",
                                     subtitle = "Apply retro-futuristic neon theme with sharp corners",
                                     checked = preferences.synthwaveMode,
+                                    highlighted = highlightSettingId == "synthwave_mode",
                                     index = currentIdx++, count = totalCount,
                                     onCheckedChange = { viewModel.setSynthwaveMode(it) },
                                 )
@@ -182,6 +205,7 @@ fun AppearanceSettingsScreen(
                                     title = "Soothing Mode",
                                     subtitle = "Apply a calm, Facebook-inspired theme with soft rounded corners",
                                     checked = preferences.soothingMode,
+                                    highlighted = highlightSettingId == "soothing_mode",
                                     index = currentIdx++, count = totalCount,
                                     onCheckedChange = { viewModel.setSoothingMode(it) },
                                 )
@@ -213,6 +237,7 @@ fun AppearanceSettingsScreen(
                                     title = "Dynamic Theming",
                                     subtitle = "Colors extracted from artwork",
                                     checked = preferences.dynamicTheming,
+                                    highlighted = highlightSettingId == "dynamic_theming",
                                     index = currentIdx++, count = totalCount,
                                     onCheckedChange = { viewModel.setDynamicTheming(it) },
                                 )
@@ -223,6 +248,7 @@ fun AppearanceSettingsScreen(
                                     title = "OLED Mode",
                                     subtitle = "Pure black backgrounds for AMOLED displays",
                                     checked = preferences.oledMode,
+                                    highlighted = highlightSettingId == "oled_mode",
                                     index = currentIdx++, count = totalCount,
                                     onCheckedChange = { viewModel.setOledMode(it) },
                                 )
@@ -237,6 +263,7 @@ fun AppearanceSettingsScreen(
                                         ContrastLevel.HIGH -> "High contrast"
                                     },
                                     trailingText = preferences.contrastLevel.name,
+                                    highlighted = highlightSettingId == "contrast",
                                     index = currentIdx++, count = totalCount,
                                     onClick = {
                                         val next = when (preferences.contrastLevel) {
@@ -257,6 +284,7 @@ fun AppearanceSettingsScreen(
                                         LibraryViewMode.LIST -> "Display items in a list layout"
                                     },
                                     trailingText = preferences.libraryViewMode.name,
+                                    highlighted = highlightSettingId == "library_view_mode",
                                     index = currentIdx++, count = totalCount,
                                     onClick = {
                                         val next = when (preferences.libraryViewMode) {
@@ -273,6 +301,7 @@ fun AppearanceSettingsScreen(
                                     title = "Home Mode",
                                     subtitle = if (preferences.homeMode == HomeMode.VIDEO) "Video-focused home screen" else "Music-focused home screen",
                                     trailingText = preferences.homeMode.name,
+                                    highlighted = highlightSettingId == "home_mode",
                                     index = currentIdx++, count = totalCount,
                                     onClick = {
                                         val next = if (preferences.homeMode == HomeMode.VIDEO) HomeMode.MUSIC else HomeMode.VIDEO
@@ -286,6 +315,7 @@ fun AppearanceSettingsScreen(
                                     title = "Show Hero Section",
                                     subtitle = if (preferences.homeHeroEnabled) "Featured content banner on home" else "Compact home layout",
                                     checked = preferences.homeHeroEnabled,
+                                    highlighted = highlightSettingId == "hero_section",
                                     index = currentIdx++, count = totalCount,
                                     onCheckedChange = { viewModel.setHomeHeroEnabled(it) },
                                 )
@@ -296,6 +326,7 @@ fun AppearanceSettingsScreen(
                                     title = "Show Navigation Labels",
                                     subtitle = if (preferences.navBarShowLabels) "Icons and text" else "Icons only",
                                     checked = preferences.navBarShowLabels,
+                                    highlighted = highlightSettingId == "nav_labels",
                                     index = currentIdx++, count = totalCount,
                                     onCheckedChange = { viewModel.setNavBarShowLabels(it) },
                                 )
@@ -319,6 +350,7 @@ fun AppearanceSettingsScreen(
                         listOfNotNull(unwatched, checkmarks, hideWatched, shareOpt, ratingsOpt).joinToString(", ").ifEmpty { "All badges/checkmarks hidden" }
                     },
                     modifier = Modifier.padding(vertical = 8.dp),
+                    initiallyExpanded = highlightSettingId in listOf("show_unwatched_badge", "show_watched_checkmark", "hide_watched_items", "show_share_media", "show_external_ratings"),
                 ) {
                     val cardTotal = 5
                     var cardIdx = 0
@@ -328,6 +360,7 @@ fun AppearanceSettingsScreen(
                         title = "Show Unwatched Badge",
                         subtitle = "Overlay a badge on items that are unwatched",
                         checked = preferences.showUnwatchedBadge,
+                        highlighted = highlightSettingId == "show_unwatched_badge",
                         index = cardIdx++, count = cardTotal,
                         onCheckedChange = { viewModel.setShowUnwatchedBadge(it) },
                     )
@@ -337,6 +370,7 @@ fun AppearanceSettingsScreen(
                         title = "Show Watched Checkmark",
                         subtitle = "Overlay a checkmark badge on card views",
                         checked = preferences.showWatchedCheckmark,
+                        highlighted = highlightSettingId == "show_watched_checkmark",
                         index = cardIdx++, count = cardTotal,
                         onCheckedChange = { viewModel.setShowWatchedCheckmark(it) },
                     )
@@ -346,6 +380,7 @@ fun AppearanceSettingsScreen(
                         title = "Hide Watched Items",
                         subtitle = "Default-filter out watched media from libraries",
                         checked = preferences.hideWatchedItems,
+                        highlighted = highlightSettingId == "hide_watched_items",
                         index = cardIdx++, count = cardTotal,
                         onCheckedChange = { viewModel.setHideWatchedItems(it) },
                     )
@@ -355,6 +390,7 @@ fun AppearanceSettingsScreen(
                         title = "Show Share Media Option",
                         subtitle = "Show share option button on details pages",
                         checked = preferences.showShareMediaOption,
+                        highlighted = highlightSettingId == "show_share_media",
                         index = cardIdx++, count = cardTotal,
                         onCheckedChange = { viewModel.setShowShareMediaOption(it) },
                     )
@@ -364,6 +400,7 @@ fun AppearanceSettingsScreen(
                         title = "Show External Ratings",
                         subtitle = "Display critic rating scores (IMDb/TMDB) on details pages",
                         checked = preferences.showExternalRatings,
+                        highlighted = highlightSettingId == "show_external_ratings",
                         index = cardIdx++, count = cardTotal,
                         onCheckedChange = { viewModel.setShowExternalRatings(it) },
                     )
@@ -381,6 +418,7 @@ fun AppearanceSettingsScreen(
                         parts.joinToString(", ").ifEmpty { "Standard experience" }
                     },
                     modifier = Modifier.padding(vertical = 8.dp),
+                    initiallyExpanded = highlightSettingId in listOf("performance_mode", "reduce_motion"),
                 ) {
                     val perfTotal = 2
                     SettingToggleItem(
@@ -388,6 +426,7 @@ fun AppearanceSettingsScreen(
                         title = "Performance Mode",
                         subtitle = "Reduces animations and effects for better performance on lower-end devices",
                         checked = preferences.performanceMode,
+                        highlighted = highlightSettingId == "performance_mode",
                         index = 0, count = perfTotal,
                         onCheckedChange = { viewModel.setPerformanceMode(it) },
                     )
@@ -396,6 +435,7 @@ fun AppearanceSettingsScreen(
                         title = "Reduce Motion",
                         subtitle = "Disable heavy parallax and card animations",
                         checked = preferences.reduceMotionEnabled,
+                        highlighted = highlightSettingId == "reduce_motion",
                         index = 1, count = perfTotal,
                         onCheckedChange = { viewModel.setReduceMotionEnabled(it) },
                     )
