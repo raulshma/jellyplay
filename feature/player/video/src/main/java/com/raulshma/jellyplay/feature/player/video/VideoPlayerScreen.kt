@@ -103,6 +103,7 @@ import com.raulshma.jellyplay.feature.player.video.components.QualityPickerSheet
 import com.raulshma.jellyplay.feature.player.video.components.PlayerModalBottomSheet
 import com.raulshma.jellyplay.feature.player.video.components.SubtitleDownloadSheet
 import com.raulshma.jellyplay.feature.player.video.components.CastIndicatorOverlay
+import com.raulshma.jellyplay.feature.player.video.components.CompanionDashboard
 import com.raulshma.jellyplay.feature.player.video.components.ChapterPickerSheet
 import com.raulshma.jellyplay.feature.player.video.components.GestureOverlay
 import com.raulshma.jellyplay.feature.player.video.components.SlideToUnlockOverlay
@@ -496,488 +497,513 @@ fun VideoPlayerScreen(
     val currentDoSeekForward by rememberUpdatedState(doSeekForward)
     val currentDoTogglePlayPause by rememberUpdatedState(doTogglePlayPause)
     val currentSeekDurationMs by rememberUpdatedState(uiState.seekDurationMs)
-
     val dismissSheet: () -> Unit = remember { { currentSheet = PlayerSheet.None } }
 
-    Box(
-        modifier = Modifier
-            .fillMaxSize()
-            .background(Color.Black)
-            .then(
-                if (isTv && currentSheet == PlayerSheet.None) {
-                    Modifier.onPreviewKeyEvent { keyEvent ->
-                        if (keyEvent.type != KeyEventType.KeyDown) return@onPreviewKeyEvent false
-                        when (keyEvent.nativeKeyEvent.keyCode) {
-                            NativeKeyEvent.KEYCODE_DPAD_CENTER, NativeKeyEvent.KEYCODE_ENTER -> {
-                                if (!showControls) {
-                                    showControls = true
-                                    true
-                                } else {
-                                    false
+    if (isCastConnected) {
+        CompanionDashboard(
+            title = title,
+            subtitle = subtitle,
+            overview = uiState.overview,
+            people = uiState.people,
+            lyricsLines = uiState.lyricsLines,
+            artworkUrl = uiState.artworkUrl,
+            isPlaying = isPlaying,
+            currentPositionMs = currentPosition,
+            durationMs = duration,
+            volume = castVolume,
+            isConnecting = isCastConnecting,
+            audioTracks = uiState.audioTracks,
+            subtitleTracks = uiState.subtitleTracks,
+            episodes = uiState.seasonEpisodes,
+            onPlayPause = doTogglePlayPause,
+            onSeekBack = doSeekBack,
+            onSeekForward = doSeekForward,
+            onSeekTo = doSeekTo,
+            onVolumeChange = { vol -> viewModel.setCastVolume(vol) },
+            onDisconnect = { viewModel.onCastDisconnected(); viewModel.castManagerField.disconnect(context) },
+            onSelectAudioTrack = { viewModel.selectAudioTrack(it) },
+            onSelectSubtitleTrack = { viewModel.selectSubtitleTrack(it) },
+            onPlayEpisode = { epId -> viewModel.initialize(epId, null, 0L) },
+            getImageUrl = { id -> viewModel.getImageUrl(id, 300) },
+            modifier = Modifier.fillMaxSize()
+        )
+    } else {
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .background(Color.Black)
+                .then(
+                    if (isTv && currentSheet == PlayerSheet.None) {
+                        Modifier.onPreviewKeyEvent { keyEvent ->
+                            if (keyEvent.type != KeyEventType.KeyDown) return@onPreviewKeyEvent false
+                            when (keyEvent.nativeKeyEvent.keyCode) {
+                                NativeKeyEvent.KEYCODE_DPAD_CENTER, NativeKeyEvent.KEYCODE_ENTER -> {
+                                    if (!showControls) {
+                                        showControls = true
+                                        true
+                                    } else {
+                                        false
+                                    }
                                 }
-                            }
-                            NativeKeyEvent.KEYCODE_DPAD_RIGHT -> {
-                                if (!showControls) {
+                                NativeKeyEvent.KEYCODE_DPAD_RIGHT -> {
+                                    if (!showControls) {
+                                        doSeekForward()
+                                        showControls = true
+                                        true
+                                    } else {
+                                        false
+                                    }
+                                }
+                                NativeKeyEvent.KEYCODE_DPAD_LEFT -> {
+                                    if (!showControls) {
+                                        doSeekBack()
+                                        showControls = true
+                                        true
+                                    } else {
+                                        false
+                                    }
+                                }
+                                NativeKeyEvent.KEYCODE_DPAD_UP, NativeKeyEvent.KEYCODE_DPAD_DOWN -> {
+                                    if (!showControls) {
+                                        showControls = true
+                                        true
+                                    } else {
+                                        false
+                                    }
+                                }
+                                NativeKeyEvent.KEYCODE_MEDIA_PLAY_PAUSE -> {
+                                    doTogglePlayPause()
+                                    true
+                                }
+                                NativeKeyEvent.KEYCODE_MEDIA_FAST_FORWARD -> {
                                     doSeekForward()
                                     showControls = true
                                     true
-                                } else {
-                                    false
                                 }
-                            }
-                            NativeKeyEvent.KEYCODE_DPAD_LEFT -> {
-                                if (!showControls) {
+                                NativeKeyEvent.KEYCODE_MEDIA_REWIND -> {
                                     doSeekBack()
                                     showControls = true
                                     true
-                                } else {
-                                    false
                                 }
-                            }
-                            NativeKeyEvent.KEYCODE_DPAD_UP, NativeKeyEvent.KEYCODE_DPAD_DOWN -> {
-                                if (!showControls) {
+                                NativeKeyEvent.KEYCODE_SPACE -> {
+                                    doTogglePlayPause()
                                     showControls = true
                                     true
-                                } else {
-                                    false
+                                }
+                                else -> false
+                            }
+                        }
+                    } else Modifier
+                )
+                .pointerInput(uiState.gesturesEnabled, isScreenLocked) {
+                    if (isScreenLocked) return@pointerInput
+                    if (!uiState.gesturesEnabled) return@pointerInput
+                    detectTapGestures(
+                        onTap = { showControls = !showControls },
+                        onDoubleTap = { offset ->
+                            val width = size.width
+                            when {
+                                offset.x < width * 0.35 -> {
+                                    seekDirection = -1
+                                    seekOffsetMs = currentSeekDurationMs
+                                    seekTimestamp++
+                                    currentDoSeekBack()
+                                }
+                                offset.x > width * 0.65 -> {
+                                    seekDirection = 1
+                                    seekOffsetMs = currentSeekDurationMs
+                                    seekTimestamp++
+                                    currentDoSeekForward()
+                                }
+                                else -> {
+                                    currentDoTogglePlayPause()
                                 }
                             }
-                            NativeKeyEvent.KEYCODE_MEDIA_PLAY_PAUSE -> {
-                                doTogglePlayPause()
-                                true
+                        },
+                        onLongPress = {
+                                if (!uiState.gesturesEnabled) return@detectTapGestures
+                                if (!uiState.engineCapabilities.supportsOcr) return@detectTapGestures
+                                val primaryText = viewModel.getCurrentPrimarySubtitleText() ?: return@detectTapGestures
+                                val text = primaryText.takeIf { it.isNotBlank() } ?: return@detectTapGestures
+                                currentSheet = PlayerSheet.TapToTranslate(text)
+                            },
+                    )
+                },
+        ) {
+            if (engine != null) {
+                key(engine) {
+                    AndroidView(
+                        factory = { ctx ->
+                            playerViewRef = engine.createSurfaceView(ctx).also { view ->
+                                lastAppliedSubtitleStyle = uiState.subtitleStyle
+                                viewModel.applySubtitleStyleToView(view)
                             }
-                            NativeKeyEvent.KEYCODE_MEDIA_FAST_FORWARD -> {
-                                doSeekForward()
-                                showControls = true
-                                true
+                            playerViewRef!!
+                        },
+                        update = { view ->
+                            val currentStyle = uiState.subtitleStyle
+                            if (lastAppliedSubtitleStyle != currentStyle) {
+                                lastAppliedSubtitleStyle = currentStyle
+                                viewModel.applySubtitleStyleToView(view)
                             }
-                            NativeKeyEvent.KEYCODE_MEDIA_REWIND -> {
-                                doSeekBack()
-                                showControls = true
-                                true
+                        },
+                        modifier = Modifier.fillMaxSize(),
+                    )
+                }
+            }
+
+            MpvSubtitleOverlay(
+                cues = mpvSubtitleCues,
+                style = uiState.subtitleStyle,
+                visible = !isInPipMode,
+            )
+
+            GestureOverlay(
+                seekDirection = seekDirection,
+                seekOffsetMs = seekOffsetMs,
+                brightnessValue = brightnessOverlay,
+                volumeValue = volumeOverlay,
+                gesturesEnabled = uiState.gesturesEnabled && !isScreenLocked,
+                swipeSeekMaxMs = uiState.swipeSeekMaxMs,
+                onSeekGesture = remember(engine) {
+                    { totalDeltaMs ->
+                        engine?.let { eng ->
+                            if (!isGestureSeeking) {
+                                gestureStartPositionMs = eng.currentPositionMs
+                                isGestureSeeking = true
                             }
-                            NativeKeyEvent.KEYCODE_SPACE -> {
-                                doTogglePlayPause()
-                                showControls = true
-                                true
-                            }
-                            else -> false
+                            gestureDeltaMs = totalDeltaMs
+                            val durationMs = eng.durationMs.coerceAtLeast(0)
+                            gestureSeekPositionMs = (gestureStartPositionMs + totalDeltaMs).coerceIn(0, durationMs)
                         }
                     }
-                } else Modifier
+                },
+                onBrightnessGesture = remember(activity) {
+                    { delta ->
+                        activity?.let { act ->
+                            val window = act.window
+                            val layout = window.attributes
+                            val current = layout.screenBrightness
+                            val newBrightness = (current + delta).coerceIn(0f, 1f)
+                            layout.screenBrightness = newBrightness
+                            window.attributes = layout
+                            brightnessOverlay = newBrightness
+                        }
+                    }
+                },
+                onVolumeGesture = remember(context, isCastConnected, castVolume) {
+                    { delta ->
+                        if (isCastConnected) {
+                            val currentNorm = castVolume
+                            val newVolume = (currentNorm + delta * 0.02f).coerceIn(0f, 1f)
+                            volumeOverlay = newVolume
+                            volumeGestureAccumulator = 0f
+                            viewModel.setCastVolume(newVolume)
+                        } else {
+                            val am = context.getSystemService(Context.AUDIO_SERVICE) as? android.media.AudioManager
+                            am?.let { amRef ->
+                                val max = amRef.getStreamMaxVolume(android.media.AudioManager.STREAM_MUSIC)
+                                val current = amRef.getStreamVolume(android.media.AudioManager.STREAM_MUSIC)
+                                val currentNorm = current.toFloat() / max.toFloat()
+                                val stepThreshold = 1f / max.toFloat()
+                                volumeGestureAccumulator += delta
+                                volumeOverlay = (currentNorm + volumeGestureAccumulator).coerceIn(0f, 1f)
+                                val steps = (volumeGestureAccumulator / stepThreshold).toInt()
+                                if (steps != 0) {
+                                    volumeGestureAccumulator -= steps * stepThreshold
+                                    val newVol = (current + steps).coerceIn(0, max)
+                                    amRef.setStreamVolume(android.media.AudioManager.STREAM_MUSIC, newVol, 0)
+                                }
+                            }
+                        }
+                    }
+                },
+                onClearOverlays = remember(doSeekTo, scope) {
+                    {
+                        if (isGestureSeeking) {
+                            doSeekTo(gestureSeekPositionMs)
+                        }
+                        if (brightnessOverlay in 0f..1f) {
+                            viewModel.saveBrightness(brightnessOverlay)
+                        }
+                        seekDirection = 0
+                        seekOffsetMs = 0L
+                        volumeGestureAccumulator = 0f
+                        isGestureSeeking = false
+                        overlayDismissJob?.cancel()
+                        overlayDismissJob = scope.launch {
+                            delay(800)
+                            brightnessOverlay = -1f
+                            volumeOverlay = -1f
+                        }
+                    }
+                },
+                showControls = showControls,
+                onEdgeSwipe = remember(onBack) {
+                    {
+                        if (!showControls) {
+                            showControls = true
+                        } else {
+                            onBack()
+                        }
+                    }
+                },
+                onHapticPulse = remember(activity) {
+                    {
+                        activity?.let { act ->
+                            val view = act.window.decorView
+                            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O_MR1) {
+                                view.performHapticFeedback(HapticFeedbackConstants.CONFIRM)
+                            } else {
+                                @Suppress("DEPRECATION")
+                                view.performHapticFeedback(HapticFeedbackConstants.LONG_PRESS)
+                            }
+                        }
+                    }
+                },
             )
-            .pointerInput(uiState.gesturesEnabled, isScreenLocked) {
-                if (isScreenLocked) return@pointerInput
-                if (!uiState.gesturesEnabled) return@pointerInput
-                detectTapGestures(
-                    onTap = { showControls = !showControls },
-                    onDoubleTap = { offset ->
-                        val width = size.width
-                        when {
-                            offset.x < width * 0.35 -> {
-                                seekDirection = -1
-                                seekOffsetMs = currentSeekDurationMs
-                                seekTimestamp++
-                                currentDoSeekBack()
-                            }
-                            offset.x > width * 0.65 -> {
-                                seekDirection = 1
-                                seekOffsetMs = currentSeekDurationMs
-                                seekTimestamp++
-                                currentDoSeekForward()
-                            }
-                            else -> {
-                                currentDoTogglePlayPause()
-                            }
-                        }
-                    },
-                    onLongPress = {
-                            if (!uiState.gesturesEnabled) return@detectTapGestures
-                            if (!uiState.engineCapabilities.supportsOcr) return@detectTapGestures
-                            val primaryText = viewModel.getCurrentPrimarySubtitleText() ?: return@detectTapGestures
-                            val text = primaryText.takeIf { it.isNotBlank() } ?: return@detectTapGestures
-                            currentSheet = PlayerSheet.TapToTranslate(text)
-                        },
+
+            // Trickplay overlay for seek gestures
+            AnimatedVisibility(
+                visible = uiState.trickplayOnSeekGesture && gestureTrickplayVisible,
+                enter = fadeIn(tween(150, easing = AlphaEasing)),
+                exit = fadeOut(tween(200, easing = AlphaEasing)),
+                modifier = Modifier.align(Alignment.Center),
+            ) {
+                TrickplayOverlay(
+                    bitmap = gestureTrickplayBitmap,
+                    positionMs = gestureSeekPositionMs,
+                    deltaMs = gestureDeltaMs,
+                    durationMs = duration,
                 )
-            },
-    ) {
-        if (engine != null) {
-            key(engine) {
-                AndroidView(
-                    factory = { ctx ->
-                        engine.createSurfaceView(ctx).also { view ->
-                            playerViewRef = view
-                            lastAppliedSubtitleStyle = uiState.subtitleStyle
-                            viewModel.applySubtitleStyleToView(view)
-                        }
-                    },
-                    update = { view ->
-                        val currentStyle = uiState.subtitleStyle
-                        if (lastAppliedSubtitleStyle != currentStyle) {
-                            lastAppliedSubtitleStyle = currentStyle
-                            viewModel.applySubtitleStyleToView(view)
-                        }
+            }
+
+            if (activeSegment != null && activeSegmentBehavior == com.raulshma.jellyplay.core.model.SegmentBehavior.SHOW_BUTTON && !isInPipMode) {
+                val hideForUpNext = activeSegment.type == com.raulshma.jellyplay.core.model.MediaSegmentType.OUTRO && shouldShowUpNext
+                if (!hideForUpNext) {
+                    SegmentSkipOverlay(
+                        isVisible = true,
+                        segmentType = activeSegment.type,
+                        onSkip = { viewModel.skipSegment(activeSegment) },
+                        modifier = Modifier
+                            .align(Alignment.BottomEnd)
+                            .padding(bottom = 100.dp, end = 40.dp),
+                    )
+                }
+            }
+
+            if (nextEpisode != null) {
+                NextEpisodeOverlay(
+                    isVisible = shouldShowUpNext,
+                    episodeTitle = nextEpisode.name,
+                    seriesName = nextEpisode.seriesName,
+                    seasonNumber = nextEpisode.seasonNumber,
+                    episodeNumber = nextEpisode.episodeNumber,
+                    thumbnailUrl = nextEpisodeImageUrl,
+                    countdownSeconds = 10,
+                    onPlayNext = { viewModel.playNextEpisode() },
+                    onCancel = {},
+                    isPlaying = isPlaying,
+                    modifier = Modifier
+                        .align(Alignment.BottomEnd)
+                        .padding(bottom = 40.dp, end = 40.dp),
+                )
+            }
+
+            HdrBadge(
+                hdrType = uiState.hdrType,
+                modifier = Modifier
+                    .align(Alignment.TopEnd)
+                    .padding(top = 60.dp, end = 16.dp),
+            )
+
+            if (isScreenLocked && !isInPipMode) {
+                SlideToUnlockOverlay(
+                    visible = true,
+                    onDismiss = { },
+                    onUnlock = {
+                        viewModel.setScreenLocked(false)
+                        showControls = true
                     },
                     modifier = Modifier.fillMaxSize(),
                 )
             }
-        }
 
-        MpvSubtitleOverlay(
-            cues = mpvSubtitleCues,
-            style = uiState.subtitleStyle,
-            visible = !isInPipMode,
-        )
-
-        GestureOverlay(
-            seekDirection = seekDirection,
-            seekOffsetMs = seekOffsetMs,
-            brightnessValue = brightnessOverlay,
-            volumeValue = volumeOverlay,
-            gesturesEnabled = uiState.gesturesEnabled && !isScreenLocked,
-            swipeSeekMaxMs = uiState.swipeSeekMaxMs,
-            onSeekGesture = remember(engine) {
-                { totalDeltaMs ->
-                    engine?.let { eng ->
-                        if (!isGestureSeeking) {
-                            gestureStartPositionMs = eng.currentPositionMs
-                            isGestureSeeking = true
-                        }
-                        gestureDeltaMs = totalDeltaMs
-                        val durationMs = eng.durationMs.coerceAtLeast(0)
-                        gestureSeekPositionMs = (gestureStartPositionMs + totalDeltaMs).coerceIn(0, durationMs)
-                    }
-                }
-            },
-            onBrightnessGesture = remember(activity) {
-                { delta ->
-                    activity?.let { act ->
-                        val window = act.window
-                        val layout = window.attributes
-                        val current = layout.screenBrightness
-                        val newBrightness = (current + delta).coerceIn(0f, 1f)
-                        layout.screenBrightness = newBrightness
-                        window.attributes = layout
-                        brightnessOverlay = newBrightness
-                    }
-                }
-            },
-            onVolumeGesture = remember(context, isCastConnected, castVolume) {
-                { delta ->
-                    if (isCastConnected) {
-                        val currentNorm = castVolume
-                        val newVolume = (currentNorm + delta * 0.02f).coerceIn(0f, 1f)
-                        volumeOverlay = newVolume
-                        volumeGestureAccumulator = 0f
-                        viewModel.setCastVolume(newVolume)
-                    } else {
-                        val audioManager = context.getSystemService(Context.AUDIO_SERVICE) as? android.media.AudioManager
-                        audioManager?.let { am ->
-                            val max = am.getStreamMaxVolume(android.media.AudioManager.STREAM_MUSIC)
-                            val current = am.getStreamVolume(android.media.AudioManager.STREAM_MUSIC)
-                            val currentNorm = current.toFloat() / max.toFloat()
-                            val stepThreshold = 1f / max.toFloat()
-                            volumeGestureAccumulator += delta
-                            volumeOverlay = (currentNorm + volumeGestureAccumulator).coerceIn(0f, 1f)
-                            val steps = (volumeGestureAccumulator / stepThreshold).toInt()
-                            if (steps != 0) {
-                                volumeGestureAccumulator -= steps * stepThreshold
-                                val newVol = (current + steps).coerceIn(0, max)
-                                am.setStreamVolume(android.media.AudioManager.STREAM_MUSIC, newVol, 0)
-                            }
-                        }
-                    }
-                }
-            },
-            onClearOverlays = remember(doSeekTo, scope) {
-                {
-                    if (isGestureSeeking) {
-                        doSeekTo(gestureSeekPositionMs)
-                    }
-                    if (brightnessOverlay in 0f..1f) {
-                        viewModel.saveBrightness(brightnessOverlay)
-                    }
-                    seekDirection = 0
-                    seekOffsetMs = 0L
-                    volumeGestureAccumulator = 0f
-                    isGestureSeeking = false
-                    overlayDismissJob?.cancel()
-                    overlayDismissJob = scope.launch {
-                        delay(800)
-                        brightnessOverlay = -1f
-                        volumeOverlay = -1f
-                    }
-                }
-            },
-            showControls = showControls,
-            onEdgeSwipe = remember(onBack) {
-                {
-                    if (!showControls) {
-                        showControls = true
-                    } else {
-                        onBack()
-                    }
-                }
-            },
-            onHapticPulse = remember(activity) {
-                {
-                    activity?.let { act ->
-                        val view = act.window.decorView
-                        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O_MR1) {
-                            view.performHapticFeedback(HapticFeedbackConstants.CONFIRM)
-                        } else {
-                            @Suppress("DEPRECATION")
-                            view.performHapticFeedback(HapticFeedbackConstants.LONG_PRESS)
-                        }
-                    }
-                }
-            },
-        )
-
-        // Trickplay overlay for seek gestures
-        AnimatedVisibility(
-            visible = uiState.trickplayOnSeekGesture && gestureTrickplayVisible,
-            enter = fadeIn(tween(150, easing = AlphaEasing)),
-            exit = fadeOut(tween(200, easing = AlphaEasing)),
-            modifier = Modifier.align(Alignment.Center),
-        ) {
-            TrickplayOverlay(
-                bitmap = gestureTrickplayBitmap,
-                positionMs = gestureSeekPositionMs,
-                deltaMs = gestureDeltaMs,
-                durationMs = duration,
-            )
-        }
-
-        
-
-        if (activeSegment != null && activeSegmentBehavior == com.raulshma.jellyplay.core.model.SegmentBehavior.SHOW_BUTTON && !isInPipMode) {
-            val hideForUpNext = activeSegment.type == com.raulshma.jellyplay.core.model.MediaSegmentType.OUTRO && shouldShowUpNext
-            if (!hideForUpNext) {
-                SegmentSkipOverlay(
-                    isVisible = true,
-                    segmentType = activeSegment.type,
-                    onSkip = { viewModel.skipSegment(activeSegment) },
+            if (uiState.showVideoStats) {
+                VideoStatsOverlay(
+                    stats = uiState.videoStats,
+                    currentPositionMs = currentPosition,
+                    durationMs = duration,
+                    playbackSpeed = playbackSpeed,
+                    isPlaying = isPlaying,
+                    playbackState = when {
+                        uiState.playerError != null -> "Error"
+                        !isPlaying -> "Paused"
+                        else -> "Playing"
+                    },
+                    playMethod = uiState.playMethod,
+                    streamingQuality = uiState.preferredPlayerType.name,
+                    playerType = uiState.preferredPlayerType.name,
+                    decoderMode = uiState.decoderMode.displayName,
+                    audioSessionId = 0,
                     modifier = Modifier
-                        .align(Alignment.BottomEnd)
-                        .padding(bottom = 100.dp, end = 40.dp),
+                        .align(Alignment.TopStart)
+                        .padding(start = 16.dp, top = 60.dp)
+                        .width(280.dp),
                 )
             }
-        }
 
-        if (nextEpisode != null) {
-            NextEpisodeOverlay(
-                isVisible = shouldShowUpNext,
-                episodeTitle = nextEpisode.name,
-                seriesName = nextEpisode.seriesName,
-                seasonNumber = nextEpisode.seasonNumber,
-                episodeNumber = nextEpisode.episodeNumber,
-                thumbnailUrl = nextEpisodeImageUrl,
-                countdownSeconds = 10,
-                onPlayNext = { viewModel.playNextEpisode() },
-                onCancel = {},
-                isPlaying = isPlaying,
-                modifier = Modifier
-                    .align(Alignment.BottomEnd)
-                    .padding(bottom = 40.dp, end = 40.dp),
+            AutoAspectRatioBadge(
+                detectedAspectRatio = detectedAspectRatio,
+                aspectRatio = aspectRatio,
             )
-        }
 
-        HdrBadge(
-            hdrType = uiState.hdrType,
-            modifier = Modifier
-                .align(Alignment.TopEnd)
-                .padding(top = 60.dp, end = 16.dp),
-        )
+            if (isCastConnected || isCastConnecting) {
+                CastIndicatorOverlay(
+                    isConnecting = isCastConnecting,
+                    modifier = Modifier
+                        .align(Alignment.TopStart)
+                        .padding(top = 60.dp, start = 16.dp),
+                )
+            }
 
-        if (isScreenLocked && !isInPipMode) {
-            SlideToUnlockOverlay(
-                visible = true,
-                onDismiss = { },
-                onUnlock = {
-                    viewModel.setScreenLocked(false)
-                    showControls = true
+            SnackbarHost(
+                hostState = snackbarHostState,
+                modifier = Modifier
+                    .align(Alignment.BottomCenter)
+                    .padding(bottom = 200.dp),
+            ) { data ->
+                Snackbar(
+                    snackbarData = data,
+                    shape = ShapeCache.smoothPill,
+                    containerColor = Color.White.copy(alpha = 0.15f),
+                    contentColor = Color.White,
+                )
+            }
+
+            val hasEpisodes = uiState.seriesSeasons.isNotEmpty() && uiState.seasonEpisodes.isNotEmpty()
+            val episodeBrowserEnabled = uiState.videoEpisodeBrowserEnabled
+
+            PlayerControls(
+                title = title,
+                subtitle = subtitle,
+                isPlaying = isPlaying,
+                currentPosition = currentPosition,
+                duration = duration,
+                playbackSpeed = playbackSpeed,
+                chapters = uiState.chapters,
+                dialogueBoostEnabled = uiState.dialogueBoostEnabled,
+                dialogueBoostStrength = uiState.dialogueBoostStrength,
+                nightModeEnabled = uiState.nightModeEnabled,
+                nightModeStrength = uiState.nightModeStrength,
+                audioPassthrough = uiState.audioPassthrough,
+                isOcrRunning = uiState.isOcrRunning,
+                segments = uiState.segments,
+                playMethod = uiState.playMethod,
+                hdrType = uiState.hdrType,
+                mediaStreams = uiState.mediaStreams,
+                videoStats = uiState.videoStats,
+                audioTracks = uiState.audioTracks,
+                showPlaybackMetadata = uiState.showPlaybackMetadata,
+                currentAspectRatio = aspectRatio,
+                detectedAspectRatio = detectedAspectRatio,
+                isVisible = showControls && !isInPipMode && !isScreenLocked,
+                supportsSubtitleStyle = uiState.engineCapabilities.supportsSubtitleStyle,
+                supportsDialogueBoost = uiState.engineCapabilities.supportsDialogueBoost,
+                supportsNightMode = uiState.engineCapabilities.supportsNightMode,
+                supportsAudioDelay = uiState.engineCapabilities.supportsAudioDelay,
+                supportsAudioPassthrough = uiState.engineCapabilities.supportsAudioPassthrough,
+                supportsOcr = uiState.engineCapabilities.supportsOcr,
+                hasEpisodes = hasEpisodes,
+                episodeBrowserEnabled = episodeBrowserEnabled,
+                onPlayPause = { doTogglePlayPause() },
+                onSeekBack = { doSeekBack() },
+                onSeekForward = { doSeekForward() },
+                onSeek = { },
+                onSeekStart = { isSeeking = true },
+                onSeekEnd = {
+                    isSeeking = false
+                    if (duration > 0) doSeekTo(seekPositionMs)
                 },
+                onSeekPositionChange = { positionMs -> seekPositionMs = positionMs },
+                tvTrickplayBitmap = if (isTv) tvTrickplayBitmap else null,
+                onBack = onBack,
+                onSpeedClick = { currentSheet = PlayerSheet.Speed },
+                onAudioClick = { currentSheet = PlayerSheet.Audio },
+                onSubtitleClick = { currentSheet = PlayerSheet.Subtitle },
+                onSubtitleStyleClick = { currentSheet = PlayerSheet.SubtitleStyle },
+                onChapterClick = { currentSheet = PlayerSheet.Chapter },
+                onInfoClick = { currentSheet = PlayerSheet.PlaybackInfo },
+                onAspectRatioClick = { currentSheet = PlayerSheet.AspectRatio },
+                onDialogueBoostClick = { viewModel.toggleDialogueBoost() },
+                onDialogueBoostStrengthChange = { viewModel.setDialogueBoostStrength(it) },
+                onNightModeClick = { viewModel.toggleNightMode() },
+                onNightModeStrengthChange = { viewModel.setNightModeStrength(it) },
+                onAudioDelayClick = { currentSheet = PlayerSheet.AudioDelay },
+                onDecoderClick = { currentSheet = PlayerSheet.Decoder },
+                onPassthroughClick = { viewModel.setAudioPassthrough(!uiState.audioPassthrough) },
+                onOcrClick = {
+                    val bitmap = viewModel.capturePlayerViewBitmap()
+                    viewModel.captureOcrSubtitle(bitmap)
+                    currentSheet = PlayerSheet.OcrResult
+                },
+                onSubtitleDownloadClick = {
+                    viewModel.loadRemoteSubtitles()
+                    currentSheet = PlayerSheet.SubtitleDownload
+                },
+                onEpisodesClick = { currentSheet = PlayerSheet.Episodes },
+                onSyncPlayClick = { currentSheet = PlayerSheet.SyncPlay },
+                onPipClick = {
+                    onEnterPip()
+                },
+                isInSyncPlaySession = isInSyncPlaySession,
+                syncPlayGroupName = uiState.syncPlayGroupName,
+                syncPlayParticipantCount = uiState.syncPlayParticipantCount,
+                isSyncPlaySynced = uiState.isSyncPlaySynced,
+                isSyncPlaySyncing = uiState.isSyncPlaySyncing,
+                showVideoStats = uiState.showVideoStats,
+                onVideoStatsClick = { viewModel.toggleVideoStats() },
+                bufferedPosition = uiState.bufferedPosition,
+                streamingQuality = uiState.streamingQuality,
+                onQualityClick = { currentSheet = PlayerSheet.Quality },
+                audioNormalizationMode = uiState.audioNormalizationMode,
+                audioNormalizationEnabled = uiState.audioNormalizationEnabled,
+                channelMixMode = uiState.channelMixMode,
+                channelMixEnabled = uiState.channelMixEnabled,
+                supportsAudioNormalization = uiState.engineCapabilities.supportsAudioNormalization,
+                supportsChannelMixing = uiState.engineCapabilities.supportsChannelMixing,
+                onAudioNormalizationClick = { viewModel.toggleAudioNormalization() },
+                onAudioNormalizationModeChange = { viewModel.setAudioNormalizationMode(it) },
+                onChannelMixClick = { viewModel.toggleChannelMix() },
+                onChannelMixModeChange = { viewModel.setChannelMixMode(it) },
+                sleepTimerActive = uiState.sleepTimerActive,
+                sleepTimerDisplayText = if (uiState.sleepTimerEndOfEpisode) "End of episode" else formatDuration(uiState.sleepTimerRemainingMs),
+                onSleepTimerClick = { currentSheet = PlayerSheet.SleepTimer },
+                supportsVideoFilters = uiState.engineCapabilities.supportsVideoFilters,
+                videoFiltersActive = uiState.videoEffects != com.raulshma.jellyplay.feature.player.video.engine.VideoEffectsConfig(),
+                onVideoFilterClick = { currentSheet = PlayerSheet.VideoFilter },
+                onLockClick = {
+                    viewModel.setScreenLocked(true)
+                    showControls = false
+                },
+                onControlsFocusChange = { controlsHasFocus = it },
+                onOverflowMenuChange = { isOverflowMenuOpen = it },
+                castManager = viewModel.castManagerField,
                 modifier = Modifier.fillMaxSize(),
             )
-        }
 
-
-        if (uiState.showVideoStats) {
-            VideoStatsOverlay(
-                stats = uiState.videoStats,
-                currentPositionMs = currentPosition,
-                durationMs = duration,
-                playbackSpeed = playbackSpeed,
-                isPlaying = isPlaying,
-                playbackState = when {
-                    uiState.playerError != null -> "Error"
-                    !isPlaying -> "Paused"
-                    else -> "Playing"
-                },
-                playMethod = uiState.playMethod,
-                streamingQuality = uiState.preferredPlayerType.name,
-                playerType = uiState.preferredPlayerType.name,
-                decoderMode = uiState.decoderMode.displayName,
-                audioSessionId = 0,
-                modifier = Modifier
-                    .align(Alignment.TopStart)
-                    .padding(start = 16.dp, top = 60.dp)
-                    .width(280.dp),
-            )
-        }
-
-        AutoAspectRatioBadge(
-            detectedAspectRatio = detectedAspectRatio,
-            aspectRatio = aspectRatio,
-        )
-
-        if (isCastConnected || isCastConnecting) {
-            CastIndicatorOverlay(
-                isConnecting = isCastConnecting,
-                modifier = Modifier
-                    .align(Alignment.TopStart)
-                    .padding(top = 60.dp, start = 16.dp),
-            )
-        }
-
-        SnackbarHost(
-            hostState = snackbarHostState,
-            modifier = Modifier
-                .align(Alignment.BottomCenter)
-                .padding(bottom = 200.dp),
-        ) { data ->
-            Snackbar(
-                snackbarData = data,
-                shape = ShapeCache.smoothPill,
-                containerColor = Color.White.copy(alpha = 0.15f),
-                contentColor = Color.White,
-            )
-        }
-
-        val hasEpisodes = uiState.seriesSeasons.isNotEmpty() && uiState.seasonEpisodes.isNotEmpty()
-        val episodeBrowserEnabled = uiState.videoEpisodeBrowserEnabled
-
-        PlayerControls(
-            title = title,
-            subtitle = subtitle,
-            isPlaying = isPlaying,
-            currentPosition = currentPosition,
-            duration = duration,
-            playbackSpeed = playbackSpeed,
-            chapters = uiState.chapters,
-            dialogueBoostEnabled = uiState.dialogueBoostEnabled,
-            dialogueBoostStrength = uiState.dialogueBoostStrength,
-            nightModeEnabled = uiState.nightModeEnabled,
-            nightModeStrength = uiState.nightModeStrength,
-            audioPassthrough = uiState.audioPassthrough,
-            isOcrRunning = uiState.isOcrRunning,
-            segments = uiState.segments,
-            playMethod = uiState.playMethod,
-            hdrType = uiState.hdrType,
-            mediaStreams = uiState.mediaStreams,
-            videoStats = uiState.videoStats,
-            audioTracks = uiState.audioTracks,
-            showPlaybackMetadata = uiState.showPlaybackMetadata,
-
-            currentAspectRatio = aspectRatio,
-            detectedAspectRatio = detectedAspectRatio,
-            isVisible = showControls && !isInPipMode && !isScreenLocked,
-            supportsSubtitleStyle = uiState.engineCapabilities.supportsSubtitleStyle,
-            supportsDialogueBoost = uiState.engineCapabilities.supportsDialogueBoost,
-            supportsNightMode = uiState.engineCapabilities.supportsNightMode,
-            supportsAudioDelay = uiState.engineCapabilities.supportsAudioDelay,
-            supportsAudioPassthrough = uiState.engineCapabilities.supportsAudioPassthrough,
-            supportsOcr = uiState.engineCapabilities.supportsOcr,
-            hasEpisodes = hasEpisodes,
-            episodeBrowserEnabled = episodeBrowserEnabled,
-            onPlayPause = { doTogglePlayPause() },
-            onSeekBack = { doSeekBack() },
-            onSeekForward = { doSeekForward() },
-            onSeek = { },
-            onSeekStart = { isSeeking = true },
-            onSeekEnd = {
-                isSeeking = false
-                if (duration > 0) doSeekTo(seekPositionMs)
-            },
-            onSeekPositionChange = { positionMs -> seekPositionMs = positionMs },
-            tvTrickplayBitmap = if (isTv) tvTrickplayBitmap else null,
-            onBack = onBack,
-            onSpeedClick = { currentSheet = PlayerSheet.Speed },
-            onAudioClick = { currentSheet = PlayerSheet.Audio },
-            onSubtitleClick = { currentSheet = PlayerSheet.Subtitle },
-            onSubtitleStyleClick = { currentSheet = PlayerSheet.SubtitleStyle },
-            onChapterClick = { currentSheet = PlayerSheet.Chapter },
-            onInfoClick = { currentSheet = PlayerSheet.PlaybackInfo },
-            onAspectRatioClick = { currentSheet = PlayerSheet.AspectRatio },
-            onDialogueBoostClick = { viewModel.toggleDialogueBoost() },
-            onDialogueBoostStrengthChange = { viewModel.setDialogueBoostStrength(it) },
-            onNightModeClick = { viewModel.toggleNightMode() },
-            onNightModeStrengthChange = { viewModel.setNightModeStrength(it) },
-            onAudioDelayClick = { currentSheet = PlayerSheet.AudioDelay },
-            onDecoderClick = { currentSheet = PlayerSheet.Decoder },
-            onPassthroughClick = { viewModel.setAudioPassthrough(!uiState.audioPassthrough) },
-            onOcrClick = {
-                val bitmap = viewModel.capturePlayerViewBitmap()
-                viewModel.captureOcrSubtitle(bitmap)
-                currentSheet = PlayerSheet.OcrResult
-            },
-            onSubtitleDownloadClick = {
-                viewModel.loadRemoteSubtitles()
-                currentSheet = PlayerSheet.SubtitleDownload
-            },
-            onEpisodesClick = { currentSheet = PlayerSheet.Episodes },
-            onSyncPlayClick = { currentSheet = PlayerSheet.SyncPlay },
-            onPipClick = {
-                onEnterPip()
-            },
-            isInSyncPlaySession = isInSyncPlaySession,
-            syncPlayGroupName = uiState.syncPlayGroupName,
-            syncPlayParticipantCount = uiState.syncPlayParticipantCount,
-            isSyncPlaySynced = uiState.isSyncPlaySynced,
-            isSyncPlaySyncing = uiState.isSyncPlaySyncing,
-            showVideoStats = uiState.showVideoStats,
-            onVideoStatsClick = { viewModel.toggleVideoStats() },
-            bufferedPosition = uiState.bufferedPosition,
-            streamingQuality = uiState.streamingQuality,
-            onQualityClick = { currentSheet = PlayerSheet.Quality },
-            audioNormalizationMode = uiState.audioNormalizationMode,
-            audioNormalizationEnabled = uiState.audioNormalizationEnabled,
-            channelMixMode = uiState.channelMixMode,
-            channelMixEnabled = uiState.channelMixEnabled,
-            supportsAudioNormalization = uiState.engineCapabilities.supportsAudioNormalization,
-            supportsChannelMixing = uiState.engineCapabilities.supportsChannelMixing,
-            onAudioNormalizationClick = { viewModel.toggleAudioNormalization() },
-            onAudioNormalizationModeChange = { viewModel.setAudioNormalizationMode(it) },
-            onChannelMixClick = { viewModel.toggleChannelMix() },
-            onChannelMixModeChange = { viewModel.setChannelMixMode(it) },
-            sleepTimerActive = uiState.sleepTimerActive,
-            sleepTimerDisplayText = if (uiState.sleepTimerEndOfEpisode) "End of episode" else formatDuration(uiState.sleepTimerRemainingMs),
-            onSleepTimerClick = { currentSheet = PlayerSheet.SleepTimer },
-            supportsVideoFilters = uiState.engineCapabilities.supportsVideoFilters,
-            videoFiltersActive = uiState.videoEffects != com.raulshma.jellyplay.feature.player.video.engine.VideoEffectsConfig(),
-            onVideoFilterClick = { currentSheet = PlayerSheet.VideoFilter },
-            onLockClick = {
-                viewModel.setScreenLocked(true)
-                showControls = false
-            },
-            onControlsFocusChange = { controlsHasFocus = it },
-            onOverflowMenuChange = { isOverflowMenuOpen = it },
-            castManager = viewModel.castManagerField,
-            modifier = Modifier.fillMaxSize(),
-        )
-
-        AnimatedVisibility(
-            visible = uiState.trickplayEnabled && showControls && isSeeking,
-            enter = fadeIn(tween(150, easing = AlphaEasing)),
-            exit = fadeOut(tween(200, easing = AlphaEasing)),
-            modifier = Modifier.align(Alignment.BottomCenter).padding(bottom = 120.dp),
-        ) {
-            TrickplayOverlay(
-                bitmap = seekTrickplayBitmap,
-                positionMs = seekPositionMs,
-                durationMs = duration,
-            )
+            AnimatedVisibility(
+                visible = uiState.trickplayEnabled && showControls && isSeeking,
+                enter = fadeIn(tween(150, easing = AlphaEasing)),
+                exit = fadeOut(tween(200, easing = AlphaEasing)),
+                modifier = Modifier.align(Alignment.BottomCenter).padding(bottom = 120.dp),
+            ) {
+                TrickplayOverlay(
+                    bitmap = seekTrickplayBitmap,
+                    positionMs = seekPositionMs,
+                    durationMs = duration,
+                )
+            }
         }
     }
 

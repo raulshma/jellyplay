@@ -28,4 +28,26 @@ interface AdminApiClient {
     suspend fun getActivityLogEntries(startIndex: Int? = null, limit: Int? = null, minDate: String? = null, hasUserId: Boolean? = null): Result<List<ActivityLogEntry>>
     suspend fun getSessions(): Result<List<SessionInfo>>
     suspend fun sendMessageToSession(sessionId: String, header: String, text: String, timeoutMs: Long = 5000): Result<Unit>
+    suspend fun play(
+        sessionId: String,
+        playCommand: String,
+        itemIds: List<String>,
+        startPositionTicks: Long? = null,
+        mediaSourceId: String? = null,
+        audioStreamIndex: Int? = null,
+        subtitleStreamIndex: Int? = null,
+        startIndex: Int? = null,
+    ): Result<Unit>
+    suspend fun sendPlaystateCommand(
+        sessionId: String,
+        command: String,
+        seekPositionTicks: Long? = null,
+        controllingUserId: String? = null,
+    ): Result<Unit>
+    suspend fun sendGeneralCommand(
+        sessionId: String,
+        commandName: String,
+        controllingUserId: String? = null,
+        arguments: Map<String, String>? = null,
+    ): Result<Unit>
 }
