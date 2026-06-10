@@ -383,6 +383,7 @@ fun PosterCard(
                     scaleX = scale
                     scaleY = scale
                     shadowElevation = elevation.toPx()
+                    clip = false
                 }
                 .tvFocusIndicator(tvFocusState, shape)
                 .clickable(

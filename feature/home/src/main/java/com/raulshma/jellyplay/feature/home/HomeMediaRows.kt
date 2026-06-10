@@ -168,6 +168,7 @@ fun WideMediaCard(
                     scaleX = scale
                     scaleY = scale
                     shadowElevation = elevation.dp.toPx()
+                    clip = false
                 }
                 .tvFocusIndicator(tvFocusState, ShapeCache.smooth12)
                 .clickable(

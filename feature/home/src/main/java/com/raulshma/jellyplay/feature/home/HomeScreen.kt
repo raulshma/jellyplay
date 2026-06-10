@@ -901,9 +901,6 @@ private fun HomeContentList(
                     .padding(top = if (isFirstAfterHero) 0.dp else 16.dp)
                     .graphicsLayer {
                         alpha = sectionAnimation
-                        val scale = 0.97f + (0.03f * sectionAnimation)
-                        scaleX = scale
-                        scaleY = scale
                         translationY = (1f - sectionAnimation) * 16.dp.toPx()
                     }
 
