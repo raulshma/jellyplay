@@ -5,7 +5,8 @@ import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
-import com.raulshma.jellyplay.core.ui.tv.tvFocusable
+import com.raulshma.jellyplay.core.ui.tv.rememberTvFocusState
+import com.raulshma.jellyplay.core.ui.tv.tvFocusIndicator
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -69,9 +70,12 @@ internal fun TrackPickerSheet(
                     ),
                 )
                 if (onReset != null) {
+                    val resetFocusState = rememberTvFocusState(focusedScale = 1.04f)
                     Row(
                         modifier = Modifier
                             .clip(CircleShape)
+                            .then(resetFocusState.focusModifier)
+                            .tvFocusIndicator(resetFocusState, CircleShape)
                             .clickable {
                                 onReset()
                                 onDismiss()
@@ -99,58 +103,73 @@ internal fun TrackPickerSheet(
             Spacer(Modifier.height(12.dp))
             LazyColumn {
                 itemsIndexed(tracks, key = { _, track -> track.index }, contentType = { _, _ -> "track" }) { index, track ->
-                    val isLast = index == tracks.lastIndex
-                    val shape = when {
-                        tracks.size == 1 -> ShapeCache.smooth16
-                        index == 0 -> com.raulshma.jellyplay.core.designsystem.theme.expressiveListShape(0, tracks.size)
-                        isLast -> com.raulshma.jellyplay.core.designsystem.theme.expressiveListShape(index, tracks.size)
-                        else -> ShapeCache.smooth8
-                    }
-
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(horizontal = 16.dp, vertical = 2.dp)
-                            .clip(shape)
-                            .background(
-                                if (track.isSelected) MaterialTheme.colorScheme.primary.copy(alpha = 0.1f)
-                                else Color.White.copy(alpha = 0.04f)
-                            )
-                            .tvFocusable()
-                            .clickable {
-                                onSelect(track)
-                                onDismiss()
-                            }
-                            .padding(horizontal = 20.dp, vertical = 14.dp),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically,
-                    ) {
-                        Text(
-                            track.label,
-                            style = MaterialTheme.typography.bodyLarge.copy(
-                                fontWeight = if (track.isSelected) FontWeight.SemiBold else FontWeight.Normal,
-                            ),
-                            color = if (track.isSelected) MaterialTheme.colorScheme.primary
-                            else MaterialTheme.colorScheme.onSurface,
-                        )
-                        if (track.isSelected) {
-                            Box(
-                                modifier = Modifier
-                                    .size(24.dp)
-                                    .clip(CircleShape)
-                                    .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.18f)),
-                                contentAlignment = Alignment.Center,
-                            ) {
-                                Icon(
-                                    Tabler.Outline.Check,
-                                    contentDescription = null,
-                                    tint = MaterialTheme.colorScheme.primary,
-                                    modifier = Modifier.size(14.dp),
-                                )
-                            }
-                        }
-                    }
+                    TrackItem(
+                        track = track,
+                        isLast = index == tracks.lastIndex,
+                        itemCount = tracks.size,
+                        onSelect = {
+                            onSelect(track)
+                            onDismiss()
+                        },
+                    )
                 }
+            }
+        }
+    }
+}
+
+@Composable
+private fun TrackItem(
+    track: TrackOption,
+    isLast: Boolean,
+    itemCount: Int,
+    onSelect: () -> Unit,
+) {
+    val shape = when {
+        itemCount == 1 -> ShapeCache.smooth16
+        isLast -> com.raulshma.jellyplay.core.designsystem.theme.expressiveListShape(if (isLast) itemCount - 1 else 0, itemCount)
+        else -> ShapeCache.smooth8
+    }
+    val focusState = rememberTvFocusState(focusedScale = 1.02f)
+
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 16.dp, vertical = 2.dp)
+            .clip(shape)
+            .background(
+                if (track.isSelected) MaterialTheme.colorScheme.primary.copy(alpha = 0.1f)
+                else Color.White.copy(alpha = 0.04f)
+            )
+            .then(focusState.focusModifier)
+            .tvFocusIndicator(focusState, shape)
+            .clickable { onSelect() }
+            .padding(horizontal = 20.dp, vertical = 14.dp),
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Text(
+            track.label,
+            style = MaterialTheme.typography.bodyLarge.copy(
+                fontWeight = if (track.isSelected) FontWeight.SemiBold else FontWeight.Normal,
+            ),
+            color = if (track.isSelected) MaterialTheme.colorScheme.primary
+            else MaterialTheme.colorScheme.onSurface,
+        )
+        if (track.isSelected) {
+            Box(
+                modifier = Modifier
+                    .size(24.dp)
+                    .clip(CircleShape)
+                    .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.18f)),
+                contentAlignment = Alignment.Center,
+            ) {
+                Icon(
+                    Tabler.Outline.Check,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.primary,
+                    modifier = Modifier.size(14.dp),
+                )
             }
         }
     }

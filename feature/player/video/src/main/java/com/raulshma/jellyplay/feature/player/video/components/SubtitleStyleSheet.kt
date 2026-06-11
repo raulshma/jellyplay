@@ -3,7 +3,9 @@ package com.raulshma.jellyplay.feature.player.video.components
 import androidx.compose.foundation.background
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
-import com.raulshma.jellyplay.core.ui.tv.tvFocusable
+import com.raulshma.jellyplay.core.ui.tv.rememberTvFocusState
+import com.raulshma.jellyplay.core.ui.tv.tvFocusIndicator
+import com.raulshma.jellyplay.core.ui.tv.LocalTvMode
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -115,7 +117,6 @@ fun SubtitleStyleSheet(
                         applyCustomStyle = it
                         onStyleChange(currentStyle.copy(applyCustomStyle = it))
                     },
-                    modifier = Modifier.tvFocusable(),
                 )
             }
             Spacer(Modifier.height(16.dp))
@@ -384,10 +385,12 @@ private fun ColorChip(
     enabled: Boolean = true,
     onClick: () -> Unit,
 ) {
+    val isTv = LocalTvMode.current
     val alpha = if (enabled) 1f else 0.4f
+    val focusState = rememberTvFocusState(focusedScale = 1.15f)
     Box(
         modifier = Modifier
-            .size(34.dp)
+            .size(if (isTv) 40.dp else 34.dp)
             .clip(CircleShape)
             .background(color.copy(alpha = alpha * color.alpha))
             .then(
@@ -397,7 +400,8 @@ private fun ColorChip(
                     Modifier.border(1.dp, Color.Gray.copy(alpha = 0.5f * alpha), CircleShape)
                 }
             )
-            .then(if (enabled) Modifier.tvFocusable() else Modifier)
+            .then(focusState.focusModifier)
+            .tvFocusIndicator(focusState, CircleShape)
             .clickable(enabled = enabled, onClick = onClick),
     )
 }

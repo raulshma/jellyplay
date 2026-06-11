@@ -38,7 +38,8 @@ import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import com.raulshma.jellyplay.core.model.SyncPlayRepeatMode
 import com.raulshma.jellyplay.core.model.SyncPlayShuffleMode
-import com.raulshma.jellyplay.core.ui.tv.tvFocusable
+import com.raulshma.jellyplay.core.ui.tv.rememberTvFocusState
+import com.raulshma.jellyplay.core.ui.tv.tvFocusIndicator
 import com.composables.icons.tabler.Tabler
 import com.composables.icons.tabler.outline.*
 
@@ -140,7 +141,7 @@ fun SyncPlayPlayerSheet(
             ) {
                 FilledTonalButton(
                     onClick = onTogglePlayPause,
-                    modifier = Modifier.weight(1f).tvFocusable(),
+                    modifier = Modifier.weight(1f),
                     shape = ShapeCache.smoothPill,
                 ) {
                     Icon(
@@ -153,7 +154,6 @@ fun SyncPlayPlayerSheet(
                 }
                 FilledTonalButton(
                     onClick = onStop,
-                    modifier = Modifier.tvFocusable(),
                     shape = ShapeCache.smoothPill,
                 ) {
                     Icon(Tabler.Outline.PlayerStop, contentDescription = "Stop", modifier = Modifier.size(18.dp))
@@ -168,7 +168,7 @@ fun SyncPlayPlayerSheet(
                 Box(modifier = Modifier.weight(1f)) {
                     FilledTonalButton(
                         onClick = { repeatExpanded = true },
-                        modifier = Modifier.fillMaxWidth().tvFocusable(),
+                        modifier = Modifier.fillMaxWidth(),
                         shape = ShapeCache.smoothPill,
                     ) {
                         Icon(Tabler.Outline.Repeat, contentDescription = null, modifier = Modifier.size(18.dp))
@@ -205,7 +205,7 @@ fun SyncPlayPlayerSheet(
                 Box(modifier = Modifier.weight(1f)) {
                     FilledTonalButton(
                         onClick = { shuffleExpanded = true },
-                        modifier = Modifier.fillMaxWidth().tvFocusable(),
+                        modifier = Modifier.fillMaxWidth(),
                         shape = ShapeCache.smoothPill,
                     ) {
                         Icon(Tabler.Outline.ArrowsShuffle, contentDescription = null, modifier = Modifier.size(18.dp))
@@ -256,13 +256,12 @@ fun SyncPlayPlayerSheet(
                 Switch(
                     checked = ignoreWait,
                     onCheckedChange = onIgnoreWaitChange,
-                    modifier = Modifier.tvFocusable(),
                 )
             }
 
             FilledTonalButton(
                 onClick = onLeave,
-                modifier = Modifier.fillMaxWidth().tvFocusable(),
+                modifier = Modifier.fillMaxWidth(),
                 shape = ShapeCache.smoothPill,
             ) {
                 Icon(Tabler.Outline.Logout, contentDescription = null, modifier = Modifier.size(18.dp))
