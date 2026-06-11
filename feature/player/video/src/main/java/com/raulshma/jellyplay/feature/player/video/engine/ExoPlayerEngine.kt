@@ -544,7 +544,16 @@ class ExoPlayerEngine(
                 sv.setFixedTextSize(android.util.TypedValue.COMPLEX_UNIT_SP, style.fontSize.toFloat())
             } else {
                 sv.setApplyEmbeddedStyles(true)
-                sv.setStyle(CaptionStyleCompat.DEFAULT)
+                sv.setStyle(
+                    CaptionStyleCompat(
+                        Color.WHITE,
+                        Color.TRANSPARENT,
+                        Color.TRANSPARENT,
+                        CaptionStyleCompat.EDGE_TYPE_OUTLINE,
+                        Color.BLACK,
+                        null
+                    )
+                )
                 sv.setFractionalTextSize(0.0533f, false)
             }
             sv.setBottomPaddingFraction(style.verticalPosition)
