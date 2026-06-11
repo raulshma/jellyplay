@@ -1436,6 +1436,7 @@ private fun PlayerSheetRouter(
                 currentStyle = uiState.subtitleStyle,
                 onStyleChange = { viewModel.setSubtitleStyle(it) },
                 onDismiss = dismissSheet,
+                capabilities = uiState.engineCapabilities,
             )
         }
         is PlayerSheet.AudioDelay -> {

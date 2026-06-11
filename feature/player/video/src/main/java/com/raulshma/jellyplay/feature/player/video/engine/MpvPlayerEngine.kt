@@ -72,6 +72,7 @@ class MpvPlayerEngine(
         supportsSubtitleDelay = true,
         supportsAudioPassthrough = true,
         supportsSubtitleStyle = true,
+        supportsSubtitleVerticalPosition = true,
         supportsDialogueBoost = true,
         supportsNightMode = true,
         supportsAudioNormalization = true,
@@ -171,12 +172,12 @@ class MpvPlayerEngine(
             override fun event(eventId: Int, data: MPVNode) {
                 when (eventId) {
                     MPV.mpvEvent.MPV_EVENT_START_FILE -> {
-                        Log.d(TAG, "MPV start file")
+                        Log.d(TAG, "MPV start file; adding ${pendingSubtitles.size} Jellyfin subtitle source(s)")
+                        addPendingSubtitles(mpv)
                         _playbackState.value = EnginePlaybackState.BUFFERING
                     }
                     MPV.mpvEvent.MPV_EVENT_FILE_LOADED -> {
-                        Log.d(TAG, "MPV file loaded; adding ${pendingSubtitles.size} Jellyfin subtitle source(s)")
-                        addPendingSubtitles(mpv)
+                        Log.d(TAG, "MPV file loaded")
                         _playbackState.value = EnginePlaybackState.READY
                         refreshTracks("file-loaded")
                     }
@@ -198,8 +199,8 @@ class MpvPlayerEngine(
             val mpvCfg = (currentConfig.engineSpecific as? MpvEngineConfig) ?: MpvEngineConfig()
 
             val hwdecValue = mpvCfg.hwdecOverride?.key ?: when (currentConfig.decoderMode) {
-                DecoderMode.HW_PREFERRED -> "mediacodec,mediacodec-copy,no"
-                DecoderMode.HW_ONLY -> "mediacodec,mediacodec-copy"
+                DecoderMode.HW_PREFERRED -> "mediacodec-copy,mediacodec,no"
+                DecoderMode.HW_ONLY -> "mediacodec-copy,mediacodec"
                 DecoderMode.SW_ONLY -> "no"
             }
             mpv.setOptionString("hwdec", hwdecValue)
@@ -210,14 +211,18 @@ class MpvPlayerEngine(
                 mpvCfg.audioFallback?.let { append(",").append(it.key) }
             }
             mpv.setOptionString("ao", aoValue)
+            mpv.setOptionString("gpu-context", "android")
+            mpv.setOptionString("opengl-es", "yes")
+            mpv.setOptionString("sub-scale-with-window", "yes")
             mpv.setOptionString("sub-auto", "fuzzy")
             mpv.setOptionString("sub-visibility", "yes")
             mpv.setOptionString("secondary-sub-visibility", "yes")
-            mpv.setOptionString("blend-subtitles", "video")
-            mpv.setOptionString("sub-ass", "yes")
-            mpv.setOptionString("sub-ass-override", "force")
+            mpv.setOptionString("sub-ass-override", "scale")
             mpv.setOptionString("keep-open", "yes")
             applySubtitleStyleOptions(mpv, currentConfig.subtitleStyle)
+            mpv.setOptionString("panscan", "0.0")
+            mpv.setOptionString("sub-use-margins", "no")
+            mpv.setOptionString("sub-ass-force-margins", "no")
 
             mpv.setOptionString("scale", mpvCfg.scaler.key)
             if (mpvCfg.deband) {
@@ -393,8 +398,8 @@ class MpvPlayerEngine(
 
             if (oldConfig.decoderMode != config.decoderMode || (oldConfig.engineSpecific as? MpvEngineConfig)?.hwdecOverride != mpvCfg.hwdecOverride) {
                 val hwdecValue = mpvCfg.hwdecOverride?.key ?: when (config.decoderMode) {
-                    DecoderMode.HW_PREFERRED -> "mediacodec,mediacodec-copy,no"
-                    DecoderMode.HW_ONLY -> "mediacodec,mediacodec-copy"
+                    DecoderMode.HW_PREFERRED -> "mediacodec-copy,mediacodec,no"
+                    DecoderMode.HW_ONLY -> "mediacodec-copy,mediacodec"
                     DecoderMode.SW_ONLY -> "no"
                 }
                 mpv.setPropertyString("hwdec", hwdecValue)
@@ -529,8 +534,15 @@ class MpvPlayerEngine(
             val m = mpvView?.mpv ?: return
             if (type == TrackType.AUDIO) {
                 Log.d(TAG, "Selecting MPV audio track id=$index")
-                if (index < 0) m.setPropertyString("aid", "auto")
-                else m.setPropertyString("aid", "$index")
+                if (index < 0) {
+                    m.setPropertyString("aid", "auto")
+                } else {
+                    try {
+                        m.setPropertyInt("aid", index)
+                    } catch (_: Exception) {
+                        m.setPropertyString("aid", "$index")
+                    }
+                }
             } else {
                 Log.d(TAG, "Selecting MPV subtitle track id=$index")
                 if (index < 0) {
@@ -538,7 +550,11 @@ class MpvPlayerEngine(
                     lastLoggedSubtitleText = null
                     m.setPropertyString("sid", "no")
                 } else {
-                    m.setPropertyString("sid", "$index")
+                    try {
+                        m.setPropertyInt("sid", index)
+                    } catch (_: Exception) {
+                        m.setPropertyString("sid", "$index")
+                    }
                 }
             }
             refreshTracks("select-${type.name.lowercase()}")
@@ -607,7 +623,27 @@ class MpvPlayerEngine(
 
         try {
             val mpvCfg = (currentConfig.engineSpecific as? MpvEngineConfig) ?: MpvEngineConfig()
-            view.initialize(mpvCfg.videoOutput.key, "android")
+            val configDir = java.io.File(context.filesDir, "mpv")
+            if (!configDir.exists()) {
+                configDir.mkdirs()
+            }
+            writeFontsConf(context, configDir)
+            try {
+                writeFontsConf(context, context.filesDir)
+            } catch (e: Exception) {
+                Log.w(TAG, "Failed to write fallback fonts.conf to filesDir", e)
+            }
+
+            try {
+                android.system.Os.setenv("FONTCONFIG_FILE", java.io.File(configDir, "fonts.conf").absolutePath, true)
+                android.system.Os.setenv("FONTCONFIG_PATH", configDir.absolutePath, true)
+                Log.d(TAG, "Set FONTCONFIG environment variables successfully")
+            } catch (t: Throwable) {
+                Log.w(TAG, "Failed to set FONTCONFIG environment variables via Os.setenv", t)
+            }
+
+            view.initialize(configDir.absolutePath, context.cacheDir.absolutePath)
+            view.setVo(mpvCfg.videoOutput.key)
             applySubtitleStyleInternal(currentConfig.subtitleStyle)
         } catch (e: Exception) {
             Log.e(TAG, "MPV initialize failed", e)
@@ -654,7 +690,15 @@ class MpvPlayerEngine(
             }
             else -> "-1"
         }
-        try { mpvView?.mpv?.setPropertyString("video-aspect-override", aspectValue) } catch (_: Exception) {}
+        val m = mpvView?.mpv ?: return
+        try { m.setPropertyString("video-aspect-override", aspectValue) } catch (_: Exception) {}
+
+        val isZoom = mode == androidx.media3.ui.AspectRatioFrameLayout.RESIZE_MODE_ZOOM
+        try {
+            m.setPropertyDouble("panscan", if (isZoom) 1.0 else 0.0)
+            m.setPropertyString("sub-use-margins", if (isZoom) "yes" else "no")
+            m.setPropertyString("sub-ass-force-margins", if (isZoom) "yes" else "no")
+        } catch (_: Exception) {}
     }
 
     override val currentPositionMs: Long
@@ -806,7 +850,9 @@ class MpvPlayerEngine(
 
     private fun configureMpvForRequest(view: PlayerMPVView, request: PlaybackRequest) {
         if (request.startPositionMs > 0) {
-            view.mpv.setOptionString("start", "+${request.startPositionMs / 1000.0}")
+            val startVal = "+${request.startPositionMs / 1000.0}"
+            try { view.mpv.setOptionString("start", startVal) } catch (_: Exception) {}
+            try { view.mpv.setPropertyString("start", startVal) } catch (_: Exception) {}
         }
 
         view.mpv.setOptionString("sub-visibility", "yes")
@@ -821,8 +867,15 @@ class MpvPlayerEngine(
 
         if (request.headers.isNotEmpty()) {
             val headerStr = request.headers.entries.joinToString(",") { "${it.key}: ${it.value}" }
-            view.mpv.setOptionString("http-header-fields", headerStr)
+            try { view.mpv.setOptionString("http-header-fields", headerStr) } catch (_: Exception) {}
+            try { view.mpv.setPropertyString("http-header-fields", headerStr) } catch (_: Exception) {}
             Log.d(TAG, "Applied MPV HTTP headers: ${request.headers.keys}")
+        }
+
+        try {
+            applySubtitleStyleProperties(view.mpv, currentConfig.subtitleStyle)
+        } catch (e: Exception) {
+            Log.w(TAG, "Failed to apply subtitle style inside configureMpvForRequest", e)
         }
     }
 
@@ -830,10 +883,8 @@ class MpvPlayerEngine(
         val subtitles = pendingSubtitles
         if (subtitles.isEmpty()) return
 
-        var selectedSubtitleAdded = false
         subtitles.forEach { sub ->
-            val shouldSelect = !selectedSubtitleAdded && shouldSelectSubtitle(sub, pendingPreferredSubtitleLanguage)
-            val flags = if (shouldSelect) "select" else "auto"
+            val flags = "auto"
             try {
                 Log.d(
                     TAG,
@@ -846,7 +897,6 @@ class MpvPlayerEngine(
                 } else {
                     mpv.command("sub-add", sub.url, flags, sub.label, sub.language)
                 }
-                if (shouldSelect) selectedSubtitleAdded = true
             } catch (e: Exception) {
                 Log.e(TAG, "Failed to add Jellyfin subtitle: ${redactSensitive(sub.url)}", e)
             }
@@ -937,35 +987,62 @@ class MpvPlayerEngine(
 
     private fun applySubtitleStyleOptions(mpv: MPV, style: SubtitleStyle) {
         val values = subtitleStyleValues(style)
-        mpv.setOptionString("sub-color", values.textColor)
-        mpv.setOptionString("sub-back-color", values.backgroundColor)
-        mpv.setOptionString("sub-outline-color", values.edgeColor)
-        mpv.setOptionString("sub-shadow-color", values.edgeColor)
-        mpv.setOptionString("sub-border-style", "outline-and-shadow")
-        mpv.setOptionString("sub-font", "sans-serif")
-        mpv.setOptionString("sub-font-size", values.fontSize.toString())
-        mpv.setOptionString("sub-scale", "1.0")
-        mpv.setOptionString("sub-pos", "100")
-        mpv.setOptionString("sub-margin-y", values.marginY.toString())
-        mpv.setOptionString("sub-outline-size", values.outlineSize.toString())
-        mpv.setOptionString("sub-shadow-offset", values.shadowOffset.toString())
+        if (style.applyCustomStyle) {
+            mpv.safeSetOption("sub-color", values.textColor)
+            mpv.safeSetOption("sub-back-color", values.backgroundColor)
+            mpv.safeSetOption("sub-outline-color", values.edgeColor)
+            mpv.safeSetOption("sub-shadow-color", values.edgeColor)
+            val borderStyle = if (style.backgroundOpacity > 0f) "background-box" else "outline-and-shadow"
+            mpv.safeSetOption("sub-border-style", borderStyle)
+            mpv.safeSetOption("sub-ass-override", "scale")
+            mpv.safeSetOption("sub-outline-size", values.outlineSize.toString())
+            mpv.safeSetOption("sub-shadow-offset", values.shadowOffset.toString())
+        } else {
+            mpv.safeSetOption("sub-ass-override", "no")
+        }
+        
+        mpv.safeSetOption("sub-font", "sans-serif")
+        mpv.safeSetOption("sub-font-size", "55")
+        mpv.safeSetOption("sub-scale", (style.fontSize.toDouble() / 24.0).toString())
+        val subPosValue = (100 - (style.verticalPosition * 100).toInt()).coerceIn(0, 100)
+        mpv.safeSetOption("sub-pos", subPosValue.toString())
+        mpv.safeSetOption("sub-margin-y", values.marginY.toString())
+        mpv.safeSetOption("sub-delay", (currentConfig.subtitleDelayMs / 1000.0).toString())
     }
 
     private fun applySubtitleStyleProperties(mpv: MPV, style: SubtitleStyle) {
         val values = subtitleStyleValues(style)
-        mpv.setPropertyBoolean("sub-visibility", true)
-        mpv.setPropertyBoolean("secondary-sub-visibility", true)
-        mpv.setPropertyString("sub-color", values.textColor)
-        mpv.setPropertyString("sub-back-color", values.backgroundColor)
-        mpv.setPropertyString("sub-outline-color", values.edgeColor)
-        mpv.setPropertyString("sub-shadow-color", values.edgeColor)
-        mpv.setPropertyString("sub-border-style", "outline-and-shadow")
-        mpv.setPropertyDouble("sub-font-size", values.fontSize.toDouble())
-        mpv.setPropertyDouble("sub-scale", 1.0)
-        mpv.setPropertyInt("sub-pos", 100)
-        mpv.setPropertyInt("sub-margin-y", values.marginY)
-        mpv.setPropertyDouble("sub-outline-size", values.outlineSize)
-        mpv.setPropertyDouble("sub-shadow-offset", values.shadowOffset)
+        mpv.safeSetPropertyBoolean("sub-visibility", true)
+        mpv.safeSetPropertyBoolean("secondary-sub-visibility", true)
+        if (style.applyCustomStyle) {
+            mpv.safeSetPropertyString("sub-color", values.textColor)
+            mpv.safeSetPropertyString("sub-back-color", values.backgroundColor)
+            mpv.safeSetPropertyString("sub-outline-color", values.edgeColor)
+            mpv.safeSetPropertyString("sub-shadow-color", values.edgeColor)
+            val borderStyle = if (style.backgroundOpacity > 0f) "background-box" else "outline-and-shadow"
+            mpv.safeSetPropertyString("sub-border-style", borderStyle)
+            mpv.safeSetPropertyString("sub-ass-override", "scale")
+            mpv.safeSetPropertyDouble("sub-outline-size", values.outlineSize)
+            mpv.safeSetPropertyDouble("sub-shadow-offset", values.shadowOffset)
+        } else {
+            // Reset to defaults
+            mpv.safeSetPropertyString("sub-color", "#FFFFFFFF")
+            mpv.safeSetPropertyString("sub-back-color", "#00000000")
+            mpv.safeSetPropertyString("sub-outline-color", "#FF000000")
+            mpv.safeSetPropertyString("sub-shadow-color", "#FF000000")
+            mpv.safeSetPropertyString("sub-border-style", "outline-and-shadow")
+            mpv.safeSetPropertyString("sub-ass-override", "no")
+            mpv.safeSetPropertyDouble("sub-outline-size", 3.0)
+            mpv.safeSetPropertyDouble("sub-shadow-offset", 0.0)
+        }
+        
+        mpv.safeSetPropertyString("sub-font", "sans-serif")
+        mpv.safeSetPropertyDouble("sub-font-size", 55.0)
+        mpv.safeSetPropertyDouble("sub-scale", style.fontSize.toDouble() / 24.0)
+        val subPosValue = (100 - (style.verticalPosition * 100).toInt()).coerceIn(0, 100)
+        mpv.safeSetPropertyInt("sub-pos", subPosValue)
+        mpv.safeSetPropertyInt("sub-margin-y", values.marginY)
+        mpv.safeSetPropertyDouble("sub-delay", currentConfig.subtitleDelayMs / 1000.0)
     }
 
     private data class MpvSubtitleStyleValues(
@@ -1016,6 +1093,14 @@ class MpvPlayerEngine(
         val alpha = (opacity.coerceIn(0f, 1f) * 255).toInt().coerceIn(0, 255)
         val rgb = color and 0x00FFFFFF
         return String.format("#%02X%06X", alpha, rgb)
+    }
+
+    private fun colorToAssHex(color: Int, opacity: Float): String {
+        val transparency = ((1f - opacity.coerceIn(0f, 1f)) * 255).toInt().coerceIn(0, 255)
+        val red = (color shr 16) and 0xFF
+        val green = (color shr 8) and 0xFF
+        val blue = color and 0xFF
+        return "&H%02X%02X%02X%02X&".format(transparency, blue, green, red)
     }
 
     private fun buildTrackLabel(
@@ -1105,5 +1190,90 @@ class MpvPlayerEngine(
             x = temp
         }
         return x
+    }
+
+    private fun writeFontsConf(context: Context, configDir: java.io.File) {
+        val configFile = java.io.File(configDir, "fonts.conf")
+        if (configFile.exists()) return
+
+        val cacheDir = java.io.File(context.cacheDir, "fontconfig")
+        if (!cacheDir.exists()) {
+            cacheDir.mkdirs()
+        }
+
+        val config = """
+            <fontconfig>
+                <dir>/system/fonts/</dir>
+                <dir>/product/fonts/</dir>
+
+                <cachedir>${cacheDir.absolutePath}</cachedir>
+
+                <alias>
+                    <family>serif</family>
+                    <prefer><family>Noto Serif</family></prefer>
+                </alias>
+
+                <alias>
+                    <family>sans-serif</family>
+                    <prefer>
+                        <family>Roboto</family>
+                        <family>Noto Sans</family>
+                    </prefer>
+                </alias>
+
+                <alias>
+                    <family>monospace</family>
+                    <prefer><family>Droid Sans Mono</family></prefer>
+                </alias>
+
+            </fontconfig>
+        """.trimIndent()
+
+        try {
+            configFile.writeText(config)
+            Log.d(TAG, "Successfully wrote fonts.conf to ${configFile.absolutePath}")
+        } catch (e: java.io.IOException) {
+            Log.w(TAG, "Failed to write fonts.conf: $e")
+        }
+    }
+
+    private fun MPV.safeSetOption(name: String, value: String) {
+        try {
+            setOptionString(name, value)
+        } catch (e: Exception) {
+            Log.w(TAG, "Failed to set option $name to $value", e)
+        }
+    }
+
+    private fun MPV.safeSetPropertyString(name: String, value: String) {
+        try {
+            setPropertyString(name, value)
+        } catch (e: Exception) {
+            Log.w(TAG, "Failed to set property $name to $value", e)
+        }
+    }
+
+    private fun MPV.safeSetPropertyDouble(name: String, value: Double) {
+        try {
+            setPropertyDouble(name, value)
+        } catch (e: Exception) {
+            Log.w(TAG, "Failed to set property $name to $value", e)
+        }
+    }
+
+    private fun MPV.safeSetPropertyInt(name: String, value: Int) {
+        try {
+            setPropertyInt(name, value)
+        } catch (e: Exception) {
+            Log.w(TAG, "Failed to set property $name to $value", e)
+        }
+    }
+
+    private fun MPV.safeSetPropertyBoolean(name: String, value: Boolean) {
+        try {
+            setPropertyBoolean(name, value)
+        } catch (e: Exception) {
+            Log.w(TAG, "Failed to set property $name to $value", e)
+        }
     }
 }

@@ -101,6 +101,7 @@ class ExoPlayerEngine(
         supportsSubtitleDelay = true,
         supportsAudioPassthrough = false,
         supportsSubtitleStyle = true,
+        supportsSubtitleVerticalPosition = true,
         supportsDialogueBoost = true,
         supportsNightMode = true,
         supportsAudioNormalization = true,
@@ -522,24 +523,30 @@ class ExoPlayerEngine(
         val bgAlpha = (style.backgroundOpacity * 255).toInt()
         val bgColorWithAlpha = (bgAlpha shl 24) or (style.backgroundColor.value and 0x00FFFFFF)
         pv.subtitleView?.let { sv ->
-            sv.setApplyEmbeddedStyles(false)
-            sv.setStyle(
-                CaptionStyleCompat(
-                    style.fontColor.value,
-                    bgColorWithAlpha,
-                    Color.TRANSPARENT,
-                    when (style.edgeType) {
-                        com.raulshma.jellyplay.core.model.SubtitleEdgeType.OUTLINE -> CaptionStyleCompat.EDGE_TYPE_OUTLINE
-                        com.raulshma.jellyplay.core.model.SubtitleEdgeType.DROP_SHADOW -> CaptionStyleCompat.EDGE_TYPE_DROP_SHADOW
-                        com.raulshma.jellyplay.core.model.SubtitleEdgeType.RAISED -> CaptionStyleCompat.EDGE_TYPE_RAISED
-                        com.raulshma.jellyplay.core.model.SubtitleEdgeType.DEPRESSED -> CaptionStyleCompat.EDGE_TYPE_DEPRESSED
-                        else -> CaptionStyleCompat.EDGE_TYPE_NONE
-                    },
-                    style.edgeColor.value,
-                    null,
+            if (style.applyCustomStyle) {
+                sv.setApplyEmbeddedStyles(false)
+                sv.setStyle(
+                    CaptionStyleCompat(
+                        style.fontColor.value,
+                        bgColorWithAlpha,
+                        Color.TRANSPARENT,
+                        when (style.edgeType) {
+                            com.raulshma.jellyplay.core.model.SubtitleEdgeType.OUTLINE -> CaptionStyleCompat.EDGE_TYPE_OUTLINE
+                            com.raulshma.jellyplay.core.model.SubtitleEdgeType.DROP_SHADOW -> CaptionStyleCompat.EDGE_TYPE_DROP_SHADOW
+                            com.raulshma.jellyplay.core.model.SubtitleEdgeType.RAISED -> CaptionStyleCompat.EDGE_TYPE_RAISED
+                            com.raulshma.jellyplay.core.model.SubtitleEdgeType.DEPRESSED -> CaptionStyleCompat.EDGE_TYPE_DEPRESSED
+                            else -> CaptionStyleCompat.EDGE_TYPE_NONE
+                        },
+                        style.edgeColor.value,
+                        null,
+                    )
                 )
-            )
-            sv.setFixedTextSize(android.util.TypedValue.COMPLEX_UNIT_SP, style.fontSize.toFloat())
+                sv.setFixedTextSize(android.util.TypedValue.COMPLEX_UNIT_SP, style.fontSize.toFloat())
+            } else {
+                sv.setApplyEmbeddedStyles(true)
+                sv.setStyle(CaptionStyleCompat.DEFAULT)
+                sv.setFractionalTextSize(0.0533f, false)
+            }
             sv.setBottomPaddingFraction(style.verticalPosition)
         }
     }

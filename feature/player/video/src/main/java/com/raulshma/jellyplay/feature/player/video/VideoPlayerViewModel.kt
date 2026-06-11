@@ -251,7 +251,7 @@ class VideoPlayerViewModel @Inject constructor(
                     val prefs = cachedPreferences
                     _uiState.update { it.copy(
                         engineCapabilities = engine.capabilities,
-                        usesSubtitleOverlay = engine is MpvPlayerEngine,
+                        usesSubtitleOverlay = false,
                         currentSubtitleCues = emptyList(),
                         audioDelayMs = prefs.audioDelayMs,
                         decoderMode = prefs.decoderMode,

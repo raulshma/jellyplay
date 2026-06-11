@@ -63,6 +63,7 @@ enum class PlayerType(val displayName: String, val description: String) {
 @Immutable
 @Serializable
 data class SubtitleStyle(
+    val applyCustomStyle: Boolean = false,
     val fontSize: Int = 24,
     val fontColor: SubtitleColor = SubtitleColor.WHITE,
     val backgroundColor: SubtitleColor = SubtitleColor.BLACK,
