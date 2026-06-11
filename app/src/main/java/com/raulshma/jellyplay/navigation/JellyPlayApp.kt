@@ -111,6 +111,7 @@ import com.raulshma.jellyplay.core.designsystem.theme.tonalElevation
 import com.raulshma.jellyplay.core.ui.components.LocalNavigationBarColor
 import com.raulshma.jellyplay.core.ui.components.MiniPlayer
 import com.raulshma.jellyplay.core.ui.components.LocalPerformanceMode
+import com.raulshma.jellyplay.core.ui.components.LocalFloatingNavVisibility
 import com.raulshma.jellyplay.core.ui.navigation.ALL_TOP_LEVEL_ROUTE_KEYS
 import com.raulshma.jellyplay.core.ui.navigation.MUSIC_TOP_LEVEL_ROUTES
 import com.raulshma.jellyplay.core.ui.navigation.Navigator
@@ -441,7 +442,8 @@ private fun MainContent(
     val bottomNavHeight = 80.dp // Approximate height
     val bottomNavHeightPx = with(LocalDensity.current) { bottomNavHeight.toPx() }
     val bottomNavOffsetHeightPx = remember { mutableFloatStateOf(0f) }
-    var isBottomNavVisible by remember { mutableStateOf(true) }
+    val isBottomNavVisibleState = remember { mutableStateOf(true) }
+    var isBottomNavVisible by isBottomNavVisibleState
 
     val animatedBottomNavOffset by androidx.compose.animation.core.animateFloatAsState(
         targetValue = if (isBottomNavVisible) 0f else -bottomNavHeightPx * 2,
@@ -462,6 +464,7 @@ private fun MainContent(
         LocalAdaptiveInfo provides adaptiveInfo,
         LocalTvTypography provides tvTypography,
         LocalPerformanceMode provides preferences.performanceMode,
+        LocalFloatingNavVisibility provides isBottomNavVisibleState,
     ) {
         val isExpanded = adaptiveInfo.windowSizeClass != WindowSizeClass.Compact
 
