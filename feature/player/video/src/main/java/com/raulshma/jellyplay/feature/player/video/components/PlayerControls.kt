@@ -54,6 +54,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusProperties
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Brush
@@ -196,6 +197,10 @@ internal fun PlayerControls(
 ) {
     val isTv = LocalTvMode.current
     val tvPlayPauseFocusRequester = remember { FocusRequester() }
+    val tvBackFocusRequester = remember { FocusRequester() }
+    val tvSeekbarFocusRequester = remember { FocusRequester() }
+    val tvBottomButtonsFocusRequester = remember { FocusRequester() }
+    val tvBackFocusState = rememberTvFocusState(focusedScale = 1.08f)
 
     LaunchedEffect(isVisible, isTv) {
         if (isTv && isVisible) {
@@ -215,11 +220,23 @@ internal fun PlayerControls(
             visible = isVisible,
             enter = playerTopControlsEnter(),
             exit = playerTopControlsExit(),
-            modifier = Modifier.align(Alignment.TopCenter)
+            modifier = Modifier
+                .align(Alignment.TopCenter)
+                .then(
+                    if (isTv) Modifier.focusRequester(tvBackFocusRequester) else Modifier
+                )
         ) {
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
+                    .then(if (isTv) Modifier.tvFocusRestorer() else Modifier)
+                    .then(
+                        if (isTv) {
+                            Modifier.focusProperties {
+                                down = tvPlayPauseFocusRequester
+                            }
+                        } else Modifier
+                    )
                     .background(
                         Brush.verticalGradient(
                             colors = listOf(
@@ -236,7 +253,10 @@ internal fun PlayerControls(
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     IconButton(
                         onClick = onBack,
-                        modifier = Modifier.size(40.dp),
+                        modifier = Modifier
+                            .size(40.dp)
+                            .then(tvBackFocusState.focusModifier)
+                            .tvFocusIndicator(tvBackFocusState, IconButtonDefaults.smallRoundShape),
                     ) {
                         Icon(
                             Tabler.Outline.ArrowLeft,
@@ -298,7 +318,16 @@ internal fun PlayerControls(
             Row(
                 horizontalArrangement = Arrangement.spacedBy(16.dp),
                 verticalAlignment = Alignment.CenterVertically,
-                modifier = Modifier.then(if (isTv) Modifier.tvFocusRestorer() else Modifier),
+                modifier = Modifier
+                    .then(if (isTv) Modifier.tvFocusRestorer() else Modifier)
+                    .then(
+                        if (isTv) {
+                            Modifier.focusProperties {
+                                up = tvBackFocusRequester
+                                down = tvSeekbarFocusRequester
+                            }
+                        } else Modifier
+                    ),
             ) {
                 FilledTonalIconButton(
                     onClick = onSeekBack,
@@ -398,6 +427,9 @@ internal fun PlayerControls(
                     onSeekStart = onSeekStart,
                     onSeekEnd = onSeekEnd,
                     onSeekPositionChange = onSeekPositionChange,
+                    tvFocusRequester = tvSeekbarFocusRequester,
+                    tvUpFocusRequester = tvPlayPauseFocusRequester,
+                    tvDownFocusRequester = tvBottomButtonsFocusRequester,
                 )
 
 
@@ -406,14 +438,24 @@ internal fun PlayerControls(
                     modifier = Modifier
                         .fillMaxWidth()
                         .padding(top = 4.dp)
-                        .then(if (isTv) Modifier.tvFocusRestorer() else Modifier),
+                        .then(if (isTv) Modifier.tvFocusRestorer() else Modifier)
+                        .then(
+                            if (isTv) {
+                                Modifier
+                                    .focusRequester(tvBottomButtonsFocusRequester)
+                                    .focusProperties {
+                                        up = tvSeekbarFocusRequester
+                                    }
+                            } else Modifier
+                        ),
                     horizontalArrangement = Arrangement.SpaceBetween,
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
                     Row(
                         modifier = Modifier
                             .weight(1f)
-                            .horizontalScroll(rememberScrollState()),
+                            .then(if (!isTv) Modifier.horizontalScroll(rememberScrollState()) else Modifier),
+                        horizontalArrangement = if (isTv) Arrangement.spacedBy(2.dp) else Arrangement.Start,
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         PlayerQualityButton(
@@ -459,11 +501,13 @@ internal fun PlayerControls(
                             onClick = onAspectRatioClick,
                             tint = if (currentAspectRatio != AspectRatio.FIT) MaterialTheme.colorScheme.primary else Color.Unspecified,
                         )
-                        PlayerIconButton(
-                            icon = Tabler.Outline.Rotate,
-                            contentDescription = "Rotate Screen",
-                            onClick = onToggleOrientation,
-                        )
+                        if (!isTv) {
+                            PlayerIconButton(
+                                icon = Tabler.Outline.Rotate,
+                                contentDescription = "Rotate Screen",
+                                onClick = onToggleOrientation,
+                            )
+                        }
                         PlayerIconButton(
                             icon = Tabler.Outline.InfoCircle,
                             contentDescription = "Info",
@@ -472,12 +516,16 @@ internal fun PlayerControls(
                     }
 
                     Row(verticalAlignment = Alignment.CenterVertically) {
-                        PlayerIconButton(
-                            icon = Tabler.Outline.Lock,
-                            contentDescription = "Lock screen",
-                            onClick = onLockClick,
-                        )
-                        PipButton(onClick = onPipClick)
+                        if (!isTv) {
+                            PlayerIconButton(
+                                icon = Tabler.Outline.Lock,
+                                contentDescription = "Lock screen",
+                                onClick = onLockClick,
+                            )
+                        }
+                        if (!isTv) {
+                            PipButton(onClick = onPipClick)
+                        }
 
                         var showOverflow by remember { mutableStateOf(false) }
                         LaunchedEffect(showOverflow) { onOverflowMenuChange(showOverflow) }
@@ -653,6 +701,9 @@ private fun TvControllableSeekBar(
     onSeekStart: () -> Unit,
     onSeekEnd: () -> Unit,
     onSeekPositionChange: (Long) -> Unit = {},
+    tvFocusRequester: FocusRequester = remember { FocusRequester() },
+    tvUpFocusRequester: FocusRequester? = null,
+    tvDownFocusRequester: FocusRequester? = null,
 ) {
     val isTv = LocalTvMode.current
     val interactionSource = remember { androidx.compose.foundation.interaction.MutableInteractionSource() }
@@ -693,6 +744,8 @@ private fun TvControllableSeekBar(
 
     val tvFocusState = rememberTvFocusState(focusedScale = 1f)
 
+    val seekStep = if (isTv) 30_000f / duration else 10_000f / duration
+
     Column(modifier = Modifier.fillMaxWidth()) {
         Box(
             modifier = Modifier
@@ -701,8 +754,17 @@ private fun TvControllableSeekBar(
                 .then(
                     if (isTv) {
                         Modifier
+                            .focusRequester(tvFocusRequester)
                             .then(tvFocusState.focusModifier)
                             .tvFocusIndicator(tvFocusState, ShapeCache.smooth4)
+                            .then(
+                                if (tvUpFocusRequester != null || tvDownFocusRequester != null) {
+                                    Modifier.focusProperties {
+                                        tvUpFocusRequester?.let { up = it }
+                                        tvDownFocusRequester?.let { down = it }
+                                    }
+                                } else Modifier
+                            )
                             .onFocusChanged { focusState ->
                                 val wasFocused = isSeekBarFocused
                                 isSeekBarFocused = focusState.isFocused
@@ -719,7 +781,6 @@ private fun TvControllableSeekBar(
                             .onKeyEvent { keyEvent ->
                                 if (keyEvent.type != KeyEventType.KeyDown) return@onKeyEvent false
                                 if (duration <= 0) return@onKeyEvent false
-                                val seekStep = 10_000f / duration
                                 when (keyEvent.key) {
                                     Key.DirectionRight -> {
                                         if (!tvSeekStarted) {
@@ -985,6 +1046,7 @@ private fun PlayerOverflowMenu(
         onDismissRequest = onDismiss,
         containerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
         shape = MaterialTheme.shapes.extraLarge,
+        modifier = Modifier.then(if (LocalTvMode.current) Modifier.fillMaxWidth(fraction = 0.5f) else Modifier),
     ) {
         if (supportsSubtitleStyle) {
             OverflowMenuItem(

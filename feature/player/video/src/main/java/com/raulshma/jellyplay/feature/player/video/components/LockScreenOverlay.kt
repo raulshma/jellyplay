@@ -9,6 +9,8 @@ import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.focusable
 import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.layout.Arrangement
@@ -32,13 +34,21 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.input.key.Key
+import androidx.compose.ui.input.key.KeyEventType
+import androidx.compose.ui.input.key.key
+import androidx.compose.ui.input.key.onKeyEvent
+import androidx.compose.ui.input.key.type
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.raulshma.jellyplay.core.ui.tv.LocalTvMode
 import com.composables.icons.tabler.Tabler
 import com.composables.icons.tabler.outline.Lock
 import com.composables.icons.tabler.outline.LockOpen
@@ -52,6 +62,7 @@ internal fun SlideToUnlockOverlay(
     onUnlock: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
+    val isTv = LocalTvMode.current
     val density = LocalDensity.current
     val unlockThresholdPx = with(density) { 120.dp.toPx() }
     val tapSlopPx = with(density) { 10.dp.toPx() }
@@ -61,6 +72,8 @@ internal fun SlideToUnlockOverlay(
     var uiVisible by remember { mutableStateOf(false) }
 
     val animatedOffset = remember { Animatable(0f) }
+
+    val tvUnlockFocusRequester = remember { FocusRequester() }
 
     LaunchedEffect(isDragging, dragOffsetY) {
         if (isDragging) {
@@ -83,6 +96,12 @@ internal fun SlideToUnlockOverlay(
         }
     }
 
+    LaunchedEffect(visible, isTv) {
+        if (visible && isTv) {
+            tvUnlockFocusRequester.requestFocus()
+        }
+    }
+
     AnimatedVisibility(
         visible = visible,
         enter = fadeIn(MaterialTheme.motionScheme.defaultEffectsSpec()),
@@ -92,46 +111,70 @@ internal fun SlideToUnlockOverlay(
         Box(
             modifier = Modifier
                 .fillMaxSize()
-                .pointerInput(unlockThresholdPx, tapSlopPx) {
-                    awaitEachGesture {
-                        val down = awaitFirstDown(requireUnconsumed = false)
-                        down.consume()
-                        var revealed = false
-                        do {
-                            val event = awaitPointerEvent()
-                            val change = event.changes.firstOrNull() ?: break
-                            if (!change.pressed) break
-                            val dy = change.position.y - down.position.y
-
-                            if (!revealed && abs(dy) < tapSlopPx) {
-                                if (!uiVisible) uiVisible = true
-                            } else {
-                                revealed = true
-                                isDragging = true
-                                val upward = (-dy).coerceAtLeast(0f)
-                                dragOffsetY = upward
-                                if (upward >= unlockThresholdPx) {
-                                    onUnlock()
-                                    return@awaitEachGesture
+                .then(
+                    if (isTv) {
+                        Modifier
+                            .focusRequester(tvUnlockFocusRequester)
+                            .focusable()
+                            .onKeyEvent { keyEvent ->
+                                if (keyEvent.type != KeyEventType.KeyDown) return@onKeyEvent false
+                                when (keyEvent.key) {
+                                    Key.Enter, Key.NumPadEnter, Key.DirectionCenter -> {
+                                        onUnlock()
+                                        true
+                                    }
+                                    Key.Back -> {
+                                        onDismiss()
+                                        true
+                                    }
+                                    else -> false
                                 }
                             }
-                            change.consume()
-                        } while (true)
+                    } else {
+                        Modifier.pointerInput(unlockThresholdPx, tapSlopPx) {
+                            awaitEachGesture {
+                                val down = awaitFirstDown(requireUnconsumed = false)
+                                down.consume()
+                                var revealed = false
+                                do {
+                                    val event = awaitPointerEvent()
+                                    val change = event.changes.firstOrNull() ?: break
+                                    if (!change.pressed) break
+                                    val dy = change.position.y - down.position.y
 
-                        if (!revealed) {
-                            uiVisible = true
+                                    if (!revealed && abs(dy) < tapSlopPx) {
+                                        if (!uiVisible) uiVisible = true
+                                    } else {
+                                        revealed = true
+                                        isDragging = true
+                                        val upward = (-dy).coerceAtLeast(0f)
+                                        dragOffsetY = upward
+                                        if (upward >= unlockThresholdPx) {
+                                            onUnlock()
+                                            return@awaitEachGesture
+                                        }
+                                    }
+                                    change.consume()
+                                } while (true)
+
+                                if (!revealed) {
+                                    uiVisible = true
+                                }
+                                isDragging = false
+                            }
                         }
-                        isDragging = false
                     }
-                },
+                ),
             contentAlignment = Alignment.Center,
         ) {
-            val offsetY = animatedOffset.value
-            val progress = (offsetY / unlockThresholdPx).coerceIn(0f, 1f)
+            val offsetY = if (isTv) 0f else animatedOffset.value
+            val progress = if (isTv) 0f else (offsetY / unlockThresholdPx).coerceIn(0f, 1f)
             val isUnlocked = progress > 0.7f
 
+            val showUi = uiVisible || progress > 0f || isTv
+
             AnimatedVisibility(
-                visible = uiVisible || progress > 0f,
+                visible = showUi,
                 enter = fadeIn(tween(200)),
                 exit = fadeOut(tween(200)),
             ) {
@@ -157,7 +200,7 @@ internal fun SlideToUnlockOverlay(
                         ) { unlocked ->
                             Icon(
                                 imageVector = if (unlocked) Tabler.Outline.LockOpen else Tabler.Outline.Lock,
-                                contentDescription = if (unlocked) "Unlocked" else "Drag up to unlock",
+                                contentDescription = if (unlocked) "Unlocked" else if (isTv) "Press OK to unlock" else "Drag up to unlock",
                                 tint = Color.White,
                                 modifier = Modifier.size(28.dp),
                             )
@@ -165,7 +208,7 @@ internal fun SlideToUnlockOverlay(
                     }
 
                     Text(
-                        text = "Slide up to unlock",
+                        text = if (isTv) "Press OK to unlock" else "Slide up to unlock",
                         color = Color.White.copy(alpha = 0.6f * (1f - progress)),
                         fontSize = 12.sp,
                         fontWeight = FontWeight.Medium,

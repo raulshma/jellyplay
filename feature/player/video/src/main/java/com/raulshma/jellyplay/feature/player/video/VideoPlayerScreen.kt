@@ -301,10 +301,13 @@ fun VideoPlayerScreen(
         onDispose {
             val currentlyInPip = viewModel.playerLifecycleManager.isInPipMode.value
             val isBgCasting = viewModel.isCastConnected && viewModel.castIsPlaying.value
+            val restoreOrientation = if (isTv)
+                ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE
+            else ActivityInfo.SCREEN_ORIENTATION_PORTRAIT
             if (isBgCasting && !currentlyInPip) {
                 activity?.let {
                     if (!it.isDestroyed && !it.isFinishing) {
-                        it.requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_PORTRAIT
+                        it.requestedOrientation = restoreOrientation
                         it.window.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
                         val window = it.window
                         val controller = WindowCompat.getInsetsController(window, window.decorView)
@@ -321,7 +324,7 @@ fun VideoPlayerScreen(
             } else if (!currentlyInPip) {
                 activity?.let {
                     if (!it.isDestroyed && !it.isFinishing) {
-                        it.requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_PORTRAIT
+                        it.requestedOrientation = restoreOrientation
                         it.window.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
                         val window = it.window
                         val controller = WindowCompat.getInsetsController(window, window.decorView)
@@ -423,18 +426,22 @@ fun VideoPlayerScreen(
     val syncPlayIgnoreWait by viewModel.syncPlayIgnoreWait.collectAsStateWithLifecycle()
 
     LaunchedEffect(isCastConnected, uiState.defaultOrientation) {
-        delay(400)
         activity?.let {
             if (!it.isDestroyed && !it.isFinishing) {
-                it.requestedOrientation = if (isCastConnected) {
-                    ActivityInfo.SCREEN_ORIENTATION_USER
+                if (isTv) {
+                    it.requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE
+                } else if (isCastConnected) {
+                    it.requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_USER
                 } else {
-                    when (uiState.defaultOrientation) {
-                        OrientationMode.SENSOR_LANDSCAPE -> ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE
-                        OrientationMode.SENSOR_PORTRAIT -> ActivityInfo.SCREEN_ORIENTATION_SENSOR_PORTRAIT
-                        OrientationMode.SENSOR -> ActivityInfo.SCREEN_ORIENTATION_SENSOR
-                        OrientationMode.LOCKED_LANDSCAPE -> ActivityInfo.SCREEN_ORIENTATION_LANDSCAPE
-                        OrientationMode.LOCKED_PORTRAIT -> ActivityInfo.SCREEN_ORIENTATION_PORTRAIT
+                    delay(400)
+                    if (!it.isDestroyed && !it.isFinishing) {
+                        it.requestedOrientation = when (uiState.defaultOrientation) {
+                            OrientationMode.SENSOR_LANDSCAPE -> ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE
+                            OrientationMode.SENSOR_PORTRAIT -> ActivityInfo.SCREEN_ORIENTATION_SENSOR_PORTRAIT
+                            OrientationMode.SENSOR -> ActivityInfo.SCREEN_ORIENTATION_SENSOR
+                            OrientationMode.LOCKED_LANDSCAPE -> ActivityInfo.SCREEN_ORIENTATION_LANDSCAPE
+                            OrientationMode.LOCKED_PORTRAIT -> ActivityInfo.SCREEN_ORIENTATION_PORTRAIT
+                        }
                     }
                 }
             }
@@ -587,6 +594,14 @@ fun VideoPlayerScreen(
                                 NativeKeyEvent.KEYCODE_DPAD_UP, NativeKeyEvent.KEYCODE_DPAD_DOWN -> {
                                     if (!showControls) {
                                         showControls = true
+                                        true
+                                    } else {
+                                        false
+                                    }
+                                }
+                                NativeKeyEvent.KEYCODE_BACK -> {
+                                    if (showControls) {
+                                        showControls = false
                                         true
                                     } else {
                                         false
@@ -1104,7 +1119,8 @@ fun VideoPlayerScreen(
 
     LaunchedEffect(showControls, controlsHasFocus, isSeeking, currentSheet, isOverflowMenuOpen) {
         if (showControls && !controlsHasFocus && !isSeeking && currentSheet == PlayerSheet.None && !isOverflowMenuOpen) {
-            delay(uiState.controlsTimeoutMs)
+            val timeout = if (isTv) uiState.controlsTimeoutMs * 2 else uiState.controlsTimeoutMs
+            delay(timeout)
             showControls = false
         }
     }
