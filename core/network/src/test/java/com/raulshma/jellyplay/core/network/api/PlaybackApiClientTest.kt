@@ -46,8 +46,8 @@ class PlaybackApiClientImplTest {
             jellyfin = jellyfin,
             okHttpClient = okHttpClient,
         )
-        engine._currentServer.value = testServer.copy(address = baseUrl)
-        engine._currentUser.value = testUser.copy(serverAddress = baseUrl)
+        engine.updateServer(testServer.copy(address = baseUrl))
+        engine.updateUser(testUser.copy(serverAddress = baseUrl))
 
         playbackClient = PlaybackApiClientImpl(engine)
     }
@@ -69,7 +69,7 @@ class PlaybackApiClientImplTest {
 
     @Test
     fun `getStreamUrl returns empty when no server`() {
-        engine._currentServer.value = null
+        engine.updateServer(null)
         val url = playbackClient.getStreamUrl("item-1", "source-1", 0L)
         assertEquals("", url)
     }
@@ -94,7 +94,7 @@ class PlaybackApiClientImplTest {
 
     @Test
     fun `getSubtitleDeliveryUrl returns empty when no server`() {
-        engine._currentServer.value = null
+        engine.updateServer(null)
         val url = playbackClient.getSubtitleDeliveryUrl("/video.srt")
         assertEquals("", url)
     }
@@ -120,7 +120,7 @@ class PlaybackApiClientImplTest {
 
     @Test
     fun `buildSubtitleDeliveryUrl returns empty when no server`() {
-        engine._currentServer.value = null
+        engine.updateServer(null)
         val url = playbackClient.buildSubtitleDeliveryUrl("item-1", "source-1", 0, "srt")
         assertEquals("", url)
     }

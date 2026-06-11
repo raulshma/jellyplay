@@ -63,14 +63,6 @@ import kotlinx.coroutines.withContext
 import okhttp3.OkHttpClient
 import javax.inject.Inject
 
-data class TrackOption(
-    val index: Int,
-    val label: String,
-    val language: String?,
-    val isSelected: Boolean,
-    val trackGroup: androidx.media3.common.TrackGroup? = null,
-)
-
 @HiltViewModel
 class VideoPlayerViewModel @Inject constructor(
     @ApplicationContext private val context: Context,
@@ -285,7 +277,7 @@ class VideoPlayerViewModel @Inject constructor(
                                     if (s.currentSubtitleCues == filteredCues) s else s.copy(currentSubtitleCues = filteredCues)
                                 }
                             } }
-                            launch { engine.availableTracks.collect { updateTracksFromEngine(engine) } }
+                            launch { engine.availableTracks.collect { trackSelectionHelper.updateTracksFromEngine() } }
                             launch { engine.errorFlow.collect { e -> _uiState.update { s -> s.copy(playerError = e, showPlaybackErrorDialog = true) } } }
                         }
                     }
@@ -306,9 +298,14 @@ class VideoPlayerViewModel @Inject constructor(
 
     val playerEngineRef: com.raulshma.jellyplay.feature.player.video.engine.MediaEngine? get() = playerSessionManager.engine
 
-    @Suppress("DEPRECATION")
-    private var pendingSubtitleStreamIndex: Int? = null
-    private var pendingAudioStreamIndex: Int? = null
+    private val trackSelectionHelper = TrackSelectionHelper(
+        preferencesStore = preferencesStore,
+        getEngine = { playerSessionManager.engine },
+        getUiState = { _uiState.value },
+        updateUiState = { transform -> _uiState.update(transform) },
+        getCurrentItemId = { playerSessionManager.sessionState.value.currentItemId },
+        scope = scope,
+    )
 
     fun initialize(
         itemId: String,
@@ -320,8 +317,7 @@ class VideoPlayerViewModel @Inject constructor(
         released = false
         lastSeekPositionMs = null
         lastSeekTimestamp = 0L
-        pendingSubtitleStreamIndex = subtitleStreamIndex
-        pendingAudioStreamIndex = audioStreamIndex
+        trackSelectionHelper.setPendingStreams(subtitleStreamIndex, audioStreamIndex)
         val currentItemId = playerSessionManager.sessionState.value.currentItemId
         if (currentItemId == itemId) {
             val engine = playerSessionManager.engine
@@ -549,90 +545,11 @@ class VideoPlayerViewModel @Inject constructor(
     }
 
     fun selectAudioTrack(option: TrackOption) {
-        val engine = playerSessionManager.engine ?: return
-        engine.selectTrack(com.raulshma.jellyplay.core.model.TrackType.AUDIO, option.index, option.trackGroup)
-        if (option.index < 0) {
-            selectedAudioTrackId = null
-        } else {
-            selectedAudioTrackId = option.index to option.trackGroup
-        }
-        _uiState.update { state ->
-            val isDefault = option.index < 0
-            state.copy(audioTracks = state.audioTracks.map { track ->
-                val matches = track.index == option.index && track.trackGroup == option.trackGroup
-                val isDefaultTrack = track.index < 0
-                track.copy(isSelected = if (isDefault) isDefaultTrack else matches)
-            })
-        }
-        persistStreamSelectionFromPlayer(
-            audioTrackOption = option,
-            subtitleTrackOption = null,
-        )
+        trackSelectionHelper.selectAudioTrack(option)
     }
 
     fun selectSubtitleTrack(option: TrackOption) {
-        val engine = playerSessionManager.engine ?: return
-
-        engine.selectTrack(com.raulshma.jellyplay.core.model.TrackType.SUBTITLE, option.index, option.trackGroup)
-
-        if (option.index < 0) {
-            selectedSubtitleTrackId = null
-        } else {
-            selectedSubtitleTrackId = option.index to option.trackGroup
-        }
-
-        _uiState.update { state ->
-            val isOff = option.index < 0
-            state.copy(subtitleTracks = state.subtitleTracks.map { track ->
-                val matches = track.index == option.index && track.trackGroup == option.trackGroup
-                val isOffTrack = track.index < 0
-                track.copy(isSelected = if (isOff) isOffTrack else matches)
-            })
-        }
-        persistStreamSelectionFromPlayer(
-            audioTrackOption = null,
-            subtitleTrackOption = option,
-        )
-    }
-
-    private fun persistStreamSelectionFromPlayer(
-        audioTrackOption: TrackOption?,
-        subtitleTrackOption: TrackOption?,
-    ) {
-        val itemId = playerSessionManager.sessionState.value.currentItemId ?: return
-        val streams = _uiState.value.mediaStreams
-        val currentSelection = preferencesStore.preferences.value.mediaStreamSelections[itemId]
-        val audioStreamIndex = if (audioTrackOption != null) {
-            if (audioTrackOption.index < 0) null
-            else resolveMediaStreamIndex(streams, StreamType.AUDIO, audioTrackOption.label)
-        } else {
-            currentSelection?.audioStreamIndex
-        }
-        val subtitleStreamIndex = if (subtitleTrackOption != null) {
-            if (subtitleTrackOption.index < 0) null
-            else resolveMediaStreamIndex(streams, StreamType.SUBTITLE, subtitleTrackOption.label)
-        } else {
-            currentSelection?.subtitleStreamIndex
-        }
-        launch {
-            preferencesStore.setMediaStreamSelection(
-                itemId = itemId,
-                audioStreamIndex = audioStreamIndex,
-                subtitleStreamIndex = subtitleStreamIndex,
-            )
-        }
-    }
-
-    private fun resolveMediaStreamIndex(
-        streams: List<MediaStream>,
-        type: StreamType,
-        trackLabel: String?,
-    ): Int? {
-        if (trackLabel == null) return null
-        val typedStreams = streams.filter { it.type == type }
-        return typedStreams.firstOrNull {
-            it.displayTitle == trackLabel || it.title == trackLabel || it.language == trackLabel
-        }?.index ?: typedStreams.firstOrNull { it.index >= 0 }?.index
+        trackSelectionHelper.selectSubtitleTrack(option)
     }
 
     fun setAspectRatio(ratio: AspectRatio) {
@@ -1326,154 +1243,6 @@ class VideoPlayerViewModel @Inject constructor(
         return trickplayManager.getThumbnail(positionMs)
     }
 
-    private var selectedSubtitleTrackId: Pair<Int, Any?>? = null
-    private var selectedAudioTrackId: Pair<Int, Any?>? = null
-
-    private fun updateTracksFromEngine(engine: com.raulshma.jellyplay.feature.player.video.engine.MediaEngine) {
-        val streams = _uiState.value.mediaStreams
-        val rawTracks = engine.availableTracks.value
-
-        val rawAudioTracks = rawTracks.filter { it.type == com.raulshma.jellyplay.core.model.TrackType.AUDIO }
-        val prevAudioSel = selectedAudioTrackId
-        if (prevAudioSel != null) {
-            val targetTrack = rawAudioTracks.find { it.index == prevAudioSel.first && it.trackGroup == prevAudioSel.second }
-            if (targetTrack != null && !targetTrack.isSelected) {
-                engine.selectTrack(com.raulshma.jellyplay.core.model.TrackType.AUDIO, targetTrack.index, targetTrack.trackGroup)
-                return
-            }
-        }
-
-        val rawSubTracks = rawTracks.filter { it.type == com.raulshma.jellyplay.core.model.TrackType.SUBTITLE }
-        val prevSubSel = selectedSubtitleTrackId
-        if (prevSubSel != null) {
-            val targetTrack = rawSubTracks.find { it.index == prevSubSel.first && it.trackGroup == prevSubSel.second }
-            if (targetTrack != null && !targetTrack.isSelected) {
-                engine.selectTrack(com.raulshma.jellyplay.core.model.TrackType.SUBTITLE, targetTrack.index, targetTrack.trackGroup)
-                return
-            }
-        }
-
-        val audioOptions = rawAudioTracks.map { t ->
-            TrackOption(t.index, t.label, t.language, t.isSelected, trackGroup = t.trackGroup as? androidx.media3.common.TrackGroup)
-        }
-
-        val audioTracks = if (audioOptions.isEmpty()) {
-            listOf(TrackOption(-1, "Default", null, true))
-        } else {
-            val sel = selectedAudioTrackId
-            val hasSelectionMatch = audioOptions.any { sel != null && sel.first == it.index && sel.second == it.trackGroup }
-            val resolvedSel = if (hasSelectionMatch) sel else {
-                val engineAutoSelected = audioOptions.find { it.isSelected }
-                if (engineAutoSelected != null) {
-                    selectedAudioTrackId = engineAutoSelected.index to engineAutoSelected.trackGroup
-                    selectedAudioTrackId
-                } else null
-            }
-            listOf(TrackOption(-1, "Default", null, resolvedSel == null)) + audioOptions.map { t ->
-                val isSel = if (resolvedSel != null) {
-                    resolvedSel.first == t.index && resolvedSel.second == t.trackGroup
-                } else {
-                    t.isSelected
-                }
-                t.copy(isSelected = isSel)
-            }
-        }
-
-        val engineSubOptions = rawSubTracks.map { t ->
-            TrackOption(t.index, t.label, t.language, t.isSelected, trackGroup = t.trackGroup as? androidx.media3.common.TrackGroup)
-        }
-
-        val subtitleTracks = if (engineSubOptions.isEmpty()) {
-            listOf(TrackOption(-1, "None", null, true))
-        } else {
-            val sel = selectedSubtitleTrackId
-            val hasSelectionMatch = engineSubOptions.any { sel != null && sel.first == it.index && sel.second == it.trackGroup }
-            val resolvedSel = if (hasSelectionMatch) sel else {
-                val engineAutoSelected = engineSubOptions.find { it.isSelected }
-                if (engineAutoSelected != null) {
-                    selectedSubtitleTrackId = engineAutoSelected.index to engineAutoSelected.trackGroup
-                    selectedSubtitleTrackId
-                } else null
-            }
-            listOf(TrackOption(-1, "Off", null, resolvedSel == null)) + engineSubOptions.map { t ->
-                val isSel = if (resolvedSel != null) {
-                    resolvedSel.first == t.index && resolvedSel.second == t.trackGroup
-                } else {
-                    t.isSelected
-                }
-                t.copy(isSelected = isSel)
-            }
-        }
-
-        _uiState.update { it.copy(audioTracks = audioTracks, subtitleTracks = subtitleTracks) }
-
-        val pendingAudio = pendingAudioStreamIndex
-        if (pendingAudio != null) {
-            pendingAudioStreamIndex = null
-            val targetStream = streams.firstOrNull {
-                it.type == com.raulshma.jellyplay.core.model.StreamType.AUDIO && it.index == pendingAudio
-            }
-            val matchByIndex = audioTracks.firstOrNull { it.index >= 0 && it.index == pendingAudio }
-            val matchByLabel = if (matchByIndex == null && targetStream != null) {
-                val targetLabel = targetStream.displayTitle ?: targetStream.title ?: targetStream.language
-                audioTracks.firstOrNull { it.index >= 0 && it.label == targetLabel }
-            } else null
-            (matchByIndex ?: matchByLabel)?.let { selectAudioTrack(it) }
-        } else {
-            val itemId = playerSessionManager.sessionState.value.currentItemId
-            if (itemId != null) {
-                val currentPrefs = preferencesStore.preferences.value
-                val stored = currentPrefs.mediaStreamSelections[itemId]
-                val audioIdx = stored?.audioStreamIndex
-                val prefAudioLang = currentPrefs.preferredAudioLanguage
-                if (audioIdx != null) {
-                    val targetStream = streams.firstOrNull {
-                        it.type == com.raulshma.jellyplay.core.model.StreamType.AUDIO && it.index == audioIdx
-                    }
-                    val targetLabel = targetStream?.displayTitle ?: targetStream?.title ?: targetStream?.language
-                    if (targetLabel != null) {
-                        audioTracks.firstOrNull { it.index >= 0 && it.label == targetLabel }?.let { selectAudioTrack(it) }
-                    }
-                } else if (prefAudioLang != null) {
-                    audioTracks.firstOrNull { it.index >= 0 && it.language.equals(prefAudioLang, ignoreCase = true) }?.let { selectAudioTrack(it) }
-                }
-            }
-        }
-
-        val pending = pendingSubtitleStreamIndex
-        if (pending != null) {
-            pendingSubtitleStreamIndex = null
-            val subStreams = _uiState.value.mediaStreams
-            val targetStream = subStreams.firstOrNull { it.type == com.raulshma.jellyplay.core.model.StreamType.SUBTITLE && it.index == pending }
-            if (targetStream != null) {
-                val targetLabel = targetStream.displayTitle ?: targetStream.title ?: targetStream.language
-                val match = subtitleTracks.firstOrNull { it.index >= 0 && it.label == targetLabel }
-                if (match != null) {
-                    selectSubtitleTrack(match)
-                }
-            }
-        } else {
-            val itemId = playerSessionManager.sessionState.value.currentItemId
-            if (itemId != null) {
-                val currentPrefs = preferencesStore.preferences.value
-                val stored = currentPrefs.mediaStreamSelections[itemId]
-                val subIdx = stored?.subtitleStreamIndex
-                val prefSubLang = currentPrefs.preferredSubtitleLanguage
-                if (subIdx != null) {
-                    val targetStream = streams.firstOrNull {
-                        it.type == com.raulshma.jellyplay.core.model.StreamType.SUBTITLE && it.index == subIdx
-                    }
-                    val targetLabel = targetStream?.displayTitle ?: targetStream?.title ?: targetStream?.language
-                    if (targetLabel != null) {
-                        subtitleTracks.firstOrNull { it.index >= 0 && it.label == targetLabel }?.let { selectSubtitleTrack(it) }
-                    }
-                } else if (prefSubLang != null) {
-                    subtitleTracks.firstOrNull { it.index >= 0 && it.language.equals(prefSubLang, ignoreCase = true) }?.let { selectSubtitleTrack(it) }
-                }
-            }
-        }
-    }
-
     private fun reportCurrentPlaybackStopped() {
         if (cachedPreferences.incognitoModeEnabled) return
         val itemId = playerSessionManager.sessionState.value.currentItemId ?: return
@@ -1520,10 +1289,7 @@ class VideoPlayerViewModel @Inject constructor(
         playerSessionManager.release()
         playerLifecycleManager.reset()
         trickplayManager.clear()
-        selectedSubtitleTrackId = null
-        selectedAudioTrackId = null
-        pendingSubtitleStreamIndex = null
-        pendingAudioStreamIndex = null
+        trackSelectionHelper.reset()
         mediaDetail = null
         autoplayNext = false
         equalizerEnabled = false

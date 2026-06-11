@@ -1,18 +1,10 @@
 package com.raulshma.jellyplay.feature.onboarding
 
+import com.raulshma.jellyplay.core.datastore.PreferencesEditor
 import com.raulshma.jellyplay.core.datastore.SeerrPreferencesStore
 import com.raulshma.jellyplay.core.datastore.SeerrSecureCredentialsStore
 import com.raulshma.jellyplay.core.model.seerr.SeerrAuthMethod
 import com.raulshma.jellyplay.core.datastore.UserPreferencesStore
-import com.raulshma.jellyplay.core.model.ColorStyle
-import com.raulshma.jellyplay.core.model.ContrastLevel
-import com.raulshma.jellyplay.core.model.HomeMode
-import com.raulshma.jellyplay.core.model.HomeSectionType
-import com.raulshma.jellyplay.core.model.OrientationMode
-import com.raulshma.jellyplay.core.model.PlayerType
-import com.raulshma.jellyplay.core.model.StreamingQuality
-import com.raulshma.jellyplay.core.model.SubtitleStyle
-import com.raulshma.jellyplay.core.model.ThemeMode
 import com.raulshma.jellyplay.core.model.UserPreferences
 import com.raulshma.jellyplay.core.ui.viewmodel.JellyPlayViewModel
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -26,6 +18,8 @@ class OnboardingViewModel @Inject constructor(
     val seerrPreferencesStore: SeerrPreferencesStore,
     private val seerrSecureCredentialsStore: SeerrSecureCredentialsStore,
 ) : JellyPlayViewModel() {
+
+    private val editor = PreferencesEditor(scope, preferencesStore)
 
     val preferences = preferencesStore.preferences
         .stateIn(scope, SharingStarted.WhileSubscribed(5_000), UserPreferences())
@@ -54,119 +48,35 @@ class OnboardingViewModel @Inject constructor(
         }
     }
 
-    fun setThemeMode(mode: ThemeMode) {
-        launch { preferencesStore.setThemeMode(mode) }
-    }
-
-    fun setDynamicTheming(enabled: Boolean) {
-        launch { preferencesStore.setDynamicTheming(enabled) }
-    }
-
-    fun setOledMode(enabled: Boolean) {
-        launch { preferencesStore.setOledMode(enabled) }
-    }
-
-    fun setContrastLevel(level: ContrastLevel) {
-        launch { preferencesStore.setContrastLevel(level) }
-    }
-
-    fun setAccentColorSwatch(swatch: String) {
-        launch { preferencesStore.setAccentColorSwatch(swatch) }
-    }
-
-    fun setColorStyle(style: ColorStyle) {
-        launch { preferencesStore.setColorStyle(style) }
-    }
-
-    fun setPerformanceMode(enabled: Boolean) {
-        launch { preferencesStore.setPerformanceMode(enabled) }
-    }
-
-    fun setHomeHeroEnabled(enabled: Boolean) {
-        launch { preferencesStore.setHomeHeroEnabled(enabled) }
-    }
-
-    fun setHomeMode(mode: HomeMode) {
-        launch { preferencesStore.setHomeMode(mode) }
-    }
-
-    fun setEnabledHomeSectionTypes(types: Set<HomeSectionType>) {
-        launch { preferencesStore.setEnabledHomeSectionTypes(types) }
-    }
-
-    fun setNavBarShowLabels(show: Boolean) {
-        launch { preferencesStore.setNavBarShowLabels(show) }
-    }
-
-    fun setPreferredPlayer(playerType: PlayerType) {
-        launch { preferencesStore.setPreferredPlayer(playerType) }
-    }
-
-    fun setStreamingQuality(quality: StreamingQuality) {
-        launch { preferencesStore.setStreamingQuality(quality) }
-    }
-
-    fun setVideoSeekDurationMs(ms: Long) {
-        launch { preferencesStore.setVideoSeekDurationMs(ms) }
-    }
-
-    fun setVideoGesturesEnabled(enabled: Boolean) {
-        launch { preferencesStore.setVideoGesturesEnabled(enabled) }
-    }
-
-    fun setVideoDefaultOrientation(mode: OrientationMode) {
-        launch { preferencesStore.setVideoDefaultOrientation(mode) }
-    }
-
-    fun setVideoAutoplayNext(enabled: Boolean) {
-        launch { preferencesStore.setVideoAutoplayNext(enabled) }
-    }
-
-    fun setAudioDefaultSpeed(speed: Float) {
-        launch { preferencesStore.setAudioDefaultSpeed(speed) }
-    }
-
-    fun setGaplessEnabled(enabled: Boolean) {
-        launch { preferencesStore.setGaplessEnabled(enabled) }
-    }
-
-    fun setCrossfadeDurationMs(ms: Long) {
-        launch { preferencesStore.setCrossfadeDurationMs(ms) }
-    }
-
-    fun setAudioNormalizationEnabled(enabled: Boolean) {
-        launch { preferencesStore.setAudioNormalizationEnabled(enabled) }
-    }
-
-    fun setAudioAutoplayNext(enabled: Boolean) {
-        launch { preferencesStore.setAudioAutoplayNext(enabled) }
-    }
-
-    fun setSubtitleStyle(style: SubtitleStyle) {
-        launch { preferencesStore.setSubtitleStyle(style) }
-    }
-
-    fun setPreferredSubtitleLanguage(language: String?) {
-        launch { preferencesStore.setPreferredSubtitleLanguage(language) }
-    }
-
-    fun setPinLockEnabled(enabled: Boolean) {
-        launch { preferencesStore.setPinLockEnabled(enabled) }
-    }
-
-    fun setPinHash(hash: String?) {
-        launch { preferencesStore.setPinHash(hash) }
-    }
-
-    fun setBiometricLockEnabled(enabled: Boolean) {
-        launch { preferencesStore.setBiometricLockEnabled(enabled) }
-    }
-
-    fun setAutoLockTimerMs(ms: Long) {
-        launch { preferencesStore.setAutoLockTimerMs(ms) }
-    }
-
-    fun hashPin(pin: String): String = preferencesStore.hashPin(pin)
+    fun setThemeMode(mode: com.raulshma.jellyplay.core.model.ThemeMode) = editor.setThemeMode(mode)
+    fun setDynamicTheming(enabled: Boolean) = editor.setDynamicTheming(enabled)
+    fun setOledMode(enabled: Boolean) = editor.setOledMode(enabled)
+    fun setContrastLevel(level: com.raulshma.jellyplay.core.model.ContrastLevel) = editor.setContrastLevel(level)
+    fun setAccentColorSwatch(swatch: String) = editor.setAccentColorSwatch(swatch)
+    fun setColorStyle(style: com.raulshma.jellyplay.core.model.ColorStyle) = editor.setColorStyle(style)
+    fun setPerformanceMode(enabled: Boolean) = editor.setPerformanceMode(enabled)
+    fun setHomeHeroEnabled(enabled: Boolean) = editor.setHomeHeroEnabled(enabled)
+    fun setHomeMode(mode: com.raulshma.jellyplay.core.model.HomeMode) = editor.setHomeMode(mode)
+    fun setEnabledHomeSectionTypes(types: Set<com.raulshma.jellyplay.core.model.HomeSectionType>) = editor.setEnabledHomeSectionTypes(types)
+    fun setNavBarShowLabels(show: Boolean) = editor.setNavBarShowLabels(show)
+    fun setPreferredPlayer(playerType: com.raulshma.jellyplay.core.model.PlayerType) = editor.setPreferredPlayer(playerType)
+    fun setStreamingQuality(quality: com.raulshma.jellyplay.core.model.StreamingQuality) = editor.setStreamingQuality(quality)
+    fun setVideoSeekDurationMs(ms: Long) = editor.setVideoSeekDurationMs(ms)
+    fun setVideoGesturesEnabled(enabled: Boolean) = editor.setVideoGesturesEnabled(enabled)
+    fun setVideoDefaultOrientation(mode: com.raulshma.jellyplay.core.model.OrientationMode) = editor.setVideoDefaultOrientation(mode)
+    fun setVideoAutoplayNext(enabled: Boolean) = editor.setVideoAutoplayNext(enabled)
+    fun setAudioDefaultSpeed(speed: Float) = editor.setAudioDefaultSpeed(speed)
+    fun setGaplessEnabled(enabled: Boolean) = editor.setGaplessEnabled(enabled)
+    fun setCrossfadeDurationMs(ms: Long) = editor.setCrossfadeDurationMs(ms)
+    fun setAudioNormalizationEnabled(enabled: Boolean) = editor.setAudioNormalizationEnabled(enabled)
+    fun setAudioAutoplayNext(enabled: Boolean) = editor.setAudioAutoplayNext(enabled)
+    fun setSubtitleStyle(style: com.raulshma.jellyplay.core.model.SubtitleStyle) = editor.setSubtitleStyle(style)
+    fun setPreferredSubtitleLanguage(language: String?) = editor.setPreferredSubtitleLanguage(language)
+    fun setPinLockEnabled(enabled: Boolean) = editor.setPinLockEnabled(enabled)
+    fun setPinHash(hash: String?) = editor.setPinHash(hash)
+    fun setBiometricLockEnabled(enabled: Boolean) = editor.setBiometricLockEnabled(enabled)
+    fun setAutoLockTimerMs(ms: Long) = editor.setAutoLockTimerMs(ms)
+    fun hashPin(pin: String): String = editor.hashPin(pin)
 
     fun setSeerrServerUrl(url: String) {
         launch { seerrPreferencesStore.setServerUrl(url) }

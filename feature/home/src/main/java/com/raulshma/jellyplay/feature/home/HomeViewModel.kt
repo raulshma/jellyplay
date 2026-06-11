@@ -19,6 +19,7 @@ import com.raulshma.jellyplay.core.data.repository.AuthRepository
 import com.raulshma.jellyplay.core.model.UserInfo
 import com.raulshma.jellyplay.core.model.seerr.DiscoverSectionType
 import com.raulshma.jellyplay.core.model.seerr.SeerrSearchResponse
+import com.raulshma.jellyplay.core.model.seerr.SeerrRequestResult
 import com.raulshma.jellyplay.core.model.HomeSectionType
 import com.raulshma.jellyplay.core.model.NetworkStatus
 import com.raulshma.jellyplay.core.model.OfflineMode
@@ -306,7 +307,7 @@ class HomeViewModel @Inject constructor(
 
     private fun requestSeerrMedia(event: HomeUiEvent.RequestSeerrMedia) {
         launch {
-            _uiState.update { it.copy(seerrRequestState = it.seerrRequestState.copy(result = DiscoverRequestResult(isLoading = true))) }
+            _uiState.update { it.copy(seerrRequestState = it.seerrRequestState.copy(result = SeerrRequestResult(isLoading = true))) }
             seerrRequestDelegate.requestMedia(
                 mediaType = event.item.mediaType,
                 tmdbId = event.item.id,
@@ -316,9 +317,9 @@ class HomeViewModel @Inject constructor(
                 rootFolder = event.rootFolder,
                 tags = event.tags,
             ).onSuccess {
-                _uiState.update { it.copy(seerrRequestState = it.seerrRequestState.copy(result = DiscoverRequestResult(success = true))) }
+                _uiState.update { it.copy(seerrRequestState = it.seerrRequestState.copy(result = SeerrRequestResult(success = true))) }
             }.onFailure { throwable ->
-                _uiState.update { it.copy(seerrRequestState = it.seerrRequestState.copy(result = DiscoverRequestResult(error = throwable.message ?: "Request failed"))) }
+                _uiState.update { it.copy(seerrRequestState = it.seerrRequestState.copy(result = SeerrRequestResult(error = throwable.message ?: "Request failed"))) }
             }
         }
     }

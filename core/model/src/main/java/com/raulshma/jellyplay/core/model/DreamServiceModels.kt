@@ -3,6 +3,7 @@ package com.raulshma.jellyplay.core.model
 import androidx.compose.runtime.Immutable
 import kotlinx.serialization.Serializable
 
+@Immutable
 @Serializable
 enum class DreamImageCategory {
     MOVIES,
@@ -10,6 +11,7 @@ enum class DreamImageCategory {
     MUSIC,
 }
 
+@Immutable
 @Serializable
 enum class DreamTransitionStyle {
     CROSSFADE,

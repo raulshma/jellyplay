@@ -10,12 +10,12 @@ import androidx.work.CoroutineWorker
 import androidx.work.WorkerParameters
 import com.raulshma.jellyplay.core.database.dao.SeenMediaDao
 import com.raulshma.jellyplay.core.database.entity.SeenMediaEntity
+import com.raulshma.jellyplay.core.data.repository.MediaRepository
 import com.raulshma.jellyplay.core.datastore.UserPreferencesStore
 import com.raulshma.jellyplay.core.model.LibraryFolder
 import com.raulshma.jellyplay.core.model.NotificationPreferences
 import com.raulshma.jellyplay.core.notification.dispatcher.NotificationDispatcher
 import com.raulshma.jellyplay.core.notification.scheduler.NotificationScheduler
-import com.raulshma.jellyplay.core.network.JellyfinApiClient
 import dagger.assisted.Assisted
 import dagger.assisted.AssistedInject
 import kotlinx.coroutines.delay
@@ -28,7 +28,7 @@ import java.util.Calendar
 class NewMediaCheckWorker @AssistedInject constructor(
     @Assisted appContext: Context,
     @Assisted workerParams: WorkerParameters,
-    private val apiClient: JellyfinApiClient,
+    private val mediaRepository: MediaRepository,
     private val seenMediaDao: SeenMediaDao,
     private val preferencesStore: UserPreferencesStore,
     private val dispatcher: NotificationDispatcher,
@@ -64,7 +64,7 @@ class NewMediaCheckWorker @AssistedInject constructor(
     }
 
     private suspend fun checkForNewMedia(prefs: NotificationPreferences) {
-        val foldersResult = apiClient.getLibraryFolders()
+        val foldersResult = mediaRepository.getLibraryFolders()
         val folders = foldersResult.getOrDefault(emptyList())
         if (folders.isEmpty()) return
 
@@ -81,7 +81,7 @@ class NewMediaCheckWorker @AssistedInject constructor(
             if (isStopped) break
             delay(200)
 
-            val latestResult = apiClient.getLatestMedia(
+            val latestResult = mediaRepository.getLatestMedia(
                 parentId = folder.id,
                 limit = prefs.maxPerCheck,
             )

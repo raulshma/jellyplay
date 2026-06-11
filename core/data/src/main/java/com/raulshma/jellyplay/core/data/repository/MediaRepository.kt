@@ -1,31 +1,19 @@
 package com.raulshma.jellyplay.core.data.repository
 
 import androidx.paging.PagingData
-import com.raulshma.jellyplay.core.model.DvrSeriesTimer
-import com.raulshma.jellyplay.core.model.DvrTimer
-import com.raulshma.jellyplay.core.model.EpgGuide
 import com.raulshma.jellyplay.core.model.Genre
 import com.raulshma.jellyplay.core.model.HomeSection
 import com.raulshma.jellyplay.core.model.HomeSectionType
 import com.raulshma.jellyplay.core.model.LibraryFolder
-import com.raulshma.jellyplay.core.model.LiveTvChannel
-import com.raulshma.jellyplay.core.model.LiveTvProgram
 import com.raulshma.jellyplay.core.model.LrcLibTrack
 import com.raulshma.jellyplay.core.model.LyricsResult
 import com.raulshma.jellyplay.core.model.MediaDetail
-import com.raulshma.jellyplay.core.model.Playlist
-import com.raulshma.jellyplay.core.model.PlaylistItem
 import com.raulshma.jellyplay.core.model.MediaItem
 import com.raulshma.jellyplay.core.model.MediaType
-import com.raulshma.jellyplay.core.model.NewsletterData
 import com.raulshma.jellyplay.core.model.SearchResult
-import com.raulshma.jellyplay.core.model.SyncPlayGroup
-import com.raulshma.jellyplay.core.model.SyncPlayGroupInfo
-import com.raulshma.jellyplay.core.model.SyncPlayRepeatMode
-import com.raulshma.jellyplay.core.model.SyncPlayShuffleMode
 import kotlinx.coroutines.flow.Flow
 
-interface MediaRepository {
+interface MediaRepository : LiveTvRepository, SyncPlayRepository, NewsletterRepository, PlaylistRepository {
 
     suspend fun getHomeSections(
         enabledSections: Set<HomeSectionType> = HomeSectionType.CONFIGURABLE.toSet(),
@@ -33,6 +21,11 @@ interface MediaRepository {
     ): Result<List<HomeSection>>
 
     suspend fun getLibraryFolders(): Result<List<LibraryFolder>>
+
+    suspend fun getLatestMedia(
+        parentId: String,
+        limit: Int = 16,
+    ): Result<List<MediaItem>>
 
     suspend fun getMediaItems(
         parentId: String? = null,
@@ -117,88 +110,11 @@ interface MediaRepository {
 
     suspend fun getLyricsById(lrcLibId: Long, itemId: String): Result<LyricsResult>
 
-    suspend fun getPlaylists(limit: Int = 50): Result<List<Playlist>>
-
-    suspend fun getPlaylistItems(playlistId: String, startIndex: Int = 0, limit: Int = 50): Result<List<PlaylistItem>>
-
-    suspend fun createPlaylist(name: String, overview: String? = null, itemIds: List<String> = emptyList()): Result<String>
-
-    suspend fun updatePlaylist(playlistId: String, name: String? = null, overview: String? = null, isPublic: Boolean? = null): Result<Unit>
-
-    suspend fun deletePlaylist(playlistId: String): Result<Unit>
-
-    suspend fun addItemsToPlaylist(playlistId: String, itemIds: List<String>): Result<Unit>
-
-    suspend fun removeItemsFromPlaylist(playlistId: String, entryIds: List<String>): Result<Unit>
-
-    suspend fun movePlaylistItem(playlistId: String, entryId: String, newIndex: Int): Result<Unit>
-
-    suspend fun getSyncPlayGroups(): Result<List<SyncPlayGroup>>
-
-    suspend fun joinSyncPlayGroup(groupId: String): Result<Unit>
-
-    suspend fun leaveSyncPlayGroup(): Result<Unit>
-
-    suspend fun createSyncPlayGroup(groupName: String): Result<Unit>
-
-    suspend fun getSyncPlayInfo(groupId: String? = null): Result<SyncPlayGroupInfo>
-
-    suspend fun syncPlayReady(
-        positionTicks: Long = 0L,
-        isPlaying: Boolean = false,
-        playlistItemId: String? = null,
-    ): Result<Unit>
-
-    suspend fun syncPlayPause(): Result<Unit>
-
-    suspend fun syncPlayUnpause(): Result<Unit>
-
-    suspend fun syncPlaySeek(positionTicks: Long): Result<Unit>
-
-    suspend fun syncPlayStop(): Result<Unit>
-
-    suspend fun syncPlayNextItem(playlistItemId: String): Result<Unit>
-
-    suspend fun syncPlayPreviousItem(playlistItemId: String): Result<Unit>
-
-    suspend fun syncPlaySetRepeatMode(mode: SyncPlayRepeatMode): Result<Unit>
-
-    suspend fun syncPlaySetShuffleMode(mode: SyncPlayShuffleMode): Result<Unit>
-
-    suspend fun syncPlaySetNewQueue(
-        itemIds: List<String>,
-        playingItemId: String,
-        mediaSourceId: String? = null,
-        startPositionTicks: Long = 0L,
-    ): Result<Unit>
-
-    suspend fun syncPlaySetIgnoreWait(ignore: Boolean): Result<Unit>
-
-    suspend fun syncPlayRemoveFromPlaylist(playlistItemId: String): Result<Unit>
-
-    suspend fun syncPlayMovePlaylistItem(playlistItemId: String, newIndex: Int): Result<Unit>
-
     suspend fun toggleFavorite(itemId: String): Result<Boolean>
 
     suspend fun markPlayed(itemId: String): Result<Unit>
 
     suspend fun markUnplayed(itemId: String): Result<Unit>
-
-    suspend fun getLiveTvChannels(startIndex: Int = 0, limit: Int = 50): Result<List<LiveTvChannel>>
-
-    suspend fun getLiveTvPrograms(channelId: String, startDateUtc: String? = null, endDateUtc: String? = null): Result<List<LiveTvProgram>>
-
-    suspend fun getLiveTvGuide(startDateUtc: String, endDateUtc: String, startIndex: Int = 0, limit: Int = 50): Result<EpgGuide>
-
-    suspend fun getTimers(): Result<List<DvrTimer>>
-
-    suspend fun getSeriesTimers(): Result<List<DvrSeriesTimer>>
-
-    suspend fun createTimer(programId: String, channelId: String, startDate: String? = null, endDate: String? = null): Result<Unit>
-
-    suspend fun cancelTimer(timerId: String): Result<Unit>
-
-    suspend fun getNewsletterData(sinceDate: String, limit: Int = 20): Result<NewsletterData>
 
     suspend fun cleanupLyricsCache()
 }

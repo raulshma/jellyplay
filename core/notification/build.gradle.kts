@@ -24,7 +24,7 @@ android {
 
 dependencies {
     implementation(project(":core:model"))
-    implementation(project(":core:network"))
+    implementation(project(":core:data"))
     implementation(project(":core:database"))
     implementation(project(":core:datastore"))
 

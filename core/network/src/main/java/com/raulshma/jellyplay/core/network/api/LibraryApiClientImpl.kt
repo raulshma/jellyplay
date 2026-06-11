@@ -208,7 +208,7 @@ class LibraryApiClientImpl @Inject constructor(
     override suspend fun getLibraryFolders(): Result<List<LibraryFolder>> = engine.apiResultWithRetry {
         val response = engine.requireApi().libraryApi.getMediaFolders().content
             ?: throw IllegalStateException("Server returned empty response")
-        val enabledFolders = engine._currentUser.value?.enabledFolderIds
+        val enabledFolders = engine.currentUser.value?.enabledFolderIds
         (response.items ?: emptyList()).map { item ->
             LibraryFolder(
                 id = item.id.toString(),
@@ -404,7 +404,7 @@ class LibraryApiClientImpl @Inject constructor(
 
     override suspend fun getGenres(parentId: String?, startIndex: Int, limit: Int): Result<List<Genre>> =
         engine.apiResultWithRetry {
-            val userId = engine._currentUser.value?.id?.toUUID()
+            val userId = engine.currentUser.value?.id?.toUUID()
             val response = engine.requireApi().genresApi.getGenres(
                 parentId = parentId?.let { it.toUUID() },
                 userId = userId,
@@ -612,7 +612,7 @@ class LibraryApiClientImpl @Inject constructor(
                 ItemFields.DATE_CREATED,
             ),
         ).content
-        val currentUserId = engine._currentUser.value?.id
+        val currentUserId = engine.currentUser.value?.id
         response.items.map { item ->
             Playlist(
                 id = item.id.toString(),
@@ -663,7 +663,7 @@ class LibraryApiClientImpl @Inject constructor(
         overview: String?,
         itemIds: List<String>,
     ): Result<String> = engine.apiResultWithRetry {
-        val userId = engine._currentUser.value?.id?.toUUID()
+        val userId = engine.currentUser.value?.id?.toUUID()
         val dto = CreatePlaylistDto(
             name = name,
             ids = itemIds.map { it.toUUID() },
@@ -702,7 +702,7 @@ class LibraryApiClientImpl @Inject constructor(
         playlistId: String,
         itemIds: List<String>,
     ): Result<Unit> = engine.apiResultWithRetry {
-        val userId = engine._currentUser.value?.id?.toUUID()
+        val userId = engine.currentUser.value?.id?.toUUID()
         engine.requireApi().playlistsApi.addItemToPlaylist(
             playlistId = playlistId.toUUID(),
             ids = itemIds.map { it.toUUID() },
@@ -736,7 +736,7 @@ class LibraryApiClientImpl @Inject constructor(
     }
 
     override suspend fun markPlayed(itemId: String): Result<Unit> = engine.apiResultWithRetry {
-        val userId = engine._currentUser.value?.id
+        val userId = engine.currentUser.value?.id
             ?: throw IllegalStateException("Not authenticated")
         engine.requireApi().playStateApi.markPlayedItem(
             userId = userId.toUUID(),
@@ -745,7 +745,7 @@ class LibraryApiClientImpl @Inject constructor(
     }
 
     override suspend fun markUnplayed(itemId: String): Result<Unit> = engine.apiResultWithRetry {
-        val userId = engine._currentUser.value?.id
+        val userId = engine.currentUser.value?.id
             ?: throw IllegalStateException("Not authenticated")
         engine.requireApi().playStateApi.markUnplayedItem(
             userId = userId.toUUID(),
@@ -754,7 +754,7 @@ class LibraryApiClientImpl @Inject constructor(
     }
 
     override suspend fun toggleFavorite(itemId: String, currentIsFavorite: Boolean?): Result<Boolean> = engine.apiResultWithRetry {
-        val userId = engine._currentUser.value?.id
+        val userId = engine.currentUser.value?.id
             ?: throw IllegalStateException("Not authenticated")
         val uuid = itemId.toUUID()
         val cached = favoriteCache[uuid]

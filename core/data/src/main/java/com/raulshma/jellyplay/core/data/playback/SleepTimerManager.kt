@@ -15,20 +15,22 @@ import javax.inject.Inject
 import javax.inject.Singleton
 
 @Singleton
-class SleepTimerManager @Inject constructor() {
+class SleepTimerManager @Inject constructor() : AudioSleepTimerManager {
 
     private val _isActive = MutableStateFlow(false)
     val isActive: StateFlow<Boolean> = _isActive.asStateFlow()
+    override val isSleepTimerActive: StateFlow<Boolean> get() = isActive
 
     private val _remainingMs = MutableStateFlow(0L)
     val remainingMs: StateFlow<Long> = _remainingMs.asStateFlow()
+    override val sleepTimerRemainingMs: StateFlow<Long> get() = remainingMs
 
     private companion object {
         const val SLEEP_TIMER_TICK_MS = 5_000L
     }
 
     private val _isEndOfEpisodeMode = MutableStateFlow(false)
-    val isEndOfEpisodeMode: StateFlow<Boolean> = _isEndOfEpisodeMode.asStateFlow()
+    override val isEndOfEpisodeMode: StateFlow<Boolean> = _isEndOfEpisodeMode.asStateFlow()
 
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
 
@@ -36,7 +38,7 @@ class SleepTimerManager @Inject constructor() {
 
     private var onTimerExpired: (() -> Unit)? = null
 
-    fun setOnTimerExpired(callback: (() -> Unit)?) {
+    override fun setOnTimerExpired(callback: (() -> Unit)?) {
         onTimerExpired = callback
     }
 
@@ -63,12 +65,16 @@ class SleepTimerManager @Inject constructor() {
         }
     }
 
+    override fun startSleepTimer(durationMs: Long) = start(durationMs)
+
     fun startEndOfEpisode() {
         cancel()
         _isActive.value = true
         _isEndOfEpisodeMode.value = true
         _remainingMs.value = 0
     }
+
+    override fun startEndOfEpisodeTimer() = startEndOfEpisode()
 
     fun cancel() {
         timerJob?.cancel()
@@ -78,7 +84,9 @@ class SleepTimerManager @Inject constructor() {
         _isEndOfEpisodeMode.value = false
     }
 
-    fun triggerEndOfEpisode() {
+    override fun cancelSleepTimer() = cancel()
+
+    override fun triggerEndOfEpisode() {
         if (_isEndOfEpisodeMode.value && _isActive.value) {
             cancel()
             try {
@@ -93,6 +101,8 @@ class SleepTimerManager @Inject constructor() {
         val remaining = _remainingMs.value
         return formatRemainingTime(remaining)
     }
+
+    override fun getSleepTimerDisplayText(): String = getDisplayText()
 
     private fun formatRemainingTime(ms: Long): String {
         val totalSeconds = ms / 1000

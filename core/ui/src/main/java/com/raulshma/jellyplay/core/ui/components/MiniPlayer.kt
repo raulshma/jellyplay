@@ -49,6 +49,12 @@ import com.raulshma.jellyplay.core.designsystem.theme.ShapeCache
 import com.raulshma.jellyplay.core.designsystem.theme.LocalIsSynthwave
 import com.raulshma.jellyplay.core.designsystem.theme.LocalIsSoothingTheme
 import com.raulshma.jellyplay.core.designsystem.theme.LocalIsMonochromeTheme
+import com.raulshma.jellyplay.core.designsystem.theme.LocalThemeVariant
+import com.raulshma.jellyplay.core.designsystem.theme.cardBorder
+import com.raulshma.jellyplay.core.designsystem.theme.containerTint
+import com.raulshma.jellyplay.core.designsystem.theme.shadowElevation
+import com.raulshma.jellyplay.core.designsystem.theme.tonalElevation
+import com.raulshma.jellyplay.core.designsystem.theme.ThemeVariant
 import coil3.size.Size as CoilSize
 import androidx.compose.ui.graphics.Brush
 import com.raulshma.jellyplay.core.ui.image.MediaImage
@@ -107,26 +113,8 @@ fun MiniPlayer(
             blue = (baseColor.blue * 0.55f + 0.08f).coerceIn(0f, 1f),
             alpha = 0.92f,
         )
-        val isSynthwave = LocalIsSynthwave.current
-        val isSoothing = LocalIsSoothingTheme.current
-        val isMonochrome = LocalIsMonochromeTheme.current
-        val synthwaveTint = Color(0xFF160C2D).copy(alpha = 0.82f)
-        val soothingTint = if (androidx.compose.foundation.isSystemInDarkTheme()) {
-            Color(0xFF161B22).copy(alpha = 0.88f)
-        } else {
-            Color(0xFFFFFFFF).copy(alpha = 0.88f)
-        }
-        val monochromeTint = if (androidx.compose.foundation.isSystemInDarkTheme()) {
-            Color(0xFF000000).copy(alpha = 0.95f)
-        } else {
-            Color(0xFFFFFFFF).copy(alpha = 0.95f)
-        }
-        val targetTint = when {
-            isSynthwave -> synthwaveTint
-            isSoothing -> soothingTint
-            isMonochrome -> monochromeTint
-            else -> pixelTint
-        }
+        val themeVariant = com.raulshma.jellyplay.core.designsystem.theme.LocalThemeVariant.current
+        val targetTint = themeVariant.containerTint(pixelTint)
 
         val animatedColor by animateColorAsState(
             targetValue = targetTint,
@@ -156,37 +144,15 @@ fun MiniPlayer(
             }
         } else Modifier
 
-        val primary = MaterialTheme.colorScheme.primary
-        val secondary = MaterialTheme.colorScheme.secondary
-        val synthwaveBorder = remember(primary, secondary) {
-            androidx.compose.foundation.BorderStroke(
-                width = 1.dp,
-                brush = Brush.linearGradient(colors = listOf(primary, secondary))
-            )
-        }
-        val outlineColor = MaterialTheme.colorScheme.outline
-        val soothingBorder = remember(outlineColor) {
-            androidx.compose.foundation.BorderStroke(
-                width = 0.5.dp,
-                color = outlineColor.copy(alpha = 0.3f)
-            )
-        }
-        val monochromeBorder = remember(outlineColor) {
-            androidx.compose.foundation.BorderStroke(
-                width = 1.dp,
-                color = outlineColor.copy(alpha = 0.45f)
-            )
-        }
-        val border = when {
-            isSynthwave -> synthwaveBorder
-            isSoothing -> soothingBorder
-            isMonochrome -> monochromeBorder
-            else -> null
-        }
+        val border = themeVariant.cardBorder(
+            primary = MaterialTheme.colorScheme.primary,
+            secondary = MaterialTheme.colorScheme.secondary,
+            outline = MaterialTheme.colorScheme.outline,
+        )
 
-        val shape = when {
-            isSoothing -> ShapeCache.smooth16
-            isMonochrome -> androidx.compose.foundation.shape.RoundedCornerShape(16.dp)
+        val shape = when (themeVariant) {
+            com.raulshma.jellyplay.core.designsystem.theme.ThemeVariant.SOOTHING -> ShapeCache.smooth16
+            com.raulshma.jellyplay.core.designsystem.theme.ThemeVariant.MONOCHROME -> androidx.compose.foundation.shape.RoundedCornerShape(16.dp)
             else -> ShapeCache.smoothPill
         }
 
@@ -194,8 +160,8 @@ fun MiniPlayer(
             shape = shape,
             color = animatedColor,
             border = border,
-            shadowElevation = if (isSoothing) 4.dp else 8.dp,
-            tonalElevation = if (isSoothing) 0.dp else 2.dp,
+            shadowElevation = themeVariant.shadowElevation(8.dp),
+            tonalElevation = themeVariant.tonalElevation(2.dp),
             modifier = Modifier
                 .fillMaxWidth()
                 .padding(horizontal = 8.dp, vertical = 4.dp)

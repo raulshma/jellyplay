@@ -3,6 +3,7 @@ package com.raulshma.jellyplay.feature.details
 import android.util.Log
 import androidx.compose.runtime.State
 import com.raulshma.jellyplay.core.data.repository.SeerrRepository
+import com.raulshma.jellyplay.core.data.seerr.SeerrRequestDelegate
 import com.raulshma.jellyplay.core.datastore.SeerrPreferencesStore
 import com.raulshma.jellyplay.core.datastore.UserPreferencesStore
 import com.raulshma.jellyplay.core.model.MediaType
@@ -16,7 +17,10 @@ import com.raulshma.jellyplay.core.model.seerr.SeerrSearchItem
 import com.raulshma.jellyplay.core.model.seerr.SeerrSeason
 import com.raulshma.jellyplay.core.model.seerr.SeerrSonarrServiceDetail
 import com.raulshma.jellyplay.core.model.seerr.SeerrTvDetails
+import com.raulshma.jellyplay.core.model.seerr.SeerrRequestResult
 import com.raulshma.jellyplay.core.ui.viewmodel.JellyPlayViewModel
+import com.raulshma.jellyplay.core.network.seerr.buildPosterUrl
+import com.raulshma.jellyplay.core.network.seerr.buildBackdropUrl
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
@@ -31,6 +35,7 @@ private const val TAG = "SeerrDetailVM"
 @HiltViewModel
 class SeerrDetailViewModel @Inject constructor(
     private val seerrRepository: SeerrRepository,
+    private val seerrRequestDelegate: SeerrRequestDelegate,
     private val preferencesStore: UserPreferencesStore,
     private val seerrPreferencesStore: SeerrPreferencesStore,
 ) : JellyPlayViewModel() {
@@ -73,17 +78,11 @@ class SeerrDetailViewModel @Inject constructor(
     val isSeerrConnected: StateFlow<Boolean> = seerrRepository.isConnected()
         .stateIn(scope, SharingStarted.WhileSubscribed(5_000), false)
 
-    private val _requestResult = stateFlow<SeerrRequestResult?>(null)
-    val requestResult = _requestResult.flow
-
-    private val _radarrServers = stateFlow<List<SeerrRadarrServiceDetail>>(emptyList())
-    val radarrServers = _radarrServers.flow
-
-    private val _sonarrServers = stateFlow<List<SeerrSonarrServiceDetail>>(emptyList())
-    val sonarrServers = _sonarrServers.flow
-
-    private val _isLoadingServices = stateFlow(false)
-    val isLoadingServices = _isLoadingServices.flow
+    private val seerrRequestState = com.raulshma.jellyplay.core.data.seerr.SeerrRequestStateHolder(scope, seerrRequestDelegate)
+    val requestResult get() = seerrRequestState.requestResult
+    val radarrServers get() = seerrRequestState.radarrServers
+    val sonarrServers get() = seerrRequestState.sonarrServers
+    val isLoadingServices get() = seerrRequestState.isLoadingServices
 
     private val _selectedSeasonNumber = composeState<Int?>(null)
     val selectedSeasonNumber: State<Int?> = _selectedSeasonNumber.asState()
@@ -182,54 +181,7 @@ class SeerrDetailViewModel @Inject constructor(
         )
     }
 
-    /**
-     * Fetches service details (Radarr/Sonarr) for the request dialog.
-     * Uses /service/ endpoints matching the Seerr web UI flow.
-     */
-    fun loadServiceDetails(mediaType: String) {
-        launch {
-            _isLoadingServices.set(true)
-            try {
-                if (mediaType == "movie") {
-                    seerrRepository.getServiceRadarrServers().onSuccess { servers ->
-                        Log.d(TAG, "Found ${servers.size} Radarr servers via /service/")
-                        val details = coroutineScope {
-                            servers.map { server ->
-                                async {
-                                    val result = seerrRepository.getServiceRadarrDetail(server.id)
-                                    if (result.isFailure) {
-                                        Log.e(TAG, "Failed to get Radarr service detail for server ${server.id}: ${result.exceptionOrNull()?.message}")
-                                    }
-                                    result.getOrNull()
-                                }
-                            }.awaitAll().filterNotNull()
-                        }
-                        Log.d(TAG, "Loaded ${details.size} Radarr service details")
-                        _radarrServers.set(details)
-                    }
-                } else {
-                    seerrRepository.getServiceSonarrServers().onSuccess { servers ->
-                        Log.d(TAG, "Found ${servers.size} Sonarr servers via /service/")
-                        val details = coroutineScope {
-                            servers.map { server ->
-                                async {
-                                    val result = seerrRepository.getServiceSonarrDetail(server.id)
-                                    if (result.isFailure) {
-                                        Log.e(TAG, "Failed to get Sonarr service detail for server ${server.id}: ${result.exceptionOrNull()?.message}")
-                                    }
-                                    result.getOrNull()
-                                }
-                            }.awaitAll().filterNotNull()
-                        }
-                        Log.d(TAG, "Loaded ${details.size} Sonarr service details")
-                        _sonarrServers.set(details)
-                    }
-                }
-            } finally {
-                _isLoadingServices.set(false)
-            }
-        }
-    }
+    fun loadServiceDetails(mediaType: String) = seerrRequestState.loadServiceDetails(mediaType)
 
     fun toggleSeason(tvId: Int, seasonNumber: Int) {
         if (_selectedSeasonNumber.value == seasonNumber) {
@@ -265,17 +217,17 @@ class SeerrDetailViewModel @Inject constructor(
         tags: List<Int>? = null,
     ) {
         launch {
-            _requestResult.set(SeerrRequestResult(isLoading = true))
-            seerrRepository.requestMedia(
-                tmdbId = item.id,
+            seerrRequestState.setRequestResult(SeerrRequestResult(isLoading = true))
+            seerrRequestDelegate.requestMedia(
                 mediaType = item.mediaType,
+                tmdbId = item.id,
                 seasons = seasons,
                 serverId = serverId,
                 profileId = profileId,
                 rootFolder = rootFolder,
                 tags = tags,
             ).onSuccess {
-                _requestResult.set(SeerrRequestResult(isLoading = false, success = true))
+                seerrRequestState.setRequestResult(SeerrRequestResult(isLoading = false, success = true))
                 val currentMovie = _movieDetails.value
                 val currentTv = _tvDetails.value
                 val movieMediaInfo = currentMovie?.mediaInfo
@@ -290,42 +242,17 @@ class SeerrDetailViewModel @Inject constructor(
                     )
                 }
             }.onFailure {
-                _requestResult.set(SeerrRequestResult(isLoading = false, success = false, error = it.message))
+                seerrRequestState.setRequestResult(SeerrRequestResult(isLoading = false, success = false, error = it.message))
             }
         }
     }
 
-    fun clearRequestResult() {
-        _requestResult.set(null)
-    }
+    fun clearRequestResult() = seerrRequestState.clearRequestResult()
 
-    fun getSeerrPosterUrl(path: String?): String? {
-        if (path == null) return null
-        return "https://image.tmdb.org/t/p/w500$path"
-    }
+    fun getSeerrPosterUrl(path: String?): String? = buildPosterUrl(path)
 
-    fun getSeerrBackdropUrl(path: String?): String? {
-        if (path == null) return null
-        return "https://image.tmdb.org/t/p/w1280$path"
-    }
+    fun getSeerrBackdropUrl(path: String?): String? = buildBackdropUrl(path)
 
-    fun prefetchRelatedDetails(tmdbId: Int, mediaType: String, onDone: () -> Unit) {
-        launch {
-            try {
-                coroutineScope {
-                    if (mediaType == "movie") {
-                        seerrRepository.getMovieDetails(tmdbId)
-                    } else {
-                        seerrRepository.getTvDetails(tmdbId)
-                    }
-                    val type = if (mediaType == "movie") MediaType.MOVIE else MediaType.SERIES
-                    launch { seerrRepository.getRatings(tmdbId, mediaType) }
-                    launch { seerrRepository.getRecommendations(tmdbId, type) }
-                    launch { seerrRepository.getSimilar(tmdbId, type) }
-                }
-            } catch (_: Exception) {
-            }
-            onDone()
-        }
-    }
+    fun prefetchRelatedDetails(tmdbId: Int, mediaType: String, onDone: () -> Unit) =
+        seerrRequestState.prefetchDetails(tmdbId, mediaType, onDone)
 }

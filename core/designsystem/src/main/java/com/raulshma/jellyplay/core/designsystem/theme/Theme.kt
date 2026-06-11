@@ -275,6 +275,7 @@ val LocalJellyPlayShapes = staticCompositionLocalOf<Shapes> { error("No Shapes p
 val LocalIsSynthwave = staticCompositionLocalOf { false }
 val LocalIsSoothingTheme = staticCompositionLocalOf { false }
 val LocalIsMonochromeTheme = staticCompositionLocalOf { false }
+val LocalThemeVariant = staticCompositionLocalOf { ThemeVariant.STANDARD }
 
 @OptIn(ExperimentalMaterial3ExpressiveApi::class)
 @Composable
@@ -398,6 +399,12 @@ fun JellyPlayTheme(
         LocalIsSynthwave provides synthwaveMode,
         LocalIsSoothingTheme provides soothingMode,
         LocalIsMonochromeTheme provides monochromeMode,
+        LocalThemeVariant provides when {
+            synthwaveMode -> ThemeVariant.SYNTHWAVE
+            soothingMode -> ThemeVariant.SOOTHING
+            monochromeMode -> ThemeVariant.MONOCHROME
+            else -> ThemeVariant.STANDARD
+        },
     ) {
         MaterialExpressiveTheme(
             colorScheme = colorScheme,
