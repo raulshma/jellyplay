@@ -679,9 +679,9 @@ private fun MainContent(
                                 Box(
                                     modifier = Modifier
                                         .align(Alignment.BottomCenter)
-                                        .padding(bottom = systemNavBarBottom + 84.dp)
+                                        .padding(bottom = systemNavBarBottom + 60.dp)
                                         .offset {
-                                            val maxOffset = 88.dp.toPx()
+                                            val maxOffset = 60.dp.toPx()
                                             val yOffset = (-bottomNavOffsetHeightPx.floatValue).coerceAtMost(maxOffset)
                                             IntOffset(x = 0, y = yOffset.roundToInt())
                                         }
@@ -728,11 +728,11 @@ private fun MainContent(
                                     },
                                     modifier = Modifier
                                         .align(Alignment.BottomEnd)
-                                        .padding(end = 8.dp, bottom = systemNavBarBottom + (if (!isExpanded) 88.dp else 8.dp))
+                                        .padding(end = 8.dp, bottom = systemNavBarBottom + (if (!isExpanded) 64.dp else 8.dp))
                                         .fillMaxWidth(0.45f)
                                         .offset {
                                             if (!isExpanded) {
-                                                val maxOffset = 88.dp.toPx()
+                                                val maxOffset = 64.dp.toPx()
                                                 val yOffset = (-bottomNavOffsetHeightPx.floatValue).coerceAtMost(maxOffset)
                                                 IntOffset(x = 0, y = yOffset.roundToInt())
                                             } else {
@@ -750,7 +750,7 @@ private fun MainContent(
                                     containerColor = animatedNavBarColor,
                                     modifier = Modifier
                                         .align(Alignment.BottomCenter)
-                                        .padding(bottom = systemNavBarBottom + 8.dp)
+                                        .padding(bottom = systemNavBarBottom + 4.dp)
                                         .padding(horizontal = 16.dp)
                                         .offset { IntOffset(x = 0, y = -bottomNavOffsetHeightPx.floatValue.roundToInt()) }
                                 )
@@ -1223,7 +1223,7 @@ private fun FloatingNavigationBar(
     modifier: Modifier = Modifier,
 ) {
     Surface(
-        modifier = modifier.padding(bottom = 8.dp),
+        modifier = modifier,
         shape = RoundedCornerShape(percent = 50),
         color = containerColor.copy(alpha = 0.65f),
         tonalElevation = 0.dp,
