@@ -5,6 +5,9 @@ import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
+import com.raulshma.jellyplay.core.ui.components.LocalFloatingNavVisibility
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -45,6 +48,7 @@ import com.composables.icons.tabler.Tabler
 import com.composables.icons.tabler.outline.*
 import kotlinx.coroutines.launch
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
@@ -354,6 +358,20 @@ private fun MainHomeContent(
     val scope = rememberCoroutineScope()
     val isDrawerOpen = drawerState.isOpen
 
+    val floatingNavVisibility = LocalFloatingNavVisibility.current
+    DisposableEffect(isDrawerOpen) {
+        if (isDrawerOpen) {
+            floatingNavVisibility.value = false
+        } else {
+            floatingNavVisibility.value = true
+        }
+        onDispose {
+            if (isDrawerOpen) {
+                floatingNavVisibility.value = true
+            }
+        }
+    }
+
     BackHandler(enabled = isFabExpanded || isSearchFocused || isDrawerOpen) {
         if (isDrawerOpen) {
             scope.launch { drawerState.close() }
@@ -387,6 +405,7 @@ private fun MainHomeContent(
                 Column(
                     modifier = Modifier
                         .fillMaxSize()
+                        .verticalScroll(rememberScrollState())
                         .padding(horizontal = 16.dp, vertical = 24.dp),
                     verticalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
