@@ -5,6 +5,7 @@ import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.ui.draw.clip
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import com.raulshma.jellyplay.core.ui.components.LocalFloatingNavVisibility
@@ -103,6 +104,9 @@ import com.raulshma.jellyplay.core.ui.components.rememberSeerrCardLoadingState
 import com.raulshma.jellyplay.core.ui.components.resolveHeaderStatus
 import com.raulshma.jellyplay.core.ui.tv.LocalTvMode
 import com.raulshma.jellyplay.core.ui.tv.isTv
+import com.raulshma.jellyplay.core.ui.tv.rememberTvFocusState
+import com.raulshma.jellyplay.core.ui.tv.tvFocusIndicator
+import com.raulshma.jellyplay.core.ui.tv.tvFocusExitHandler
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.collectLatest
 
@@ -716,50 +720,53 @@ private fun MainHomeContent(
                     },
                 )
 
-                HomeFabMenu(
-                    isExpanded = isFabExpanded,
-                    onToggle = { isFabExpanded = it },
-                    activeDownloadCount = activeDownloadCount,
-                    offlineMode = state.offlineMode,
-                    onSurpriseClick = {
-                        showSurprise = !showSurprise
-                        if (!showSurprise) autoRotateEnabled = true
-                    },
-                    onSyncPlayClick = onSyncPlayClick,
-                    onDownloadsClick = onDownloadsClick,
-                    onToggleOffline = { viewModel.onEvent(HomeUiEvent.ToggleOfflineMode) },
-                    onSettingsClick = onSettingsClick,
-                    modifier = Modifier
-                        .align(Alignment.BottomEnd)
-                        .padding(bottom = 64.dp + WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding())
-                        .offset {
-                            val maxOffset = 64.dp.toPx()
-                            val yOffset = (-navOffsetPx).coerceAtMost(maxOffset)
-                            androidx.compose.ui.unit.IntOffset(x = 0, y = yOffset.toInt())
+                if (!isTv) {
+                    HomeFabMenu(
+                        isExpanded = isFabExpanded,
+                        onToggle = { isFabExpanded = it },
+                        activeDownloadCount = activeDownloadCount,
+                        offlineMode = state.offlineMode,
+                        onSurpriseClick = {
+                            showSurprise = !showSurprise
+                            if (!showSurprise) autoRotateEnabled = true
                         },
-                )
+                        onSyncPlayClick = onSyncPlayClick,
+                        onDownloadsClick = onDownloadsClick,
+                        onToggleOffline = { viewModel.onEvent(HomeUiEvent.ToggleOfflineMode) },
+                        onSettingsClick = onSettingsClick,
+                        modifier = Modifier
+                            .align(Alignment.BottomEnd)
+                            .padding(bottom = 64.dp + WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding())
+                            .offset {
+                                val maxOffset = 64.dp.toPx()
+                                val yOffset = (-navOffsetPx).coerceAtMost(maxOffset)
+                                androidx.compose.ui.unit.IntOffset(x = 0, y = yOffset.toInt())
+                            },
+                    )
+                }
 
-                // Floating menu button at the top left, aligned horizontally with HomeTopDock
-                Box(
-                    modifier = Modifier
-                        .statusBarsPadding()
-                        .padding(
-                            horizontal = 16.dp,
-                            vertical = 8.dp
-                        )
-                        .align(Alignment.TopStart)
-                ) {
+                if (!isTv) {
                     Box(
                         modifier = Modifier
-                            .size(64.dp)
-                            .clickable(
-                                interactionSource = remember { androidx.compose.foundation.interaction.MutableInteractionSource() },
-                                indication = null,
-                                onClick = { scope.launch { drawerState.open() } }
+                            .statusBarsPadding()
+                            .padding(
+                                horizontal = 16.dp,
+                                vertical = 8.dp
                             )
-                            .graphicsLayer {
-                                alpha = if (isSearchFocused) 0f else 1f
-                            },
+                            .align(Alignment.TopStart)
+                    ) {
+                        Box(
+                            modifier = Modifier
+                                .size(64.dp)
+                                .clip(RoundedCornerShape(16.dp))
+                                .clickable(
+                                    interactionSource = remember { androidx.compose.foundation.interaction.MutableInteractionSource() },
+                                    indication = null,
+                                    onClick = { scope.launch { drawerState.open() } }
+                                )
+                                .graphicsLayer {
+                                    alpha = if (isSearchFocused) 0f else 1f
+                                },
                         contentAlignment = Alignment.CenterStart
                     ) {
                         Icon(
@@ -769,6 +776,7 @@ private fun MainHomeContent(
                             modifier = Modifier.size(24.dp)
                         )
                     }
+                }
                 }
         }
     }
