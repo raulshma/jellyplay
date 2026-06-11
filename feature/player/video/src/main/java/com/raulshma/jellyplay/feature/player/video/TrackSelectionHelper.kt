@@ -5,6 +5,7 @@ import com.raulshma.jellyplay.core.datastore.UserPreferencesStore
 import com.raulshma.jellyplay.core.model.MediaStream
 import com.raulshma.jellyplay.core.model.StreamType
 import com.raulshma.jellyplay.core.model.TrackType
+import com.raulshma.jellyplay.core.model.isLanguageMatch
 import com.raulshma.jellyplay.feature.player.video.engine.MediaEngine
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.launch
@@ -37,7 +38,7 @@ internal class TrackSelectionHelper(
         pendingAudioStreamIndex = audioIndex
     }
 
-    fun selectAudioTrack(option: TrackOption) {
+    fun selectAudioTrack(option: TrackOption, isUserOverride: Boolean = true) {
         val engine = getEngine() ?: return
         engine.selectTrack(TrackType.AUDIO, option.index, option.trackGroup)
         if (option.index < 0) {
@@ -53,13 +54,15 @@ internal class TrackSelectionHelper(
                 track.copy(isSelected = if (isDefault) isDefaultTrack else matches)
             })
         }
-        persistStreamSelectionFromPlayer(
-            audioTrackOption = option,
-            subtitleTrackOption = null,
-        )
+        if (isUserOverride) {
+            persistStreamSelectionFromPlayer(
+                audioTrackOption = option,
+                subtitleTrackOption = null,
+            )
+        }
     }
 
-    fun selectSubtitleTrack(option: TrackOption) {
+    fun selectSubtitleTrack(option: TrackOption, isUserOverride: Boolean = true) {
         val engine = getEngine() ?: return
 
         engine.selectTrack(TrackType.SUBTITLE, option.index, option.trackGroup)
@@ -78,10 +81,12 @@ internal class TrackSelectionHelper(
                 track.copy(isSelected = if (isOff) isOffTrack else matches)
             })
         }
-        persistStreamSelectionFromPlayer(
-            audioTrackOption = null,
-            subtitleTrackOption = option,
-        )
+        if (isUserOverride) {
+            persistStreamSelectionFromPlayer(
+                audioTrackOption = null,
+                subtitleTrackOption = option,
+            )
+        }
     }
 
     fun updateTracksFromEngine() {
@@ -166,32 +171,45 @@ internal class TrackSelectionHelper(
         val pendingAudio = pendingAudioStreamIndex
         if (pendingAudio != null) {
             pendingAudioStreamIndex = null
-            val targetStream = streams.firstOrNull {
-                it.type == StreamType.AUDIO && it.index == pendingAudio
+            if (pendingAudio == -1) {
+                audioTracks.firstOrNull { it.index < 0 }?.let { selectAudioTrack(it, isUserOverride = false) }
+            } else {
+                val targetStream = streams.firstOrNull {
+                    it.type == StreamType.AUDIO && it.index == pendingAudio
+                }
+                val matchByIndex = audioTracks.firstOrNull { it.index >= 0 && it.index == pendingAudio }
+                val matchByLabel = if (matchByIndex == null && targetStream != null) {
+                    val targetLabel = targetStream.displayTitle ?: targetStream.title ?: targetStream.language
+                    audioTracks.firstOrNull { it.index >= 0 && it.label == targetLabel }
+                } else null
+                (matchByIndex ?: matchByLabel)?.let { selectAudioTrack(it, isUserOverride = false) }
             }
-            val matchByIndex = audioTracks.firstOrNull { it.index >= 0 && it.index == pendingAudio }
-            val matchByLabel = if (matchByIndex == null && targetStream != null) {
-                val targetLabel = targetStream.displayTitle ?: targetStream.title ?: targetStream.language
-                audioTracks.firstOrNull { it.index >= 0 && it.label == targetLabel }
-            } else null
-            (matchByIndex ?: matchByLabel)?.let { selectAudioTrack(it) }
         } else {
             val itemId = getCurrentItemId()
             if (itemId != null) {
                 val currentPrefs = preferencesStore.preferences.value
                 val stored = currentPrefs.mediaStreamSelections[itemId]
                 val audioIdx = stored?.audioStreamIndex
-                val prefAudioLang = currentPrefs.preferredAudioLanguage
+                val prefAudioLang = currentPrefs.preferredAudioLanguage ?: "eng"
                 if (audioIdx != null) {
-                    val targetStream = streams.firstOrNull {
-                        it.type == StreamType.AUDIO && it.index == audioIdx
+                    if (audioIdx == -1) {
+                        audioTracks.firstOrNull { it.index < 0 }?.let { selectAudioTrack(it, isUserOverride = false) }
+                    } else {
+                        val targetStream = streams.firstOrNull {
+                            it.type == StreamType.AUDIO && it.index == audioIdx
+                        }
+                        val targetLabel = targetStream?.displayTitle ?: targetStream?.title ?: targetStream?.language
+                        if (targetLabel != null) {
+                            audioTracks.firstOrNull { it.index >= 0 && it.label == targetLabel }?.let { selectAudioTrack(it, isUserOverride = false) }
+                        }
                     }
-                    val targetLabel = targetStream?.displayTitle ?: targetStream?.title ?: targetStream?.language
-                    if (targetLabel != null) {
-                        audioTracks.firstOrNull { it.index >= 0 && it.label == targetLabel }?.let { selectAudioTrack(it) }
+                } else {
+                    val match = audioTracks.firstOrNull { it.index >= 0 && isLanguageMatch(it.language, prefAudioLang) }
+                    if (match != null) {
+                        selectAudioTrack(match, isUserOverride = false)
+                    } else {
+                        audioTracks.firstOrNull { it.index < 0 }?.let { selectAudioTrack(it, isUserOverride = false) }
                     }
-                } else if (prefAudioLang != null) {
-                    audioTracks.firstOrNull { it.index >= 0 && it.language.equals(prefAudioLang, ignoreCase = true) }?.let { selectAudioTrack(it) }
                 }
             }
         }
@@ -199,13 +217,17 @@ internal class TrackSelectionHelper(
         val pending = pendingSubtitleStreamIndex
         if (pending != null) {
             pendingSubtitleStreamIndex = null
-            val subStreams = getUiState().mediaStreams
-            val targetStream = subStreams.firstOrNull { it.type == StreamType.SUBTITLE && it.index == pending }
-            if (targetStream != null) {
-                val targetLabel = targetStream.displayTitle ?: targetStream.title ?: targetStream.language
-                val match = subtitleTracks.firstOrNull { it.index >= 0 && it.label == targetLabel }
-                if (match != null) {
-                    selectSubtitleTrack(match)
+            if (pending == -1) {
+                subtitleTracks.firstOrNull { it.index < 0 }?.let { selectSubtitleTrack(it, isUserOverride = false) }
+            } else {
+                val subStreams = getUiState().mediaStreams
+                val targetStream = subStreams.firstOrNull { it.type == StreamType.SUBTITLE && it.index == pending }
+                if (targetStream != null) {
+                    val targetLabel = targetStream.displayTitle ?: targetStream.title ?: targetStream.language
+                    val match = subtitleTracks.firstOrNull { it.index >= 0 && it.label == targetLabel }
+                    if (match != null) {
+                        selectSubtitleTrack(match, isUserOverride = false)
+                    }
                 }
             }
         } else {
@@ -214,19 +236,56 @@ internal class TrackSelectionHelper(
                 val currentPrefs = preferencesStore.preferences.value
                 val stored = currentPrefs.mediaStreamSelections[itemId]
                 val subIdx = stored?.subtitleStreamIndex
-                val prefSubLang = currentPrefs.preferredSubtitleLanguage
+                val prefSubLang = currentPrefs.preferredSubtitleLanguage ?: "eng"
                 if (subIdx != null) {
-                    val targetStream = streams.firstOrNull {
-                        it.type == StreamType.SUBTITLE && it.index == subIdx
+                    if (subIdx == -1) {
+                        subtitleTracks.firstOrNull { it.index < 0 }?.let { selectSubtitleTrack(it, isUserOverride = false) }
+                    } else {
+                        val targetStream = streams.firstOrNull {
+                            it.type == StreamType.SUBTITLE && it.index == subIdx
+                        }
+                        val targetLabel = targetStream?.displayTitle ?: targetStream?.title ?: targetStream?.language
+                        if (targetLabel != null) {
+                            subtitleTracks.firstOrNull { it.index >= 0 && it.label == targetLabel }?.let { selectSubtitleTrack(it, isUserOverride = false) }
+                        }
                     }
-                    val targetLabel = targetStream?.displayTitle ?: targetStream?.title ?: targetStream?.language
-                    if (targetLabel != null) {
-                        subtitleTracks.firstOrNull { it.index >= 0 && it.label == targetLabel }?.let { selectSubtitleTrack(it) }
+                } else {
+                    val match = subtitleTracks.firstOrNull { it.index >= 0 && isLanguageMatch(it.language, prefSubLang) }
+                    if (match != null) {
+                        selectSubtitleTrack(match, isUserOverride = false)
+                    } else {
+                        subtitleTracks.firstOrNull { it.index < 0 }?.let { selectSubtitleTrack(it, isUserOverride = false) }
                     }
-                } else if (prefSubLang != null) {
-                    subtitleTracks.firstOrNull { it.index >= 0 && it.language.equals(prefSubLang, ignoreCase = true) }?.let { selectSubtitleTrack(it) }
                 }
             }
+        }
+    }
+
+    fun resetAudioSelection() {
+        val itemId = getCurrentItemId() ?: return
+        selectedAudioTrackId = null
+        scope.launch {
+            val currentSelection = preferencesStore.preferences.value.mediaStreamSelections[itemId]
+            preferencesStore.setMediaStreamSelection(
+                itemId = itemId,
+                audioStreamIndex = null,
+                subtitleStreamIndex = currentSelection?.subtitleStreamIndex
+            )
+            updateTracksFromEngine()
+        }
+    }
+
+    fun resetSubtitleSelection() {
+        val itemId = getCurrentItemId() ?: return
+        selectedSubtitleTrackId = null
+        scope.launch {
+            val currentSelection = preferencesStore.preferences.value.mediaStreamSelections[itemId]
+            preferencesStore.setMediaStreamSelection(
+                itemId = itemId,
+                audioStreamIndex = currentSelection?.audioStreamIndex,
+                subtitleStreamIndex = null
+            )
+            updateTracksFromEngine()
         }
     }
 
@@ -245,14 +304,14 @@ internal class TrackSelectionHelper(
         val streams = getUiState().mediaStreams
         val currentSelection = preferencesStore.preferences.value.mediaStreamSelections[itemId]
         val audioStreamIndex = if (audioTrackOption != null) {
-            if (audioTrackOption.index < 0) null
-            else resolveMediaStreamIndex(streams, StreamType.AUDIO, audioTrackOption.label)
+            if (audioTrackOption.index < 0) -1
+            else resolveMediaStreamIndex(streams, StreamType.AUDIO, audioTrackOption)
         } else {
             currentSelection?.audioStreamIndex
         }
         val subtitleStreamIndex = if (subtitleTrackOption != null) {
-            if (subtitleTrackOption.index < 0) null
-            else resolveMediaStreamIndex(streams, StreamType.SUBTITLE, subtitleTrackOption.label)
+            if (subtitleTrackOption.index < 0) -1
+            else resolveMediaStreamIndex(streams, StreamType.SUBTITLE, subtitleTrackOption)
         } else {
             currentSelection?.subtitleStreamIndex
         }
@@ -268,12 +327,29 @@ internal class TrackSelectionHelper(
     private fun resolveMediaStreamIndex(
         streams: List<MediaStream>,
         type: StreamType,
-        trackLabel: String?,
+        trackOption: TrackOption,
     ): Int? {
-        if (trackLabel == null) return null
         val typedStreams = streams.filter { it.type == type }
-        return typedStreams.firstOrNull {
+        val trackLabel = trackOption.label
+        val trackLanguage = trackOption.language
+
+        val exactMatch = typedStreams.firstOrNull {
             it.displayTitle == trackLabel || it.title == trackLabel || it.language == trackLabel
-        }?.index ?: typedStreams.firstOrNull { it.index >= 0 }?.index
+        }
+        if (exactMatch != null) return exactMatch.index
+
+        if (trackLanguage != null) {
+            val languageMatches = typedStreams.filter { isLanguageMatch(it.language, trackLanguage) }
+            if (languageMatches.isNotEmpty()) {
+                if (languageMatches.size == 1) return languageMatches[0].index
+                val bestMatch = languageMatches.firstOrNull { stream ->
+                    val streamTitle = stream.displayTitle ?: stream.title ?: ""
+                    streamTitle.isNotBlank() && (trackLabel.contains(streamTitle, ignoreCase = true) || streamTitle.contains(trackLabel, ignoreCase = true))
+                } ?: languageMatches.firstOrNull { it.isDefault } ?: languageMatches.first()
+                return bestMatch.index
+            }
+        }
+
+        return typedStreams.firstOrNull { it.index >= 0 }?.index
     }
 }

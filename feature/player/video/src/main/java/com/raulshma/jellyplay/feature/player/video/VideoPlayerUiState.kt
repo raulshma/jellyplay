@@ -38,6 +38,8 @@ data class VideoPlayerUiState(
     val duration: Long = 0L,
     val playbackSpeed: Float = 1.0f,
     val audioTracks: List<TrackOption> = emptyList(),
+    val hasAudioOverride: Boolean = false,
+    val hasSubtitleOverride: Boolean = false,
     val overview: String = "",
     val people: List<PersonInfo> = emptyList(),
     val artworkUrl: String? = null,

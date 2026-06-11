@@ -1369,6 +1369,7 @@ private fun PlayerSheetRouter(
                 title = "Audio",
                 tracks = uiState.audioTracks,
                 onSelect = { viewModel.selectAudioTrack(it) },
+                onReset = if (uiState.hasAudioOverride) { { viewModel.resetAudioTrack() } } else null,
                 onDismiss = dismissSheet,
             )
         }
@@ -1377,6 +1378,7 @@ private fun PlayerSheetRouter(
                 title = "Subtitles",
                 tracks = uiState.subtitleTracks,
                 onSelect = { viewModel.selectSubtitleTrack(it) },
+                onReset = if (uiState.hasSubtitleOverride) { { viewModel.resetSubtitleTrack() } } else null,
                 onDismiss = dismissSheet,
             )
         }

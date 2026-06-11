@@ -184,6 +184,14 @@ class VideoPlayerViewModel @Inject constructor(
             preferencesStore.preferences.collect { prefs ->
                 val oldPrefs = cachedPreferences
                 cachedPreferences = prefs
+                val itemId = playerSessionManager.sessionState.value.currentItemId
+                val stored = itemId?.let { prefs.mediaStreamSelections[it] }
+                _uiState.update { state ->
+                    state.copy(
+                        hasAudioOverride = stored?.audioStreamIndex != null,
+                        hasSubtitleOverride = stored?.subtitleStreamIndex != null,
+                    )
+                }
                 if (_uiState.value.subtitleStyle != prefs.subtitleStyle) {
                     _uiState.update { it.copy(subtitleStyle = prefs.subtitleStyle) }
                     playerSessionManager.engine?.let {
@@ -218,6 +226,9 @@ class VideoPlayerViewModel @Inject constructor(
 
         launch {
             playerSessionManager.sessionState.collect { session ->
+                val itemId = session.currentItemId
+                val prefs = cachedPreferences
+                val stored = itemId?.let { prefs.mediaStreamSelections[it] }
                 _uiState.update { state ->
                     state.copy(
                         title = session.title,
@@ -225,6 +236,8 @@ class VideoPlayerViewModel @Inject constructor(
                         currentMediaSource = session.currentMediaSource,
                         mediaStreams = session.mediaStreams,
                         playMethod = session.playMethodString,
+                        hasAudioOverride = stored?.audioStreamIndex != null,
+                        hasSubtitleOverride = stored?.subtitleStreamIndex != null,
                     )
                 }
             }
@@ -550,6 +563,14 @@ class VideoPlayerViewModel @Inject constructor(
 
     fun selectSubtitleTrack(option: TrackOption) {
         trackSelectionHelper.selectSubtitleTrack(option)
+    }
+
+    fun resetAudioTrack() {
+        trackSelectionHelper.resetAudioSelection()
+    }
+
+    fun resetSubtitleTrack() {
+        trackSelectionHelper.resetSubtitleSelection()
     }
 
     fun setAspectRatio(ratio: AspectRatio) {

@@ -128,6 +128,7 @@ import com.raulshma.jellyplay.core.model.MediaType
 import com.raulshma.jellyplay.core.model.PersonInfo
 import com.raulshma.jellyplay.core.model.StreamType
 import com.raulshma.jellyplay.core.model.UserPreferences
+import com.raulshma.jellyplay.core.model.isLanguageMatch
 import com.raulshma.jellyplay.core.model.seerr.SeerrSearchItem
 import com.raulshma.jellyplay.core.model.seerr.SeerrRelatedVideo
 import androidx.compose.ui.platform.LocalUriHandler
@@ -867,7 +868,8 @@ private fun DetailContent(
                                     onPlayAlbumTrack = onPlayAlbumTrack,
                                     showActionButtons = false,
                                     relatedVideos = relatedVideos,
-                                    onVideoClick = onVideoClick
+                                    onVideoClick = onVideoClick,
+                                    preferences = preferences,
                                 )
                             }
                         } else if (error != null) {
@@ -971,7 +973,8 @@ private fun DetailContent(
                                     onNavigate = onNavigate,
                                     onPlayAlbumTrack = onPlayAlbumTrack,
                                     relatedVideos = relatedVideos,
-                                    onVideoClick = onVideoClick
+                                    onVideoClick = onVideoClick,
+                                    preferences = preferences,
                                 )
                             }
                         } else if (error != null) {
@@ -1202,6 +1205,7 @@ private fun MediaInfoSection(
     selectedSubtitleIndex: Int?,
     onAudioSelect: (Int?) -> Unit,
     onSubtitleSelect: (Int?) -> Unit,
+    preferences: UserPreferences,
     horizontalPadding: androidx.compose.ui.unit.Dp = 24.dp,
 ) {
     val videoStream = mediaStreams.firstOrNull { it.type == StreamType.VIDEO }
@@ -1220,11 +1224,24 @@ private fun MediaInfoSection(
         var picker by remember { mutableStateOf<StreamPickerType?>(null) }
 
         val defaultAudio = audioStreams.firstOrNull { it.isDefault } ?: audioStreams.firstOrNull()
-        val selectedAudio = audioStreams.firstOrNull { it.index == selectedAudioIndex } ?: defaultAudio
+        val selectedAudio = when (selectedAudioIndex) {
+            -1 -> defaultAudio
+            null -> {
+                val prefAudioLang = preferences.preferredAudioLanguage ?: "eng"
+                audioStreams.firstOrNull { isLanguageMatch(it.language, prefAudioLang) } ?: defaultAudio
+            }
+            else -> audioStreams.firstOrNull { it.index == selectedAudioIndex } ?: defaultAudio
+        }
+
         val defaultSubtitle = subtitleStreams.firstOrNull { it.isDefault }
-            ?: subtitleStreams.firstOrNull { it.index == selectedSubtitleIndex }
-            ?: subtitleStreams.firstOrNull()
-        val selectedSubtitle = subtitleStreams.firstOrNull { it.index == selectedSubtitleIndex } ?: defaultSubtitle
+        val selectedSubtitle = when (selectedSubtitleIndex) {
+            -1 -> null // Explicitly Off
+            null -> {
+                val prefSubLang = preferences.preferredSubtitleLanguage ?: "eng"
+                subtitleStreams.firstOrNull { isLanguageMatch(it.language, prefSubLang) }
+            }
+            else -> subtitleStreams.firstOrNull { it.index == selectedSubtitleIndex } ?: defaultSubtitle
+        }
 
         Row(
             modifier = Modifier.fillMaxWidth(),
@@ -1311,30 +1328,44 @@ private fun MediaInfoSection(
             val activePicker = picker ?: return@Column
             val options = when (activePicker) {
                 StreamPickerType.AUDIO -> {
-                    listOf(StreamPickerOption(index = null, label = "Default", isDefault = true)) +
-                        audioStreams.map { stream ->
-                            StreamPickerOption(
-                                index = stream.index,
-                                label = stream.displayTitle
-                                    ?: stream.title
-                                    ?: stream.language
-                                    ?: "Track ${stream.index}",
-                                isDefault = stream.isDefault,
-                            )
+                    buildList {
+                        if (selectedAudioIndex != null) {
+                            add(StreamPickerOption(index = null, label = "Auto", isDefault = false))
                         }
+                        add(StreamPickerOption(index = -1, label = "Default", isDefault = true))
+                        addAll(
+                            audioStreams.map { stream ->
+                                StreamPickerOption(
+                                    index = stream.index,
+                                    label = stream.displayTitle
+                                        ?: stream.title
+                                        ?: stream.language
+                                        ?: "Track ${stream.index}",
+                                    isDefault = stream.isDefault,
+                                )
+                            }
+                        )
+                    }
                 }
                 StreamPickerType.SUBTITLE -> {
-                    listOf(StreamPickerOption(index = null, label = "Off", isDefault = true)) +
-                        subtitleStreams.map { stream ->
-                            StreamPickerOption(
-                                index = stream.index,
-                                label = stream.displayTitle
-                                    ?: stream.title
-                                    ?: stream.language
-                                    ?: "Track ${stream.index}",
-                                isDefault = stream.isDefault,
-                            )
+                    buildList {
+                        if (selectedSubtitleIndex != null) {
+                            add(StreamPickerOption(index = null, label = "Auto", isDefault = false))
                         }
+                        add(StreamPickerOption(index = -1, label = "Off", isDefault = true))
+                        addAll(
+                            subtitleStreams.map { stream ->
+                                StreamPickerOption(
+                                    index = stream.index,
+                                    label = stream.displayTitle
+                                        ?: stream.title
+                                        ?: stream.language
+                                        ?: "Track ${stream.index}",
+                                    isDefault = stream.isDefault,
+                                )
+                            }
+                        )
+                    }
                 }
             }
 
@@ -1949,6 +1980,7 @@ private fun DetailContentBody(
     onSeerrRequest: (SeerrSearchItem) -> Unit = {},
     relatedVideos: List<SeerrRelatedVideo> = emptyList(),
     onVideoClick: (SeerrRelatedVideo) -> Unit = {},
+    preferences: UserPreferences,
 ) {
     val showContent = true
 
@@ -2185,6 +2217,7 @@ private fun DetailContentBody(
                     selectedSubtitleIndex = selectedSubtitleIndex,
                     onAudioSelect = onAudioSelect,
                     onSubtitleSelect = onSubtitleSelect,
+                    preferences = preferences,
                 )
             }
         }

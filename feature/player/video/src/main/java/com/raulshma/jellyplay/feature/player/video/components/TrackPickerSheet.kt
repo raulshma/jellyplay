@@ -43,6 +43,7 @@ internal fun TrackPickerSheet(
     title: String,
     tracks: List<TrackOption>,
     onSelect: (TrackOption) -> Unit,
+    onReset: (() -> Unit)? = null,
     onDismiss: () -> Unit,
 ) {
     PlayerModalBottomSheet(
@@ -54,13 +55,47 @@ internal fun TrackPickerSheet(
                 .fillMaxWidth()
                 .padding(bottom = 32.dp),
         ) {
-            Text(
-                title,
-                style = MaterialTheme.typography.titleLarge.copy(
-                    fontWeight = FontWeight.Bold,
-                ),
-                modifier = Modifier.padding(horizontal = 24.dp),
-            )
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 24.dp),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Text(
+                    title,
+                    style = MaterialTheme.typography.titleLarge.copy(
+                        fontWeight = FontWeight.Bold,
+                    ),
+                )
+                if (onReset != null) {
+                    Row(
+                        modifier = Modifier
+                            .clip(CircleShape)
+                            .clickable {
+                                onReset()
+                                onDismiss()
+                            }
+                            .padding(horizontal = 12.dp, vertical = 6.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(6.dp)
+                    ) {
+                        Icon(
+                            Tabler.Outline.Rotate,
+                            contentDescription = "Reset to Auto",
+                            tint = MaterialTheme.colorScheme.primary,
+                            modifier = Modifier.size(16.dp),
+                        )
+                        Text(
+                            text = "Reset to Auto",
+                            style = MaterialTheme.typography.labelLarge.copy(
+                                fontWeight = FontWeight.SemiBold,
+                            ),
+                            color = MaterialTheme.colorScheme.primary,
+                        )
+                    }
+                }
+            }
             Spacer(Modifier.height(12.dp))
             LazyColumn {
                 itemsIndexed(tracks, key = { _, track -> track.index }, contentType = { _, _ -> "track" }) { index, track ->

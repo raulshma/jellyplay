@@ -425,10 +425,14 @@ class UserPreferencesStore @Inject constructor(
     ) {
         context.dataStore.edit { prefs ->
             val current = readMediaStreamSelections(prefs).toMutableMap()
-            current[itemId] = MediaStreamSelection(
-                audioStreamIndex = audioStreamIndex,
-                subtitleStreamIndex = subtitleStreamIndex,
-            )
+            if (audioStreamIndex == null && subtitleStreamIndex == null) {
+                current.remove(itemId)
+            } else {
+                current[itemId] = MediaStreamSelection(
+                    audioStreamIndex = audioStreamIndex,
+                    subtitleStreamIndex = subtitleStreamIndex,
+                )
+            }
             if (current.size > 100) {
                 val excess = current.size - 100
                 current.keys.take(excess).forEach { current.remove(it) }
