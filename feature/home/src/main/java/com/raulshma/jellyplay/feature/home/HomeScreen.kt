@@ -4,6 +4,7 @@ import androidx.activity.compose.BackHandler
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -724,45 +725,30 @@ private fun MainHomeContent(
                     modifier = Modifier
                         .statusBarsPadding()
                         .padding(
-                            horizontal = (4f + 12f * scrollFraction).dp,
-                            vertical = (4f + 4f * scrollFraction).dp
+                            horizontal = 16.dp,
+                            vertical = 8.dp
                         )
                         .align(Alignment.TopStart)
                 ) {
-                    androidx.compose.material3.Surface(
-                        onClick = {
-                            scope.launch { drawerState.open() }
-                        },
-                        shape = RoundedCornerShape((24f + 4f * scrollFraction).dp),
-                        color = if (isSearchFocused) {
-                            Color.Transparent
-                        } else {
-                            lerp(
-                                Color.Transparent,
-                                MaterialTheme.colorScheme.surfaceContainerHigh,
-                                scrollFraction
-                            )
-                        },
+                    Box(
                         modifier = Modifier
-                            .graphicsLayer {
-                                scaleX = dockScale
-                                scaleY = dockScale
-                                alpha = if (isSearchFocused) 0f else 1f
-                                shadowElevation = if (scrollFraction > 0f) 8f * scrollFraction else 0f
-                            }
-                    ) {
-                        Box(
-                            modifier = Modifier
-                                .size(56.dp),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            Icon(
-                                imageVector = Tabler.Outline.Menu2,
-                                contentDescription = "Open Shortcuts Menu",
-                                tint = appBarIconColorFaded,
-                                modifier = Modifier.size(24.dp)
+                            .size(64.dp)
+                            .clickable(
+                                interactionSource = remember { androidx.compose.foundation.interaction.MutableInteractionSource() },
+                                indication = null,
+                                onClick = { scope.launch { drawerState.open() } }
                             )
-                        }
+                            .graphicsLayer {
+                                alpha = if (isSearchFocused) 0f else 1f
+                            },
+                        contentAlignment = Alignment.CenterStart
+                    ) {
+                        Icon(
+                            imageVector = Tabler.Outline.Menu2,
+                            contentDescription = "Open Shortcuts Menu",
+                            tint = appBarIconColorFaded,
+                            modifier = Modifier.size(24.dp)
+                        )
                     }
                 }
         }
