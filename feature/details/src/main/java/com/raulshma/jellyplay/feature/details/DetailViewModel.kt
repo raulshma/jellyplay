@@ -199,37 +199,9 @@ class DetailViewModel @Inject constructor(
             mediaRepository.getMediaDetail(itemId)
                 .onSuccess { detail ->
                     _detail.value = detail
-                    val streams = detail.mediaSources.firstOrNull()?.mediaStreams.orEmpty()
-                    val storedSelections = preferences.value.mediaStreamSelections
-                    val storedSelection = storedSelections[itemId]
-                    val hasStoredSelection = storedSelections.containsKey(itemId)
-
-                    selectedSubtitleIndex = if (hasStoredSelection) {
-                        storedSelection?.subtitleStreamIndex
-                    } else {
-                        val subStreams = streams.filter { it.type == com.raulshma.jellyplay.core.model.StreamType.SUBTITLE }
-                        subStreams.firstOrNull { it.isDefault }?.index
-                            ?: preferences.value.preferredSubtitleLanguage?.let { lang ->
-                                subStreams.firstOrNull { it.language.equals(lang, ignoreCase = true) }?.index
-                            }
-                    }
-                    selectedAudioIndex = if (hasStoredSelection) {
-                        storedSelection?.audioStreamIndex
-                    } else {
-                        val audioStreams = streams.filter { it.type == com.raulshma.jellyplay.core.model.StreamType.AUDIO }
-                        audioStreams.firstOrNull { it.isDefault }?.index
-                            ?: preferences.value.preferredAudioLanguage?.let { lang ->
-                                audioStreams.firstOrNull { it.language.equals(lang, ignoreCase = true) }?.index
-                            }
-                    }
-
-                    launch {
-                        preferencesStore.setMediaStreamSelection(
-                            itemId = itemId,
-                            audioStreamIndex = selectedAudioIndex,
-                            subtitleStreamIndex = selectedSubtitleIndex,
-                        )
-                    }
+                    val storedSelection = preferences.value.mediaStreamSelections[itemId]
+                    selectedSubtitleIndex = storedSelection?.subtitleStreamIndex
+                    selectedAudioIndex = storedSelection?.audioStreamIndex
                     if (detail.item.mediaType == MediaType.SERIES) {
                         loadSeasons(itemId)
                     } else if (detail.item.mediaType == MediaType.EPISODE && detail.item.seriesId != null) {

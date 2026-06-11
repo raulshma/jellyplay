@@ -14,6 +14,7 @@ import com.raulshma.jellyplay.core.model.DecoderMode
 import com.raulshma.jellyplay.core.model.LibVlcEngineConfig
 import com.raulshma.jellyplay.core.model.SubtitleStyle
 import com.raulshma.jellyplay.core.model.TrackType
+import com.raulshma.jellyplay.core.model.parseLanguageFromLabel
 import kotlinx.coroutines.channels.awaitClose
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
@@ -174,6 +175,13 @@ class LibVlcPlayerEngine(
             "--aout=${vlcCfg.audioOutput.key}",
             "--vout=${vlcCfg.videoOutput.key}",
         )
+
+        request.preferredAudioLanguage?.takeIf { it.isNotBlank() }?.let { language ->
+            options.add("--audio-language=$language")
+        }
+        request.preferredSubtitleLanguage?.takeIf { it.isNotBlank() }?.let { language ->
+            options.add("--sub-language=$language")
+        }
 
         if (vlcCfg.audioTimeStretch) {
             options.add("--audio-time-stretch")
@@ -403,12 +411,25 @@ class LibVlcPlayerEngine(
         try {
             val mp = mediaPlayer ?: return
             if (type == TrackType.AUDIO) {
-                val tracks = mp.getAudioTracks() ?: return
-                if (index in tracks.indices) mp.audioTrack = tracks[index].id
+                val tracks = mp.getAudioTracks()?.filter { it.id != -1 } ?: return
+                if (index < 0) {
+                    if (tracks.isNotEmpty()) {
+                        mp.audioTrack = tracks[0].id
+                    }
+                    return
+                }
+                if (index in tracks.indices) {
+                    mp.audioTrack = tracks[index].id
+                }
             } else {
-                if (index < 0) { mp.spuTrack = -1; return }
-                val tracks = mp.getSpuTracks() ?: return
-                if (index in tracks.indices) mp.spuTrack = tracks[index].id
+                if (index < 0) {
+                    mp.spuTrack = -1
+                    return
+                }
+                val tracks = mp.getSpuTracks()?.filter { it.id != -1 } ?: return
+                if (index in tracks.indices) {
+                    mp.spuTrack = tracks[index].id
+                }
             }
         } catch (_: Exception) {}
     }
@@ -773,7 +794,7 @@ class LibVlcPlayerEngine(
         val result = mutableListOf<MediaTrack>()
         
         try {
-            val audioTracks = mp.getAudioTracks()
+            val audioTracks = mp.getAudioTracks()?.filter { it.id != -1 }
             if (audioTracks != null) {
                 val currentId = try { mp.audioTrack } catch (_: Exception) { -1 }
                 audioTracks.forEachIndexed { index, desc ->
@@ -782,7 +803,7 @@ class LibVlcPlayerEngine(
                             id = "vlc_audio_${desc.id}",
                             index = index,
                             label = desc.name ?: "Audio ${index + 1}",
-                            language = null,
+                            language = parseLanguageFromLabel(desc.name),
                             isSelected = desc.id == currentId,
                             type = TrackType.AUDIO,
                         )
@@ -790,7 +811,7 @@ class LibVlcPlayerEngine(
                 }
             }
             
-            val spuTracks = mp.getSpuTracks()
+            val spuTracks = mp.getSpuTracks()?.filter { it.id != -1 }
             if (spuTracks != null) {
                 val currentId = try { mp.spuTrack } catch (_: Exception) { -1 }
                 spuTracks.forEachIndexed { index, desc ->
@@ -799,7 +820,7 @@ class LibVlcPlayerEngine(
                             id = "vlc_sub_${desc.id}",
                             index = index,
                             label = desc.name ?: "Subtitle ${index + 1}",
-                            language = null,
+                            language = parseLanguageFromLabel(desc.name),
                             isSelected = desc.id == currentId,
                             type = TrackType.SUBTITLE,
                         )
