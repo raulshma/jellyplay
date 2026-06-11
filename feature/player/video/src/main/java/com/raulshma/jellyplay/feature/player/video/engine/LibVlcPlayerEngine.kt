@@ -658,28 +658,33 @@ class LibVlcPlayerEngine(
     }
 
     private fun Media.applySubtitleStyle(style: SubtitleStyle) {
-        val fontColor = style.fontColor.value and 0x00FFFFFF
-        val backgroundColor = style.backgroundColor.value and 0x00FFFFFF
-        val edgeColor = style.edgeColor.value and 0x00FFFFFF
+        if (style.applyCustomStyle) {
+            val fontColor = style.fontColor.value and 0x00FFFFFF
+            val backgroundColor = style.backgroundColor.value and 0x00FFFFFF
+            val edgeColor = style.edgeColor.value and 0x00FFFFFF
 
-        addOption(":freetype-rel-fontsize=${style.fontSize}")
-        addOption(":freetype-color=$fontColor")
-        addOption(":freetype-background-color=$backgroundColor")
-        addOption(":freetype-background-opacity=${(style.backgroundOpacity * 255).toInt().coerceIn(0, 255)}")
-        addOption(":freetype-outline-color=$edgeColor")
+            addOption(":freetype-rel-fontsize=${style.fontSize}")
+            addOption(":freetype-color=$fontColor")
+            addOption(":freetype-background-color=$backgroundColor")
+            addOption(":freetype-background-opacity=${(style.backgroundOpacity * 255).toInt().coerceIn(0, 255)}")
+            addOption(":freetype-outline-color=$edgeColor")
 
-        when (style.edgeType) {
-            com.raulshma.jellyplay.core.model.SubtitleEdgeType.NONE -> addOption(":freetype-outline-thickness=0")
-            com.raulshma.jellyplay.core.model.SubtitleEdgeType.OUTLINE -> addOption(":freetype-outline-thickness=2")
-            com.raulshma.jellyplay.core.model.SubtitleEdgeType.DROP_SHADOW -> {
-                addOption(":freetype-outline-thickness=0")
-                addOption(":freetype-shadow-opacity=255")
+            when (style.edgeType) {
+                com.raulshma.jellyplay.core.model.SubtitleEdgeType.NONE -> addOption(":freetype-outline-thickness=0")
+                com.raulshma.jellyplay.core.model.SubtitleEdgeType.OUTLINE -> addOption(":freetype-outline-thickness=2")
+                com.raulshma.jellyplay.core.model.SubtitleEdgeType.DROP_SHADOW -> {
+                    addOption(":freetype-outline-thickness=0")
+                    addOption(":freetype-shadow-opacity=255")
+                }
+                com.raulshma.jellyplay.core.model.SubtitleEdgeType.RAISED,
+                com.raulshma.jellyplay.core.model.SubtitleEdgeType.DEPRESSED -> {
+                    addOption(":freetype-outline-thickness=1")
+                    addOption(":freetype-shadow-opacity=255")
+                }
             }
-            com.raulshma.jellyplay.core.model.SubtitleEdgeType.RAISED,
-            com.raulshma.jellyplay.core.model.SubtitleEdgeType.DEPRESSED -> {
-                addOption(":freetype-outline-thickness=1")
-                addOption(":freetype-shadow-opacity=255")
-            }
+        } else {
+            // Default size and no color/border overrides
+            addOption(":freetype-rel-fontsize=${style.fontSize}")
         }
 
         val screenHeight = context.resources.displayMetrics.heightPixels

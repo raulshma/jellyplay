@@ -1,6 +1,8 @@
 package com.raulshma.jellyplay.feature.player.video.components
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import com.raulshma.jellyplay.core.ui.tv.tvFocusable
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -25,6 +27,7 @@ import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.Slider
 import androidx.compose.material3.SliderDefaults
 import androidx.compose.material3.Text
+import androidx.compose.material3.Switch
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -46,6 +49,7 @@ import com.raulshma.jellyplay.core.designsystem.theme.ShapeCache
 import com.raulshma.jellyplay.core.model.SubtitleColor
 import com.raulshma.jellyplay.core.model.SubtitleEdgeType
 import com.raulshma.jellyplay.core.model.SubtitleStyle
+import com.raulshma.jellyplay.feature.player.video.engine.EngineCapabilities
 
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
 @Composable
@@ -53,7 +57,9 @@ fun SubtitleStyleSheet(
     currentStyle: SubtitleStyle,
     onStyleChange: (SubtitleStyle) -> Unit,
     onDismiss: () -> Unit,
+    capabilities: EngineCapabilities = EngineCapabilities(),
 ) {
+    var applyCustomStyle by remember { mutableStateOf(currentStyle.applyCustomStyle) }
     var fontSize by remember { mutableIntStateOf(currentStyle.fontSize) }
     var fontColor by remember { mutableStateOf(currentStyle.fontColor) }
     var backgroundColor by remember { mutableStateOf(currentStyle.backgroundColor) }
@@ -70,6 +76,7 @@ fun SubtitleStyleSheet(
         Column(
             modifier = Modifier
                 .fillMaxWidth()
+                .verticalScroll(rememberScrollState())
                 .padding(horizontal = 24.dp)
                 .padding(bottom = 32.dp),
         ) {
@@ -79,16 +86,50 @@ fun SubtitleStyleSheet(
                     fontWeight = FontWeight.Bold,
                 ),
             )
-            Spacer(Modifier.height(20.dp))
+            Spacer(Modifier.height(16.dp))
+
+            // Style Override Toggle
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(vertical = 8.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween,
+            ) {
+                Column {
+                    Text(
+                        "Override Subtitle Styles",
+                        style = MaterialTheme.typography.bodyLarge.copy(
+                            fontWeight = FontWeight.Bold,
+                        ),
+                    )
+                    Text(
+                        "Apply custom size, colors, and borders",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+                Switch(
+                    checked = applyCustomStyle,
+                    onCheckedChange = {
+                        applyCustomStyle = it
+                        onStyleChange(currentStyle.copy(applyCustomStyle = it))
+                    },
+                    modifier = Modifier.tvFocusable(),
+                )
+            }
+            Spacer(Modifier.height(16.dp))
 
             Text(
                 "Font Size: ${fontSize}sp",
                 style = MaterialTheme.typography.bodyMedium.copy(
                     fontWeight = FontWeight.Medium,
                 ),
+                color = if (applyCustomStyle) Color.Unspecified else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f),
             )
             Slider(
                 value = fontSize.toFloat(),
+                enabled = applyCustomStyle,
                 onValueChange = { fontSize = it.toInt() },
                 onValueChangeFinished = {
                     onStyleChange(currentStyle.copy(fontSize = fontSize))
@@ -96,8 +137,8 @@ fun SubtitleStyleSheet(
                 valueRange = 16f..48f,
                 steps = 32,
                 colors = SliderDefaults.colors(
-                    thumbColor = MaterialTheme.colorScheme.primary,
-                    activeTrackColor = MaterialTheme.colorScheme.primary,
+                    thumbColor = if (applyCustomStyle) MaterialTheme.colorScheme.primary else Color.Gray,
+                    activeTrackColor = if (applyCustomStyle) MaterialTheme.colorScheme.primary else Color.Gray.copy(alpha = 0.5f),
                 ),
                 modifier = Modifier.fillMaxWidth(),
             )
@@ -108,6 +149,7 @@ fun SubtitleStyleSheet(
                 style = MaterialTheme.typography.bodyMedium.copy(
                     fontWeight = FontWeight.Medium,
                 ),
+                color = if (applyCustomStyle) Color.Unspecified else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f),
             )
             Spacer(Modifier.height(4.dp))
             FlowRow(
@@ -118,6 +160,7 @@ fun SubtitleStyleSheet(
                     ColorChip(
                         color = Color(color.value),
                         isSelected = fontColor == color,
+                        enabled = applyCustomStyle,
                         onClick = {
                             fontColor = color
                             onStyleChange(currentStyle.copy(fontColor = color))
@@ -132,6 +175,7 @@ fun SubtitleStyleSheet(
                 style = MaterialTheme.typography.bodyMedium.copy(
                     fontWeight = FontWeight.Medium,
                 ),
+                color = if (applyCustomStyle) Color.Unspecified else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f),
             )
             Spacer(Modifier.height(4.dp))
             FlowRow(
@@ -142,6 +186,7 @@ fun SubtitleStyleSheet(
                     ColorChip(
                         color = Color(color.value),
                         isSelected = backgroundColor == color,
+                        enabled = applyCustomStyle,
                         onClick = {
                             backgroundColor = color
                             onStyleChange(currentStyle.copy(backgroundColor = color))
@@ -156,9 +201,11 @@ fun SubtitleStyleSheet(
                 style = MaterialTheme.typography.bodyMedium.copy(
                     fontWeight = FontWeight.Medium,
                 ),
+                color = if (applyCustomStyle) Color.Unspecified else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f),
             )
             Slider(
                 value = backgroundOpacity,
+                enabled = applyCustomStyle,
                 onValueChange = { backgroundOpacity = it },
                 onValueChangeFinished = {
                     onStyleChange(currentStyle.copy(backgroundOpacity = backgroundOpacity))
@@ -166,8 +213,8 @@ fun SubtitleStyleSheet(
                 valueRange = 0f..1f,
                 steps = 10,
                 colors = SliderDefaults.colors(
-                    thumbColor = MaterialTheme.colorScheme.primary,
-                    activeTrackColor = MaterialTheme.colorScheme.primary,
+                    thumbColor = if (applyCustomStyle) MaterialTheme.colorScheme.primary else Color.Gray,
+                    activeTrackColor = if (applyCustomStyle) MaterialTheme.colorScheme.primary else Color.Gray.copy(alpha = 0.5f),
                 ),
                 modifier = Modifier.fillMaxWidth(),
             )
@@ -178,6 +225,7 @@ fun SubtitleStyleSheet(
                 style = MaterialTheme.typography.bodyMedium.copy(
                     fontWeight = FontWeight.Medium,
                 ),
+                color = if (applyCustomStyle) Color.Unspecified else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f),
             )
             Spacer(Modifier.height(4.dp))
             FlowRow(
@@ -188,6 +236,7 @@ fun SubtitleStyleSheet(
                     val isSelected = edgeType == type
                     FilterChip(
                         selected = isSelected,
+                        enabled = applyCustomStyle,
                         onClick = {
                             edgeType = type
                             onStyleChange(currentStyle.copy(edgeType = type))
@@ -213,14 +262,14 @@ fun SubtitleStyleSheet(
                         border = FilterChipDefaults.filterChipBorder(
                             borderColor = Color.Transparent,
                             selectedBorderColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.4f),
-                            enabled = true,
+                            enabled = applyCustomStyle,
                             selected = isSelected,
                         ),
                     )
                 }
             }
 
-            if (edgeType != SubtitleEdgeType.NONE) {
+            if (applyCustomStyle && edgeType != SubtitleEdgeType.NONE) {
                 Spacer(Modifier.height(8.dp))
                 Text(
                     "Edge Color",
@@ -237,6 +286,7 @@ fun SubtitleStyleSheet(
                         ColorChip(
                             color = Color(color.value),
                             isSelected = edgeColor == color,
+                            enabled = applyCustomStyle,
                             onClick = {
                                 edgeColor = color
                                 onStyleChange(currentStyle.copy(edgeColor = color))
@@ -246,54 +296,58 @@ fun SubtitleStyleSheet(
                 }
             }
 
-            Spacer(Modifier.height(12.dp))
-            val offsetSec = offsetMs / 1000.0
-            val offsetLabel = when {
-                offsetMs == 0L -> "0.0s"
-                offsetMs > 0 -> "+${"%.1f".format(offsetSec)}s"
-                else -> "${"%.1f".format(offsetSec)}s"
+            if (capabilities.supportsSubtitleDelay) {
+                Spacer(Modifier.height(12.dp))
+                val offsetSec = offsetMs / 1000.0
+                val offsetLabel = when {
+                    offsetMs == 0L -> "0.0s"
+                    offsetMs > 0 -> "+${"%.1f".format(offsetSec)}s"
+                    else -> "${"%.1f".format(offsetSec)}s"
+                }
+                Text(
+                    "Subtitle Offset: $offsetLabel",
+                    style = MaterialTheme.typography.bodyMedium.copy(
+                        fontWeight = FontWeight.Medium,
+                    ),
+                )
+                Slider(
+                    value = offsetMs.toFloat(),
+                    onValueChange = { offsetMs = (it / 100f).roundToLong() * 100 },
+                    onValueChangeFinished = {
+                        onStyleChange(currentStyle.copy(offsetMs = offsetMs))
+                    },
+                    valueRange = -10000f..10000f,
+                    steps = 199,
+                    colors = SliderDefaults.colors(
+                        thumbColor = MaterialTheme.colorScheme.primary,
+                        activeTrackColor = MaterialTheme.colorScheme.primary,
+                    ),
+                    modifier = Modifier.fillMaxWidth(),
+                )
             }
-            Text(
-                "Subtitle Offset: $offsetLabel",
-                style = MaterialTheme.typography.bodyMedium.copy(
-                    fontWeight = FontWeight.Medium,
-                ),
-            )
-            Slider(
-                value = offsetMs.toFloat(),
-                onValueChange = { offsetMs = (it / 100f).roundToLong() * 100 },
-                onValueChangeFinished = {
-                    onStyleChange(currentStyle.copy(offsetMs = offsetMs))
-                },
-                valueRange = -10000f..10000f,
-                steps = 199,
-                colors = SliderDefaults.colors(
-                    thumbColor = MaterialTheme.colorScheme.primary,
-                    activeTrackColor = MaterialTheme.colorScheme.primary,
-                ),
-                modifier = Modifier.fillMaxWidth(),
-            )
 
-            Spacer(Modifier.height(12.dp))
-            Text(
-                "Vertical Position: ${(verticalPosition * 100).toInt()}%",
-                style = MaterialTheme.typography.bodyMedium.copy(
-                    fontWeight = FontWeight.Medium,
-                ),
-            )
-            Slider(
-                value = verticalPosition,
-                onValueChange = { verticalPosition = it },
-                onValueChangeFinished = {
-                    onStyleChange(currentStyle.copy(verticalPosition = verticalPosition))
-                },
-                valueRange = 0f..0.4f,
-                colors = SliderDefaults.colors(
-                    thumbColor = MaterialTheme.colorScheme.primary,
-                    activeTrackColor = MaterialTheme.colorScheme.primary,
-                ),
-                modifier = Modifier.fillMaxWidth(),
-            )
+            if (capabilities.supportsSubtitleVerticalPosition) {
+                Spacer(Modifier.height(12.dp))
+                Text(
+                    "Vertical Position: ${(verticalPosition * 100).toInt()}%",
+                    style = MaterialTheme.typography.bodyMedium.copy(
+                        fontWeight = FontWeight.Medium,
+                    ),
+                )
+                Slider(
+                    value = verticalPosition,
+                    onValueChange = { verticalPosition = it },
+                    onValueChangeFinished = {
+                        onStyleChange(currentStyle.copy(verticalPosition = verticalPosition))
+                    },
+                    valueRange = 0f..0.4f,
+                    colors = SliderDefaults.colors(
+                        thumbColor = MaterialTheme.colorScheme.primary,
+                        activeTrackColor = MaterialTheme.colorScheme.primary,
+                    ),
+                    modifier = Modifier.fillMaxWidth(),
+                )
+            }
 
             Spacer(Modifier.height(8.dp))
             Row(
@@ -302,8 +356,9 @@ fun SubtitleStyleSheet(
             ) {
                 FilterChip(
                     selected = false,
+                    enabled = applyCustomStyle,
                     onClick = {
-                        val default = SubtitleStyle()
+                        val default = SubtitleStyle(applyCustomStyle = true)
                         fontSize = default.fontSize
                         fontColor = default.fontColor
                         backgroundColor = default.backgroundColor
@@ -326,21 +381,23 @@ fun SubtitleStyleSheet(
 private fun ColorChip(
     color: Color,
     isSelected: Boolean,
+    enabled: Boolean = true,
     onClick: () -> Unit,
 ) {
+    val alpha = if (enabled) 1f else 0.4f
     Box(
         modifier = Modifier
             .size(34.dp)
             .clip(CircleShape)
-            .background(color)
+            .background(color.copy(alpha = alpha * color.alpha))
             .then(
-                if (isSelected) {
+                if (isSelected && enabled) {
                     Modifier.border(3.dp, MaterialTheme.colorScheme.primary, CircleShape)
                 } else {
-                    Modifier.border(1.dp, Color.Gray.copy(alpha = 0.5f), CircleShape)
+                    Modifier.border(1.dp, Color.Gray.copy(alpha = 0.5f * alpha), CircleShape)
                 }
             )
-            .tvFocusable()
-            .clickable(onClick = onClick),
+            .then(if (enabled) Modifier.tvFocusable() else Modifier)
+            .clickable(enabled = enabled, onClick = onClick),
     )
 }

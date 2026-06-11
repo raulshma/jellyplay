@@ -291,7 +291,7 @@ internal fun PlayerControls(
             ) {
                 FilledTonalIconButton(
                     onClick = onSeekBack,
-                    modifier = Modifier.size(IconButtonDefaults.largeContainerSize()),
+                    modifier = Modifier.size(IconButtonDefaults.mediumContainerSize()),
                     shape = IconButtonDefaults.largeRoundShape,
                     colors = IconButtonDefaults.filledTonalIconButtonColors(
                         containerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
@@ -300,7 +300,7 @@ internal fun PlayerControls(
                 ) {
                     Icon(
                         Tabler.Outline.PlayerTrackPrev, "Rewind",
-                        modifier = Modifier.size(IconButtonDefaults.largeIconSize),
+                        modifier = Modifier.size(IconButtonDefaults.mediumIconSize),
                     )
                 }
 
@@ -324,7 +324,7 @@ internal fun PlayerControls(
 
                 FilledTonalIconButton(
                     onClick = onSeekForward,
-                    modifier = Modifier.size(IconButtonDefaults.largeContainerSize()),
+                    modifier = Modifier.size(IconButtonDefaults.mediumContainerSize()),
                     shape = IconButtonDefaults.largeRoundShape,
                     colors = IconButtonDefaults.filledTonalIconButtonColors(
                         containerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
@@ -333,7 +333,7 @@ internal fun PlayerControls(
                 ) {
                     Icon(
                         Tabler.Outline.PlayerTrackNext, "Forward",
-                        modifier = Modifier.size(IconButtonDefaults.largeIconSize),
+                        modifier = Modifier.size(IconButtonDefaults.mediumIconSize),
                     )
                 }
             }

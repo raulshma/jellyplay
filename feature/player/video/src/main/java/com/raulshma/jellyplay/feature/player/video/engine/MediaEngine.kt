@@ -89,6 +89,7 @@ data class EngineCapabilities(
     val supportsSubtitleDelay: Boolean = false,
     val supportsAudioPassthrough: Boolean = false,
     val supportsSubtitleStyle: Boolean = false,
+    val supportsSubtitleVerticalPosition: Boolean = false,
     val supportsDialogueBoost: Boolean = false,
     val supportsNightMode: Boolean = false,
     val supportsAudioNormalization: Boolean = false,
