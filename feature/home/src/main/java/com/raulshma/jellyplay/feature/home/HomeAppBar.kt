@@ -332,13 +332,15 @@ fun HomeFabMenu(
                     checked = isExpanded,
                     onCheckedChange = onToggle,
                     containerColor = ToggleFloatingActionButtonDefaults.containerColor(
-                        initialColor = MaterialTheme.colorScheme.surfaceContainerHigh,
-                        finalColor = MaterialTheme.colorScheme.primaryContainer,
+                        initialColor = MaterialTheme.colorScheme.surfaceContainer.copy(alpha = 0.65f),
+                        finalColor = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.85f),
                     ),
+                    containerCornerRadius = { 28.dp },
                 ) {
                     Icon(
                         if (isExpanded) Tabler.Outline.X else Tabler.Outline.DotsVertical,
                         contentDescription = if (isExpanded) "Close menu" else "More options",
+                        tint = if (isExpanded) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.8f),
                     )
                 }
             }
@@ -346,7 +348,7 @@ fun HomeFabMenu(
         modifier = modifier
             .padding(
                 end = 8.dp,
-                bottom = 8.dp,
+                bottom = 4.dp,
             ),
     ) {
         FloatingActionButtonMenuItem(

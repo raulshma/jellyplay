@@ -515,9 +515,9 @@ fun LibraryScreen(
                             visible = toolbarExpanded,
                             modifier = Modifier
                                 .align(Alignment.BottomCenter)
-                                .padding(bottom = 88.dp + WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding())
+                                .padding(bottom = 64.dp + WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding())
                                 .offset {
-                                    val maxOffset = 88.dp.toPx()
+                                    val maxOffset = 64.dp.toPx()
                                     val yOffset = (-navOffsetPx).coerceAtMost(maxOffset)
                                     androidx.compose.ui.unit.IntOffset(x = 0, y = yOffset.toInt())
                                 },
