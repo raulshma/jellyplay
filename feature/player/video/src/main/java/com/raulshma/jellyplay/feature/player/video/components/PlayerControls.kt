@@ -264,6 +264,17 @@ internal fun PlayerControls(
                             )
                         }
                     }
+                    if (duration > 0) {
+                        val remainingMs = (duration - currentPosition).coerceAtLeast(0)
+                        val realRemainingMs = if (playbackSpeed > 0f) (remainingMs / playbackSpeed).toLong() else remainingMs
+                        val endsAt = rememberEndsAtTime(realRemainingMs)
+                        Text(
+                            text = "Ends at $endsAt",
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.8f),
+                            modifier = Modifier.padding(end = 8.dp)
+                        )
+                    }
                     if (isInSyncPlaySession) {
                         Spacer(Modifier.width(8.dp))
                         SyncPlayHeaderIndicator(
@@ -894,18 +905,6 @@ private fun TvControllableSeekBar(
                     ),
                     color = MaterialTheme.colorScheme.onSurface,
                 )
-                if (duration > 0) {
-                    val remainingMs = (duration - displayMs).coerceAtLeast(0)
-                    val realRemainingMs = if (playbackSpeed > 0f) (remainingMs / playbackSpeed).toLong() else remainingMs
-                    val endsAt = rememberEndsAtTime(realRemainingMs)
-                    Text(
-                        text = " • Ends at $endsAt",
-                        style = MaterialTheme.typography.labelSmall.copy(
-                            fontWeight = FontWeight.Normal,
-                        ),
-                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f),
-                    )
-                }
             }
         } else {
             Row(
@@ -913,28 +912,14 @@ private fun TvControllableSeekBar(
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically,
             ) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Text(
-                        formatDuration(currentPosition),
-                        style = MaterialTheme.typography.labelSmall.copy(
-                            fontFamily = FontFamily.Monospace,
-                            fontWeight = FontWeight.Medium,
-                        ),
-                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f),
-                    )
-                    if (duration > 0) {
-                        val remainingMs = (duration - currentPosition).coerceAtLeast(0)
-                        val realRemainingMs = if (playbackSpeed > 0f) (remainingMs / playbackSpeed).toLong() else remainingMs
-                        val endsAt = rememberEndsAtTime(realRemainingMs)
-                        Text(
-                            text = " • Ends at $endsAt",
-                            style = MaterialTheme.typography.labelSmall.copy(
-                                fontWeight = FontWeight.Normal,
-                            ),
-                            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f),
-                        )
-                    }
-                }
+                Text(
+                    formatDuration(currentPosition),
+                    style = MaterialTheme.typography.labelSmall.copy(
+                        fontFamily = FontFamily.Monospace,
+                        fontWeight = FontWeight.Medium,
+                    ),
+                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f),
+                )
                 Text(
                     if (duration > 0) formatDuration(duration) else "--:--",
                     style = MaterialTheme.typography.labelSmall.copy(
