@@ -11,6 +11,8 @@ import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.stateIn
+import kotlinx.coroutines.sync.Semaphore
+import kotlinx.coroutines.sync.withPermit
 import javax.inject.Inject
 
 data class RequestMediaInfo(
@@ -45,6 +47,8 @@ class RequestsViewModel @Inject constructor(
 
     private val _state = composeState(RequestsUiState())
     val state: State<RequestsUiState> = _state.asState()
+
+    private val enrichSemaphore = Semaphore(4)
 
     val currentUser: StateFlow<SeerrCurrentUser?> = seerrRepository.currentUser
         .stateIn(scope, SharingStarted.WhileSubscribed(5_000), null)
@@ -106,30 +110,32 @@ class RequestsViewModel @Inject constructor(
             if (_state.value.mediaInfo.containsKey(tmdbId)) return@forEach
 
             launch {
-                val info = if (request.type.equals("movie", ignoreCase = true)) {
-                    seerrRepository.getMovieDetails(tmdbId).getOrNull()?.let {
-                        RequestMediaInfo(
-                            title = it.title,
-                            posterUrl = it.posterUrl,
-                            overview = it.overview,
-                            year = it.releaseDate?.take(4)?.toIntOrNull(),
-                        )
+                enrichSemaphore.withPermit {
+                    val info = if (request.type.equals("movie", ignoreCase = true)) {
+                        seerrRepository.getMovieDetails(tmdbId).getOrNull()?.let {
+                            RequestMediaInfo(
+                                title = it.title,
+                                posterUrl = it.posterUrl,
+                                overview = it.overview,
+                                year = it.releaseDate?.take(4)?.toIntOrNull(),
+                            )
+                        }
+                    } else {
+                        seerrRepository.getTvDetails(tmdbId).getOrNull()?.let {
+                            RequestMediaInfo(
+                                title = it.name,
+                                posterUrl = it.posterUrl,
+                                overview = it.overview,
+                                year = it.firstAirDate?.take(4)?.toIntOrNull(),
+                            )
+                        }
                     }
-                } else {
-                    seerrRepository.getTvDetails(tmdbId).getOrNull()?.let {
-                        RequestMediaInfo(
-                            title = it.name,
-                            posterUrl = it.posterUrl,
-                            overview = it.overview,
-                            year = it.firstAirDate?.take(4)?.toIntOrNull(),
-                        )
-                    }
-                }
 
-                info?.let {
-                    val current = _state.value.mediaInfo.toMutableMap()
-                    current[tmdbId] = it
-                    _state.value = _state.value.copy(mediaInfo = current)
+                    info?.let {
+                        val current = _state.value.mediaInfo.toMutableMap()
+                        current[tmdbId] = it
+                        _state.value = _state.value.copy(mediaInfo = current)
+                    }
                 }
             }
         }

@@ -224,6 +224,6 @@ class StateFlowHandle<T>(private val backing: MutableStateFlow<T>) {
  * to observe a [StateFlow] produced by a ViewModel.
  */
 @Composable
-fun <T> StateFlow<T>.collectAsStateWithLifecycleSafe(
+fun <T> StateFlow<T>.collectAsStateSafe(
     initial: T,
 ): State<T> = collectAsState(initial = initial)

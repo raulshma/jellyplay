@@ -39,6 +39,7 @@ import com.raulshma.jellyplay.core.ui.adaptive.bottomPadding
 import com.raulshma.jellyplay.core.ui.adaptive.contentPadding
 import com.raulshma.jellyplay.core.ui.adaptive.itemSpacing
 import com.raulshma.jellyplay.core.ui.components.ErrorScreen
+import com.raulshma.jellyplay.core.ui.components.ExpressiveToolbarIconButton
 import com.raulshma.jellyplay.core.ui.components.JellyPlayScreenScaffold
 import com.raulshma.jellyplay.core.ui.components.ScreenEmptyState
 import com.raulshma.jellyplay.core.ui.components.rememberScreenBackgroundColor
@@ -226,36 +227,3 @@ private fun ChannelCard(
     }
 }
 
-
-// ─────────────────────────────────────────────────────────────────────────────
-// ── Subcomponents (matching LibraryScreen / MediaDetailScreen design language)
-// ─────────────────────────────────────────────────────────────────────────────
-
-@OptIn(ExperimentalMaterial3ExpressiveApi::class)
-@Composable
-private fun ExpressiveToolbarIconButton(
-    onClick: () -> Unit,
-    icon: androidx.compose.ui.graphics.vector.ImageVector,
-    contentDescription: String,
-    highlighted: Boolean = false,
-) {
-    val tint = if (highlighted) MaterialTheme.colorScheme.primary
-               else MaterialTheme.colorScheme.onSurfaceVariant
-    IconButton(
-        onClick = onClick,
-        shapes = IconButtonDefaults.shapes(),
-        modifier = Modifier.size(36.dp),
-        colors = IconButtonDefaults.iconButtonColors(
-            containerColor = MaterialTheme.colorScheme.onSurface.copy(
-                alpha = if (highlighted) 0.18f else 0.08f
-            ),
-        ),
-    ) {
-        Icon(
-            icon,
-            contentDescription = contentDescription,
-            modifier = Modifier.size(18.dp),
-            tint = tint,
-        )
-    }
-}

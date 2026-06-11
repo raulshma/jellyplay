@@ -54,6 +54,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.raulshma.jellyplay.core.designsystem.theme.ShapeCache
 import com.raulshma.jellyplay.core.designsystem.theme.isLightColor
+import com.raulshma.jellyplay.core.designsystem.theme.ThemeVariantColors
 import com.raulshma.jellyplay.core.ui.adaptive.LocalAdaptiveInfo
 import com.raulshma.jellyplay.core.ui.adaptive.bottomPadding
 import com.raulshma.jellyplay.core.ui.adaptive.contentPadding
@@ -68,8 +69,8 @@ fun rememberScreenBackgroundColor(
     artworkColor: Color? = null,
     isLightTheme: Boolean = isLightColor(MaterialTheme.colorScheme.background),
 ): Color {
-    val isSynthwave = LocalIsSynthwave.current
-    if (isSynthwave) return Color.Transparent
+    val themeVariant = com.raulshma.jellyplay.core.designsystem.theme.LocalThemeVariant.current
+    if (themeVariant == com.raulshma.jellyplay.core.designsystem.theme.ThemeVariant.SYNTHWAVE) return Color.Transparent
 
     val baseColor = artworkColor
         ?: MaterialTheme.colorScheme.background
@@ -113,11 +114,14 @@ fun JellyPlayScreenScaffold(
 
     val isTv = LocalTvMode.current
 
-    val isSynthwave = LocalIsSynthwave.current
-    val backgroundModifier = if (isSynthwave) {
+    val themeVariant = com.raulshma.jellyplay.core.designsystem.theme.LocalThemeVariant.current
+    val backgroundModifier = if (themeVariant == com.raulshma.jellyplay.core.designsystem.theme.ThemeVariant.SYNTHWAVE) {
         Modifier.background(
             Brush.verticalGradient(
-                colors = listOf(Color(0xFF0D061A), Color(0xFF1B0B3A))
+                colors = listOf(
+                    com.raulshma.jellyplay.core.designsystem.theme.ThemeVariantColors.SYNTHWAVE_BACKGROUND,
+                    com.raulshma.jellyplay.core.designsystem.theme.ThemeVariantColors.SYNTHWAVE_BACKGROUND_END,
+                )
             )
         )
     } else {

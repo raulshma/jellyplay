@@ -4,7 +4,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import com.raulshma.jellyplay.core.data.playback.AudioPlaybackManager
-import com.raulshma.jellyplay.core.data.playback.AudioQueueItem
+import com.raulshma.jellyplay.core.data.playback.toAudioQueueItem
 import com.raulshma.jellyplay.core.data.repository.MediaRepository
 import com.raulshma.jellyplay.core.data.repository.PlaybackRepository
 import com.raulshma.jellyplay.core.data.repository.SmartPlaylistRepository
@@ -157,16 +157,7 @@ class SmartPlaylistsViewModel @Inject constructor(
 
     fun playAll(startIndex: Int = 0) {
         val queueItems = generatedItems.map { track ->
-            AudioQueueItem(
-                id = track.id,
-                name = track.name,
-                artist = track.albumArtist ?: track.artistItems.firstOrNull()?.name ?: "",
-                album = track.album,
-                imageUrl = getImageUrl(track.id),
-                mediaSourceId = null,
-                durationMs = track.runTimeTicks?.let { it / 10_000 } ?: 0L,
-                normalizationGain = track.normalizationGain,
-            )
+            track.toAudioQueueItem(imageUrl = getImageUrl(track.id))
         }
         audioPlaybackManager.playQueue(queueItems, startIndex)
     }

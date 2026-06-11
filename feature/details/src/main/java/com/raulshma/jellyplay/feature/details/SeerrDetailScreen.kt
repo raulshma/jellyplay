@@ -1984,7 +1984,7 @@ private fun StreamingProvidersRow(
                         if (seerrServerUrl.isNotBlank()) {
                             "${seerrServerUrl.trimEnd('/')}/imageproxy/tmdb/t/p/w45/$cleanPath"
                         } else {
-                            "https://image.tmdb.org/t/p/w45/$cleanPath"
+                            "${TmdbImageUrls.LOGO_W45}/$cleanPath"
                         }
                     }
                     if (logoUrl != null) {

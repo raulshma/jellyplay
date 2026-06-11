@@ -62,16 +62,16 @@ fun VideoStatsOverlay(
 
         StatsSection("Playback") {
             StatsRow("State", if (isPlaying) "Playing" else playbackState)
-            StatsRow("Position", formatDurationMs(currentPositionMs))
-            StatsRow("Duration", formatDurationMs(durationMs))
+            StatsRow("Position", formatDurationMsLocal(currentPositionMs))
+            StatsRow("Duration", formatDurationMsLocal(durationMs))
             if (durationMs > 0) {
                 val progress = (currentPositionMs.toFloat() / durationMs.toFloat() * 100f)
                 StatsRow("Progress", String.format("%.1f%%", progress))
             }
             StatsRow("Speed", "${playbackSpeed}x")
             val bufferHealthMs = (stats.bufferedPositionMs - currentPositionMs).coerceAtLeast(0L)
-            StatsRow("Buffer Health", formatDurationMs(bufferHealthMs))
-            StatsRow("Buffered", formatDurationMs(stats.bufferedPositionMs))
+            StatsRow("Buffer Health", formatDurationMsLocal(bufferHealthMs))
+            StatsRow("Buffered", formatDurationMsLocal(stats.bufferedPositionMs))
             StatsRow("Clock", rememberCurrentTimeString())
         }
 
@@ -178,15 +178,7 @@ private fun StatsRow(
     }
 }
 
-private fun formatDurationMs(ms: Long): String {
-    if (ms <= 0) return "0:00"
-    val totalSec = ms / 1000
-    val h = totalSec / 3600
-    val m = (totalSec % 3600) / 60
-    val s = totalSec % 60
-    return if (h > 0) String.format("%d:%02d:%02d", h, m, s)
-    else String.format("%d:%02d", m, s)
-}
+private fun formatDurationMsLocal(ms: Long): String = com.raulshma.jellyplay.core.ui.components.formatDurationMs(ms)
 
 private fun formatBitrate(bps: Int): String = when {
     bps >= 1_000_000 -> String.format("%.1f Mbps", bps / 1_000_000.0)

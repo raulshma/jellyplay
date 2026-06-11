@@ -103,6 +103,10 @@ import com.raulshma.jellyplay.core.designsystem.theme.LocalIsSynthwave
 import com.raulshma.jellyplay.core.designsystem.theme.LocalIsSoothingTheme
 import com.raulshma.jellyplay.core.designsystem.theme.LocalIsMonochromeTheme
 import com.raulshma.jellyplay.core.designsystem.theme.ShapeCache
+import com.raulshma.jellyplay.core.designsystem.theme.cardBorder
+import com.raulshma.jellyplay.core.designsystem.theme.containerTint
+import com.raulshma.jellyplay.core.designsystem.theme.shadowElevation
+import com.raulshma.jellyplay.core.designsystem.theme.tonalElevation
 import com.raulshma.jellyplay.core.ui.components.LocalNavigationBarColor
 import com.raulshma.jellyplay.core.ui.components.MiniPlayer
 import com.raulshma.jellyplay.core.ui.components.LocalPerformanceMode
@@ -1214,60 +1218,21 @@ private fun FloatingNavigationBar(
     containerColor: Color = MaterialTheme.colorScheme.surfaceContainer,
     modifier: Modifier = Modifier,
 ) {
-    val isSynthwave = LocalIsSynthwave.current
-    val isSoothing = LocalIsSoothingTheme.current
-    val isMonochrome = LocalIsMonochromeTheme.current
+    val themeVariant = com.raulshma.jellyplay.core.designsystem.theme.LocalThemeVariant.current
 
-    val synthwaveTint = Color(0xFF160C2D).copy(alpha = 0.92f)
-    val soothingTint = if (androidx.compose.foundation.isSystemInDarkTheme()) {
-        Color(0xFF161B22).copy(alpha = 0.88f)
-    } else {
-        Color(0xFFFFFFFF).copy(alpha = 0.88f)
-    }
-    val monochromeTint = if (androidx.compose.foundation.isSystemInDarkTheme()) {
-        Color(0xFF000000).copy(alpha = 0.95f)
-    } else {
-        Color(0xFFFFFFFF).copy(alpha = 0.95f)
-    }
-    val resolvedColor = when {
-        isSynthwave -> synthwaveTint
-        isSoothing -> soothingTint
-        isMonochrome -> monochromeTint
-        else -> containerColor.copy(alpha = 0.90f)
-    }
+    val resolvedColor = themeVariant.containerTint(containerColor.copy(alpha = 0.90f))
 
-    val border = when {
-        isSynthwave -> {
-            androidx.compose.foundation.BorderStroke(
-                width = 1.5.dp,
-                brush = androidx.compose.ui.graphics.Brush.linearGradient(
-                    colors = listOf(
-                        MaterialTheme.colorScheme.primary,
-                        MaterialTheme.colorScheme.secondary
-                    )
-                )
-            )
-        }
-        isSoothing -> {
-            androidx.compose.foundation.BorderStroke(
-                width = 0.5.dp,
-                color = MaterialTheme.colorScheme.outline.copy(alpha = 0.3f)
-            )
-        }
-        isMonochrome -> {
-            androidx.compose.foundation.BorderStroke(
-                width = 1.dp,
-                color = MaterialTheme.colorScheme.outline.copy(alpha = 0.45f)
-            )
-        }
-        else -> null
-    }
+    val border = themeVariant.cardBorder(
+        primary = MaterialTheme.colorScheme.primary,
+        secondary = MaterialTheme.colorScheme.secondary,
+        outline = MaterialTheme.colorScheme.outline,
+    )
 
-    val shape = when {
-        isSynthwave -> RoundedCornerShape(0.dp)
-        isSoothing -> ShapeCache.smoothPill
-        isMonochrome -> RoundedCornerShape(16.dp)
-        else -> RoundedCornerShape(24.dp)
+    val shape = when (themeVariant) {
+        com.raulshma.jellyplay.core.designsystem.theme.ThemeVariant.SYNTHWAVE -> RoundedCornerShape(0.dp)
+        com.raulshma.jellyplay.core.designsystem.theme.ThemeVariant.SOOTHING -> ShapeCache.smoothPill
+        com.raulshma.jellyplay.core.designsystem.theme.ThemeVariant.MONOCHROME -> RoundedCornerShape(16.dp)
+        com.raulshma.jellyplay.core.designsystem.theme.ThemeVariant.STANDARD -> RoundedCornerShape(24.dp)
     }
 
     Surface(
@@ -1275,8 +1240,8 @@ private fun FloatingNavigationBar(
         shape = shape,
         color = resolvedColor,
         border = border,
-        tonalElevation = if (isSoothing) 0.dp else 4.dp,
-        shadowElevation = if (isSoothing) 4.dp else if (isSynthwave) 0.dp else 8.dp,
+        tonalElevation = themeVariant.tonalElevation(4.dp),
+        shadowElevation = themeVariant.shadowElevation(8.dp),
     ) {
         androidx.compose.material3.NavigationBar(
             modifier = Modifier

@@ -1,17 +1,17 @@
 package com.raulshma.jellyplay.core.database
 
 import androidx.room.TypeConverter
-import org.json.JSONArray
+import kotlinx.serialization.json.Json
 
 object Converters {
+
+    private val json = Json { ignoreUnknownKeys = true }
 
     @TypeConverter
     @JvmStatic
     fun fromStringList(value: List<String>?): String? {
         if (value == null) return null
-        val array = JSONArray()
-        value.forEach { array.put(it) }
-        return array.toString()
+        return json.encodeToString(value)
     }
 
     @TypeConverter
@@ -20,10 +20,7 @@ object Converters {
         if (value.isNullOrEmpty()) return null
         val trimmed = value.trim()
         return if (trimmed.startsWith("[")) {
-            runCatching {
-                val array = JSONArray(trimmed)
-                (0 until array.length()).map { array.getString(it) }
-            }.getOrNull()
+            runCatching { json.decodeFromString<List<String>>(trimmed) }.getOrNull()
         } else {
             trimmed.split(",").filter { it.isNotEmpty() }
         }
@@ -40,8 +37,7 @@ object Converters {
         val trimmed = value.trim()
         return if (trimmed.startsWith("[")) {
             runCatching {
-                val array = JSONArray(trimmed)
-                (0 until array.length()).map { array.getInt(it) }
+                json.decodeFromString<List<Int>>(trimmed)
             }.getOrNull()
         } else {
             trimmed.split(",").mapNotNull { it.toIntOrNull() }

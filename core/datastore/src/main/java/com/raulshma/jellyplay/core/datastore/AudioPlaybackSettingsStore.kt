@@ -8,6 +8,7 @@ import com.raulshma.jellyplay.core.model.EqualizerSettings
 import com.raulshma.jellyplay.core.model.PreloadBufferSize
 import com.raulshma.jellyplay.core.model.ReverbPreset
 import com.raulshma.jellyplay.core.model.StreamingQuality
+import com.raulshma.jellyplay.core.datastore.di.ApplicationScope
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -62,8 +63,9 @@ data class AudioPlaybackSettings(
 @Singleton
 class AudioPlaybackSettingsStore @Inject constructor(
     private val userPreferencesStore: UserPreferencesStore,
+    @ApplicationScope private val externalScope: CoroutineScope,
 ) {
-    private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
+    private val scope = externalScope
 
     val settings: StateFlow<AudioPlaybackSettings> = userPreferencesStore.preferences
         .map { it.toAudioSettings() }

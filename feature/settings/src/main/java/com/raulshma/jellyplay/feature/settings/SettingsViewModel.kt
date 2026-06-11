@@ -7,6 +7,7 @@ import androidx.compose.runtime.setValue
 import com.raulshma.jellyplay.core.data.repository.AuthRepository
 import com.raulshma.jellyplay.core.data.repository.DownloadRepository
 import com.raulshma.jellyplay.core.data.repository.MediaRepository
+import com.raulshma.jellyplay.core.datastore.PreferencesEditor
 import com.raulshma.jellyplay.core.datastore.UserPreferencesStore
 import com.raulshma.jellyplay.core.model.AudioNormalizationMode
 import com.raulshma.jellyplay.core.model.DecoderMode
@@ -65,6 +66,8 @@ class SettingsViewModel @Inject constructor(
     private val apiClient: com.raulshma.jellyplay.core.network.JellyfinApiClient,
     private val notificationScheduler: NotificationScheduler,
 ) : JellyPlayViewModel() {
+
+    private val editor = PreferencesEditor(scope, preferencesStore)
 
     var preferences by composeState(UserPreferences())
         private set
@@ -204,33 +207,19 @@ class SettingsViewModel @Inject constructor(
         sessionRefreshJob?.cancel()
     }
 
-    fun setDynamicTheming(enabled: Boolean) {
-        launch { preferencesStore.setDynamicTheming(enabled) }
-    }
+    fun setDynamicTheming(enabled: Boolean) = editor.setDynamicTheming(enabled)
 
-    fun setAccentColorSwatch(swatch: String) {
-        launch { preferencesStore.setAccentColorSwatch(swatch) }
-    }
+    fun setAccentColorSwatch(swatch: String) = editor.setAccentColorSwatch(swatch)
 
-    fun setColorStyle(style: ColorStyle) {
-        launch { preferencesStore.setColorStyle(style) }
-    }
+    fun setColorStyle(style: ColorStyle) = editor.setColorStyle(style)
 
-    fun setThemeMode(mode: ThemeMode) {
-        launch { preferencesStore.setThemeMode(mode) }
-    }
+    fun setThemeMode(mode: ThemeMode) = editor.setThemeMode(mode)
 
-    fun setContrastLevel(level: ContrastLevel) {
-        launch { preferencesStore.setContrastLevel(level) }
-    }
+    fun setContrastLevel(level: ContrastLevel) = editor.setContrastLevel(level)
 
-    fun setOledMode(enabled: Boolean) {
-        launch { preferencesStore.setOledMode(enabled) }
-    }
+    fun setOledMode(enabled: Boolean) = editor.setOledMode(enabled)
 
-    fun setPreferredPlayer(playerType: PlayerType) {
-        launch { preferencesStore.setPreferredPlayer(playerType) }
-    }
+    fun setPreferredPlayer(playerType: PlayerType) = editor.setPreferredPlayer(playerType)
 
     fun setTrailerAutoplay(enabled: Boolean) {
         launch { preferencesStore.setTrailerAutoplay(enabled) }
@@ -240,13 +229,9 @@ class SettingsViewModel @Inject constructor(
         launch { preferencesStore.setPreferredAudioLanguage(language) }
     }
 
-    fun setPreferredSubtitleLanguage(language: String?) {
-        launch { preferencesStore.setPreferredSubtitleLanguage(language) }
-    }
+    fun setPreferredSubtitleLanguage(language: String?) = editor.setPreferredSubtitleLanguage(language)
 
-    fun setStreamingQuality(quality: StreamingQuality) {
-        launch { preferencesStore.setStreamingQuality(quality) }
-    }
+    fun setStreamingQuality(quality: StreamingQuality) = editor.setStreamingQuality(quality)
 
     fun setWifiOnlyDownloads(enabled: Boolean) {
         launch { preferencesStore.setWifiOnlyDownloads(enabled) }
@@ -303,9 +288,7 @@ class SettingsViewModel @Inject constructor(
         launch { authRepository.logout() }
     }
 
-    fun setPinLockEnabled(enabled: Boolean) {
-        launch { preferencesStore.setPinLockEnabled(enabled) }
-    }
+    fun setPinLockEnabled(enabled: Boolean) = editor.setPinLockEnabled(enabled)
 
     fun setPin(pin: String) {
         launch {
@@ -326,17 +309,13 @@ class SettingsViewModel @Inject constructor(
         return preferencesStore.verifyPin(pin, preferences.pinHash)
     }
 
-    fun setBiometricLockEnabled(enabled: Boolean) {
-        launch { preferencesStore.setBiometricLockEnabled(enabled) }
-    }
+    fun setBiometricLockEnabled(enabled: Boolean) = editor.setBiometricLockEnabled(enabled)
 
     fun setShowAdvancedSettings(enabled: Boolean) {
         launch { preferencesStore.setShowAdvancedSettings(enabled) }
     }
 
-    fun setAutoLockTimerMs(ms: Long) {
-        launch { preferencesStore.setAutoLockTimerMs(ms) }
-    }
+    fun setAutoLockTimerMs(ms: Long) = editor.setAutoLockTimerMs(ms)
 
     fun setDialogueBoostEnabled(enabled: Boolean) {
         launch { preferencesStore.setDialogueBoostEnabled(enabled) }
@@ -407,21 +386,15 @@ class SettingsViewModel @Inject constructor(
         }
     }
 
-    fun setVideoSeekDurationMs(ms: Long) {
-        launch { preferencesStore.setVideoSeekDurationMs(ms) }
-    }
+    fun setVideoSeekDurationMs(ms: Long) = editor.setVideoSeekDurationMs(ms)
 
-    fun setVideoDefaultOrientation(mode: OrientationMode) {
-        launch { preferencesStore.setVideoDefaultOrientation(mode) }
-    }
+    fun setVideoDefaultOrientation(mode: OrientationMode) = editor.setVideoDefaultOrientation(mode)
 
     fun setVideoControlsTimeoutMs(ms: Long) {
         launch { preferencesStore.setVideoControlsTimeoutMs(ms) }
     }
 
-    fun setVideoGesturesEnabled(enabled: Boolean) {
-        launch { preferencesStore.setVideoGesturesEnabled(enabled) }
-    }
+    fun setVideoGesturesEnabled(enabled: Boolean) = editor.setVideoGesturesEnabled(enabled)
 
     fun setVideoDefaultSpeed(speed: Float) {
         launch { preferencesStore.setVideoDefaultSpeed(speed) }
@@ -431,9 +404,7 @@ class SettingsViewModel @Inject constructor(
         launch { preferencesStore.setVideoDefaultAspectRatio(ratio) }
     }
 
-    fun setVideoAutoplayNext(enabled: Boolean) {
-        launch { preferencesStore.setVideoAutoplayNext(enabled) }
-    }
+    fun setVideoAutoplayNext(enabled: Boolean) = editor.setVideoAutoplayNext(enabled)
 
     fun setVideoSwipeSeekMaxMs(ms: Long) {
         launch { preferencesStore.setVideoSwipeSeekMaxMs(ms) }
@@ -447,9 +418,7 @@ class SettingsViewModel @Inject constructor(
         launch { preferencesStore.setVideoBrightnessLevel(level) }
     }
 
-    fun setAudioDefaultSpeed(speed: Float) {
-        launch { preferencesStore.setAudioDefaultSpeed(speed) }
-    }
+    fun setAudioDefaultSpeed(speed: Float) = editor.setAudioDefaultSpeed(speed)
 
     fun setAudioNightModeVolume(volume: Float) {
         launch { preferencesStore.setAudioNightModeVolume(volume) }
@@ -463,21 +432,15 @@ class SettingsViewModel @Inject constructor(
         launch { preferencesStore.setAudioSkipPreviousThresholdMs(ms) }
     }
 
-    fun setAudioAutoplayNext(enabled: Boolean) {
-        launch { preferencesStore.setAudioAutoplayNext(enabled) }
-    }
+    fun setAudioAutoplayNext(enabled: Boolean) = editor.setAudioAutoplayNext(enabled)
 
     fun setAudioDelayMs(ms: Long) {
         launch { preferencesStore.setAudioDelay(ms) }
     }
 
-    fun setHomeMode(mode: HomeMode) {
-        launch { preferencesStore.setHomeMode(mode) }
-    }
+    fun setHomeMode(mode: HomeMode) = editor.setHomeMode(mode)
 
-    fun setSubtitleStyle(style: SubtitleStyle) {
-        launch { preferencesStore.setSubtitleStyle(style) }
-    }
+    fun setSubtitleStyle(style: SubtitleStyle) = editor.setSubtitleStyle(style)
 
     fun setEqualizerSettings(settings: EqualizerSettings) {
         launch { preferencesStore.setEqualizerSettings(settings) }
@@ -514,13 +477,9 @@ class SettingsViewModel @Inject constructor(
         launch { preferencesStore.setVideoShowPlaybackMetadata(enabled) }
     }
 
-    fun setGaplessEnabled(enabled: Boolean) {
-        launch { preferencesStore.setGaplessEnabled(enabled) }
-    }
+    fun setGaplessEnabled(enabled: Boolean) = editor.setGaplessEnabled(enabled)
 
-    fun setCrossfadeDurationMs(ms: Long) {
-        launch { preferencesStore.setCrossfadeDurationMs(ms) }
-    }
+    fun setCrossfadeDurationMs(ms: Long) = editor.setCrossfadeDurationMs(ms)
 
     fun setAudioNormalizationMode(mode: AudioNormalizationMode) {
         launch { preferencesStore.setAudioNormalizationMode(mode) }
@@ -550,9 +509,7 @@ class SettingsViewModel @Inject constructor(
         launch { preferencesStore.setDreamShowTitle(enabled) }
     }
 
-    fun setEnabledHomeSectionTypes(types: Set<HomeSectionType>) {
-        launch { preferencesStore.setEnabledHomeSectionTypes(types) }
-    }
+    fun setEnabledHomeSectionTypes(types: Set<HomeSectionType>) = editor.setEnabledHomeSectionTypes(types)
 
     fun setHomeSectionOrder(order: List<HomeSectionType>) {
         launch { preferencesStore.setHomeSectionOrder(order) }
@@ -574,17 +531,11 @@ class SettingsViewModel @Inject constructor(
         setHiddenLibrarySectionIds(current)
     }
 
-    fun setNavBarShowLabels(show: Boolean) {
-        launch { preferencesStore.setNavBarShowLabels(show) }
-    }
+    fun setNavBarShowLabels(show: Boolean) = editor.setNavBarShowLabels(show)
 
-    fun setHomeHeroEnabled(enabled: Boolean) {
-        launch { preferencesStore.setHomeHeroEnabled(enabled) }
-    }
+    fun setHomeHeroEnabled(enabled: Boolean) = editor.setHomeHeroEnabled(enabled)
 
-    fun setPerformanceMode(enabled: Boolean) {
-        launch { preferencesStore.setPerformanceMode(enabled) }
-    }
+    fun setPerformanceMode(enabled: Boolean) = editor.setPerformanceMode(enabled)
 
     fun setLibraryViewMode(mode: LibraryViewMode) {
         launch { preferencesStore.setLibraryViewMode(mode) }

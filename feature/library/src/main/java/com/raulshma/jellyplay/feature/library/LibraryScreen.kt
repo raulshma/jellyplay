@@ -81,6 +81,8 @@ import androidx.paging.compose.itemKey
 import com.raulshma.jellyplay.core.designsystem.theme.LocalIsLightTheme
 import com.raulshma.jellyplay.core.designsystem.theme.ShapeCache
 import com.raulshma.jellyplay.core.ui.components.ErrorScreen
+import com.raulshma.jellyplay.core.ui.components.ExpressiveToolbarIconButton
+import com.raulshma.jellyplay.core.ui.components.GlassDismissTag
 import com.raulshma.jellyplay.core.ui.components.LoadingScreen
 import com.raulshma.jellyplay.core.ui.components.PosterCard
 import com.raulshma.jellyplay.core.ui.adaptive.LocalAdaptiveInfo
@@ -710,42 +712,7 @@ private fun ErrorAwareStatusIndicator(
     }
 }
 
-@OptIn(ExperimentalMaterial3ExpressiveApi::class)
-@Composable
-private fun ExpressiveToolbarIconButton(
-    onClick: () -> Unit,
-    icon: androidx.compose.ui.graphics.vector.ImageVector,
-    contentDescription: String,
-    highlighted: Boolean = false,
-) {
-    val focusState = rememberTvFocusState(focusedScale = 1.15f)
-    val tint = if (highlighted) MaterialTheme.colorScheme.primary
-               else MaterialTheme.colorScheme.onSurfaceVariant
 
-    Box(
-        modifier = Modifier
-            .then(focusState.focusModifier)
-            .tvFocusIndicator(focusState, ShapeCache.smooth10),
-    ) {
-        IconButton(
-            onClick = onClick,
-            shapes = IconButtonDefaults.shapes(),
-            modifier = Modifier.size(36.dp),
-            colors = IconButtonDefaults.iconButtonColors(
-                containerColor = MaterialTheme.colorScheme.onSurface.copy(
-                    alpha = if (highlighted) 0.18f else 0.08f
-                ),
-            ),
-        ) {
-            Icon(
-                icon,
-                contentDescription = contentDescription,
-                modifier = Modifier.size(18.dp),
-                tint = tint,
-            )
-        }
-    }
-}
 
 @Composable
 private fun GlassPill(
@@ -818,71 +785,4 @@ private fun GlassPill(
     }
 }
 
-@Composable
-private fun GlassDismissTag(
-    label: String,
-    onDismiss: () -> Unit,
-) {
-    val focusState = rememberTvFocusState(focusedScale = 1.05f)
-    val interactionSource = remember { MutableInteractionSource() }
-    val isPressed by interactionSource.collectIsPressedAsState()
-    val baseScale by animateFloatAsState(
-        targetValue = if (isPressed) 0.95f else 1f,
-        animationSpec = spring(
-            dampingRatio = Spring.DampingRatioMediumBouncy,
-            stiffness = Spring.StiffnessMedium,
-        ),
-        label = "tagPressedScale"
-    )
-    val scale = baseScale * focusState.scale
 
-    val shapeMorphProgress by animateFloatAsState(
-        targetValue = if (isPressed) 1f else 0f,
-        animationSpec = spring(
-            dampingRatio = Spring.DampingRatioMediumBouncy,
-            stiffness = Spring.StiffnessMedium,
-        ),
-        label = "tagShapeMorph"
-    )
-    val shape = remember(shapeMorphProgress) {
-        if (shapeMorphProgress > 0.5f) ShapeCache.smooth16 else ShapeCache.smooth12
-    }
-
-    val isLight = LocalIsLightTheme.current
-    val glassBg = if (isLight) Color.Black.copy(alpha = 0.08f) else Color.White.copy(alpha = 0.12f)
-    val textColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.85f)
-    val iconTint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f)
-
-    Row(
-        modifier = Modifier
-            .graphicsLayer {
-                scaleX = scale
-                scaleY = scale
-            }
-            .clip(shape)
-            .background(glassBg)
-            .then(focusState.focusModifier)
-            .tvFocusIndicator(focusState, shape)
-            .clickable(
-                interactionSource = interactionSource,
-                indication = null,
-                onClick = onDismiss
-            )
-            .padding(start = 12.dp, end = 8.dp, top = 6.dp, bottom = 6.dp),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(6.dp),
-    ) {
-        Text(
-            text = label,
-            style = MaterialTheme.typography.labelMedium,
-            color = textColor,
-            fontWeight = FontWeight.Medium,
-        )
-        Icon(
-            Tabler.Outline.X,
-            contentDescription = "Remove",
-            modifier = Modifier.size(14.dp),
-            tint = iconTint,
-        )
-    }
-}
