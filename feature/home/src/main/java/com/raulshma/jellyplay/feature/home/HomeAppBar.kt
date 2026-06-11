@@ -95,8 +95,6 @@ fun HomeTopDock(
     }
     val appBarIconColor = lerp(baseIconColor, MaterialTheme.colorScheme.onSurface, scrollFraction)
     val appBarIconColorFaded = appBarIconColor.copy(alpha = 0.9f)
-    val dockScale = 1f - (0.04f * scrollFraction)
-    val dockCornerRadius = 24f + (4f * scrollFraction)
     val focusManager = LocalFocusManager.current
 
     Box(
@@ -104,8 +102,8 @@ fun HomeTopDock(
             .fillMaxWidth()
             .statusBarsPadding()
             .padding(
-                horizontal = (4f + 12f * scrollFraction).dp,
-                vertical = (4f + 4f * scrollFraction).dp
+                horizontal = 16.dp,
+                vertical = 8.dp
             ),
         contentAlignment = Alignment.TopEnd
     ) {
@@ -114,25 +112,15 @@ fun HomeTopDock(
                 .then(if (isSearchFocused) Modifier.fillMaxWidth() else Modifier.wrapContentWidth())
                 .animateContentSize(animationSpec = MaterialTheme.motionScheme.defaultSpatialSpec())
                 .graphicsLayer {
-                    scaleX = dockScale
-                    scaleY = dockScale
-                    shadowElevation = if (isSearchFocused) {
-                        4f
-                    } else {
-                        if (scrollFraction > 0f) 8f * scrollFraction else 0f
-                    }
-                    shape = RoundedCornerShape(dockCornerRadius.dp)
+                    shadowElevation = if (isSearchFocused) 4f else 0f
+                    shape = RoundedCornerShape(24.dp)
                     clip = true
                 }
                 .background(
                     if (isSearchFocused) {
                         MaterialTheme.colorScheme.surfaceContainerHigh
                     } else {
-                        lerp(
-                            Color.Transparent,
-                            MaterialTheme.colorScheme.surfaceContainerHigh,
-                            scrollFraction
-                        )
+                        Color.Transparent
                     }
                 )
         ) {

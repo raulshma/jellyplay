@@ -1,6 +1,7 @@
 package com.raulshma.jellyplay.navigation
 
 import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.animateContentSize
 import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
@@ -1218,56 +1219,46 @@ private fun FloatingNavigationBar(
     containerColor: Color = MaterialTheme.colorScheme.surfaceContainer,
     modifier: Modifier = Modifier,
 ) {
-    val themeVariant = com.raulshma.jellyplay.core.designsystem.theme.LocalThemeVariant.current
-
-    val resolvedColor = themeVariant.containerTint(containerColor.copy(alpha = 0.90f))
-
-    val border = themeVariant.cardBorder(
-        primary = MaterialTheme.colorScheme.primary,
-        secondary = MaterialTheme.colorScheme.secondary,
-        outline = MaterialTheme.colorScheme.outline,
-    )
-
-    val shape = when (themeVariant) {
-        com.raulshma.jellyplay.core.designsystem.theme.ThemeVariant.SYNTHWAVE -> RoundedCornerShape(0.dp)
-        com.raulshma.jellyplay.core.designsystem.theme.ThemeVariant.SOOTHING -> ShapeCache.smoothPill
-        com.raulshma.jellyplay.core.designsystem.theme.ThemeVariant.MONOCHROME -> RoundedCornerShape(16.dp)
-        com.raulshma.jellyplay.core.designsystem.theme.ThemeVariant.STANDARD -> RoundedCornerShape(24.dp)
-    }
-
     Surface(
-        modifier = modifier,
-        shape = shape,
-        color = resolvedColor,
-        border = border,
-        tonalElevation = themeVariant.tonalElevation(4.dp),
-        shadowElevation = themeVariant.shadowElevation(8.dp),
+        modifier = modifier.padding(bottom = 8.dp),
+        shape = RoundedCornerShape(percent = 50),
+        color = containerColor.copy(alpha = 0.65f),
+        tonalElevation = 0.dp,
+        shadowElevation = 0.dp,
     ) {
-        androidx.compose.material3.NavigationBar(
+        Row(
             modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 8.dp),
-            containerColor = Color.Transparent,
-            contentColor = MaterialTheme.colorScheme.onSurface,
-            tonalElevation = 0.dp,
-            windowInsets = WindowInsets(0, 0, 0, 0)
+                .animateContentSize(animationSpec = MaterialTheme.motionScheme.defaultSpatialSpec())
+                .padding(horizontal = 28.dp, vertical = 14.dp),
+            horizontalArrangement = Arrangement.spacedBy(32.dp),
+            verticalAlignment = Alignment.CenterVertically
         ) {
             routes.forEach { (route, label) ->
                 val selected = route == currentTopLevel
-                NavigationBarItem(
-                    selected = selected,
-                    onClick = { onNavigate(route) },
-                    icon = { NavIcon(route, label, selected = selected) },
-                    label = if (showLabels) { { Text(label, maxLines = 1, overflow = TextOverflow.Ellipsis) } } else null,
-                    alwaysShowLabel = showLabels,
-                    colors = NavigationBarItemDefaults.colors(
-                        indicatorColor = MaterialTheme.colorScheme.secondaryContainer,
-                        selectedIconColor = MaterialTheme.colorScheme.onSecondaryContainer,
-                        selectedTextColor = MaterialTheme.colorScheme.onSurface,
-                        unselectedIconColor = MaterialTheme.colorScheme.onSurfaceVariant,
-                        unselectedTextColor = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                )
+                val tint = if (selected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f)
+                Row(
+                    modifier = Modifier
+                        .animateContentSize(animationSpec = MaterialTheme.motionScheme.defaultSpatialSpec())
+                        .clickable(
+                            interactionSource = remember { androidx.compose.foundation.interaction.MutableInteractionSource() },
+                            indication = null,
+                            onClick = { onNavigate(route) }
+                        ),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(6.dp)
+                ) {
+                    NavIcon(route, label, selected = selected, tint = tint)
+                    if (selected && showLabels) {
+                        Text(
+                            text = label,
+                            color = tint,
+                            style = MaterialTheme.typography.labelMedium,
+                            fontWeight = FontWeight.Bold,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
+                        )
+                    }
+                }
             }
         }
     }
