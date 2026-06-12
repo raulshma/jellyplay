@@ -25,15 +25,20 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.raulshma.jellyplay.core.designsystem.theme.ShapeCache
 import com.raulshma.jellyplay.core.ui.animation.AnimationTokens
+import com.raulshma.jellyplay.core.ui.tv.LocalTvMode
 import com.raulshma.jellyplay.feature.player.video.TrackOption
 import com.composables.icons.tabler.Tabler
 import com.composables.icons.tabler.outline.*
@@ -47,6 +52,19 @@ internal fun TrackPickerSheet(
     onReset: (() -> Unit)? = null,
     onDismiss: () -> Unit,
 ) {
+    val isTv = LocalTvMode.current
+    val focusRequester = remember { FocusRequester() }
+
+    LaunchedEffect(isTv, tracks) {
+        if (isTv && tracks.isNotEmpty()) {
+            try {
+                focusRequester.requestFocus()
+            } catch (e: Exception) {
+                // ignore
+            }
+        }
+    }
+
     PlayerModalBottomSheet(
         onDismissRequest = onDismiss,
         sheetState = rememberModalBottomSheetState(),
@@ -103,6 +121,9 @@ internal fun TrackPickerSheet(
             Spacer(Modifier.height(12.dp))
             LazyColumn {
                 itemsIndexed(tracks, key = { _, track -> track.index }, contentType = { _, _ -> "track" }) { index, track ->
+                    val isSelected = track.isSelected
+                    val isFirst = index == 0
+                    val isTarget = isSelected || (tracks.none { it.isSelected } && isFirst)
                     TrackItem(
                         track = track,
                         isLast = index == tracks.lastIndex,
@@ -111,6 +132,7 @@ internal fun TrackPickerSheet(
                             onSelect(track)
                             onDismiss()
                         },
+                        modifier = if (isTarget) Modifier.focusRequester(focusRequester) else Modifier,
                     )
                 }
             }
@@ -124,6 +146,7 @@ private fun TrackItem(
     isLast: Boolean,
     itemCount: Int,
     onSelect: () -> Unit,
+    modifier: Modifier = Modifier,
 ) {
     val shape = when {
         itemCount == 1 -> ShapeCache.smooth16
@@ -133,7 +156,7 @@ private fun TrackItem(
     val focusState = rememberTvFocusState(focusedScale = 1.02f)
 
     Row(
-        modifier = Modifier
+        modifier = modifier
             .fillMaxWidth()
             .padding(horizontal = 16.dp, vertical = 2.dp)
             .clip(shape)

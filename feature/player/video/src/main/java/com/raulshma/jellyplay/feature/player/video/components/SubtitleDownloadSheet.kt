@@ -22,15 +22,20 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.raulshma.jellyplay.core.designsystem.theme.ShapeCache
 import com.raulshma.jellyplay.core.model.RemoteSubtitleInfo
+import com.raulshma.jellyplay.core.ui.tv.LocalTvMode
 import com.composables.icons.tabler.Tabler
 import com.composables.icons.tabler.outline.*
 
@@ -43,6 +48,20 @@ fun SubtitleDownloadSheet(
     onLoadLocalFile: () -> Unit,
     onDismiss: () -> Unit,
 ) {
+    val isTv = LocalTvMode.current
+    val focusRequester = remember { FocusRequester() }
+    val loadBtnFocus = rememberTvFocusState()
+
+    LaunchedEffect(isTv) {
+        if (isTv) {
+            try {
+                focusRequester.requestFocus()
+            } catch (e: Exception) {
+                // ignore
+            }
+        }
+    }
+
     PlayerModalBottomSheet(
         onDismissRequest = onDismiss,
         sheetState = rememberModalBottomSheetState(),
@@ -65,7 +84,10 @@ fun SubtitleDownloadSheet(
                 onClick = onLoadLocalFile,
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(horizontal = 16.dp),
+                    .padding(horizontal = 16.dp)
+                    .then(if (isTv) Modifier.focusRequester(focusRequester) else Modifier)
+                    .then(loadBtnFocus.focusModifier)
+                    .tvFocusIndicator(loadBtnFocus, ShapeCache.smoothPill),
             ) {
                 Icon(
                     imageVector = Tabler.Outline.FolderOpen,

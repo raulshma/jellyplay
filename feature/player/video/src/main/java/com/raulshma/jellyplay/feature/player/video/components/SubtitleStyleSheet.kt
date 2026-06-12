@@ -37,14 +37,21 @@ import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.input.key.KeyEventType
+import androidx.compose.ui.input.key.onPreviewKeyEvent
+import androidx.compose.ui.input.key.type
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import android.view.KeyEvent
 
 import kotlin.math.roundToLong
 import com.raulshma.jellyplay.core.designsystem.theme.ShapeCache
@@ -71,6 +78,19 @@ fun SubtitleStyleSheet(
     var offsetMs by remember { mutableLongStateOf(currentStyle.offsetMs) }
     var verticalPosition by remember { mutableFloatStateOf(currentStyle.verticalPosition) }
 
+    val isTv = LocalTvMode.current
+    val focusRequester = remember { FocusRequester() }
+
+    LaunchedEffect(isTv) {
+        if (isTv) {
+            try {
+                focusRequester.requestFocus()
+            } catch (e: Exception) {
+                // ignore
+            }
+        }
+    }
+
     PlayerModalBottomSheet(
         onDismissRequest = onDismiss,
         sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
@@ -91,10 +111,16 @@ fun SubtitleStyleSheet(
             Spacer(Modifier.height(16.dp))
 
             // Style Override Toggle
+            val toggleFocusState = rememberTvFocusState()
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(vertical = 8.dp),
+                    .clip(ShapeCache.smooth8)
+                    .then(if (isTv) Modifier.focusRequester(focusRequester).then(toggleFocusState.focusModifier).tvFocusIndicator(toggleFocusState, ShapeCache.smooth8).clickable {
+                        applyCustomStyle = !applyCustomStyle
+                        onStyleChange(currentStyle.copy(applyCustomStyle = applyCustomStyle))
+                    } else Modifier)
+                    .padding(vertical = 8.dp, horizontal = if (isTv) 12.dp else 0.dp),
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.SpaceBetween,
             ) {
@@ -113,9 +139,9 @@ fun SubtitleStyleSheet(
                 }
                 Switch(
                     checked = applyCustomStyle,
-                    onCheckedChange = {
-                        applyCustomStyle = it
-                        onStyleChange(currentStyle.copy(applyCustomStyle = it))
+                    onCheckedChange = if (isTv) null else { checked ->
+                        applyCustomStyle = checked
+                        onStyleChange(currentStyle.copy(applyCustomStyle = checked))
                     },
                 )
             }
@@ -128,6 +154,7 @@ fun SubtitleStyleSheet(
                 ),
                 color = if (applyCustomStyle) Color.Unspecified else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f),
             )
+            val fontSizeFocusState = rememberTvFocusState()
             Slider(
                 value = fontSize.toFloat(),
                 enabled = applyCustomStyle,
@@ -141,7 +168,27 @@ fun SubtitleStyleSheet(
                     thumbColor = if (applyCustomStyle) MaterialTheme.colorScheme.primary else Color.Gray,
                     activeTrackColor = if (applyCustomStyle) MaterialTheme.colorScheme.primary else Color.Gray.copy(alpha = 0.5f),
                 ),
-                modifier = Modifier.fillMaxWidth(),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .then(if (isTv) fontSizeFocusState.focusModifier else Modifier)
+                    .then(if (isTv) Modifier.tvFocusIndicator(fontSizeFocusState) else Modifier)
+                    .onPreviewKeyEvent { keyEvent ->
+                        if (isTv && applyCustomStyle && keyEvent.type == KeyEventType.KeyDown) {
+                            when (keyEvent.nativeKeyEvent.keyCode) {
+                                KeyEvent.KEYCODE_DPAD_LEFT -> {
+                                    fontSize = (fontSize - 1).coerceIn(16, 48)
+                                    onStyleChange(currentStyle.copy(fontSize = fontSize))
+                                    true
+                                }
+                                KeyEvent.KEYCODE_DPAD_RIGHT -> {
+                                    fontSize = (fontSize + 1).coerceIn(16, 48)
+                                    onStyleChange(currentStyle.copy(fontSize = fontSize))
+                                    true
+                                }
+                                else -> false
+                            }
+                        } else false
+                    },
             )
 
             Spacer(Modifier.height(8.dp))
@@ -204,6 +251,7 @@ fun SubtitleStyleSheet(
                 ),
                 color = if (applyCustomStyle) Color.Unspecified else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f),
             )
+            val opacityFocusState = rememberTvFocusState()
             Slider(
                 value = backgroundOpacity,
                 enabled = applyCustomStyle,
@@ -217,7 +265,27 @@ fun SubtitleStyleSheet(
                     thumbColor = if (applyCustomStyle) MaterialTheme.colorScheme.primary else Color.Gray,
                     activeTrackColor = if (applyCustomStyle) MaterialTheme.colorScheme.primary else Color.Gray.copy(alpha = 0.5f),
                 ),
-                modifier = Modifier.fillMaxWidth(),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .then(if (isTv) opacityFocusState.focusModifier else Modifier)
+                    .then(if (isTv) Modifier.tvFocusIndicator(opacityFocusState) else Modifier)
+                    .onPreviewKeyEvent { keyEvent ->
+                        if (isTv && applyCustomStyle && keyEvent.type == KeyEventType.KeyDown) {
+                            when (keyEvent.nativeKeyEvent.keyCode) {
+                                KeyEvent.KEYCODE_DPAD_LEFT -> {
+                                    backgroundOpacity = (backgroundOpacity - 0.1f).coerceIn(0f, 1f)
+                                    onStyleChange(currentStyle.copy(backgroundOpacity = backgroundOpacity))
+                                    true
+                                }
+                                KeyEvent.KEYCODE_DPAD_RIGHT -> {
+                                    backgroundOpacity = (backgroundOpacity + 0.1f).coerceIn(0f, 1f)
+                                    onStyleChange(currentStyle.copy(backgroundOpacity = backgroundOpacity))
+                                    true
+                                }
+                                else -> false
+                            }
+                        } else false
+                    },
             )
 
             Spacer(Modifier.height(12.dp))
@@ -235,6 +303,7 @@ fun SubtitleStyleSheet(
             ) {
                 SubtitleEdgeType.entries.forEach { type ->
                     val isSelected = edgeType == type
+                    val chipFocusState = rememberTvFocusState(focusedScale = 1.05f)
                     FilterChip(
                         selected = isSelected,
                         enabled = applyCustomStyle,
@@ -266,6 +335,9 @@ fun SubtitleStyleSheet(
                             enabled = applyCustomStyle,
                             selected = isSelected,
                         ),
+                        modifier = Modifier
+                            .then(if (isTv) chipFocusState.focusModifier else Modifier)
+                            .then(if (isTv) Modifier.tvFocusIndicator(chipFocusState, ShapeCache.smoothPill) else Modifier),
                     )
                 }
             }
@@ -311,6 +383,7 @@ fun SubtitleStyleSheet(
                         fontWeight = FontWeight.Medium,
                     ),
                 )
+                val offsetFocusState = rememberTvFocusState()
                 Slider(
                     value = offsetMs.toFloat(),
                     onValueChange = { offsetMs = (it / 100f).roundToLong() * 100 },
@@ -323,7 +396,27 @@ fun SubtitleStyleSheet(
                         thumbColor = MaterialTheme.colorScheme.primary,
                         activeTrackColor = MaterialTheme.colorScheme.primary,
                     ),
-                    modifier = Modifier.fillMaxWidth(),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .then(if (isTv) offsetFocusState.focusModifier else Modifier)
+                        .then(if (isTv) Modifier.tvFocusIndicator(offsetFocusState) else Modifier)
+                        .onPreviewKeyEvent { keyEvent ->
+                            if (isTv && keyEvent.type == KeyEventType.KeyDown) {
+                                when (keyEvent.nativeKeyEvent.keyCode) {
+                                    KeyEvent.KEYCODE_DPAD_LEFT -> {
+                                        offsetMs = (offsetMs - 500L).coerceIn(-10000L, 10000L)
+                                        onStyleChange(currentStyle.copy(offsetMs = offsetMs))
+                                        true
+                                    }
+                                    KeyEvent.KEYCODE_DPAD_RIGHT -> {
+                                        offsetMs = (offsetMs + 500L).coerceIn(-10000L, 10000L)
+                                        onStyleChange(currentStyle.copy(offsetMs = offsetMs))
+                                        true
+                                    }
+                                    else -> false
+                                }
+                            } else false
+                        },
                 )
             }
 
@@ -335,6 +428,7 @@ fun SubtitleStyleSheet(
                         fontWeight = FontWeight.Medium,
                     ),
                 )
+                val positionFocusState = rememberTvFocusState()
                 Slider(
                     value = verticalPosition,
                     onValueChange = { verticalPosition = it },
@@ -346,7 +440,27 @@ fun SubtitleStyleSheet(
                         thumbColor = MaterialTheme.colorScheme.primary,
                         activeTrackColor = MaterialTheme.colorScheme.primary,
                     ),
-                    modifier = Modifier.fillMaxWidth(),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .then(if (isTv) positionFocusState.focusModifier else Modifier)
+                        .then(if (isTv) Modifier.tvFocusIndicator(positionFocusState) else Modifier)
+                        .onPreviewKeyEvent { keyEvent ->
+                            if (isTv && keyEvent.type == KeyEventType.KeyDown) {
+                                when (keyEvent.nativeKeyEvent.keyCode) {
+                                    KeyEvent.KEYCODE_DPAD_LEFT -> {
+                                        verticalPosition = (verticalPosition - 0.02f).coerceIn(0f, 0.4f)
+                                        onStyleChange(currentStyle.copy(verticalPosition = verticalPosition))
+                                        true
+                                    }
+                                    KeyEvent.KEYCODE_DPAD_RIGHT -> {
+                                        verticalPosition = (verticalPosition + 0.02f).coerceIn(0f, 0.4f)
+                                        onStyleChange(currentStyle.copy(verticalPosition = verticalPosition))
+                                        true
+                                    }
+                                    else -> false
+                                }
+                            } else false
+                        },
                 )
             }
 
@@ -355,6 +469,7 @@ fun SubtitleStyleSheet(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.End,
             ) {
+                val resetFocusState = rememberTvFocusState(focusedScale = 1.05f)
                 FilterChip(
                     selected = false,
                     enabled = applyCustomStyle,
@@ -372,6 +487,9 @@ fun SubtitleStyleSheet(
                     },
                     label = { Text("Reset", style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Medium) },
                     shape = ShapeCache.smoothPill,
+                    modifier = Modifier
+                        .then(if (isTv) resetFocusState.focusModifier else Modifier)
+                        .then(if (isTv) Modifier.tvFocusIndicator(resetFocusState, ShapeCache.smoothPill) else Modifier),
                 )
             }
         }

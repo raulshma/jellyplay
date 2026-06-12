@@ -22,9 +22,13 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
@@ -32,6 +36,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.raulshma.jellyplay.core.designsystem.theme.ShapeCache
 import com.raulshma.jellyplay.core.model.ChapterInfo
+import com.raulshma.jellyplay.core.ui.tv.LocalTvMode
 import com.raulshma.jellyplay.feature.player.video.formatDuration
 import com.composables.icons.tabler.Tabler
 import com.composables.icons.tabler.outline.*
@@ -44,6 +49,19 @@ internal fun ChapterPickerSheet(
     onSelect: (Long) -> Unit,
     onDismiss: () -> Unit,
 ) {
+    val isTv = LocalTvMode.current
+    val focusRequester = remember { FocusRequester() }
+
+    LaunchedEffect(isTv, chapters) {
+        if (isTv && chapters.isNotEmpty()) {
+            try {
+                focusRequester.requestFocus()
+            } catch (e: Exception) {
+                // ignore
+            }
+        }
+    }
+
     PlayerModalBottomSheet(
         onDismissRequest = onDismiss,
         sheetState = rememberModalBottomSheetState(),
@@ -63,20 +81,34 @@ internal fun ChapterPickerSheet(
             Spacer(Modifier.height(12.dp))
             LazyColumn {
                 itemsIndexed(chapters, key = { _, chapter -> chapter.startPositionTicks }, contentType = { _, _ -> "chapter" }) { index, chapter ->
+                    val isCurrentChapter = {
+                        val chapterMs = chapter.startPositionTicks / 10_000
+                        if (index < chapters.lastIndex) {
+                            val nextChapterMs = chapters[index + 1].startPositionTicks / 10_000
+                            currentPositionMs in chapterMs until nextChapterMs
+                        } else {
+                            currentPositionMs >= chapterMs
+                        }
+                    }()
+                    val isFirst = index == 0
+                    val isTarget = isCurrentChapter || (chapters.none {
+                        val chapterMs = it.startPositionTicks / 10_000
+                        val idx = chapters.indexOf(it)
+                        if (idx < chapters.lastIndex) {
+                            val nextChapterMs = chapters[idx + 1].startPositionTicks / 10_000
+                            currentPositionMs in chapterMs until nextChapterMs
+                        } else {
+                            currentPositionMs >= chapterMs
+                        }
+                    } && isFirst)
+
                     ChapterItem(
                         chapter = chapter,
-                        isCurrentChapter = {
-                            val chapterMs = chapter.startPositionTicks / 10_000
-                            if (index < chapters.lastIndex) {
-                                val nextChapterMs = chapters[index + 1].startPositionTicks / 10_000
-                                currentPositionMs in chapterMs until nextChapterMs
-                            } else {
-                                currentPositionMs >= chapterMs
-                            }
-                        }(),
+                        isCurrentChapter = isCurrentChapter,
                         isLast = index == chapters.lastIndex,
                         itemCount = chapters.size,
                         onSelect = { onSelect(chapter.startPositionTicks) },
+                        modifier = if (isTarget) Modifier.focusRequester(focusRequester) else Modifier,
                     )
                 }
             }
@@ -91,6 +123,7 @@ private fun ChapterItem(
     isLast: Boolean,
     itemCount: Int,
     onSelect: () -> Unit,
+    modifier: Modifier = Modifier,
 ) {
     val chapterMs = chapter.startPositionTicks / 10_000
     val shape = when {
@@ -101,7 +134,7 @@ private fun ChapterItem(
     val focusState = rememberTvFocusState(focusedScale = 1.02f)
 
     Row(
-        modifier = Modifier
+        modifier = modifier
             .fillMaxWidth()
             .padding(horizontal = 16.dp, vertical = 2.dp)
             .clip(shape)

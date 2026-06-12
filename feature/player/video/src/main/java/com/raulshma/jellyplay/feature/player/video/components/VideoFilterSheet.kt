@@ -1,6 +1,11 @@
 package com.raulshma.jellyplay.feature.player.video.components
 
+import android.view.KeyEvent
+import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -14,14 +19,26 @@ import androidx.compose.material3.SliderDefaults
 import androidx.compose.material3.Text
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.input.key.KeyEventType
+import androidx.compose.ui.input.key.onPreviewKeyEvent
+import androidx.compose.ui.input.key.type
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import com.raulshma.jellyplay.core.designsystem.theme.ShapeCache
+import com.raulshma.jellyplay.core.ui.tv.LocalTvMode
+import com.raulshma.jellyplay.core.ui.tv.rememberTvFocusState
+import com.raulshma.jellyplay.core.ui.tv.tvFocusIndicator
 import com.raulshma.jellyplay.feature.player.video.engine.VideoEffectsConfig
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -32,11 +49,23 @@ fun VideoFilterSheet(
     onDismiss: () -> Unit,
 ) {
     val sheetState = rememberModalBottomSheetState()
+    val isTv = LocalTvMode.current
+    val focusRequester = remember { FocusRequester() }
 
     var brightness by remember { mutableFloatStateOf(currentEffects.brightness) }
     var contrast by remember { mutableFloatStateOf(currentEffects.contrast) }
     var saturation by remember { mutableFloatStateOf(currentEffects.saturation) }
     var sharpness by remember { mutableFloatStateOf(currentEffects.sharpness) }
+
+    LaunchedEffect(isTv) {
+        if (isTv) {
+            try {
+                focusRequester.requestFocus()
+            } catch (e: Exception) {
+                // ignore
+            }
+        }
+    }
 
     PlayerModalBottomSheet(
         onDismissRequest = onDismiss,
@@ -69,6 +98,8 @@ fun VideoFilterSheet(
                     brightness = 0f
                     onEffectsChange(VideoEffectsConfig(brightness, contrast, saturation, sharpness))
                 },
+                isTv = isTv,
+                focusRequester = focusRequester,
             )
 
             Spacer(modifier = Modifier.height(16.dp))
@@ -86,6 +117,7 @@ fun VideoFilterSheet(
                     contrast = 1f
                     onEffectsChange(VideoEffectsConfig(brightness, contrast, saturation, sharpness))
                 },
+                isTv = isTv,
             )
 
             Spacer(modifier = Modifier.height(16.dp))
@@ -103,6 +135,7 @@ fun VideoFilterSheet(
                     saturation = 1f
                     onEffectsChange(VideoEffectsConfig(brightness, contrast, saturation, sharpness))
                 },
+                isTv = isTv,
             )
 
             Spacer(modifier = Modifier.height(16.dp))
@@ -120,6 +153,7 @@ fun VideoFilterSheet(
                     sharpness = 0f
                     onEffectsChange(VideoEffectsConfig(brightness, contrast, saturation, sharpness))
                 },
+                isTv = isTv,
             )
         }
     }
@@ -133,7 +167,12 @@ private fun FilterSlider(
     valueLabel: String,
     onValueChange: (Float) -> Unit,
     onReset: () -> Unit,
+    isTv: Boolean,
+    focusRequester: FocusRequester? = null,
 ) {
+    val sliderFocusState = rememberTvFocusState()
+    val resetFocusState = rememberTvFocusState(focusedScale = 1.05f)
+
     Column {
         Row(
             modifier = Modifier.fillMaxWidth(),
@@ -156,13 +195,23 @@ private fun FilterSlider(
                     color = MaterialTheme.colorScheme.primary,
                     fontWeight = FontWeight.SemiBold,
                 )
-                Text(
-                    text = "Reset",
-                    style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.tertiary,
-                    fontWeight = FontWeight.Medium,
-                    modifier = Modifier.padding(horizontal = 4.dp),
-                )
+                
+                val shape = ShapeCache.smoothPill
+                Box(
+                    modifier = Modifier
+                        .clip(shape)
+                        .then(resetFocusState.focusModifier)
+                        .tvFocusIndicator(resetFocusState, shape)
+                        .clickable(onClick = onReset)
+                        .padding(horizontal = 8.dp, vertical = 4.dp)
+                ) {
+                    Text(
+                        text = "Reset",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.tertiary,
+                        fontWeight = FontWeight.Medium,
+                    )
+                }
             }
         }
         Slider(
@@ -173,7 +222,27 @@ private fun FilterSlider(
                 activeTrackColor = MaterialTheme.colorScheme.primary,
                 inactiveTrackColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.12f),
             ),
-            modifier = Modifier.fillMaxWidth(),
+            modifier = Modifier
+                .fillMaxWidth()
+                .then(if (focusRequester != null) Modifier.focusRequester(focusRequester) else Modifier)
+                .then(sliderFocusState.focusModifier)
+                .tvFocusIndicator(sliderFocusState)
+                .onPreviewKeyEvent { keyEvent ->
+                    if (keyEvent.type == KeyEventType.KeyDown) {
+                        val step = (valueRange.endInclusive - valueRange.start) / 20f
+                        when (keyEvent.nativeKeyEvent.keyCode) {
+                            KeyEvent.KEYCODE_DPAD_LEFT -> {
+                                onValueChange((value - step).coerceIn(valueRange))
+                                true
+                            }
+                            KeyEvent.KEYCODE_DPAD_RIGHT -> {
+                                onValueChange((value + step).coerceIn(valueRange))
+                                true
+                            }
+                            else -> false
+                        }
+                    } else false
+                },
         )
     }
 }

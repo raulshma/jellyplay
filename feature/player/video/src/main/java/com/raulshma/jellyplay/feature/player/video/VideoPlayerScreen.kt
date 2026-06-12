@@ -11,6 +11,9 @@ import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.background
+import androidx.compose.foundation.focusable
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxScope
@@ -169,6 +172,15 @@ fun VideoPlayerScreen(
     var lastAppliedSubtitleStyle by remember { mutableStateOf<SubtitleStyle?>(null) }
 
     val isTv = LocalTvMode.current
+
+    val tvPlayerFocusRequester = remember { FocusRequester() }
+    var userInteractionCount by remember { mutableIntStateOf(0) }
+
+    LaunchedEffect(showControls, isTv) {
+        if (isTv && !showControls) {
+            tvPlayerFocusRequester.requestFocus()
+        }
+    }
 
     var seekOffsetMs by remember { mutableLongStateOf(0L) }
     var seekDirection by remember { mutableIntStateOf(0) }
@@ -562,8 +574,12 @@ fun VideoPlayerScreen(
                 .background(Color.Black)
                 .then(
                     if (isTv && currentSheet == PlayerSheet.None) {
-                        Modifier.onPreviewKeyEvent { keyEvent ->
-                            if (keyEvent.type != KeyEventType.KeyDown) return@onPreviewKeyEvent false
+                        Modifier
+                            .focusRequester(tvPlayerFocusRequester)
+                            .focusable()
+                            .onPreviewKeyEvent { keyEvent ->
+                                userInteractionCount++
+                                if (keyEvent.type != KeyEventType.KeyDown) return@onPreviewKeyEvent false
                             when (keyEvent.nativeKeyEvent.keyCode) {
                                 NativeKeyEvent.KEYCODE_DPAD_CENTER, NativeKeyEvent.KEYCODE_ENTER -> {
                                     if (!showControls) {
@@ -575,8 +591,14 @@ fun VideoPlayerScreen(
                                 }
                                 NativeKeyEvent.KEYCODE_DPAD_RIGHT -> {
                                     if (!showControls) {
+                                        if (seekDirection == 1 && seekOffsetMs > 0L) {
+                                            seekOffsetMs += currentSeekDurationMs
+                                        } else {
+                                            seekDirection = 1
+                                            seekOffsetMs = currentSeekDurationMs
+                                        }
+                                        seekTimestamp++
                                         doSeekForward()
-                                        showControls = true
                                         true
                                     } else {
                                         false
@@ -584,8 +606,14 @@ fun VideoPlayerScreen(
                                 }
                                 NativeKeyEvent.KEYCODE_DPAD_LEFT -> {
                                     if (!showControls) {
+                                        if (seekDirection == -1 && seekOffsetMs > 0L) {
+                                            seekOffsetMs += currentSeekDurationMs
+                                        } else {
+                                            seekDirection = -1
+                                            seekOffsetMs = currentSeekDurationMs
+                                        }
+                                        seekTimestamp++
                                         doSeekBack()
-                                        showControls = true
                                         true
                                     } else {
                                         false
@@ -649,14 +677,22 @@ fun VideoPlayerScreen(
                             val width = size.width
                             when {
                                 offset.x < width * 0.35 -> {
-                                    seekDirection = -1
-                                    seekOffsetMs = currentSeekDurationMs
+                                    if (seekDirection == -1 && seekOffsetMs > 0L) {
+                                        seekOffsetMs += currentSeekDurationMs
+                                    } else {
+                                        seekDirection = -1
+                                        seekOffsetMs = currentSeekDurationMs
+                                    }
                                     seekTimestamp++
                                     currentDoSeekBack()
                                 }
                                 offset.x > width * 0.65 -> {
-                                    seekDirection = 1
-                                    seekOffsetMs = currentSeekDurationMs
+                                    if (seekDirection == 1 && seekOffsetMs > 0L) {
+                                        seekOffsetMs += currentSeekDurationMs
+                                    } else {
+                                        seekDirection = 1
+                                        seekOffsetMs = currentSeekDurationMs
+                                    }
                                     seekTimestamp++
                                     currentDoSeekForward()
                                 }
@@ -1117,8 +1153,11 @@ fun VideoPlayerScreen(
         }
     }
 
-    LaunchedEffect(showControls, controlsHasFocus, isSeeking, currentSheet, isOverflowMenuOpen) {
-        if (showControls && !controlsHasFocus && !isSeeking && currentSheet == PlayerSheet.None && !isOverflowMenuOpen) {
+    LaunchedEffect(showControls, controlsHasFocus, isSeeking, currentSheet, isOverflowMenuOpen, userInteractionCount) {
+        if (showControls && !isSeeking && currentSheet == PlayerSheet.None && !isOverflowMenuOpen) {
+            if (!isTv && controlsHasFocus) {
+                return@LaunchedEffect
+            }
             val timeout = if (isTv) uiState.controlsTimeoutMs * 2 else uiState.controlsTimeoutMs
             delay(timeout)
             showControls = false
