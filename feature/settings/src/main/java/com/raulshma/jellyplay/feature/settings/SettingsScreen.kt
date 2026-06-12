@@ -33,23 +33,28 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.input.key.Key
 import androidx.compose.ui.input.key.KeyEventType
 import androidx.compose.ui.input.key.key
 import androidx.compose.ui.input.key.onKeyEvent
+import androidx.compose.ui.input.key.onPreviewKeyEvent
 import androidx.compose.ui.input.key.type
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.activity.compose.BackHandler
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.delay
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.lazy.itemsIndexed
@@ -77,6 +82,11 @@ import com.raulshma.jellyplay.core.ui.adaptive.bottomPadding
 import com.raulshma.jellyplay.core.ui.adaptive.contentPadding
 import com.raulshma.jellyplay.core.ui.tv.LocalTvMode
 import com.raulshma.jellyplay.core.ui.tv.tvFocusRestorer
+import com.raulshma.jellyplay.core.ui.tv.rememberTvFocusState
+import com.raulshma.jellyplay.core.ui.tv.tvFocusIndicator
+import com.raulshma.jellyplay.core.ui.tv.TvFocusDefaults
+import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.graphics.Color
 import com.composables.icons.tabler.Tabler
 import com.composables.icons.tabler.outline.*
 
@@ -113,6 +123,9 @@ fun SettingsScreen(
 
     val listFocusRequester = remember { FocusRequester() }
     val searchFocusRequester = remember { FocusRequester() }
+    val leadingFocusRequester = remember { FocusRequester() }
+    val trailingFocusRequester = remember { FocusRequester() }
+    val coroutineScope = rememberCoroutineScope()
 
     var animateEntrance by androidx.compose.runtime.saveable.rememberSaveable { mutableStateOf(false) }
     LaunchedEffect(Unit) {
@@ -122,7 +135,7 @@ fun SettingsScreen(
     LaunchedEffect(isTv) {
         if (isTv) {
             kotlinx.coroutines.delay(150)
-            try { listFocusRequester.requestFocus() } catch (_: Exception) {}
+            try { searchFocusRequester.requestFocus() } catch (_: Exception) {}
         }
     }
 
@@ -188,19 +201,80 @@ fun SettingsScreen(
                             bottom = 8.dp
                         )
                 ) {
-                    DockedSearchBar(
-                        inputField = {
+                    if (isTv && !isSearchActive) {
+                        SettingsTvCollapsedSearchRow(
+                            userName = userName,
+                            showAdvanced = preferences.showAdvancedSettings,
+                            onNewsletterClick = onNewsletterClick,
+                            onToggleAdvanced = { viewModel.setShowAdvancedSettings(!preferences.showAdvancedSettings) },
+                            onSearchClicked = {
+                                isSearchActive = true
+                                coroutineScope.launch {
+                                    kotlinx.coroutines.delay(100)
+                                    try { searchFocusRequester.requestFocus() } catch (_: Exception) {}
+                                }
+                            },
+                            searchBoxFocusRequester = searchFocusRequester
+                        )
+                    } else {
+                        DockedSearchBar(
+                            inputField = {
                             SearchBarDefaults.InputField(
                                 query = searchQuery,
                                 onQueryChange = { searchQuery = it },
                                 onSearch = { },
                                 expanded = isSearchActive,
-                                onExpandedChange = { isSearchActive = it },
+                                onExpandedChange = { expanded ->
+                                    if (!isTv) {
+                                        isSearchActive = expanded
+                                    }
+                                },
                                 modifier = Modifier
                                     .fillMaxWidth()
                                     .focusRequester(searchFocusRequester)
                                     .onFocusEvent { isSearchFocused = it.isFocused }
-                                    .then(if (isTv) Modifier.tvFocusable() else Modifier),
+                                    .then(if (isTv) Modifier.tvFocusable() else Modifier)
+                                    .onPreviewKeyEvent { keyEvent ->
+                                        if (isTv) {
+                                            when (keyEvent.key) {
+                                                Key.DirectionCenter, Key.Enter -> {
+                                                    if (!isSearchActive) {
+                                                        if (keyEvent.type == KeyEventType.KeyUp) {
+                                                            isSearchActive = true
+                                                        }
+                                                        true
+                                                    } else {
+                                                        false
+                                                    }
+                                                }
+                                                Key.DirectionLeft -> {
+                                                    if (keyEvent.type == KeyEventType.KeyDown) {
+                                                        try {
+                                                            leadingFocusRequester.requestFocus()
+                                                        } catch (_: Exception) {}
+                                                    }
+                                                    true
+                                                }
+                                                Key.DirectionRight -> {
+                                                    if (keyEvent.type == KeyEventType.KeyDown) {
+                                                        try {
+                                                            trailingFocusRequester.requestFocus()
+                                                        } catch (_: Exception) {}
+                                                    }
+                                                    true
+                                                }
+                                                Key.Back -> {
+                                                    if (keyEvent.type == KeyEventType.KeyUp) {
+                                                        isSearchActive = false
+                                                        searchQuery = ""
+                                                        try { listFocusRequester.requestFocus() } catch (_: Exception) {}
+                                                    }
+                                                    true
+                                                }
+                                                else -> false
+                                            }
+                                        } else false
+                                    },
                                 placeholder = {
                                     Text(
                                         "Search settings...",
@@ -208,7 +282,7 @@ fun SettingsScreen(
                                     )
                                 },
                                 leadingIcon = {
-                                    IconButton(
+                                    SettingsIconButton(
                                         onClick = {
                                             if (isSearchActive) {
                                                 isSearchActive = false
@@ -216,15 +290,24 @@ fun SettingsScreen(
                                             } else {
                                                 onBack()
                                             }
-                                        }
-                                    ) {
-                                        Icon(
-                                            imageVector = if (isSearchActive) Tabler.Outline.ArrowLeft else Tabler.Outline.Search,
-                                            contentDescription = "Search / Back",
-                                            tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
-                                            modifier = Modifier.size(20.dp),
-                                        )
-                                    }
+                                        },
+                                        icon = if (isSearchActive) Tabler.Outline.ArrowLeft else Tabler.Outline.Search,
+                                        contentDescription = "Search / Back",
+                                        tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
+                                        iconSize = 20.dp,
+                                        modifier = Modifier
+                                            .focusRequester(leadingFocusRequester)
+                                            .onPreviewKeyEvent { keyEvent ->
+                                                if (isTv && keyEvent.key == Key.DirectionRight && keyEvent.type == KeyEventType.KeyDown) {
+                                                    try {
+                                                        searchFocusRequester.requestFocus()
+                                                        true
+                                                    } catch (_: Exception) {
+                                                        false
+                                                    }
+                                                } else false
+                                            }
+                                    )
                                 },
                                 trailingIcon = {
                                     Row(
@@ -232,23 +315,45 @@ fun SettingsScreen(
                                         modifier = Modifier.padding(end = 4.dp)
                                     ) {
                                         if (searchQuery.isNotBlank() || isSearchActive) {
-                                            IconButton(onClick = { searchQuery = "" }) {
-                                                Icon(
-                                                    imageVector = Tabler.Outline.X,
-                                                    contentDescription = "Clear search",
-                                                    tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
-                                                    modifier = Modifier.size(18.dp)
-                                                )
-                                            }
+                                            SettingsIconButton(
+                                                onClick = { searchQuery = "" },
+                                                icon = Tabler.Outline.X,
+                                                contentDescription = "Clear search",
+                                                tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
+                                                iconSize = 18.dp,
+                                                modifier = Modifier
+                                                    .focusRequester(trailingFocusRequester)
+                                                    .onPreviewKeyEvent { keyEvent ->
+                                                        if (isTv && keyEvent.key == Key.DirectionLeft && keyEvent.type == KeyEventType.KeyDown) {
+                                                            try {
+                                                                searchFocusRequester.requestFocus()
+                                                                true
+                                                            } catch (_: Exception) {
+                                                                false
+                                                            }
+                                                        } else false
+                                                    }
+                                            )
                                         } else {
-                                            IconButton(onClick = onNewsletterClick) {
-                                                Icon(
-                                                    imageVector = Tabler.Outline.Mail,
-                                                    contentDescription = "Newsletter",
-                                                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                                                    modifier = Modifier.size(20.dp),
-                                                )
-                                            }
+                                            SettingsIconButton(
+                                                onClick = onNewsletterClick,
+                                                icon = Tabler.Outline.Mail,
+                                                contentDescription = "Newsletter",
+                                                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                                                iconSize = 20.dp,
+                                                modifier = Modifier
+                                                    .focusRequester(trailingFocusRequester)
+                                                    .onPreviewKeyEvent { keyEvent ->
+                                                        if (isTv && keyEvent.key == Key.DirectionLeft && keyEvent.type == KeyEventType.KeyDown) {
+                                                            try {
+                                                                searchFocusRequester.requestFocus()
+                                                                true
+                                                            } catch (_: Exception) {
+                                                                false
+                                                            }
+                                                        } else false
+                                                    }
+                                            )
                                             AdvancedSettingsToggleButton(
                                                 showAdvanced = preferences.showAdvancedSettings,
                                                 onToggle = { viewModel.setShowAdvancedSettings(!preferences.showAdvancedSettings) },
@@ -275,12 +380,29 @@ fun SettingsScreen(
                             )
                         },
                         expanded = isSearchActive,
-                        onExpandedChange = { isSearchActive = it },
+                        onExpandedChange = { expanded ->
+                            if (!isTv) {
+                                isSearchActive = expanded
+                            }
+                        },
                         modifier = Modifier
                             .fillMaxWidth()
+                            .then(
+                                if (isSearchFocused && isTv) {
+                                    Modifier.shadow(
+                                        elevation = TvFocusDefaults.GlowElevation,
+                                        shape = ShapeCache.smooth16,
+                                        clip = false,
+                                        ambientColor = MaterialTheme.colorScheme.primary.copy(alpha = TvFocusDefaults.GlowAmbientAlpha),
+                                        spotColor = MaterialTheme.colorScheme.primary.copy(alpha = TvFocusDefaults.GlowSpotAlpha),
+                                    )
+                                } else {
+                                    Modifier
+                                }
+                            )
                             .border(
-                                width = 1.dp,
-                                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.08f),
+                                width = if (isSearchFocused && isTv) TvFocusDefaults.BorderWidth else 1.dp,
+                                color = if (isSearchFocused && isTv) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.08f),
                                 shape = ShapeCache.smooth16
                             ),
                         shape = ShapeCache.smooth16,
@@ -292,12 +414,21 @@ fun SettingsScreen(
                             LazyColumn(
                                 modifier = Modifier
                                     .fillMaxWidth()
-                                    .padding(vertical = 8.dp),
+                                    .padding(vertical = 8.dp)
+                                    .then(if (isTv) Modifier.onPreviewKeyEvent { keyEvent ->
+                                        if (keyEvent.key == Key.Back && keyEvent.type == KeyEventType.KeyUp) {
+                                            isSearchActive = false
+                                            searchQuery = ""
+                                            try { listFocusRequester.requestFocus() } catch (_: Exception) {}
+                                            true
+                                        } else false
+                                    } else Modifier),
                                 verticalArrangement = Arrangement.spacedBy(4.dp),
                                 contentPadding = PaddingValues(horizontal = 16.dp)
                             ) {
                                 itemsIndexed(filteredItems, key = { _, item -> item.id }) { index, item ->
                                     val shape = com.raulshma.jellyplay.core.designsystem.theme.expressiveListShape(index, filteredItems.size, innerRadius = 0.dp)
+                                    val itemTvFocusState = rememberTvFocusState(focusedScale = 1.01f)
                                     ListItem(
                                         headlineContent = {
                                             Text(
@@ -377,6 +508,8 @@ fun SettingsScreen(
                                         modifier = Modifier
                                             .fillMaxWidth()
                                             .clip(shape)
+                                            .then(itemTvFocusState.focusModifier)
+                                            .tvFocusIndicator(itemTvFocusState, shape)
                                             .clickable {
                                                 if (item.isAdvanced && !preferences.showAdvancedSettings) {
                                                     viewModel.setShowAdvancedSettings(true)
@@ -422,6 +555,7 @@ fun SettingsScreen(
                                 )
                             }
                         }
+                    }
                     }
                 }
 
@@ -777,5 +911,128 @@ private fun AnimatedSettingsEntrance(
         ),
     ) {
         content()
+    }
+}
+
+@Composable
+private fun SettingsIconButton(
+    onClick: () -> Unit,
+    icon: ImageVector,
+    contentDescription: String,
+    modifier: Modifier = Modifier,
+    tint: Color = MaterialTheme.colorScheme.onSurfaceVariant,
+    iconSize: androidx.compose.ui.unit.Dp = 20.dp,
+) {
+    val isTv = LocalTvMode.current
+    if (isTv) {
+        val focusState = rememberTvFocusState(focusedScale = 1.15f)
+        Box(
+            modifier = modifier
+                .size(36.dp)
+                .then(focusState.focusModifier)
+                .tvFocusIndicator(focusState, ShapeCache.smooth10)
+                .clickable(onClick = onClick),
+            contentAlignment = Alignment.Center,
+        ) {
+            Icon(
+                icon,
+                contentDescription = contentDescription,
+                modifier = Modifier.size(iconSize),
+                tint = tint,
+            )
+        }
+    } else {
+        IconButton(onClick = onClick, modifier = modifier) {
+            Icon(
+                icon,
+                contentDescription = contentDescription,
+                modifier = Modifier.size(iconSize),
+                tint = tint,
+            )
+        }
+    }
+}
+
+@Composable
+private fun SettingsTvCollapsedSearchRow(
+    userName: String,
+    showAdvanced: Boolean,
+    onNewsletterClick: () -> Unit,
+    onToggleAdvanced: () -> Unit,
+    onSearchClicked: () -> Unit,
+    searchBoxFocusRequester: FocusRequester,
+    modifier: Modifier = Modifier,
+) {
+    Row(
+        modifier = modifier
+            .fillMaxWidth()
+            .height(56.dp)
+            .border(
+                width = 1.dp,
+                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.08f),
+                shape = ShapeCache.smooth16
+            )
+            .background(
+                color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f),
+                shape = ShapeCache.smooth16
+            )
+            .padding(horizontal = 4.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        val searchBoxFocusState = rememberTvFocusState(focusedScale = 1.02f)
+        Row(
+            modifier = Modifier
+                .weight(1f)
+                .height(48.dp)
+                .focusRequester(searchBoxFocusRequester)
+                .then(searchBoxFocusState.focusModifier)
+                .tvFocusIndicator(searchBoxFocusState, ShapeCache.smooth12)
+                .clickable(onClick = onSearchClicked)
+                .padding(horizontal = 12.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Icon(
+                imageVector = Tabler.Outline.Search,
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
+                modifier = Modifier.size(20.dp),
+            )
+            Spacer(Modifier.width(12.dp))
+            Text(
+                text = "Search settings...",
+                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.4f),
+                style = MaterialTheme.typography.bodyMedium,
+            )
+        }
+
+        SettingsIconButton(
+            onClick = onNewsletterClick,
+            icon = Tabler.Outline.Mail,
+            contentDescription = "Newsletter",
+            tint = MaterialTheme.colorScheme.onSurfaceVariant,
+            iconSize = 20.dp,
+        )
+
+        AdvancedSettingsToggleButton(
+            showAdvanced = showAdvanced,
+            onToggle = onToggleAdvanced,
+        )
+
+        Spacer(Modifier.width(4.dp))
+        Box(
+            modifier = Modifier
+                .size(28.dp)
+                .clip(CircleShape)
+                .background(MaterialTheme.colorScheme.primaryContainer),
+            contentAlignment = Alignment.Center,
+        ) {
+            Text(
+                text = if (userName.isNotBlank()) userName.take(1).uppercase() else "U",
+                style = MaterialTheme.typography.labelMedium,
+                color = MaterialTheme.colorScheme.onPrimaryContainer,
+                fontWeight = FontWeight.Bold,
+            )
+        }
+        Spacer(Modifier.width(8.dp))
     }
 }
