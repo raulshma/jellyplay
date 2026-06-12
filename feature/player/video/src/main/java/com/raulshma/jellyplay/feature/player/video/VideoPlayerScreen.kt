@@ -1182,9 +1182,13 @@ fun VideoPlayerScreen(
         snapshotFlow { gestureSeekPositionMs }
             .conflate()
             .collect { pos ->
-                if (isGestureSeeking && uiState.trickplayOnSeekGesture && uiState.trickplayInfo != null) {
+                if (isGestureSeeking && uiState.trickplayOnSeekGesture) {
                     gestureTrickplayVisible = true
-                    gestureTrickplayBitmap = viewModel.getTrickplayThumbnail(pos)
+                    gestureTrickplayBitmap = if (uiState.trickplayInfo != null) {
+                        viewModel.getTrickplayThumbnail(pos)
+                    } else {
+                        null
+                    }
                 }
             }
     }
