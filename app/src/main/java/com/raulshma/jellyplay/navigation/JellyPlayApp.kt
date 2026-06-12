@@ -521,26 +521,8 @@ private fun MainContent(
                             icon = routeToIcon(route),
                         )
                     }
-                    val secondaryNavItems = remember(homeMode) {
-                        buildList {
-                            add(TvNavItem(Route.Downloads, "Downloads", Tabler.Outline.Download))
-                            add(TvNavItem(Route.Favorites, "Favorites", Tabler.Outline.Heart))
-                            add(TvNavItem(Route.SyncPlay, "SyncPlay", Tabler.Outline.Users))
-                            add(TvNavItem(Route.WatchProgressHeatmap, "Watch History", Tabler.Outline.ChartBar))
-                            add(TvNavItem(Route.Requests, "Requests", Tabler.Outline.Inbox))
-                            add(TvNavItem(Route.ServerManagement(), "Server Mgmt", Tabler.Outline.Server))
-                            add(TvNavItem(Route.UserManagement(), "Switch User", Tabler.Outline.User))
-                            add(TvNavItem(Route.AdminDashboard, "Admin", Tabler.Outline.Shield))
-                            add(TvNavItem(Route.SeerrSettings(), "Seerr", Tabler.Outline.Puzzle))
-                            add(TvNavItem(Route.Settings, "Settings", Tabler.Outline.Settings))
-                            add(TvNavItem(Route.Onboarding, "Setup Wizard", Tabler.Outline.Wand))
-                            add(TvNavItem(Route.About, "About", Tabler.Outline.InfoCircle))
-                        }
-                    }
-
                     TvNavigationDrawer(
                         primaryItems = primaryNavItems,
-                        secondaryItems = secondaryNavItems,
                         currentTopLevel = currentTopLevel,
                         isSubPage = tvIsSubPage,
                         onNavigate = { navigator.navigate(it) },
