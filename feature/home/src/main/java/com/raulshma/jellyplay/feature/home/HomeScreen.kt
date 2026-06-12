@@ -1,3 +1,4 @@
+@file:OptIn(androidx.compose.ui.ExperimentalComposeUiApi::class)
 package com.raulshma.jellyplay.feature.home
 
 import androidx.activity.compose.BackHandler
@@ -73,6 +74,9 @@ import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.focus.focusProperties
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.foundation.focusGroup
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -599,78 +603,90 @@ private fun MainHomeContent(
         PullToRefreshBox(
             isRefreshing = state.isRefreshing,
             onRefresh = { viewModel.onEvent(HomeUiEvent.PullToRefresh) },
+            enabled = !isTv && !isSearchFocused,
             modifier = Modifier.fillMaxSize(),
         ) {
         Box(modifier = Modifier.fillMaxSize().background(backgroundColor)) {
-            when {
-                state.error != null && state.sections.isEmpty() && state.offlineMode == OfflineMode.ONLINE -> {
-                    ErrorScreen(
-                        message = state.error!!,
-                        onRetry = { viewModel.onEvent(HomeUiEvent.Refresh) },
-                        modifier = Modifier.padding(horizontal = contentPad),
-                    )
-                }
-                state.offlineMode != OfflineMode.ONLINE -> {
-                    val filteredOfflineLibrary = remember(state.offlineLibrary, state.homeMode) {
-                        if (state.homeMode == HomeMode.MUSIC) {
-                            state.offlineLibrary.filter {
-                                it.mediaType == MediaType.AUDIO ||
-                                it.mediaType == MediaType.MUSIC ||
-                                it.mediaType == MediaType.ALBUM ||
-                                it.mediaType == MediaType.ARTIST
-                            }
-                        } else {
-                            state.offlineLibrary.filter {
-                                it.mediaType != MediaType.AUDIO &&
-                                it.mediaType != MediaType.MUSIC &&
-                                it.mediaType != MediaType.ALBUM &&
-                                it.mediaType != MediaType.ARTIST
-                            }
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .focusGroup()
+                    .focusProperties {
+                        onEnter = { focusDirection ->
+                            if (isSearchFocused) FocusRequester.Cancel else FocusRequester.Default
                         }
                     }
-                    OfflineHomeContent(
-                        offlineLibrary = filteredOfflineLibrary,
-                        onItemClick = onOfflineLibraryClick,
-                        contentPadding = contentPad,
-                        backgroundColor = backgroundColor,
-                        onGoOnline = { viewModel.onEvent(HomeUiEvent.ToggleOfflineMode) },
-                    )
-                }
-                state.homeMode == HomeMode.MUSIC -> {
-                    musicContent()
-                }
-                else -> {
-                    HomeContentList(
-                        isLoading = state.isLoading,
-                        homeHeroEnabled = state.homeHeroEnabled,
-                        newsletterBannerVisible = state.newsletterBannerVisible,
-                        discoverEnabled = state.discoverEnabled,
-                        offlineLibrary = state.offlineLibrary,
-                        sections = state.sections,
-                        featuredItem = featuredItem,
-                        viewModel = viewModel,
-                        listState = listState,
-                        backgroundColor = backgroundColor,
-                        contentPad = contentPad,
-                        headerHeight = headerHeight,
-                        isLightTheme = isLightTheme,
-                        density = density,
-                        mediaImageUrlBuilder = mediaImageUrlBuilder,
-                        mediaBackdropUrlBuilder = mediaBackdropUrlBuilder,
-                        mediaOnItemClick = mediaOnItemClick,
-                        mediaOnPlayClick = mediaOnPlayClick,
-                        fallbackImageUrlBuilder = fallbackImageUrlBuilder,
-                        discoverRows = discoverRows,
-                        allDiscoverItems = allDiscoverItems,
-                        seerrCardLoadingState = seerrCardLoadingState,
-                        seerrPrefetch = seerrPrefetch,
-                        onSeerrItemClick = onSeerrItemClick,
-                        onOfflineLibraryClick = onOfflineLibraryClick,
-                        onItemClick = onItemClick,
-                        onFocusChange = { focusInHero = it },
-                        onSeerrRequest = { viewModel.onEvent(HomeUiEvent.SelectSeerrRequestItem(it)) },
-                        onNewsletterClick = onNewsletterClick,
-                    )
+            ) {
+                when {
+                    state.error != null && state.sections.isEmpty() && state.offlineMode == OfflineMode.ONLINE -> {
+                        ErrorScreen(
+                            message = state.error!!,
+                            onRetry = { viewModel.onEvent(HomeUiEvent.Refresh) },
+                            modifier = Modifier.padding(horizontal = contentPad),
+                        )
+                    }
+                    state.offlineMode != OfflineMode.ONLINE -> {
+                        val filteredOfflineLibrary = remember(state.offlineLibrary, state.homeMode) {
+                            if (state.homeMode == HomeMode.MUSIC) {
+                                state.offlineLibrary.filter {
+                                    it.mediaType == MediaType.AUDIO ||
+                                    it.mediaType == MediaType.MUSIC ||
+                                    it.mediaType == MediaType.ALBUM ||
+                                    it.mediaType == MediaType.ARTIST
+                                }
+                            } else {
+                                state.offlineLibrary.filter {
+                                    it.mediaType != MediaType.AUDIO &&
+                                    it.mediaType != MediaType.MUSIC &&
+                                    it.mediaType != MediaType.ALBUM &&
+                                    it.mediaType != MediaType.ARTIST
+                                }
+                            }
+                        }
+                        OfflineHomeContent(
+                            offlineLibrary = filteredOfflineLibrary,
+                            onItemClick = onOfflineLibraryClick,
+                            contentPadding = contentPad,
+                            backgroundColor = backgroundColor,
+                            onGoOnline = { viewModel.onEvent(HomeUiEvent.ToggleOfflineMode) },
+                        )
+                    }
+                    state.homeMode == HomeMode.MUSIC -> {
+                        musicContent()
+                    }
+                    else -> {
+                        HomeContentList(
+                            isLoading = state.isLoading,
+                            homeHeroEnabled = state.homeHeroEnabled,
+                            newsletterBannerVisible = state.newsletterBannerVisible,
+                            discoverEnabled = state.discoverEnabled,
+                            offlineLibrary = state.offlineLibrary,
+                            sections = state.sections,
+                            featuredItem = featuredItem,
+                            viewModel = viewModel,
+                            listState = listState,
+                            backgroundColor = backgroundColor,
+                            contentPad = contentPad,
+                            headerHeight = headerHeight,
+                            isLightTheme = isLightTheme,
+                            density = density,
+                            mediaImageUrlBuilder = mediaImageUrlBuilder,
+                            mediaBackdropUrlBuilder = mediaBackdropUrlBuilder,
+                            mediaOnItemClick = mediaOnItemClick,
+                            mediaOnPlayClick = mediaOnPlayClick,
+                            fallbackImageUrlBuilder = fallbackImageUrlBuilder,
+                            discoverRows = discoverRows,
+                            allDiscoverItems = allDiscoverItems,
+                            seerrCardLoadingState = seerrCardLoadingState,
+                            seerrPrefetch = seerrPrefetch,
+                            onSeerrItemClick = onSeerrItemClick,
+                            onOfflineLibraryClick = onOfflineLibraryClick,
+                            onItemClick = onItemClick,
+                            onFocusChange = { focusInHero = it },
+                            onSeerrRequest = { viewModel.onEvent(HomeUiEvent.SelectSeerrRequestItem(it)) },
+                            onNewsletterClick = onNewsletterClick,
+                        )
+                    }
                 }
             }
 
@@ -693,30 +709,32 @@ private fun MainHomeContent(
                     },
                     onToggleOffline = { viewModel.onEvent(HomeUiEvent.ToggleOfflineMode) },
                     searchResultsContent = {
-                        HomeSearchResultsOverlay(
-                            jellyfinResults = state.searchState.jellyfinResults,
-                            seerrResults = state.searchState.seerrResults,
-                            isSearching = state.searchState.isSearching,
-                            getImageUrl = { viewModel.getImageUrl(it) },
-                            onJellyfinClick = { item ->
-                                isSearchExpanded = false
-                                viewModel.onEvent(HomeUiEvent.ClearSearch)
-                                focusManager.clearFocus()
-                                onItemClick(item.id)
-                            },
-                            onSeerrClick = { item ->
-                                isSearchExpanded = false
-                                viewModel.onEvent(HomeUiEvent.ClearSearch)
-                                focusManager.clearFocus()
-                                onSearchSeerrClick(item.id, item.mediaType)
-                            },
-                            searchHistory = searchHistory,
-                            onHistoryClick = { query ->
-                                viewModel.onEvent(HomeUiEvent.UpdateSearchQuery(query))
-                            },
-                            onDeleteHistoryItem = { id -> viewModel.deleteSearchHistoryItem(id) },
-                            onClearHistory = { viewModel.clearSearchHistory() },
-                        )
+                        if (state.searchState.query.isNotBlank() || searchHistory.isNotEmpty()) {
+                            HomeSearchResultsOverlay(
+                                jellyfinResults = state.searchState.jellyfinResults,
+                                seerrResults = state.searchState.seerrResults,
+                                isSearching = state.searchState.isSearching,
+                                getImageUrl = { viewModel.getImageUrl(it) },
+                                onJellyfinClick = { item ->
+                                    isSearchExpanded = false
+                                    viewModel.onEvent(HomeUiEvent.ClearSearch)
+                                    focusManager.clearFocus()
+                                    onItemClick(item.id)
+                                },
+                                onSeerrClick = { item ->
+                                    isSearchExpanded = false
+                                    viewModel.onEvent(HomeUiEvent.ClearSearch)
+                                    focusManager.clearFocus()
+                                    onSearchSeerrClick(item.id, item.mediaType)
+                                },
+                                searchHistory = searchHistory,
+                                onHistoryClick = { query ->
+                                    viewModel.onEvent(HomeUiEvent.UpdateSearchQuery(query))
+                                },
+                                onDeleteHistoryItem = { id -> viewModel.deleteSearchHistoryItem(id) },
+                                onClearHistory = { viewModel.clearSearchHistory() },
+                            )
+                        }
                     },
                 )
 

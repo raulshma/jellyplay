@@ -45,6 +45,10 @@ import com.raulshma.jellyplay.core.model.MediaItem
 import com.raulshma.jellyplay.core.model.MediaType
 import com.raulshma.jellyplay.core.model.seerr.SeerrSearchItem
 import com.raulshma.jellyplay.core.ui.image.MediaImage
+import androidx.compose.ui.graphics.Color
+import com.raulshma.jellyplay.core.ui.tv.LocalTvMode
+import com.raulshma.jellyplay.core.ui.tv.rememberTvFocusState
+import com.raulshma.jellyplay.core.ui.tv.tvFocusIndicator
 import com.composables.icons.tabler.Tabler
 import com.composables.icons.tabler.outline.Search
 import com.composables.icons.tabler.outline.X
@@ -119,11 +123,14 @@ fun HomeSearchResultsOverlay(
                                 ),
                                 color = MaterialTheme.colorScheme.primary,
                             )
+                            val clearAllFocusState = rememberTvFocusState()
                             Text(
                                 text = "Clear all",
                                 style = MaterialTheme.typography.labelSmall,
                                 color = MaterialTheme.colorScheme.primary,
                                 modifier = Modifier
+                                    .then(clearAllFocusState.focusModifier)
+                                    .tvFocusIndicator(clearAllFocusState, RoundedCornerShape(8.dp))
                                     .clip(RoundedCornerShape(8.dp))
                                     .clickable { onClearHistory() }
                                     .padding(horizontal = 8.dp, vertical = 4.dp),
@@ -136,18 +143,41 @@ fun HomeSearchResultsOverlay(
                         contentType = { "historyItem" },
                     ) { index ->
                         val historyItem = searchHistory[index]
+                        val itemFocusState = rememberTvFocusState()
+                        val deleteFocusState = rememberTvFocusState()
+                        val isItemFocused = itemFocusState.isFocused
+                        val isDeleteFocused = deleteFocusState.isFocused
+
+                        val itemBgColor = if (isItemFocused) {
+                            MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)
+                        } else {
+                            Color.Transparent
+                        }
+
+                        val deleteBgColor = if (isDeleteFocused) {
+                            MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)
+                        } else {
+                            Color.Transparent
+                        }
+
                         Row(
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .clickable { onHistoryClick(historyItem.query) }
-                                .padding(horizontal = 16.dp, vertical = 8.dp),
+                                .padding(horizontal = 16.dp, vertical = 2.dp),
                             verticalAlignment = Alignment.CenterVertically,
                             horizontalArrangement = Arrangement.SpaceBetween,
                         ) {
                             Row(
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .then(itemFocusState.focusModifier)
+                                    .tvFocusIndicator(itemFocusState, ShapeCache.smooth12)
+                                    .clip(ShapeCache.smooth12)
+                                    .background(itemBgColor)
+                                    .clickable { onHistoryClick(historyItem.query) }
+                                    .padding(horizontal = 8.dp, vertical = 8.dp),
                                 verticalAlignment = Alignment.CenterVertically,
                                 horizontalArrangement = Arrangement.spacedBy(10.dp),
-                                modifier = Modifier.weight(1f),
                             ) {
                                 Icon(
                                     Tabler.Outline.Search,
@@ -162,16 +192,24 @@ fun HomeSearchResultsOverlay(
                                     overflow = TextOverflow.Ellipsis,
                                 )
                             }
-                            Icon(
-                                Tabler.Outline.X,
-                                contentDescription = "Remove",
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Box(
                                 modifier = Modifier
-                                    .size(14.dp)
+                                    .then(deleteFocusState.focusModifier)
+                                    .tvFocusIndicator(deleteFocusState, RoundedCornerShape(8.dp))
                                     .clip(RoundedCornerShape(8.dp))
+                                    .background(deleteBgColor)
                                     .clickable { onDeleteHistoryItem(historyItem.id) }
-                                    .padding(2.dp),
-                                tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                            )
+                                    .padding(8.dp),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Icon(
+                                    Tabler.Outline.X,
+                                    contentDescription = "Remove",
+                                    modifier = Modifier.size(14.dp),
+                                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                                )
+                            }
                         }
                     }
                 }
@@ -292,13 +330,22 @@ private fun SearchItemRow(
     onClick: () -> Unit,
     index: Int,
 ) {
+    val isTv = LocalTvMode.current
+    val tvFocusState = rememberTvFocusState()
     val interactionSource = remember { MutableInteractionSource() }
     val isPressed by interactionSource.collectIsPressedAsState()
-    val scale by animateFloatAsState(
+    val baseScale by animateFloatAsState(
         targetValue = if (isPressed) 0.97f else 1f,
         animationSpec = MaterialTheme.motionScheme.defaultSpatialSpec(),
         label = "searchItemScale",
     )
+    val scale = if (isTv) 1f else baseScale
+    val isFocused = tvFocusState.isFocused
+    val backgroundColor = when {
+        isPressed -> MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.8f)
+        isFocused -> MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)
+        else -> Color.Transparent
+    }
 
     var visible by remember { mutableStateOf(false) }
     LaunchedEffect(Unit) { visible = true }
@@ -312,6 +359,8 @@ private fun SearchItemRow(
     Row(
         modifier = Modifier
             .fillMaxWidth()
+            .then(tvFocusState.focusModifier)
+            .tvFocusIndicator(tvFocusState, ShapeCache.smooth12)
             .graphicsLayer {
                 scaleX = scale
                 scaleY = scale
@@ -319,6 +368,7 @@ private fun SearchItemRow(
                 translationY = (1f - animationProgress) * 8f
             }
             .clip(ShapeCache.smooth12)
+            .background(backgroundColor)
             .clickable(
                 interactionSource = interactionSource,
                 indication = null,

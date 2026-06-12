@@ -50,6 +50,15 @@ import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.unit.dp
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.ui.input.key.Key
+import androidx.compose.ui.input.key.KeyEventType
+import androidx.compose.ui.input.key.key
+import androidx.compose.ui.input.key.type
+import androidx.compose.ui.input.key.onPreviewKeyEvent
+import com.raulshma.jellyplay.core.ui.tv.LocalTvMode
+import com.raulshma.jellyplay.core.ui.tv.rememberTvFocusState
+import com.raulshma.jellyplay.core.ui.tv.tvFocusIndicator
 import com.raulshma.jellyplay.core.designsystem.theme.ShapeCache
 import com.raulshma.jellyplay.core.model.HomeMode
 import com.raulshma.jellyplay.core.model.OfflineMode
@@ -104,7 +113,16 @@ fun HomeTopDock(
             .padding(
                 horizontal = 16.dp,
                 vertical = 8.dp
-            ),
+            )
+            .onPreviewKeyEvent { keyEvent ->
+                if (isSearchFocused && keyEvent.key == Key.Back && keyEvent.type == KeyEventType.KeyDown) {
+                    onClearSearch()
+                    focusManager.clearFocus()
+                    true
+                } else {
+                    false
+                }
+            },
         contentAlignment = Alignment.TopEnd
     ) {
         Column(
@@ -161,7 +179,7 @@ fun HomeTopDock(
                 }
             }
 
-            if (searchQuery.isNotBlank()) {
+            if (isSearchFocused) {
                 Box(
                     modifier = Modifier
                         .fillMaxWidth()
@@ -188,16 +206,23 @@ private fun RowScope.SearchExpandedContent(
 ) {
     val focusRequester = remember { FocusRequester() }
 
-    IconButton(
-        onClick = onBack,
-        modifier = Modifier.size(40.dp),
+    val backFocusState = rememberTvFocusState()
+    Box(
+        modifier = Modifier
+            .then(backFocusState.focusModifier)
+            .tvFocusIndicator(backFocusState, CircleShape)
     ) {
-        Icon(
-            Tabler.Outline.ArrowLeft,
-            contentDescription = "Back",
-            tint = appBarIconColorFaded,
-            modifier = Modifier.size(20.dp),
-        )
+        IconButton(
+            onClick = onBack,
+            modifier = Modifier.size(40.dp),
+        ) {
+            Icon(
+                Tabler.Outline.ArrowLeft,
+                contentDescription = "Back",
+                tint = appBarIconColorFaded,
+                modifier = Modifier.size(20.dp),
+            )
+        }
     }
 
     @OptIn(ExperimentalMaterial3Api::class)
@@ -232,23 +257,28 @@ private fun RowScope.SearchExpandedContent(
     )
 
     LaunchedEffect(Unit) {
-        if (searchQuery.isEmpty()) {
-            focusRequester.requestFocus()
-        }
+        focusRequester.requestFocus()
     }
 
     if (searchQuery.isNotEmpty()) {
-        IconButton(
-            onClick = onClear,
-            shapes = androidx.compose.material3.IconButtonDefaults.shapes(),
-            modifier = Modifier.size(40.dp),
+        val clearFocusState = rememberTvFocusState()
+        Box(
+            modifier = Modifier
+                .then(clearFocusState.focusModifier)
+                .tvFocusIndicator(clearFocusState, CircleShape)
         ) {
-            Icon(
-                Tabler.Outline.X,
-                contentDescription = "Clear search",
-                tint = appBarIconColorFaded,
-                modifier = Modifier.size(20.dp),
-            )
+            IconButton(
+                onClick = onClear,
+                shapes = androidx.compose.material3.IconButtonDefaults.shapes(),
+                modifier = Modifier.size(40.dp),
+            ) {
+                Icon(
+                    Tabler.Outline.X,
+                    contentDescription = "Clear search",
+                    tint = appBarIconColorFaded,
+                    modifier = Modifier.size(20.dp),
+                )
+            }
         }
     }
 }
@@ -264,16 +294,23 @@ private fun CollapsedDockContent(
     onSearchExpand: () -> Unit,
 ) {
     if (offlineMode != OfflineMode.ONLINE) {
-        IconButton(
-            onClick = onToggleOffline,
-            modifier = Modifier.size(40.dp),
+        val onlineFocusState = rememberTvFocusState()
+        Box(
+            modifier = Modifier
+                .then(onlineFocusState.focusModifier)
+                .tvFocusIndicator(onlineFocusState, CircleShape)
         ) {
-            Icon(
-                Tabler.Outline.Download,
-                contentDescription = "Go online",
-                tint = MaterialTheme.colorScheme.primary,
-                modifier = Modifier.size(20.dp),
-            )
+            IconButton(
+                onClick = onToggleOffline,
+                modifier = Modifier.size(40.dp),
+            ) {
+                Icon(
+                    Tabler.Outline.Download,
+                    contentDescription = "Go online",
+                    tint = MaterialTheme.colorScheme.primary,
+                    modifier = Modifier.size(20.dp),
+                )
+            }
         }
     }
     ModeSwitch(
@@ -284,16 +321,23 @@ private fun CollapsedDockContent(
         status = headerStatus,
         tint = appBarIconColorFaded,
     )
-    IconButton(
-        onClick = onSearchExpand,
-        modifier = Modifier.size(40.dp),
+    val searchFocusState = rememberTvFocusState()
+    Box(
+        modifier = Modifier
+            .then(searchFocusState.focusModifier)
+            .tvFocusIndicator(searchFocusState, CircleShape)
     ) {
-        Icon(
-            Tabler.Outline.Search,
-            contentDescription = "Search",
-            tint = appBarIconColorFaded,
-            modifier = Modifier.size(20.dp),
-        )
+        IconButton(
+            onClick = onSearchExpand,
+            modifier = Modifier.size(40.dp),
+        ) {
+            Icon(
+                Tabler.Outline.Search,
+                contentDescription = "Search",
+                tint = appBarIconColorFaded,
+                modifier = Modifier.size(20.dp),
+            )
+        }
     }
 }
 
