@@ -95,7 +95,6 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.raulshma.jellyplay.core.designsystem.theme.ArtworkThemeWrapper
 import com.raulshma.jellyplay.core.data.playback.AudioQueueItem
-import com.raulshma.jellyplay.core.ui.tv.tvFocusable
 import com.raulshma.jellyplay.core.ui.image.MediaImage
 import com.raulshma.jellyplay.feature.player.audio.components.WaveformSeekBar
 import com.raulshma.jellyplay.core.designsystem.theme.rememberArtworkColors
@@ -1009,7 +1008,7 @@ private fun PixelPlayerTopBar(
         horizontalArrangement = Arrangement.SpaceBetween,
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        IconButton(onClick = onBack, modifier = Modifier.tvFocusable()) {
+        IconButton(onClick = onBack, modifier = Modifier) {
             Icon(
                 Tabler.Outline.ChevronDown, "Minimize",
                 tint = MaterialTheme.colorScheme.onBackground,
@@ -1024,7 +1023,7 @@ private fun PixelPlayerTopBar(
         )
         Row {
             if (hasLyrics) {
-                IconButton(onClick = onLyricsClick, modifier = Modifier.tvFocusable()) {
+                IconButton(onClick = onLyricsClick, modifier = Modifier) {
                     Icon(
                         if (lyricsVisible) Tabler.Outline.Microphone2 else Tabler.Outline.Microphone,
                         "Lyrics",
@@ -1033,11 +1032,11 @@ private fun PixelPlayerTopBar(
                     )
                 }
             }
-            IconButton(onClick = onQueueClick, modifier = Modifier.tvFocusable()) {
+            IconButton(onClick = onQueueClick, modifier = Modifier) {
                 Icon(Tabler.Outline.Playlist, "Queue", tint = MaterialTheme.colorScheme.onBackground, modifier = Modifier.size(22.dp))
             }
             Box {
-                IconButton(onClick = { onMenuToggle(true) }, modifier = Modifier.tvFocusable()) {
+                IconButton(onClick = { onMenuToggle(true) }, modifier = Modifier) {
                     Icon(Tabler.Outline.DotsVertical, "More", tint = MaterialTheme.colorScheme.onBackground, modifier = Modifier.size(22.dp))
                 }
                 val itemColors = androidx.compose.material3.MenuDefaults.itemColors(
@@ -1454,7 +1453,7 @@ private fun PixelPlayPauseButton(
             .graphicsLayer { scaleX = scale; scaleY = scale }
             .clip(ShapeCache.smooth20)
             .background(buttonBg)
-            .tvFocusable()
+            
             .clickable(
                 interactionSource = interactionSource,
                 indication = null,
@@ -1493,7 +1492,7 @@ private fun IconButtonWithPressAnimation(
         modifier = modifier
             .size(size)
             .graphicsLayer { scaleX = scale; scaleY = scale }
-            .tvFocusable(),
+            ,
         shapes = androidx.compose.material3.IconButtonDefaults.shapes(),
         interactionSource = interactionSource,
     ) {

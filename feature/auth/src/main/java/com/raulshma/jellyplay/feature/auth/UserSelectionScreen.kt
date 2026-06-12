@@ -1,7 +1,6 @@
 package com.raulshma.jellyplay.feature.auth
 
 import androidx.compose.animation.AnimatedVisibility
-import com.raulshma.jellyplay.core.ui.tv.tvFocusable
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.slideInVertically
 import androidx.compose.foundation.clickable
@@ -188,7 +187,7 @@ private fun UserCard(
     Card(
         modifier = Modifier
             .fillMaxWidth()
-            .tvFocusable().clickable(onClick = onClick),
+            .clickable(onClick = onClick),
         border = border,
     ) {
         Row(

@@ -6,6 +6,7 @@ import androidx.compose.foundation.verticalScroll
 import com.raulshma.jellyplay.core.ui.tv.rememberTvFocusState
 import com.raulshma.jellyplay.core.ui.tv.tvFocusIndicator
 import com.raulshma.jellyplay.core.ui.tv.LocalTvMode
+import com.raulshma.jellyplay.core.ui.tv.components.DpadSlider
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -46,12 +47,8 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.input.key.KeyEventType
-import androidx.compose.ui.input.key.onPreviewKeyEvent
-import androidx.compose.ui.input.key.type
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
-import android.view.KeyEvent
 
 import kotlin.math.roundToLong
 import com.raulshma.jellyplay.core.designsystem.theme.ShapeCache
@@ -154,42 +151,40 @@ fun SubtitleStyleSheet(
                 ),
                 color = if (applyCustomStyle) Color.Unspecified else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f),
             )
-            val fontSizeFocusState = rememberTvFocusState()
-            Slider(
-                value = fontSize.toFloat(),
-                enabled = applyCustomStyle,
-                onValueChange = { fontSize = it.toInt() },
-                onValueChangeFinished = {
-                    onStyleChange(currentStyle.copy(fontSize = fontSize))
-                },
-                valueRange = 16f..48f,
-                steps = 32,
-                colors = SliderDefaults.colors(
-                    thumbColor = if (applyCustomStyle) MaterialTheme.colorScheme.primary else Color.Gray,
-                    activeTrackColor = if (applyCustomStyle) MaterialTheme.colorScheme.primary else Color.Gray.copy(alpha = 0.5f),
-                ),
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .then(if (isTv) fontSizeFocusState.focusModifier else Modifier)
-                    .then(if (isTv) Modifier.tvFocusIndicator(fontSizeFocusState) else Modifier)
-                    .onPreviewKeyEvent { keyEvent ->
-                        if (isTv && applyCustomStyle && keyEvent.type == KeyEventType.KeyDown) {
-                            when (keyEvent.nativeKeyEvent.keyCode) {
-                                KeyEvent.KEYCODE_DPAD_LEFT -> {
-                                    fontSize = (fontSize - 1).coerceIn(16, 48)
-                                    onStyleChange(currentStyle.copy(fontSize = fontSize))
-                                    true
-                                }
-                                KeyEvent.KEYCODE_DPAD_RIGHT -> {
-                                    fontSize = (fontSize + 1).coerceIn(16, 48)
-                                    onStyleChange(currentStyle.copy(fontSize = fontSize))
-                                    true
-                                }
-                                else -> false
-                            }
-                        } else false
+            if (isTv) {
+                DpadSlider(
+                    value = fontSize.toFloat(),
+                    enabled = applyCustomStyle,
+                    onValueChange = {
+                        fontSize = it.toInt()
+                        onStyleChange(currentStyle.copy(fontSize = fontSize))
                     },
-            )
+                    valueRange = 16f..48f,
+                    steps = 32,
+                    dpadStep = 1f,
+                    colors = SliderDefaults.colors(
+                        thumbColor = if (applyCustomStyle) MaterialTheme.colorScheme.primary else Color.Gray,
+                        activeTrackColor = if (applyCustomStyle) MaterialTheme.colorScheme.primary else Color.Gray.copy(alpha = 0.5f),
+                    ),
+                    modifier = Modifier.fillMaxWidth(),
+                )
+            } else {
+                Slider(
+                    value = fontSize.toFloat(),
+                    enabled = applyCustomStyle,
+                    onValueChange = { fontSize = it.toInt() },
+                    onValueChangeFinished = {
+                        onStyleChange(currentStyle.copy(fontSize = fontSize))
+                    },
+                    valueRange = 16f..48f,
+                    steps = 32,
+                    colors = SliderDefaults.colors(
+                        thumbColor = if (applyCustomStyle) MaterialTheme.colorScheme.primary else Color.Gray,
+                        activeTrackColor = if (applyCustomStyle) MaterialTheme.colorScheme.primary else Color.Gray.copy(alpha = 0.5f),
+                    ),
+                    modifier = Modifier.fillMaxWidth(),
+                )
+            }
 
             Spacer(Modifier.height(8.dp))
             Text(
@@ -251,42 +246,40 @@ fun SubtitleStyleSheet(
                 ),
                 color = if (applyCustomStyle) Color.Unspecified else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f),
             )
-            val opacityFocusState = rememberTvFocusState()
-            Slider(
-                value = backgroundOpacity,
-                enabled = applyCustomStyle,
-                onValueChange = { backgroundOpacity = it },
-                onValueChangeFinished = {
-                    onStyleChange(currentStyle.copy(backgroundOpacity = backgroundOpacity))
-                },
-                valueRange = 0f..1f,
-                steps = 10,
-                colors = SliderDefaults.colors(
-                    thumbColor = if (applyCustomStyle) MaterialTheme.colorScheme.primary else Color.Gray,
-                    activeTrackColor = if (applyCustomStyle) MaterialTheme.colorScheme.primary else Color.Gray.copy(alpha = 0.5f),
-                ),
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .then(if (isTv) opacityFocusState.focusModifier else Modifier)
-                    .then(if (isTv) Modifier.tvFocusIndicator(opacityFocusState) else Modifier)
-                    .onPreviewKeyEvent { keyEvent ->
-                        if (isTv && applyCustomStyle && keyEvent.type == KeyEventType.KeyDown) {
-                            when (keyEvent.nativeKeyEvent.keyCode) {
-                                KeyEvent.KEYCODE_DPAD_LEFT -> {
-                                    backgroundOpacity = (backgroundOpacity - 0.1f).coerceIn(0f, 1f)
-                                    onStyleChange(currentStyle.copy(backgroundOpacity = backgroundOpacity))
-                                    true
-                                }
-                                KeyEvent.KEYCODE_DPAD_RIGHT -> {
-                                    backgroundOpacity = (backgroundOpacity + 0.1f).coerceIn(0f, 1f)
-                                    onStyleChange(currentStyle.copy(backgroundOpacity = backgroundOpacity))
-                                    true
-                                }
-                                else -> false
-                            }
-                        } else false
+            if (isTv) {
+                DpadSlider(
+                    value = backgroundOpacity,
+                    enabled = applyCustomStyle,
+                    onValueChange = {
+                        backgroundOpacity = it
+                        onStyleChange(currentStyle.copy(backgroundOpacity = backgroundOpacity))
                     },
-            )
+                    valueRange = 0f..1f,
+                    steps = 10,
+                    dpadStep = 0.1f,
+                    colors = SliderDefaults.colors(
+                        thumbColor = if (applyCustomStyle) MaterialTheme.colorScheme.primary else Color.Gray,
+                        activeTrackColor = if (applyCustomStyle) MaterialTheme.colorScheme.primary else Color.Gray.copy(alpha = 0.5f),
+                    ),
+                    modifier = Modifier.fillMaxWidth(),
+                )
+            } else {
+                Slider(
+                    value = backgroundOpacity,
+                    enabled = applyCustomStyle,
+                    onValueChange = { backgroundOpacity = it },
+                    onValueChangeFinished = {
+                        onStyleChange(currentStyle.copy(backgroundOpacity = backgroundOpacity))
+                    },
+                    valueRange = 0f..1f,
+                    steps = 10,
+                    colors = SliderDefaults.colors(
+                        thumbColor = if (applyCustomStyle) MaterialTheme.colorScheme.primary else Color.Gray,
+                        activeTrackColor = if (applyCustomStyle) MaterialTheme.colorScheme.primary else Color.Gray.copy(alpha = 0.5f),
+                    ),
+                    modifier = Modifier.fillMaxWidth(),
+                )
+            }
 
             Spacer(Modifier.height(12.dp))
             Text(
@@ -383,41 +376,34 @@ fun SubtitleStyleSheet(
                         fontWeight = FontWeight.Medium,
                     ),
                 )
-                val offsetFocusState = rememberTvFocusState()
-                Slider(
-                    value = offsetMs.toFloat(),
-                    onValueChange = { offsetMs = (it / 100f).roundToLong() * 100 },
-                    onValueChangeFinished = {
-                        onStyleChange(currentStyle.copy(offsetMs = offsetMs))
-                    },
-                    valueRange = -10000f..10000f,
-                    steps = 199,
-                    colors = SliderDefaults.colors(
-                        thumbColor = MaterialTheme.colorScheme.primary,
-                        activeTrackColor = MaterialTheme.colorScheme.primary,
-                    ),
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .then(if (isTv) offsetFocusState.focusModifier else Modifier)
-                        .then(if (isTv) Modifier.tvFocusIndicator(offsetFocusState) else Modifier)
-                        .onPreviewKeyEvent { keyEvent ->
-                            if (isTv && keyEvent.type == KeyEventType.KeyDown) {
-                                when (keyEvent.nativeKeyEvent.keyCode) {
-                                    KeyEvent.KEYCODE_DPAD_LEFT -> {
-                                        offsetMs = (offsetMs - 500L).coerceIn(-10000L, 10000L)
-                                        onStyleChange(currentStyle.copy(offsetMs = offsetMs))
-                                        true
-                                    }
-                                    KeyEvent.KEYCODE_DPAD_RIGHT -> {
-                                        offsetMs = (offsetMs + 500L).coerceIn(-10000L, 10000L)
-                                        onStyleChange(currentStyle.copy(offsetMs = offsetMs))
-                                        true
-                                    }
-                                    else -> false
-                                }
-                            } else false
+                if (isTv) {
+                    DpadSlider(
+                        value = offsetMs.toFloat(),
+                        onValueChange = {
+                            offsetMs = (it / 100f).roundToLong() * 100
+                            onStyleChange(currentStyle.copy(offsetMs = offsetMs))
                         },
-                )
+                        valueRange = -10000f..10000f,
+                        steps = 199,
+                        dpadStep = 500f,
+                        modifier = Modifier.fillMaxWidth(),
+                    )
+                } else {
+                    Slider(
+                        value = offsetMs.toFloat(),
+                        onValueChange = { offsetMs = (it / 100f).roundToLong() * 100 },
+                        onValueChangeFinished = {
+                            onStyleChange(currentStyle.copy(offsetMs = offsetMs))
+                        },
+                        valueRange = -10000f..10000f,
+                        steps = 199,
+                        colors = SliderDefaults.colors(
+                            thumbColor = MaterialTheme.colorScheme.primary,
+                            activeTrackColor = MaterialTheme.colorScheme.primary,
+                        ),
+                        modifier = Modifier.fillMaxWidth(),
+                    )
+                }
             }
 
             if (capabilities.supportsSubtitleVerticalPosition) {
@@ -428,40 +414,32 @@ fun SubtitleStyleSheet(
                         fontWeight = FontWeight.Medium,
                     ),
                 )
-                val positionFocusState = rememberTvFocusState()
-                Slider(
-                    value = verticalPosition,
-                    onValueChange = { verticalPosition = it },
-                    onValueChangeFinished = {
-                        onStyleChange(currentStyle.copy(verticalPosition = verticalPosition))
-                    },
-                    valueRange = 0f..0.4f,
-                    colors = SliderDefaults.colors(
-                        thumbColor = MaterialTheme.colorScheme.primary,
-                        activeTrackColor = MaterialTheme.colorScheme.primary,
-                    ),
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .then(if (isTv) positionFocusState.focusModifier else Modifier)
-                        .then(if (isTv) Modifier.tvFocusIndicator(positionFocusState) else Modifier)
-                        .onPreviewKeyEvent { keyEvent ->
-                            if (isTv && keyEvent.type == KeyEventType.KeyDown) {
-                                when (keyEvent.nativeKeyEvent.keyCode) {
-                                    KeyEvent.KEYCODE_DPAD_LEFT -> {
-                                        verticalPosition = (verticalPosition - 0.02f).coerceIn(0f, 0.4f)
-                                        onStyleChange(currentStyle.copy(verticalPosition = verticalPosition))
-                                        true
-                                    }
-                                    KeyEvent.KEYCODE_DPAD_RIGHT -> {
-                                        verticalPosition = (verticalPosition + 0.02f).coerceIn(0f, 0.4f)
-                                        onStyleChange(currentStyle.copy(verticalPosition = verticalPosition))
-                                        true
-                                    }
-                                    else -> false
-                                }
-                            } else false
+                if (isTv) {
+                    DpadSlider(
+                        value = verticalPosition,
+                        onValueChange = {
+                            verticalPosition = it
+                            onStyleChange(currentStyle.copy(verticalPosition = verticalPosition))
                         },
-                )
+                        valueRange = 0f..0.4f,
+                        dpadStep = 0.02f,
+                        modifier = Modifier.fillMaxWidth(),
+                    )
+                } else {
+                    Slider(
+                        value = verticalPosition,
+                        onValueChange = { verticalPosition = it },
+                        onValueChangeFinished = {
+                            onStyleChange(currentStyle.copy(verticalPosition = verticalPosition))
+                        },
+                        valueRange = 0f..0.4f,
+                        colors = SliderDefaults.colors(
+                            thumbColor = MaterialTheme.colorScheme.primary,
+                            activeTrackColor = MaterialTheme.colorScheme.primary,
+                        ),
+                        modifier = Modifier.fillMaxWidth(),
+                    )
+                }
             }
 
             Spacer(Modifier.height(8.dp))

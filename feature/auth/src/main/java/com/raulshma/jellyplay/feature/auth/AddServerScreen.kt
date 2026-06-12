@@ -55,7 +55,6 @@ import com.raulshma.jellyplay.core.model.DiscoveredServer
 import com.raulshma.jellyplay.core.ui.adaptive.LocalAdaptiveInfo
 import com.raulshma.jellyplay.core.ui.adaptive.contentPadding
 import com.raulshma.jellyplay.core.ui.tv.LocalTvMode
-import com.raulshma.jellyplay.core.ui.tv.tvFocusable
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.raulshma.jellyplay.core.designsystem.theme.AlphaEasing
 import com.raulshma.jellyplay.core.designsystem.theme.FancyTransitionEasing
@@ -299,7 +298,7 @@ private fun ServerCountRow(
                 .clip(ShapeCache.smooth16)
                 .background(MaterialTheme.colorScheme.primaryContainer)
                 .clickable { expanded = !expanded }
-                .tvFocusable()
+                
                 .padding(horizontal = 16.dp, vertical = 12.dp),
         ) {
             if (isScanning) {
@@ -432,7 +431,7 @@ private fun DiscoveredServerItem(
             .fillMaxWidth()
             .clip(shape)
             .background(MaterialTheme.colorScheme.surfaceContainerHigh)
-            .tvFocusable()
+            
             .clickable(onClick = onClick, enabled = !isConnecting)
             .padding(horizontal = 16.dp, vertical = 14.dp),
         verticalAlignment = CenterVertically,

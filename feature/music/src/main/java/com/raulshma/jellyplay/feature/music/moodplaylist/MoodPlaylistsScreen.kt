@@ -19,7 +19,6 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
-import com.raulshma.jellyplay.core.ui.tv.tvFocusable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -115,7 +114,7 @@ private fun MoodCard(
         modifier = Modifier
             .fillMaxWidth()
             .aspectRatio(1f)
-            .tvFocusable().clickable(onClick = onClick)
+            .clickable(onClick = onClick)
             .clip(ShapeCache.smooth16),
         colors = CardDefaults.cardColors(
             containerColor = backgroundColor,

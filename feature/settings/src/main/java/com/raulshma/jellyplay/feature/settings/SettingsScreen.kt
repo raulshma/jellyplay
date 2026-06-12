@@ -42,12 +42,8 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
-import androidx.compose.ui.input.key.Key
-import androidx.compose.ui.input.key.KeyEventType
-import androidx.compose.ui.input.key.key
-import androidx.compose.ui.input.key.onKeyEvent
-import androidx.compose.ui.input.key.onPreviewKeyEvent
-import androidx.compose.ui.input.key.type
+import com.raulshma.jellyplay.core.ui.tv.input.onDpadKey
+import com.raulshma.jellyplay.core.ui.tv.input.onDpadKeyEvent
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
@@ -67,7 +63,6 @@ import androidx.compose.material3.ListItem
 import androidx.compose.material3.ListItemDefaults
 import com.raulshma.jellyplay.core.ui.navigation.Route
 import androidx.compose.foundation.layout.statusBarsPadding
-import com.raulshma.jellyplay.core.ui.tv.tvFocusable
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.raulshma.jellyplay.core.designsystem.theme.ShapeCache
@@ -233,48 +228,31 @@ fun SettingsScreen(
                                     .fillMaxWidth()
                                     .focusRequester(searchFocusRequester)
                                     .onFocusEvent { isSearchFocused = it.isFocused }
-                                    .then(if (isTv) Modifier.tvFocusable() else Modifier)
-                                    .onPreviewKeyEvent { keyEvent ->
-                                        if (isTv) {
-                                            when (keyEvent.key) {
-                                                Key.DirectionCenter, Key.Enter -> {
-                                                    if (!isSearchActive) {
-                                                        if (keyEvent.type == KeyEventType.KeyUp) {
-                                                            isSearchActive = true
-                                                        }
-                                                        true
-                                                    } else {
-                                                        false
-                                                    }
-                                                }
-                                                Key.DirectionLeft -> {
-                                                    if (keyEvent.type == KeyEventType.KeyDown) {
-                                                        try {
-                                                            leadingFocusRequester.requestFocus()
-                                                        } catch (_: Exception) {}
-                                                    }
-                                                    true
-                                                }
-                                                Key.DirectionRight -> {
-                                                    if (keyEvent.type == KeyEventType.KeyDown) {
-                                                        try {
-                                                            trailingFocusRequester.requestFocus()
-                                                        } catch (_: Exception) {}
-                                                    }
-                                                    true
-                                                }
-                                                Key.Back -> {
-                                                    if (keyEvent.type == KeyEventType.KeyUp) {
-                                                        isSearchActive = false
-                                                        searchQuery = ""
-                                                        try { listFocusRequester.requestFocus() } catch (_: Exception) {}
-                                                    }
-                                                    true
-                                                }
-                                                else -> false
+                                    
+                                    .onDpadKeyEvent(
+                                        onSelect = { e ->
+                                            if (!isSearchActive && e.isKeyUp) {
+                                                isSearchActive = true
+                                                true
+                                            } else false
+                                        },
+                                        onLeft = {
+                                            try { leadingFocusRequester.requestFocus() } catch (_: Exception) {}
+                                            true
+                                        },
+                                        onRight = {
+                                            try { trailingFocusRequester.requestFocus() } catch (_: Exception) {}
+                                            true
+                                        },
+                                        onBack = { e ->
+                                            if (e.isKeyUp) {
+                                                isSearchActive = false
+                                                searchQuery = ""
+                                                try { listFocusRequester.requestFocus() } catch (_: Exception) {}
                                             }
-                                        } else false
-                                    },
+                                            true
+                                        },
+                                    ),
                                 placeholder = {
                                     Text(
                                         "Search settings...",
@@ -297,16 +275,12 @@ fun SettingsScreen(
                                         iconSize = 20.dp,
                                         modifier = Modifier
                                             .focusRequester(leadingFocusRequester)
-                                            .onPreviewKeyEvent { keyEvent ->
-                                                if (isTv && keyEvent.key == Key.DirectionRight && keyEvent.type == KeyEventType.KeyDown) {
-                                                    try {
-                                                        searchFocusRequester.requestFocus()
-                                                        true
-                                                    } catch (_: Exception) {
-                                                        false
-                                                    }
-                                                } else false
-                                            }
+                                            .onDpadKey(
+                                                onRight = {
+                                                    try { searchFocusRequester.requestFocus() } catch (_: Exception) {}
+                                                    true
+                                                },
+                                            )
                                     )
                                 },
                                 trailingIcon = {
@@ -323,16 +297,12 @@ fun SettingsScreen(
                                                 iconSize = 18.dp,
                                                 modifier = Modifier
                                                     .focusRequester(trailingFocusRequester)
-                                                    .onPreviewKeyEvent { keyEvent ->
-                                                        if (isTv && keyEvent.key == Key.DirectionLeft && keyEvent.type == KeyEventType.KeyDown) {
-                                                            try {
-                                                                searchFocusRequester.requestFocus()
-                                                                true
-                                                            } catch (_: Exception) {
-                                                                false
-                                                            }
-                                                        } else false
-                                                    }
+                                                    .onDpadKey(
+                                                        onLeft = {
+                                                            try { searchFocusRequester.requestFocus() } catch (_: Exception) {}
+                                                            true
+                                                        },
+                                                    )
                                             )
                                         } else {
                                             SettingsIconButton(
@@ -343,16 +313,12 @@ fun SettingsScreen(
                                                 iconSize = 20.dp,
                                                 modifier = Modifier
                                                     .focusRequester(trailingFocusRequester)
-                                                    .onPreviewKeyEvent { keyEvent ->
-                                                        if (isTv && keyEvent.key == Key.DirectionLeft && keyEvent.type == KeyEventType.KeyDown) {
-                                                            try {
-                                                                searchFocusRequester.requestFocus()
-                                                                true
-                                                            } catch (_: Exception) {
-                                                                false
-                                                            }
-                                                        } else false
-                                                    }
+                                                    .onDpadKey(
+                                                        onLeft = {
+                                                            try { searchFocusRequester.requestFocus() } catch (_: Exception) {}
+                                                            true
+                                                        },
+                                                    )
                                             )
                                             AdvancedSettingsToggleButton(
                                                 showAdvanced = preferences.showAdvancedSettings,
@@ -415,14 +381,16 @@ fun SettingsScreen(
                                 modifier = Modifier
                                     .fillMaxWidth()
                                     .padding(vertical = 8.dp)
-                                    .then(if (isTv) Modifier.onPreviewKeyEvent { keyEvent ->
-                                        if (keyEvent.key == Key.Back && keyEvent.type == KeyEventType.KeyUp) {
-                                            isSearchActive = false
-                                            searchQuery = ""
-                                            try { listFocusRequester.requestFocus() } catch (_: Exception) {}
+                                    .then(Modifier.onDpadKeyEvent(
+                                        onBack = { e ->
+                                            if (e.isKeyUp) {
+                                                isSearchActive = false
+                                                searchQuery = ""
+                                                try { listFocusRequester.requestFocus() } catch (_: Exception) {}
+                                            }
                                             true
-                                        } else false
-                                    } else Modifier),
+                                        },
+                                    )),
                                 verticalArrangement = Arrangement.spacedBy(4.dp),
                                 contentPadding = PaddingValues(horizontal = 16.dp)
                             ) {
@@ -564,16 +532,16 @@ fun SettingsScreen(
                         modifier = Modifier
                             .fillMaxSize()
                             .imePadding()
-                            .then(if (isTv) Modifier
+                            .then(Modifier
                                 .tvFocusRestorer()
                                 .focusRequester(listFocusRequester)
-                                .onKeyEvent { keyEvent ->
-                                    if (keyEvent.key == Key.Back && keyEvent.type == KeyEventType.KeyUp) {
-                                        onBack()
+                                .onDpadKeyEvent(
+                                    onBack = { e ->
+                                        if (e.isKeyUp) { onBack() }
                                         true
-                                    } else false
-                                }
-                            else Modifier),
+                                    },
+                                )
+                            ),
                         state = rememberLazyListState(),
                         verticalArrangement = Arrangement.spacedBy(8.dp),
                         contentPadding = PaddingValues(

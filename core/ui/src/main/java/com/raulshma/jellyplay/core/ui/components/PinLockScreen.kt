@@ -1,7 +1,6 @@
 package com.raulshma.jellyplay.core.ui.components
 
 import androidx.compose.animation.animateColorAsState
-import com.raulshma.jellyplay.core.ui.tv.tvFocusable
 import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
@@ -164,7 +163,7 @@ fun PinLockScreen(
                             Box(
                                 modifier = Modifier
                                     .styleable(styleState, ComponentStyles.pinKeyStyle(keySize))
-                                    .tvFocusable().clickable(
+                                    .clickable(
                                         interactionSource = interactionSource,
                                         indication = null,
                                     ) {
@@ -222,7 +221,7 @@ private fun PinKeyButton(
     Box(
         modifier = Modifier
             .styleable(styleState, ComponentStyles.pinKeyStyle(keySize))
-            .tvFocusable().clickable(
+            .clickable(
                 interactionSource = interactionSource,
                 indication = null,
                 onClick = onClick,
