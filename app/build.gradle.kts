@@ -132,6 +132,7 @@ dependencies {
     implementation(project(":feature:newsletter"))
     implementation(project(":feature:insights"))
     implementation(project(":feature:requests"))
+    implementation(project(":feature:shortcuts"))
 
     implementation(libs.androidx.core.ktx)
     implementation(libs.androidx.core.splashscreen)
