@@ -104,7 +104,9 @@ import com.raulshma.jellyplay.MainViewModel
 import com.raulshma.jellyplay.core.data.playback.AudioPlaybackManager
 import com.raulshma.jellyplay.core.model.HomeMode
 import com.raulshma.jellyplay.core.ui.adaptive.LocalAdaptiveInfo
+import com.raulshma.jellyplay.core.ui.adaptive.LocalJellyPlayUi
 import com.raulshma.jellyplay.core.ui.adaptive.WindowSizeClass
+import com.raulshma.jellyplay.core.ui.adaptive.rememberJellyPlayUiEnvironment
 import com.raulshma.jellyplay.core.ui.adaptive.rememberAdaptiveInfo
 import com.raulshma.jellyplay.core.designsystem.theme.TvTypography
 import com.raulshma.jellyplay.core.designsystem.theme.LocalIsSynthwave
@@ -133,6 +135,7 @@ import com.raulshma.jellyplay.core.ui.tv.rememberTvFocusState
 import com.raulshma.jellyplay.core.ui.tv.tvFocusIndicator
 import com.raulshma.jellyplay.core.ui.tv.tvFocusRestorer
 import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusProperties
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.focusRestorer
 import androidx.compose.ui.focus.onFocusChanged
@@ -446,6 +449,10 @@ private fun MainContent(
     val drawerScope = rememberCoroutineScope()
 
     val adaptiveInfo = rememberAdaptiveInfo()
+    val uiEnvironment = rememberJellyPlayUiEnvironment(
+        adaptiveInfo = adaptiveInfo,
+        isTv = isTv,
+    )
 
     val tvTypography = if (isTv) TvTypography else null
 
@@ -472,6 +479,7 @@ private fun MainContent(
         LocalDrawerOpener provides { drawerScope.launch { drawerState.open() } },
         LocalTvMode provides isTv,
         LocalAdaptiveInfo provides adaptiveInfo,
+        LocalJellyPlayUi provides uiEnvironment,
         LocalTvTypography provides tvTypography,
         LocalPerformanceMode provides preferences.performanceMode,
         LocalFloatingNavVisibility provides isBottomNavVisibleState,
@@ -863,6 +871,7 @@ private fun TvMainLayout(
         initialValue = androidx.tv.material3.DrawerValue.Closed
     )
     val currentRoute = navigationState.backStacks[currentTopLevel]?.lastOrNull()
+    val isSubPage = currentRoute != null && currentRoute !in activeTopLevelRoutes.keys
 
     NavigationDrawer(
         drawerState = drawerState,
@@ -888,6 +897,20 @@ private fun TvMainLayout(
                         bottom = 8.dp
                     )
                     .verticalScroll(rememberScrollState())
+                    .then(
+                        if (isSubPage) {
+                            @OptIn(androidx.compose.ui.ExperimentalComposeUiApi::class)
+                            Modifier.focusProperties {
+                                @Suppress("DEPRECATION")
+                                exit = { direction: androidx.compose.ui.focus.FocusDirection ->
+                                    when (direction) {
+                                        androidx.compose.ui.focus.FocusDirection.Right -> contentFocusRequester
+                                        else -> androidx.compose.ui.focus.FocusRequester.Default
+                                    }
+                                }
+                            }
+                        } else Modifier
+                    )
                     .focusRestorer()
                     .selectableGroup(),
             ) {

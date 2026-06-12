@@ -91,6 +91,7 @@ import com.raulshma.jellyplay.core.ui.tv.LocalTvMode
 import com.raulshma.jellyplay.core.ui.tv.rememberTvFocusState
 import com.raulshma.jellyplay.core.ui.tv.tvFocusIndicator
 import com.raulshma.jellyplay.core.model.LibraryViewMode
+import com.raulshma.jellyplay.core.model.MediaType
 import com.raulshma.jellyplay.feature.library.components.LibraryFilterSheet
 import com.raulshma.jellyplay.feature.library.components.LibraryListItem
 import com.raulshma.jellyplay.core.ui.animation.animateContentSizeNoClip
@@ -105,7 +106,7 @@ import kotlinx.coroutines.launch
 )
 @Composable
 fun LibraryScreen(
-    onItemClick: (String) -> Unit,
+    onItemClick: (itemId: String, mediaType: MediaType, parentId: String?) -> Unit,
     onSmartPlaylistsClick: () -> Unit = {},
     onMoodPlaylistsClick: () -> Unit = {},
     onPlaylistsClick: () -> Unit = {},
@@ -444,16 +445,19 @@ fun LibraryScreen(
                                         ) { index ->
                                             val item = pagedItems[index]
                                             if (item != null) {
-                                                val memoizedClick = remember(item.id) { { onItemClick(item.id) } }
+                                                val memoizedClick = remember(item.id, item.mediaType, item.parentId) {
+                                                    { onItemClick(item.id, item.mediaType, item.parentId) }
+                                                }
                                                 val subtitle = remember(item.year, item.mediaType) {
                                                     buildString {
                                                         if (item.year != null) append("${item.year}")
                                                         val typeLabel = when (item.mediaType) {
-                                                            com.raulshma.jellyplay.core.model.MediaType.EPISODE -> "Episode"
-                                                            com.raulshma.jellyplay.core.model.MediaType.SERIES -> "Series"
-                                                            com.raulshma.jellyplay.core.model.MediaType.MOVIE -> "Movie"
-                                                            com.raulshma.jellyplay.core.model.MediaType.AUDIO -> "Audio"
-                                                            com.raulshma.jellyplay.core.model.MediaType.MUSIC -> "Music"
+                                                            MediaType.EPISODE -> "Episode"
+                                                            MediaType.SERIES -> "Series"
+                                                            MediaType.MOVIE -> "Movie"
+                                                            MediaType.AUDIO -> "Audio"
+                                                            MediaType.MUSIC -> "Music"
+                                                            MediaType.PHOTO -> "Photo"
                                                             else -> null
                                                         }
                                                         if (typeLabel != null) {
@@ -488,7 +492,9 @@ fun LibraryScreen(
                                         ) { index ->
                                             val item = pagedItems[index]
                                             if (item != null) {
-                                                val memoizedClick = remember(item.id) { { onItemClick(item.id) } }
+                                                val memoizedClick = remember(item.id, item.mediaType, item.parentId) {
+                                                    { onItemClick(item.id, item.mediaType, item.parentId) }
+                                                }
                                                 PosterCard(
                                                     item = item,
                                                     imageUrl = remember(item.id) { viewModel.getImageUrl(item.id) },

@@ -613,10 +613,16 @@ private fun DetailContent(
     val contentFocusRequester = remember { FocusRequester() }
     val scrollBehavior = TopAppBarDefaults.exitUntilCollapsedScrollBehavior(rememberTopAppBarState())
 
-    LaunchedEffect(isTv, contentVisible) {
-        if (isTv && contentVisible) {
-            kotlinx.coroutines.delay(150)
-            try { contentFocusRequester.requestFocus() } catch (_: Exception) { }
+    if (isTv) {
+        LaunchedEffect(Unit) {
+            var focused = false
+            androidx.compose.runtime.snapshotFlow { contentVisible }.collect {
+                if (it && !focused) {
+                    focused = true
+                    kotlinx.coroutines.delay(50)
+                    try { contentFocusRequester.requestFocus() } catch (_: Exception) { }
+                }
+            }
         }
     }
 

@@ -28,7 +28,11 @@ class JellyfinDtoMappersTest {
     @Test
     fun `unknown BaseItemKind maps to UNKNOWN`() {
         assertEquals(MediaType.UNKNOWN, BaseItemKind.PLAYLIST.toMediaType())
-        assertEquals(MediaType.UNKNOWN, BaseItemKind.PHOTO.toMediaType())
         assertEquals(MediaType.UNKNOWN, BaseItemKind.VIDEO.toMediaType())
+    }
+
+    @Test
+    fun `PHOTO BaseItemKind maps to PHOTO`() {
+        assertEquals(MediaType.PHOTO, BaseItemKind.PHOTO.toMediaType())
     }
 }
