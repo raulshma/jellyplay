@@ -19,7 +19,6 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
-import com.raulshma.jellyplay.core.ui.tv.tvFocusable
 import androidx.compose.foundation.clickable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -158,7 +157,7 @@ private fun TimerCard(
             .fillMaxWidth()
             .clip(ShapeCache.smooth16)
             .background(MaterialTheme.colorScheme.onSurface.copy(alpha = 0.05f))
-            .tvFocusable().clickable { }
+            .clickable { }
             .padding(horizontal = 16.dp, vertical = 14.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
@@ -233,7 +232,7 @@ private fun TimerCard(
                 .size(36.dp)
                 .clip(CircleShape)
                 .background(MaterialTheme.colorScheme.onSurface.copy(alpha = 0.08f))
-                .tvFocusable().clickable { onCancel(timer.id) },
+                .clickable { onCancel(timer.id) },
             contentAlignment = Alignment.Center,
         ) {
             Icon(
@@ -256,7 +255,7 @@ private fun SeriesTimerCard(
             .fillMaxWidth()
             .clip(ShapeCache.smooth16)
             .background(MaterialTheme.colorScheme.onSurface.copy(alpha = 0.05f))
-            .tvFocusable().clickable { }
+            .clickable { }
             .padding(horizontal = 16.dp, vertical = 14.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
@@ -307,7 +306,7 @@ private fun SeriesTimerCard(
                 .size(36.dp)
                 .clip(CircleShape)
                 .background(MaterialTheme.colorScheme.onSurface.copy(alpha = 0.08f))
-                .tvFocusable().clickable { onCancel(timer.id) },
+                .clickable { onCancel(timer.id) },
             contentAlignment = Alignment.Center,
         ) {
             Icon(

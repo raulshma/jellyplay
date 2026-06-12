@@ -31,11 +31,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
-import androidx.compose.ui.input.key.Key
-import androidx.compose.ui.input.key.KeyEventType
-import androidx.compose.ui.input.key.key
-import androidx.compose.ui.input.key.onKeyEvent
-import androidx.compose.ui.input.key.type
+import com.raulshma.jellyplay.core.ui.tv.input.onDpadKeyEvent
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.unit.dp
@@ -81,28 +77,24 @@ fun PhotoViewerScreen(
         modifier = Modifier
             .fillMaxSize()
             .background(Color.Black)
-            .onKeyEvent { keyEvent ->
-                if (keyEvent.type != KeyEventType.KeyUp) return@onKeyEvent false
-                when (keyEvent.key) {
-                    Key.Back -> {
-                        onBack()
-                        true
+            .onDpadKeyEvent(
+                onBack = { e ->
+                    if (e.isKeyUp) { onBack() }
+                    true
+                },
+                onLeft = { e ->
+                    if (e.isKeyUp && viewModel.hasPrevious()) {
+                        viewModel.navigateTo(currentIndex - 1)
                     }
-                    Key.DirectionLeft -> {
-                        if (viewModel.hasPrevious()) {
-                            viewModel.navigateTo(currentIndex - 1)
-                        }
-                        true
+                    true
+                },
+                onRight = { e ->
+                    if (e.isKeyUp && viewModel.hasNext()) {
+                        viewModel.navigateTo(currentIndex + 1)
                     }
-                    Key.DirectionRight -> {
-                        if (viewModel.hasNext()) {
-                            viewModel.navigateTo(currentIndex + 1)
-                        }
-                        true
-                    }
-                    else -> false
-                }
-            },
+                    true
+                },
+            ),
     ) {
         when {
             isLoading -> {

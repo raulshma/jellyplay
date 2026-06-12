@@ -1,6 +1,5 @@
 package com.raulshma.jellyplay.feature.player.video.components
 
-import android.view.KeyEvent
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -18,8 +17,6 @@ import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
-import androidx.compose.material3.Slider
-import androidx.compose.material3.SliderDefaults
 import androidx.compose.material3.Text
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
@@ -34,14 +31,11 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.input.key.KeyEventType
-import androidx.compose.ui.input.key.onPreviewKeyEvent
-import androidx.compose.ui.input.key.type
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
-import com.raulshma.jellyplay.core.designsystem.theme.ShapeCache
 import com.raulshma.jellyplay.core.ui.tv.LocalTvMode
+import com.raulshma.jellyplay.core.ui.tv.components.DpadSlider
 import com.raulshma.jellyplay.core.ui.tv.rememberTvFocusState
 import com.raulshma.jellyplay.core.ui.tv.tvFocusIndicator
 import com.composables.icons.tabler.Tabler
@@ -59,7 +53,6 @@ fun AudioDelaySheet(
     var delayMs by remember { mutableLongStateOf(currentDelayMs) }
     val isTv = LocalTvMode.current
     val focusRequester = remember { FocusRequester() }
-    val sliderFocusState = rememberTvFocusState()
 
     LaunchedEffect(isTv) {
         if (isTv) {
@@ -130,41 +123,31 @@ fun AudioDelaySheet(
                     }
                 }
 
-                Slider(
-                    value = delayMs.toFloat(),
-                    onValueChange = { delayMs = (it / 50f).roundToLong() * 50 },
-                    onValueChangeFinished = { onDelayChange(delayMs) },
-                    valueRange = -5000f..5000f,
-                    steps = 199,
-                    colors = SliderDefaults.colors(
-                        thumbColor = MaterialTheme.colorScheme.primary,
-                        activeTrackColor = MaterialTheme.colorScheme.primary,
-                    ),
-                    modifier = Modifier
-                        .weight(1f)
-                        .then(if (isTv) Modifier.focusRequester(focusRequester) else Modifier)
-                        .then(sliderFocusState.focusModifier)
-                        .tvFocusIndicator(sliderFocusState)
-                        .onPreviewKeyEvent { keyEvent ->
-                            if (keyEvent.type == KeyEventType.KeyDown) {
-                                when (keyEvent.nativeKeyEvent.keyCode) {
-                                    KeyEvent.KEYCODE_DPAD_LEFT -> {
-                                        val newDelay = (delayMs - 100L).coerceIn(-5000L, 5000L)
-                                        delayMs = newDelay
-                                        onDelayChange(newDelay)
-                                        true
-                                    }
-                                    KeyEvent.KEYCODE_DPAD_RIGHT -> {
-                                        val newDelay = (delayMs + 100L).coerceIn(-5000L, 5000L)
-                                        delayMs = newDelay
-                                        onDelayChange(newDelay)
-                                        true
-                                    }
-                                    else -> false
-                                }
-                            } else false
-                        },
-                )
+                if (isTv) {
+                    DpadSlider(
+                        value = delayMs.toFloat(),
+                        onValueChange = { delayMs = (it / 50f).roundToLong() * 50 },
+                        onValueChangeFinished = { onDelayChange(delayMs) },
+                        valueRange = -5000f..5000f,
+                        steps = 199,
+                        dpadStep = 100f,
+                        focusRequester = focusRequester,
+                        modifier = Modifier.weight(1f),
+                    )
+                } else {
+                    androidx.compose.material3.Slider(
+                        value = delayMs.toFloat(),
+                        onValueChange = { delayMs = (it / 50f).roundToLong() * 50 },
+                        onValueChangeFinished = { onDelayChange(delayMs) },
+                        valueRange = -5000f..5000f,
+                        steps = 199,
+                        colors = androidx.compose.material3.SliderDefaults.colors(
+                            thumbColor = MaterialTheme.colorScheme.primary,
+                            activeTrackColor = MaterialTheme.colorScheme.primary,
+                        ),
+                        modifier = Modifier.weight(1f),
+                    )
+                }
 
                 if (isTv) {
                     val incFocus = rememberTvFocusState()

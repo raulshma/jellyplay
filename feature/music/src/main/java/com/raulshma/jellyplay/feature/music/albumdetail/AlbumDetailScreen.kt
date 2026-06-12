@@ -1,7 +1,6 @@
 package com.raulshma.jellyplay.feature.music.albumdetail
 
 import androidx.compose.foundation.background
-import com.raulshma.jellyplay.core.ui.tv.tvFocusable
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -206,7 +205,7 @@ private fun AlbumDetailContent(
                                 text = artistName,
                                 style = MaterialTheme.typography.bodyMedium,
                                 color = MaterialTheme.colorScheme.primary,
-                                modifier = Modifier.tvFocusable().clickable {
+                                modifier = Modifier.clickable {
                                     if (artistId != null) onArtistClick(artistId)
                                 },
                             )
@@ -325,7 +324,7 @@ private fun TrackItem(
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .tvFocusable().clickable(onClick = onClick)
+            .clickable(onClick = onClick)
             .padding(horizontal = 16.dp, vertical = 8.dp),
         horizontalArrangement = Arrangement.spacedBy(12.dp),
         verticalAlignment = Alignment.CenterVertically,

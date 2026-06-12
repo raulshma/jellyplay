@@ -59,11 +59,7 @@ import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.input.key.Key
-import androidx.compose.ui.input.key.KeyEventType
-import androidx.compose.ui.input.key.key
-import androidx.compose.ui.input.key.onKeyEvent
-import androidx.compose.ui.input.key.type
+import com.raulshma.jellyplay.core.ui.tv.input.onDpadKey
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.font.FontFamily
@@ -809,40 +805,37 @@ private fun TvControllableSeekBar(
                                 }
                             }
                             .focusable()
-                            .onKeyEvent { keyEvent ->
-                                if (keyEvent.type != KeyEventType.KeyDown) return@onKeyEvent false
-                                if (duration <= 0) return@onKeyEvent false
-                                when (keyEvent.key) {
-                                    Key.DirectionRight -> {
-                                        if (!tvSeekStarted) {
-                                            tvSeekStarted = true
-                                            onSeekStart()
-                                        }
-                                        tvSeekPosition = (tvSeekPosition + seekStep).coerceAtMost(1f)
-                                        onSeek(tvSeekPosition)
-                                        onSeekPositionChange((tvSeekPosition * duration).toLong())
-                                        true
+                            .onDpadKey(
+                                onRight = {
+                                    if (duration <= 0) return@onDpadKey false
+                                    if (!tvSeekStarted) {
+                                        tvSeekStarted = true
+                                        onSeekStart()
                                     }
-                                    Key.DirectionLeft -> {
-                                        if (!tvSeekStarted) {
-                                            tvSeekStarted = true
-                                            onSeekStart()
-                                        }
-                                        tvSeekPosition = (tvSeekPosition - seekStep).coerceAtLeast(0f)
-                                        onSeek(tvSeekPosition)
-                                        onSeekPositionChange((tvSeekPosition * duration).toLong())
-                                        true
+                                    tvSeekPosition = (tvSeekPosition + seekStep).coerceAtMost(1f)
+                                    onSeek(tvSeekPosition)
+                                    onSeekPositionChange((tvSeekPosition * duration).toLong())
+                                    true
+                                },
+                                onLeft = {
+                                    if (duration <= 0) return@onDpadKey false
+                                    if (!tvSeekStarted) {
+                                        tvSeekStarted = true
+                                        onSeekStart()
                                     }
-                                    Key.Enter, Key.NumPadEnter -> {
-                                        if (tvSeekStarted) {
-                                            tvSeekStarted = false
-                                            onSeekEnd()
-                                        }
-                                        true
+                                    tvSeekPosition = (tvSeekPosition - seekStep).coerceAtLeast(0f)
+                                    onSeek(tvSeekPosition)
+                                    onSeekPositionChange((tvSeekPosition * duration).toLong())
+                                    true
+                                },
+                                onSelect = {
+                                    if (tvSeekStarted) {
+                                        tvSeekStarted = false
+                                        onSeekEnd()
                                     }
-                                    else -> false
-                                }
-                            }
+                                    true
+                                },
+                            )
                     } else {
                         Modifier.pointerInput(duration) {
                             if (duration <= 0) return@pointerInput

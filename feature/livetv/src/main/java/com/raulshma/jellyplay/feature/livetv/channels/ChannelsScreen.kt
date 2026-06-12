@@ -44,7 +44,6 @@ import com.raulshma.jellyplay.core.ui.components.JellyPlayScreenScaffold
 import com.raulshma.jellyplay.core.ui.components.ScreenEmptyState
 import com.raulshma.jellyplay.core.ui.components.rememberScreenBackgroundColor
 import com.raulshma.jellyplay.core.ui.tv.LocalTvMode
-import com.raulshma.jellyplay.core.ui.tv.tvFocusable
 import com.raulshma.jellyplay.core.designsystem.theme.ShapeCache
 import com.raulshma.jellyplay.core.ui.image.MediaImage
 import com.composables.icons.tabler.Tabler
@@ -146,7 +145,7 @@ private fun ChannelCard(
             .fillMaxWidth()
             .clip(ShapeCache.smooth16)
             .background(MaterialTheme.colorScheme.onSurface.copy(alpha = 0.05f))
-            .tvFocusable().clickable(onClick = onClick)
+            .clickable(onClick = onClick)
             .padding(horizontal = 16.dp, vertical = 14.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
@@ -214,7 +213,7 @@ private fun ChannelCard(
                 .size(40.dp)
                 .clip(CircleShape)
                 .background(MaterialTheme.colorScheme.onSurface.copy(alpha = 0.12f))
-                .tvFocusable().clickable(onClick = onClick),
+                .clickable(onClick = onClick),
             contentAlignment = Alignment.Center,
         ) {
             Icon(

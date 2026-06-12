@@ -148,7 +148,6 @@ import com.raulshma.jellyplay.core.ui.adaptive.WindowSizeClass
 import com.raulshma.jellyplay.core.ui.adaptive.*
 import com.raulshma.jellyplay.core.ui.image.MediaImage
 import com.raulshma.jellyplay.core.ui.tv.LocalTvMode
-import com.raulshma.jellyplay.core.ui.tv.tvFocusable
 import com.raulshma.jellyplay.core.ui.tv.tvFocusRestorer
 import com.raulshma.jellyplay.core.ui.tv.tvFocusExitHandler
 import com.raulshma.jellyplay.core.ui.tv.rememberTvFocusState
@@ -160,11 +159,7 @@ import com.raulshma.jellyplay.core.ui.components.formatRemainingTimeFromTicks
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.onFocusChanged
-import androidx.compose.ui.input.key.Key
-import androidx.compose.ui.input.key.key
-import androidx.compose.ui.input.key.onKeyEvent
-import androidx.compose.ui.input.key.type
-import androidx.compose.ui.input.key.KeyEventType
+import com.raulshma.jellyplay.core.ui.tv.input.onDpadKeyEvent
 import com.composables.icons.tabler.Tabler
 import com.composables.icons.tabler.filled.*
 import com.composables.icons.tabler.outline.*
@@ -640,12 +635,12 @@ private fun DetailContent(
         modifier = Modifier
             .fillMaxSize()
             .then(backgroundModifier)
-            .onKeyEvent { keyEvent ->
-                if (isTv && keyEvent.key == Key.Back && keyEvent.type == KeyEventType.KeyUp) {
-                    onBack()
+            .onDpadKeyEvent(
+                onBack = { e ->
+                    if (e.isKeyUp) { onBack() }
                     true
-                } else false
-            },
+                },
+            ),
     ) {
         Box(
             modifier = Modifier
@@ -2964,7 +2959,7 @@ private fun AlbumTrackItem(
         modifier = Modifier
             .fillMaxWidth()
             .graphicsLayer { scaleX = scale; scaleY = scale }
-            .tvFocusable().clickable(
+            .clickable(
                 interactionSource = interactionSource,
                 indication = null,
                 onClick = onClick,

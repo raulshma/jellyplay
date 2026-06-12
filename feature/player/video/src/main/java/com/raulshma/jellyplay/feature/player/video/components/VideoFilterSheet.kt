@@ -1,6 +1,5 @@
 package com.raulshma.jellyplay.feature.player.video.components
 
-import android.view.KeyEvent
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -14,8 +13,6 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Slider
-import androidx.compose.material3.SliderDefaults
 import androidx.compose.material3.Text
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
@@ -30,13 +27,11 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.input.key.KeyEventType
-import androidx.compose.ui.input.key.onPreviewKeyEvent
-import androidx.compose.ui.input.key.type
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.raulshma.jellyplay.core.designsystem.theme.ShapeCache
 import com.raulshma.jellyplay.core.ui.tv.LocalTvMode
+import com.raulshma.jellyplay.core.ui.tv.components.DpadSlider
 import com.raulshma.jellyplay.core.ui.tv.rememberTvFocusState
 import com.raulshma.jellyplay.core.ui.tv.tvFocusIndicator
 import com.raulshma.jellyplay.feature.player.video.engine.VideoEffectsConfig
@@ -170,7 +165,6 @@ private fun FilterSlider(
     isTv: Boolean,
     focusRequester: FocusRequester? = null,
 ) {
-    val sliderFocusState = rememberTvFocusState()
     val resetFocusState = rememberTvFocusState(focusedScale = 1.05f)
 
     Column {
@@ -214,35 +208,29 @@ private fun FilterSlider(
                 }
             }
         }
-        Slider(
-            value = value,
-            onValueChange = onValueChange,
-            valueRange = valueRange,
-            colors = SliderDefaults.colors(
-                activeTrackColor = MaterialTheme.colorScheme.primary,
-                inactiveTrackColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.12f),
-            ),
-            modifier = Modifier
-                .fillMaxWidth()
-                .then(if (focusRequester != null) Modifier.focusRequester(focusRequester) else Modifier)
-                .then(sliderFocusState.focusModifier)
-                .tvFocusIndicator(sliderFocusState)
-                .onPreviewKeyEvent { keyEvent ->
-                    if (keyEvent.type == KeyEventType.KeyDown) {
-                        val step = (valueRange.endInclusive - valueRange.start) / 20f
-                        when (keyEvent.nativeKeyEvent.keyCode) {
-                            KeyEvent.KEYCODE_DPAD_LEFT -> {
-                                onValueChange((value - step).coerceIn(valueRange))
-                                true
-                            }
-                            KeyEvent.KEYCODE_DPAD_RIGHT -> {
-                                onValueChange((value + step).coerceIn(valueRange))
-                                true
-                            }
-                            else -> false
-                        }
-                    } else false
-                },
-        )
+        if (isTv) {
+            DpadSlider(
+                value = value,
+                onValueChange = onValueChange,
+                valueRange = valueRange,
+                focusRequester = focusRequester,
+                colors = androidx.compose.material3.SliderDefaults.colors(
+                    activeTrackColor = MaterialTheme.colorScheme.primary,
+                    inactiveTrackColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.12f),
+                ),
+                modifier = Modifier.fillMaxWidth(),
+            )
+        } else {
+            androidx.compose.material3.Slider(
+                value = value,
+                onValueChange = onValueChange,
+                valueRange = valueRange,
+                colors = androidx.compose.material3.SliderDefaults.colors(
+                    activeTrackColor = MaterialTheme.colorScheme.primary,
+                    inactiveTrackColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.12f),
+                ),
+                modifier = Modifier.fillMaxWidth(),
+            )
+        }
     }
 }

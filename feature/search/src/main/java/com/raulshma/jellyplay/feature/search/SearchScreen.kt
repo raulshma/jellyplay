@@ -94,7 +94,6 @@ import com.raulshma.jellyplay.core.ui.navigation.Route
 import com.raulshma.jellyplay.core.ui.adaptive.WindowSizeClass
 import com.raulshma.jellyplay.core.ui.adaptive.*
 import com.raulshma.jellyplay.core.ui.tv.LocalTvMode
-import com.raulshma.jellyplay.core.ui.tv.tvFocusable
 import com.raulshma.jellyplay.feature.search.components.SearchFilterSheet
 import com.raulshma.jellyplay.core.designsystem.theme.ShapeCache
 import java.util.Locale
@@ -282,7 +281,7 @@ fun SearchScreen(
                                     .fillMaxWidth()
                                     .focusRequester(focusRequester)
                                     .onFocusEvent { isSearchFocused = it.isFocused }
-                                    .tvFocusable(),
+                                    ,
                                 placeholder = {
                                     Text(
                                         "Search movies, shows, music...",
@@ -304,7 +303,7 @@ fun SearchScreen(
                                                 .size(32.dp)
                                                 .clip(ShapeCache.smooth8)
                                                 .background(MaterialTheme.colorScheme.onSurface.copy(alpha = 0.12f))
-                                                .tvFocusable().clickable { viewModel.search("") },
+                                                .clickable { viewModel.search("") },
                                             contentAlignment = Alignment.Center,
                                         ) {
                                             Icon(
@@ -320,7 +319,7 @@ fun SearchScreen(
                                                 .size(32.dp)
                                                 .clip(ShapeCache.smooth8)
                                                 .background(MaterialTheme.colorScheme.onSurface.copy(alpha = 0.12f))
-                                                .tvFocusable().clickable {
+                                                .clickable {
                                                     val intent = Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH).apply {
                                                         putExtra(
                                                             RecognizerIntent.EXTRA_LANGUAGE_MODEL,
@@ -389,7 +388,7 @@ fun SearchScreen(
                         Box(
                             modifier = Modifier
                                 .clip(ShapeCache.smooth8)
-                                .tvFocusable().clickable { viewModel.clearFilters() }
+                                .clickable { viewModel.clearFilters() }
                                 .padding(horizontal = 10.dp, vertical = 5.dp),
                         ) {
                             Text(
@@ -506,7 +505,7 @@ fun SearchScreen(
                             modifier = Modifier
                                 .clip(ShapeCache.smooth8)
                                 .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.12f))
-                                .tvFocusable()
+                                
                                 .clickable { viewModel.retrySeerrSearch() }
                                 .padding(horizontal = 10.dp, vertical = 5.dp),
                             verticalAlignment = Alignment.CenterVertically,

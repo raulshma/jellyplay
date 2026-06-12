@@ -1,7 +1,6 @@
 package com.raulshma.jellyplay.core.ui.components
 
 import androidx.compose.animation.AnimatedVisibility
-import com.raulshma.jellyplay.core.ui.tv.tvFocusable
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
@@ -171,7 +170,7 @@ fun MiniPlayer(
                 modifier = Modifier
                     .fillMaxWidth()
                     .height(64.dp)
-                    .tvFocusable().clickable(onClick = onClick)
+                    .clickable(onClick = onClick)
                     .padding(horizontal = 12.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {

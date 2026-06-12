@@ -6,6 +6,7 @@ import androidx.compose.runtime.compositionLocalOf
 import androidx.compose.runtime.remember
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+import com.raulshma.jellyplay.core.ui.tv.TvFocusDefaults
 
 enum class DeviceClass {
     Phone,
@@ -91,6 +92,6 @@ private fun defaultFocusTokens(isTv: Boolean): JellyPlayFocusTokens =
         enabled = isTv,
         focusedScale = if (isTv) 1.08f else 1f,
         compactFocusedScale = if (isTv) 1.04f else 1f,
-        borderWidth = if (isTv) 2.dp else 0.dp,
-        glowElevation = if (isTv) 16.dp else 0.dp,
+        borderWidth = if (isTv) TvFocusDefaults.BorderWidth else 0.dp,
+        glowElevation = if (isTv) TvFocusDefaults.GlowElevation else 0.dp,
     )

@@ -38,7 +38,6 @@ import com.raulshma.jellyplay.core.ui.components.JellyPlayScreenScaffold
 import com.raulshma.jellyplay.core.ui.components.ScreenEmptyState
 import com.raulshma.jellyplay.core.ui.components.rememberScreenBackgroundColor
 import com.raulshma.jellyplay.core.ui.tv.LocalTvMode
-import com.raulshma.jellyplay.core.ui.tv.tvFocusable
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import com.raulshma.jellyplay.core.designsystem.theme.ShapeCache
@@ -127,7 +126,7 @@ private fun ProgramCard(
             .fillMaxWidth()
             .clip(ShapeCache.smooth16)
             .background(MaterialTheme.colorScheme.onSurface.copy(alpha = 0.05f))
-            .tvFocusable().clickable(onClick = onClick)
+            .clickable(onClick = onClick)
             .padding(horizontal = 16.dp, vertical = 14.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
@@ -183,7 +182,7 @@ private fun ProgramCard(
                     .size(36.dp)
                     .clip(CircleShape)
                     .background(MaterialTheme.colorScheme.onSurface.copy(alpha = 0.08f))
-                    .tvFocusable().clickable(onClick = onRecordClick),
+                    .clickable(onClick = onRecordClick),
                 contentAlignment = Alignment.Center,
             ) {
                 Icon(

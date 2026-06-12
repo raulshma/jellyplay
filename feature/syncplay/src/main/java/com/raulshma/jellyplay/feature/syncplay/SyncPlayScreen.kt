@@ -1,7 +1,6 @@
 package com.raulshma.jellyplay.feature.syncplay
 
 import androidx.compose.animation.AnimatedContent
-import com.raulshma.jellyplay.core.ui.tv.tvFocusable
 import androidx.compose.animation.AnimatedVisibility
 import com.raulshma.jellyplay.core.designsystem.theme.ShapeCache
 import androidx.compose.animation.core.animateFloatAsState
@@ -280,7 +279,7 @@ private fun SyncPlayGroupCard(
     Card(
         modifier = Modifier
             .fillMaxWidth()
-            .tvFocusable().clickable(onClick = onJoin),
+            .clickable(onClick = onJoin),
         colors = CardDefaults.cardColors(
             containerColor = MaterialTheme.colorScheme.surfaceContainer,
         ),

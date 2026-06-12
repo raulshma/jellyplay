@@ -88,11 +88,7 @@ import com.raulshma.jellyplay.core.ui.tv.tvFocusExitHandler
 import com.raulshma.jellyplay.core.ui.tv.rememberTvFocusState
 import com.raulshma.jellyplay.core.ui.tv.tvFocusIndicator
 import com.raulshma.jellyplay.core.ui.tv.rememberInitialFocus
-import androidx.compose.ui.input.key.Key
-import androidx.compose.ui.input.key.key
-import androidx.compose.ui.input.key.onKeyEvent
-import androidx.compose.ui.input.key.type
-import androidx.compose.ui.input.key.KeyEventType
+import com.raulshma.jellyplay.core.ui.tv.input.onDpadKeyEvent
 import java.text.NumberFormat
 import java.util.*
 import com.composables.icons.tabler.Tabler
@@ -437,12 +433,12 @@ private fun SeerrDetailContent(
         modifier = Modifier
             .fillMaxSize()
             .then(backgroundModifier)
-            .onKeyEvent { keyEvent ->
-                if (isTv && keyEvent.key == Key.Back && keyEvent.type == KeyEventType.KeyUp) {
-                    onBack()
+            .onDpadKeyEvent(
+                onBack = { e ->
+                    if (e.isKeyUp) { onBack() }
                     true
-                } else false
-            },
+                },
+            ),
     ) {
         Box(
             modifier = Modifier

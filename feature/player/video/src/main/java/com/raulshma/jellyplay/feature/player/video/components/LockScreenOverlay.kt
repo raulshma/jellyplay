@@ -38,11 +38,7 @@ import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
-import androidx.compose.ui.input.key.Key
-import androidx.compose.ui.input.key.KeyEventType
-import androidx.compose.ui.input.key.key
-import androidx.compose.ui.input.key.onKeyEvent
-import androidx.compose.ui.input.key.type
+import com.raulshma.jellyplay.core.ui.tv.input.onDpadKey
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.font.FontWeight
@@ -116,20 +112,16 @@ internal fun SlideToUnlockOverlay(
                         Modifier
                             .focusRequester(tvUnlockFocusRequester)
                             .focusable()
-                            .onKeyEvent { keyEvent ->
-                                if (keyEvent.type != KeyEventType.KeyDown) return@onKeyEvent false
-                                when (keyEvent.key) {
-                                    Key.Enter, Key.NumPadEnter, Key.DirectionCenter -> {
-                                        onUnlock()
-                                        true
-                                    }
-                                    Key.Back -> {
-                                        onDismiss()
-                                        true
-                                    }
-                                    else -> false
-                                }
-                            }
+                            .onDpadKey(
+                                onSelect = {
+                                    onUnlock()
+                                    true
+                                },
+                                onBack = {
+                                    onDismiss()
+                                    true
+                                },
+                            )
                     } else {
                         Modifier.pointerInput(unlockThresholdPx, tapSlopPx) {
                             awaitEachGesture {
