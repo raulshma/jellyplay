@@ -20,6 +20,7 @@ class NavigationRouteTest {
             Route.Library,
             Route.Search,
             Route.LiveTv,
+            Route.Shortcuts,
             Route.Settings,
             Route.Downloads,
             Route.SyncPlay,
@@ -53,11 +54,12 @@ class NavigationRouteTest {
     @Test
     fun topLevelRoutes_containsExpectedRoutes() {
         val topLevel = com.raulshma.jellyplay.core.ui.navigation.TOP_LEVEL_ROUTES
-        assertEquals(4, topLevel.size)
+        assertEquals(5, topLevel.size)
         assert(topLevel.containsKey(Route.Home))
         assert(topLevel.containsKey(Route.Library))
         assert(topLevel.containsKey(Route.Search))
         assert(topLevel.containsKey(Route.LiveTv))
+        assert(topLevel.containsKey(Route.Shortcuts))
     }
 
     @Test
@@ -67,5 +69,6 @@ class NavigationRouteTest {
         assertEquals("Library", topLevel[Route.Library])
         assertEquals("Search", topLevel[Route.Search])
         assertEquals("Live TV", topLevel[Route.LiveTv])
+        assertEquals("Shortcuts", topLevel[Route.Shortcuts])
     }
 }

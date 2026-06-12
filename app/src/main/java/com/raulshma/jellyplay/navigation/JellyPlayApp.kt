@@ -160,6 +160,7 @@ import com.raulshma.jellyplay.feature.syncplay.navigation.syncPlaySection
 import com.raulshma.jellyplay.feature.onboarding.navigation.onboardingSection
 import com.raulshma.jellyplay.feature.newsletter.navigation.newsletterSection
 import com.raulshma.jellyplay.feature.requests.navigation.requestsSection
+import com.raulshma.jellyplay.feature.shortcuts.navigation.shortcutsSection
 import kotlinx.coroutines.launch
 import com.composables.icons.tabler.Tabler
 import com.composables.icons.tabler.outline.*
@@ -1137,6 +1138,7 @@ private fun NavIcon(route: Route, label: String, selected: Boolean = false, tint
         Route.Search -> Tabler.Outline.Search
         Route.LiveTv -> Tabler.Outline.DeviceTv
         Route.MusicBrowse -> Tabler.Outline.Disc
+        Route.Shortcuts -> Tabler.Outline.Apps
         else -> Tabler.Outline.Home // Fallback
     }
 
@@ -1399,6 +1401,7 @@ private fun MainNavDisplay(
             newsletterSection(navigator)
             insightsSection(navigator)
             requestsSection(navigator)
+            shortcutsSection(navigator)
         },
         modifier = modifier,
     )

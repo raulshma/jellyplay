@@ -126,6 +126,8 @@ sealed class Route : NavKey {
     @Serializable data object WatchProgressHeatmap : Route()
 
     @Serializable data object Requests : Route()
+
+    @Serializable data object Shortcuts : Route()
 }
 
 val VIDEO_TOP_LEVEL_ROUTES = linkedMapOf(
@@ -133,6 +135,7 @@ val VIDEO_TOP_LEVEL_ROUTES = linkedMapOf(
     Route.Library to "Library",
     Route.Search to "Search",
     Route.LiveTv to "Live TV",
+    Route.Shortcuts to "Shortcuts",
 )
 
 val MUSIC_TOP_LEVEL_ROUTES = linkedMapOf(
