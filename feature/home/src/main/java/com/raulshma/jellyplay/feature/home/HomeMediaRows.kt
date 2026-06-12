@@ -18,6 +18,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyListState
+import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
@@ -88,24 +89,50 @@ fun ContinueWatchingRow(
             color = MaterialTheme.colorScheme.onSurface,
             modifier = Modifier.padding(horizontal = contentPad, vertical = 8.dp),
         )
-        HorizontalUncontainedCarousel(
-            state = rememberCarouselState { items.size },
-            itemWidth = cardWidth,
-            itemSpacing = spacing,
-            contentPadding = PaddingValues(horizontal = contentPad),
-            modifier = Modifier.tvFocusRestorer(),
-        ) { index ->
-            val item = items[index]
-            val memoizedClick = remember(item) { { onItemClick(item) } }
-            val memoizedPlayClick = onPlayClick?.let { click -> remember(item, click) { { click(item) } } }
-            WideMediaCard(
-                item = item,
-                imageUrl = imageUrlBuilder(item),
-                backdropUrl = backdropUrlBuilder(item),
-                onClick = memoizedClick,
-                onPlayClick = memoizedPlayClick,
-                cardWidth = cardWidth,
-            )
+        if (isTv) {
+            LazyRow(
+                modifier = Modifier.tvFocusRestorer(),
+                contentPadding = PaddingValues(horizontal = contentPad),
+                horizontalArrangement = Arrangement.spacedBy(spacing),
+            ) {
+                items(
+                    count = items.size,
+                    key = { index -> items[index].id },
+                    contentType = { "continueWatchingItem" },
+                ) { index ->
+                    val item = items[index]
+                    val memoizedClick = remember(item) { { onItemClick(item) } }
+                    val memoizedPlayClick = onPlayClick?.let { click -> remember(item, click) { { click(item) } } }
+                    WideMediaCard(
+                        item = item,
+                        imageUrl = imageUrlBuilder(item),
+                        backdropUrl = backdropUrlBuilder(item),
+                        onClick = memoizedClick,
+                        onPlayClick = memoizedPlayClick,
+                        cardWidth = cardWidth,
+                    )
+                }
+            }
+        } else {
+            HorizontalUncontainedCarousel(
+                state = rememberCarouselState { items.size },
+                itemWidth = cardWidth,
+                itemSpacing = spacing,
+                contentPadding = PaddingValues(horizontal = contentPad),
+                modifier = Modifier.tvFocusRestorer(),
+            ) { index ->
+                val item = items[index]
+                val memoizedClick = remember(item) { { onItemClick(item) } }
+                val memoizedPlayClick = onPlayClick?.let { click -> remember(item, click) { { click(item) } } }
+                WideMediaCard(
+                    item = item,
+                    imageUrl = imageUrlBuilder(item),
+                    backdropUrl = backdropUrlBuilder(item),
+                    onClick = memoizedClick,
+                    onPlayClick = memoizedPlayClick,
+                    cardWidth = cardWidth,
+                )
+            }
         }
     }
 }
@@ -378,30 +405,62 @@ fun HomeMediaRow(
             color = MaterialTheme.colorScheme.onSurface,
             modifier = Modifier.padding(horizontal = contentPad, vertical = 8.dp),
         )
-        HorizontalUncontainedCarousel(
-            state = rememberCarouselState { items.size },
-            itemWidth = cardWidth,
-            itemSpacing = spacing,
-            contentPadding = PaddingValues(horizontal = contentPad),
-            modifier = Modifier.tvFocusRestorer(),
-        ) { index ->
-            val item = items[index]
-            val memoizedClick = remember(item) { { onItemClick(item) } }
-            val memoizedPlayClick = onPlayClick?.let { click -> remember(item, click) { { click(item) } } }
-            PosterCard(
-                item = item,
-                imageUrl = imageUrlBuilder(item),
-                fallbackUrls = fallbackImageUrlBuilder(item),
-                onClick = memoizedClick,
-                modifier = Modifier.width(cardWidth),
-                showProgress = item.playbackPositionTicks != null && item.playbackPositionTicks!! > 0,
-                progressPercent = if (item.runTimeTicks != null && item.runTimeTicks!! > 0) {
-                    (item.playbackPositionTicks?.toFloat() ?: 0f) / item.runTimeTicks!!.toFloat()
-                } else 0f,
-                blurHash = item.blurHashes.primary,
-                onPlayClick = memoizedPlayClick,
-                sharedElementKey = "poster_${item.id}",
-            )
+        if (isTv) {
+            LazyRow(
+                modifier = Modifier.tvFocusRestorer(),
+                contentPadding = PaddingValues(horizontal = contentPad),
+                horizontalArrangement = Arrangement.spacedBy(spacing),
+            ) {
+                items(
+                    count = items.size,
+                    key = { index -> items[index].id },
+                    contentType = { "mediaItem" },
+                ) { index ->
+                    val item = items[index]
+                    val memoizedClick = remember(item) { { onItemClick(item) } }
+                    val memoizedPlayClick = onPlayClick?.let { click -> remember(item, click) { { click(item) } } }
+                    PosterCard(
+                        item = item,
+                        imageUrl = imageUrlBuilder(item),
+                        fallbackUrls = fallbackImageUrlBuilder(item),
+                        onClick = memoizedClick,
+                        modifier = Modifier.width(cardWidth),
+                        showProgress = item.playbackPositionTicks != null && item.playbackPositionTicks!! > 0,
+                        progressPercent = if (item.runTimeTicks != null && item.runTimeTicks!! > 0) {
+                            (item.playbackPositionTicks?.toFloat() ?: 0f) / item.runTimeTicks!!.toFloat()
+                        } else 0f,
+                        blurHash = item.blurHashes.primary,
+                        onPlayClick = memoizedPlayClick,
+                        sharedElementKey = "poster_${item.id}",
+                    )
+                }
+            }
+        } else {
+            HorizontalUncontainedCarousel(
+                state = rememberCarouselState { items.size },
+                itemWidth = cardWidth,
+                itemSpacing = spacing,
+                contentPadding = PaddingValues(horizontal = contentPad),
+                modifier = Modifier.tvFocusRestorer(),
+            ) { index ->
+                val item = items[index]
+                val memoizedClick = remember(item) { { onItemClick(item) } }
+                val memoizedPlayClick = onPlayClick?.let { click -> remember(item, click) { { click(item) } } }
+                PosterCard(
+                    item = item,
+                    imageUrl = imageUrlBuilder(item),
+                    fallbackUrls = fallbackImageUrlBuilder(item),
+                    onClick = memoizedClick,
+                    modifier = Modifier.width(cardWidth),
+                    showProgress = item.playbackPositionTicks != null && item.playbackPositionTicks!! > 0,
+                    progressPercent = if (item.runTimeTicks != null && item.runTimeTicks!! > 0) {
+                        (item.playbackPositionTicks?.toFloat() ?: 0f) / item.runTimeTicks!!.toFloat()
+                    } else 0f,
+                    blurHash = item.blurHashes.primary,
+                    onPlayClick = memoizedPlayClick,
+                    sharedElementKey = "poster_${item.id}",
+                )
+            }
         }
     }
 }
