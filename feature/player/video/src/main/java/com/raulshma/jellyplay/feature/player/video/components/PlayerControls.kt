@@ -193,6 +193,10 @@ internal fun PlayerControls(
     audioTracks: List<TrackOption> = emptyList(),
     showPlaybackMetadata: Boolean = true,
     onToggleOrientation: () -> Unit = {},
+    tvSkipSegmentFocusRequester: FocusRequester? = null,
+    tvNextEpisodeFocusRequester: FocusRequester? = null,
+    isSkipSegmentVisible: Boolean = false,
+    isNextEpisodeVisible: Boolean = false,
     modifier: Modifier = Modifier,
 ) {
     val isTv = LocalTvMode.current
@@ -534,6 +538,17 @@ internal fun PlayerControls(
                                 icon = Tabler.Outline.DotsVertical,
                                 contentDescription = "More options",
                                 onClick = { showOverflow = true },
+                                modifier = Modifier.then(
+                                    if (isTv) {
+                                        Modifier.focusProperties {
+                                            right = when {
+                                                isNextEpisodeVisible && tvNextEpisodeFocusRequester != null -> tvNextEpisodeFocusRequester
+                                                isSkipSegmentVisible && tvSkipSegmentFocusRequester != null -> tvSkipSegmentFocusRequester
+                                                else -> FocusRequester.Default
+                                            }
+                                        }
+                                    } else Modifier
+                                )
                             )
                             PlayerOverflowMenu(
                                 expanded = showOverflow,
@@ -1042,12 +1057,80 @@ private fun PlayerOverflowMenu(
     var showAudioNormalizationSubmenu by remember { mutableStateOf(false) }
     var showChannelMixSubmenu by remember { mutableStateOf(false) }
 
+    val isTv = LocalTvMode.current
+
+    val dialogueBoostFocusRequester = remember { FocusRequester() }
+    val nightModeFocusRequester = remember { FocusRequester() }
+    val audioNormalizationFocusRequester = remember { FocusRequester() }
+    val channelMixFocusRequester = remember { FocusRequester() }
+
+    var isFirstDialogueBoostRender by remember { mutableStateOf(true) }
+    var isFirstNightModeRender by remember { mutableStateOf(true) }
+    var isFirstAudioNormalizationRender by remember { mutableStateOf(true) }
+    var isFirstChannelMixRender by remember { mutableStateOf(true) }
+
+    LaunchedEffect(showDialogueBoostSubmenu) {
+        if (isFirstDialogueBoostRender) {
+            isFirstDialogueBoostRender = false
+        } else {
+            if (isTv) {
+                try {
+                    dialogueBoostFocusRequester.requestFocus()
+                } catch (e: Exception) {
+                    // ignore
+                }
+            }
+        }
+    }
+
+    LaunchedEffect(showNightModeSubmenu) {
+        if (isFirstNightModeRender) {
+            isFirstNightModeRender = false
+        } else {
+            if (isTv) {
+                try {
+                    nightModeFocusRequester.requestFocus()
+                } catch (e: Exception) {
+                    // ignore
+                }
+            }
+        }
+    }
+
+    LaunchedEffect(showAudioNormalizationSubmenu) {
+        if (isFirstAudioNormalizationRender) {
+            isFirstAudioNormalizationRender = false
+        } else {
+            if (isTv) {
+                try {
+                    audioNormalizationFocusRequester.requestFocus()
+                } catch (e: Exception) {
+                    // ignore
+                }
+            }
+        }
+    }
+
+    LaunchedEffect(showChannelMixSubmenu) {
+        if (isFirstChannelMixRender) {
+            isFirstChannelMixRender = false
+        } else {
+            if (isTv) {
+                try {
+                    channelMixFocusRequester.requestFocus()
+                } catch (e: Exception) {
+                    // ignore
+                }
+            }
+        }
+    }
+
     DropdownMenu(
         expanded = expanded,
         onDismissRequest = onDismiss,
         containerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
         shape = MaterialTheme.shapes.extraLarge,
-        modifier = Modifier.then(if (LocalTvMode.current) Modifier.fillMaxWidth(fraction = 0.5f) else Modifier),
+        modifier = Modifier.then(if (isTv) Modifier.fillMaxWidth(fraction = 0.5f) else Modifier),
     ) {
         if (supportsSubtitleStyle) {
             OverflowMenuItem(
@@ -1063,6 +1146,7 @@ private fun PlayerOverflowMenu(
                     icon = Tabler.Outline.ArrowLeft,
                     label = "Dialogue Boost",
                     onClick = { showDialogueBoostSubmenu = false },
+                    modifier = Modifier.focusRequester(dialogueBoostFocusRequester),
                 )
                 EffectStrength.entries.forEach { strength ->
                     DropdownMenuItem(
@@ -1096,6 +1180,7 @@ private fun PlayerOverflowMenu(
                     label = if (dialogueBoostEnabled) "Dialogue Boost \u00B7 ${dialogueBoostStrength.displayName}" else "Dialogue Boost",
                     onClick = { showDialogueBoostSubmenu = true },
                     tint = if (dialogueBoostEnabled) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface,
+                    modifier = Modifier.focusRequester(dialogueBoostFocusRequester),
                 )
             }
         }
@@ -1105,6 +1190,7 @@ private fun PlayerOverflowMenu(
                     icon = Tabler.Outline.ArrowLeft,
                     label = "Night Mode",
                     onClick = { showNightModeSubmenu = false },
+                    modifier = Modifier.focusRequester(nightModeFocusRequester),
                 )
                 EffectStrength.entries.forEach { strength ->
                     DropdownMenuItem(
@@ -1138,6 +1224,7 @@ private fun PlayerOverflowMenu(
                     label = if (nightModeEnabled) "Night Mode \u00B7 ${nightModeStrength.displayName}" else "Night Mode",
                     onClick = { showNightModeSubmenu = true },
                     tint = if (nightModeEnabled) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface,
+                    modifier = Modifier.focusRequester(nightModeFocusRequester),
                 )
             }
         }
@@ -1147,6 +1234,7 @@ private fun PlayerOverflowMenu(
                     icon = Tabler.Outline.ArrowLeft,
                     label = "Audio Normalization",
                     onClick = { showAudioNormalizationSubmenu = false },
+                    modifier = Modifier.focusRequester(audioNormalizationFocusRequester),
                 )
                 AudioNormalizationMode.entries.forEach { mode ->
                     DropdownMenuItem(
@@ -1179,6 +1267,7 @@ private fun PlayerOverflowMenu(
                     label = if (audioNormalizationEnabled) "Normalization \u00B7 ${audioNormalizationMode.displayName}" else "Audio Normalization",
                     onClick = { showAudioNormalizationSubmenu = true },
                     tint = if (audioNormalizationEnabled) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface,
+                    modifier = Modifier.focusRequester(audioNormalizationFocusRequester),
                 )
             }
         }
@@ -1188,6 +1277,7 @@ private fun PlayerOverflowMenu(
                     icon = Tabler.Outline.ArrowLeft,
                     label = "Channel Mixing",
                     onClick = { showChannelMixSubmenu = false },
+                    modifier = Modifier.focusRequester(channelMixFocusRequester),
                 )
                 ChannelMixMode.entries.forEach { mode ->
                     DropdownMenuItem(
@@ -1220,6 +1310,7 @@ private fun PlayerOverflowMenu(
                     label = if (channelMixEnabled) "Channel Mix \u00B7 ${channelMixMode.displayName}" else "Channel Mixing",
                     onClick = { showChannelMixSubmenu = true },
                     tint = if (channelMixEnabled) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface,
+                    modifier = Modifier.focusRequester(channelMixFocusRequester),
                 )
             }
         }
@@ -1278,6 +1369,7 @@ private fun OverflowMenuItem(
     onClick: () -> Unit,
     tint: Color = Color.Unspecified,
     enabled: Boolean = true,
+    modifier: Modifier = Modifier,
 ) {
     val effectiveTint = if (tint != Color.Unspecified) tint else MaterialTheme.colorScheme.onSurface
     DropdownMenuItem(
@@ -1298,6 +1390,7 @@ private fun OverflowMenuItem(
                 modifier = Modifier.size(20.dp),
             )
         },
+        modifier = modifier,
     )
 }
 
