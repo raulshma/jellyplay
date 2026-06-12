@@ -55,12 +55,7 @@ import androidx.compose.ui.unit.dp
 import com.raulshma.jellyplay.core.designsystem.theme.ShapeCache
 import com.raulshma.jellyplay.core.designsystem.theme.isLightColor
 import com.raulshma.jellyplay.core.designsystem.theme.ThemeVariantColors
-import com.raulshma.jellyplay.core.ui.adaptive.LocalAdaptiveInfo
-import com.raulshma.jellyplay.core.ui.adaptive.bottomPadding
-import com.raulshma.jellyplay.core.ui.adaptive.contentPadding
-import com.raulshma.jellyplay.core.ui.tv.LocalTvMode
-import com.raulshma.jellyplay.core.ui.tv.rememberTvFocusState
-import com.raulshma.jellyplay.core.ui.tv.tvFocusIndicator
+import com.raulshma.jellyplay.core.ui.adaptive.LocalJellyPlayUi
 import com.composables.icons.tabler.Tabler
 import com.composables.icons.tabler.outline.*
 
@@ -112,7 +107,7 @@ fun JellyPlayScreenScaffold(
         TopBarStyle.None -> null
     }
 
-    val isTv = LocalTvMode.current
+    val isTv = LocalJellyPlayUi.current.isTv
 
     val themeVariant = com.raulshma.jellyplay.core.designsystem.theme.LocalThemeVariant.current
     val backgroundModifier = if (themeVariant == com.raulshma.jellyplay.core.designsystem.theme.ThemeVariant.SYNTHWAVE) {
@@ -199,46 +194,27 @@ fun CircleBgBackButton(
     scrollCollapsed: Float = 0f,
     iconColor: Color? = null,
 ) {
-    val isTv = LocalTvMode.current
-    val tvFocusState = rememberTvFocusState(focusedScale = 1.15f)
+    val isTv = LocalJellyPlayUi.current.isTv
+
+    if (isTv) return
+
     val resolvedIconColor = iconColor
         ?: lerp(Color.White, MaterialTheme.colorScheme.onSurface, scrollCollapsed)
     val bgAlpha = if (scrollCollapsed < 0.5f) 0.3f else 0f
     val bgColor = MaterialTheme.colorScheme.surface.copy(alpha = bgAlpha)
 
-    if (isTv) {
-        Box(
-            modifier = modifier
-                .padding(8.dp)
-                .size(44.dp)
-                .clip(CircleShape)
-                .background(bgColor)
-                .then(tvFocusState.focusModifier)
-                .tvFocusIndicator(tvFocusState, CircleShape)
-                .clickable(onClick = onClick),
-            contentAlignment = Alignment.Center,
-        ) {
-            Icon(
-                Tabler.Outline.ArrowLeft,
-                contentDescription = "Back",
-                tint = resolvedIconColor,
-                modifier = Modifier.size(22.dp),
-            )
-        }
-    } else {
-        IconButton(
-            onClick = onClick,
-            modifier = modifier
-                .padding(8.dp)
-                .clip(CircleShape)
-                .background(bgColor),
-        ) {
-            Icon(
-                Tabler.Outline.ArrowLeft,
-                contentDescription = "Back",
-                tint = resolvedIconColor,
-            )
-        }
+    IconButton(
+        onClick = onClick,
+        modifier = modifier
+            .padding(8.dp)
+            .clip(CircleShape)
+            .background(bgColor),
+    ) {
+        Icon(
+            Tabler.Outline.ArrowLeft,
+            contentDescription = "Back",
+            tint = resolvedIconColor,
+        )
     }
 }
 

@@ -30,7 +30,7 @@ import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.WindowInsetsControllerCompat
 import com.raulshma.jellyplay.core.designsystem.theme.ShapeCache
-import com.raulshma.jellyplay.core.ui.tv.LocalTvMode
+import com.raulshma.jellyplay.core.ui.adaptive.LocalJellyPlayUi
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -41,7 +41,7 @@ fun TvSafeSheet(
     sheetState: SheetState = rememberModalBottomSheetState(),
     content: @Composable ColumnScope.() -> Unit,
 ) {
-    val isTv = LocalTvMode.current
+    val isTv = LocalJellyPlayUi.current.isTv
 
     if (isTv) {
         TvSheetDialog(

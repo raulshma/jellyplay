@@ -410,10 +410,16 @@ private fun SeerrDetailContent(
     val hasContent = movieDetail != null || tvDetail != null
     val scrollBehavior = TopAppBarDefaults.exitUntilCollapsedScrollBehavior(rememberTopAppBarState())
 
-    LaunchedEffect(isTv, hasContent) {
-        if (isTv && hasContent) {
-            kotlinx.coroutines.delay(150)
-            try { contentFocusRequester.requestFocus() } catch (_: Exception) { }
+    if (isTv) {
+        LaunchedEffect(Unit) {
+            var focused = false
+            androidx.compose.runtime.snapshotFlow { hasContent }.collect {
+                if (it && !focused) {
+                    focused = true
+                    kotlinx.coroutines.delay(50)
+                    try { contentFocusRequester.requestFocus() } catch (_: Exception) { }
+                }
+            }
         }
     }
 

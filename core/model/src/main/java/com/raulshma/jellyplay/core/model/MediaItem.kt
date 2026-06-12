@@ -15,6 +15,7 @@ enum class MediaType {
     ALBUM,
     ARTIST,
     COLLECTION,
+    PHOTO,
     LIVE_TV,
     CHANNEL,
     UNKNOWN,

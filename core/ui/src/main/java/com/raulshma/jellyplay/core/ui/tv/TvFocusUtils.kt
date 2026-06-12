@@ -101,7 +101,7 @@ fun rememberTvFocusState(
 
     return TvFocusState(
         isFocused = isFocused && isTv,
-        scale = if (isTv) 1f else animatedScale,
+        scale = if (isTv) animatedScale else 1f,
         borderWidth = animatedBorder,
         glowElevation = animatedGlowElevation,
         focusModifier = focusModifier,
@@ -203,7 +203,7 @@ fun rememberRowSharedFocusState(
 
     return TvFocusState(
         isFocused = isFocused && isTv,
-        scale = if (isTv) 1f else animatedScale,
+        scale = if (isTv) animatedScale else 1f,
         borderWidth = animatedBorder,
         glowElevation = animatedGlowElevation,
         focusModifier = focusModifier,

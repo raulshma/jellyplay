@@ -21,7 +21,6 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
@@ -66,14 +65,9 @@ import com.raulshma.jellyplay.core.designsystem.theme.cardBorder
 import com.raulshma.jellyplay.core.designsystem.theme.cardElevation
 import com.raulshma.jellyplay.core.model.MediaItem
 import com.raulshma.jellyplay.core.model.MediaType
-import com.raulshma.jellyplay.core.ui.adaptive.LocalAdaptiveInfo
-import com.raulshma.jellyplay.core.ui.adaptive.*
 import com.raulshma.jellyplay.core.ui.animation.fastEffectsSpec
+import com.raulshma.jellyplay.core.ui.adaptive.LocalJellyPlayUi
 import com.raulshma.jellyplay.core.ui.image.MediaImage
-import com.raulshma.jellyplay.core.ui.tv.LocalTvMode
-import com.raulshma.jellyplay.core.ui.tv.rememberTvFocusState
-import com.raulshma.jellyplay.core.ui.tv.tvFocusIndicator
-import com.raulshma.jellyplay.core.ui.tv.tvFocusRestorer
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 
@@ -132,8 +126,7 @@ fun PlayButtonWithProgress(
     modifier: Modifier = Modifier,
     buttonSize: Dp = 36.dp,
 ) {
-    val isTv = LocalTvMode.current
-    val tvFocusState = rememberTvFocusState(focusedScale = 1.15f)
+    val focusInteraction = rememberJellyFocusableInteraction(focusedScale = 1.15f)
     val interactionSource = remember { MutableInteractionSource() }
     val isPressed by interactionSource.collectIsPressedAsState()
     val baseScale by animateFloatAsState(
@@ -142,7 +135,7 @@ fun PlayButtonWithProgress(
         label = "playBtnScale",
     )
     val scale by animateFloatAsState(
-        targetValue = baseScale * tvFocusState.scale,
+        targetValue = baseScale * focusInteraction.scale,
         animationSpec = fastEffectsSpec(),
         label = "playBtnCombinedScale",
     )
@@ -153,9 +146,9 @@ fun PlayButtonWithProgress(
     Box(
         modifier = modifier
             .size(buttonSize)
-            .then(tvFocusState.focusModifier)
+            .then(focusInteraction.modifier)
             .graphicsLayer { scaleX = scale; scaleY = scale }
-            .tvFocusIndicator(tvFocusState, ShapeCache.smooth10)
+            .jellyFocusIndicator(focusInteraction, ShapeCache.smooth10)
             .clip(ShapeCache.smooth10)
             .clickable(
                 interactionSource = interactionSource,
@@ -263,8 +256,9 @@ fun PosterCard(
     onPlayClick: (() -> Unit)? = null,
     sharedElementKey: String? = null,
 ) {
-    val isTv = LocalTvMode.current
-    val tvFocusState = rememberTvFocusState()
+    val uiEnvironment = LocalJellyPlayUi.current
+    val isTv = uiEnvironment.isTv
+    val focusInteraction = rememberJellyFocusableInteraction()
     val interactionSource = remember { MutableInteractionSource() }
     val isPressed by interactionSource.collectIsPressedAsState()
     val baseScale by animateFloatAsState(
@@ -275,11 +269,11 @@ fun PosterCard(
         ),
         label = "cardScale",
     )
-    val scale = baseScale * tvFocusState.scale
+    val scale = baseScale * focusInteraction.scale
     val themeVariant = com.raulshma.jellyplay.core.designsystem.theme.LocalThemeVariant.current
     val elevation = themeVariant.cardElevation(
         isPressed = isPressed,
-        isTvFocused = tvFocusState.isFocused,
+        isTvFocused = focusInteraction.isFocused,
         isTv = isTv,
     )
     val shape = ShapeCache.smooth12
@@ -325,14 +319,14 @@ fun PosterCard(
         Card(
             modifier = Modifier
                 .fillMaxWidth()
-                .then(tvFocusState.focusModifier)
+                .then(focusInteraction.modifier)
                 .graphicsLayer {
                     scaleX = scale
                     scaleY = scale
                     shadowElevation = elevation.toPx()
                     clip = false
                 }
-                .tvFocusIndicator(tvFocusState, shape)
+                .jellyFocusIndicator(focusInteraction, shape)
                 .clickable(
                     interactionSource = interactionSource,
                     indication = null,
@@ -509,11 +503,12 @@ fun MediaRow(
     blurHashBuilder: (MediaItem) -> String? = { it.blurHashes.primary },
     onPlayClick: ((MediaItem) -> Unit)? = null,
 ) {
-    val adaptiveInfo = LocalAdaptiveInfo.current
-    val isTv = LocalTvMode.current
-    val cardWidth = adaptiveInfo.rowCardWidth(isTv)
-    val contentPad = adaptiveInfo.contentPadding(isTv)
-    val spacing = adaptiveInfo.itemSpacing(isTv)
+    val uiEnvironment = LocalJellyPlayUi.current
+    val isTv = uiEnvironment.isTv
+    val layout = uiEnvironment.layout
+    val cardWidth = layout.rowCardWidth
+    val contentPad = layout.contentPadding
+    val spacing = layout.itemSpacing
     val titleStyle = if (isTv) MaterialTheme.typography.titleLarge else MaterialTheme.typography.titleMedium
 
     Column(modifier = modifier.background(MaterialTheme.colorScheme.background)) {
@@ -522,10 +517,9 @@ fun MediaRow(
             style = titleStyle,
             modifier = Modifier.padding(horizontal = contentPad, vertical = 8.dp),
         )
-        LazyRow(
+        JellyFocusableRow(
             contentPadding = PaddingValues(horizontal = contentPad),
             horizontalArrangement = Arrangement.spacedBy(spacing),
-            modifier = Modifier.tvFocusRestorer(),
         ) {
             items(items, key = { "${title}_${it.id}" }, contentType = { "mediaItem" }) { item ->
                 val memoizedClick = remember(item) { { onItemClick(item) } }
