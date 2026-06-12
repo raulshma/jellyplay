@@ -59,6 +59,7 @@ fun AdminDashboardScreen(
     onUserStatistics: () -> Unit = {},
     onStaleMedia: () -> Unit = {},
     onWatchedMediaCleanup: () -> Unit = {},
+    onPlugins: () -> Unit = {},
     viewModel: AdminDashboardViewModel = hiltViewModel(),
 ) {
     val state = viewModel.state
@@ -148,6 +149,7 @@ fun AdminDashboardScreen(
                     onUserStatistics = onUserStatistics,
                     onStaleMedia = onStaleMedia,
                     onWatchedMediaCleanup = onWatchedMediaCleanup,
+                    onPlugins = onPlugins,
                     modifier = Modifier.fillMaxSize(),
                 )
             }
@@ -169,6 +171,7 @@ private fun DashboardContent(
     onUserStatistics: () -> Unit = {},
     onStaleMedia: () -> Unit = {},
     onWatchedMediaCleanup: () -> Unit = {},
+    onPlugins: () -> Unit = {},
     modifier: Modifier = Modifier,
 ) {
     var staggerIndex = 0
@@ -267,6 +270,7 @@ private fun DashboardContent(
                 onUserStatistics = onUserStatistics,
                 onStaleMedia = onStaleMedia,
                 onWatchedMediaCleanup = onWatchedMediaCleanup,
+                onPlugins = onPlugins
             )
         }
     }

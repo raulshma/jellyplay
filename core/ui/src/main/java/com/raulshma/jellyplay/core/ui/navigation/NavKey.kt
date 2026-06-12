@@ -109,6 +109,10 @@ sealed class Route : NavKey {
     @Serializable data object StaleMedia : Route()
     @Serializable data object WatchedMediaCleanup : Route()
 
+    @Serializable data object Plugins : Route()
+    @Serializable data class PluginDetail(val pluginId: String, val pluginName: String) : Route()
+    @Serializable data class PluginConfig(val pluginId: String, val pluginName: String) : Route()
+
     @Serializable data object Newsletter : Route()
 
     @Serializable data class NewsletterSectionList(
