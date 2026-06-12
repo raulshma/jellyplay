@@ -36,6 +36,7 @@ import com.composables.icons.tabler.outline.PlayerPlay
 import com.composables.icons.tabler.outline.Users
 import com.composables.icons.tabler.outline.Trash
 import com.composables.icons.tabler.outline.EyeOff
+import com.composables.icons.tabler.outline.Tool
 import com.raulshma.jellyplay.core.designsystem.theme.ShapeCache
 
 @Composable
@@ -46,6 +47,7 @@ fun QuickActionsSection(
     onUserStatistics: () -> Unit = {},
     onStaleMedia: () -> Unit = {},
     onWatchedMediaCleanup: () -> Unit = {},
+    onPlugins: () -> Unit = {},
     modifier: Modifier = Modifier,
 ) {
     Column(modifier = modifier.fillMaxWidth().padding(horizontal = 8.dp)) {
@@ -112,6 +114,20 @@ fun QuickActionsSection(
                 iconBackgroundColor = MaterialTheme.colorScheme.tertiaryContainer,
                 iconTint = MaterialTheme.colorScheme.onTertiaryContainer,
                 onClick = onWatchedMediaCleanup,
+                modifier = Modifier.weight(1f),
+            )
+        }
+        Spacer(Modifier.height(10.dp))
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(10.dp),
+        ) {
+            QuickActionButton(
+                icon = Tabler.Outline.Tool,
+                label = "Plugins",
+                iconBackgroundColor = MaterialTheme.colorScheme.primaryContainer,
+                iconTint = MaterialTheme.colorScheme.onPrimaryContainer,
+                onClick = onPlugins,
                 modifier = Modifier.weight(1f),
             )
         }
