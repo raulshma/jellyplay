@@ -47,12 +47,14 @@ fun SegmentSkipOverlay(
     segmentType: MediaSegmentType,
     onSkip: () -> Unit,
     modifier: Modifier = Modifier,
+    focusRequester: FocusRequester? = null,
 ) {
     SkipButtonOverlay(
         isVisible = isVisible,
         text = segmentType.skipLabel,
         onSkip = onSkip,
         modifier = modifier,
+        focusRequester = focusRequester,
     )
 }
 
@@ -61,12 +63,14 @@ fun IntroSkipOverlay(
     isVisible: Boolean,
     onSkip: () -> Unit,
     modifier: Modifier = Modifier,
+    focusRequester: FocusRequester? = null,
 ) {
     SkipButtonOverlay(
         isVisible = isVisible,
         text = "Skip Intro",
         onSkip = onSkip,
         modifier = modifier,
+        focusRequester = focusRequester,
     )
 }
 
@@ -75,12 +79,14 @@ fun CreditsSkipOverlay(
     isVisible: Boolean,
     onSkip: () -> Unit,
     modifier: Modifier = Modifier,
+    focusRequester: FocusRequester? = null,
 ) {
     SkipButtonOverlay(
         isVisible = isVisible,
         text = "Skip Credits",
         onSkip = onSkip,
         modifier = modifier,
+        focusRequester = focusRequester,
     )
 }
 
@@ -90,15 +96,21 @@ private fun SkipButtonOverlay(
     text: String,
     onSkip: () -> Unit,
     modifier: Modifier = Modifier,
+    focusRequester: FocusRequester? = null,
 ) {
     val isTv = LocalTvMode.current
     val skipFocusState = rememberTvFocusState(focusedScale = 1.06f)
-    val tvFocusRequester = remember { FocusRequester() }
+    val localFocusRequester = remember { FocusRequester() }
+    val tvFocusRequester = focusRequester ?: localFocusRequester
 
     LaunchedEffect(isVisible, isTv) {
         if (isVisible && isTv) {
             kotlinx.coroutines.delay(300)
-            tvFocusRequester.requestFocus()
+            try {
+                tvFocusRequester.requestFocus()
+            } catch (e: Exception) {
+                // ignore
+            }
         }
     }
 

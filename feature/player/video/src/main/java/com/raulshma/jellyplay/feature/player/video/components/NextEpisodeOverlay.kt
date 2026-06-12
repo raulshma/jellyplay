@@ -75,11 +75,13 @@ fun NextEpisodeOverlay(
     onCancel: () -> Unit,
     isPlaying: Boolean,
     modifier: Modifier = Modifier,
+    focusRequester: FocusRequester? = null,
 ) {
     var countdown by remember(isVisible) { mutableIntStateOf(countdownSeconds) }
     var dismissed by remember(isVisible) { mutableStateOf(false) }
     val isTv = LocalTvMode.current
-    val tvPlayNextFocusRequester = remember { FocusRequester() }
+    val localFocusRequester = remember { FocusRequester() }
+    val tvPlayNextFocusRequester = focusRequester ?: localFocusRequester
 
     LaunchedEffect(isVisible) {
         dismissed = false
@@ -89,7 +91,11 @@ fun NextEpisodeOverlay(
     LaunchedEffect(isVisible, isTv) {
         if (isVisible && isTv) {
             kotlinx.coroutines.delay(300)
-            tvPlayNextFocusRequester.requestFocus()
+            try {
+                tvPlayNextFocusRequester.requestFocus()
+            } catch (e: Exception) {
+                // ignore
+            }
         }
     }
 
