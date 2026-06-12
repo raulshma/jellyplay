@@ -3,6 +3,7 @@ package com.raulshma.jellyplay.core.datastore
 import com.raulshma.jellyplay.core.model.ColorStyle
 import com.raulshma.jellyplay.core.model.ContrastLevel
 import com.raulshma.jellyplay.core.model.ThemeMode
+import com.raulshma.jellyplay.core.datastore.di.ApplicationScope
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -40,8 +41,9 @@ data class AppearanceSettings(
 @Singleton
 class AppearanceSettingsStore @Inject constructor(
     private val userPreferencesStore: UserPreferencesStore,
+    @ApplicationScope private val externalScope: CoroutineScope,
 ) {
-    private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
+    private val scope = externalScope
 
     val settings: StateFlow<AppearanceSettings> = userPreferencesStore.preferences
         .map { prefs ->

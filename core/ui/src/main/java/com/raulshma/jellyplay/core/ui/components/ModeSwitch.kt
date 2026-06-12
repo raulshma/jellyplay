@@ -37,6 +37,9 @@ import androidx.compose.ui.unit.dp
 import com.raulshma.jellyplay.core.model.HomeMode
 import com.composables.icons.tabler.Tabler
 import com.composables.icons.tabler.outline.*
+import com.raulshma.jellyplay.core.ui.tv.LocalTvMode
+import com.raulshma.jellyplay.core.ui.tv.rememberTvFocusState
+import com.raulshma.jellyplay.core.ui.tv.tvFocusIndicator
 
 /**
  * A private helper for linear interpolation of floats.
@@ -204,6 +207,8 @@ fun ModeSwitch(
     val glowColor = if (isMusic) primaryColor else Color(0xFFFFB74D)
 
     val interactionSource = remember { MutableInteractionSource() }
+    val isTv = LocalTvMode.current
+    val tvFocusState = rememberTvFocusState(focusedScale = 1.08f)
 
     val width = 76.dp
     val height = 36.dp
@@ -216,9 +221,11 @@ fun ModeSwitch(
             .clip(CircleShape)
             .background(trackBgColor)
             .shadow(elevation = 1.dp, shape = CircleShape)
+            .then(tvFocusState.focusModifier)
+            .tvFocusIndicator(tvFocusState, CircleShape)
             .clickable(
                 interactionSource = interactionSource,
-                indication = null, // pristine glassmorphism without default overlay
+                indication = null,
                 onClick = {
                     onModeChange(if (isMusic) HomeMode.VIDEO else HomeMode.MUSIC)
                 }

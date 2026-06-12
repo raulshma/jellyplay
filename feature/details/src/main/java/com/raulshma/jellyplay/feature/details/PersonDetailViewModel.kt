@@ -3,6 +3,7 @@ package com.raulshma.jellyplay.feature.details
 import com.raulshma.jellyplay.core.data.repository.MediaRepository
 import com.raulshma.jellyplay.core.data.repository.PlaybackRepository
 import com.raulshma.jellyplay.core.model.MediaItem
+import com.raulshma.jellyplay.core.network.RetryPolicy
 import com.raulshma.jellyplay.core.ui.viewmodel.JellyPlayViewModel
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.async
@@ -35,10 +36,10 @@ class PersonDetailViewModel @Inject constructor(
             _filmography.value = emptyList()
             coroutineScope {
                 val detailDeferred = async {
-                    retryIO { mediaRepository.getMediaDetail(personId) }
+                    RetryPolicy.executeWithRetry { mediaRepository.getMediaDetail(personId) }
                 }
                 val itemsDeferred = async {
-                    retryIO { mediaRepository.getItemsByPerson(personId) }
+                    RetryPolicy.executeWithRetry { mediaRepository.getItemsByPerson(personId) }
                 }
 
                 val detailResult = detailDeferred.await()
@@ -55,23 +56,6 @@ class PersonDetailViewModel @Inject constructor(
             }
             _isLoading.value = false
         }
-    }
-
-    private suspend fun <T> retryIO(
-        times: Int = 3,
-        initialDelay: Long = 1000,
-        maxDelay: Long = 4000,
-        factor: Double = 2.0,
-        block: suspend () -> Result<T>
-    ): Result<T> {
-        var currentDelay = initialDelay
-        repeat(times - 1) {
-            val result = block()
-            if (result.isSuccess) return result
-            kotlinx.coroutines.delay(currentDelay)
-            currentDelay = (currentDelay * factor).toLong().coerceAtMost(maxDelay)
-        }
-        return block()
     }
 
     fun getImageUrl(itemId: String): String =

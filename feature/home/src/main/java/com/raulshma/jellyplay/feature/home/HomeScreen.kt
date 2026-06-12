@@ -1,9 +1,15 @@
+@file:OptIn(androidx.compose.ui.ExperimentalComposeUiApi::class)
 package com.raulshma.jellyplay.feature.home
 
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
+import androidx.compose.ui.draw.clip
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
+import com.raulshma.jellyplay.core.ui.components.LocalFloatingNavVisibility
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -44,6 +50,7 @@ import com.composables.icons.tabler.Tabler
 import com.composables.icons.tabler.outline.*
 import kotlinx.coroutines.launch
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
@@ -67,6 +74,9 @@ import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.focus.focusProperties
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.foundation.focusGroup
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -98,6 +108,9 @@ import com.raulshma.jellyplay.core.ui.components.rememberSeerrCardLoadingState
 import com.raulshma.jellyplay.core.ui.components.resolveHeaderStatus
 import com.raulshma.jellyplay.core.ui.tv.LocalTvMode
 import com.raulshma.jellyplay.core.ui.tv.isTv
+import com.raulshma.jellyplay.core.ui.tv.rememberTvFocusState
+import com.raulshma.jellyplay.core.ui.tv.tvFocusIndicator
+import com.raulshma.jellyplay.core.ui.tv.tvFocusExitHandler
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.collectLatest
 
@@ -353,6 +366,20 @@ private fun MainHomeContent(
     val scope = rememberCoroutineScope()
     val isDrawerOpen = drawerState.isOpen
 
+    val floatingNavVisibility = LocalFloatingNavVisibility.current
+    DisposableEffect(isDrawerOpen) {
+        if (isDrawerOpen) {
+            floatingNavVisibility.value = false
+        } else {
+            floatingNavVisibility.value = true
+        }
+        onDispose {
+            if (isDrawerOpen) {
+                floatingNavVisibility.value = true
+            }
+        }
+    }
+
     BackHandler(enabled = isFabExpanded || isSearchFocused || isDrawerOpen) {
         if (isDrawerOpen) {
             scope.launch { drawerState.close() }
@@ -386,6 +413,7 @@ private fun MainHomeContent(
                 Column(
                     modifier = Modifier
                         .fillMaxSize()
+                        .verticalScroll(rememberScrollState())
                         .padding(horizontal = 16.dp, vertical = 24.dp),
                     verticalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
@@ -575,78 +603,90 @@ private fun MainHomeContent(
         PullToRefreshBox(
             isRefreshing = state.isRefreshing,
             onRefresh = { viewModel.onEvent(HomeUiEvent.PullToRefresh) },
+            enabled = !isTv && !isSearchFocused,
             modifier = Modifier.fillMaxSize(),
         ) {
         Box(modifier = Modifier.fillMaxSize().background(backgroundColor)) {
-            when {
-                state.error != null && state.sections.isEmpty() && state.offlineMode == OfflineMode.ONLINE -> {
-                    ErrorScreen(
-                        message = state.error!!,
-                        onRetry = { viewModel.onEvent(HomeUiEvent.Refresh) },
-                        modifier = Modifier.padding(horizontal = contentPad),
-                    )
-                }
-                state.offlineMode != OfflineMode.ONLINE -> {
-                    val filteredOfflineLibrary = remember(state.offlineLibrary, state.homeMode) {
-                        if (state.homeMode == HomeMode.MUSIC) {
-                            state.offlineLibrary.filter {
-                                it.mediaType == MediaType.AUDIO ||
-                                it.mediaType == MediaType.MUSIC ||
-                                it.mediaType == MediaType.ALBUM ||
-                                it.mediaType == MediaType.ARTIST
-                            }
-                        } else {
-                            state.offlineLibrary.filter {
-                                it.mediaType != MediaType.AUDIO &&
-                                it.mediaType != MediaType.MUSIC &&
-                                it.mediaType != MediaType.ALBUM &&
-                                it.mediaType != MediaType.ARTIST
-                            }
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .focusGroup()
+                    .focusProperties {
+                        onEnter = { focusDirection ->
+                            if (isSearchFocused) FocusRequester.Cancel else FocusRequester.Default
                         }
                     }
-                    OfflineHomeContent(
-                        offlineLibrary = filteredOfflineLibrary,
-                        onItemClick = onOfflineLibraryClick,
-                        contentPadding = contentPad,
-                        backgroundColor = backgroundColor,
-                        onGoOnline = { viewModel.onEvent(HomeUiEvent.ToggleOfflineMode) },
-                    )
-                }
-                state.homeMode == HomeMode.MUSIC -> {
-                    musicContent()
-                }
-                else -> {
-                    HomeContentList(
-                        isLoading = state.isLoading,
-                        homeHeroEnabled = state.homeHeroEnabled,
-                        newsletterBannerVisible = state.newsletterBannerVisible,
-                        discoverEnabled = state.discoverEnabled,
-                        offlineLibrary = state.offlineLibrary,
-                        sections = state.sections,
-                        featuredItem = featuredItem,
-                        viewModel = viewModel,
-                        listState = listState,
-                        backgroundColor = backgroundColor,
-                        contentPad = contentPad,
-                        headerHeight = headerHeight,
-                        isLightTheme = isLightTheme,
-                        density = density,
-                        mediaImageUrlBuilder = mediaImageUrlBuilder,
-                        mediaBackdropUrlBuilder = mediaBackdropUrlBuilder,
-                        mediaOnItemClick = mediaOnItemClick,
-                        mediaOnPlayClick = mediaOnPlayClick,
-                        fallbackImageUrlBuilder = fallbackImageUrlBuilder,
-                        discoverRows = discoverRows,
-                        allDiscoverItems = allDiscoverItems,
-                        seerrCardLoadingState = seerrCardLoadingState,
-                        seerrPrefetch = seerrPrefetch,
-                        onSeerrItemClick = onSeerrItemClick,
-                        onOfflineLibraryClick = onOfflineLibraryClick,
-                        onItemClick = onItemClick,
-                        onFocusChange = { focusInHero = it },
-                        onSeerrRequest = { viewModel.onEvent(HomeUiEvent.SelectSeerrRequestItem(it)) },
-                        onNewsletterClick = onNewsletterClick,
-                    )
+            ) {
+                when {
+                    state.error != null && state.sections.isEmpty() && state.offlineMode == OfflineMode.ONLINE -> {
+                        ErrorScreen(
+                            message = state.error!!,
+                            onRetry = { viewModel.onEvent(HomeUiEvent.Refresh) },
+                            modifier = Modifier.padding(horizontal = contentPad),
+                        )
+                    }
+                    state.offlineMode != OfflineMode.ONLINE -> {
+                        val filteredOfflineLibrary = remember(state.offlineLibrary, state.homeMode) {
+                            if (state.homeMode == HomeMode.MUSIC) {
+                                state.offlineLibrary.filter {
+                                    it.mediaType == MediaType.AUDIO ||
+                                    it.mediaType == MediaType.MUSIC ||
+                                    it.mediaType == MediaType.ALBUM ||
+                                    it.mediaType == MediaType.ARTIST
+                                }
+                            } else {
+                                state.offlineLibrary.filter {
+                                    it.mediaType != MediaType.AUDIO &&
+                                    it.mediaType != MediaType.MUSIC &&
+                                    it.mediaType != MediaType.ALBUM &&
+                                    it.mediaType != MediaType.ARTIST
+                                }
+                            }
+                        }
+                        OfflineHomeContent(
+                            offlineLibrary = filteredOfflineLibrary,
+                            onItemClick = onOfflineLibraryClick,
+                            contentPadding = contentPad,
+                            backgroundColor = backgroundColor,
+                            onGoOnline = { viewModel.onEvent(HomeUiEvent.ToggleOfflineMode) },
+                        )
+                    }
+                    state.homeMode == HomeMode.MUSIC -> {
+                        musicContent()
+                    }
+                    else -> {
+                        HomeContentList(
+                            isLoading = state.isLoading,
+                            homeHeroEnabled = state.homeHeroEnabled,
+                            newsletterBannerVisible = state.newsletterBannerVisible,
+                            discoverEnabled = state.discoverEnabled,
+                            offlineLibrary = state.offlineLibrary,
+                            sections = state.sections,
+                            featuredItem = featuredItem,
+                            viewModel = viewModel,
+                            listState = listState,
+                            backgroundColor = backgroundColor,
+                            contentPad = contentPad,
+                            headerHeight = headerHeight,
+                            isLightTheme = isLightTheme,
+                            density = density,
+                            mediaImageUrlBuilder = mediaImageUrlBuilder,
+                            mediaBackdropUrlBuilder = mediaBackdropUrlBuilder,
+                            mediaOnItemClick = mediaOnItemClick,
+                            mediaOnPlayClick = mediaOnPlayClick,
+                            fallbackImageUrlBuilder = fallbackImageUrlBuilder,
+                            discoverRows = discoverRows,
+                            allDiscoverItems = allDiscoverItems,
+                            seerrCardLoadingState = seerrCardLoadingState,
+                            seerrPrefetch = seerrPrefetch,
+                            onSeerrItemClick = onSeerrItemClick,
+                            onOfflineLibraryClick = onOfflineLibraryClick,
+                            onItemClick = onItemClick,
+                            onFocusChange = { focusInHero = it },
+                            onSeerrRequest = { viewModel.onEvent(HomeUiEvent.SelectSeerrRequestItem(it)) },
+                            onNewsletterClick = onNewsletterClick,
+                        )
+                    }
                 }
             }
 
@@ -669,101 +709,92 @@ private fun MainHomeContent(
                     },
                     onToggleOffline = { viewModel.onEvent(HomeUiEvent.ToggleOfflineMode) },
                     searchResultsContent = {
-                        HomeSearchResultsOverlay(
-                            jellyfinResults = state.searchState.jellyfinResults,
-                            seerrResults = state.searchState.seerrResults,
-                            isSearching = state.searchState.isSearching,
-                            getImageUrl = { viewModel.getImageUrl(it) },
-                            onJellyfinClick = { item ->
-                                isSearchExpanded = false
-                                viewModel.onEvent(HomeUiEvent.ClearSearch)
-                                focusManager.clearFocus()
-                                onItemClick(item.id)
-                            },
-                            onSeerrClick = { item ->
-                                isSearchExpanded = false
-                                viewModel.onEvent(HomeUiEvent.ClearSearch)
-                                focusManager.clearFocus()
-                                onSearchSeerrClick(item.id, item.mediaType)
-                            },
-                            searchHistory = searchHistory,
-                            onHistoryClick = { query ->
-                                viewModel.onEvent(HomeUiEvent.UpdateSearchQuery(query))
-                            },
-                            onDeleteHistoryItem = { id -> viewModel.deleteSearchHistoryItem(id) },
-                            onClearHistory = { viewModel.clearSearchHistory() },
-                        )
-                    },
-                )
-
-                HomeFabMenu(
-                    isExpanded = isFabExpanded,
-                    onToggle = { isFabExpanded = it },
-                    activeDownloadCount = activeDownloadCount,
-                    offlineMode = state.offlineMode,
-                    onSurpriseClick = {
-                        showSurprise = !showSurprise
-                        if (!showSurprise) autoRotateEnabled = true
-                    },
-                    onSyncPlayClick = onSyncPlayClick,
-                    onDownloadsClick = onDownloadsClick,
-                    onToggleOffline = { viewModel.onEvent(HomeUiEvent.ToggleOfflineMode) },
-                    onSettingsClick = onSettingsClick,
-                    modifier = Modifier
-                        .align(Alignment.BottomEnd)
-                        .padding(bottom = 88.dp + WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding())
-                        .offset {
-                            val maxOffset = 88.dp.toPx()
-                            val yOffset = (-navOffsetPx).coerceAtMost(maxOffset)
-                            androidx.compose.ui.unit.IntOffset(x = 0, y = yOffset.toInt())
-                        },
-                )
-
-                // Floating menu button at the top left, aligned horizontally with HomeTopDock
-                Box(
-                    modifier = Modifier
-                        .statusBarsPadding()
-                        .padding(
-                            horizontal = (4f + 12f * scrollFraction).dp,
-                            vertical = (4f + 4f * scrollFraction).dp
-                        )
-                        .align(Alignment.TopStart)
-                ) {
-                    androidx.compose.material3.Surface(
-                        onClick = {
-                            scope.launch { drawerState.open() }
-                        },
-                        shape = RoundedCornerShape((24f + 4f * scrollFraction).dp),
-                        color = if (isSearchFocused) {
-                            Color.Transparent
-                        } else {
-                            lerp(
-                                Color.Transparent,
-                                MaterialTheme.colorScheme.surfaceContainerHigh,
-                                scrollFraction
+                        if (state.searchState.query.isNotBlank() || searchHistory.isNotEmpty()) {
+                            HomeSearchResultsOverlay(
+                                jellyfinResults = state.searchState.jellyfinResults,
+                                seerrResults = state.searchState.seerrResults,
+                                isSearching = state.searchState.isSearching,
+                                getImageUrl = { viewModel.getImageUrl(it) },
+                                onJellyfinClick = { item ->
+                                    isSearchExpanded = false
+                                    viewModel.onEvent(HomeUiEvent.ClearSearch)
+                                    focusManager.clearFocus()
+                                    onItemClick(item.id)
+                                },
+                                onSeerrClick = { item ->
+                                    isSearchExpanded = false
+                                    viewModel.onEvent(HomeUiEvent.ClearSearch)
+                                    focusManager.clearFocus()
+                                    onSearchSeerrClick(item.id, item.mediaType)
+                                },
+                                searchHistory = searchHistory,
+                                onHistoryClick = { query ->
+                                    viewModel.onEvent(HomeUiEvent.UpdateSearchQuery(query))
+                                },
+                                onDeleteHistoryItem = { id -> viewModel.deleteSearchHistoryItem(id) },
+                                onClearHistory = { viewModel.clearSearchHistory() },
                             )
+                        }
+                    },
+                )
+
+                if (!isTv) {
+                    HomeFabMenu(
+                        isExpanded = isFabExpanded,
+                        onToggle = { isFabExpanded = it },
+                        activeDownloadCount = activeDownloadCount,
+                        offlineMode = state.offlineMode,
+                        onSurpriseClick = {
+                            showSurprise = !showSurprise
+                            if (!showSurprise) autoRotateEnabled = true
                         },
+                        onSyncPlayClick = onSyncPlayClick,
+                        onDownloadsClick = onDownloadsClick,
+                        onToggleOffline = { viewModel.onEvent(HomeUiEvent.ToggleOfflineMode) },
+                        onSettingsClick = onSettingsClick,
                         modifier = Modifier
-                            .graphicsLayer {
-                                scaleX = dockScale
-                                scaleY = dockScale
-                                alpha = if (isSearchFocused) 0f else 1f
-                                shadowElevation = if (scrollFraction > 0f) 8f * scrollFraction else 0f
-                            }
+                            .align(Alignment.BottomEnd)
+                            .padding(bottom = 64.dp + WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding())
+                            .offset {
+                                val maxOffset = 64.dp.toPx()
+                                val yOffset = (-navOffsetPx).coerceAtMost(maxOffset)
+                                androidx.compose.ui.unit.IntOffset(x = 0, y = yOffset.toInt())
+                            },
+                    )
+                }
+
+                if (!isTv) {
+                    Box(
+                        modifier = Modifier
+                            .statusBarsPadding()
+                            .padding(
+                                horizontal = 16.dp,
+                                vertical = 8.dp
+                            )
+                            .align(Alignment.TopStart)
                     ) {
                         Box(
                             modifier = Modifier
-                                .size(56.dp),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            Icon(
-                                imageVector = Tabler.Outline.Menu2,
-                                contentDescription = "Open Shortcuts Menu",
-                                tint = appBarIconColorFaded,
-                                modifier = Modifier.size(24.dp)
-                            )
-                        }
+                                .size(64.dp)
+                                .clip(RoundedCornerShape(16.dp))
+                                .clickable(
+                                    interactionSource = remember { androidx.compose.foundation.interaction.MutableInteractionSource() },
+                                    indication = null,
+                                    onClick = { scope.launch { drawerState.open() } }
+                                )
+                                .graphicsLayer {
+                                    alpha = if (isSearchFocused) 0f else 1f
+                                },
+                        contentAlignment = Alignment.CenterStart
+                    ) {
+                        Icon(
+                            imageVector = Tabler.Outline.Menu2,
+                            contentDescription = "Open Shortcuts Menu",
+                            tint = appBarIconColorFaded,
+                            modifier = Modifier.size(24.dp)
+                        )
                     }
+                }
                 }
         }
     }

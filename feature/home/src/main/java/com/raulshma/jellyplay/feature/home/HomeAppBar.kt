@@ -50,6 +50,15 @@ import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.unit.dp
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.ui.input.key.Key
+import androidx.compose.ui.input.key.KeyEventType
+import androidx.compose.ui.input.key.key
+import androidx.compose.ui.input.key.type
+import androidx.compose.ui.input.key.onPreviewKeyEvent
+import com.raulshma.jellyplay.core.ui.tv.LocalTvMode
+import com.raulshma.jellyplay.core.ui.tv.rememberTvFocusState
+import com.raulshma.jellyplay.core.ui.tv.tvFocusIndicator
 import com.raulshma.jellyplay.core.designsystem.theme.ShapeCache
 import com.raulshma.jellyplay.core.model.HomeMode
 import com.raulshma.jellyplay.core.model.OfflineMode
@@ -95,8 +104,6 @@ fun HomeTopDock(
     }
     val appBarIconColor = lerp(baseIconColor, MaterialTheme.colorScheme.onSurface, scrollFraction)
     val appBarIconColorFaded = appBarIconColor.copy(alpha = 0.9f)
-    val dockScale = 1f - (0.04f * scrollFraction)
-    val dockCornerRadius = 24f + (4f * scrollFraction)
     val focusManager = LocalFocusManager.current
 
     Box(
@@ -104,9 +111,18 @@ fun HomeTopDock(
             .fillMaxWidth()
             .statusBarsPadding()
             .padding(
-                horizontal = (4f + 12f * scrollFraction).dp,
-                vertical = (4f + 4f * scrollFraction).dp
-            ),
+                horizontal = 16.dp,
+                vertical = 8.dp
+            )
+            .onPreviewKeyEvent { keyEvent ->
+                if (isSearchFocused && keyEvent.key == Key.Back && keyEvent.type == KeyEventType.KeyDown) {
+                    onClearSearch()
+                    focusManager.clearFocus()
+                    true
+                } else {
+                    false
+                }
+            },
         contentAlignment = Alignment.TopEnd
     ) {
         Column(
@@ -114,25 +130,15 @@ fun HomeTopDock(
                 .then(if (isSearchFocused) Modifier.fillMaxWidth() else Modifier.wrapContentWidth())
                 .animateContentSize(animationSpec = MaterialTheme.motionScheme.defaultSpatialSpec())
                 .graphicsLayer {
-                    scaleX = dockScale
-                    scaleY = dockScale
-                    shadowElevation = if (isSearchFocused) {
-                        4f
-                    } else {
-                        if (scrollFraction > 0f) 8f * scrollFraction else 0f
-                    }
-                    shape = RoundedCornerShape(dockCornerRadius.dp)
+                    shadowElevation = if (isSearchFocused) 4f else 0f
+                    shape = RoundedCornerShape(24.dp)
                     clip = true
                 }
                 .background(
                     if (isSearchFocused) {
                         MaterialTheme.colorScheme.surfaceContainerHigh
                     } else {
-                        lerp(
-                            Color.Transparent,
-                            MaterialTheme.colorScheme.surfaceContainerHigh,
-                            scrollFraction
-                        )
+                        Color.Transparent
                     }
                 )
         ) {
@@ -173,7 +179,7 @@ fun HomeTopDock(
                 }
             }
 
-            if (searchQuery.isNotBlank()) {
+            if (isSearchFocused) {
                 Box(
                     modifier = Modifier
                         .fillMaxWidth()
@@ -200,16 +206,23 @@ private fun RowScope.SearchExpandedContent(
 ) {
     val focusRequester = remember { FocusRequester() }
 
-    IconButton(
-        onClick = onBack,
-        modifier = Modifier.size(40.dp),
+    val backFocusState = rememberTvFocusState()
+    Box(
+        modifier = Modifier
+            .then(backFocusState.focusModifier)
+            .tvFocusIndicator(backFocusState, CircleShape)
     ) {
-        Icon(
-            Tabler.Outline.ArrowLeft,
-            contentDescription = "Back",
-            tint = appBarIconColorFaded,
-            modifier = Modifier.size(20.dp),
-        )
+        IconButton(
+            onClick = onBack,
+            modifier = Modifier.size(40.dp),
+        ) {
+            Icon(
+                Tabler.Outline.ArrowLeft,
+                contentDescription = "Back",
+                tint = appBarIconColorFaded,
+                modifier = Modifier.size(20.dp),
+            )
+        }
     }
 
     @OptIn(ExperimentalMaterial3Api::class)
@@ -244,23 +257,28 @@ private fun RowScope.SearchExpandedContent(
     )
 
     LaunchedEffect(Unit) {
-        if (searchQuery.isEmpty()) {
-            focusRequester.requestFocus()
-        }
+        focusRequester.requestFocus()
     }
 
     if (searchQuery.isNotEmpty()) {
-        IconButton(
-            onClick = onClear,
-            shapes = androidx.compose.material3.IconButtonDefaults.shapes(),
-            modifier = Modifier.size(40.dp),
+        val clearFocusState = rememberTvFocusState()
+        Box(
+            modifier = Modifier
+                .then(clearFocusState.focusModifier)
+                .tvFocusIndicator(clearFocusState, CircleShape)
         ) {
-            Icon(
-                Tabler.Outline.X,
-                contentDescription = "Clear search",
-                tint = appBarIconColorFaded,
-                modifier = Modifier.size(20.dp),
-            )
+            IconButton(
+                onClick = onClear,
+                shapes = androidx.compose.material3.IconButtonDefaults.shapes(),
+                modifier = Modifier.size(40.dp),
+            ) {
+                Icon(
+                    Tabler.Outline.X,
+                    contentDescription = "Clear search",
+                    tint = appBarIconColorFaded,
+                    modifier = Modifier.size(20.dp),
+                )
+            }
         }
     }
 }
@@ -276,16 +294,23 @@ private fun CollapsedDockContent(
     onSearchExpand: () -> Unit,
 ) {
     if (offlineMode != OfflineMode.ONLINE) {
-        IconButton(
-            onClick = onToggleOffline,
-            modifier = Modifier.size(40.dp),
+        val onlineFocusState = rememberTvFocusState()
+        Box(
+            modifier = Modifier
+                .then(onlineFocusState.focusModifier)
+                .tvFocusIndicator(onlineFocusState, CircleShape)
         ) {
-            Icon(
-                Tabler.Outline.Download,
-                contentDescription = "Go online",
-                tint = MaterialTheme.colorScheme.primary,
-                modifier = Modifier.size(20.dp),
-            )
+            IconButton(
+                onClick = onToggleOffline,
+                modifier = Modifier.size(40.dp),
+            ) {
+                Icon(
+                    Tabler.Outline.Download,
+                    contentDescription = "Go online",
+                    tint = MaterialTheme.colorScheme.primary,
+                    modifier = Modifier.size(20.dp),
+                )
+            }
         }
     }
     ModeSwitch(
@@ -296,16 +321,23 @@ private fun CollapsedDockContent(
         status = headerStatus,
         tint = appBarIconColorFaded,
     )
-    IconButton(
-        onClick = onSearchExpand,
-        modifier = Modifier.size(40.dp),
+    val searchFocusState = rememberTvFocusState()
+    Box(
+        modifier = Modifier
+            .then(searchFocusState.focusModifier)
+            .tvFocusIndicator(searchFocusState, CircleShape)
     ) {
-        Icon(
-            Tabler.Outline.Search,
-            contentDescription = "Search",
-            tint = appBarIconColorFaded,
-            modifier = Modifier.size(20.dp),
-        )
+        IconButton(
+            onClick = onSearchExpand,
+            modifier = Modifier.size(40.dp),
+        ) {
+            Icon(
+                Tabler.Outline.Search,
+                contentDescription = "Search",
+                tint = appBarIconColorFaded,
+                modifier = Modifier.size(20.dp),
+            )
+        }
     }
 }
 
@@ -344,13 +376,15 @@ fun HomeFabMenu(
                     checked = isExpanded,
                     onCheckedChange = onToggle,
                     containerColor = ToggleFloatingActionButtonDefaults.containerColor(
-                        initialColor = MaterialTheme.colorScheme.surfaceContainerHigh,
-                        finalColor = MaterialTheme.colorScheme.primaryContainer,
+                        initialColor = MaterialTheme.colorScheme.surfaceContainer.copy(alpha = 0.65f),
+                        finalColor = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.85f),
                     ),
+                    containerCornerRadius = { 28.dp },
                 ) {
                     Icon(
                         if (isExpanded) Tabler.Outline.X else Tabler.Outline.DotsVertical,
                         contentDescription = if (isExpanded) "Close menu" else "More options",
+                        tint = if (isExpanded) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.8f),
                     )
                 }
             }
@@ -358,7 +392,7 @@ fun HomeFabMenu(
         modifier = modifier
             .padding(
                 end = 8.dp,
-                bottom = 8.dp,
+                bottom = 4.dp,
             ),
     ) {
         FloatingActionButtonMenuItem(

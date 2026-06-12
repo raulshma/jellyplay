@@ -12,9 +12,11 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.width
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import com.raulshma.jellyplay.core.ui.tv.LocalTvMode
 import androidx.compose.material3.ListItem
 import androidx.compose.material3.ListItemDefaults
 import androidx.compose.material3.MaterialTheme
@@ -479,13 +481,33 @@ internal fun SettingInfoItem(
 internal fun AdvancedSettingsToggleButton(
     showAdvanced: Boolean,
     onToggle: () -> Unit,
+    modifier: Modifier = Modifier,
 ) {
-    IconButton(onClick = onToggle) {
-        Icon(
-            if (showAdvanced) Tabler.Outline.Code else Tabler.Outline.Adjustments,
-            contentDescription = if (showAdvanced) "Hide advanced settings" else "Show advanced settings",
-            modifier = Modifier.size(22.dp),
-        )
+    val isTv = LocalTvMode.current
+    if (isTv) {
+        val focusState = rememberTvFocusState(focusedScale = 1.15f)
+        Box(
+            modifier = modifier
+                .size(36.dp)
+                .then(focusState.focusModifier)
+                .tvFocusIndicator(focusState, ShapeCache.smooth10)
+                .clickable(onClick = onToggle),
+            contentAlignment = Alignment.Center,
+        ) {
+            Icon(
+                if (showAdvanced) Tabler.Outline.Code else Tabler.Outline.Adjustments,
+                contentDescription = if (showAdvanced) "Hide advanced settings" else "Show advanced settings",
+                modifier = Modifier.size(22.dp),
+            )
+        }
+    } else {
+        IconButton(onClick = onToggle, modifier = modifier) {
+            Icon(
+                if (showAdvanced) Tabler.Outline.Code else Tabler.Outline.Adjustments,
+                contentDescription = if (showAdvanced) "Hide advanced settings" else "Show advanced settings",
+                modifier = Modifier.size(22.dp),
+            )
+        }
     }
 }
 

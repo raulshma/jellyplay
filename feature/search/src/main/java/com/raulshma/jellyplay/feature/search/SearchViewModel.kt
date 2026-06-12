@@ -14,6 +14,7 @@ import com.raulshma.jellyplay.core.model.Genre
 import com.raulshma.jellyplay.core.model.MediaItem
 import com.raulshma.jellyplay.core.model.MediaType
 import com.raulshma.jellyplay.core.model.seerr.SeerrRadarrServiceDetail
+import com.raulshma.jellyplay.core.model.seerr.SeerrRequestResult
 import com.raulshma.jellyplay.core.model.seerr.SeerrSearchItem
 import com.raulshma.jellyplay.core.model.seerr.SeerrSeason
 import com.raulshma.jellyplay.core.model.seerr.SeerrSonarrServiceDetail
@@ -223,20 +224,12 @@ class SearchViewModel @Inject constructor(
         }
     }
 
-    private val _requestResult = stateFlow<RequestResult?>(null)
-    val requestResult: StateFlow<RequestResult?> = _requestResult.flow
-
-    private val _radarrServers = stateFlow<List<SeerrRadarrServiceDetail>>(emptyList())
-    val radarrServers: StateFlow<List<SeerrRadarrServiceDetail>> = _radarrServers.flow
-
-    private val _sonarrServers = stateFlow<List<SeerrSonarrServiceDetail>>(emptyList())
-    val sonarrServers: StateFlow<List<SeerrSonarrServiceDetail>> = _sonarrServers.flow
-
-    private val _isLoadingSeerrServices = stateFlow(false)
-    val isLoadingSeerrServices: StateFlow<Boolean> = _isLoadingSeerrServices.flow
-
-    private val _tvSeasons = stateFlow<List<SeerrSeason>>(emptyList())
-    val tvSeasons: StateFlow<List<SeerrSeason>> = _tvSeasons.flow
+    private val seerrRequestState = com.raulshma.jellyplay.core.data.seerr.SeerrRequestStateHolder(scope, seerrRequestDelegate)
+    val requestResult: StateFlow<SeerrRequestResult?> get() = seerrRequestState.requestResult
+    val radarrServers: StateFlow<List<SeerrRadarrServiceDetail>> get() = seerrRequestState.radarrServers
+    val sonarrServers: StateFlow<List<SeerrSonarrServiceDetail>> get() = seerrRequestState.sonarrServers
+    val isLoadingSeerrServices: StateFlow<Boolean> get() = seerrRequestState.isLoadingServices
+    val tvSeasons: StateFlow<List<SeerrSeason>> get() = seerrRequestState.tvSeasons
 
     fun requestSeerrMedia(
         item: SeerrSearchItem,
@@ -245,60 +238,14 @@ class SearchViewModel @Inject constructor(
         profileId: Int? = null,
         rootFolder: String? = null,
         tags: List<Int>? = null,
-    ) {
-        launch {
-            _requestResult.set(RequestResult(isLoading = true))
-            seerrRequestDelegate.requestMedia(
-                mediaType = item.mediaType,
-                tmdbId = item.id,
-                seasons = seasons,
-                serverId = serverId,
-                profileId = profileId,
-                rootFolder = rootFolder,
-                tags = tags,
-            ).onSuccess {
-                _requestResult.set(RequestResult(success = true))
-            }.onFailure {
-                _requestResult.set(RequestResult(error = it.message ?: "Request failed"))
-            }
-        }
-    }
+    ) = seerrRequestState.requestMedia(item, seasons, serverId, profileId, rootFolder, tags)
 
-    fun clearRequestResult() {
-        _requestResult.set(null)
-    }
+    fun clearRequestResult() = seerrRequestState.clearRequestResult()
 
-    fun prefetchSeerrDetails(tmdbId: Int, mediaType: String, onDone: () -> Unit) {
-        launch {
-            seerrRequestDelegate.prefetchDetails(tmdbId, mediaType)
-            onDone()
-        }
-    }
+    fun prefetchSeerrDetails(tmdbId: Int, mediaType: String, onDone: () -> Unit) =
+        seerrRequestState.prefetchDetails(tmdbId, mediaType, onDone)
 
-    fun loadSeerrServiceDetails(mediaType: String) {
-        launch {
-            _isLoadingSeerrServices.set(true)
-            try {
-                val result = seerrRequestDelegate.fetchServiceDetails(mediaType)
-                _radarrServers.set(result.radarrServers)
-                _sonarrServers.set(result.sonarrServers)
-            } finally {
-                _isLoadingSeerrServices.set(false)
-            }
-        }
-    }
+    fun loadSeerrServiceDetails(mediaType: String) = seerrRequestState.loadServiceDetails(mediaType)
 
-    fun loadTvSeasons(tmdbId: Int) {
-        launch {
-            _tvSeasons.set(emptyList())
-            val seasons = seerrRequestDelegate.fetchTvSeasons(tmdbId)
-            _tvSeasons.set(seasons)
-        }
-    }
+    fun loadTvSeasons(tmdbId: Int) = seerrRequestState.loadTvSeasons(tmdbId)
 }
-
-data class RequestResult(
-    val isLoading: Boolean = false,
-    val success: Boolean? = null,
-    val error: String? = null,
-)

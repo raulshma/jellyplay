@@ -5,19 +5,12 @@ import androidx.compose.runtime.Immutable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshots.Snapshot
-import androidx.work.Constraints
-import androidx.work.Data
-import androidx.work.ExistingWorkPolicy
-import androidx.work.NetworkType
-import androidx.work.OneTimeWorkRequestBuilder
-import androidx.work.WorkManager
 import com.raulshma.jellyplay.core.data.offline.OfflineModeManager
 import com.raulshma.jellyplay.core.data.repository.DownloadRepository
 import com.raulshma.jellyplay.core.data.repository.MediaRepository
 import com.raulshma.jellyplay.core.data.repository.PlaybackRepository
 import com.raulshma.jellyplay.core.data.repository.SeerrRepository
 import com.raulshma.jellyplay.core.data.seerr.SeerrRequestDelegate
-import com.raulshma.jellyplay.core.data.worker.DownloadWorker
 import com.raulshma.jellyplay.core.datastore.UserPreferencesStore
 import com.raulshma.jellyplay.core.model.MediaDetail
 import com.raulshma.jellyplay.core.model.MediaItem
@@ -25,9 +18,11 @@ import com.raulshma.jellyplay.core.model.MediaType
 import com.raulshma.jellyplay.core.model.NetworkStatus
 import com.raulshma.jellyplay.core.model.UserPreferences
 import com.raulshma.jellyplay.core.model.seerr.SeerrRadarrServiceDetail
+import com.raulshma.jellyplay.core.model.seerr.SeerrRequestResult
 import com.raulshma.jellyplay.core.model.seerr.SeerrSearchItem
 import com.raulshma.jellyplay.core.model.seerr.SeerrSeason
 import com.raulshma.jellyplay.core.model.seerr.SeerrSonarrServiceDetail
+import com.raulshma.jellyplay.core.data.playback.toAudioQueueItem
 import com.raulshma.jellyplay.core.network.seerr.buildPosterUrl
 import com.raulshma.jellyplay.core.network.api.TmdbApiClient
 import com.raulshma.jellyplay.core.model.seerr.SeerrRelatedVideo
@@ -83,20 +78,12 @@ class DetailViewModel @Inject constructor(
     val isSeerrRecommendationsEnabled: StateFlow<Boolean> = seerrRepository.isRecommendationsEnabled()
         .stateIn(scope, SharingStarted.WhileSubscribed(5_000), false)
 
-    private val _seerrRequestResult = stateFlow<SeerrRequestResult?>(null)
-    val seerrRequestResult: StateFlow<SeerrRequestResult?> = _seerrRequestResult.flow
-
-    private val _radarrServers = stateFlow<List<SeerrRadarrServiceDetail>>(emptyList())
-    val radarrServers: StateFlow<List<SeerrRadarrServiceDetail>> = _radarrServers.flow
-
-    private val _sonarrServers = stateFlow<List<SeerrSonarrServiceDetail>>(emptyList())
-    val sonarrServers: StateFlow<List<SeerrSonarrServiceDetail>> = _sonarrServers.flow
-
-    private val _isLoadingSeerrServices = stateFlow(false)
-    val isLoadingSeerrServices: StateFlow<Boolean> = _isLoadingSeerrServices.flow
-
-    private val _seerrTvSeasons = stateFlow<List<SeerrSeason>>(emptyList())
-    val seerrTvSeasons: StateFlow<List<SeerrSeason>> = _seerrTvSeasons.flow
+    private val seerrRequestState = com.raulshma.jellyplay.core.data.seerr.SeerrRequestStateHolder(scope, seerrRequestDelegate)
+    val seerrRequestResult: StateFlow<SeerrRequestResult?> get() = seerrRequestState.requestResult
+    val radarrServers: StateFlow<List<SeerrRadarrServiceDetail>> get() = seerrRequestState.radarrServers
+    val sonarrServers: StateFlow<List<SeerrSonarrServiceDetail>> get() = seerrRequestState.sonarrServers
+    val isLoadingSeerrServices: StateFlow<Boolean> get() = seerrRequestState.isLoadingServices
+    val seerrTvSeasons: StateFlow<List<SeerrSeason>> get() = seerrRequestState.tvSeasons
 
     private var loadJob: Job? = null
 
@@ -212,37 +199,9 @@ class DetailViewModel @Inject constructor(
             mediaRepository.getMediaDetail(itemId)
                 .onSuccess { detail ->
                     _detail.value = detail
-                    val streams = detail.mediaSources.firstOrNull()?.mediaStreams.orEmpty()
-                    val storedSelections = preferences.value.mediaStreamSelections
-                    val storedSelection = storedSelections[itemId]
-                    val hasStoredSelection = storedSelections.containsKey(itemId)
-
-                    selectedSubtitleIndex = if (hasStoredSelection) {
-                        storedSelection?.subtitleStreamIndex
-                    } else {
-                        val subStreams = streams.filter { it.type == com.raulshma.jellyplay.core.model.StreamType.SUBTITLE }
-                        subStreams.firstOrNull { it.isDefault }?.index
-                            ?: preferences.value.preferredSubtitleLanguage?.let { lang ->
-                                subStreams.firstOrNull { it.language.equals(lang, ignoreCase = true) }?.index
-                            }
-                    }
-                    selectedAudioIndex = if (hasStoredSelection) {
-                        storedSelection?.audioStreamIndex
-                    } else {
-                        val audioStreams = streams.filter { it.type == com.raulshma.jellyplay.core.model.StreamType.AUDIO }
-                        audioStreams.firstOrNull { it.isDefault }?.index
-                            ?: preferences.value.preferredAudioLanguage?.let { lang ->
-                                audioStreams.firstOrNull { it.language.equals(lang, ignoreCase = true) }?.index
-                            }
-                    }
-
-                    launch {
-                        preferencesStore.setMediaStreamSelection(
-                            itemId = itemId,
-                            audioStreamIndex = selectedAudioIndex,
-                            subtitleStreamIndex = selectedSubtitleIndex,
-                        )
-                    }
+                    val storedSelection = preferences.value.mediaStreamSelections[itemId]
+                    selectedSubtitleIndex = storedSelection?.subtitleStreamIndex
+                    selectedAudioIndex = storedSelection?.audioStreamIndex
                     if (detail.item.mediaType == MediaType.SERIES) {
                         loadSeasons(itemId)
                     } else if (detail.item.mediaType == MediaType.EPISODE && detail.item.seriesId != null) {
@@ -338,15 +297,9 @@ class DetailViewModel @Inject constructor(
     fun playAlbum(startIndex: Int = 0) {
         if (albumTracks.isEmpty()) return
         val queueItems = albumTracks.map { track ->
-            com.raulshma.jellyplay.core.data.playback.AudioQueueItem(
-                id = track.id,
-                name = track.name,
-                artist = track.albumArtist ?: track.artistItems.firstOrNull()?.name ?: "",
-                album = track.album ?: _detail.value?.item?.name,
+            track.toAudioQueueItem(
                 imageUrl = playbackRepository.getImageUrl(track.id, maxWidth = 400),
-                mediaSourceId = null,
-                durationMs = track.runTimeTicks?.let { it / 10_000 } ?: 0L,
-                normalizationGain = track.normalizationGain,
+                albumFallback = _detail.value?.item?.name,
             )
         }
         audioPlaybackManager.playQueue(queueItems, startIndex)
@@ -631,22 +584,7 @@ class DetailViewModel @Inject constructor(
         playbackRepository.getBackdropUrl(itemId, maxWidth = 1280)
 
     private fun enqueueDownloadWorker(downloadId: String) {
-        val constraints = Constraints.Builder()
-            .setRequiredNetworkType(NetworkType.CONNECTED)
-            .build()
-        val workRequest = OneTimeWorkRequestBuilder<DownloadWorker>()
-            .setConstraints(constraints)
-            .setInputData(
-                Data.Builder()
-                    .putString(DownloadWorker.KEY_DOWNLOAD_ID, downloadId)
-                    .build()
-            )
-            .build()
-        WorkManager.getInstance(context).enqueueUniqueWork(
-            "${DownloadWorker.UNIQUE_WORK_PREFIX}$downloadId",
-            ExistingWorkPolicy.REPLACE,
-            workRequest,
-        )
+        downloadRepository.enqueueDownload(downloadId)
     }
 
     private fun loadSeerrData(detail: MediaDetail, generation: Long) {
@@ -744,64 +682,17 @@ class DetailViewModel @Inject constructor(
         profileId: Int? = null,
         rootFolder: String? = null,
         tags: List<Int>? = null,
-    ) {
-        launch {
-            _seerrRequestResult.set(SeerrRequestResult(isLoading = true))
-            seerrRequestDelegate.requestMedia(
-                mediaType = item.mediaType,
-                tmdbId = item.id,
-                seasons = seasons,
-                serverId = serverId,
-                profileId = profileId,
-                rootFolder = rootFolder,
-                tags = tags,
-            ).onSuccess {
-                _seerrRequestResult.set(SeerrRequestResult(success = true))
-            }.onFailure {
-                _seerrRequestResult.set(SeerrRequestResult(error = it.message ?: "Request failed"))
-            }
-        }
-    }
+    ) = seerrRequestState.requestMedia(item, seasons, serverId, profileId, rootFolder, tags)
 
-    fun loadSeerrServiceDetails(mediaType: String) {
-        launch {
-            _isLoadingSeerrServices.set(true)
-            try {
-                val result = seerrRequestDelegate.fetchServiceDetails(mediaType)
-                _radarrServers.set(result.radarrServers)
-                _sonarrServers.set(result.sonarrServers)
-            } finally {
-                _isLoadingSeerrServices.set(false)
-            }
-        }
-    }
+    fun loadSeerrServiceDetails(mediaType: String) = seerrRequestState.loadServiceDetails(mediaType)
 
-    fun loadSeerrTvSeasons(tmdbId: Int) {
-        launch {
-            _seerrTvSeasons.set(emptyList())
-            val seasons = seerrRequestDelegate.fetchTvSeasons(tmdbId)
-            _seerrTvSeasons.set(seasons)
-        }
-    }
+    fun loadSeerrTvSeasons(tmdbId: Int) = seerrRequestState.loadTvSeasons(tmdbId)
 
-    fun clearSeerrRequestResult() {
-        _seerrRequestResult.set(null)
-    }
+    fun clearSeerrRequestResult() = seerrRequestState.clearRequestResult()
 
-    fun prefetchSeerrDetails(tmdbId: Int, mediaType: String, onDone: () -> Unit) {
-        launch {
-            seerrRequestDelegate.prefetchDetails(tmdbId, mediaType)
-            onDone()
-        }
-    }
+    fun prefetchSeerrDetails(tmdbId: Int, mediaType: String, onDone: () -> Unit) =
+        seerrRequestState.prefetchDetails(tmdbId, mediaType, onDone)
 }
-
-@Immutable
-data class SeerrRequestResult(
-    val isLoading: Boolean = false,
-    val success: Boolean? = null,
-    val error: String? = null,
-)
 
 @Immutable
 data class SeriesDownloadResult(

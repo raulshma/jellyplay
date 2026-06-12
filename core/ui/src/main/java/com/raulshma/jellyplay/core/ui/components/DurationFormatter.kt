@@ -26,6 +26,7 @@ fun formatRemainingTimeFromTicks(runTimeTicks: Long, playbackPositionTicks: Long
 }
 
 fun formatDurationMs(ms: Long): String {
+    if (ms <= 0) return "0:00"
     val totalSeconds = ms / 1000
     val hours = totalSeconds / 3600
     val minutes = (totalSeconds % 3600) / 60
@@ -35,4 +36,20 @@ fun formatDurationMs(ms: Long): String {
     } else {
         String.format("%d:%02d", minutes, seconds)
     }
+}
+
+fun formatDurationFromMinutes(totalMinutes: Long): String {
+    val hours = totalMinutes / 60
+    val minutes = totalMinutes % 60
+    return when {
+        hours > 0 && minutes > 0 -> "${hours}h ${minutes}m"
+        hours > 0 -> "${hours}h"
+        else -> "${minutes}m"
+    }
+}
+
+fun formatDurationApproxSeconds(seconds: Long): String = when {
+    seconds >= 3600 -> String.format("%.1fh", seconds / 3600.0)
+    seconds >= 60 -> "${seconds / 60}m"
+    else -> "${seconds}s"
 }

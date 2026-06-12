@@ -22,7 +22,7 @@ class BaselineProfileGenerator {
         ) {
             pressHome()
             startActivityAndWait()
-            waitForIdleSync()
+            device.waitForIdle()
         }
     }
 }

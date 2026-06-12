@@ -54,6 +54,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusProperties
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Brush
@@ -192,10 +193,18 @@ internal fun PlayerControls(
     audioTracks: List<TrackOption> = emptyList(),
     showPlaybackMetadata: Boolean = true,
     onToggleOrientation: () -> Unit = {},
+    tvSkipSegmentFocusRequester: FocusRequester? = null,
+    tvNextEpisodeFocusRequester: FocusRequester? = null,
+    isSkipSegmentVisible: Boolean = false,
+    isNextEpisodeVisible: Boolean = false,
     modifier: Modifier = Modifier,
 ) {
     val isTv = LocalTvMode.current
     val tvPlayPauseFocusRequester = remember { FocusRequester() }
+    val tvBackFocusRequester = remember { FocusRequester() }
+    val tvSeekbarFocusRequester = remember { FocusRequester() }
+    val tvBottomButtonsFocusRequester = remember { FocusRequester() }
+    val tvBackFocusState = rememberTvFocusState(focusedScale = 1.08f)
 
     LaunchedEffect(isVisible, isTv) {
         if (isTv && isVisible) {
@@ -215,11 +224,23 @@ internal fun PlayerControls(
             visible = isVisible,
             enter = playerTopControlsEnter(),
             exit = playerTopControlsExit(),
-            modifier = Modifier.align(Alignment.TopCenter)
+            modifier = Modifier
+                .align(Alignment.TopCenter)
+                .then(
+                    if (isTv) Modifier.focusRequester(tvBackFocusRequester) else Modifier
+                )
         ) {
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
+                    .then(if (isTv) Modifier.tvFocusRestorer() else Modifier)
+                    .then(
+                        if (isTv) {
+                            Modifier.focusProperties {
+                                down = tvPlayPauseFocusRequester
+                            }
+                        } else Modifier
+                    )
                     .background(
                         Brush.verticalGradient(
                             colors = listOf(
@@ -236,7 +257,10 @@ internal fun PlayerControls(
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     IconButton(
                         onClick = onBack,
-                        modifier = Modifier.size(40.dp),
+                        modifier = Modifier
+                            .size(40.dp)
+                            .then(tvBackFocusState.focusModifier)
+                            .tvFocusIndicator(tvBackFocusState, IconButtonDefaults.smallRoundShape),
                     ) {
                         Icon(
                             Tabler.Outline.ArrowLeft,
@@ -264,6 +288,17 @@ internal fun PlayerControls(
                             )
                         }
                     }
+                    if (duration > 0) {
+                        val remainingMs = (duration - currentPosition).coerceAtLeast(0)
+                        val realRemainingMs = if (playbackSpeed > 0f) (remainingMs / playbackSpeed).toLong() else remainingMs
+                        val endsAt = rememberEndsAtTime(realRemainingMs)
+                        Text(
+                            text = "Ends at $endsAt",
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.8f),
+                            modifier = Modifier.padding(end = 8.dp)
+                        )
+                    }
                     if (isInSyncPlaySession) {
                         Spacer(Modifier.width(8.dp))
                         SyncPlayHeaderIndicator(
@@ -287,11 +322,20 @@ internal fun PlayerControls(
             Row(
                 horizontalArrangement = Arrangement.spacedBy(16.dp),
                 verticalAlignment = Alignment.CenterVertically,
-                modifier = Modifier.then(if (isTv) Modifier.tvFocusRestorer() else Modifier),
+                modifier = Modifier
+                    .then(if (isTv) Modifier.tvFocusRestorer() else Modifier)
+                    .then(
+                        if (isTv) {
+                            Modifier.focusProperties {
+                                up = tvBackFocusRequester
+                                down = tvSeekbarFocusRequester
+                            }
+                        } else Modifier
+                    ),
             ) {
                 FilledTonalIconButton(
                     onClick = onSeekBack,
-                    modifier = Modifier.size(IconButtonDefaults.largeContainerSize()),
+                    modifier = Modifier.size(IconButtonDefaults.mediumContainerSize()),
                     shape = IconButtonDefaults.largeRoundShape,
                     colors = IconButtonDefaults.filledTonalIconButtonColors(
                         containerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
@@ -300,7 +344,7 @@ internal fun PlayerControls(
                 ) {
                     Icon(
                         Tabler.Outline.PlayerTrackPrev, "Rewind",
-                        modifier = Modifier.size(IconButtonDefaults.largeIconSize),
+                        modifier = Modifier.size(IconButtonDefaults.mediumIconSize),
                     )
                 }
 
@@ -324,7 +368,7 @@ internal fun PlayerControls(
 
                 FilledTonalIconButton(
                     onClick = onSeekForward,
-                    modifier = Modifier.size(IconButtonDefaults.largeContainerSize()),
+                    modifier = Modifier.size(IconButtonDefaults.mediumContainerSize()),
                     shape = IconButtonDefaults.largeRoundShape,
                     colors = IconButtonDefaults.filledTonalIconButtonColors(
                         containerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
@@ -333,7 +377,7 @@ internal fun PlayerControls(
                 ) {
                     Icon(
                         Tabler.Outline.PlayerTrackNext, "Forward",
-                        modifier = Modifier.size(IconButtonDefaults.largeIconSize),
+                        modifier = Modifier.size(IconButtonDefaults.mediumIconSize),
                     )
                 }
             }
@@ -387,6 +431,9 @@ internal fun PlayerControls(
                     onSeekStart = onSeekStart,
                     onSeekEnd = onSeekEnd,
                     onSeekPositionChange = onSeekPositionChange,
+                    tvFocusRequester = tvSeekbarFocusRequester,
+                    tvUpFocusRequester = tvPlayPauseFocusRequester,
+                    tvDownFocusRequester = tvBottomButtonsFocusRequester,
                 )
 
 
@@ -395,14 +442,24 @@ internal fun PlayerControls(
                     modifier = Modifier
                         .fillMaxWidth()
                         .padding(top = 4.dp)
-                        .then(if (isTv) Modifier.tvFocusRestorer() else Modifier),
+                        .then(if (isTv) Modifier.tvFocusRestorer() else Modifier)
+                        .then(
+                            if (isTv) {
+                                Modifier
+                                    .focusRequester(tvBottomButtonsFocusRequester)
+                                    .focusProperties {
+                                        up = tvSeekbarFocusRequester
+                                    }
+                            } else Modifier
+                        ),
                     horizontalArrangement = Arrangement.SpaceBetween,
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
                     Row(
                         modifier = Modifier
                             .weight(1f)
-                            .horizontalScroll(rememberScrollState()),
+                            .then(if (!isTv) Modifier.horizontalScroll(rememberScrollState()) else Modifier),
+                        horizontalArrangement = if (isTv) Arrangement.spacedBy(2.dp) else Arrangement.Start,
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         PlayerQualityButton(
@@ -448,11 +505,13 @@ internal fun PlayerControls(
                             onClick = onAspectRatioClick,
                             tint = if (currentAspectRatio != AspectRatio.FIT) MaterialTheme.colorScheme.primary else Color.Unspecified,
                         )
-                        PlayerIconButton(
-                            icon = Tabler.Outline.Rotate,
-                            contentDescription = "Rotate Screen",
-                            onClick = onToggleOrientation,
-                        )
+                        if (!isTv) {
+                            PlayerIconButton(
+                                icon = Tabler.Outline.Rotate,
+                                contentDescription = "Rotate Screen",
+                                onClick = onToggleOrientation,
+                            )
+                        }
                         PlayerIconButton(
                             icon = Tabler.Outline.InfoCircle,
                             contentDescription = "Info",
@@ -461,12 +520,16 @@ internal fun PlayerControls(
                     }
 
                     Row(verticalAlignment = Alignment.CenterVertically) {
-                        PlayerIconButton(
-                            icon = Tabler.Outline.Lock,
-                            contentDescription = "Lock screen",
-                            onClick = onLockClick,
-                        )
-                        PipButton(onClick = onPipClick)
+                        if (!isTv) {
+                            PlayerIconButton(
+                                icon = Tabler.Outline.Lock,
+                                contentDescription = "Lock screen",
+                                onClick = onLockClick,
+                            )
+                        }
+                        if (!isTv) {
+                            PipButton(onClick = onPipClick)
+                        }
 
                         var showOverflow by remember { mutableStateOf(false) }
                         LaunchedEffect(showOverflow) { onOverflowMenuChange(showOverflow) }
@@ -475,6 +538,17 @@ internal fun PlayerControls(
                                 icon = Tabler.Outline.DotsVertical,
                                 contentDescription = "More options",
                                 onClick = { showOverflow = true },
+                                modifier = Modifier.then(
+                                    if (isTv) {
+                                        Modifier.focusProperties {
+                                            right = when {
+                                                isNextEpisodeVisible && tvNextEpisodeFocusRequester != null -> tvNextEpisodeFocusRequester
+                                                isSkipSegmentVisible && tvSkipSegmentFocusRequester != null -> tvSkipSegmentFocusRequester
+                                                else -> FocusRequester.Default
+                                            }
+                                        }
+                                    } else Modifier
+                                )
                             )
                             PlayerOverflowMenu(
                                 expanded = showOverflow,
@@ -642,6 +716,9 @@ private fun TvControllableSeekBar(
     onSeekStart: () -> Unit,
     onSeekEnd: () -> Unit,
     onSeekPositionChange: (Long) -> Unit = {},
+    tvFocusRequester: FocusRequester = remember { FocusRequester() },
+    tvUpFocusRequester: FocusRequester? = null,
+    tvDownFocusRequester: FocusRequester? = null,
 ) {
     val isTv = LocalTvMode.current
     val interactionSource = remember { androidx.compose.foundation.interaction.MutableInteractionSource() }
@@ -682,7 +759,25 @@ private fun TvControllableSeekBar(
 
     val tvFocusState = rememberTvFocusState(focusedScale = 1f)
 
+    val seekStep = if (isTv) 30_000f / duration else 10_000f / duration
+
     Column(modifier = Modifier.fillMaxWidth()) {
+        if (isTv && isSeekBarFocused && trickplayBitmap != null) {
+            val displayMs = (tvSeekPosition * duration).toLong()
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(bottom = 8.dp),
+                contentAlignment = Alignment.BottomCenter,
+            ) {
+                TrickplayOverlay(
+                    bitmap = trickplayBitmap,
+                    positionMs = displayMs,
+                    durationMs = duration,
+                )
+            }
+        }
+
         Box(
             modifier = Modifier
                 .fillMaxWidth()
@@ -690,8 +785,17 @@ private fun TvControllableSeekBar(
                 .then(
                     if (isTv) {
                         Modifier
+                            .focusRequester(tvFocusRequester)
                             .then(tvFocusState.focusModifier)
                             .tvFocusIndicator(tvFocusState, ShapeCache.smooth4)
+                            .then(
+                                if (tvUpFocusRequester != null || tvDownFocusRequester != null) {
+                                    Modifier.focusProperties {
+                                        tvUpFocusRequester?.let { up = it }
+                                        tvDownFocusRequester?.let { down = it }
+                                    }
+                                } else Modifier
+                            )
                             .onFocusChanged { focusState ->
                                 val wasFocused = isSeekBarFocused
                                 isSeekBarFocused = focusState.isFocused
@@ -708,7 +812,6 @@ private fun TvControllableSeekBar(
                             .onKeyEvent { keyEvent ->
                                 if (keyEvent.type != KeyEventType.KeyDown) return@onKeyEvent false
                                 if (duration <= 0) return@onKeyEvent false
-                                val seekStep = 10_000f / duration
                                 when (keyEvent.key) {
                                     Key.DirectionRight -> {
                                         if (!tvSeekStarted) {
@@ -865,21 +968,6 @@ private fun TvControllableSeekBar(
         if (isDragging || (isTv && isSeekBarFocused)) {
             val displayMs = if (isDragging) (dragFraction * duration).toLong() else (tvSeekPosition * duration).toLong()
 
-            if (isTv && isSeekBarFocused && trickplayBitmap != null) {
-                Box(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(bottom = 8.dp),
-                    contentAlignment = Alignment.BottomCenter,
-                ) {
-                    TrickplayOverlay(
-                        bitmap = trickplayBitmap,
-                        positionMs = displayMs,
-                        durationMs = duration,
-                    )
-                }
-            }
-
             Row(
                 modifier = Modifier
                     .align(Alignment.Start)
@@ -894,18 +982,6 @@ private fun TvControllableSeekBar(
                     ),
                     color = MaterialTheme.colorScheme.onSurface,
                 )
-                if (duration > 0) {
-                    val remainingMs = (duration - displayMs).coerceAtLeast(0)
-                    val realRemainingMs = if (playbackSpeed > 0f) (remainingMs / playbackSpeed).toLong() else remainingMs
-                    val endsAt = rememberEndsAtTime(realRemainingMs)
-                    Text(
-                        text = " • Ends at $endsAt",
-                        style = MaterialTheme.typography.labelSmall.copy(
-                            fontWeight = FontWeight.Normal,
-                        ),
-                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f),
-                    )
-                }
             }
         } else {
             Row(
@@ -913,28 +989,14 @@ private fun TvControllableSeekBar(
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically,
             ) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Text(
-                        formatDuration(currentPosition),
-                        style = MaterialTheme.typography.labelSmall.copy(
-                            fontFamily = FontFamily.Monospace,
-                            fontWeight = FontWeight.Medium,
-                        ),
-                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f),
-                    )
-                    if (duration > 0) {
-                        val remainingMs = (duration - currentPosition).coerceAtLeast(0)
-                        val realRemainingMs = if (playbackSpeed > 0f) (remainingMs / playbackSpeed).toLong() else remainingMs
-                        val endsAt = rememberEndsAtTime(realRemainingMs)
-                        Text(
-                            text = " • Ends at $endsAt",
-                            style = MaterialTheme.typography.labelSmall.copy(
-                                fontWeight = FontWeight.Normal,
-                            ),
-                            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f),
-                        )
-                    }
-                }
+                Text(
+                    formatDuration(currentPosition),
+                    style = MaterialTheme.typography.labelSmall.copy(
+                        fontFamily = FontFamily.Monospace,
+                        fontWeight = FontWeight.Medium,
+                    ),
+                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f),
+                )
                 Text(
                     if (duration > 0) formatDuration(duration) else "--:--",
                     style = MaterialTheme.typography.labelSmall.copy(
@@ -995,11 +1057,80 @@ private fun PlayerOverflowMenu(
     var showAudioNormalizationSubmenu by remember { mutableStateOf(false) }
     var showChannelMixSubmenu by remember { mutableStateOf(false) }
 
+    val isTv = LocalTvMode.current
+
+    val dialogueBoostFocusRequester = remember { FocusRequester() }
+    val nightModeFocusRequester = remember { FocusRequester() }
+    val audioNormalizationFocusRequester = remember { FocusRequester() }
+    val channelMixFocusRequester = remember { FocusRequester() }
+
+    var isFirstDialogueBoostRender by remember { mutableStateOf(true) }
+    var isFirstNightModeRender by remember { mutableStateOf(true) }
+    var isFirstAudioNormalizationRender by remember { mutableStateOf(true) }
+    var isFirstChannelMixRender by remember { mutableStateOf(true) }
+
+    LaunchedEffect(showDialogueBoostSubmenu) {
+        if (isFirstDialogueBoostRender) {
+            isFirstDialogueBoostRender = false
+        } else {
+            if (isTv) {
+                try {
+                    dialogueBoostFocusRequester.requestFocus()
+                } catch (e: Exception) {
+                    // ignore
+                }
+            }
+        }
+    }
+
+    LaunchedEffect(showNightModeSubmenu) {
+        if (isFirstNightModeRender) {
+            isFirstNightModeRender = false
+        } else {
+            if (isTv) {
+                try {
+                    nightModeFocusRequester.requestFocus()
+                } catch (e: Exception) {
+                    // ignore
+                }
+            }
+        }
+    }
+
+    LaunchedEffect(showAudioNormalizationSubmenu) {
+        if (isFirstAudioNormalizationRender) {
+            isFirstAudioNormalizationRender = false
+        } else {
+            if (isTv) {
+                try {
+                    audioNormalizationFocusRequester.requestFocus()
+                } catch (e: Exception) {
+                    // ignore
+                }
+            }
+        }
+    }
+
+    LaunchedEffect(showChannelMixSubmenu) {
+        if (isFirstChannelMixRender) {
+            isFirstChannelMixRender = false
+        } else {
+            if (isTv) {
+                try {
+                    channelMixFocusRequester.requestFocus()
+                } catch (e: Exception) {
+                    // ignore
+                }
+            }
+        }
+    }
+
     DropdownMenu(
         expanded = expanded,
         onDismissRequest = onDismiss,
         containerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
         shape = MaterialTheme.shapes.extraLarge,
+        modifier = Modifier.then(if (isTv) Modifier.fillMaxWidth(fraction = 0.5f) else Modifier),
     ) {
         if (supportsSubtitleStyle) {
             OverflowMenuItem(
@@ -1015,6 +1146,7 @@ private fun PlayerOverflowMenu(
                     icon = Tabler.Outline.ArrowLeft,
                     label = "Dialogue Boost",
                     onClick = { showDialogueBoostSubmenu = false },
+                    modifier = Modifier.focusRequester(dialogueBoostFocusRequester),
                 )
                 EffectStrength.entries.forEach { strength ->
                     DropdownMenuItem(
@@ -1048,6 +1180,7 @@ private fun PlayerOverflowMenu(
                     label = if (dialogueBoostEnabled) "Dialogue Boost \u00B7 ${dialogueBoostStrength.displayName}" else "Dialogue Boost",
                     onClick = { showDialogueBoostSubmenu = true },
                     tint = if (dialogueBoostEnabled) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface,
+                    modifier = Modifier.focusRequester(dialogueBoostFocusRequester),
                 )
             }
         }
@@ -1057,6 +1190,7 @@ private fun PlayerOverflowMenu(
                     icon = Tabler.Outline.ArrowLeft,
                     label = "Night Mode",
                     onClick = { showNightModeSubmenu = false },
+                    modifier = Modifier.focusRequester(nightModeFocusRequester),
                 )
                 EffectStrength.entries.forEach { strength ->
                     DropdownMenuItem(
@@ -1090,6 +1224,7 @@ private fun PlayerOverflowMenu(
                     label = if (nightModeEnabled) "Night Mode \u00B7 ${nightModeStrength.displayName}" else "Night Mode",
                     onClick = { showNightModeSubmenu = true },
                     tint = if (nightModeEnabled) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface,
+                    modifier = Modifier.focusRequester(nightModeFocusRequester),
                 )
             }
         }
@@ -1099,6 +1234,7 @@ private fun PlayerOverflowMenu(
                     icon = Tabler.Outline.ArrowLeft,
                     label = "Audio Normalization",
                     onClick = { showAudioNormalizationSubmenu = false },
+                    modifier = Modifier.focusRequester(audioNormalizationFocusRequester),
                 )
                 AudioNormalizationMode.entries.forEach { mode ->
                     DropdownMenuItem(
@@ -1131,6 +1267,7 @@ private fun PlayerOverflowMenu(
                     label = if (audioNormalizationEnabled) "Normalization \u00B7 ${audioNormalizationMode.displayName}" else "Audio Normalization",
                     onClick = { showAudioNormalizationSubmenu = true },
                     tint = if (audioNormalizationEnabled) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface,
+                    modifier = Modifier.focusRequester(audioNormalizationFocusRequester),
                 )
             }
         }
@@ -1140,6 +1277,7 @@ private fun PlayerOverflowMenu(
                     icon = Tabler.Outline.ArrowLeft,
                     label = "Channel Mixing",
                     onClick = { showChannelMixSubmenu = false },
+                    modifier = Modifier.focusRequester(channelMixFocusRequester),
                 )
                 ChannelMixMode.entries.forEach { mode ->
                     DropdownMenuItem(
@@ -1172,6 +1310,7 @@ private fun PlayerOverflowMenu(
                     label = if (channelMixEnabled) "Channel Mix \u00B7 ${channelMixMode.displayName}" else "Channel Mixing",
                     onClick = { showChannelMixSubmenu = true },
                     tint = if (channelMixEnabled) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface,
+                    modifier = Modifier.focusRequester(channelMixFocusRequester),
                 )
             }
         }
@@ -1230,6 +1369,7 @@ private fun OverflowMenuItem(
     onClick: () -> Unit,
     tint: Color = Color.Unspecified,
     enabled: Boolean = true,
+    modifier: Modifier = Modifier,
 ) {
     val effectiveTint = if (tint != Color.Unspecified) tint else MaterialTheme.colorScheme.onSurface
     DropdownMenuItem(
@@ -1250,6 +1390,7 @@ private fun OverflowMenuItem(
                 modifier = Modifier.size(20.dp),
             )
         },
+        modifier = modifier,
     )
 }
 

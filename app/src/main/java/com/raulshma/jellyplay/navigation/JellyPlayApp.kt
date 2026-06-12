@@ -1,6 +1,7 @@
 package com.raulshma.jellyplay.navigation
 
 import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.animateContentSize
 import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
@@ -31,7 +32,10 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.selection.selectableGroup
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -47,6 +51,9 @@ import androidx.tv.material3.NavigationDrawer
 import androidx.tv.material3.NavigationDrawerItem
 import androidx.tv.material3.MaterialTheme as TvMaterial3Theme
 import androidx.tv.material3.darkColorScheme as tvDarkColorScheme
+import androidx.tv.material3.Icon as TvIcon
+import androidx.tv.material3.Text as TvText
+import androidx.tv.material3.LocalContentColor as TvLocalContentColor
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
@@ -59,6 +66,7 @@ import androidx.compose.runtime.saveable.rememberSaveableStateHolder
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.foundation.layout.IntrinsicSize
 import androidx.compose.ui.graphics.Color
 
 import androidx.compose.ui.platform.LocalContext
@@ -103,9 +111,14 @@ import com.raulshma.jellyplay.core.designsystem.theme.LocalIsSynthwave
 import com.raulshma.jellyplay.core.designsystem.theme.LocalIsSoothingTheme
 import com.raulshma.jellyplay.core.designsystem.theme.LocalIsMonochromeTheme
 import com.raulshma.jellyplay.core.designsystem.theme.ShapeCache
+import com.raulshma.jellyplay.core.designsystem.theme.cardBorder
+import com.raulshma.jellyplay.core.designsystem.theme.containerTint
+import com.raulshma.jellyplay.core.designsystem.theme.shadowElevation
+import com.raulshma.jellyplay.core.designsystem.theme.tonalElevation
 import com.raulshma.jellyplay.core.ui.components.LocalNavigationBarColor
 import com.raulshma.jellyplay.core.ui.components.MiniPlayer
 import com.raulshma.jellyplay.core.ui.components.LocalPerformanceMode
+import com.raulshma.jellyplay.core.ui.components.LocalFloatingNavVisibility
 import com.raulshma.jellyplay.core.ui.navigation.ALL_TOP_LEVEL_ROUTE_KEYS
 import com.raulshma.jellyplay.core.ui.navigation.MUSIC_TOP_LEVEL_ROUTES
 import com.raulshma.jellyplay.core.ui.navigation.Navigator
@@ -116,6 +129,8 @@ import com.raulshma.jellyplay.core.ui.tv.TvScaffold
 import com.raulshma.jellyplay.core.ui.tv.LocalTvMode
 import com.raulshma.jellyplay.core.ui.tv.LocalTvTypography
 import com.raulshma.jellyplay.core.ui.tv.isTv
+import com.raulshma.jellyplay.core.ui.tv.rememberTvFocusState
+import com.raulshma.jellyplay.core.ui.tv.tvFocusIndicator
 import com.raulshma.jellyplay.core.ui.tv.tvFocusRestorer
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
@@ -145,6 +160,7 @@ import com.raulshma.jellyplay.feature.syncplay.navigation.syncPlaySection
 import com.raulshma.jellyplay.feature.onboarding.navigation.onboardingSection
 import com.raulshma.jellyplay.feature.newsletter.navigation.newsletterSection
 import com.raulshma.jellyplay.feature.requests.navigation.requestsSection
+import com.raulshma.jellyplay.feature.shortcuts.navigation.shortcutsSection
 import kotlinx.coroutines.launch
 import com.composables.icons.tabler.Tabler
 import com.composables.icons.tabler.outline.*
@@ -436,7 +452,8 @@ private fun MainContent(
     val bottomNavHeight = 80.dp // Approximate height
     val bottomNavHeightPx = with(LocalDensity.current) { bottomNavHeight.toPx() }
     val bottomNavOffsetHeightPx = remember { mutableFloatStateOf(0f) }
-    var isBottomNavVisible by remember { mutableStateOf(true) }
+    val isBottomNavVisibleState = remember { mutableStateOf(true) }
+    var isBottomNavVisible by isBottomNavVisibleState
 
     val animatedBottomNavOffset by androidx.compose.animation.core.animateFloatAsState(
         targetValue = if (isBottomNavVisible) 0f else -bottomNavHeightPx * 2,
@@ -457,6 +474,7 @@ private fun MainContent(
         LocalAdaptiveInfo provides adaptiveInfo,
         LocalTvTypography provides tvTypography,
         LocalPerformanceMode provides preferences.performanceMode,
+        LocalFloatingNavVisibility provides isBottomNavVisibleState,
     ) {
         val isExpanded = adaptiveInfo.windowSizeClass != WindowSizeClass.Compact
 
@@ -671,9 +689,9 @@ private fun MainContent(
                                 Box(
                                     modifier = Modifier
                                         .align(Alignment.BottomCenter)
-                                        .padding(bottom = systemNavBarBottom + 84.dp)
+                                        .padding(bottom = systemNavBarBottom + 60.dp)
                                         .offset {
-                                            val maxOffset = 88.dp.toPx()
+                                            val maxOffset = 60.dp.toPx()
                                             val yOffset = (-bottomNavOffsetHeightPx.floatValue).coerceAtMost(maxOffset)
                                             IntOffset(x = 0, y = yOffset.roundToInt())
                                         }
@@ -720,11 +738,11 @@ private fun MainContent(
                                     },
                                     modifier = Modifier
                                         .align(Alignment.BottomEnd)
-                                        .padding(end = 8.dp, bottom = systemNavBarBottom + (if (!isExpanded) 88.dp else 8.dp))
+                                        .padding(end = 8.dp, bottom = systemNavBarBottom + (if (!isExpanded) 64.dp else 8.dp))
                                         .fillMaxWidth(0.45f)
                                         .offset {
                                             if (!isExpanded) {
-                                                val maxOffset = 88.dp.toPx()
+                                                val maxOffset = 64.dp.toPx()
                                                 val yOffset = (-bottomNavOffsetHeightPx.floatValue).coerceAtMost(maxOffset)
                                                 IntOffset(x = 0, y = yOffset.roundToInt())
                                             } else {
@@ -742,7 +760,7 @@ private fun MainContent(
                                     containerColor = animatedNavBarColor,
                                     modifier = Modifier
                                         .align(Alignment.BottomCenter)
-                                        .padding(bottom = systemNavBarBottom + 8.dp)
+                                        .padding(bottom = systemNavBarBottom + 4.dp)
                                         .padding(horizontal = 16.dp)
                                         .offset { IntOffset(x = 0, y = -bottomNavOffsetHeightPx.floatValue.roundToInt()) }
                                 )
@@ -846,7 +864,8 @@ private fun TvMainLayout(
     )
     val currentRoute = navigationState.backStacks[currentTopLevel]?.lastOrNull()
 
-    Row(
+    NavigationDrawer(
+        drawerState = drawerState,
         modifier = Modifier
             .fillMaxSize()
             .background(MaterialTheme.colorScheme.background)
@@ -856,16 +875,22 @@ private fun TvMainLayout(
                     true
                 } else false
             },
-    ) {
-        NavigationDrawer(
-            drawerState = drawerState,
-            modifier = Modifier.padding(vertical = 8.dp),
-            drawerContent = {
-                Column(
-                    modifier = Modifier
-                        .focusRestorer()
-                        .selectableGroup(),
-                ) {
+        drawerContent = { drawerValue ->
+            val isClosed = drawerValue == androidx.tv.material3.DrawerValue.Closed
+            Column(
+                modifier = Modifier
+                    .fillMaxHeight()
+                    .width(if (isClosed) 72.dp else 280.dp)
+                    .padding(
+                        start = 24.dp,
+                        end = if (isClosed) 24.dp else 16.dp,
+                        top = 8.dp,
+                        bottom = 8.dp
+                    )
+                    .verticalScroll(rememberScrollState())
+                    .focusRestorer()
+                    .selectableGroup(),
+            ) {
                     activeTopLevelRoutes.entries.toList().forEachIndexed { index, (route, label) ->
                         val isSelected = route == currentTopLevel
                         NavigationDrawerItem(
@@ -876,13 +901,12 @@ private fun TvMainLayout(
                                 drawerState.setValue(androidx.tv.material3.DrawerValue.Closed)
                             },
                             leadingContent = {
-                                NavIcon(route, label, tint = MaterialTheme.colorScheme.onSurface)
+                                NavIcon(route, label, tint = TvLocalContentColor.current)
                             },
                             content = {
-                                Text(
+                                TvText(
                                     label,
                                     style = MaterialTheme.typography.labelMedium,
-                                    color = MaterialTheme.colorScheme.onSurface,
                                 )
                             },
                             modifier = Modifier
@@ -894,6 +918,184 @@ private fun TvMainLayout(
                                 },
                         )
                     }
+
+                    HorizontalDivider(
+                        modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
+                        color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f),
+                    )
+
+                    NavigationDrawerItem(
+                        selected = false,
+                        onClick = {
+                            drawerState.setValue(androidx.tv.material3.DrawerValue.Closed)
+                            navigator.navigate(Route.Downloads)
+                        },
+                        leadingContent = {
+                            TvIcon(Tabler.Outline.Download, contentDescription = null)
+                        },
+                        content = {
+                            TvText("Downloads", style = MaterialTheme.typography.labelMedium)
+                        },
+                    )
+
+                    NavigationDrawerItem(
+                        selected = false,
+                        onClick = {
+                            drawerState.setValue(androidx.tv.material3.DrawerValue.Closed)
+                            navigator.navigate(Route.Favorites)
+                        },
+                        leadingContent = {
+                            TvIcon(Tabler.Outline.Heart, contentDescription = null)
+                        },
+                        content = {
+                            TvText("Favorites", style = MaterialTheme.typography.labelMedium)
+                        },
+                    )
+
+                    NavigationDrawerItem(
+                        selected = false,
+                        onClick = {
+                            drawerState.setValue(androidx.tv.material3.DrawerValue.Closed)
+                            navigator.navigate(Route.SyncPlay)
+                        },
+                        leadingContent = {
+                            TvIcon(Tabler.Outline.Users, contentDescription = null)
+                        },
+                        content = {
+                            TvText("SyncPlay", style = MaterialTheme.typography.labelMedium)
+                        },
+                    )
+
+                    NavigationDrawerItem(
+                        selected = false,
+                        onClick = {
+                            drawerState.setValue(androidx.tv.material3.DrawerValue.Closed)
+                            navigator.navigate(Route.WatchProgressHeatmap)
+                        },
+                        leadingContent = {
+                            TvIcon(Tabler.Outline.ChartBar, contentDescription = null)
+                        },
+                        content = {
+                            TvText("Watch History", style = MaterialTheme.typography.labelMedium)
+                        },
+                    )
+
+                    NavigationDrawerItem(
+                        selected = false,
+                        onClick = {
+                            drawerState.setValue(androidx.tv.material3.DrawerValue.Closed)
+                            navigator.navigate(Route.Requests)
+                        },
+                        leadingContent = {
+                            TvIcon(Tabler.Outline.Inbox, contentDescription = null)
+                        },
+                        content = {
+                            TvText("Requests", style = MaterialTheme.typography.labelMedium)
+                        },
+                    )
+
+                    HorizontalDivider(
+                        modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
+                        color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f),
+                    )
+
+                    NavigationDrawerItem(
+                        selected = false,
+                        onClick = {
+                            drawerState.setValue(androidx.tv.material3.DrawerValue.Closed)
+                            navigator.navigate(Route.ServerManagement())
+                        },
+                        leadingContent = {
+                            TvIcon(Tabler.Outline.Server, contentDescription = null)
+                        },
+                        content = {
+                            TvText("Server Mgmt", style = MaterialTheme.typography.labelMedium)
+                        },
+                    )
+
+                    NavigationDrawerItem(
+                        selected = false,
+                        onClick = {
+                            drawerState.setValue(androidx.tv.material3.DrawerValue.Closed)
+                            navigator.navigate(Route.UserManagement())
+                        },
+                        leadingContent = {
+                            TvIcon(Tabler.Outline.User, contentDescription = null)
+                        },
+                        content = {
+                            TvText("Switch User", style = MaterialTheme.typography.labelMedium)
+                        },
+                    )
+
+                    NavigationDrawerItem(
+                        selected = false,
+                        onClick = {
+                            drawerState.setValue(androidx.tv.material3.DrawerValue.Closed)
+                            navigator.navigate(Route.AdminDashboard)
+                        },
+                        leadingContent = {
+                            TvIcon(Tabler.Outline.Shield, contentDescription = null)
+                        },
+                        content = {
+                            TvText("Admin", style = MaterialTheme.typography.labelMedium)
+                        },
+                    )
+
+                    NavigationDrawerItem(
+                        selected = false,
+                        onClick = {
+                            drawerState.setValue(androidx.tv.material3.DrawerValue.Closed)
+                            navigator.navigate(Route.SeerrSettings())
+                        },
+                        leadingContent = {
+                            TvIcon(Tabler.Outline.Puzzle, contentDescription = null)
+                        },
+                        content = {
+                            TvText("Seerr", style = MaterialTheme.typography.labelMedium)
+                        },
+                    )
+
+                    NavigationDrawerItem(
+                        selected = false,
+                        onClick = {
+                            drawerState.setValue(androidx.tv.material3.DrawerValue.Closed)
+                            navigator.navigate(Route.Settings)
+                        },
+                        leadingContent = {
+                            TvIcon(Tabler.Outline.Settings, contentDescription = null)
+                        },
+                        content = {
+                            TvText("Settings", style = MaterialTheme.typography.labelMedium)
+                        },
+                    )
+
+                    NavigationDrawerItem(
+                        selected = false,
+                        onClick = {
+                            drawerState.setValue(androidx.tv.material3.DrawerValue.Closed)
+                            navigator.navigate(Route.Onboarding)
+                        },
+                        leadingContent = {
+                            TvIcon(Tabler.Outline.Wand, contentDescription = null)
+                        },
+                        content = {
+                            TvText("Setup Wizard", style = MaterialTheme.typography.labelMedium)
+                        },
+                    )
+
+                    NavigationDrawerItem(
+                        selected = false,
+                        onClick = {
+                            drawerState.setValue(androidx.tv.material3.DrawerValue.Closed)
+                            navigator.navigate(Route.About)
+                        },
+                        leadingContent = {
+                            TvIcon(Tabler.Outline.InfoCircle, contentDescription = null)
+                        },
+                        content = {
+                            TvText("About", style = MaterialTheme.typography.labelMedium)
+                        },
+                    )
                 }
             },
             content = {
@@ -906,7 +1108,6 @@ private fun TvMainLayout(
                     enterPip = enterPip,
                     enterVideoMiniMode = enterVideoMiniMode,
                     modifier = Modifier
-                        .weight(1f)
                         .focusRequester(contentFocusRequester)
                         .tvFocusRestorer(),
                     onNowPlayingClick = onNowPlayingClick,
@@ -914,7 +1115,6 @@ private fun TvMainLayout(
                 )
             },
         )
-    }
 
     LaunchedEffect(currentRoute) {
         val initialIndex = activeTopLevelRoutes.keys.indexOf(currentTopLevel).coerceAtLeast(0)
@@ -925,7 +1125,7 @@ private fun TvMainLayout(
 }
 
 @Composable
-private fun NavIcon(route: Route, label: String, selected: Boolean = false, tint: Color = MaterialTheme.colorScheme.onSurface) {
+private fun NavIcon(route: Route, label: String, selected: Boolean = false, tint: Color = androidx.compose.material3.LocalContentColor.current) {
     val scale by androidx.compose.animation.core.animateFloatAsState(
         targetValue = if (selected) 1.15f else 1.0f,
         animationSpec = MaterialTheme.motionScheme.defaultSpatialSpec(),
@@ -938,6 +1138,7 @@ private fun NavIcon(route: Route, label: String, selected: Boolean = false, tint
         Route.Search -> Tabler.Outline.Search
         Route.LiveTv -> Tabler.Outline.DeviceTv
         Route.MusicBrowse -> Tabler.Outline.Disc
+        Route.Shortcuts -> Tabler.Outline.Apps
         else -> Tabler.Outline.Home // Fallback
     }
 
@@ -999,8 +1200,8 @@ private fun MainNavDisplay(
     val defaultSpatialOffset = motionScheme.defaultSpatialSpec<androidx.compose.ui.unit.IntOffset>()
 
     NavDisplay(
-                backStack = currentBackStack,
-                onBack = { navigator.goBack() },
+        backStack = currentBackStack,
+        onBack = { navigator.goBack() },
                 entryDecorators = listOf(entryDecorator, paddingDecorator),
                 transitionSpec = {
                     val targetLast = targetState
@@ -1200,6 +1401,7 @@ private fun MainNavDisplay(
             newsletterSection(navigator)
             insightsSection(navigator)
             requestsSection(navigator)
+            shortcutsSection(navigator)
         },
         modifier = modifier,
     )
@@ -1214,95 +1416,46 @@ private fun FloatingNavigationBar(
     containerColor: Color = MaterialTheme.colorScheme.surfaceContainer,
     modifier: Modifier = Modifier,
 ) {
-    val isSynthwave = LocalIsSynthwave.current
-    val isSoothing = LocalIsSoothingTheme.current
-    val isMonochrome = LocalIsMonochromeTheme.current
-
-    val synthwaveTint = Color(0xFF160C2D).copy(alpha = 0.92f)
-    val soothingTint = if (androidx.compose.foundation.isSystemInDarkTheme()) {
-        Color(0xFF161B22).copy(alpha = 0.88f)
-    } else {
-        Color(0xFFFFFFFF).copy(alpha = 0.88f)
-    }
-    val monochromeTint = if (androidx.compose.foundation.isSystemInDarkTheme()) {
-        Color(0xFF000000).copy(alpha = 0.95f)
-    } else {
-        Color(0xFFFFFFFF).copy(alpha = 0.95f)
-    }
-    val resolvedColor = when {
-        isSynthwave -> synthwaveTint
-        isSoothing -> soothingTint
-        isMonochrome -> monochromeTint
-        else -> containerColor.copy(alpha = 0.90f)
-    }
-
-    val border = when {
-        isSynthwave -> {
-            androidx.compose.foundation.BorderStroke(
-                width = 1.5.dp,
-                brush = androidx.compose.ui.graphics.Brush.linearGradient(
-                    colors = listOf(
-                        MaterialTheme.colorScheme.primary,
-                        MaterialTheme.colorScheme.secondary
-                    )
-                )
-            )
-        }
-        isSoothing -> {
-            androidx.compose.foundation.BorderStroke(
-                width = 0.5.dp,
-                color = MaterialTheme.colorScheme.outline.copy(alpha = 0.3f)
-            )
-        }
-        isMonochrome -> {
-            androidx.compose.foundation.BorderStroke(
-                width = 1.dp,
-                color = MaterialTheme.colorScheme.outline.copy(alpha = 0.45f)
-            )
-        }
-        else -> null
-    }
-
-    val shape = when {
-        isSynthwave -> RoundedCornerShape(0.dp)
-        isSoothing -> ShapeCache.smoothPill
-        isMonochrome -> RoundedCornerShape(16.dp)
-        else -> RoundedCornerShape(24.dp)
-    }
-
     Surface(
         modifier = modifier,
-        shape = shape,
-        color = resolvedColor,
-        border = border,
-        tonalElevation = if (isSoothing) 0.dp else 4.dp,
-        shadowElevation = if (isSoothing) 4.dp else if (isSynthwave) 0.dp else 8.dp,
+        shape = RoundedCornerShape(percent = 50),
+        color = containerColor.copy(alpha = 0.65f),
+        tonalElevation = 0.dp,
+        shadowElevation = 0.dp,
     ) {
-        androidx.compose.material3.NavigationBar(
+        Row(
             modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 8.dp),
-            containerColor = Color.Transparent,
-            contentColor = MaterialTheme.colorScheme.onSurface,
-            tonalElevation = 0.dp,
-            windowInsets = WindowInsets(0, 0, 0, 0)
+                .animateContentSize(animationSpec = MaterialTheme.motionScheme.defaultSpatialSpec())
+                .padding(horizontal = 28.dp, vertical = 14.dp),
+            horizontalArrangement = Arrangement.spacedBy(32.dp),
+            verticalAlignment = Alignment.CenterVertically
         ) {
             routes.forEach { (route, label) ->
                 val selected = route == currentTopLevel
-                NavigationBarItem(
-                    selected = selected,
-                    onClick = { onNavigate(route) },
-                    icon = { NavIcon(route, label, selected = selected) },
-                    label = if (showLabels) { { Text(label, maxLines = 1, overflow = TextOverflow.Ellipsis) } } else null,
-                    alwaysShowLabel = showLabels,
-                    colors = NavigationBarItemDefaults.colors(
-                        indicatorColor = MaterialTheme.colorScheme.secondaryContainer,
-                        selectedIconColor = MaterialTheme.colorScheme.onSecondaryContainer,
-                        selectedTextColor = MaterialTheme.colorScheme.onSurface,
-                        unselectedIconColor = MaterialTheme.colorScheme.onSurfaceVariant,
-                        unselectedTextColor = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                )
+                val tint = if (selected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f)
+                Row(
+                    modifier = Modifier
+                        .animateContentSize(animationSpec = MaterialTheme.motionScheme.defaultSpatialSpec())
+                        .clickable(
+                            interactionSource = remember { androidx.compose.foundation.interaction.MutableInteractionSource() },
+                            indication = null,
+                            onClick = { onNavigate(route) }
+                        ),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(6.dp)
+                ) {
+                    NavIcon(route, label, selected = selected, tint = tint)
+                    if (selected && showLabels) {
+                        Text(
+                            text = label,
+                            color = tint,
+                            style = MaterialTheme.typography.labelMedium,
+                            fontWeight = FontWeight.Bold,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
+                        )
+                    }
+                }
             }
         }
     }

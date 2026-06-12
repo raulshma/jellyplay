@@ -1,8 +1,8 @@
 package com.raulshma.jellyplay.core.network.seerr
 
-import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.runBlocking
 import com.raulshma.jellyplay.core.model.seerr.SeerrCredentials
+import com.raulshma.jellyplay.core.network.RetryPolicy
 import okhttp3.OkHttpClient
 import okhttp3.mockwebserver.MockResponse
 import okhttp3.mockwebserver.MockWebServer
@@ -35,10 +35,10 @@ class ResilientSeerrApiClientTest {
     @Test
     fun `calculateBackoff returns value within expected range`() {
         repeat(100) {
-            val delay = resilientClient.calculateBackoff(attempt = 0)
+            val delay = RetryPolicy.calculateBackoff(attempt = 0, jitterFloorMs = 0)
             assertTrue(
-                "Delay $delay should be between 0 and ${ResilientSeerrApiClient.BASE_DELAY_MS}",
-                delay in 0..ResilientSeerrApiClient.BASE_DELAY_MS
+                "Delay $delay should be between 0 and ${RetryPolicy.DEFAULT_BASE_DELAY_MS}",
+                delay in 0..RetryPolicy.DEFAULT_BASE_DELAY_MS
             )
         }
     }
@@ -46,80 +46,80 @@ class ResilientSeerrApiClientTest {
     @Test
     fun `calculateBackoff caps at MAX_DELAY_MS`() {
         repeat(100) {
-            val delay = resilientClient.calculateBackoff(attempt = 10)
+            val delay = RetryPolicy.calculateBackoff(attempt = 10, jitterFloorMs = 0)
             assertTrue(
-                "Delay $delay should be between 0 and ${ResilientSeerrApiClient.MAX_DELAY_MS}",
-                delay in 0..ResilientSeerrApiClient.MAX_DELAY_MS
+                "Delay $delay should be between 0 and ${RetryPolicy.DEFAULT_MAX_DELAY_MS}",
+                delay in 0..RetryPolicy.DEFAULT_MAX_DELAY_MS
             )
         }
     }
 
     @Test
     fun `isRetryable returns true for SocketTimeoutException`() {
-        assertTrue(resilientClient.isRetryable(SocketTimeoutException("timeout")))
+        assertTrue(RetryPolicy.isRetryable(SocketTimeoutException("timeout")))
     }
 
     @Test
     fun `isRetryable returns true for ConnectException`() {
-        assertTrue(resilientClient.isRetryable(java.net.ConnectException("refused")))
+        assertTrue(RetryPolicy.isRetryable(java.net.ConnectException("refused")))
     }
 
     @Test
     fun `isRetryable returns true for UnknownHostException`() {
-        assertTrue(resilientClient.isRetryable(java.net.UnknownHostException("no DNS")))
+        assertTrue(RetryPolicy.isRetryable(java.net.UnknownHostException("no DNS")))
     }
 
     @Test
     fun `isRetryable returns true for IOException`() {
-        assertTrue(resilientClient.isRetryable(java.io.IOException("network reset")))
+        assertTrue(RetryPolicy.isRetryable(java.io.IOException("network reset")))
     }
 
     @Test
     fun `isRetryable returns true for HTTP 429`() {
-        assertTrue(resilientClient.isRetryable(Exception("HTTP 429: Too Many Requests")))
+        assertTrue(RetryPolicy.isRetryable(Exception("HTTP 429: Too Many Requests")))
     }
 
     @Test
     fun `isRetryable returns true for HTTP 500`() {
-        assertTrue(resilientClient.isRetryable(Exception("HTTP 500: Internal Server Error")))
+        assertTrue(RetryPolicy.isRetryable(Exception("HTTP 500: Internal Server Error")))
     }
 
     @Test
     fun `isRetryable returns true for HTTP 502`() {
-        assertTrue(resilientClient.isRetryable(Exception("HTTP 502: Bad Gateway")))
+        assertTrue(RetryPolicy.isRetryable(Exception("HTTP 502: Bad Gateway")))
     }
 
     @Test
     fun `isRetryable returns true for HTTP 503`() {
-        assertTrue(resilientClient.isRetryable(Exception("HTTP 503: Service Unavailable")))
+        assertTrue(RetryPolicy.isRetryable(Exception("HTTP 503: Service Unavailable")))
     }
 
     @Test
     fun `isRetryable returns true for HTTP 504`() {
-        assertTrue(resilientClient.isRetryable(Exception("HTTP 504: Gateway Timeout")))
+        assertTrue(RetryPolicy.isRetryable(Exception("HTTP 504: Gateway Timeout")))
     }
 
     @Test
     fun `isRetryable returns false for HTTP 401`() {
-        val result = resilientClient.isRetryable(Exception("HTTP 401: Unauthorized"))
+        val result = RetryPolicy.isRetryable(Exception("HTTP 401: Unauthorized"))
         assertTrue(!result)
     }
 
     @Test
     fun `isRetryable returns false for HTTP 404`() {
-        val result = resilientClient.isRetryable(Exception("HTTP 404: Not Found"))
+        val result = RetryPolicy.isRetryable(Exception("HTTP 404: Not Found"))
         assertTrue(!result)
     }
 
     @Test
     fun `isRetryable returns false for generic exception`() {
-        val result = resilientClient.isRetryable(IllegalStateException("bug"))
+        val result = RetryPolicy.isRetryable(IllegalStateException("bug"))
         assertTrue(!result)
     }
 
     @Test
     fun `isRetryable returns false for CancellationException`() {
-        val result = resilientClient.isRetryable(CancellationException("cancelled"))
+        val result = RetryPolicy.isRetryable(kotlinx.coroutines.CancellationException("cancelled"))
         assertTrue(!result)
     }
 

@@ -2,6 +2,7 @@ package com.raulshma.jellyplay.feature.player.video.components
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -21,6 +22,7 @@ import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -28,6 +30,8 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -38,7 +42,9 @@ import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import com.raulshma.jellyplay.core.model.SyncPlayRepeatMode
 import com.raulshma.jellyplay.core.model.SyncPlayShuffleMode
-import com.raulshma.jellyplay.core.ui.tv.tvFocusable
+import com.raulshma.jellyplay.core.ui.tv.LocalTvMode
+import com.raulshma.jellyplay.core.ui.tv.rememberTvFocusState
+import com.raulshma.jellyplay.core.ui.tv.tvFocusIndicator
 import com.composables.icons.tabler.Tabler
 import com.composables.icons.tabler.outline.*
 
@@ -60,6 +66,19 @@ fun SyncPlayPlayerSheet(
     onIgnoreWaitChange: (Boolean) -> Unit,
     onDismiss: () -> Unit,
 ) {
+    val isTv = LocalTvMode.current
+    val focusRequester = remember { FocusRequester() }
+
+    LaunchedEffect(isTv) {
+        if (isTv) {
+            try {
+                focusRequester.requestFocus()
+            } catch (e: Exception) {
+                // ignore
+            }
+        }
+    }
+
     PlayerModalBottomSheet(
         onDismissRequest = onDismiss,
         sheetState = rememberModalBottomSheetState(),
@@ -138,9 +157,14 @@ fun SyncPlayPlayerSheet(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
             ) {
+                val toggleFocus = rememberTvFocusState()
                 FilledTonalButton(
                     onClick = onTogglePlayPause,
-                    modifier = Modifier.weight(1f).tvFocusable(),
+                    modifier = Modifier
+                        .weight(1f)
+                        .then(if (isTv) Modifier.focusRequester(focusRequester) else Modifier)
+                        .then(toggleFocus.focusModifier)
+                        .tvFocusIndicator(toggleFocus, ShapeCache.smoothPill),
                     shape = ShapeCache.smoothPill,
                 ) {
                     Icon(
@@ -151,9 +175,12 @@ fun SyncPlayPlayerSheet(
                     Spacer(Modifier.width(6.dp))
                     Text(if (isPlaying) "Pause" else "Play")
                 }
+                val stopFocus = rememberTvFocusState()
                 FilledTonalButton(
                     onClick = onStop,
-                    modifier = Modifier.tvFocusable(),
+                    modifier = Modifier
+                        .then(stopFocus.focusModifier)
+                        .tvFocusIndicator(stopFocus, ShapeCache.smoothPill),
                     shape = ShapeCache.smoothPill,
                 ) {
                     Icon(Tabler.Outline.PlayerStop, contentDescription = "Stop", modifier = Modifier.size(18.dp))
@@ -165,10 +192,25 @@ fun SyncPlayPlayerSheet(
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
             ) {
                 var repeatExpanded by remember { mutableStateOf(false) }
+                val repeatFocus = rememberTvFocusState()
                 Box(modifier = Modifier.weight(1f)) {
                     FilledTonalButton(
-                        onClick = { repeatExpanded = true },
-                        modifier = Modifier.fillMaxWidth().tvFocusable(),
+                        onClick = {
+                            if (isTv) {
+                                val nextMode = when (repeatMode) {
+                                    SyncPlayRepeatMode.REPEAT_NONE -> SyncPlayRepeatMode.REPEAT_ONE
+                                    SyncPlayRepeatMode.REPEAT_ONE -> SyncPlayRepeatMode.REPEAT_ALL
+                                    SyncPlayRepeatMode.REPEAT_ALL -> SyncPlayRepeatMode.REPEAT_NONE
+                                }
+                                onRepeatModeChange(nextMode)
+                            } else {
+                                repeatExpanded = true
+                            }
+                        },
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .then(repeatFocus.focusModifier)
+                            .tvFocusIndicator(repeatFocus, ShapeCache.smoothPill),
                         shape = ShapeCache.smoothPill,
                     ) {
                         Icon(Tabler.Outline.Repeat, contentDescription = null, modifier = Modifier.size(18.dp))
@@ -180,32 +222,48 @@ fun SyncPlayPlayerSheet(
                         }
                         Text(label)
                     }
-                    DropdownMenu(
-                        expanded = repeatExpanded,
-                        onDismissRequest = { repeatExpanded = false },
-                    ) {
-                        SyncPlayRepeatMode.entries.forEach { mode ->
-                            val label = when (mode) {
-                                SyncPlayRepeatMode.REPEAT_ONE -> "Repeat One"
-                                SyncPlayRepeatMode.REPEAT_ALL -> "Repeat All"
-                                SyncPlayRepeatMode.REPEAT_NONE -> "Repeat None"
+                    if (!isTv) {
+                        DropdownMenu(
+                            expanded = repeatExpanded,
+                            onDismissRequest = { repeatExpanded = false },
+                        ) {
+                            SyncPlayRepeatMode.entries.forEach { mode ->
+                                val label = when (mode) {
+                                    SyncPlayRepeatMode.REPEAT_ONE -> "Repeat One"
+                                    SyncPlayRepeatMode.REPEAT_ALL -> "Repeat All"
+                                    SyncPlayRepeatMode.REPEAT_NONE -> "Repeat None"
+                                }
+                                DropdownMenuItem(
+                                    text = { Text(label) },
+                                    onClick = {
+                                        onRepeatModeChange(mode)
+                                        repeatExpanded = false
+                                    },
+                                )
                             }
-                            DropdownMenuItem(
-                                text = { Text(label) },
-                                onClick = {
-                                    onRepeatModeChange(mode)
-                                    repeatExpanded = false
-                                },
-                            )
                         }
                     }
                 }
 
                 var shuffleExpanded by remember { mutableStateOf(false) }
+                val shuffleFocus = rememberTvFocusState()
                 Box(modifier = Modifier.weight(1f)) {
                     FilledTonalButton(
-                        onClick = { shuffleExpanded = true },
-                        modifier = Modifier.fillMaxWidth().tvFocusable(),
+                        onClick = {
+                            if (isTv) {
+                                val nextMode = when (shuffleMode) {
+                                    SyncPlayShuffleMode.SORTED -> SyncPlayShuffleMode.SHUFFLE
+                                    SyncPlayShuffleMode.SHUFFLE -> SyncPlayShuffleMode.SORTED
+                                }
+                                onShuffleModeChange(nextMode)
+                            } else {
+                                shuffleExpanded = true
+                            }
+                        },
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .then(shuffleFocus.focusModifier)
+                            .tvFocusIndicator(shuffleFocus, ShapeCache.smoothPill),
                         shape = ShapeCache.smoothPill,
                     ) {
                         Icon(Tabler.Outline.ArrowsShuffle, contentDescription = null, modifier = Modifier.size(18.dp))
@@ -216,29 +274,38 @@ fun SyncPlayPlayerSheet(
                         }
                         Text(label)
                     }
-                    DropdownMenu(
-                        expanded = shuffleExpanded,
-                        onDismissRequest = { shuffleExpanded = false },
-                    ) {
-                        SyncPlayShuffleMode.entries.forEach { mode ->
-                            val label = when (mode) {
-                                SyncPlayShuffleMode.SHUFFLE -> "Shuffle"
-                                SyncPlayShuffleMode.SORTED -> "Sorted"
+                    if (!isTv) {
+                        DropdownMenu(
+                            expanded = shuffleExpanded,
+                            onDismissRequest = { shuffleExpanded = false },
+                        ) {
+                            SyncPlayShuffleMode.entries.forEach { mode ->
+                                val label = when (mode) {
+                                    SyncPlayShuffleMode.SHUFFLE -> "Shuffle"
+                                    SyncPlayShuffleMode.SORTED -> "Sorted"
+                                }
+                                DropdownMenuItem(
+                                    text = { Text(label) },
+                                    onClick = {
+                                        onShuffleModeChange(mode)
+                                        shuffleExpanded = false
+                                    },
+                                )
                             }
-                            DropdownMenuItem(
-                                text = { Text(label) },
-                                onClick = {
-                                    onShuffleModeChange(mode)
-                                    shuffleExpanded = false
-                                },
-                            )
                         }
                     }
                 }
             }
 
+            val ignoreWaitFocus = rememberTvFocusState()
             Row(
-                modifier = Modifier.fillMaxWidth(),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clip(ShapeCache.smooth12)
+                    .then(ignoreWaitFocus.focusModifier)
+                    .tvFocusIndicator(ignoreWaitFocus, ShapeCache.smooth12)
+                    .clickable { onIgnoreWaitChange(!ignoreWait) }
+                    .padding(8.dp),
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.SpaceBetween,
             ) {
@@ -255,14 +322,17 @@ fun SyncPlayPlayerSheet(
                 }
                 Switch(
                     checked = ignoreWait,
-                    onCheckedChange = onIgnoreWaitChange,
-                    modifier = Modifier.tvFocusable(),
+                    onCheckedChange = null,
                 )
             }
 
+            val leaveFocus = rememberTvFocusState()
             FilledTonalButton(
                 onClick = onLeave,
-                modifier = Modifier.fillMaxWidth().tvFocusable(),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .then(leaveFocus.focusModifier)
+                    .tvFocusIndicator(leaveFocus, ShapeCache.smoothPill),
                 shape = ShapeCache.smoothPill,
             ) {
                 Icon(Tabler.Outline.Logout, contentDescription = null, modifier = Modifier.size(18.dp))

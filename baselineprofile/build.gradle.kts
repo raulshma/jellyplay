@@ -12,6 +12,7 @@ android {
         targetSdk = 37
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
+        missingDimensionStrategy("platform", "phone")
     }
 
     compileOptions {

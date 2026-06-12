@@ -20,6 +20,8 @@ import com.raulshma.jellyplay.core.database.dao.DownloadDao
 import com.raulshma.jellyplay.core.database.dao.UserDao
 import com.raulshma.jellyplay.core.datastore.UserPreferencesStore
 import com.raulshma.jellyplay.core.model.DownloadStatus
+import com.raulshma.jellyplay.core.model.formatBytes
+import com.raulshma.jellyplay.core.model.formatSpeed
 import dagger.assisted.Assisted
 import dagger.assisted.AssistedInject
 import kotlinx.coroutines.Dispatchers
@@ -621,36 +623,12 @@ class DownloadWorker @AssistedInject constructor(
         return if (eta.isNotEmpty()) "$downloaded / $total · $speed · $eta" else "$downloaded / $total · $speed"
     }
 
-    private fun formatSpeed(speedBytesPerSec: Long): String = when {
-        speedBytesPerSec <= 0 -> ""
-        speedBytesPerSec < 1024 -> "$speedBytesPerSec B/s"
-        speedBytesPerSec < 1024 * 1024 -> "%.1f KB/s".format(speedBytesPerSec / 1024.0)
-        speedBytesPerSec < 1024 * 1024 * 1024 -> "%.1f MB/s".format(speedBytesPerSec / (1024.0 * 1024))
-        else -> "%.1f GB/s".format(speedBytesPerSec / (1024.0 * 1024 * 1024))
-    }
+    private fun formatSpeed(speedBytesPerSec: Long): String = speedBytesPerSec.formatSpeed()
 
-    private fun formatEta(downloadedBytes: Long, totalBytes: Long, speedBytesPerSec: Long): String {
-        if (totalBytes <= 0 || speedBytesPerSec <= 0) return ""
-        val remainingBytes = totalBytes - downloadedBytes
-        if (remainingBytes <= 0) return ""
-        val secondsRemaining = remainingBytes / speedBytesPerSec
-        return when {
-            secondsRemaining < 60 -> "${secondsRemaining}s left"
-            secondsRemaining < 3600 -> "${secondsRemaining / 60}m ${secondsRemaining % 60}s left"
-            else -> {
-                val hours = secondsRemaining / 3600
-                val minutes = (secondsRemaining % 3600) / 60
-                "${hours}h ${minutes}m left"
-            }
-        }
-    }
+    private fun formatEta(downloadedBytes: Long, totalBytes: Long, speedBytesPerSec: Long): String =
+        com.raulshma.jellyplay.core.model.formatEta(downloadedBytes, totalBytes, speedBytesPerSec)
 
-    private fun formatBytes(bytes: Long): String = when {
-        bytes < 1024 -> "$bytes B"
-        bytes < 1024 * 1024 -> "%.1f KB".format(bytes / 1024.0)
-        bytes < 1024 * 1024 * 1024 -> "%.1f MB".format(bytes / (1024.0 * 1024))
-        else -> "%.1f GB".format(bytes / (1024.0 * 1024 * 1024))
-    }
+    private fun formatBytes(bytes: Long): String = bytes.formatBytes()
 
     private fun createNotificationChannel() {
         if (channelCreated) return

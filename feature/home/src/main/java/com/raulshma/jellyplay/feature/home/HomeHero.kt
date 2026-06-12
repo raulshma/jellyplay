@@ -66,6 +66,7 @@ import com.raulshma.jellyplay.core.ui.image.MediaImage
 import com.raulshma.jellyplay.core.ui.tv.LocalTvMode
 import com.raulshma.jellyplay.core.ui.tv.rememberTvFocusState
 import com.raulshma.jellyplay.core.ui.tv.tvFocusIndicator
+import com.raulshma.jellyplay.core.ui.tv.tvHeroFocusExitHandler
 import com.composables.icons.tabler.Tabler
 import com.composables.icons.tabler.outline.Heart
 import com.composables.icons.tabler.outline.PlayerPlay
@@ -426,7 +427,8 @@ fun HeroHeader(
 
             Row(
                 horizontalArrangement = Arrangement.spacedBy(16.dp),
-                verticalAlignment = Alignment.CenterVertically
+                verticalAlignment = Alignment.CenterVertically,
+                modifier = Modifier.then(if (isTv) Modifier.tvHeroFocusExitHandler() else Modifier),
             ) {
                 val hasProgress = item.playbackPositionTicks != null && item.playbackPositionTicks!! > 0
 

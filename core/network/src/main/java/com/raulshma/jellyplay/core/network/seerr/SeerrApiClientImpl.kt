@@ -59,19 +59,23 @@ class SeerrApiClientImpl @Inject constructor(
         }
     }
 
-    private fun executeRequestWithCookie(request: Request): Result<Pair<String, String?>> {
+    private suspend fun executeRequestWithCookie(request: Request): Result<Pair<String, String?>> {
         return try {
-            okHttpClient.newCall(request).execute().use { response ->
-                val body = response.body?.string()
-                    ?: return Result.failure(Exception("Empty response body (HTTP ${response.code})"))
-                if (!response.isSuccessful) {
-                    val errorMsg = parseErrorMessage(response.code, body)
-                    return Result.failure(Exception(errorMsg))
+            withContext(Dispatchers.IO) {
+                okHttpClient.newCall(request).execute().use { response ->
+                    val body = response.body?.string()
+                        ?: return@withContext Result.failure<Pair<String, String?>>(
+                            Exception("Empty response body (HTTP ${response.code})")
+                        )
+                    if (!response.isSuccessful) {
+                        val errorMsg = parseErrorMessage(response.code, body)
+                        return@withContext Result.failure<Pair<String, String?>>(Exception(errorMsg))
+                    }
+                    val cookieHeader = response.headers("Set-Cookie").joinToString("; ") {
+                        it.substringBefore(";")
+                    }
+                    Result.success(body to cookieHeader.ifBlank { null })
                 }
-                val cookieHeader = response.headers("Set-Cookie").joinToString("; ") {
-                    it.substringBefore(";")
-                }
-                Result.success(body to cookieHeader.ifBlank { null })
             }
         } catch (e: Exception) {
             Result.failure(Exception(formatNetworkError(e)))
@@ -104,6 +108,62 @@ class SeerrApiClientImpl @Inject constructor(
         }
     }
 
+    private suspend inline fun <reified T> getAndParse(
+        baseUrl: String,
+        credentials: SeerrCredentials,
+        path: String,
+    ): Result<T> {
+        val request = Request.Builder()
+            .url(buildUrl(baseUrl, path))
+            .withAuth(credentials)
+            .get()
+            .build()
+        return parseAndMap(executeRequest(request))
+    }
+
+    private suspend inline fun <reified T> postAndParse(
+        baseUrl: String,
+        credentials: SeerrCredentials,
+        path: String,
+    ): Result<T> {
+        val requestBody = "{}".toRequestBody("application/json".toMediaType())
+        val request = Request.Builder()
+            .url(buildUrl(baseUrl, path))
+            .withAuth(credentials)
+            .post(requestBody)
+            .build()
+        return parseAndMap(executeRequest(request))
+    }
+
+    private suspend inline fun <reified T, reified B> postAndParse(
+        baseUrl: String,
+        credentials: SeerrCredentials,
+        path: String,
+        body: B,
+    ): Result<T> {
+        val requestBody = json.encodeToString(body).toRequestBody("application/json".toMediaType())
+        val request = Request.Builder()
+            .url(buildUrl(baseUrl, path))
+            .withAuth(credentials)
+            .post(requestBody)
+            .build()
+        return parseAndMap(executeRequest(request))
+    }
+
+    private suspend inline fun <reified T, reified B> putAndParse(
+        baseUrl: String,
+        credentials: SeerrCredentials,
+        path: String,
+        body: B,
+    ): Result<T> {
+        val request = Request.Builder()
+            .url(buildUrl(baseUrl, path))
+            .withAuth(credentials)
+            .put(json.encodeToString(body).toRequestBody("application/json".toMediaType()))
+            .build()
+        return parseAndMap(executeRequest(request))
+    }
+
     override suspend fun loginJellyfin(
         baseUrl: String,
         username: String,
@@ -134,343 +194,91 @@ class SeerrApiClientImpl @Inject constructor(
         }
     }
 
-    override suspend fun testConnection(baseUrl: String, credentials: SeerrCredentials): Result<SeerrStatusResponse> {
-        val request = Request.Builder()
-            .url(buildUrl(baseUrl, "/status"))
-            .withAuth(credentials)
-            .get()
-            .build()
-
-        return parseAndMap(executeRequest(request))
-    }
+    override suspend fun testConnection(baseUrl: String, credentials: SeerrCredentials): Result<SeerrStatusResponse> =
+        getAndParse(baseUrl, credentials, "/status")
 
     override suspend fun search(
-        baseUrl: String,
-        credentials: SeerrCredentials,
-        query: String,
-        page: Int,
+        baseUrl: String, credentials: SeerrCredentials, query: String, page: Int,
     ): Result<SeerrSearchResponse> {
-        val base = Request.Builder()
-            .url(buildUrl(baseUrl, "/search"))
-            .build().url.newBuilder()
-            .addQueryParameter("query", query)
-            .addQueryParameter("page", page.toString())
-            .build()
-        val request = Request.Builder()
-            .url(base)
-            .withAuth(credentials)
-            .get()
-            .build()
-
+        val url = buildUrl(baseUrl, "/search")
+            .let { base ->
+                Request.Builder().url(base).build().url.newBuilder()
+                    .addQueryParameter("query", query)
+                    .addQueryParameter("page", page.toString())
+                    .build()
+            }
+        val request = Request.Builder().url(url).withAuth(credentials).get().build()
         return parseAndMap(executeRequest(request))
     }
 
-    override suspend fun getMovieDetails(
-        baseUrl: String,
-        credentials: SeerrCredentials,
-        tmdbId: Int,
-    ): Result<SeerrMovieDetails> {
-        val request = Request.Builder()
-            .url(buildUrl(baseUrl, "/movie/$tmdbId"))
-            .withAuth(credentials)
-            .get()
-            .build()
+    override suspend fun getMovieDetails(baseUrl: String, credentials: SeerrCredentials, tmdbId: Int): Result<SeerrMovieDetails> =
+        getAndParse(baseUrl, credentials, "/movie/$tmdbId")
 
-        return parseAndMap(executeRequest(request))
-    }
+    override suspend fun getTvDetails(baseUrl: String, credentials: SeerrCredentials, tmdbId: Int): Result<SeerrTvDetails> =
+        getAndParse(baseUrl, credentials, "/tv/$tmdbId")
 
-    override suspend fun getTvDetails(
-        baseUrl: String,
-        credentials: SeerrCredentials,
-        tmdbId: Int,
-    ): Result<SeerrTvDetails> {
-        val request = Request.Builder()
-            .url(buildUrl(baseUrl, "/tv/$tmdbId"))
-            .withAuth(credentials)
-            .get()
-            .build()
+    override suspend fun getTvSeasonDetails(baseUrl: String, credentials: SeerrCredentials, tvId: Int, seasonNumber: Int): Result<SeerrSeasonDetail> =
+        getAndParse(baseUrl, credentials, "/tv/$tvId/season/$seasonNumber")
 
-        return parseAndMap(executeRequest(request))
-    }
+    override suspend fun getMovieRatings(baseUrl: String, credentials: SeerrCredentials, tmdbId: Int): Result<SeerrRatings> =
+        getAndParse(baseUrl, credentials, "/movie/$tmdbId/ratings")
 
-    override suspend fun getTvSeasonDetails(
-        baseUrl: String,
-        credentials: SeerrCredentials,
-        tvId: Int,
-        seasonNumber: Int,
-    ): Result<SeerrSeasonDetail> {
-        val request = Request.Builder()
-            .url(buildUrl(baseUrl, "/tv/$tvId/season/$seasonNumber"))
-            .withAuth(credentials)
-            .get()
-            .build()
+    override suspend fun getTvRatings(baseUrl: String, credentials: SeerrCredentials, tmdbId: Int): Result<SeerrRatings> =
+        getAndParse(baseUrl, credentials, "/tv/$tmdbId/ratings")
 
-        return parseAndMap(executeRequest(request))
-    }
+    override suspend fun getMovieRatingsCombined(baseUrl: String, credentials: SeerrCredentials, tmdbId: Int): Result<SeerrRatings> =
+        getAndParse(baseUrl, credentials, "/movie/$tmdbId/ratingscombined")
 
-    override suspend fun getMovieRatings(
-        baseUrl: String,
-        credentials: SeerrCredentials,
-        tmdbId: Int,
-    ): Result<SeerrRatings> {
-        val request = Request.Builder()
-            .url(buildUrl(baseUrl, "/movie/$tmdbId/ratings"))
-            .withAuth(credentials)
-            .get()
-            .build()
+    override suspend fun getMovieRecommendations(baseUrl: String, credentials: SeerrCredentials, tmdbId: Int, page: Int): Result<SeerrSearchResponse> =
+        getAndParse(baseUrl, credentials, "/movie/$tmdbId/recommendations?page=$page")
 
-        return parseAndMap(executeRequest(request))
-    }
+    override suspend fun getMovieSimilar(baseUrl: String, credentials: SeerrCredentials, tmdbId: Int, page: Int): Result<SeerrSearchResponse> =
+        getAndParse(baseUrl, credentials, "/movie/$tmdbId/similar?page=$page")
 
-    override suspend fun getTvRatings(
-        baseUrl: String,
-        credentials: SeerrCredentials,
-        tmdbId: Int,
-    ): Result<SeerrRatings> {
-        val request = Request.Builder()
-            .url(buildUrl(baseUrl, "/tv/$tmdbId/ratings"))
-            .withAuth(credentials)
-            .get()
-            .build()
+    override suspend fun getTvRecommendations(baseUrl: String, credentials: SeerrCredentials, tmdbId: Int, page: Int): Result<SeerrSearchResponse> =
+        getAndParse(baseUrl, credentials, "/tv/$tmdbId/recommendations?page=$page")
 
-        return parseAndMap(executeRequest(request))
-    }
-
-    override suspend fun getMovieRatingsCombined(
-        baseUrl: String,
-        credentials: SeerrCredentials,
-        tmdbId: Int,
-    ): Result<SeerrRatings> {
-        val request = Request.Builder()
-            .url(buildUrl(baseUrl, "/movie/$tmdbId/ratingscombined"))
-            .withAuth(credentials)
-            .get()
-            .build()
-
-        return parseAndMap(executeRequest(request))
-    }
-
-    override suspend fun getMovieRecommendations(
-        baseUrl: String,
-        credentials: SeerrCredentials,
-        tmdbId: Int,
-        page: Int,
-    ): Result<SeerrSearchResponse> {
-        val request = Request.Builder()
-            .url(buildUrl(baseUrl, "/movie/$tmdbId/recommendations?page=$page"))
-            .withAuth(credentials)
-            .get()
-            .build()
-
-        return parseAndMap(executeRequest(request))
-    }
-
-    override suspend fun getMovieSimilar(
-        baseUrl: String,
-        credentials: SeerrCredentials,
-        tmdbId: Int,
-        page: Int,
-    ): Result<SeerrSearchResponse> {
-        val request = Request.Builder()
-            .url(buildUrl(baseUrl, "/movie/$tmdbId/similar?page=$page"))
-            .withAuth(credentials)
-            .get()
-            .build()
-
-        return parseAndMap(executeRequest(request))
-    }
-
-    override suspend fun getTvRecommendations(
-        baseUrl: String,
-        credentials: SeerrCredentials,
-        tmdbId: Int,
-        page: Int,
-    ): Result<SeerrSearchResponse> {
-        val request = Request.Builder()
-            .url(buildUrl(baseUrl, "/tv/$tmdbId/recommendations?page=$page"))
-            .withAuth(credentials)
-            .get()
-            .build()
-
-        return parseAndMap(executeRequest(request))
-    }
-
-    override suspend fun getTvSimilar(
-        baseUrl: String,
-        credentials: SeerrCredentials,
-        tmdbId: Int,
-        page: Int,
-    ): Result<SeerrSearchResponse> {
-        val request = Request.Builder()
-            .url(buildUrl(baseUrl, "/tv/$tmdbId/similar?page=$page"))
-            .withAuth(credentials)
-            .get()
-            .build()
-
-        return parseAndMap(executeRequest(request))
-    }
+    override suspend fun getTvSimilar(baseUrl: String, credentials: SeerrCredentials, tmdbId: Int, page: Int): Result<SeerrSearchResponse> =
+        getAndParse(baseUrl, credentials, "/tv/$tmdbId/similar?page=$page")
 
     override suspend fun requestMedia(
-        baseUrl: String,
-        credentials: SeerrCredentials,
-        mediaType: String,
-        mediaId: Int,
-        tvdbId: Int?,
-        seasons: List<Int>?,
-        serverId: Int?,
-        profileId: Int?,
-        rootFolder: String?,
-        tags: List<Int>?,
-    ): Result<SeerrMediaRequest> {
-        val payload = SeerrRequestPayload(
-            mediaType = mediaType,
-            mediaId = mediaId,
-            tvdbId = tvdbId,
-            seasons = seasons,
-            serverId = serverId,
-            profileId = profileId,
-            rootFolder = rootFolder,
-            tags = tags,
-        )
-        val body = json.encodeToString(payload)
-            .toRequestBody("application/json".toMediaType())
+        baseUrl: String, credentials: SeerrCredentials, mediaType: String, mediaId: Int,
+        tvdbId: Int?, seasons: List<Int>?, serverId: Int?, profileId: Int?,
+        rootFolder: String?, tags: List<Int>?,
+    ): Result<SeerrMediaRequest> = postAndParse(baseUrl, credentials, "/request",
+        SeerrRequestPayload(mediaType = mediaType, mediaId = mediaId, tvdbId = tvdbId,
+            seasons = seasons, serverId = serverId, profileId = profileId,
+            rootFolder = rootFolder, tags = tags))
 
-        val request = Request.Builder()
-            .url(buildUrl(baseUrl, "/request"))
-            .withAuth(credentials)
-            .post(body)
-            .build()
+    override suspend fun getRadarrSettings(baseUrl: String, credentials: SeerrCredentials): Result<List<SeerrRadarrSettings>> =
+        getAndParse(baseUrl, credentials, "/settings/radarr")
 
-        return parseAndMap(executeRequest(request))
-    }
+    override suspend fun getSonarrSettings(baseUrl: String, credentials: SeerrCredentials): Result<List<SeerrSonarrSettings>> =
+        getAndParse(baseUrl, credentials, "/settings/sonarr")
 
-    override suspend fun getRadarrSettings(
-        baseUrl: String,
-        credentials: SeerrCredentials,
-    ): Result<List<SeerrRadarrSettings>> {
-        val request = Request.Builder()
-            .url(buildUrl(baseUrl, "/settings/radarr"))
-            .withAuth(credentials)
-            .get()
-            .build()
+    override suspend fun getRadarrServiceDetail(baseUrl: String, credentials: SeerrCredentials, id: Int): Result<SeerrRadarrServiceDetail> =
+        getAndParse(baseUrl, credentials, "/settings/radarr/$id")
 
-        return parseAndMap(executeRequest(request))
-    }
+    override suspend fun getSonarrServiceDetail(baseUrl: String, credentials: SeerrCredentials, id: Int): Result<SeerrSonarrServiceDetail> =
+        getAndParse(baseUrl, credentials, "/settings/sonarr/$id")
 
-    override suspend fun getSonarrSettings(
-        baseUrl: String,
-        credentials: SeerrCredentials,
-    ): Result<List<SeerrSonarrSettings>> {
-        val request = Request.Builder()
-            .url(buildUrl(baseUrl, "/settings/sonarr"))
-            .withAuth(credentials)
-            .get()
-            .build()
+    override suspend fun getServiceRadarrServers(baseUrl: String, credentials: SeerrCredentials): Result<List<SeerrServiceServer>> =
+        getAndParse(baseUrl, credentials, "/service/radarr")
 
-        return parseAndMap(executeRequest(request))
-    }
+    override suspend fun getServiceSonarrServers(baseUrl: String, credentials: SeerrCredentials): Result<List<SeerrServiceServer>> =
+        getAndParse(baseUrl, credentials, "/service/sonarr")
 
-    override suspend fun getRadarrServiceDetail(
-        baseUrl: String,
-        credentials: SeerrCredentials,
-        id: Int,
-    ): Result<SeerrRadarrServiceDetail> {
-        val request = Request.Builder()
-            .url(buildUrl(baseUrl, "/settings/radarr/$id"))
-            .withAuth(credentials)
-            .get()
-            .build()
+    override suspend fun getServiceRadarrDetail(baseUrl: String, credentials: SeerrCredentials, id: Int): Result<SeerrRadarrServiceDetail> =
+        getAndParse(baseUrl, credentials, "/service/radarr/$id")
 
-        return parseAndMap(executeRequest(request))
-    }
+    override suspend fun getServiceSonarrDetail(baseUrl: String, credentials: SeerrCredentials, id: Int): Result<SeerrSonarrServiceDetail> =
+        getAndParse(baseUrl, credentials, "/service/sonarr/$id")
 
-    override suspend fun getSonarrServiceDetail(
-        baseUrl: String,
-        credentials: SeerrCredentials,
-        id: Int,
-    ): Result<SeerrSonarrServiceDetail> {
-        val request = Request.Builder()
-            .url(buildUrl(baseUrl, "/settings/sonarr/$id"))
-            .withAuth(credentials)
-            .get()
-            .build()
-
-        return parseAndMap(executeRequest(request))
-    }
-
-    override suspend fun getServiceRadarrServers(
-        baseUrl: String,
-        credentials: SeerrCredentials,
-    ): Result<List<SeerrServiceServer>> {
-        val request = Request.Builder()
-            .url(buildUrl(baseUrl, "/service/radarr"))
-            .withAuth(credentials)
-            .get()
-            .build()
-
-        return parseAndMap(executeRequest(request))
-    }
-
-    override suspend fun getServiceSonarrServers(
-        baseUrl: String,
-        credentials: SeerrCredentials,
-    ): Result<List<SeerrServiceServer>> {
-        val request = Request.Builder()
-            .url(buildUrl(baseUrl, "/service/sonarr"))
-            .withAuth(credentials)
-            .get()
-            .build()
-
-        return parseAndMap(executeRequest(request))
-    }
-
-    override suspend fun getServiceRadarrDetail(
-        baseUrl: String,
-        credentials: SeerrCredentials,
-        id: Int,
-    ): Result<SeerrRadarrServiceDetail> {
-        val request = Request.Builder()
-            .url(buildUrl(baseUrl, "/service/radarr/$id"))
-            .withAuth(credentials)
-            .get()
-            .build()
-
-        return parseAndMap(executeRequest(request))
-    }
-
-    override suspend fun getServiceSonarrDetail(
-        baseUrl: String,
-        credentials: SeerrCredentials,
-        id: Int,
-    ): Result<SeerrSonarrServiceDetail> {
-        val request = Request.Builder()
-            .url(buildUrl(baseUrl, "/service/sonarr/$id"))
-            .withAuth(credentials)
-            .get()
-            .build()
-
-        return parseAndMap(executeRequest(request))
-    }
-
-    override suspend fun getTrending(
-        baseUrl: String,
-        credentials: SeerrCredentials,
-        page: Int,
-    ): Result<SeerrSearchResponse> {
-        val request = Request.Builder()
-            .url(buildUrl(baseUrl, "/discover/trending?page=$page"))
-            .withAuth(credentials)
-            .get()
-            .build()
-
-        return parseAndMap(executeRequest(request))
-    }
+    override suspend fun getTrending(baseUrl: String, credentials: SeerrCredentials, page: Int): Result<SeerrSearchResponse> =
+        getAndParse(baseUrl, credentials, "/discover/trending?page=$page")
 
     override suspend fun getDiscoverMovies(
-        baseUrl: String,
-        credentials: SeerrCredentials,
-        page: Int,
-        primaryReleaseDateGte: String?,
+        baseUrl: String, credentials: SeerrCredentials, page: Int, primaryReleaseDateGte: String?,
     ): Result<SeerrSearchResponse> {
         val path = buildString {
             append("/discover/movies?page=$page")
@@ -479,20 +287,11 @@ class SeerrApiClientImpl @Inject constructor(
                 append(java.net.URLEncoder.encode(primaryReleaseDateGte, "UTF-8"))
             }
         }
-        val request = Request.Builder()
-            .url(buildUrl(baseUrl, path))
-            .withAuth(credentials)
-            .get()
-            .build()
-
-        return parseAndMap(executeRequest(request))
+        return getAndParse(baseUrl, credentials, path)
     }
 
     override suspend fun getDiscoverTv(
-        baseUrl: String,
-        credentials: SeerrCredentials,
-        page: Int,
-        firstAirDateGte: String?,
+        baseUrl: String, credentials: SeerrCredentials, page: Int, firstAirDateGte: String?,
     ): Result<SeerrSearchResponse> {
         val path = buildString {
             append("/discover/tv?page=$page")
@@ -501,13 +300,7 @@ class SeerrApiClientImpl @Inject constructor(
                 append(java.net.URLEncoder.encode(firstAirDateGte, "UTF-8"))
             }
         }
-        val request = Request.Builder()
-            .url(buildUrl(baseUrl, path))
-            .withAuth(credentials)
-            .get()
-            .build()
-
-        return parseAndMap(executeRequest(request))
+        return getAndParse(baseUrl, credentials, path)
     }
 
     override suspend fun getRequests(
@@ -547,44 +340,14 @@ class SeerrApiClientImpl @Inject constructor(
         return parseAndMap(executeRequest(request))
     }
 
-    override suspend fun approveRequest(
-        baseUrl: String,
-        credentials: SeerrCredentials,
-        id: Int,
-    ): Result<SeerrRequestItem> {
-        val request = Request.Builder()
-            .url(buildUrl(baseUrl, "/request/$id/approve"))
-            .withAuth(credentials)
-            .post("{}".toRequestBody("application/json".toMediaType()))
-            .build()
-        return parseAndMap(executeRequest(request))
-    }
+    override suspend fun approveRequest(baseUrl: String, credentials: SeerrCredentials, id: Int): Result<SeerrRequestItem> =
+        postAndParse(baseUrl, credentials, "/request/$id/approve")
 
-    override suspend fun declineRequest(
-        baseUrl: String,
-        credentials: SeerrCredentials,
-        id: Int,
-    ): Result<SeerrRequestItem> {
-        val request = Request.Builder()
-            .url(buildUrl(baseUrl, "/request/$id/decline"))
-            .withAuth(credentials)
-            .post("{}".toRequestBody("application/json".toMediaType()))
-            .build()
-        return parseAndMap(executeRequest(request))
-    }
+    override suspend fun declineRequest(baseUrl: String, credentials: SeerrCredentials, id: Int): Result<SeerrRequestItem> =
+        postAndParse(baseUrl, credentials, "/request/$id/decline")
 
-    override suspend fun retryRequest(
-        baseUrl: String,
-        credentials: SeerrCredentials,
-        id: Int,
-    ): Result<SeerrRequestItem> {
-        val request = Request.Builder()
-            .url(buildUrl(baseUrl, "/request/$id/retry"))
-            .withAuth(credentials)
-            .post("{}".toRequestBody("application/json".toMediaType()))
-            .build()
-        return parseAndMap(executeRequest(request))
-    }
+    override suspend fun retryRequest(baseUrl: String, credentials: SeerrCredentials, id: Int): Result<SeerrRequestItem> =
+        postAndParse(baseUrl, credentials, "/request/$id/retry")
 
     override suspend fun deleteRequest(
         baseUrl: String,
@@ -622,57 +385,16 @@ class SeerrApiClientImpl @Inject constructor(
     }
 
     override suspend fun editRequest(
-        baseUrl: String,
-        credentials: SeerrCredentials,
-        id: Int,
-        mediaType: String,
-        mediaId: Int,
-        serverId: Int?,
-        profileId: Int?,
-        rootFolder: String?,
-        tags: List<Int>?,
-        seasons: List<Int>?,
-    ): Result<SeerrRequestItem> {
-        val payload = SeerrEditRequestPayload(
-            mediaType = mediaType,
-            mediaId = mediaId,
-            serverId = serverId,
-            profileId = profileId,
-            rootFolder = rootFolder,
-            tags = tags,
-            seasons = seasons,
-        )
-        val body = json.encodeToString(payload)
-            .toRequestBody("application/json".toMediaType())
-        val request = Request.Builder()
-            .url(buildUrl(baseUrl, "/request/$id"))
-            .withAuth(credentials)
-            .put(body)
-            .build()
-        return parseAndMap(executeRequest(request))
-    }
+        baseUrl: String, credentials: SeerrCredentials, id: Int, mediaType: String,
+        mediaId: Int, serverId: Int?, profileId: Int?, rootFolder: String?, tags: List<Int>?, seasons: List<Int>?,
+    ): Result<SeerrRequestItem> = putAndParse(baseUrl, credentials, "/request/$id",
+        SeerrEditRequestPayload(mediaType = mediaType, mediaId = mediaId,
+            serverId = serverId, profileId = profileId, rootFolder = rootFolder,
+            tags = tags, seasons = seasons))
 
-    override suspend fun getRequestCount(
-        baseUrl: String,
-        credentials: SeerrCredentials,
-    ): Result<SeerrRequestCount> {
-        val request = Request.Builder()
-            .url(buildUrl(baseUrl, "/request/count"))
-            .withAuth(credentials)
-            .get()
-            .build()
-        return parseAndMap(executeRequest(request))
-    }
+    override suspend fun getRequestCount(baseUrl: String, credentials: SeerrCredentials): Result<SeerrRequestCount> =
+        getAndParse(baseUrl, credentials, "/request/count")
 
-    override suspend fun getCurrentUser(
-        baseUrl: String,
-        credentials: SeerrCredentials,
-    ): Result<SeerrCurrentUser> {
-        val request = Request.Builder()
-            .url(buildUrl(baseUrl, "/auth/me"))
-            .withAuth(credentials)
-            .get()
-            .build()
-        return parseAndMap(executeRequest(request))
-    }
+    override suspend fun getCurrentUser(baseUrl: String, credentials: SeerrCredentials): Result<SeerrCurrentUser> =
+        getAndParse(baseUrl, credentials, "/auth/me")
 }

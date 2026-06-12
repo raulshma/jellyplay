@@ -51,6 +51,7 @@ import com.raulshma.jellyplay.core.model.DownloadQuality
 import com.raulshma.jellyplay.core.model.LibraryWidgetItem
 import com.raulshma.jellyplay.core.model.SeerrWidgetItem
 import com.raulshma.jellyplay.core.model.WidgetConfig
+import com.raulshma.jellyplay.core.datastore.di.ApplicationScope
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -74,8 +75,9 @@ private val Context.dataStore: DataStore<Preferences> by preferencesDataStore(na
 @Singleton
 class UserPreferencesStore @Inject constructor(
     @ApplicationContext private val context: Context,
+    @ApplicationScope private val externalScope: CoroutineScope,
 ) {
-    private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+    private val scope = externalScope
 
     private val sharedPrefs: StateFlow<Preferences> = context.dataStore.data
         .catch { _ -> emit(emptyPreferences()) }
@@ -423,10 +425,14 @@ class UserPreferencesStore @Inject constructor(
     ) {
         context.dataStore.edit { prefs ->
             val current = readMediaStreamSelections(prefs).toMutableMap()
-            current[itemId] = MediaStreamSelection(
-                audioStreamIndex = audioStreamIndex,
-                subtitleStreamIndex = subtitleStreamIndex,
-            )
+            if (audioStreamIndex == null && subtitleStreamIndex == null) {
+                current.remove(itemId)
+            } else {
+                current[itemId] = MediaStreamSelection(
+                    audioStreamIndex = audioStreamIndex,
+                    subtitleStreamIndex = subtitleStreamIndex,
+                )
+            }
             if (current.size > 100) {
                 val excess = current.size - 100
                 current.keys.take(excess).forEach { current.remove(it) }

@@ -144,9 +144,9 @@ fun PlaylistDetailScreen(
                     text = { Text("Play All") },
                     modifier = Modifier
                         .align(Alignment.BottomEnd)
-                        .padding(end = 16.dp, bottom = 88.dp + WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding())
+                        .padding(end = 16.dp, bottom = 64.dp + WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding())
                         .offset {
-                            val maxOffset = 88.dp.toPx()
+                            val maxOffset = 64.dp.toPx()
                             val yOffset = (-navOffsetPx).coerceAtMost(maxOffset)
                             IntOffset(x = 0, y = yOffset.toInt())
                         },

@@ -1,11 +1,21 @@
 package com.raulshma.jellyplay.feature.player.video.components
 
+import android.view.KeyEvent
+import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.Slider
@@ -13,14 +23,30 @@ import androidx.compose.material3.SliderDefaults
 import androidx.compose.material3.Text
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.input.key.KeyEventType
+import androidx.compose.ui.input.key.onPreviewKeyEvent
+import androidx.compose.ui.input.key.type
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import com.raulshma.jellyplay.core.designsystem.theme.ShapeCache
+import com.raulshma.jellyplay.core.ui.tv.LocalTvMode
+import com.raulshma.jellyplay.core.ui.tv.rememberTvFocusState
+import com.raulshma.jellyplay.core.ui.tv.tvFocusIndicator
+import com.composables.icons.tabler.Tabler
+import com.composables.icons.tabler.outline.Minus
+import com.composables.icons.tabler.outline.Plus
 import kotlin.math.roundToLong
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -31,6 +57,19 @@ fun AudioDelaySheet(
     onDismiss: () -> Unit,
 ) {
     var delayMs by remember { mutableLongStateOf(currentDelayMs) }
+    val isTv = LocalTvMode.current
+    val focusRequester = remember { FocusRequester() }
+    val sliderFocusState = rememberTvFocusState()
+
+    LaunchedEffect(isTv) {
+        if (isTv) {
+            try {
+                focusRequester.requestFocus()
+            } catch (e: Exception) {
+                // ignore
+            }
+        }
+    }
 
     PlayerModalBottomSheet(
         onDismissRequest = onDismiss,
@@ -66,18 +105,87 @@ fun AudioDelaySheet(
             )
             Spacer(Modifier.height(12.dp))
 
-            Slider(
-                value = delayMs.toFloat(),
-                onValueChange = { delayMs = (it / 50f).roundToLong() * 50 },
-                onValueChangeFinished = { onDelayChange(delayMs) },
-                valueRange = -5000f..5000f,
-                steps = 199,
-                colors = SliderDefaults.colors(
-                    thumbColor = MaterialTheme.colorScheme.primary,
-                    activeTrackColor = MaterialTheme.colorScheme.primary,
-                ),
+            Row(
                 modifier = Modifier.fillMaxWidth(),
-            )
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(16.dp),
+            ) {
+                if (isTv) {
+                    val decFocus = rememberTvFocusState()
+                    Box(
+                        modifier = Modifier
+                            .size(40.dp)
+                            .clip(CircleShape)
+                            .background(Color.White.copy(alpha = 0.08f))
+                            .then(decFocus.focusModifier)
+                            .tvFocusIndicator(decFocus, CircleShape)
+                            .clickable {
+                                val newDelay = (delayMs - 100L).coerceIn(-5000L, 5000L)
+                                delayMs = newDelay
+                                onDelayChange(newDelay)
+                            },
+                        contentAlignment = Alignment.Center,
+                    ) {
+                        Icon(Tabler.Outline.Minus, contentDescription = "Decrease", tint = Color.White)
+                    }
+                }
+
+                Slider(
+                    value = delayMs.toFloat(),
+                    onValueChange = { delayMs = (it / 50f).roundToLong() * 50 },
+                    onValueChangeFinished = { onDelayChange(delayMs) },
+                    valueRange = -5000f..5000f,
+                    steps = 199,
+                    colors = SliderDefaults.colors(
+                        thumbColor = MaterialTheme.colorScheme.primary,
+                        activeTrackColor = MaterialTheme.colorScheme.primary,
+                    ),
+                    modifier = Modifier
+                        .weight(1f)
+                        .then(if (isTv) Modifier.focusRequester(focusRequester) else Modifier)
+                        .then(sliderFocusState.focusModifier)
+                        .tvFocusIndicator(sliderFocusState)
+                        .onPreviewKeyEvent { keyEvent ->
+                            if (keyEvent.type == KeyEventType.KeyDown) {
+                                when (keyEvent.nativeKeyEvent.keyCode) {
+                                    KeyEvent.KEYCODE_DPAD_LEFT -> {
+                                        val newDelay = (delayMs - 100L).coerceIn(-5000L, 5000L)
+                                        delayMs = newDelay
+                                        onDelayChange(newDelay)
+                                        true
+                                    }
+                                    KeyEvent.KEYCODE_DPAD_RIGHT -> {
+                                        val newDelay = (delayMs + 100L).coerceIn(-5000L, 5000L)
+                                        delayMs = newDelay
+                                        onDelayChange(newDelay)
+                                        true
+                                    }
+                                    else -> false
+                                }
+                            } else false
+                        },
+                )
+
+                if (isTv) {
+                    val incFocus = rememberTvFocusState()
+                    Box(
+                        modifier = Modifier
+                            .size(40.dp)
+                            .clip(CircleShape)
+                            .background(Color.White.copy(alpha = 0.08f))
+                            .then(incFocus.focusModifier)
+                            .tvFocusIndicator(incFocus, CircleShape)
+                            .clickable {
+                                val newDelay = (delayMs + 100L).coerceIn(-5000L, 5000L)
+                                delayMs = newDelay
+                                onDelayChange(newDelay)
+                            },
+                        contentAlignment = Alignment.Center,
+                    ) {
+                        Icon(Tabler.Outline.Plus, contentDescription = "Increase", tint = Color.White)
+                    }
+                }
+            }
 
             Spacer(Modifier.height(8.dp))
             Text(

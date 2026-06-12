@@ -7,6 +7,9 @@ import com.raulshma.jellyplay.core.ui.navigation.Route
 import com.raulshma.jellyplay.feature.admin.dashboard.AdminDashboardScreen
 import com.raulshma.jellyplay.feature.admin.devices.DevicesScreen
 import com.raulshma.jellyplay.feature.admin.logs.LogsScreen
+import com.raulshma.jellyplay.feature.admin.plugins.PluginConfigScreen
+import com.raulshma.jellyplay.feature.admin.plugins.PluginDetailScreen
+import com.raulshma.jellyplay.feature.admin.plugins.PluginsScreen
 import com.raulshma.jellyplay.feature.admin.statistics.UserStatisticsScreen
 import com.raulshma.jellyplay.feature.admin.statistics.detail.UserStatisticsDetailScreen
 import com.raulshma.jellyplay.feature.admin.stalemedia.StaleMediaScreen
@@ -25,6 +28,7 @@ fun EntryProviderScope<NavKey>.adminSection(
             onUserStatistics = { navigator.navigate(Route.UserStatistics) },
             onStaleMedia = { navigator.navigate(Route.StaleMedia) },
             onWatchedMediaCleanup = { navigator.navigate(Route.WatchedMediaCleanup) },
+            onPlugins = { navigator.navigate(Route.Plugins) },
         )
     }
 
@@ -68,6 +72,34 @@ fun EntryProviderScope<NavKey>.adminSection(
 
     entry<Route.WatchedMediaCleanup> {
         WatchedMediaCleanupScreen(
+            onBack = { navigator.goBack() },
+        )
+    }
+
+    entry<Route.Plugins> {
+        PluginsScreen(
+            onBack = { navigator.goBack() },
+            onPluginDetail = { pluginId, pluginName ->
+                navigator.navigate(Route.PluginDetail(pluginId, pluginName))
+            },
+        )
+    }
+
+    entry<Route.PluginDetail> { route ->
+        PluginDetailScreen(
+            pluginId = route.pluginId,
+            pluginName = route.pluginName,
+            onBack = { navigator.goBack() },
+            onConfig = { pluginId, pluginName ->
+                navigator.navigate(Route.PluginConfig(pluginId, pluginName))
+            },
+        )
+    }
+
+    entry<Route.PluginConfig> { route ->
+        PluginConfigScreen(
+            pluginId = route.pluginId,
+            pluginName = route.pluginName,
             onBack = { navigator.goBack() },
         )
     }

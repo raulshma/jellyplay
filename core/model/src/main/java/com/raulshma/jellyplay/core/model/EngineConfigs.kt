@@ -10,8 +10,8 @@ sealed interface EngineSpecificConfig
 enum class MpvHwdec(val key: String, val displayName: String) {
     MEDIACODEC("mediacodec", "MediaCodec Direct (Zero-Copy)"),
     MEDIACODEC_COPY("mediacodec-copy", "MediaCodec Copy"),
-    MEDIACODEC_HW_ONLY("mediacodec,mediacodec-copy", "MediaCodec HW Only (No SW Fallback)"),
-    MEDIACODEC_FALLBACK("mediacodec,mediacodec-copy,no", "MediaCodec + SW Fallback"),
+    MEDIACODEC_HW_ONLY("mediacodec-copy,mediacodec", "MediaCodec HW Only (No SW Fallback)"),
+    MEDIACODEC_FALLBACK("mediacodec-copy,mediacodec,no", "MediaCodec + SW Fallback"),
     AUTO("auto", "Auto Detect"),
     NO("no", "Software Only"),
 }

@@ -25,7 +25,6 @@ import com.raulshma.jellyplay.core.ui.components.JellyPlayLoadingIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.rememberModalBottomSheetState
@@ -45,6 +44,8 @@ import androidx.compose.ui.unit.dp
 import com.raulshma.jellyplay.core.model.MediaItem
 import com.raulshma.jellyplay.core.ui.image.MediaImage
 import com.raulshma.jellyplay.core.ui.tv.LocalTvMode
+import com.raulshma.jellyplay.core.ui.tv.rememberTvFocusState
+import com.raulshma.jellyplay.core.ui.tv.tvFocusIndicator
 import com.raulshma.jellyplay.core.ui.tv.tvFocusRestorer
 import com.raulshma.jellyplay.core.ui.tv.tvFocusExitHandler
 import com.raulshma.jellyplay.core.ui.components.formatDurationFromTicks
@@ -66,6 +67,8 @@ internal fun EpisodePickerSheet(
     getImageUrl: (String) -> String,
 ) {
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+    val isTv = LocalTvMode.current
+
     PlayerModalBottomSheet(
         onDismissRequest = onDismiss,
         sheetState = sheetState,
@@ -99,10 +102,15 @@ internal fun EpisodePickerSheet(
             Spacer(Modifier.height(16.dp))
 
             if (seasons.isNotEmpty()) {
-                val isTv = LocalTvMode.current
                 val seasonFocusRequester = remember { FocusRequester() }
                 LaunchedEffect(isTv) {
-                    if (isTv) seasonFocusRequester.requestFocus()
+                    if (isTv) {
+                        try {
+                            seasonFocusRequester.requestFocus()
+                        } catch (e: Exception) {
+                            // ignore
+                        }
+                    }
                 }
 
                 LazyRow(
@@ -124,10 +132,16 @@ internal fun EpisodePickerSheet(
                         } else {
                             MaterialTheme.colorScheme.onSurfaceVariant
                         }
+
+                        val seasonFocusState = rememberTvFocusState(focusedScale = 1.05f)
+                        val shape = ShapeCache.smoothPill
+
                         Surface(
                             modifier = Modifier
-                                .clip(ShapeCache.smoothPill)
-                                .then(if (season.id == seasons.firstOrNull()?.id) Modifier.focusRequester(seasonFocusRequester) else Modifier)
+                                .clip(shape)
+                                .then(seasonFocusState.focusModifier)
+                                .tvFocusIndicator(seasonFocusState, shape)
+                                .then(if (season.id == currentSeasonId || (currentSeasonId == null && season.id == seasons.firstOrNull()?.id)) Modifier.focusRequester(seasonFocusRequester) else Modifier)
                                 .clickable { onSeasonSelect(season.id) },
                             color = containerColor,
                             contentColor = contentColor,
@@ -168,6 +182,17 @@ internal fun EpisodePickerSheet(
                     )
                 }
             } else {
+                val episodeFocusRequester = remember { FocusRequester() }
+                LaunchedEffect(isTv, seasons.isEmpty(), episodes) {
+                    if (isTv && (seasons.isEmpty() || currentSeasonId != null) && episodes.isNotEmpty()) {
+                        try {
+                            episodeFocusRequester.requestFocus()
+                        } catch (e: Exception) {
+                            // ignore
+                        }
+                    }
+                }
+
                 LazyColumn {
                     itemsIndexed(
                         episodes,
@@ -175,11 +200,14 @@ internal fun EpisodePickerSheet(
                         contentType = { _, _ -> "episode" },
                     ) { index, episode ->
                         val isCurrent = episode.id == currentEpisodeId
+                        val isFirstOrCurrent = isCurrent || (episodes.none { it.id == currentEpisodeId } && index == 0)
+
                         EpisodeRow(
                             episode = episode,
                             isCurrent = isCurrent,
                             imageUrl = getImageUrl(episode.id),
                             onClick = { onEpisodeSelect(episode) },
+                            modifier = if (isFirstOrCurrent) Modifier.focusRequester(episodeFocusRequester) else Modifier
                         )
                         if (index < episodes.lastIndex) {
                             Box(
@@ -203,6 +231,7 @@ private fun EpisodeRow(
     isCurrent: Boolean,
     imageUrl: String,
     onClick: () -> Unit,
+    modifier: Modifier = Modifier,
 ) {
     val pos = episode.playbackPositionTicks
     val rt = episode.runTimeTicks
@@ -210,15 +239,22 @@ private fun EpisodeRow(
         (pos.toFloat() / rt).coerceIn(0f, 1f)
     } else 0f
 
+    val focusState = rememberTvFocusState(focusedScale = 1.01f)
+    val shape = ShapeCache.smooth12
+
     Row(
-        modifier = Modifier
+        modifier = modifier
             .fillMaxWidth()
-            .clickable(onClick = onClick)
+            .padding(horizontal = 8.dp, vertical = 2.dp)
+            .clip(shape)
             .background(
                 if (isCurrent) MaterialTheme.colorScheme.primary.copy(alpha = 0.08f)
                 else Color.Transparent
             )
-            .padding(horizontal = 20.dp, vertical = 12.dp),
+            .then(focusState.focusModifier)
+            .tvFocusIndicator(focusState, shape)
+            .clickable(onClick = onClick)
+            .padding(horizontal = 16.dp, vertical = 10.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         if (isCurrent) {

@@ -4,7 +4,7 @@ import androidx.lifecycle.SavedStateHandle
 import androidx.paging.PagingData
 import androidx.paging.cachedIn
 import com.raulshma.jellyplay.core.data.playback.AudioPlaybackManager
-import com.raulshma.jellyplay.core.data.playback.AudioQueueItem
+import com.raulshma.jellyplay.core.data.playback.toAudioQueueItem
 import com.raulshma.jellyplay.core.data.repository.MediaRepository
 import com.raulshma.jellyplay.core.data.repository.PlaybackRepository
 import com.raulshma.jellyplay.core.model.MediaItem
@@ -38,16 +38,7 @@ class GenreDetailViewModel @Inject constructor(
     fun addToQueue(track: MediaItem) {
         launch {
             val imageUrl = getImageUrl(track.id)
-            val queueItem = AudioQueueItem(
-                id = track.id,
-                name = track.name,
-                artist = track.albumArtist ?: track.artistItems.firstOrNull()?.name ?: "",
-                album = track.album,
-                imageUrl = imageUrl,
-                mediaSourceId = null,
-                durationMs = track.runTimeTicks?.let { it / 10_000 } ?: 0L,
-                normalizationGain = track.normalizationGain,
-            )
+            val queueItem = track.toAudioQueueItem(imageUrl = imageUrl)
             audioPlaybackManager.addToQueue(queueItem)
         }
     }
@@ -55,16 +46,7 @@ class GenreDetailViewModel @Inject constructor(
     fun playAll(tracks: List<MediaItem>, startIndex: Int) {
         launch {
             val queueItems = tracks.map { track ->
-                AudioQueueItem(
-                    id = track.id,
-                    name = track.name,
-                    artist = track.albumArtist ?: track.artistItems.firstOrNull()?.name ?: "",
-                    album = track.album,
-                    imageUrl = getImageUrl(track.id),
-                    mediaSourceId = null,
-                    durationMs = track.runTimeTicks?.let { it / 10_000 } ?: 0L,
-                    normalizationGain = track.normalizationGain,
-                )
+                track.toAudioQueueItem(imageUrl = getImageUrl(track.id))
             }
             audioPlaybackManager.playQueue(queueItems, startIndex)
         }

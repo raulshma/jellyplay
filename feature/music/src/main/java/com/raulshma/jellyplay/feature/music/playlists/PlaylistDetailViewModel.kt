@@ -1,7 +1,7 @@
 package com.raulshma.jellyplay.feature.music.playlists
 
 import com.raulshma.jellyplay.core.data.playback.AudioPlaybackManager
-import com.raulshma.jellyplay.core.data.playback.AudioQueueItem
+import com.raulshma.jellyplay.core.data.playback.toAudioQueueItem
 import com.raulshma.jellyplay.core.data.repository.MediaRepository
 import com.raulshma.jellyplay.core.data.repository.PlaybackRepository
 import com.raulshma.jellyplay.core.model.PlaylistItem
@@ -56,30 +56,12 @@ class PlaylistDetailViewModel @Inject constructor(
     }
 
     fun addToQueue(item: PlaylistItem) {
-        val queueItem = AudioQueueItem(
-            id = item.id,
-            name = item.name,
-            artist = item.artist ?: "",
-            album = item.album,
-            imageUrl = null,
-            mediaSourceId = null,
-            durationMs = item.runTimeTicks?.let { it / 10_000 } ?: 0L,
-        )
+        val queueItem = item.toAudioQueueItem()
         audioPlaybackManager.addToQueue(queueItem)
     }
 
     fun playAll(startIndex: Int = 0) {
-        val queueItems = items.map { item ->
-            AudioQueueItem(
-                id = item.id,
-                name = item.name,
-                artist = item.artist ?: "",
-                album = item.album,
-                imageUrl = null,
-                mediaSourceId = null,
-                durationMs = item.runTimeTicks?.let { it / 10_000 } ?: 0L,
-            )
-        }
+        val queueItems = items.map { item -> item.toAudioQueueItem() }
         audioPlaybackManager.playQueue(queueItems, startIndex)
     }
 
