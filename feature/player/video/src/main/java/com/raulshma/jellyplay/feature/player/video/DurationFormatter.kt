@@ -1,13 +1,12 @@
 package com.raulshma.jellyplay.feature.player.video
 
+import com.raulshma.jellyplay.core.ui.components.formatDurationMs
+import kotlin.math.abs
+
 internal fun formatDuration(ms: Long): String {
-    val totalSeconds = ms / 1000
-    val hours = totalSeconds / 3600
-    val minutes = (totalSeconds % 3600) / 60
-    val seconds = totalSeconds % 60
-    return if (hours > 0) {
-        String.format("%d:%02d:%02d", hours, minutes, seconds)
+    return if (ms < 0) {
+        "-" + formatDurationMs(abs(ms))
     } else {
-        String.format("%d:%02d", minutes, seconds)
+        formatDurationMs(ms)
     }
 }

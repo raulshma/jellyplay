@@ -1,11 +1,11 @@
 package com.raulshma.jellyplay.core.data.repository
 
+import com.raulshma.jellyplay.core.data.cache.TtlCache
 import com.raulshma.jellyplay.core.datastore.SeerrPreferencesStore
 import com.raulshma.jellyplay.core.datastore.SeerrSecureCredentialsStore
 import com.raulshma.jellyplay.core.model.MediaType
 import com.raulshma.jellyplay.core.model.seerr.*
 import com.raulshma.jellyplay.core.network.seerr.SeerrApiClient
-import java.util.concurrent.ConcurrentHashMap
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -19,8 +19,6 @@ import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import javax.inject.Inject
 import javax.inject.Singleton
-
-private data class CacheEntry<T>(val value: T, val timestampMs: Long)
 
 @Singleton
 class SeerrRepositoryImpl @Inject constructor(
@@ -45,23 +43,16 @@ class SeerrRepositoryImpl @Inject constructor(
     private val cachedPrefs = seerrPreferencesStore.preferences
         .stateIn(cacheScope, SharingStarted.Eagerly, null)
 
-    private val detailCache = ConcurrentHashMap<String, CacheEntry<Any>>()
     private val CACHE_TTL_MS = 60_000L
+    private val detailCache = TtlCache<Any>(ttlMs = CACHE_TTL_MS)
 
     private fun <T> getCached(key: String): T? {
-        val now = System.currentTimeMillis()
-        detailCache.entries.removeIf { now - it.value.timestampMs > CACHE_TTL_MS }
-        val entry = detailCache[key] ?: return null
-        if (System.currentTimeMillis() - entry.timestampMs > CACHE_TTL_MS) {
-            detailCache.remove(key, entry)
-            return null
-        }
-        @Suppress("UNCHECKED_CAST")
-        return entry.value as T
+        detailCache.evictExpired()
+        return detailCache.get(key) as? T
     }
 
     private fun putCached(key: String, value: Any) {
-        detailCache[key] = CacheEntry(value, System.currentTimeMillis())
+        detailCache.put(key, value)
     }
 
     private suspend fun getCredentials(): SeerrCredentials? {

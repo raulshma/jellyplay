@@ -1,6 +1,7 @@
 package com.raulshma.jellyplay.feature.player.video.components
 
 import androidx.compose.animation.AnimatedVisibility
+import com.raulshma.jellyplay.core.ui.tv.LocalTvMode
 import com.raulshma.jellyplay.core.ui.tv.rememberTvFocusState
 import com.raulshma.jellyplay.core.ui.tv.tvFocusIndicator
 import androidx.compose.animation.core.tween
@@ -45,6 +46,8 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
@@ -72,13 +75,28 @@ fun NextEpisodeOverlay(
     onCancel: () -> Unit,
     isPlaying: Boolean,
     modifier: Modifier = Modifier,
+    focusRequester: FocusRequester? = null,
 ) {
     var countdown by remember(isVisible) { mutableIntStateOf(countdownSeconds) }
     var dismissed by remember(isVisible) { mutableStateOf(false) }
+    val isTv = LocalTvMode.current
+    val localFocusRequester = remember { FocusRequester() }
+    val tvPlayNextFocusRequester = focusRequester ?: localFocusRequester
 
     LaunchedEffect(isVisible) {
         dismissed = false
         countdown = countdownSeconds
+    }
+
+    LaunchedEffect(isVisible, isTv) {
+        if (isVisible && isTv) {
+            kotlinx.coroutines.delay(300)
+            try {
+                tvPlayNextFocusRequester.requestFocus()
+            } catch (e: Exception) {
+                // ignore
+            }
+        }
     }
 
     LaunchedEffect(isVisible, countdown, dismissed, isPlaying) {
@@ -145,6 +163,7 @@ fun NextEpisodeOverlay(
                                 .clip(CircleShape)
                                 .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.25f))
                                 .border(1.5.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.5f), CircleShape)
+                                .then(if (isTv) Modifier.focusRequester(tvPlayNextFocusRequester) else Modifier)
                                 .then(playFocusState.focusModifier)
                                 .tvFocusIndicator(playFocusState, CircleShape)
                                 .clickable(onClick = onPlayNext),

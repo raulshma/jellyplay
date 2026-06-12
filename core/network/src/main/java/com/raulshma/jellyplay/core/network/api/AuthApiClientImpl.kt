@@ -38,7 +38,7 @@ class AuthApiClientImpl @Inject constructor(
                     name = systemInfo.serverName ?: "Jellyfin Server",
                     address = normalizedAddress,
                 )
-                engine.authMutex.withLock { engine._currentServer.value = info }
+                engine.authMutex.withLock { engine.updateServer(info) }
                 info
             } catch (e: Exception) {
                 Log.e("JellyfinApi", "connectToServer failed for $normalizedAddress", e)
@@ -52,7 +52,7 @@ class AuthApiClientImpl @Inject constructor(
         username: String,
         password: String,
     ): Result<UserInfo> = authenticateUser(
-        serverInfo = engine._currentServer.value ?: connectToServer(serverAddress).getOrThrow(),
+        serverInfo = engine.currentServer.value ?: connectToServer(serverAddress).getOrThrow(),
         username = username,
         password = password,
     )
@@ -62,7 +62,7 @@ class AuthApiClientImpl @Inject constructor(
         username: String,
         password: String,
     ): Result<UserInfo> = engine.apiResultWithRetry {
-        engine.authMutex.withLock { engine._currentServer.value = serverInfo }
+        engine.authMutex.withLock { engine.updateServer(serverInfo) }
         val client = engine.jellyfin.createApi(serverInfo.address)
         val authResult = client.userApi.authenticateUserByName(
             AuthenticateUserByName(
@@ -75,7 +75,7 @@ class AuthApiClientImpl @Inject constructor(
             baseUrl = serverInfo.address,
             accessToken = accessTokenValue,
         )
-        engine.api = authenticatedClient
+        engine.updateApi(authenticatedClient)
         val userDto = authResult.user ?: throw Exception("Authentication failed")
         val policy = userDto.policy
         val userInfo = UserInfo(
@@ -92,45 +92,45 @@ class AuthApiClientImpl @Inject constructor(
             } else emptyList(),
         )
         engine.authMutex.withLock {
-            engine._currentUser.value = userInfo
-            engine._currentServer.value = serverInfo.copy(
+            engine.updateUser(userInfo)
+            engine.updateServer(serverInfo.copy(
                 userId = userInfo.id,
                 accessToken = userInfo.accessToken,
                 isConnected = true,
-            )
+            ))
         }
         userInfo
     }
 
     override suspend fun setServer(serverInfo: ServerInfo) {
-        engine.authMutex.withLock { engine._currentServer.value = serverInfo }
+        engine.authMutex.withLock { engine.updateServer(serverInfo) }
     }
 
     override suspend fun setUser(userInfo: UserInfo) {
-        engine.authMutex.withLock { engine._currentUser.value = userInfo }
-        val server = engine._currentServer.value ?: return
-        engine.api = engine.jellyfin.createApi(
+        engine.authMutex.withLock { engine.updateUser(userInfo) }
+        val server = engine.currentServer.value ?: return
+        engine.updateApi(engine.jellyfin.createApi(
             baseUrl = server.address,
             accessToken = userInfo.accessToken,
-        )
+        ))
     }
 
     override suspend fun disconnect() {
-        engine.api = null
+        engine.updateApi(null)
         engine.authMutex.withLock {
-            engine._currentUser.value = null
-            engine._currentServer.value = null
+            engine.updateUser(null)
+            engine.updateServer(null)
         }
     }
 
     override suspend fun isQuickConnectEnabled(): Result<Boolean> = engine.apiResultWithRetry {
-        val server = engine._currentServer.value ?: throw IllegalStateException("Not connected to server")
+        val server = engine.currentServer.value ?: throw IllegalStateException("Not connected to server")
         val client = engine.api ?: engine.jellyfin.createApi(server.address)
         client.quickConnectApi.getQuickConnectEnabled().content
     }
 
     override suspend fun initiateQuickConnect(): Result<QuickConnectInfo> = engine.apiResultWithRetry {
-        val server = engine._currentServer.value ?: throw IllegalStateException("Not connected to server")
+        val server = engine.currentServer.value ?: throw IllegalStateException("Not connected to server")
         val client = engine.api ?: engine.jellyfin.createApi(server.address)
         val result = client.quickConnectApi.initiateQuickConnect().content
         QuickConnectInfo(
@@ -140,7 +140,7 @@ class AuthApiClientImpl @Inject constructor(
     }
 
     override suspend fun getQuickConnectState(secret: String): Result<QuickConnectState> = engine.apiResultWithRetry {
-        val server = engine._currentServer.value ?: throw IllegalStateException("Not connected to server")
+        val server = engine.currentServer.value ?: throw IllegalStateException("Not connected to server")
         val client = engine.api ?: engine.jellyfin.createApi(server.address)
         val result = client.quickConnectApi.getQuickConnectState(secret).content
         QuickConnectState(
@@ -153,7 +153,7 @@ class AuthApiClientImpl @Inject constructor(
         serverInfo: ServerInfo,
         secret: String,
     ): Result<UserInfo> = engine.apiResultWithRetry {
-        engine.authMutex.withLock { engine._currentServer.value = serverInfo }
+        engine.authMutex.withLock { engine.updateServer(serverInfo) }
         val client = engine.jellyfin.createApi(serverInfo.address)
         val authResult = client.userApi.authenticateWithQuickConnect(
             QuickConnectDto(secret = secret)
@@ -163,7 +163,7 @@ class AuthApiClientImpl @Inject constructor(
             baseUrl = serverInfo.address,
             accessToken = accessTokenValue,
         )
-        engine.api = authenticatedClient
+        engine.updateApi(authenticatedClient)
         val userDto = authResult.user ?: throw Exception("Quick Connect authentication failed")
         val policy = userDto.policy
         val userInfo = UserInfo(
@@ -179,12 +179,12 @@ class AuthApiClientImpl @Inject constructor(
             } else emptyList(),
         )
         engine.authMutex.withLock {
-            engine._currentUser.value = userInfo
-            engine._currentServer.value = serverInfo.copy(
+            engine.updateUser(userInfo)
+            engine.updateServer(serverInfo.copy(
                 userId = userInfo.id,
                 accessToken = userInfo.accessToken,
                 isConnected = true,
-            )
+            ))
         }
         userInfo
     }
@@ -193,7 +193,7 @@ class AuthApiClientImpl @Inject constructor(
         engine.requireApi().sessionApi.postFullCapabilities(data = JellyfinApiEngine.CACHED_CAPABILITIES)
     }
 
-    override fun getServerUrl(): String? = engine._currentServer.value?.address
+    override fun getServerUrl(): String? = engine.currentServer.value?.address
 
-    override fun getAccessToken(): String? = engine._currentUser.value?.accessToken
+    override fun getAccessToken(): String? = engine.currentUser.value?.accessToken
 }

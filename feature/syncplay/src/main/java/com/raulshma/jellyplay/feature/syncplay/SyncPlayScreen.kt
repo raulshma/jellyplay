@@ -248,9 +248,9 @@ fun SyncPlayScreen(
                 exit = fadeOut(MaterialTheme.motionScheme.fastEffectsSpec()) + slideOutVertically(targetOffsetY = { it }),
                 modifier = Modifier
                     .align(Alignment.BottomEnd)
-                    .padding(bottom = 88.dp + WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding(), end = 16.dp)
+                    .padding(bottom = 64.dp + WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding(), end = 16.dp)
                     .offset {
-                        val maxOffset = 88.dp.toPx()
+                        val maxOffset = 64.dp.toPx()
                         val yOffset = (-navOffsetPx).coerceAtMost(maxOffset)
                         androidx.compose.ui.unit.IntOffset(x = 0, y = yOffset.toInt())
                     },

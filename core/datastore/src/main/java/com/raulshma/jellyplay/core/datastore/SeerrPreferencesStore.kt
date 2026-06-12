@@ -10,6 +10,7 @@ import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
 import com.raulshma.jellyplay.core.model.seerr.SeerrAuthMethod
 import com.raulshma.jellyplay.core.model.seerr.SeerrPreferences
+import com.raulshma.jellyplay.core.datastore.di.ApplicationScope
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -29,8 +30,9 @@ private val Context.seerrDataStore: DataStore<Preferences> by preferencesDataSto
 class SeerrPreferencesStore @Inject constructor(
     @ApplicationContext private val context: Context,
     private val secureCredentialsStore: SeerrSecureCredentialsStore,
+    @ApplicationScope private val externalScope: CoroutineScope,
 ) {
-    private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+    private val scope = externalScope
 
     private object Keys {
         val SERVER_URL = stringPreferencesKey("seerr_server_url")

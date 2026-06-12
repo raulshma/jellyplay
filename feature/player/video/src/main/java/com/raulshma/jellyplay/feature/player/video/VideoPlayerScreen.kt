@@ -11,6 +11,9 @@ import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.background
+import androidx.compose.foundation.focusable
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxScope
@@ -59,7 +62,7 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.key.KeyEventType
 import androidx.compose.ui.input.key.NativeKeyEvent
-import androidx.compose.ui.input.key.onPreviewKeyEvent
+import androidx.compose.ui.input.key.onKeyEvent
 import androidx.compose.ui.input.key.type
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
@@ -170,9 +173,15 @@ fun VideoPlayerScreen(
 
     val isTv = LocalTvMode.current
 
+    val tvPlayerFocusRequester = remember { FocusRequester() }
+    val tvSkipSegmentFocusRequester = remember { FocusRequester() }
+    val tvNextEpisodeFocusRequester = remember { FocusRequester() }
+    var userInteractionCount by remember { mutableIntStateOf(0) }
+
     var seekOffsetMs by remember { mutableLongStateOf(0L) }
     var seekDirection by remember { mutableIntStateOf(0) }
     var seekTimestamp by remember { mutableLongStateOf(0L) }
+    var tvSeekStartPositionMs by remember { mutableLongStateOf(0L) }
     var brightnessOverlay by remember { mutableFloatStateOf(-1f) }
     var volumeOverlay by remember { mutableFloatStateOf(-1f) }
     var externalLaunched by remember { mutableStateOf(false) }
@@ -301,10 +310,13 @@ fun VideoPlayerScreen(
         onDispose {
             val currentlyInPip = viewModel.playerLifecycleManager.isInPipMode.value
             val isBgCasting = viewModel.isCastConnected && viewModel.castIsPlaying.value
+            val restoreOrientation = if (isTv)
+                ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE
+            else ActivityInfo.SCREEN_ORIENTATION_PORTRAIT
             if (isBgCasting && !currentlyInPip) {
                 activity?.let {
                     if (!it.isDestroyed && !it.isFinishing) {
-                        it.requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_PORTRAIT
+                        it.requestedOrientation = restoreOrientation
                         it.window.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
                         val window = it.window
                         val controller = WindowCompat.getInsetsController(window, window.decorView)
@@ -321,7 +333,7 @@ fun VideoPlayerScreen(
             } else if (!currentlyInPip) {
                 activity?.let {
                     if (!it.isDestroyed && !it.isFinishing) {
-                        it.requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_PORTRAIT
+                        it.requestedOrientation = restoreOrientation
                         it.window.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
                         val window = it.window
                         val controller = WindowCompat.getInsetsController(window, window.decorView)
@@ -376,7 +388,7 @@ fun VideoPlayerScreen(
             currentSheet = PlayerSheet.None
         } else if (isTv && showControls) {
             showControls = false
-        } else if (uiState.isPlaying && uiState.engineCapabilities.supportsMiniMode) {
+        } else if (!isTv && uiState.isPlaying && uiState.engineCapabilities.supportsMiniMode) {
             viewModel.prepareForMiniMode(
                 title = uiState.title,
                 subtitle = uiState.subtitle,
@@ -423,18 +435,22 @@ fun VideoPlayerScreen(
     val syncPlayIgnoreWait by viewModel.syncPlayIgnoreWait.collectAsStateWithLifecycle()
 
     LaunchedEffect(isCastConnected, uiState.defaultOrientation) {
-        delay(400)
         activity?.let {
             if (!it.isDestroyed && !it.isFinishing) {
-                it.requestedOrientation = if (isCastConnected) {
-                    ActivityInfo.SCREEN_ORIENTATION_USER
+                if (isTv) {
+                    it.requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE
+                } else if (isCastConnected) {
+                    it.requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_USER
                 } else {
-                    when (uiState.defaultOrientation) {
-                        OrientationMode.SENSOR_LANDSCAPE -> ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE
-                        OrientationMode.SENSOR_PORTRAIT -> ActivityInfo.SCREEN_ORIENTATION_SENSOR_PORTRAIT
-                        OrientationMode.SENSOR -> ActivityInfo.SCREEN_ORIENTATION_SENSOR
-                        OrientationMode.LOCKED_LANDSCAPE -> ActivityInfo.SCREEN_ORIENTATION_LANDSCAPE
-                        OrientationMode.LOCKED_PORTRAIT -> ActivityInfo.SCREEN_ORIENTATION_PORTRAIT
+                    delay(400)
+                    if (!it.isDestroyed && !it.isFinishing) {
+                        it.requestedOrientation = when (uiState.defaultOrientation) {
+                            OrientationMode.SENSOR_LANDSCAPE -> ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE
+                            OrientationMode.SENSOR_PORTRAIT -> ActivityInfo.SCREEN_ORIENTATION_SENSOR_PORTRAIT
+                            OrientationMode.SENSOR -> ActivityInfo.SCREEN_ORIENTATION_SENSOR
+                            OrientationMode.LOCKED_LANDSCAPE -> ActivityInfo.SCREEN_ORIENTATION_LANDSCAPE
+                            OrientationMode.LOCKED_PORTRAIT -> ActivityInfo.SCREEN_ORIENTATION_PORTRAIT
+                        }
                     }
                 }
             }
@@ -473,6 +489,28 @@ fun VideoPlayerScreen(
         nextEpisode?.let { viewModel.getImageUrl(it.id, 300) }
     }
     val isInSyncPlaySession = uiState.isInSyncPlaySession
+
+    val isNextEpisodeVisible = nextEpisode != null && shouldShowUpNext
+    val isSkipSegmentVisible = activeSegment != null &&
+            activeSegmentBehavior == com.raulshma.jellyplay.core.model.SegmentBehavior.SHOW_BUTTON &&
+            !isInPipMode &&
+            !(activeSegment.type == com.raulshma.jellyplay.core.model.MediaSegmentType.OUTRO && shouldShowUpNext)
+
+    LaunchedEffect(showControls, isTv, isNextEpisodeVisible, isSkipSegmentVisible) {
+        if (isTv && !showControls) {
+            try {
+                if (isNextEpisodeVisible) {
+                    tvNextEpisodeFocusRequester.requestFocus()
+                } else if (isSkipSegmentVisible) {
+                    tvSkipSegmentFocusRequester.requestFocus()
+                } else {
+                    tvPlayerFocusRequester.requestFocus()
+                }
+            } catch (e: Exception) {
+                // ignore if not attached
+            }
+        }
+    }
 
     val doPlay: () -> Unit = remember(engine, isInSyncPlaySession, isCastConnected) {
         {
@@ -555,65 +593,108 @@ fun VideoPlayerScreen(
                 .background(Color.Black)
                 .then(
                     if (isTv && currentSheet == PlayerSheet.None) {
-                        Modifier.onPreviewKeyEvent { keyEvent ->
-                            if (keyEvent.type != KeyEventType.KeyDown) return@onPreviewKeyEvent false
-                            when (keyEvent.nativeKeyEvent.keyCode) {
-                                NativeKeyEvent.KEYCODE_DPAD_CENTER, NativeKeyEvent.KEYCODE_ENTER -> {
-                                    if (!showControls) {
-                                        showControls = true
-                                        true
-                                    } else {
-                                        false
+                        Modifier
+                            .focusRequester(tvPlayerFocusRequester)
+                            .focusable()
+                            .onKeyEvent { keyEvent ->
+                                userInteractionCount++
+                                val isKeyDown = keyEvent.type == KeyEventType.KeyDown
+                                val isKeyUp = keyEvent.type == KeyEventType.KeyUp
+                                when (keyEvent.nativeKeyEvent.keyCode) {
+                                    NativeKeyEvent.KEYCODE_DPAD_RIGHT -> {
+                                        if (!showControls) {
+                                            if (isKeyDown) {
+                                                val repeatCount = keyEvent.nativeKeyEvent.repeatCount
+                                                val multiplier = (1f + repeatCount * 0.1f).coerceAtMost(2.5f)
+                                                val step = (currentSeekDurationMs * multiplier).toLong()
+                                                if (seekDirection == 1 && seekOffsetMs > 0L) {
+                                                    seekOffsetMs += step
+                                                } else {
+                                                    seekDirection = 1
+                                                    seekOffsetMs = step
+                                                    tvSeekStartPositionMs = viewModel.playerEngineRef?.currentPositionMs ?: 0L
+                                                }
+                                                seekTimestamp++
+                                            } else if (isKeyUp) {
+                                                if (seekDirection == 1 && seekOffsetMs > 0L) {
+                                                    val pos = tvSeekStartPositionMs
+                                                    val dur = viewModel.playerEngineRef?.durationMs ?: 0L
+                                                    val target = (pos + seekOffsetMs).coerceAtMost(dur.coerceAtLeast(0))
+                                                    doSeekTo(target)
+                                                }
+                                            }
+                                            true
+                                        } else false
+                                    }
+                                    NativeKeyEvent.KEYCODE_DPAD_LEFT -> {
+                                        if (!showControls) {
+                                            if (isKeyDown) {
+                                                val repeatCount = keyEvent.nativeKeyEvent.repeatCount
+                                                val multiplier = (1f + repeatCount * 0.1f).coerceAtMost(2.5f)
+                                                val step = (currentSeekDurationMs * multiplier).toLong()
+                                                if (seekDirection == -1 && seekOffsetMs > 0L) {
+                                                    seekOffsetMs += step
+                                                } else {
+                                                    seekDirection = -1
+                                                    seekOffsetMs = step
+                                                    tvSeekStartPositionMs = viewModel.playerEngineRef?.currentPositionMs ?: 0L
+                                                }
+                                                seekTimestamp++
+                                            } else if (isKeyUp) {
+                                                if (seekDirection == -1 && seekOffsetMs > 0L) {
+                                                    val pos = tvSeekStartPositionMs
+                                                    val target = (pos - seekOffsetMs).coerceAtLeast(0)
+                                                    doSeekTo(target)
+                                                }
+                                            }
+                                            true
+                                        } else false
+                                    }
+                                    else -> {
+                                        if (!isKeyDown) return@onKeyEvent false
+                                        when (keyEvent.nativeKeyEvent.keyCode) {
+                                            NativeKeyEvent.KEYCODE_DPAD_CENTER, NativeKeyEvent.KEYCODE_ENTER -> {
+                                                if (!showControls) {
+                                                    showControls = true
+                                                    true
+                                                } else false
+                                            }
+                                            NativeKeyEvent.KEYCODE_DPAD_UP, NativeKeyEvent.KEYCODE_DPAD_DOWN -> {
+                                                if (!showControls) {
+                                                    showControls = true
+                                                    true
+                                                } else false
+                                            }
+                                            NativeKeyEvent.KEYCODE_BACK -> {
+                                                if (showControls) {
+                                                    showControls = false
+                                                    true
+                                                } else false
+                                            }
+                                            NativeKeyEvent.KEYCODE_MEDIA_PLAY_PAUSE -> {
+                                                doTogglePlayPause()
+                                                true
+                                            }
+                                            NativeKeyEvent.KEYCODE_MEDIA_FAST_FORWARD -> {
+                                                doSeekForward()
+                                                showControls = true
+                                                true
+                                            }
+                                            NativeKeyEvent.KEYCODE_MEDIA_REWIND -> {
+                                                doSeekBack()
+                                                showControls = true
+                                                true
+                                            }
+                                            NativeKeyEvent.KEYCODE_SPACE -> {
+                                                doTogglePlayPause()
+                                                showControls = true
+                                                true
+                                            }
+                                            else -> false
+                                        }
                                     }
                                 }
-                                NativeKeyEvent.KEYCODE_DPAD_RIGHT -> {
-                                    if (!showControls) {
-                                        doSeekForward()
-                                        showControls = true
-                                        true
-                                    } else {
-                                        false
-                                    }
-                                }
-                                NativeKeyEvent.KEYCODE_DPAD_LEFT -> {
-                                    if (!showControls) {
-                                        doSeekBack()
-                                        showControls = true
-                                        true
-                                    } else {
-                                        false
-                                    }
-                                }
-                                NativeKeyEvent.KEYCODE_DPAD_UP, NativeKeyEvent.KEYCODE_DPAD_DOWN -> {
-                                    if (!showControls) {
-                                        showControls = true
-                                        true
-                                    } else {
-                                        false
-                                    }
-                                }
-                                NativeKeyEvent.KEYCODE_MEDIA_PLAY_PAUSE -> {
-                                    doTogglePlayPause()
-                                    true
-                                }
-                                NativeKeyEvent.KEYCODE_MEDIA_FAST_FORWARD -> {
-                                    doSeekForward()
-                                    showControls = true
-                                    true
-                                }
-                                NativeKeyEvent.KEYCODE_MEDIA_REWIND -> {
-                                    doSeekBack()
-                                    showControls = true
-                                    true
-                                }
-                                NativeKeyEvent.KEYCODE_SPACE -> {
-                                    doTogglePlayPause()
-                                    showControls = true
-                                    true
-                                }
-                                else -> false
                             }
-                        }
                     } else Modifier
                 )
                 .pointerInput(uiState.gesturesEnabled, isScreenLocked) {
@@ -634,14 +715,22 @@ fun VideoPlayerScreen(
                             val width = size.width
                             when {
                                 offset.x < width * 0.35 -> {
-                                    seekDirection = -1
-                                    seekOffsetMs = currentSeekDurationMs
+                                    if (seekDirection == -1 && seekOffsetMs > 0L) {
+                                        seekOffsetMs += currentSeekDurationMs
+                                    } else {
+                                        seekDirection = -1
+                                        seekOffsetMs = currentSeekDurationMs
+                                    }
                                     seekTimestamp++
                                     currentDoSeekBack()
                                 }
                                 offset.x > width * 0.65 -> {
-                                    seekDirection = 1
-                                    seekOffsetMs = currentSeekDurationMs
+                                    if (seekDirection == 1 && seekOffsetMs > 0L) {
+                                        seekOffsetMs += currentSeekDurationMs
+                                    } else {
+                                        seekDirection = 1
+                                        seekOffsetMs = currentSeekDurationMs
+                                    }
                                     seekTimestamp++
                                     currentDoSeekForward()
                                 }
@@ -838,6 +927,7 @@ fun VideoPlayerScreen(
                         isVisible = true,
                         segmentType = activeSegment.type,
                         onSkip = { viewModel.skipSegment(activeSegment) },
+                        focusRequester = tvSkipSegmentFocusRequester,
                         modifier = Modifier
                             .align(Alignment.BottomEnd)
                             .padding(bottom = 100.dp, end = 40.dp),
@@ -857,6 +947,7 @@ fun VideoPlayerScreen(
                     onPlayNext = { viewModel.playNextEpisode() },
                     onCancel = {},
                     isPlaying = isPlaying,
+                    focusRequester = tvNextEpisodeFocusRequester,
                     modifier = Modifier
                         .align(Alignment.BottomEnd)
                         .padding(bottom = 40.dp, end = 40.dp),
@@ -960,6 +1051,10 @@ fun VideoPlayerScreen(
                 currentAspectRatio = aspectRatio,
                 detectedAspectRatio = detectedAspectRatio,
                 isVisible = showControls && !isInPipMode && !isScreenLocked,
+                tvSkipSegmentFocusRequester = tvSkipSegmentFocusRequester,
+                tvNextEpisodeFocusRequester = tvNextEpisodeFocusRequester,
+                isSkipSegmentVisible = isSkipSegmentVisible,
+                isNextEpisodeVisible = isNextEpisodeVisible,
                 supportsSubtitleStyle = uiState.engineCapabilities.supportsSubtitleStyle,
                 supportsDialogueBoost = uiState.engineCapabilities.supportsDialogueBoost,
                 supportsNightMode = uiState.engineCapabilities.supportsNightMode,
@@ -1040,7 +1135,7 @@ fun VideoPlayerScreen(
             )
 
             AnimatedVisibility(
-                visible = uiState.trickplayEnabled && showControls && isSeeking,
+                visible = !isTv && uiState.trickplayEnabled && showControls && isSeeking,
                 enter = fadeIn(tween(150, easing = AlphaEasing)),
                 exit = fadeOut(tween(200, easing = AlphaEasing)),
                 modifier = Modifier.align(Alignment.BottomCenter).padding(bottom = 120.dp),
@@ -1102,9 +1197,13 @@ fun VideoPlayerScreen(
         }
     }
 
-    LaunchedEffect(showControls, controlsHasFocus, isSeeking, currentSheet, isOverflowMenuOpen) {
-        if (showControls && !controlsHasFocus && !isSeeking && currentSheet == PlayerSheet.None && !isOverflowMenuOpen) {
-            delay(uiState.controlsTimeoutMs)
+    LaunchedEffect(showControls, controlsHasFocus, isSeeking, currentSheet, isOverflowMenuOpen, userInteractionCount) {
+        if (showControls && !isSeeking && currentSheet == PlayerSheet.None && !isOverflowMenuOpen) {
+            if (!isTv && controlsHasFocus) {
+                return@LaunchedEffect
+            }
+            val timeout = if (isTv) uiState.controlsTimeoutMs * 2 else uiState.controlsTimeoutMs
+            delay(timeout)
             showControls = false
         }
     }
@@ -1369,6 +1468,7 @@ private fun PlayerSheetRouter(
                 title = "Audio",
                 tracks = uiState.audioTracks,
                 onSelect = { viewModel.selectAudioTrack(it) },
+                onReset = if (uiState.hasAudioOverride) { { viewModel.resetAudioTrack() } } else null,
                 onDismiss = dismissSheet,
             )
         }
@@ -1377,6 +1477,7 @@ private fun PlayerSheetRouter(
                 title = "Subtitles",
                 tracks = uiState.subtitleTracks,
                 onSelect = { viewModel.selectSubtitleTrack(it) },
+                onReset = if (uiState.hasSubtitleOverride) { { viewModel.resetSubtitleTrack() } } else null,
                 onDismiss = dismissSheet,
             )
         }
@@ -1434,6 +1535,7 @@ private fun PlayerSheetRouter(
                 currentStyle = uiState.subtitleStyle,
                 onStyleChange = { viewModel.setSubtitleStyle(it) },
                 onDismiss = dismissSheet,
+                capabilities = uiState.engineCapabilities,
             )
         }
         is PlayerSheet.AudioDelay -> {

@@ -2,14 +2,12 @@ package com.raulshma.jellyplay.core.network.api
 
 import com.raulshma.jellyplay.core.model.ServerInfo
 import com.raulshma.jellyplay.core.model.UserInfo
-import io.mockk.every
 import io.mockk.mockk
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.test.runTest
 import okhttp3.OkHttpClient
 import org.jellyfin.sdk.Jellyfin
 import org.junit.Assert.assertEquals
-import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
 import org.junit.Before
 import org.junit.Test
@@ -47,40 +45,40 @@ class AuthApiClientImplTest {
 
     @Test
     fun `initial state has no server`() = runTest {
-        assertNull(engine._currentServer.value)
-        assertNull(engine._currentUser.value)
+        assertNull(engine.currentServer.value)
+        assertNull(engine.currentUser.value)
     }
 
     @Test
     fun `setServer updates current server`() = runTest {
         authClient.setServer(testServer)
 
-        assertEquals(testServer, engine._currentServer.value)
+        assertEquals(testServer, engine.currentServer.value)
     }
 
     @Test
     fun `setUser updates current user`() = runTest {
-        engine._currentServer.value = testServer
-        engine._currentUser.value = testUser
+        engine.updateServer(testServer)
+        engine.updateUser(testUser)
 
-        assertEquals(testUser, engine._currentUser.value)
+        assertEquals(testUser, engine.currentUser.value)
     }
 
     @Test
     fun `disconnect clears server and user`() = runTest {
-        engine._currentServer.value = testServer
-        engine._currentUser.value = testUser
+        engine.updateServer(testServer)
+        engine.updateUser(testUser)
 
         authClient.disconnect()
 
-        assertNull(engine._currentServer.value)
-        assertNull(engine._currentUser.value)
+        assertNull(engine.currentServer.value)
+        assertNull(engine.currentUser.value)
         assertNull(engine.api)
     }
 
     @Test
     fun `getServerUrl returns server address`() = runTest {
-        engine._currentServer.value = testServer
+        engine.updateServer(testServer)
 
         assertEquals("https://test.example.com", authClient.getServerUrl())
     }
@@ -92,7 +90,7 @@ class AuthApiClientImplTest {
 
     @Test
     fun `getAccessToken returns user token`() = runTest {
-        engine._currentUser.value = testUser
+        engine.updateUser(testUser)
 
         assertEquals("token-123", authClient.getAccessToken())
     }
@@ -112,8 +110,8 @@ class AuthApiClientImplTest {
 
     @Test
     fun `currentUser flow reflects state changes`() = runTest {
-        engine._currentServer.value = testServer
-        engine._currentUser.value = testUser
+        engine.updateServer(testServer)
+        engine.updateUser(testUser)
 
         val user = authClient.currentUser.first()
         assertEquals(testUser, user)
@@ -123,9 +121,9 @@ class AuthApiClientImplTest {
     fun `disconnect then setServer restores server state`() = runTest {
         authClient.setServer(testServer)
         authClient.disconnect()
-        assertNull(engine._currentServer.value)
+        assertNull(engine.currentServer.value)
 
         authClient.setServer(testServer)
-        assertEquals(testServer, engine._currentServer.value)
+        assertEquals(testServer, engine.currentServer.value)
     }
 }

@@ -81,6 +81,8 @@ import androidx.paging.compose.collectAsLazyPagingItems
 import androidx.paging.compose.itemKey
 import com.raulshma.jellyplay.core.data.repository.SearchHistoryItem
 import com.raulshma.jellyplay.core.ui.components.ErrorScreen
+import com.raulshma.jellyplay.core.ui.components.ExpressiveToolbarIconButton
+import com.raulshma.jellyplay.core.ui.components.GlassDismissTag
 import com.raulshma.jellyplay.core.ui.components.PosterCard
 import com.raulshma.jellyplay.core.ui.components.ScreenEmptyState
 import com.raulshma.jellyplay.core.ui.components.rememberScreenBackgroundColor
@@ -773,77 +775,6 @@ fun SearchScreen(
 // ─────────────────────────────────────────────────────────────────────────────
 // ── Subcomponents (matching LibraryScreen / MediaDetailScreen design language)
 // ─────────────────────────────────────────────────────────────────────────────
-
-@OptIn(ExperimentalMaterial3ExpressiveApi::class)
-@Composable
-private fun ExpressiveToolbarIconButton(
-    onClick: () -> Unit,
-    icon: androidx.compose.ui.graphics.vector.ImageVector,
-    contentDescription: String,
-    highlighted: Boolean = false,
-) {
-    val tint = if (highlighted) MaterialTheme.colorScheme.primary
-               else MaterialTheme.colorScheme.onSurfaceVariant
-    IconButton(
-        onClick = onClick,
-        shapes = IconButtonDefaults.shapes(),
-        modifier = Modifier.size(36.dp),
-        colors = IconButtonDefaults.iconButtonColors(
-            containerColor = MaterialTheme.colorScheme.onSurface.copy(
-                alpha = if (highlighted) 0.18f else 0.08f
-            ),
-        ),
-    ) {
-        Icon(
-            icon,
-            contentDescription = contentDescription,
-            modifier = Modifier.size(18.dp),
-            tint = tint,
-        )
-    }
-}
-
-@Composable
-private fun GlassDismissTag(
-    label: String,
-    onDismiss: () -> Unit,
-) {
-    val interactionSource = remember { MutableInteractionSource() }
-    val isPressed by interactionSource.collectIsPressedAsState()
-    val scale by animateFloatAsState(
-        targetValue = if (isPressed) 0.95f else 1f,
-        animationSpec = MaterialTheme.motionScheme.fastSpatialSpec(),
-        label = "tagScale",
-    )
-
-    Row(
-        modifier = Modifier
-            .clip(ShapeCache.smooth12)
-            .background(MaterialTheme.colorScheme.onSurface.copy(alpha = 0.12f))
-            .graphicsLayer { scaleX = scale; scaleY = scale }
-            .tvFocusable().clickable(
-                interactionSource = interactionSource,
-                indication = null,
-                onClick = onDismiss,
-            )
-            .padding(start = 12.dp, end = 8.dp, top = 6.dp, bottom = 6.dp),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(6.dp),
-    ) {
-        Text(
-            text = label,
-            style = MaterialTheme.typography.labelMedium,
-            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.85f),
-            fontWeight = FontWeight.Medium,
-        )
-        Icon(
-            Tabler.Outline.X,
-            contentDescription = "Remove",
-            modifier = Modifier.size(14.dp),
-            tint = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f),
-        )
-    }
-}
 
 @Composable
 private fun AnimatedSearchItem(

@@ -327,8 +327,5 @@ private fun StatPill(text: String) {
     }
 }
 
-private fun formatDuration(seconds: Long): String = when {
-    seconds >= 3600 -> String.format("%.1fh", seconds / 3600.0)
-    seconds >= 60 -> "${seconds / 60}m"
-    else -> "${seconds}s"
-}
+private fun formatDuration(seconds: Long): String =
+    com.raulshma.jellyplay.core.ui.components.formatDurationApproxSeconds(seconds)

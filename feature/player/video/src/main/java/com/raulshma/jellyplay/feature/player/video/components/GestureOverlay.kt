@@ -16,6 +16,8 @@ import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
@@ -213,18 +215,7 @@ private fun SeekCircleOverlay(
     seekOffsetMs: Long,
     modifier: Modifier = Modifier,
 ) {
-    val progress = remember { Animatable(0f) }
-
-    LaunchedEffect(isLeft, seekOffsetMs) {
-        progress.snapTo(0f)
-        progress.animateTo(
-            targetValue = 1f,
-            animationSpec = tween(durationMillis = 700, easing = LinearEasing),
-        )
-    }
-
     val primaryColor = MaterialTheme.colorScheme.primary
-    val circleSize = 90.dp
 
     AnimatedVisibility(
         visible = true,
@@ -232,64 +223,43 @@ private fun SeekCircleOverlay(
         exit = playerGestureFeedbackExit(),
         modifier = modifier,
     ) {
-        BoxWithConstraints(
+        Box(
             modifier = Modifier.fillMaxSize(),
         ) {
-            val screenWidthPx = constraints.maxWidth
-            val screenHeightPx = constraints.maxHeight
-            val density = androidx.compose.ui.platform.LocalDensity.current
-            val circleSizePx = with(density) { circleSize.toPx() }
-            val xOffsetPx = if (isLeft) {
-                screenWidthPx * 0.15f - circleSizePx / 2f
-            } else {
-                screenWidthPx * 0.85f - circleSizePx / 2f
-            }
-            val yOffsetPx = screenHeightPx / 2f - circleSizePx / 2f
-            Box(
-                contentAlignment = Alignment.Center,
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.Center,
                 modifier = Modifier
-                    .offset(
-                        x = with(density) { xOffsetPx.toDp() },
-                        y = with(density) { yOffsetPx.toDp() },
-                    )
-                    .size(circleSize)
-                    .clip(ShapeCache.smooth24)
-                    .background(Color.Black.copy(alpha = 0.55f))
-                    .border(1.dp, Color.White.copy(alpha = 0.1f), ShapeCache.smooth24),
+                    .align(if (isLeft) Alignment.CenterStart else Alignment.CenterEnd)
+                    .padding(horizontal = 48.dp)
             ) {
-                androidx.compose.foundation.Canvas(
-                    modifier = Modifier.size(circleSize),
-                ) {
-                    val strokeWidth = 3.dp.toPx()
-                    val arcSize = size.minDimension - strokeWidth * 2
-                    val topLeft = androidx.compose.ui.geometry.Offset(strokeWidth, strokeWidth)
-                    drawArc(
-                        color = primaryColor,
-                        startAngle = -90f,
-                        sweepAngle = 360 * progress.value,
-                        useCenter = false,
-                        topLeft = topLeft,
-                        size = androidx.compose.ui.geometry.Size(arcSize, arcSize),
-                        style = androidx.compose.ui.graphics.drawscope.Stroke(width = strokeWidth),
-                    )
-                }
-
-                Column(
-                    horizontalAlignment = Alignment.CenterHorizontally,
-                    verticalArrangement = Arrangement.Center,
-                ) {
+                if (isLeft) {
                     Icon(
-                        imageVector = if (isLeft) Tabler.Outline.PlayerTrackPrev else Tabler.Outline.PlayerTrackNext,
+                        imageVector = Tabler.Outline.PlayerTrackPrev,
                         contentDescription = null,
-                        tint = MaterialTheme.colorScheme.primary,
+                        tint = primaryColor,
                         modifier = Modifier.size(20.dp),
                     )
+                    Spacer(modifier = Modifier.width(6.dp))
                     Text(
-                        text = "${seekOffsetMs / 1000}s",
+                        text = "-${seekOffsetMs / 1000}s",
                         color = Color.White,
-                        fontSize = 13.sp,
+                        fontSize = 15.sp,
                         fontWeight = FontWeight.Bold,
-                        fontFamily = FontFamily.Monospace,
+                    )
+                } else {
+                    Text(
+                        text = "+${seekOffsetMs / 1000}s",
+                        color = Color.White,
+                        fontSize = 15.sp,
+                        fontWeight = FontWeight.Bold,
+                    )
+                    Spacer(modifier = Modifier.width(6.dp))
+                    Icon(
+                        imageVector = Tabler.Outline.PlayerTrackNext,
+                        contentDescription = null,
+                        tint = primaryColor,
+                        modifier = Modifier.size(20.dp),
                     )
                 }
             }

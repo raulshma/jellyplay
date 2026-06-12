@@ -1,6 +1,7 @@
 package com.raulshma.jellyplay.feature.player.video.components
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -10,6 +11,8 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
 import androidx.compose.material3.Icon
@@ -25,10 +28,16 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.raulshma.jellyplay.core.designsystem.theme.ShapeCache
+import com.raulshma.jellyplay.core.ui.tv.LocalTvMode
+import com.raulshma.jellyplay.core.ui.tv.rememberTvFocusState
+import com.raulshma.jellyplay.core.ui.tv.tvFocusIndicator
 import kotlinx.coroutines.delay
 import com.composables.icons.tabler.Tabler
 import com.composables.icons.tabler.outline.*
@@ -53,6 +62,19 @@ internal fun SleepTimerSheet(
     onCancel: () -> Unit,
     onDismiss: () -> Unit,
 ) {
+    val isTv = LocalTvMode.current
+    val focusRequester = remember { FocusRequester() }
+
+    LaunchedEffect(isTv, isActive) {
+        if (isTv) {
+            try {
+                focusRequester.requestFocus()
+            } catch (e: Exception) {
+                // ignore
+            }
+        }
+    }
+
     PlayerModalBottomSheet(
         onDismissRequest = onDismiss,
         sheetState = rememberModalBottomSheetState(),
@@ -60,7 +82,6 @@ internal fun SleepTimerSheet(
         Column(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(horizontal = 24.dp)
                 .padding(bottom = 32.dp),
         ) {
             Text(
@@ -68,50 +89,175 @@ internal fun SleepTimerSheet(
                 style = MaterialTheme.typography.titleLarge.copy(
                     fontWeight = FontWeight.Bold,
                 ),
+                modifier = Modifier.padding(horizontal = 24.dp),
             )
             Spacer(Modifier.height(20.dp))
 
-            if (isActive) {
-                ActiveTimerSection(
-                    isEndOfEpisodeMode = isEndOfEpisodeMode,
-                    remainingMs = remainingMs,
-                    onCancel = onCancel,
-                )
-                Spacer(Modifier.height(16.dp))
-            }
+            if (isTv) {
+                LazyColumn {
+                    if (isActive) {
+                        item {
+                            val cancelFocusState = rememberTvFocusState(focusedScale = 1.02f)
+                            val shape = ShapeCache.smooth8
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(horizontal = 16.dp, vertical = 4.dp)
+                                    .clip(shape)
+                                    .background(MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.15f))
+                                    .border(1.dp, MaterialTheme.colorScheme.error.copy(alpha = 0.3f), shape)
+                                    .then(cancelFocusState.focusModifier)
+                                    .focusRequester(focusRequester) // Focus the cancel option by default if active
+                                    .tvFocusIndicator(cancelFocusState, shape)
+                                    .clickable { onCancel(); onDismiss() }
+                                    .padding(horizontal = 20.dp, vertical = 14.dp),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically,
+                            ) {
+                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                    Icon(
+                                        Tabler.Outline.Stopwatch,
+                                        contentDescription = null,
+                                        tint = MaterialTheme.colorScheme.error,
+                                        modifier = Modifier.size(18.dp),
+                                    )
+                                    Spacer(Modifier.size(8.dp))
+                                    Text(
+                                        text = "Cancel Sleep Timer (${if (isEndOfEpisodeMode) "End of episode" else formatTime(remainingMs)} left)",
+                                        style = MaterialTheme.typography.bodyLarge.copy(fontWeight = FontWeight.Bold),
+                                        color = MaterialTheme.colorScheme.error,
+                                    )
+                                }
+                            }
+                            Spacer(Modifier.height(8.dp))
+                        }
+                    }
 
-            Text(
-                "Duration",
-                style = MaterialTheme.typography.titleSmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-            Spacer(Modifier.height(8.dp))
+                    item {
+                        val isEndSelected = isActive && isEndOfEpisodeMode
+                        val endFocusState = rememberTvFocusState(focusedScale = 1.02f)
+                        val shape = ShapeCache.smooth8
+                        val requesterModifier = if (!isActive) Modifier.focusRequester(focusRequester) else Modifier
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(horizontal = 16.dp, vertical = 2.dp)
+                                .clip(shape)
+                                .background(
+                                    if (isEndSelected) MaterialTheme.colorScheme.primary.copy(alpha = 0.1f)
+                                    else Color.White.copy(alpha = 0.04f)
+                                )
+                                .then(endFocusState.focusModifier)
+                                .then(requesterModifier)
+                                .tvFocusIndicator(endFocusState, shape)
+                                .clickable { onSelectEndOfEpisode(); onDismiss() }
+                                .padding(horizontal = 20.dp, vertical = 14.dp),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
+                            Text(
+                                text = "End of episode",
+                                style = MaterialTheme.typography.bodyLarge.copy(
+                                    fontWeight = if (isEndSelected) FontWeight.Bold else FontWeight.Normal,
+                                ),
+                                color = if (isEndSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface,
+                            )
+                            if (isEndSelected) {
+                                Icon(
+                                    Tabler.Outline.Check,
+                                    contentDescription = null,
+                                    tint = MaterialTheme.colorScheme.primary,
+                                    modifier = Modifier.size(18.dp),
+                                )
+                            }
+                        }
+                    }
 
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-            ) {
-                PRESET_DURATIONS.forEach { durationMs ->
-                    val isSelected = !isEndOfEpisodeMode && isActive && remainingMs == durationMs
-                    val isLastUsed = !isActive && durationMs == lastUsedDurationMs
+                    items(PRESET_DURATIONS) { durationMs ->
+                        val isSelected = !isEndOfEpisodeMode && isActive && remainingMs == durationMs
+                        val isLastUsed = !isActive && durationMs == lastUsedDurationMs
+                        val isTarget = isSelected || isLastUsed
+                        val presetFocusState = rememberTvFocusState(focusedScale = 1.02f)
+                        val shape = ShapeCache.smooth8
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(horizontal = 16.dp, vertical = 2.dp)
+                                .clip(shape)
+                                .background(
+                                    if (isTarget) MaterialTheme.colorScheme.primary.copy(alpha = 0.1f)
+                                    else Color.White.copy(alpha = 0.04f)
+                                )
+                                .then(presetFocusState.focusModifier)
+                                .tvFocusIndicator(presetFocusState, shape)
+                                .clickable { onSelectDuration(durationMs); onDismiss() }
+                                .padding(horizontal = 20.dp, vertical = 14.dp),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
+                            Text(
+                                text = formatDurationLabel(durationMs),
+                                style = MaterialTheme.typography.bodyLarge.copy(
+                                    fontWeight = if (isTarget) FontWeight.Bold else FontWeight.Normal,
+                                ),
+                                color = if (isTarget) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface,
+                            )
+                            if (isTarget) {
+                                Icon(
+                                    Tabler.Outline.Check,
+                                    contentDescription = null,
+                                    tint = MaterialTheme.colorScheme.primary,
+                                    modifier = Modifier.size(18.dp),
+                                )
+                            }
+                        }
+                    }
+                }
+            } else {
+                Column(modifier = Modifier.padding(horizontal = 24.dp)) {
+                    if (isActive) {
+                        ActiveTimerSection(
+                            isEndOfEpisodeMode = isEndOfEpisodeMode,
+                            remainingMs = remainingMs,
+                            onCancel = onCancel,
+                        )
+                        Spacer(Modifier.height(16.dp))
+                    }
+
+                    Text(
+                        "Duration",
+                        style = MaterialTheme.typography.titleSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                    Spacer(Modifier.height(8.dp))
+
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    ) {
+                        PRESET_DURATIONS.forEach { durationMs ->
+                            val isSelected = !isEndOfEpisodeMode && isActive && remainingMs == durationMs
+                            val isLastUsed = !isActive && durationMs == lastUsedDurationMs
+                            SleepTimerChip(
+                                label = formatDurationLabel(durationMs),
+                                isSelected = isSelected || isLastUsed,
+                                onClick = { onSelectDuration(durationMs); onDismiss() },
+                                modifier = Modifier.weight(1f),
+                            )
+                        }
+                    }
+
+                    Spacer(Modifier.height(12.dp))
+
+                    val isEndSelected = isActive && isEndOfEpisodeMode
                     SleepTimerChip(
-                        label = formatDurationLabel(durationMs),
-                        isSelected = isSelected || isLastUsed,
-                        onClick = { onSelectDuration(durationMs); onDismiss() },
-                        modifier = Modifier.weight(1f),
+                        label = "End of episode",
+                        isSelected = isEndSelected,
+                        onClick = { onSelectEndOfEpisode(); onDismiss() },
+                        modifier = Modifier.fillMaxWidth(),
                     )
                 }
             }
-
-            Spacer(Modifier.height(12.dp))
-
-            val isEndSelected = isActive && isEndOfEpisodeMode
-            SleepTimerChip(
-                label = "End of episode",
-                isSelected = isEndSelected,
-                onClick = { onSelectEndOfEpisode(); onDismiss() },
-                modifier = Modifier.fillMaxWidth(),
-            )
         }
     }
 }

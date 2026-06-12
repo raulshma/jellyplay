@@ -8,6 +8,7 @@ import com.raulshma.jellyplay.core.model.OfflineMediaItem
 import com.raulshma.jellyplay.core.model.OfflineMode
 import com.raulshma.jellyplay.core.model.seerr.DiscoverSectionType
 import com.raulshma.jellyplay.core.model.seerr.SeerrRadarrServiceDetail
+import com.raulshma.jellyplay.core.model.seerr.SeerrRequestResult
 import com.raulshma.jellyplay.core.model.seerr.SeerrSearchItem
 import com.raulshma.jellyplay.core.model.seerr.SeerrSeason
 import com.raulshma.jellyplay.core.model.seerr.SeerrSonarrServiceDetail
@@ -48,18 +49,11 @@ data class HomeSearchState(
 @Immutable
 data class SeerrRequestState(
     val requestItem: SeerrSearchItem? = null,
-    val result: DiscoverRequestResult? = null,
+    val result: SeerrRequestResult? = null,
     val radarrServers: List<SeerrRadarrServiceDetail> = emptyList(),
     val sonarrServers: List<SeerrSonarrServiceDetail> = emptyList(),
     val isLoadingServices: Boolean = false,
     val tvSeasons: List<SeerrSeason> = emptyList(),
-)
-
-@Immutable
-data class DiscoverRequestResult(
-    val isLoading: Boolean = false,
-    val success: Boolean? = null,
-    val error: String? = null,
 )
 
 @Immutable

@@ -2,7 +2,8 @@ package com.raulshma.jellyplay.feature.player.video.components
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
-import com.raulshma.jellyplay.core.ui.tv.tvFocusable
+import com.raulshma.jellyplay.core.ui.tv.rememberTvFocusState
+import com.raulshma.jellyplay.core.ui.tv.tvFocusIndicator
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -21,9 +22,13 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
@@ -31,6 +36,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.raulshma.jellyplay.core.designsystem.theme.ShapeCache
 import com.raulshma.jellyplay.core.model.ChapterInfo
+import com.raulshma.jellyplay.core.ui.tv.LocalTvMode
 import com.raulshma.jellyplay.feature.player.video.formatDuration
 import com.composables.icons.tabler.Tabler
 import com.composables.icons.tabler.outline.*
@@ -43,6 +49,19 @@ internal fun ChapterPickerSheet(
     onSelect: (Long) -> Unit,
     onDismiss: () -> Unit,
 ) {
+    val isTv = LocalTvMode.current
+    val focusRequester = remember { FocusRequester() }
+
+    LaunchedEffect(isTv, chapters) {
+        if (isTv && chapters.isNotEmpty()) {
+            try {
+                focusRequester.requestFocus()
+            } catch (e: Exception) {
+                // ignore
+            }
+        }
+    }
+
     PlayerModalBottomSheet(
         onDismissRequest = onDismiss,
         sheetState = rememberModalBottomSheetState(),
@@ -62,72 +81,106 @@ internal fun ChapterPickerSheet(
             Spacer(Modifier.height(12.dp))
             LazyColumn {
                 itemsIndexed(chapters, key = { _, chapter -> chapter.startPositionTicks }, contentType = { _, _ -> "chapter" }) { index, chapter ->
-                    val chapterMs = chapter.startPositionTicks / 10_000
-                    val isCurrentChapter = if (index < chapters.lastIndex) {
-                        val nextChapterMs = chapters[index + 1].startPositionTicks / 10_000
-                        currentPositionMs in chapterMs until nextChapterMs
-                    } else {
-                        currentPositionMs >= chapterMs
-                    }
-
-                    val shape = when {
-                        chapters.size == 1 -> ShapeCache.smooth16
-                        index == 0 -> com.raulshma.jellyplay.core.designsystem.theme.expressiveListShape(0, chapters.size)
-                        index == chapters.lastIndex -> com.raulshma.jellyplay.core.designsystem.theme.expressiveListShape(index, chapters.size)
-                        else -> ShapeCache.smooth8
-                    }
-
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(horizontal = 16.dp, vertical = 2.dp)
-                            .clip(shape)
-                            .background(
-                                if (isCurrentChapter) MaterialTheme.colorScheme.primary.copy(alpha = 0.1f)
-                                else Color.White.copy(alpha = 0.04f)
-                            )
-                            .tvFocusable()
-                            .clickable { onSelect(chapter.startPositionTicks) }
-                            .padding(horizontal = 20.dp, vertical = 14.dp),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically,
-                    ) {
-                        Column(modifier = Modifier.weight(1f)) {
-                            Text(
-                                chapter.name,
-                                style = MaterialTheme.typography.bodyLarge.copy(
-                                    fontWeight = if (isCurrentChapter) FontWeight.SemiBold else FontWeight.Normal,
-                                ),
-                                color = if (isCurrentChapter) MaterialTheme.colorScheme.primary
-                                else MaterialTheme.colorScheme.onSurface,
-                            )
-                            Text(
-                                formatDuration(chapterMs),
-                                style = MaterialTheme.typography.bodySmall.copy(
-                                    fontFamily = FontFamily.Monospace,
-                                    fontWeight = FontWeight.Medium,
-                                ),
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            )
+                    val isCurrentChapter = {
+                        val chapterMs = chapter.startPositionTicks / 10_000
+                        if (index < chapters.lastIndex) {
+                            val nextChapterMs = chapters[index + 1].startPositionTicks / 10_000
+                            currentPositionMs in chapterMs until nextChapterMs
+                        } else {
+                            currentPositionMs >= chapterMs
                         }
-                        if (isCurrentChapter) {
-                            Box(
-                                modifier = Modifier
-                                    .size(28.dp)
-                                    .clip(CircleShape)
-                                    .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.18f)),
-                                contentAlignment = Alignment.Center,
-                            ) {
-                                Icon(
-                                    Tabler.Outline.PlayerPlay,
-                                    contentDescription = null,
-                                    tint = MaterialTheme.colorScheme.primary,
-                                    modifier = Modifier.size(14.dp),
-                                )
-                            }
+                    }()
+                    val isFirst = index == 0
+                    val isTarget = isCurrentChapter || (chapters.none {
+                        val chapterMs = it.startPositionTicks / 10_000
+                        val idx = chapters.indexOf(it)
+                        if (idx < chapters.lastIndex) {
+                            val nextChapterMs = chapters[idx + 1].startPositionTicks / 10_000
+                            currentPositionMs in chapterMs until nextChapterMs
+                        } else {
+                            currentPositionMs >= chapterMs
                         }
-                    }
+                    } && isFirst)
+
+                    ChapterItem(
+                        chapter = chapter,
+                        isCurrentChapter = isCurrentChapter,
+                        isLast = index == chapters.lastIndex,
+                        itemCount = chapters.size,
+                        onSelect = { onSelect(chapter.startPositionTicks) },
+                        modifier = if (isTarget) Modifier.focusRequester(focusRequester) else Modifier,
+                    )
                 }
+            }
+        }
+    }
+}
+
+@Composable
+private fun ChapterItem(
+    chapter: ChapterInfo,
+    isCurrentChapter: Boolean,
+    isLast: Boolean,
+    itemCount: Int,
+    onSelect: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    val chapterMs = chapter.startPositionTicks / 10_000
+    val shape = when {
+        itemCount == 1 -> ShapeCache.smooth16
+        isLast -> com.raulshma.jellyplay.core.designsystem.theme.expressiveListShape(if (isLast) itemCount - 1 else 0, itemCount)
+        else -> ShapeCache.smooth8
+    }
+    val focusState = rememberTvFocusState(focusedScale = 1.02f)
+
+    Row(
+        modifier = modifier
+            .fillMaxWidth()
+            .padding(horizontal = 16.dp, vertical = 2.dp)
+            .clip(shape)
+            .background(
+                if (isCurrentChapter) MaterialTheme.colorScheme.primary.copy(alpha = 0.1f)
+                else Color.White.copy(alpha = 0.04f)
+            )
+            .then(focusState.focusModifier)
+            .tvFocusIndicator(focusState, shape)
+            .clickable { onSelect() }
+            .padding(horizontal = 20.dp, vertical = 14.dp),
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Column(modifier = Modifier.weight(1f)) {
+            Text(
+                chapter.name,
+                style = MaterialTheme.typography.bodyLarge.copy(
+                    fontWeight = if (isCurrentChapter) FontWeight.SemiBold else FontWeight.Normal,
+                ),
+                color = if (isCurrentChapter) MaterialTheme.colorScheme.primary
+                else MaterialTheme.colorScheme.onSurface,
+            )
+            Text(
+                formatDuration(chapterMs),
+                style = MaterialTheme.typography.bodySmall.copy(
+                    fontFamily = FontFamily.Monospace,
+                    fontWeight = FontWeight.Medium,
+                ),
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+        if (isCurrentChapter) {
+            Box(
+                modifier = Modifier
+                    .size(28.dp)
+                    .clip(CircleShape)
+                    .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.18f)),
+                contentAlignment = Alignment.Center,
+            ) {
+                Icon(
+                    Tabler.Outline.PlayerPlay,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.primary,
+                    modifier = Modifier.size(14.dp),
+                )
             }
         }
     }

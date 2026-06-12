@@ -1,5 +1,6 @@
 package com.raulshma.jellyplay.core.data.repository
 
+import com.raulshma.jellyplay.core.data.cache.TtlCache
 import com.raulshma.jellyplay.core.model.CreditTimestamps
 import com.raulshma.jellyplay.core.model.IntroTimestamps
 import com.raulshma.jellyplay.core.model.MediaSegment
@@ -10,7 +11,6 @@ import com.raulshma.jellyplay.core.model.RemoteSubtitleInfo
 import com.raulshma.jellyplay.core.network.JellyfinApiClient
 import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
-import java.util.Collections
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -19,17 +19,10 @@ class PlaybackRepositoryImpl @Inject constructor(
     private val apiClient: JellyfinApiClient,
 ) : PlaybackRepository {
 
-    private data class CachedSegments(val segments: List<MediaSegment>, val timestamp: Long)
-    // LRU cache capped at 50 entries — prevents unbounded growth when many distinct
-    // items are played in a single session. LinkedHashMap with accessOrder=true evicts
-    // the least-recently-accessed entry when the limit is exceeded.
-    private val segmentsCache: MutableMap<String, CachedSegments> =
-        Collections.synchronizedMap(
-            object : LinkedHashMap<String, CachedSegments>(16, 0.75f, true) {
-                override fun removeEldestEntry(eldest: MutableMap.MutableEntry<String, CachedSegments>?): Boolean =
-                    size > MAX_CACHE_ENTRIES
-            }
-        )
+    private val segmentsCache = TtlCache<List<MediaSegment>>(
+        maxSize = MAX_CACHE_ENTRIES,
+        ttlMs = SEGMENTS_CACHE_TTL_MS,
+    )
 
     override suspend fun reportPlaybackStart(info: PlaybackStartInfo): Result<Unit> =
         apiClient.reportPlaybackStart(info.itemId, info.sessionId, info.playMethod)
@@ -93,15 +86,15 @@ class PlaybackRepositoryImpl @Inject constructor(
         apiClient.getCreditTimestamps(itemId)
 
     override suspend fun getMediaSegments(itemId: String): Result<List<MediaSegment>> {
-        val cached = segmentsCache[itemId]
-        if (cached != null && System.currentTimeMillis() - cached.timestamp < 5 * 60 * 1000L) {
-            return Result.success(cached.segments)
+        val cached = segmentsCache.get(itemId)
+        if (cached != null) {
+            return Result.success(cached)
         }
 
         val segmentsResult = apiClient.getMediaSegments(itemId)
         val segments = segmentsResult.getOrDefault(emptyList())
         if (segments.isNotEmpty()) {
-            segmentsCache[itemId] = CachedSegments(segments, System.currentTimeMillis())
+            segmentsCache.put(itemId, segments)
             return Result.success(segments)
         }
 
@@ -139,7 +132,7 @@ class PlaybackRepositoryImpl @Inject constructor(
                 }
             }
             val result = Result.success(fallbackSegments)
-            segmentsCache[itemId] = CachedSegments(fallbackSegments, System.currentTimeMillis())
+            segmentsCache.put(itemId, fallbackSegments)
             result
         }
     }
@@ -154,7 +147,7 @@ class PlaybackRepositoryImpl @Inject constructor(
         apiClient.getTrickplayTileImage(itemId, width, index)
 
     companion object {
-        /** Maximum number of distinct items whose segment data is kept in memory. */
         private const val MAX_CACHE_ENTRIES = 50
+        private const val SEGMENTS_CACHE_TTL_MS = 5 * 60 * 1000L
     }
 }

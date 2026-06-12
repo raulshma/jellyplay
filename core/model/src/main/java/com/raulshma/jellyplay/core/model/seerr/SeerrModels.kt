@@ -41,8 +41,8 @@ data class SeerrSearchItem(
             (releaseDate ?: firstAirDate)?.take(4)?.toInt()
         } catch (_: Exception) { null }
 
-    val posterUrl: String? = posterPath?.let { "https://image.tmdb.org/t/p/w500$it" }
-    val backdropUrl: String? = backdropPath?.let { "https://image.tmdb.org/t/p/w1280$it" }
+    val posterUrl: String? = posterPath?.let { "${TmdbImageUrls.POSTER_W500}$it" }
+    val backdropUrl: String? = backdropPath?.let { "${TmdbImageUrls.BACKDROP_W1280}$it" }
 }
 
 @Immutable
@@ -121,8 +121,8 @@ data class SeerrMovieDetails(
     val watchProviders: List<SeerrWatchProviderRegion> = emptyList(),
     val releases: SeerrReleases? = null,
 ) {
-    val posterUrl: String? = posterPath?.let { "https://image.tmdb.org/t/p/w500$it" }
-    val backdropUrl: String? = backdropPath?.let { "https://image.tmdb.org/t/p/w1280$it" }
+    val posterUrl: String? = posterPath?.let { "${TmdbImageUrls.POSTER_W500}$it" }
+    val backdropUrl: String? = backdropPath?.let { "${TmdbImageUrls.BACKDROP_W1280}$it" }
 }
 
 @Immutable
@@ -164,8 +164,8 @@ data class SeerrTvDetails(
     val watchProviders: List<SeerrWatchProviderRegion> = emptyList(),
     val contentRatings: SeerrContentRatingsResponse? = null,
 ) {
-    val posterUrl: String? = posterPath?.let { "https://image.tmdb.org/t/p/w500$it" }
-    val backdropUrl: String? = backdropPath?.let { "https://image.tmdb.org/t/p/w1280$it" }
+    val posterUrl: String? = posterPath?.let { "${TmdbImageUrls.POSTER_W500}$it" }
+    val backdropUrl: String? = backdropPath?.let { "${TmdbImageUrls.BACKDROP_W1280}$it" }
 }
 
 @Immutable
@@ -251,7 +251,7 @@ data class SeerrAggregateCast(
     val totalEpisodeCount: Int = 0,
     val order: Int = 0,
 ) {
-    val profileUrl: String? = profilePath?.let { "https://image.tmdb.org/t/p/h632$it" }
+    val profileUrl: String? = profilePath?.let { "${TmdbImageUrls.PROFILE_H632}$it" }
 }
 
 @Immutable
@@ -265,7 +265,7 @@ data class SeerrAggregateCrew(
     val totalEpisodeCount: Int = 0,
     val department: String? = null,
 ) {
-    val profileUrl: String? = profilePath?.let { "https://image.tmdb.org/t/p/h632$it" }
+    val profileUrl: String? = profilePath?.let { "${TmdbImageUrls.PROFILE_H632}$it" }
 }
 
 @Immutable
@@ -373,7 +373,7 @@ data class SeerrCast(
     val order: Int = 0,
     val profilePath: String? = null,
 ) {
-    val profileUrl: String? = profilePath?.let { "https://image.tmdb.org/t/p/h632$it" }
+    val profileUrl: String? = profilePath?.let { "${TmdbImageUrls.PROFILE_H632}$it" }
 }
 
 @Immutable
@@ -387,7 +387,7 @@ data class SeerrCrew(
     val department: String? = null,
     val profilePath: String? = null,
 ) {
-    val profileUrl: String? = profilePath?.let { "https://image.tmdb.org/t/p/h632$it" }
+    val profileUrl: String? = profilePath?.let { "${TmdbImageUrls.PROFILE_H632}$it" }
 }
 
 @Immutable
@@ -420,7 +420,7 @@ data class SeerrSeason(
     val posterPath: String? = null,
     val seasonNumber: Int = 0,
 ) {
-    val posterUrl: String? = posterPath?.let { "https://image.tmdb.org/t/p/w500$it" }
+    val posterUrl: String? = posterPath?.let { "${TmdbImageUrls.POSTER_W500}$it" }
 }
 
 @Immutable
@@ -451,7 +451,7 @@ data class SeerrEpisode(
     val crew: List<SeerrEpisodeCrew> = emptyList(),
     val guestStars: List<SeerrEpisodeGuestStar> = emptyList(),
 ) {
-    val stillUrl: String? get() = stillPath?.let { "https://image.tmdb.org/t/p/w500$it" }
+    val stillUrl: String? get() = stillPath?.let { "${TmdbImageUrls.POSTER_W500}$it" }
 }
 
 @Immutable
@@ -863,6 +863,13 @@ enum class SeerrRequestFilter(val value: String) {
     UNAVAILABLE("unavailable"),
     FAILED("failed"),
 }
+
+@Immutable
+data class SeerrRequestResult(
+    val isLoading: Boolean = false,
+    val success: Boolean? = null,
+    val error: String? = null,
+)
 
 @Immutable
 @Serializable

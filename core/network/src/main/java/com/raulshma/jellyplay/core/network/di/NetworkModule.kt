@@ -18,6 +18,8 @@ import com.raulshma.jellyplay.core.network.api.MetadataApiClient
 import com.raulshma.jellyplay.core.network.api.MetadataApiClientImpl
 import com.raulshma.jellyplay.core.network.api.PlaybackApiClient
 import com.raulshma.jellyplay.core.network.api.PlaybackApiClientImpl
+import com.raulshma.jellyplay.core.network.api.PluginApiClient
+import com.raulshma.jellyplay.core.network.api.PluginApiClientImpl
 import com.raulshma.jellyplay.core.network.api.SyncPlayApiClient
 import com.raulshma.jellyplay.core.network.api.SyncPlayApiClientImpl
 import com.raulshma.jellyplay.core.network.seerr.ResilientSeerrApiClient
@@ -85,6 +87,10 @@ abstract class NetworkModule {
     @Binds
     @Singleton
     abstract fun bindMediaInfoApiClient(impl: MediaInfoApiClientImpl): MediaInfoApiClient
+
+    @Binds
+    @Singleton
+    abstract fun bindPluginApiClient(impl: PluginApiClientImpl): PluginApiClient
 
     @Binds
     @Singleton

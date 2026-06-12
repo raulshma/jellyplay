@@ -1,6 +1,7 @@
 package com.raulshma.jellyplay.feature.player.video.components
 
 import androidx.compose.animation.AnimatedVisibility
+import com.raulshma.jellyplay.core.ui.tv.LocalTvMode
 import com.raulshma.jellyplay.core.ui.tv.rememberTvFocusState
 import com.raulshma.jellyplay.core.ui.tv.tvFocusIndicator
 import androidx.compose.animation.core.tween
@@ -18,6 +19,7 @@ import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.focusable
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -25,9 +27,13 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -41,12 +47,14 @@ fun SegmentSkipOverlay(
     segmentType: MediaSegmentType,
     onSkip: () -> Unit,
     modifier: Modifier = Modifier,
+    focusRequester: FocusRequester? = null,
 ) {
     SkipButtonOverlay(
         isVisible = isVisible,
         text = segmentType.skipLabel,
         onSkip = onSkip,
         modifier = modifier,
+        focusRequester = focusRequester,
     )
 }
 
@@ -55,12 +63,14 @@ fun IntroSkipOverlay(
     isVisible: Boolean,
     onSkip: () -> Unit,
     modifier: Modifier = Modifier,
+    focusRequester: FocusRequester? = null,
 ) {
     SkipButtonOverlay(
         isVisible = isVisible,
         text = "Skip Intro",
         onSkip = onSkip,
         modifier = modifier,
+        focusRequester = focusRequester,
     )
 }
 
@@ -69,12 +79,14 @@ fun CreditsSkipOverlay(
     isVisible: Boolean,
     onSkip: () -> Unit,
     modifier: Modifier = Modifier,
+    focusRequester: FocusRequester? = null,
 ) {
     SkipButtonOverlay(
         isVisible = isVisible,
         text = "Skip Credits",
         onSkip = onSkip,
         modifier = modifier,
+        focusRequester = focusRequester,
     )
 }
 
@@ -84,8 +96,24 @@ private fun SkipButtonOverlay(
     text: String,
     onSkip: () -> Unit,
     modifier: Modifier = Modifier,
+    focusRequester: FocusRequester? = null,
 ) {
+    val isTv = LocalTvMode.current
     val skipFocusState = rememberTvFocusState(focusedScale = 1.06f)
+    val localFocusRequester = remember { FocusRequester() }
+    val tvFocusRequester = focusRequester ?: localFocusRequester
+
+    LaunchedEffect(isVisible, isTv) {
+        if (isVisible && isTv) {
+            kotlinx.coroutines.delay(300)
+            try {
+                tvFocusRequester.requestFocus()
+            } catch (e: Exception) {
+                // ignore
+            }
+        }
+    }
+
     AnimatedVisibility(
         visible = isVisible,
         enter = fadeIn(tween(150, easing = AlphaEasing)) + scaleIn(initialScale = 0.85f, animationSpec = tween(150, easing = PointToPointEasing)) + slideInHorizontally(animationSpec = tween(400, easing = PointToPointEasing), initialOffsetX = { it / 3 }),
@@ -98,6 +126,7 @@ private fun SkipButtonOverlay(
                 .clip(ShapeCache.smoothPill)
                 .background(Color.White.copy(alpha = 0.12f))
                 .border(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.35f), ShapeCache.smoothPill)
+                .then(if (isTv) Modifier.focusRequester(tvFocusRequester) else Modifier)
                 .then(skipFocusState.focusModifier)
                 .tvFocusIndicator(skipFocusState, ShapeCache.smoothPill)
                 .clickable(onClick = onSkip)

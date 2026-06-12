@@ -1,7 +1,7 @@
 package com.raulshma.jellyplay.feature.music.albumdetail
 
 import com.raulshma.jellyplay.core.data.playback.AudioPlaybackManager
-import com.raulshma.jellyplay.core.data.playback.AudioQueueItem
+import com.raulshma.jellyplay.core.data.playback.toAudioQueueItem
 import com.raulshma.jellyplay.core.data.repository.DownloadRepository
 import com.raulshma.jellyplay.core.data.repository.MediaRepository
 import com.raulshma.jellyplay.core.data.repository.PlaybackRepository
@@ -54,30 +54,18 @@ class AlbumDetailViewModel @Inject constructor(
     fun playAlbum(tracks: List<MediaItem>, startIndex: Int = 0) {
         if (tracks.isEmpty()) return
         val queueItems = tracks.map { track ->
-            AudioQueueItem(
-                id = track.id,
-                name = track.name,
-                artist = track.albumArtist ?: track.artistItems.firstOrNull()?.name ?: "",
-                album = track.album ?: detail?.item?.name,
+            track.toAudioQueueItem(
                 imageUrl = playbackRepository.getImageUrl(track.id, maxWidth = 400),
-                mediaSourceId = null,
-                durationMs = track.runTimeTicks?.let { it / 10_000 } ?: 0L,
-                normalizationGain = track.normalizationGain,
+                albumFallback = detail?.item?.name,
             )
         }
         audioPlaybackManager.playQueue(queueItems, startIndex)
     }
 
     fun addToQueue(track: MediaItem) {
-        val queueItem = AudioQueueItem(
-            id = track.id,
-            name = track.name,
-            artist = track.albumArtist ?: track.artistItems.firstOrNull()?.name ?: "",
-            album = track.album ?: detail?.item?.name,
+        val queueItem = track.toAudioQueueItem(
             imageUrl = playbackRepository.getImageUrl(track.id, maxWidth = 400),
-            mediaSourceId = null,
-            durationMs = track.runTimeTicks?.let { it / 10_000 } ?: 0L,
-            normalizationGain = track.normalizationGain,
+            albumFallback = detail?.item?.name,
         )
         audioPlaybackManager.addToQueue(queueItem)
     }

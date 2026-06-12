@@ -105,8 +105,8 @@ class PlaybackApiClientImpl @Inject constructor(
         maxBitrate: Int?,
         useAudioEndpoint: Boolean,
     ): String {
-        val server = engine._currentServer.value ?: return ""
-        val user = engine._currentUser.value ?: return ""
+        val server = engine.currentServer.value ?: return ""
+        val user = engine.currentUser.value ?: return ""
         val path = if (useAudioEndpoint) {
             "/Audio/$itemId/universal"
         } else {
@@ -128,8 +128,8 @@ class PlaybackApiClientImpl @Inject constructor(
     }
 
     override fun getSubtitleDeliveryUrl(deliveryUrl: String): String {
-        val server = engine._currentServer.value ?: return ""
-        val user = engine._currentUser.value ?: return ""
+        val server = engine.currentServer.value ?: return ""
+        val user = engine.currentUser.value ?: return ""
         val baseUrl = if (deliveryUrl.startsWith("http")) deliveryUrl else "${server.address}$deliveryUrl"
         val separator = if ("?" in baseUrl) "&" else "?"
         return "$baseUrl${separator}api_key=${user.accessToken}"
@@ -141,8 +141,8 @@ class PlaybackApiClientImpl @Inject constructor(
         index: Int,
         codec: String?,
     ): String {
-        val server = engine._currentServer.value ?: return ""
-        val user = engine._currentUser.value ?: return ""
+        val server = engine.currentServer.value ?: return ""
+        val user = engine.currentUser.value ?: return ""
         val format = when ((codec ?: "srt").lowercase()) {
             "subrip" -> "srt"
             "ass", "ssa" -> codec!!.lowercase()
@@ -152,8 +152,8 @@ class PlaybackApiClientImpl @Inject constructor(
     }
 
     override suspend fun getIntroTimestamps(itemId: String): Result<IntroTimestamps> = engine.apiResultWithRetry {
-        val server = engine._currentServer.value ?: throw IllegalStateException("No server")
-        val user = engine._currentUser.value ?: throw IllegalStateException("No user")
+        val server = engine.currentServer.value ?: throw IllegalStateException("No server")
+        val user = engine.currentUser.value ?: throw IllegalStateException("No user")
         val url = "${server.address}/Items/$itemId/IntroSkipTimestamps"
         val request = Request.Builder()
             .url(url)
@@ -170,8 +170,8 @@ class PlaybackApiClientImpl @Inject constructor(
     }
 
     override suspend fun getCreditTimestamps(itemId: String): Result<CreditTimestamps> = engine.apiResultWithRetry {
-        val server = engine._currentServer.value ?: throw IllegalStateException("No server")
-        val user = engine._currentUser.value ?: throw IllegalStateException("No user")
+        val server = engine.currentServer.value ?: throw IllegalStateException("No server")
+        val user = engine.currentUser.value ?: throw IllegalStateException("No user")
         val url = "${server.address}/Items/$itemId/CreditTimestamps"
         val request = Request.Builder()
             .url(url)
@@ -203,8 +203,8 @@ class PlaybackApiClientImpl @Inject constructor(
     }
 
     override suspend fun getRemoteSubtitles(itemId: String): Result<List<RemoteSubtitleInfo>> = engine.apiResultWithRetry {
-        val server = engine._currentServer.value ?: throw IllegalStateException("No server")
-        val user = engine._currentUser.value ?: throw IllegalStateException("No user")
+        val server = engine.currentServer.value ?: throw IllegalStateException("No server")
+        val user = engine.currentUser.value ?: throw IllegalStateException("No user")
         val url = "${server.address}/Items/$itemId/RemoteSearch/Subtitles"
         val request = Request.Builder()
             .url(url)

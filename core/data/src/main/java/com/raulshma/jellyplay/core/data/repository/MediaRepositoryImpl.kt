@@ -1,9 +1,9 @@
 package com.raulshma.jellyplay.core.data.repository
 
-import java.util.Collections
 import androidx.paging.Pager
 import androidx.paging.PagingConfig
 import androidx.paging.PagingData
+import com.raulshma.jellyplay.core.data.cache.TtlCache
 import com.raulshma.jellyplay.core.database.dao.LyricsCacheDao
 import com.raulshma.jellyplay.core.database.entity.LyricsCacheEntity
 import com.raulshma.jellyplay.core.data.paging.FavoritesPagingSource
@@ -49,18 +49,10 @@ class MediaRepositoryImpl @Inject constructor(
     private val networkMonitor: NetworkMonitor,
 ) : MediaRepository {
 
-    // Short-lived in-process cache for MediaDetail. Prevents redundant network calls
-    // when the same item is opened from multiple screens (detail + player) in quick
-    // succession. TTL is intentionally short (2 min) so server-side changes are
-    // reflected promptly.
-    private data class CachedDetail(val detail: MediaDetail, val fetchedAt: Long)
-    private val detailCache: MutableMap<String, CachedDetail> =
-        Collections.synchronizedMap(
-            object : LinkedHashMap<String, CachedDetail>(16, 0.75f, true) {
-                override fun removeEldestEntry(eldest: MutableMap.MutableEntry<String, CachedDetail>?): Boolean =
-                    size > DETAIL_CACHE_MAX_ENTRIES
-            }
-        )
+    private val detailCache = TtlCache<MediaDetail>(
+        maxSize = DETAIL_CACHE_MAX_ENTRIES,
+        ttlMs = DETAIL_CACHE_TTL_MS,
+    )
 
     fun invalidateDetailCache(itemId: String? = null) {
         if (itemId != null) {
@@ -70,9 +62,8 @@ class MediaRepositoryImpl @Inject constructor(
         }
     }
 
-    private data class CachedHomeSections(val sections: List<HomeSection>, val fetchedAt: Long)
-    @Volatile
-    private var cachedHomeSections: CachedHomeSections? = null
+    private var cachedHomeSections: List<HomeSection>? = null
+    private var cachedHomeSectionsTimestamp: Long = 0L
     private val homeSectionsLock = Any()
 
     override suspend fun getHomeSections(
@@ -80,13 +71,14 @@ class MediaRepositoryImpl @Inject constructor(
         hiddenLibraryIds: Set<String>,
     ): Result<List<HomeSection>> {
         val cached = cachedHomeSections
-        if (cached != null && android.os.SystemClock.elapsedRealtime() - cached.fetchedAt < HOME_SECTIONS_CACHE_TTL_MS) {
-            return Result.success(cached.sections)
+        if (cached != null && android.os.SystemClock.elapsedRealtime() - cachedHomeSectionsTimestamp < HOME_SECTIONS_CACHE_TTL_MS) {
+            return Result.success(cached)
         }
         return apiClient.getHomeSections(enabledSections, hiddenLibraryIds).also { result ->
             result.getOrNull()?.let { sections ->
                 synchronized(homeSectionsLock) {
-                    cachedHomeSections = CachedHomeSections(sections, android.os.SystemClock.elapsedRealtime())
+                    cachedHomeSections = sections
+                    cachedHomeSectionsTimestamp = android.os.SystemClock.elapsedRealtime()
                 }
             }
         }
@@ -94,6 +86,12 @@ class MediaRepositoryImpl @Inject constructor(
 
     override suspend fun getLibraryFolders(): Result<List<LibraryFolder>> =
         apiClient.getLibraryFolders()
+
+    override suspend fun getLatestMedia(
+        parentId: String,
+        limit: Int,
+    ): Result<List<MediaItem>> =
+        apiClient.getLatestMedia(parentId = parentId, limit = limit)
 
     override suspend fun getMediaItems(
         parentId: String?,
@@ -116,17 +114,13 @@ class MediaRepositoryImpl @Inject constructor(
     )
 
     override suspend fun getMediaDetail(itemId: String): Result<MediaDetail> {
-        val now = android.os.SystemClock.elapsedRealtime()
-        val cached = detailCache[itemId]
-        if (cached != null && now - cached.fetchedAt < DETAIL_CACHE_TTL_MS) {
-            return Result.success(cached.detail)
+        val cached = detailCache.get(itemId)
+        if (cached != null) {
+            return Result.success(cached)
         }
         return apiClient.getMediaDetail(itemId).also { result ->
             result.getOrNull()?.let { detail ->
-                val existing = detailCache[itemId]
-                if (existing == null || existing.fetchedAt < now) {
-                    detailCache[itemId] = CachedDetail(detail, android.os.SystemClock.elapsedRealtime())
-                }
+                detailCache.put(itemId, detail)
             }
         }
     }
@@ -477,19 +471,19 @@ class MediaRepositoryImpl @Inject constructor(
         apiClient.syncPlayMovePlaylistItem(playlistItemId, newIndex)
 
     override suspend fun toggleFavorite(itemId: String): Result<Boolean> {
-        cachedHomeSections = null
+        cachedHomeSectionsTimestamp = 0L
         invalidateDetailCache(itemId)
         return apiClient.toggleFavorite(itemId)
     }
 
     override suspend fun markPlayed(itemId: String): Result<Unit> {
-        cachedHomeSections = null
+        cachedHomeSectionsTimestamp = 0L
         invalidateDetailCache(itemId)
         return apiClient.markPlayed(itemId)
     }
 
     override suspend fun markUnplayed(itemId: String): Result<Unit> {
-        cachedHomeSections = null
+        cachedHomeSectionsTimestamp = 0L
         invalidateDetailCache(itemId)
         return apiClient.markUnplayed(itemId)
     }
