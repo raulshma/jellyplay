@@ -391,7 +391,7 @@ fun VideoPlayerScreen(
             currentSheet = PlayerSheet.None
         } else if (isTv && showControls) {
             showControls = false
-        } else if (uiState.isPlaying && uiState.engineCapabilities.supportsMiniMode) {
+        } else if (!isTv && uiState.isPlaying && uiState.engineCapabilities.supportsMiniMode) {
             viewModel.prepareForMiniMode(
                 title = uiState.title,
                 subtitle = uiState.subtitle,
@@ -1091,7 +1091,7 @@ fun VideoPlayerScreen(
             )
 
             AnimatedVisibility(
-                visible = uiState.trickplayEnabled && showControls && isSeeking,
+                visible = !isTv && uiState.trickplayEnabled && showControls && isSeeking,
                 enter = fadeIn(tween(150, easing = AlphaEasing)),
                 exit = fadeOut(tween(200, easing = AlphaEasing)),
                 modifier = Modifier.align(Alignment.BottomCenter).padding(bottom = 120.dp),

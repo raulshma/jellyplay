@@ -125,13 +125,8 @@ class SeerrApiClientImpl @Inject constructor(
         baseUrl: String,
         credentials: SeerrCredentials,
         path: String,
-        body: Any? = null,
     ): Result<T> {
-        val requestBody = if (body != null) {
-            json.encodeToString(body).toRequestBody("application/json".toMediaType())
-        } else {
-            "{}".toRequestBody("application/json".toMediaType())
-        }
+        val requestBody = "{}".toRequestBody("application/json".toMediaType())
         val request = Request.Builder()
             .url(buildUrl(baseUrl, path))
             .withAuth(credentials)
@@ -140,11 +135,26 @@ class SeerrApiClientImpl @Inject constructor(
         return parseAndMap(executeRequest(request))
     }
 
-    private suspend inline fun <reified T> putAndParse(
+    private suspend inline fun <reified T, reified B> postAndParse(
         baseUrl: String,
         credentials: SeerrCredentials,
         path: String,
-        body: Any,
+        body: B,
+    ): Result<T> {
+        val requestBody = json.encodeToString(body).toRequestBody("application/json".toMediaType())
+        val request = Request.Builder()
+            .url(buildUrl(baseUrl, path))
+            .withAuth(credentials)
+            .post(requestBody)
+            .build()
+        return parseAndMap(executeRequest(request))
+    }
+
+    private suspend inline fun <reified T, reified B> putAndParse(
+        baseUrl: String,
+        credentials: SeerrCredentials,
+        path: String,
+        body: B,
     ): Result<T> {
         val request = Request.Builder()
             .url(buildUrl(baseUrl, path))
