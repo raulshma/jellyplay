@@ -79,6 +79,7 @@ import com.raulshma.jellyplay.core.ui.components.SeerrMediaCard
 import com.raulshma.jellyplay.core.ui.components.SeerrRequestDialog
 import com.raulshma.jellyplay.core.ui.components.rememberSeerrCardLoadingState
 import com.raulshma.jellyplay.core.designsystem.theme.BrandColors
+import com.raulshma.jellyplay.core.designsystem.theme.StatusColors
 import com.raulshma.jellyplay.core.ui.components.StaggeredSection
 import com.raulshma.jellyplay.core.ui.image.MediaImage
 import com.raulshma.jellyplay.core.ui.tv.LocalTvMode
@@ -753,7 +754,12 @@ private fun SeerrActionButtons(
 ) {
     val mediaInfo = movieDetail?.mediaInfo ?: tvDetail?.mediaInfo
     val status = mediaInfo?.status ?: 0
-    val isAvailable = status == 5 || status == 4 // Available or Partially Available
+    val mediaStatus = remember(status) { SeerrMediaStatus.fromValue(status) }
+    val isAvailable = mediaStatus == SeerrMediaStatus.AVAILABLE || mediaStatus == SeerrMediaStatus.PARTIALLY_AVAILABLE
+    val isPending = mediaStatus == SeerrMediaStatus.PENDING
+    val isProcessing = mediaStatus == SeerrMediaStatus.PROCESSING
+    val hasRequest = mediaInfo?.requests?.isNotEmpty() == true
+    val isRequested = isPending || isProcessing || hasRequest
     val isTv = LocalTvMode.current
     val buttonFocusState = rememberTvFocusState(focusedScale = 1.05f)
 
@@ -761,7 +767,60 @@ private fun SeerrActionButtons(
         modifier = modifier,
         horizontalArrangement = Arrangement.spacedBy(8.dp)
     ) {
-        if (!isAvailable) {
+        if (isAvailable) {
+            Button(
+                onClick = { /* Could navigate to the item in library if we had the ID mapping */ },
+                modifier = Modifier
+                    .weight(1f)
+                    .then(
+                        if (contentFocusRequester != null) Modifier.focusRequester(contentFocusRequester) else Modifier
+                    )
+                    .then(if (isTv) buttonFocusState.focusModifier else Modifier)
+                    .then(if (isTv) Modifier.tvFocusIndicator(buttonFocusState, ShapeCache.smooth12) else Modifier),
+                shape = ShapeCache.smooth12,
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.1f),
+                    contentColor = MaterialTheme.colorScheme.onSurface,
+                    disabledContainerColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.1f),
+                    disabledContentColor = MaterialTheme.colorScheme.onSurface
+                ),
+                contentPadding = PaddingValues(vertical = 12.dp),
+                enabled = false
+            ) {
+                Icon(Tabler.Outline.Check, contentDescription = null)
+                Spacer(Modifier.width(8.dp))
+                Text("Available", fontWeight = FontWeight.Bold)
+            }
+        } else if (isRequested) {
+            val (label, icon, color) = when {
+                isProcessing -> Triple("Processing", Tabler.Outline.Hourglass, StatusColors.info)
+                isPending -> Triple("Pending", Tabler.Outline.Clock, StatusColors.pending)
+                else -> Triple("Requested", Tabler.Outline.ArrowRight, StatusColors.requested)
+            }
+            Button(
+                onClick = {},
+                modifier = Modifier
+                    .weight(1f)
+                    .then(
+                        if (contentFocusRequester != null) Modifier.focusRequester(contentFocusRequester) else Modifier
+                    )
+                    .then(if (isTv) buttonFocusState.focusModifier else Modifier)
+                    .then(if (isTv) Modifier.tvFocusIndicator(buttonFocusState, ShapeCache.smooth12) else Modifier),
+                shape = ShapeCache.smooth12,
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = color.copy(alpha = 0.15f),
+                    contentColor = color,
+                    disabledContainerColor = color.copy(alpha = 0.15f),
+                    disabledContentColor = color
+                ),
+                contentPadding = PaddingValues(vertical = 12.dp),
+                enabled = false
+            ) {
+                Icon(icon, contentDescription = null)
+                Spacer(Modifier.width(8.dp))
+                Text(label, fontWeight = FontWeight.Bold)
+            }
+        } else {
             Button(
                 onClick = onRequestClick,
                 modifier = Modifier
@@ -781,28 +840,6 @@ private fun SeerrActionButtons(
                 Icon(Tabler.Outline.Plus, contentDescription = null)
                 Spacer(Modifier.width(8.dp))
                 Text("Request", fontWeight = FontWeight.Bold)
-            }
-        } else {
-            Button(
-                onClick = { /* Could navigate to the item in library if we had the ID mapping */ },
-                modifier = Modifier
-                    .weight(1f)
-                    .then(
-                        if (contentFocusRequester != null) Modifier.focusRequester(contentFocusRequester) else Modifier
-                    )
-                    .then(if (isTv) buttonFocusState.focusModifier else Modifier)
-                    .then(if (isTv) Modifier.tvFocusIndicator(buttonFocusState, ShapeCache.smooth12) else Modifier),
-                shape = ShapeCache.smooth12,
-                colors = ButtonDefaults.buttonColors(
-                    containerColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.1f),
-                    contentColor = MaterialTheme.colorScheme.onSurface
-                ),
-                contentPadding = PaddingValues(vertical = 12.dp),
-                enabled = false
-            ) {
-                Icon(Tabler.Outline.Check, contentDescription = null)
-                Spacer(Modifier.width(8.dp))
-                Text("Available", fontWeight = FontWeight.Bold)
             }
         }
     }

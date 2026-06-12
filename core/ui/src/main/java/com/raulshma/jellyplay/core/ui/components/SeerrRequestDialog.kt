@@ -548,13 +548,16 @@ fun SeerrRequestDialog(
                                     val tags = selectedTags.toList().ifEmpty { null }
 
                                     val resolvedSeasons = if (isTv) {
-                                        if (selectAllSeasons) null // null = all seasons
-                                        else selectedSeasonNumbers.toList().ifEmpty { null }
+                                        if (selectAllSeasons) {
+                                            availableSeasonNumbers
+                                        } else {
+                                            selectedSeasonNumbers.toList()
+                                        }
                                     } else null
 
                                     onConfirm(serverId, profileId, rootFolder, tags, resolvedSeasons)
                                 },
-                                enabled = !isRequesting && (!isTv || selectAllSeasons || selectedSeasonNumbers.isNotEmpty()),
+                                enabled = !isRequesting && (!isTv || (seasons.isNotEmpty() && (selectAllSeasons || selectedSeasonNumbers.isNotEmpty()))),
                                 shape = ShapeCache.smooth12,
                                 colors = ButtonDefaults.buttonColors(
                                     containerColor = colorScheme.primary,

@@ -747,6 +747,22 @@ private fun TvControllableSeekBar(
     val seekStep = if (isTv) 30_000f / duration else 10_000f / duration
 
     Column(modifier = Modifier.fillMaxWidth()) {
+        if (isTv && isSeekBarFocused && trickplayBitmap != null) {
+            val displayMs = (tvSeekPosition * duration).toLong()
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(bottom = 8.dp),
+                contentAlignment = Alignment.BottomCenter,
+            ) {
+                TrickplayOverlay(
+                    bitmap = trickplayBitmap,
+                    positionMs = displayMs,
+                    durationMs = duration,
+                )
+            }
+        }
+
         Box(
             modifier = Modifier
                 .fillMaxWidth()
@@ -936,21 +952,6 @@ private fun TvControllableSeekBar(
 
         if (isDragging || (isTv && isSeekBarFocused)) {
             val displayMs = if (isDragging) (dragFraction * duration).toLong() else (tvSeekPosition * duration).toLong()
-
-            if (isTv && isSeekBarFocused && trickplayBitmap != null) {
-                Box(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(bottom = 8.dp),
-                    contentAlignment = Alignment.BottomCenter,
-                ) {
-                    TrickplayOverlay(
-                        bitmap = trickplayBitmap,
-                        positionMs = displayMs,
-                        durationMs = duration,
-                    )
-                }
-            }
 
             Row(
                 modifier = Modifier

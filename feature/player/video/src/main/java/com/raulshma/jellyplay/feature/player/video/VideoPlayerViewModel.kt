@@ -368,6 +368,8 @@ class VideoPlayerViewModel @Inject constructor(
             return
         }
 
+        videoMiniPlayerState.release()
+
         releaseInternals()
         playSessionId = java.util.UUID.randomUUID().toString()
         trickplayManager.clear()
