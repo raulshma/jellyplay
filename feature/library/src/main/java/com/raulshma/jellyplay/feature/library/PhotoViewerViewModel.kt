@@ -123,7 +123,7 @@ class PhotoViewerViewModel @Inject constructor(
 
     fun hasPrevious(): Boolean = _currentIndex.value > 0
 
-    fun getImageUrl(itemId: String, maxWidth: Int = 1920): String =
+    fun getImageUrl(itemId: String, maxWidth: Int? = null): String =
         playbackRepository.getImageUrl(itemId, maxWidth = maxWidth)
 
     fun getThumbnailUrl(itemId: String): String =
@@ -171,7 +171,7 @@ class PhotoViewerViewModel @Inject constructor(
 
             try {
                 val imageLoader = coil3.SingletonImageLoader.get(appContext)
-                val imageUrl = getImageUrl(photo.id, maxWidth = Int.MAX_VALUE)
+                val imageUrl = getImageUrl(photo.id, maxWidth = null)
                 val request = ImageRequest.Builder(appContext)
                     .data(imageUrl)
                     .allowHardware(false)
@@ -226,7 +226,7 @@ class PhotoViewerViewModel @Inject constructor(
 
     fun getFullImageUrl(): String? {
         val photo = _photo.value ?: return null
-        return getImageUrl(photo.id, maxWidth = Int.MAX_VALUE)
+        return getImageUrl(photo.id, maxWidth = null)
     }
 
     fun sharePhoto(context: Context, onError: (String) -> Unit) {
@@ -234,7 +234,7 @@ class PhotoViewerViewModel @Inject constructor(
         launch {
             try {
                 val imageLoader = coil3.SingletonImageLoader.get(appContext)
-                val imageUrl = getImageUrl(photo.id, maxWidth = Int.MAX_VALUE)
+                val imageUrl = getImageUrl(photo.id, maxWidth = null)
                 val request = ImageRequest.Builder(appContext)
                     .data(imageUrl)
                     .allowHardware(false)
