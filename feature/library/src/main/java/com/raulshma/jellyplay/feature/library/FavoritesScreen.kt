@@ -54,9 +54,7 @@ import com.raulshma.jellyplay.core.ui.components.PosterCard
 import com.raulshma.jellyplay.core.ui.components.rememberScreenBackgroundColor
 import com.raulshma.jellyplay.core.designsystem.theme.ShapeCache
 import com.raulshma.jellyplay.core.ui.tv.LocalTvMode
-import com.raulshma.jellyplay.core.ui.tv.TvGrabInitialFocus
-import com.raulshma.jellyplay.core.ui.tv.tryRequestFocus
-import com.raulshma.jellyplay.core.ui.tv.tvFocusRestorer
+import com.raulshma.jellyplay.core.ui.tv.TvFocusableGrid
 
 @Composable
 fun FavoritesScreen(
@@ -134,25 +132,9 @@ fun FavoritesScreen(
                 }
                 else -> {
                     val gridState = rememberLazyGridState()
-                    val tvGridFocusRequester = remember { FocusRequester() }
-                    val tvGridFallbackRequester = remember { FocusRequester() }
-                    var tvGridFocusedIndex by rememberSaveable { mutableIntStateOf(0) }
-                    // Grab focus on the grid once paging data resolves, and clamp the saved index to the
-                    // live page count. Without this the grid composes over async data but never receives focus.
-                    TvGrabInitialFocus(
-                        focusRequester = tvGridFocusRequester,
+                    TvFocusableGrid(
                         itemCount = pagingItems.itemCount,
-                        onReady = { tvGridFocusedIndex = tvGridFocusedIndex.coerceIn(0, (pagingItems.itemCount - 1).coerceAtLeast(0)) },
-                        tag = "favorites_grid_init",
-                    )
-                    @OptIn(ExperimentalComposeUiApi::class)
-                    val tvGridModifier = if (isTv) Modifier
-                        .focusProperties { onEnter = { tvGridFocusRequester.tryRequestFocus("favorites_grid") } }
-                        .focusGroup()
-                        .tvFocusRestorer(tvGridFallbackRequester)
-                        .focusRequester(tvGridFocusRequester)
-                    else Modifier
-                    LazyVerticalGrid(
+                        key = { index -> pagingItems[index]?.id ?: index },
                         columns = GridCells.Adaptive(minSize = if (isTv) 180.dp else 150.dp),
                         state = gridState,
                         contentPadding = PaddingValues(
@@ -163,42 +145,34 @@ fun FavoritesScreen(
                         ),
                         horizontalArrangement = Arrangement.spacedBy(if (isTv) 16.dp else 12.dp),
                         verticalArrangement = Arrangement.spacedBy(if (isTv) 20.dp else 16.dp),
-                        modifier = Modifier.fillMaxSize().then(tvGridModifier),
-                    ) {
-                        items(
-                            count = pagingItems.itemCount,
-                            key = { index -> pagingItems[index]?.id ?: index }
-                        ) { index ->
-                            val item = pagingItems[index]
-                            if (item != null) {
-                                val tvItemModifier = if (isTv) Modifier
-                                    .onFocusChanged { if (it.hasFocus) tvGridFocusedIndex = index }
-                                    .then(if (index == tvGridFocusedIndex) Modifier.focusRequester(tvGridFallbackRequester) else Modifier)
-                                else Modifier
-                                PosterCard(
-                                    item = item,
-                                    imageUrl = remember(item.id) { viewModel.getImageUrl(item.id) },
-                                    blurHash = item.blurHashes.primary,
-                                    onClick = { onItemClick(item.id, item.mediaType, item.parentId, item.name) },
-                                    photoFolderChildImageUrls = photoFolderChildUrls[item.id].orEmpty(),
-                                    modifier = tvItemModifier,
-                                )
-                            }
-                        }
-
-                        if (pagingItems.loadState.append is LoadState.Loading) {
-                            item {
-                                Box(
-                                    modifier = Modifier
-                                        .fillMaxWidth()
-                                        .padding(16.dp),
-                                    contentAlignment = Alignment.Center,
-                                ) {
-                                    com.raulshma.jellyplay.core.ui.components.JellyPlayLoadingIndicator(
-                                        color = MaterialTheme.colorScheme.primary,
-                                    )
+                        modifier = Modifier.fillMaxSize(),
+                        extraContent = {
+                            if (pagingItems.loadState.append is LoadState.Loading) {
+                                item {
+                                    Box(
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .padding(16.dp),
+                                        contentAlignment = Alignment.Center,
+                                    ) {
+                                        com.raulshma.jellyplay.core.ui.components.JellyPlayLoadingIndicator(
+                                            color = MaterialTheme.colorScheme.primary,
+                                        )
+                                    }
                                 }
                             }
+                        },
+                    ) { index, itemModifier ->
+                        val item = pagingItems[index]
+                        if (item != null) {
+                            PosterCard(
+                                item = item,
+                                imageUrl = remember(item.id) { viewModel.getImageUrl(item.id) },
+                                blurHash = item.blurHashes.primary,
+                                onClick = { onItemClick(item.id, item.mediaType, item.parentId, item.name) },
+                                photoFolderChildImageUrls = photoFolderChildUrls[item.id].orEmpty(),
+                                modifier = itemModifier,
+                            )
                         }
                     }
                 }

@@ -406,8 +406,8 @@ private fun MainHomeContent(
         colorStyle = state.colorStyle,
         accentColorSwatch = state.accentColorSwatch,
     ) {
-        @OptIn(androidx.compose.material3.ExperimentalMaterial3Api::class)
-        ModalNavigationDrawer(
+        HomeScreenDrawer(
+            showDrawer = !isTv,
             drawerState = drawerState,
             drawerContent = @Composable {
                 ModalDrawerSheet(
@@ -1116,5 +1116,25 @@ private fun rememberFallbackUrls(
                 )
             } else emptyList()
         }
+    }
+}
+
+@OptIn(androidx.compose.material3.ExperimentalMaterial3Api::class)
+@Composable
+private fun HomeScreenDrawer(
+    showDrawer: Boolean,
+    drawerState: androidx.compose.material3.DrawerState,
+    drawerContent: @Composable () -> Unit,
+    content: @Composable () -> Unit,
+) {
+    if (showDrawer) {
+        ModalNavigationDrawer(
+            drawerState = drawerState,
+            drawerContent = drawerContent,
+        ) {
+            content()
+        }
+    } else {
+        content()
     }
 }

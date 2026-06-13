@@ -55,9 +55,7 @@ import com.raulshma.jellyplay.core.ui.components.ScreenEmptyState
 import com.raulshma.jellyplay.core.ui.components.ScreenLoadingState
 import com.raulshma.jellyplay.core.ui.components.resolveHeaderStatus
 import com.raulshma.jellyplay.core.ui.tv.LocalTvMode
-import com.raulshma.jellyplay.core.ui.tv.TvGrabInitialFocus
-import com.raulshma.jellyplay.core.ui.tv.tryRequestFocus
-import com.raulshma.jellyplay.core.ui.tv.tvFocusRestorer
+import com.raulshma.jellyplay.core.ui.tv.TvFocusableGrid
 import com.raulshma.jellyplay.feature.library.components.PhotoGridCard
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -151,25 +149,9 @@ fun PhotoAlbumScreen(
                                 title = "No photos found",
                             )
                         } else {
-                            val tvGridFocusRequester = remember { FocusRequester() }
-                            val tvGridFallbackRequester = remember { FocusRequester() }
-                            var tvGridFocusedIndex by rememberSaveable { mutableIntStateOf(0) }
-                            // Grab focus once paging data resolves and clamp the saved index, so the
-                            // grid is not left unfocused after async photos load.
-                            TvGrabInitialFocus(
-                                focusRequester = tvGridFocusRequester,
+                            TvFocusableGrid(
                                 itemCount = photos.itemCount,
-                                onReady = { tvGridFocusedIndex = tvGridFocusedIndex.coerceIn(0, (photos.itemCount - 1).coerceAtLeast(0)) },
-                                tag = "photo_grid_init",
-                            )
-                            @OptIn(ExperimentalComposeUiApi::class)
-                            val tvGridModifier = if (isTv) Modifier
-                                .focusProperties { onEnter = { tvGridFocusRequester.tryRequestFocus("photo_grid") } }
-                                .focusGroup()
-                                .tvFocusRestorer(tvGridFallbackRequester)
-                                .focusRequester(tvGridFocusRequester)
-                            else Modifier
-                            LazyVerticalGrid(
+                                key = photos.itemKey { it.id },
                                 columns = GridCells.Adaptive(adaptiveInfo.gridCellSize(isTv)),
                                 contentPadding = PaddingValues(
                                     start = adaptiveInfo.contentPadding(isTv),
@@ -179,33 +161,24 @@ fun PhotoAlbumScreen(
                                 ),
                                 horizontalArrangement = Arrangement.spacedBy(adaptiveInfo.itemSpacing(isTv)),
                                 verticalArrangement = Arrangement.spacedBy(adaptiveInfo.itemSpacing(isTv)),
-                                modifier = Modifier.fillMaxSize().then(tvGridModifier),
-                            ) {
-                                items(
-                                    count = photos.itemCount,
-                                    key = photos.itemKey { it.id },
-                                    contentType = { "photoItem" },
-                                ) { index ->
-                                    val photo = photos[index]
-                                    if (photo != null) {
-                                        val imageUrl = remember(photo.id) {
-                                            viewModel.getImageUrl(photo.id, maxWidth = 400)
-                                        }
-                                        val memoizedClick = remember(photo.id, parentId) {
-                                            { onPhotoClick(photo.id, parentId) }
-                                        }
-                                        val tvItemModifier = if (isTv) Modifier
-                                            .onFocusChanged { if (it.hasFocus) tvGridFocusedIndex = index }
-                                            .then(if (index == tvGridFocusedIndex) Modifier.focusRequester(tvGridFallbackRequester) else Modifier)
-                                        else Modifier
-                                        PhotoGridCard(
-                                            imageUrl = imageUrl,
-                                            contentDescription = photo.name,
-                                            blurHash = photo.blurHashes.primary,
-                                            onClick = memoizedClick,
-                                            modifier = tvItemModifier,
-                                        )
+                                modifier = Modifier.fillMaxSize(),
+                                contentType = { "photoItem" },
+                            ) { index, itemModifier ->
+                                val photo = photos[index]
+                                if (photo != null) {
+                                    val imageUrl = remember(photo.id) {
+                                        viewModel.getImageUrl(photo.id, maxWidth = 400)
                                     }
+                                    val memoizedClick = remember(photo.id, parentId) {
+                                        { onPhotoClick(photo.id, parentId) }
+                                    }
+                                    PhotoGridCard(
+                                        imageUrl = imageUrl,
+                                        contentDescription = photo.name,
+                                        blurHash = photo.blurHashes.primary,
+                                        onClick = memoizedClick,
+                                        modifier = itemModifier,
+                                    )
                                 }
                             }
                         }
