@@ -47,7 +47,7 @@ import com.raulshma.jellyplay.core.ui.tv.LocalTvMode
 
 @Composable
 fun FavoritesScreen(
-    onItemClick: (String) -> Unit,
+    onItemClick: (itemId: String, mediaType: MediaType, parentId: String?, itemName: String) -> Unit,
     onBack: () -> Unit,
     viewModel: FavoritesViewModel = hiltViewModel(),
 ) {
@@ -137,7 +137,7 @@ fun FavoritesScreen(
                                     item = item,
                                     imageUrl = remember(item.id) { viewModel.getImageUrl(item.id) },
                                     blurHash = item.blurHashes.primary,
-                                    onClick = { onItemClick(item.id) },
+                                    onClick = { onItemClick(item.id, item.mediaType, item.parentId, item.name) },
                                 )
                             }
                         }

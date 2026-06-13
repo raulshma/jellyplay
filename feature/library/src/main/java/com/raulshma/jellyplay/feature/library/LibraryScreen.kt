@@ -106,7 +106,7 @@ import kotlinx.coroutines.launch
 )
 @Composable
 fun LibraryScreen(
-    onItemClick: (itemId: String, mediaType: MediaType, parentId: String?) -> Unit,
+    onItemClick: (itemId: String, mediaType: MediaType, parentId: String?, itemName: String) -> Unit,
     onSmartPlaylistsClick: () -> Unit = {},
     onMoodPlaylistsClick: () -> Unit = {},
     onPlaylistsClick: () -> Unit = {},
@@ -445,8 +445,8 @@ fun LibraryScreen(
                                         ) { index ->
                                             val item = pagedItems[index]
                                             if (item != null) {
-                                                val memoizedClick = remember(item.id, item.mediaType, item.parentId) {
-                                                    { onItemClick(item.id, item.mediaType, item.parentId) }
+                                                val memoizedClick = remember(item.id, item.mediaType, item.parentId, item.name) {
+                                                    { onItemClick(item.id, item.mediaType, item.parentId, item.name) }
                                                 }
                                                 val subtitle = remember(item.year, item.mediaType) {
                                                     buildString {
@@ -457,7 +457,7 @@ fun LibraryScreen(
                                                             MediaType.MOVIE -> "Movie"
                                                             MediaType.AUDIO -> "Audio"
                                                             MediaType.MUSIC -> "Music"
-                                                            MediaType.PHOTO -> "Photo"
+                                                            MediaType.PHOTO, MediaType.PHOTO_FOLDER -> "Photo"
                                                             else -> null
                                                         }
                                                         if (typeLabel != null) {
@@ -492,8 +492,8 @@ fun LibraryScreen(
                                         ) { index ->
                                             val item = pagedItems[index]
                                             if (item != null) {
-                                                val memoizedClick = remember(item.id, item.mediaType, item.parentId) {
-                                                    { onItemClick(item.id, item.mediaType, item.parentId) }
+                                                val memoizedClick = remember(item.id, item.mediaType, item.parentId, item.name) {
+                                                    { onItemClick(item.id, item.mediaType, item.parentId, item.name) }
                                                 }
                                                 PosterCard(
                                                     item = item,

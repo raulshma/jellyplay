@@ -119,7 +119,7 @@ private val EXPANDED_DISCOVER_PATTERN = listOf(5, 4, 6, 5)
 
 @Composable
 fun HomeScreen(
-    onItemClick: (String) -> Unit,
+    onItemClick: (itemId: String, mediaType: com.raulshma.jellyplay.core.model.MediaType, parentId: String?, itemName: String) -> Unit,
     onPlayClick: (itemId: String, mediaSourceId: String?, startPosition: Long) -> Unit = { _, _, _ -> },
     onSettingsClick: () -> Unit = {},
     onSyncPlayClick: () -> Unit = {},
@@ -176,7 +176,7 @@ fun HomeScreen(
 private fun MainHomeContent(
     state: HomeUiState,
     viewModel: HomeViewModel,
-    onItemClick: (String) -> Unit,
+    onItemClick: (itemId: String, mediaType: com.raulshma.jellyplay.core.model.MediaType, parentId: String?, itemName: String) -> Unit,
     onPlayClick: (String, String?, Long) -> Unit,
     onSettingsClick: () -> Unit,
     onSyncPlayClick: () -> Unit,
@@ -340,7 +340,7 @@ private fun MainHomeContent(
     val mediaImageUrlBuilder = remember { { item: com.raulshma.jellyplay.core.model.MediaItem -> viewModel.getImageUrl(item.id) } }
     val mediaBackdropUrlBuilder = remember { { item: com.raulshma.jellyplay.core.model.MediaItem -> viewModel.getBackdropUrl(item.id) } }
     val currentOnItemClick by rememberUpdatedState(onItemClick)
-    val mediaOnItemClick = remember { { item: com.raulshma.jellyplay.core.model.MediaItem -> currentOnItemClick(item.id) } }
+    val mediaOnItemClick = remember { { item: com.raulshma.jellyplay.core.model.MediaItem -> currentOnItemClick(item.id, item.mediaType, item.parentId, item.name) } }
     val currentOnPlayClick by rememberUpdatedState(onPlayClick)
     val mediaOnPlayClick = remember { { item: com.raulshma.jellyplay.core.model.MediaItem ->
         currentOnPlayClick(item.id, null, item.playbackPositionTicks ?: 0L)
@@ -681,7 +681,7 @@ private fun MainHomeContent(
                             seerrPrefetch = seerrPrefetch,
                             onSeerrItemClick = onSeerrItemClick,
                             onOfflineLibraryClick = onOfflineLibraryClick,
-                            onItemClick = onItemClick,
+                            onItemClick = { id -> onItemClick(id, MediaType.UNKNOWN, null, "") },
                             onFocusChange = { focusInHero = it },
                             onSeerrRequest = { viewModel.onEvent(HomeUiEvent.SelectSeerrRequestItem(it)) },
                             onNewsletterClick = onNewsletterClick,
@@ -719,7 +719,7 @@ private fun MainHomeContent(
                                     isSearchExpanded = false
                                     viewModel.onEvent(HomeUiEvent.ClearSearch)
                                     focusManager.clearFocus()
-                                    onItemClick(item.id)
+                                    onItemClick(item.id, item.mediaType, item.parentId, item.name)
                                 },
                                 onSeerrClick = { item ->
                                     isSearchExpanded = false

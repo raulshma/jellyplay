@@ -120,7 +120,7 @@ on every screen — phone, tablet, foldable, Android TV, and Amazon Fire TV.
   - **Dynamic**: Continue Listening — auto-updates with the currently playing track and album art
 - BlurHash image placeholders for smooth loading
 - Localization in 9 languages (English, German, Spanish, French, Italian, Portuguese, Japanese, Korean, Chinese)
-- Deep link support via `jellyplay://` and `https://jellyplay.app/` URI schemes
+- Deep link support via `jellyplay://` and `https://raulshma.github.io/jellyplay/` URI schemes
 - **Settings search** — find any setting instantly by name
 - **New media notifications** — real-time per-library notifications when new content is added, with quiet hours, seen-media tracking, grouped notifications, and notification actions
 
@@ -287,7 +287,7 @@ on every screen — phone, tablet, foldable, Android TV, and Amazon Fire TV.
 ### Deep Links
 
 - Custom URI scheme: `jellyplay://media/{id}`, `jellyplay://newsletter/{section}`, `jellyplay://seerr/{tmdbId}/{type}`
-- HTTPS scheme: `https://jellyplay.app/media/{id}`, `https://jellyplay.app/newsletter/{section}`
+- HTTPS scheme: `https://raulshma.github.io/jellyplay/media/{id}`, `https://raulshma.github.io/jellyplay/newsletter/{section}`
 - Widgets, notifications, and shortcuts all use deep links for navigation
 
 ### Insights & Activity

@@ -103,7 +103,7 @@ import com.composables.icons.tabler.outline.*
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class, ExperimentalMaterial3ExpressiveApi::class)
 @Composable
 fun SearchScreen(
-    onItemClick: (String) -> Unit,
+    onItemClick: (itemId: String, mediaType: com.raulshma.jellyplay.core.model.MediaType, parentId: String?, itemName: String) -> Unit,
     onNavigate: (Route) -> Unit = {},
     viewModel: SearchViewModel = hiltViewModel(),
 ) {
@@ -645,7 +645,7 @@ fun SearchScreen(
                                             PosterCard(
                                                 item = item,
                                                 imageUrl = viewModel.getImageUrl(item.id),
-                                                onClick = { onItemClick(item.id) },
+                                                onClick = { onItemClick(item.id, item.mediaType, item.parentId, item.name) },
                                                 showProgress = item.playbackPositionTicks != null && item.playbackPositionTicks!! > 0,
                                                 progressPercent = if (item.runTimeTicks != null && item.runTimeTicks!! > 0) {
                                                     (item.playbackPositionTicks?.toFloat() ?: 0f) / item.runTimeTicks!!.toFloat()
