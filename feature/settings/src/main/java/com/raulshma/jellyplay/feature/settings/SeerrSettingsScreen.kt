@@ -67,6 +67,10 @@ import com.raulshma.jellyplay.core.ui.adaptive.contentPadding
 import com.raulshma.jellyplay.core.ui.components.JellyPlayScreenScaffold
 import com.raulshma.jellyplay.core.ui.components.JellyPlayCircularProgressIndicator
 import com.raulshma.jellyplay.core.ui.tv.LocalTvMode
+import com.raulshma.jellyplay.core.ui.tv.tvFocusRestorer
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
+import com.raulshma.jellyplay.core.ui.tv.tryRequestFocus
 import com.raulshma.jellyplay.feature.settings.SeerrSettingsViewModel.ConnectionStatus
 import com.composables.icons.tabler.Tabler
 import com.composables.icons.tabler.outline.*
@@ -117,6 +121,16 @@ fun SeerrSettingsScreen(
         }
     }
 
+    val focusRequester = remember { FocusRequester() }
+    LaunchedEffect(Unit) {
+        if (isTv) {
+            for (attempt in 1..3) {
+                androidx.compose.runtime.withFrameNanos { }
+                if (focusRequester.tryRequestFocus("seerr_init")) break
+            }
+        }
+    }
+
     JellyPlayScreenScaffold(
         title = "Seerr Settings",
         onBack = onBack,
@@ -126,7 +140,9 @@ fun SeerrSettingsScreen(
             state = scrollState,
             modifier = Modifier
                 .fillMaxSize()
-                .imePadding(),
+                .imePadding()
+                .tvFocusRestorer()
+                .focusRequester(focusRequester),
             contentPadding = PaddingValues(
                 start = contentPad,
                 end = contentPad,
