@@ -60,9 +60,11 @@ fun <T> TvFocusableItemRow(
     // group; neither proactively grabs focus. When requestInitialFocus is true, grab focus on the
     // focused cell the first time the row becomes non-empty (for single-row screens; multi-row
     // screens like Home should leave this false and drive focus from the page instead).
+    // The scroll-to-item before the grab ensures the saved cell is composed before requesting focus.
     LaunchedEffect(items.isNotEmpty()) {
         if (isTv && requestInitialFocus && items.isNotEmpty() && !initialFocusRequested) {
             initialFocusRequested = true
+            state.scrollToItem(focusedIndex.coerceIn(0, items.lastIndex))
             fallbackFocusRequester.tryRequestFocus("tv_row_init")
         }
     }
