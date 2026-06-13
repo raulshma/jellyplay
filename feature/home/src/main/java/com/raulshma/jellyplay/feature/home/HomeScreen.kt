@@ -792,7 +792,7 @@ private fun MainHomeContent(
                     )
                 }
 
-                if (!isTv) {
+                if (!isTv && !isSearchFocused) {
                     Box(
                         modifier = Modifier
                             .statusBarsPadding()
@@ -810,20 +810,17 @@ private fun MainHomeContent(
                                     interactionSource = remember { androidx.compose.foundation.interaction.MutableInteractionSource() },
                                     indication = null,
                                     onClick = { scope.launch { drawerState.open() } }
-                                )
-                                .graphicsLayer {
-                                    alpha = if (isSearchFocused) 0f else 1f
-                                },
-                        contentAlignment = Alignment.CenterStart
-                    ) {
-                        Icon(
-                            imageVector = Tabler.Outline.Menu2,
-                            contentDescription = "Open Shortcuts Menu",
-                            tint = appBarIconColorFaded,
-                            modifier = Modifier.size(24.dp)
-                        )
+                                ),
+                            contentAlignment = Alignment.CenterStart
+                        ) {
+                            Icon(
+                                imageVector = Tabler.Outline.Menu2,
+                                contentDescription = "Open Shortcuts Menu",
+                                tint = appBarIconColorFaded,
+                                modifier = Modifier.size(24.dp)
+                            )
+                        }
                     }
-                }
                 }
         }
     }
