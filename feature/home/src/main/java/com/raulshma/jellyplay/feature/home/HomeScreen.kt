@@ -110,7 +110,6 @@ import com.raulshma.jellyplay.core.ui.tv.LocalTvMode
 import com.raulshma.jellyplay.core.ui.tv.isTv
 import com.raulshma.jellyplay.core.ui.tv.rememberTvFocusState
 import com.raulshma.jellyplay.core.ui.tv.tvFocusIndicator
-import com.raulshma.jellyplay.core.ui.tv.tvFocusExitHandler
 import com.raulshma.jellyplay.core.ui.tv.tryRequestFocus
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.collectLatest
