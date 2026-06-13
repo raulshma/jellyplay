@@ -84,7 +84,6 @@ import com.raulshma.jellyplay.core.ui.components.StaggeredSection
 import com.raulshma.jellyplay.core.ui.image.MediaImage
 import com.raulshma.jellyplay.core.ui.tv.LocalTvMode
 import com.raulshma.jellyplay.core.ui.tv.tvFocusRestorer
-import com.raulshma.jellyplay.core.ui.tv.tvFocusExitHandler
 import com.raulshma.jellyplay.core.ui.tv.rememberTvFocusState
 import com.raulshma.jellyplay.core.ui.tv.tvFocusIndicator
 import com.raulshma.jellyplay.core.ui.tv.rememberInitialFocus
@@ -1043,8 +1042,7 @@ private fun SeerrHorizontalSection(
             horizontalArrangement = Arrangement.spacedBy(16.dp),
             contentPadding = PaddingValues(horizontal = 4.dp),
             modifier = Modifier
-                .tvFocusRestorer()
-                .tvFocusExitHandler(),
+                .tvFocusRestorer(),
         ) {
             items(items, key = { it.id }, contentType = { "seerrSearchItem" }) { item ->
                 SeerrMediaCard(
@@ -1137,8 +1135,7 @@ private fun CastSection(
             horizontalArrangement = Arrangement.spacedBy(16.dp),
             contentPadding = PaddingValues(horizontal = 4.dp),
             modifier = Modifier
-                .tvFocusRestorer()
-                .tvFocusExitHandler(),
+                .tvFocusRestorer(),
         ) {
             items(cast, key = { member -> when (member) { is SeerrAggregateCast -> member.id; is SeerrCast -> member.id; else -> 0 } }, contentType = { "castMember" }) { member ->
                 val name: String
@@ -1219,8 +1216,7 @@ private fun SeasonsSection(
             horizontalArrangement = Arrangement.spacedBy(16.dp),
             contentPadding = PaddingValues(horizontal = 4.dp),
             modifier = Modifier
-                .tvFocusRestorer()
-                .tvFocusExitHandler(),
+                .tvFocusRestorer(),
         ) {
             items(sortedSeasons, key = { it.id }, contentType = { "season" }) { season ->
                 val isSelected = selectedSeasonNumber == season.seasonNumber
@@ -1599,8 +1595,7 @@ private fun VideosSection(
             horizontalArrangement = Arrangement.spacedBy(16.dp),
             contentPadding = PaddingValues(horizontal = 4.dp),
             modifier = Modifier
-                .tvFocusRestorer()
-                .tvFocusExitHandler(),
+                .tvFocusRestorer(),
         ) {
             items(videos, key = { it.key ?: "" }, contentType = { "video" }) { video ->
                 val thumbnailUrl = if (video.site?.lowercase() == "youtube") {
