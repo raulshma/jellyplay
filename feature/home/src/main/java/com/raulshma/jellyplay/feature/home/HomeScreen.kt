@@ -76,7 +76,9 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.focus.focusProperties
 import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.FocusDirection
 import androidx.compose.foundation.focusGroup
+import com.raulshma.jellyplay.core.ui.tv.input.onDpadKey
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -242,6 +244,7 @@ private fun MainHomeContent(
     val isTvForRotation = LocalContext.current.isTv()
     var autoRotateEnabled by remember { mutableStateOf(!isTvForRotation) }
     var focusInHero by remember { mutableStateOf(true) }
+    val heroFocusRequester = remember { FocusRequester() }
 
     LaunchedEffect(showSurprise) {
         if (showSurprise && featuredCandidates.isNotEmpty()) {
@@ -616,12 +619,18 @@ private fun MainHomeContent(
             Box(
                 modifier = Modifier
                     .fillMaxSize()
-                    .focusGroup()
                     .focusProperties {
-                        onEnter = { focusDirection ->
-                            if (isSearchFocused) FocusRequester.Cancel else FocusRequester.Default
+                        onEnter = {
+                            if (isSearchFocused) {
+                                FocusRequester.Cancel
+                            } else if (requestedFocusDirection == FocusDirection.Down && state.homeHeroEnabled && featuredItem != null) {
+                                heroFocusRequester
+                            } else {
+                                FocusRequester.Default
+                            }
                         }
                     }
+                    .focusGroup()
             ) {
                 when {
                     state.error != null && state.sections.isEmpty() && state.offlineMode == OfflineMode.ONLINE -> {
@@ -692,6 +701,7 @@ private fun MainHomeContent(
                             onSeerrRequest = { viewModel.onEvent(HomeUiEvent.SelectSeerrRequestItem(it)) },
                             onNewsletterClick = onNewsletterClick,
                             photoFolderChildUrls = photoFolderChildUrls,
+                            heroFocusRequester = heroFocusRequester,
                         )
                     }
                 }
@@ -743,6 +753,18 @@ private fun MainHomeContent(
                             )
                         }
                     },
+                    modifier = Modifier.then(
+                        if (isTv) {
+                            Modifier.onDpadKey(
+                                onDown = {
+                                    if (!isSearchFocused && state.homeHeroEnabled && featuredItem != null) {
+                                        heroFocusRequester.tryRequestFocus("top_dock_down_hero")
+                                        true
+                                    } else false
+                                }
+                            )
+                        } else Modifier
+                    )
                 )
 
                 if (!isTv) {
@@ -868,6 +890,7 @@ private fun HomeContentList(
     onSeerrRequest: (SeerrSearchItem) -> Unit,
     onNewsletterClick: () -> Unit = {},
     photoFolderChildUrls: Map<String, List<String>> = emptyMap(),
+    heroFocusRequester: FocusRequester? = null,
 ) {
     val isTv = LocalTvMode.current
     val adaptiveInfo = LocalAdaptiveInfo.current
@@ -930,6 +953,7 @@ private fun HomeContentList(
                         onDetailsClick = onItemClick,
                         requestInitialFocus = !savedRowIsValid,
                         onFocusChange = onFocusChange,
+                        focusRequester = heroFocusRequester,
                     )
                 }
             } else {

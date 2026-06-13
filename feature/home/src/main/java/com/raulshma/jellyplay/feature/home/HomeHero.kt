@@ -85,6 +85,7 @@ fun AnimatedHeroHeader(
     onDetailsClick: ((String) -> Unit)? = null,
     onFocusChange: (Boolean) -> Unit = {},
     requestInitialFocus: Boolean = true,
+    focusRequester: FocusRequester? = null,
 ) {
     val parallaxOffset by remember(listState) {
         derivedStateOf {
@@ -133,6 +134,7 @@ fun AnimatedHeroHeader(
             onFocusChange = onFocusChange,
             requestInitialFocus = requestInitialFocus,
             isVisible = heroIsVisible,
+            focusRequester = focusRequester,
         )
     }
 }
@@ -150,6 +152,7 @@ fun HeroHeader(
     onFocusChange: (Boolean) -> Unit = {},
     isVisible: Boolean = true,
     requestInitialFocus: Boolean = true,
+    focusRequester: FocusRequester? = null,
 ) {
     val isTv = LocalTvMode.current
     val adaptiveInfo = LocalAdaptiveInfo.current
@@ -176,8 +179,9 @@ fun HeroHeader(
         label = "detailsButtonScale",
     )
 
-    val heroTvFocusState = rememberTvFocusState()
-    val heroPlayFocusRequester = remember { FocusRequester() }
+    val playTvFocusState = rememberTvFocusState()
+    val detailsTvFocusState = rememberTvFocusState()
+    val heroPlayFocusRequester = focusRequester ?: remember { FocusRequester() }
     val heroDetailsFocusRequester = remember { FocusRequester() }
 
     if (isTv && requestInitialFocus) {
@@ -439,12 +443,7 @@ fun HeroHeader(
                 Box(
                     modifier = Modifier
                         .height(48.dp)
-                        .then(heroTvFocusState.focusModifier)
-                        .tvFocusIndicator(heroTvFocusState, ShapeCache.smoothPill)
-                        .focusRequester(heroPlayFocusRequester)
-                        .onFocusChanged { focusState ->
-                            onFocusChange(focusState.isFocused || focusState.hasFocus)
-                        }
+                        .tvFocusIndicator(playTvFocusState, ShapeCache.smoothPill, Color.White)
                         .graphicsLayer { scaleX = playScale; scaleY = playScale }
                 ) {
                     if (!isTv) {
@@ -476,6 +475,11 @@ fun HeroHeader(
                             .fillMaxHeight()
                             .clip(ShapeCache.smoothPill)
                             .background(playGradientBrush)
+                            .then(if (isTv) playTvFocusState.focusModifier else Modifier)
+                            .focusRequester(heroPlayFocusRequester)
+                            .onFocusChanged { focusState ->
+                                onFocusChange(focusState.isFocused || focusState.hasFocus)
+                            }
                             .clickable(
                                 interactionSource = playInteractionSource,
                                 indication = null,
@@ -504,11 +508,7 @@ fun HeroHeader(
                 Box(
                     modifier = Modifier
                         .height(48.dp)
-                        .tvFocusIndicator(heroTvFocusState, ShapeCache.smoothPill)
-                        .focusRequester(heroDetailsFocusRequester)
-                        .onFocusChanged { focusState ->
-                            onFocusChange(focusState.isFocused || focusState.hasFocus)
-                        }
+                        .tvFocusIndicator(detailsTvFocusState, ShapeCache.smoothPill)
                         .graphicsLayer { scaleX = detailsScale; scaleY = detailsScale }
                 ) {
                     Box(
@@ -520,6 +520,11 @@ fun HeroHeader(
                                 BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.15f)),
                                 ShapeCache.smoothPill
                             )
+                            .then(if (isTv) detailsTvFocusState.focusModifier else Modifier)
+                            .focusRequester(heroDetailsFocusRequester)
+                            .onFocusChanged { focusState ->
+                                onFocusChange(focusState.isFocused || focusState.hasFocus)
+                            }
                             .clickable(
                                 interactionSource = detailsInteractionSource,
                                 indication = null,
