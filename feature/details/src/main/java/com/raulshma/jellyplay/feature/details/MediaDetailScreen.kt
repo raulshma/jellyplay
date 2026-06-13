@@ -137,6 +137,7 @@ import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import com.raulshma.jellyplay.core.ui.components.CircleBgBackButton
 import com.raulshma.jellyplay.core.ui.components.ErrorScreen
+import com.raulshma.jellyplay.core.ui.components.LoadingScreen
 import com.raulshma.jellyplay.core.ui.components.LocalAnimatedVisibilityScope
 import com.raulshma.jellyplay.core.ui.components.LocalNavigationBarColor
 import com.raulshma.jellyplay.core.ui.components.LocalSharedTransitionScope
@@ -643,6 +644,13 @@ private fun DetailContent(
                 },
             ),
     ) {
+        // While the detail is still loading (contentVisible == false) there is no focusable node on
+        // screen, so TV focus is orphaned until data arrives. Show a focusable loading surface for
+        // that window; LoadingScreen requests focus on TV. It is removed the moment contentVisible
+        // flips true, after which the contentFocusRequester grab takes over on the Play button.
+        if (isTv && !contentVisible && error == null) {
+            LoadingScreen(modifier = Modifier.fillMaxSize())
+        }
         Box(
             modifier = Modifier
                 .fillMaxWidth()
