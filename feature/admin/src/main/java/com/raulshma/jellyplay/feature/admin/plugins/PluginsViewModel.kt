@@ -209,7 +209,7 @@ class PluginsViewModel @Inject constructor(
         launch {
             hasActiveInstalls.collect { active ->
                 while (active) {
-                    delay(3000)
+                    delay(5000)
                     fetchActiveInstallations()
                 }
             }

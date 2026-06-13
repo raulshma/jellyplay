@@ -117,4 +117,6 @@ interface MediaRepository : LiveTvRepository, SyncPlayRepository, NewsletterRepo
     suspend fun markUnplayed(itemId: String): Result<Unit>
 
     suspend fun cleanupLyricsCache()
+
+    suspend fun getPhotoFolderChildImageUrls(folderId: String, limit: Int = 4): List<String>
 }

@@ -68,6 +68,7 @@ import com.raulshma.jellyplay.core.model.MediaType
 import com.raulshma.jellyplay.core.ui.animation.fastEffectsSpec
 import com.raulshma.jellyplay.core.ui.adaptive.LocalJellyPlayUi
 import com.raulshma.jellyplay.core.ui.image.MediaImage
+import com.raulshma.jellyplay.core.ui.image.PhotoFolderPoster
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 
@@ -255,6 +256,7 @@ fun PosterCard(
     blurHash: String? = null,
     onPlayClick: (() -> Unit)? = null,
     sharedElementKey: String? = null,
+    photoFolderChildImageUrls: List<String> = emptyList(),
 ) {
     val uiEnvironment = LocalJellyPlayUi.current
     val isTv = uiEnvironment.isTv
@@ -337,15 +339,23 @@ fun PosterCard(
             elevation = CardDefaults.cardElevation(defaultElevation = 0.dp),
         ) {
             Box {
-                MediaImage(
-                    url = imageUrl,
-                    fallbackUrls = fallbackUrls,
-                    contentDescription = item.name,
-                    blurHash = blurHash,
-                    modifier = imageModifier,
-                    contentScale = ContentScale.Crop,
-                    crossfade = false,
-                )
+                if (item.mediaType == MediaType.PHOTO_FOLDER && photoFolderChildImageUrls.isNotEmpty()) {
+                    PhotoFolderPoster(
+                        imageUrls = photoFolderChildImageUrls,
+                        modifier = imageModifier,
+                        contentDescription = item.name,
+                    )
+                } else {
+                    MediaImage(
+                        url = imageUrl,
+                        fallbackUrls = fallbackUrls,
+                        contentDescription = item.name,
+                        blurHash = blurHash,
+                        modifier = imageModifier,
+                        contentScale = ContentScale.Crop,
+                        crossfade = false,
+                    )
+                }
 
                 Box(
                     modifier = Modifier
@@ -502,6 +512,7 @@ fun MediaRow(
     modifier: Modifier = Modifier,
     blurHashBuilder: (MediaItem) -> String? = { it.blurHashes.primary },
     onPlayClick: ((MediaItem) -> Unit)? = null,
+    photoFolderChildUrls: Map<String, List<String>> = emptyMap(),
 ) {
     val uiEnvironment = LocalJellyPlayUi.current
     val isTv = uiEnvironment.isTv
@@ -535,6 +546,7 @@ fun MediaRow(
                     } else 0f,
                     blurHash = blurHashBuilder(item),
                     onPlayClick = onPlayClick?.let { click -> remember(item, click) { { click(item) } } },
+                    photoFolderChildImageUrls = photoFolderChildUrls[item.id].orEmpty(),
                 )
             }
         }

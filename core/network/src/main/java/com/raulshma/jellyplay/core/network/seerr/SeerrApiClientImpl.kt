@@ -22,11 +22,7 @@ class SeerrApiClientImpl @Inject constructor(
     private val okHttpClient: OkHttpClient,
 ) : SeerrApiClient {
 
-    private val json = Json {
-        ignoreUnknownKeys = true
-        coerceInputValues = true
-        isLenient = true
-    }
+    private val json = lenientJson
 
     private fun buildUrl(baseUrl: String, path: String): String {
         val base = baseUrl.trimEnd('/')
@@ -397,4 +393,12 @@ class SeerrApiClientImpl @Inject constructor(
 
     override suspend fun getCurrentUser(baseUrl: String, credentials: SeerrCredentials): Result<SeerrCurrentUser> =
         getAndParse(baseUrl, credentials, "/auth/me")
+
+    companion object {
+        internal val lenientJson = Json {
+            ignoreUnknownKeys = true
+            coerceInputValues = true
+            isLenient = true
+        }
+    }
 }

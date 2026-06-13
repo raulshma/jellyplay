@@ -346,6 +346,12 @@ private fun MainHomeContent(
         currentOnPlayClick(item.id, null, item.playbackPositionTicks ?: 0L, item.mediaType, item.parentId)
     } }
 
+    val photoFolderChildUrls by viewModel.photoFolderChildUrls.collectAsStateWithLifecycle()
+    LaunchedEffect(state.sections) {
+        val allItems = state.sections.flatMap { it.items }
+        viewModel.prefetchPhotoFolderChildUrls(allItems)
+    }
+
     val fallbackImageUrlBuilder = rememberFallbackUrls(viewModel)
 
     val discoverSectionOrder = remember {
@@ -685,6 +691,7 @@ private fun MainHomeContent(
                             onFocusChange = { focusInHero = it },
                             onSeerrRequest = { viewModel.onEvent(HomeUiEvent.SelectSeerrRequestItem(it)) },
                             onNewsletterClick = onNewsletterClick,
+                            photoFolderChildUrls = photoFolderChildUrls,
                         )
                     }
                 }
@@ -860,6 +867,7 @@ private fun HomeContentList(
     onFocusChange: (Boolean) -> Unit,
     onSeerrRequest: (SeerrSearchItem) -> Unit,
     onNewsletterClick: () -> Unit = {},
+    photoFolderChildUrls: Map<String, List<String>> = emptyMap(),
 ) {
     val isTv = LocalTvMode.current
     val adaptiveInfo = LocalAdaptiveInfo.current
@@ -970,6 +978,7 @@ private fun HomeContentList(
                         onItemClick = mediaOnItemClick,
                         onPlayClick = mediaOnPlayClick,
                         modifier = sectionModifier,
+                        photoFolderChildUrls = photoFolderChildUrls,
                     )
                 }
             }

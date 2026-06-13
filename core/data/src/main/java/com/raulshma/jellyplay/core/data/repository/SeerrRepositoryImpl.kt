@@ -401,21 +401,27 @@ class SeerrRepositoryImpl @Inject constructor(
         user?.canManageRequests == true
     }
 
+    private var pollingJob: kotlinx.coroutines.Job? = null
+
     fun startPolling() {
-        cacheScope.launch {
+        stopPolling()
+        pollingJob = cacheScope.launch {
             seerrPreferencesStore.preferences.collect { prefs ->
                 if (!prefs.enabled) return@collect
-                while (true) {
-                    getRequestCount().onSuccess { count ->
-                        _pendingRequestCount.value = count.pending
-                    }
-                    if (_currentUser.value == null) {
-                        getCurrentUser()
-                    }
-                    kotlinx.coroutines.delay(60_000)
+                getRequestCount().onSuccess { count ->
+                    _pendingRequestCount.value = count.pending
                 }
+                if (_currentUser.value == null) {
+                    getCurrentUser()
+                }
+                kotlinx.coroutines.delay(60_000)
             }
         }
+    }
+
+    fun stopPolling() {
+        pollingJob?.cancel()
+        pollingJob = null
     }
 
     init {

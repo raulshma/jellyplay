@@ -390,6 +390,7 @@ fun HomeMediaRow(
     onItemClick: (MediaItem) -> Unit,
     onPlayClick: ((MediaItem) -> Unit)? = null,
     modifier: Modifier = Modifier,
+    photoFolderChildUrls: Map<String, List<String>> = emptyMap(),
 ) {
     val adaptiveInfo = LocalAdaptiveInfo.current
     val isTv = LocalTvMode.current
@@ -432,6 +433,7 @@ fun HomeMediaRow(
                         blurHash = item.blurHashes.primary,
                         onPlayClick = memoizedPlayClick,
                         sharedElementKey = "poster_${item.id}",
+                        photoFolderChildImageUrls = photoFolderChildUrls[item.id].orEmpty(),
                     )
                 }
             }
@@ -459,6 +461,7 @@ fun HomeMediaRow(
                     blurHash = item.blurHashes.primary,
                     onPlayClick = memoizedPlayClick,
                     sharedElementKey = "poster_${item.id}",
+                    photoFolderChildImageUrls = photoFolderChildUrls[item.id].orEmpty(),
                 )
             }
         }

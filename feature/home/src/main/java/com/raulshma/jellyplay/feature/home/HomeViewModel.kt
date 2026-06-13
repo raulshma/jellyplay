@@ -234,6 +234,20 @@ class HomeViewModel @Inject constructor(
     fun getBackdropUrl(itemId: String): String =
         playbackRepository.getBackdropUrl(itemId, maxWidth = 1280)
 
+    private val _photoFolderChildUrls = MutableStateFlow<Map<String, List<String>>>(emptyMap())
+    val photoFolderChildUrls: StateFlow<Map<String, List<String>>> = _photoFolderChildUrls
+
+    fun prefetchPhotoFolderChildUrls(items: List<com.raulshma.jellyplay.core.model.MediaItem>) {
+        launch {
+            val current = _photoFolderChildUrls.value
+            items.filter { it.mediaType == com.raulshma.jellyplay.core.model.MediaType.PHOTO_FOLDER && it.id !in current }
+                .forEach { folder ->
+                    val urls = mediaRepository.getPhotoFolderChildImageUrls(folder.id)
+                    _photoFolderChildUrls.value = _photoFolderChildUrls.value + (folder.id to urls)
+                }
+        }
+    }
+
     fun getHomeScrollPosition(): HomeScrollPosition = homeScrollPosition
 
     fun saveHomeScrollPosition(firstVisibleItemIndex: Int, firstVisibleItemScrollOffset: Int) {
