@@ -16,6 +16,7 @@ enum class MediaType {
     ARTIST,
     COLLECTION,
     PHOTO,
+    PHOTO_FOLDER,
     LIVE_TV,
     CHANNEL,
     UNKNOWN,
@@ -26,6 +27,9 @@ val MediaType.isAudioType: Boolean
 
 val MediaType.isMusicTrack: Boolean
     get() = this == MediaType.AUDIO || this == MediaType.MUSIC
+
+val MediaType.isPhotoType: Boolean
+    get() = this == MediaType.PHOTO || this == MediaType.PHOTO_FOLDER
 
 @Immutable
 @Serializable

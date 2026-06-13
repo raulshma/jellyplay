@@ -325,7 +325,8 @@ private fun MainContent(
     val isAudioPlayerScreen = currentRoute is Route.AudioPlayer
 
     val isFullScreenRoute = isPlayerScreen || isAudioPlayerScreen ||
-            currentRoute is Route.Ambient || currentRoute is Route.Onboarding
+            currentRoute is Route.Ambient || currentRoute is Route.Onboarding ||
+            currentRoute is Route.PhotoViewer
 
     val activeTopLevelRoutes: LinkedHashMap<Route, String> = when (homeMode) {
         HomeMode.VIDEO -> VIDEO_TOP_LEVEL_ROUTES

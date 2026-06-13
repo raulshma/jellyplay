@@ -146,7 +146,7 @@ private fun MediaType.displayName(): String = when (this) {
     MediaType.ALBUM -> "Albums"
     MediaType.ARTIST -> "Artists"
     MediaType.COLLECTION -> "Collections"
-    MediaType.PHOTO -> "Photos"
+    MediaType.PHOTO, MediaType.PHOTO_FOLDER -> "Photos"
     MediaType.LIVE_TV -> "Live TV"
     MediaType.CHANNEL -> "Channels"
     MediaType.UNKNOWN -> "Unknown"

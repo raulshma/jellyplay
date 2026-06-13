@@ -35,4 +35,9 @@ class JellyfinDtoMappersTest {
     fun `PHOTO BaseItemKind maps to PHOTO`() {
         assertEquals(MediaType.PHOTO, BaseItemKind.PHOTO.toMediaType())
     }
+
+    @Test
+    fun `PHOTO_ALBUM BaseItemKind maps to PHOTO_FOLDER`() {
+        assertEquals(MediaType.PHOTO_FOLDER, BaseItemKind.PHOTO_ALBUM.toMediaType())
+    }
 }

@@ -259,7 +259,7 @@ internal val MediaType.label: String
         MediaType.ALBUM -> "Album"
         MediaType.ARTIST -> "Artist"
         MediaType.COLLECTION -> "Collection"
-        MediaType.PHOTO -> "Photo"
+        MediaType.PHOTO, MediaType.PHOTO_FOLDER -> "Photo"
         MediaType.LIVE_TV -> "Live TV"
         MediaType.CHANNEL -> "Channel"
         MediaType.SEASON -> "Season"

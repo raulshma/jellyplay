@@ -51,9 +51,10 @@ class DeepLinkHandler @Inject constructor() {
     private fun parseHttpsScheme(uri: Uri): Route? {
         if (uri.host != HOST_WEB) return null
         val segments = uri.pathSegments
-        if (segments.size < 2) return null
-        val type = segments[0]
-        val itemId = segments[1]
+        if (segments.firstOrNull() != PATH_PREFIX) return null
+        if (segments.size < 3) return null
+        val type = segments[1]
+        val itemId = segments[2]
         return routeForPath(type, itemId)
     }
 
@@ -68,14 +69,15 @@ class DeepLinkHandler @Inject constructor() {
     companion object {
         const val SCHEME_CUSTOM = "jellyplay"
         const val SCHEME_HTTPS = "https"
-        const val HOST_WEB = "jellyplay.app"
+        const val HOST_WEB = "raulshma.github.io"
+        const val PATH_PREFIX = "jellyplay"
 
         fun createMediaLink(itemId: String): String {
             return "$SCHEME_CUSTOM://media/$itemId"
         }
 
         fun createWebMediaLink(itemId: String): String {
-            return "$SCHEME_HTTPS://$HOST_WEB/media/$itemId"
+            return "$SCHEME_HTTPS://$HOST_WEB/$PATH_PREFIX/media/$itemId"
         }
 
         fun createContinueWatchingLink(): String {
