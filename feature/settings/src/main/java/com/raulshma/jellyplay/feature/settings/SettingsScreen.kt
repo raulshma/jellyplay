@@ -127,10 +127,21 @@ fun SettingsScreen(
         animateEntrance = true
     }
 
-    LaunchedEffect(isTv) {
+    // On first TV entry, focus the search bar so the user can quickly type. On re-entry from a
+    // sub-settings screen, focus the list instead — the restored scroll position puts the user
+    // near where they left off, and tvFocusRestorer() on the LazyColumn restores the last-focused
+    // child. Without the saveable flag, the search bar steals focus on every return, which the
+    // user perceives as "focus reset to the top."
+    var isFirstTvEntry by androidx.compose.runtime.saveable.rememberSaveable { mutableStateOf(true) }
+    LaunchedEffect(Unit) {
         if (isTv) {
             kotlinx.coroutines.delay(150)
-            try { searchFocusRequester.requestFocus() } catch (_: Exception) {}
+            if (isFirstTvEntry) {
+                try { searchFocusRequester.requestFocus() } catch (_: Exception) {}
+                isFirstTvEntry = false
+            } else {
+                try { listFocusRequester.requestFocus() } catch (_: Exception) {}
+            }
         }
     }
 

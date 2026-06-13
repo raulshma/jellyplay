@@ -68,9 +68,14 @@ fun TvFocusableGrid(
     // group from outside; neither proactively grabs focus. So when a grid's data arrives after first
     // composition, grab focus on the focused cell once (mirrors Wholphin's page-owned
     // LaunchedEffect(Unit) { gridFocusRequester.requestFocus() } inside the Success branch).
+    // The scroll-to-item before the grab ensures the saved cell is actually composed — without it,
+    // returning from a full-screen route (e.g. PhotoViewer) can leave the saved index off-screen,
+    // the fallbackFocusRequester attached to nothing, and the grab silently no-ops.
     LaunchedEffect(itemCount > 0) {
         if (isTv && requestInitialFocus && itemCount > 0 && !initialFocusRequested) {
             initialFocusRequested = true
+            val targetIndex = focusedIndex.coerceIn(0, itemCount - 1)
+            state.scrollToItem(targetIndex)
             fallbackFocusRequester.tryRequestFocus("tv_grid_init")
         }
     }

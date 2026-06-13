@@ -60,6 +60,7 @@ fun TvNavigationDrawer(
     modifier: Modifier = Modifier,
     drawerState: DrawerState = rememberDrawerState(initialValue = DrawerValue.Closed),
     drawerListState: LazyListState = rememberLazyListState(),
+    currentRoute: NavKey? = null,
     content: @Composable () -> Unit,
 ) {
     val focusManager = LocalFocusManager.current
@@ -198,8 +199,26 @@ fun TvNavigationDrawer(
             }
         },
         content = {
+            val contentFocusRequester = remember { FocusRequester() }
+            var contentHasFocus by remember { mutableStateOf(false) }
+
+            // Content focus guard — the defensive safety net that fixes "drawer expands instead of
+            // focusing screen elements." focusRestorer()/focusProperties{onEnter} only REACT to focus
+            // entering the group; nothing proactively pushes focus into content. So screens that
+            // forget to grab focus (or load data asynchronously) leave content unfocused — the first
+            // D-pad press drifts to the always-composed drawer rail, whose onFocusChanged write-back
+            // snaps the drawer open. This guard grabs content focus whenever the drawer is closed and
+            // content lacks it, keyed on route change so it fires on every screen transition.
+            LaunchedEffect(currentRoute, drawerState.currentValue, contentHasFocus) {
+                if (drawerState.currentValue == DrawerValue.Closed && !contentHasFocus) {
+                    contentFocusRequester.tryRequestFocus("tv_content_guard")
+                }
+            }
+
             Box(
                 modifier = Modifier
+                    .focusRequester(contentFocusRequester)
+                    .onFocusChanged { contentHasFocus = it.hasFocus }
                     .focusGroup()
                     .tvFocusRestorer(),
             ) {

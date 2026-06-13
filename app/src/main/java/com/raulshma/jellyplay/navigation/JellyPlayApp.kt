@@ -537,6 +537,7 @@ private fun MainContent(
                         onBack = { navigator.goBack() },
                         drawerState = tvDrawerState,
                         drawerListState = tvDrawerListState,
+                        currentRoute = tvCurrentRoute,
                     ) {
                         MainNavDisplay(
                             navigationState = navigationState,

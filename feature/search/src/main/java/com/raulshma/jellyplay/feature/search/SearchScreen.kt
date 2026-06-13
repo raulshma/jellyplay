@@ -94,6 +94,7 @@ import com.raulshma.jellyplay.core.ui.navigation.Route
 import com.raulshma.jellyplay.core.ui.adaptive.WindowSizeClass
 import com.raulshma.jellyplay.core.ui.adaptive.*
 import com.raulshma.jellyplay.core.ui.tv.LocalTvMode
+import com.raulshma.jellyplay.core.ui.tv.tryRequestFocus
 import com.raulshma.jellyplay.feature.search.components.SearchFilterSheet
 import com.raulshma.jellyplay.core.designsystem.theme.ShapeCache
 import java.util.Locale
@@ -136,6 +137,16 @@ fun SearchScreen(
     val focusRequester = remember { FocusRequester() }
     val focusManager = LocalFocusManager.current
     var isSearchFocused by remember { mutableStateOf(false) }
+
+    // Grab focus into the search field on TV entry. Without this the first D-pad press drifts to
+    // the drawer rail and expands it. LaunchedEffect(Unit) re-fires on every composition entry
+    // (including back-nav from a detail page), which is the desired behavior for a top-level screen.
+    val isTvEntry = LocalTvMode.current
+    LaunchedEffect(Unit) {
+        if (isTvEntry) {
+            focusRequester.tryRequestFocus()
+        }
+    }
 
     BackHandler(enabled = isSearchFocused || query.isNotBlank() || hasActiveFilters) {
         when {
