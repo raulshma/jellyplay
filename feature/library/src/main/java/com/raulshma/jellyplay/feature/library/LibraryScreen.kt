@@ -96,7 +96,7 @@ import com.raulshma.jellyplay.core.ui.components.PosterCard
 import com.raulshma.jellyplay.core.ui.adaptive.LocalAdaptiveInfo
 import com.raulshma.jellyplay.core.ui.adaptive.*
 import com.raulshma.jellyplay.core.ui.tv.LocalTvMode
-import com.raulshma.jellyplay.core.ui.tv.TvGrabInitialFocus
+import com.raulshma.jellyplay.core.ui.tv.TvFocusableGrid
 import com.raulshma.jellyplay.core.ui.tv.rememberTvFocusState
 import com.raulshma.jellyplay.core.ui.tv.tvFocusIndicator
 import com.raulshma.jellyplay.core.ui.tv.tryRequestFocus
@@ -149,9 +149,6 @@ fun LibraryScreen(
 
     val gridState = rememberLazyGridState()
     val listState = rememberLazyListState()
-    val tvGridFocusRequester = remember { FocusRequester() }
-    val tvGridFallbackRequester = remember { FocusRequester() }
-    var tvGridFocusedIndex by rememberSaveable { mutableIntStateOf(0) }
     val hasActiveFilters by remember {
         derivedStateOf {
             filters.mediaTypes.isNotEmpty() ||
@@ -177,16 +174,6 @@ fun LibraryScreen(
     val contentPad = adaptiveInfo.contentPadding(isTv)
     val spacing = adaptiveInfo.itemSpacing(isTv)
     val bottomPad = adaptiveInfo.bottomPadding(isTv)
-
-    // The inline TV grid below wires focusRestorer(fallback)/onEnter but neither grabs focus
-    // proactively; without this, focus is orphaned while paging data loads after first composition.
-    // Also clamps the saved index to the live page count so a filter shrink never leaves it past the end.
-    TvGrabInitialFocus(
-        focusRequester = tvGridFocusRequester,
-        itemCount = pagedItems.itemCount,
-        onReady = { tvGridFocusedIndex = tvGridFocusedIndex.coerceIn(0, (pagedItems.itemCount - 1).coerceAtLeast(0)) },
-        tag = "library_grid_init",
-    )
 
     val gridPadding = PaddingValues(
         start = contentPad,
@@ -507,50 +494,36 @@ fun LibraryScreen(
                                         }
                                     }
                                 } else {
-                                    @OptIn(ExperimentalComposeUiApi::class)
-                                    val tvGridModifier = if (isTv) Modifier
-                                        .focusProperties { onEnter = { tvGridFocusRequester.tryRequestFocus("library_grid") } }
-                                        .focusGroup()
-                                        .tvFocusRestorer(tvGridFallbackRequester)
-                                        .focusRequester(tvGridFocusRequester)
-                                    else Modifier
-                                    LazyVerticalGrid(
-                                        state = gridState,
+                                    TvFocusableGrid(
+                                        itemCount = pagedItems.itemCount,
+                                        key = pagedItems.itemKey { it.id },
                                         columns = GridCells.Adaptive(gridCellSize),
+                                        state = gridState,
                                         contentPadding = gridPadding,
                                         horizontalArrangement = Arrangement.spacedBy(spacing),
                                         verticalArrangement = Arrangement.spacedBy(spacing),
-                                        modifier = Modifier.fillMaxSize().then(tvGridModifier),
-                                    ) {
-                                        items(
-                                            count = pagedItems.itemCount,
-                                            key = pagedItems.itemKey { it.id },
-                                            contentType = { "mediaItem" },
-                                        ) { index ->
-                                            val item = pagedItems[index]
-                                            if (item != null) {
-                                                val memoizedClick = remember(item.id, item.mediaType, item.parentId, item.name) {
-                                                    { onItemClick(item.id, item.mediaType, item.parentId, item.name) }
-                                                }
-                                                val tvItemModifier = if (isTv) Modifier
-                                                    .onFocusChanged { if (it.hasFocus) tvGridFocusedIndex = index }
-                                                    .then(if (index == tvGridFocusedIndex) Modifier.focusRequester(tvGridFallbackRequester) else Modifier)
-                                                else Modifier
-                                                PosterCard(
-                                                    item = item,
-                                                    imageUrl = remember(item.id) { viewModel.getImageUrl(item.id) },
-                                                    onClick = memoizedClick,
-                                                    showProgress = item.playbackPositionTicks != null && item.playbackPositionTicks!! > 0,
-                                                    progressPercent = if (item.runTimeTicks != null && item.runTimeTicks!! > 0) {
-                                                        (item.playbackPositionTicks?.toFloat()
-                                                            ?: 0f) / item.runTimeTicks!!.toFloat()
-                                                    } else 0f,
-                                                    blurHash = item.blurHashes.primary,
-                                                    sharedElementKey = "poster_${item.id}",
-                                                    photoFolderChildImageUrls = photoFolderChildUrls[item.id].orEmpty(),
-                                                    modifier = tvItemModifier,
-                                                )
+                                        modifier = Modifier.fillMaxSize(),
+                                        contentType = { "mediaItem" },
+                                    ) { index, itemModifier ->
+                                        val item = pagedItems[index]
+                                        if (item != null) {
+                                            val memoizedClick = remember(item.id, item.mediaType, item.parentId, item.name) {
+                                                { onItemClick(item.id, item.mediaType, item.parentId, item.name) }
                                             }
+                                            PosterCard(
+                                                item = item,
+                                                imageUrl = remember(item.id) { viewModel.getImageUrl(item.id) },
+                                                onClick = memoizedClick,
+                                                showProgress = item.playbackPositionTicks != null && item.playbackPositionTicks!! > 0,
+                                                progressPercent = if (item.runTimeTicks != null && item.runTimeTicks!! > 0) {
+                                                    (item.playbackPositionTicks?.toFloat()
+                                                        ?: 0f) / item.runTimeTicks!!.toFloat()
+                                                } else 0f,
+                                                blurHash = item.blurHashes.primary,
+                                                sharedElementKey = "poster_${item.id}",
+                                                photoFolderChildImageUrls = photoFolderChildUrls[item.id].orEmpty(),
+                                                modifier = itemModifier,
+                                            )
                                         }
                                     }
                                 }

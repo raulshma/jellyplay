@@ -4,9 +4,10 @@ import androidx.compose.foundation.focusGroup
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.lazy.grid.GridCells
+import androidx.compose.foundation.lazy.grid.LazyGridScope
 import androidx.compose.foundation.lazy.grid.LazyGridState
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
-import androidx.compose.foundation.lazy.grid.itemsIndexed
+import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.lazy.grid.rememberLazyGridState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -24,11 +25,19 @@ import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.unit.dp
 
+/**
+ * Paging-friendly TV focus grid. Drives an initial focus grab once data arrives (the contract that
+ * `focusRestorer(fallback)` and `focusProperties { onEnter }` do not proactively satisfy), clamps
+ * the saveable focused index to the live item count, and wires the container + per-item focus
+ * modifiers in the correct order (`focusGroup → tvFocusRestorer(fallback) → focusRequester(grid)`).
+ *
+ * Pass [extraContent] for paged-append footers (load-more indicators) or other extra grid items.
+ */
 @OptIn(androidx.compose.ui.ExperimentalComposeUiApi::class)
 @Composable
-fun <T> TvFocusableGrid(
-    items: List<T>,
-    key: (T) -> Any,
+fun TvFocusableGrid(
+    itemCount: Int,
+    key: (index: Int) -> Any,
     columns: GridCells,
     modifier: Modifier = Modifier,
     initialIndex: Int = 0,
@@ -37,13 +46,10 @@ fun <T> TvFocusableGrid(
     contentPadding: PaddingValues = PaddingValues(0.dp),
     horizontalArrangement: Arrangement.Horizontal = Arrangement.spacedBy(0.dp),
     verticalArrangement: Arrangement.Vertical = Arrangement.spacedBy(0.dp),
-    contentType: (T) -> Any? = { null },
+    contentType: (index: Int) -> Any? = { null },
     onFocusedIndexChange: (Int) -> Unit = {},
-    itemContent: @Composable (
-        index: Int,
-        item: T,
-        modifier: Modifier,
-    ) -> Unit,
+    extraContent: LazyGridScope.() -> Unit = {},
+    itemContent: @Composable (index: Int, modifier: Modifier) -> Unit,
 ) {
     val isTv = LocalTvMode.current
     val gridFocusRequester = remember { FocusRequester() }
@@ -52,9 +58,9 @@ fun <T> TvFocusableGrid(
     var focusedIndex by rememberSaveable { mutableIntStateOf(initialIndex) }
     var initialFocusRequested by remember { mutableStateOf(false) }
 
-    LaunchedEffect(items.size) {
-        if (items.isNotEmpty()) {
-            focusedIndex = focusedIndex.coerceIn(0, items.lastIndex)
+    LaunchedEffect(itemCount) {
+        if (itemCount > 0) {
+            focusedIndex = focusedIndex.coerceIn(0, itemCount - 1)
         }
     }
 
@@ -62,14 +68,14 @@ fun <T> TvFocusableGrid(
     // group from outside; neither proactively grabs focus. So when a grid's data arrives after first
     // composition, grab focus on the focused cell once (mirrors Wholphin's page-owned
     // LaunchedEffect(Unit) { gridFocusRequester.requestFocus() } inside the Success branch).
-    LaunchedEffect(items.isNotEmpty()) {
-        if (isTv && requestInitialFocus && items.isNotEmpty() && !initialFocusRequested) {
+    LaunchedEffect(itemCount > 0) {
+        if (isTv && requestInitialFocus && itemCount > 0 && !initialFocusRequested) {
             initialFocusRequested = true
             fallbackFocusRequester.tryRequestFocus("tv_grid_init")
         }
     }
 
-    val currentFocusedIndex = if (items.isEmpty()) 0 else focusedIndex.coerceIn(0, items.lastIndex)
+    val currentFocusedIndex = if (itemCount == 0) 0 else focusedIndex.coerceIn(0, itemCount - 1)
 
     LazyVerticalGrid(
         columns = columns,
@@ -91,11 +97,11 @@ fun <T> TvFocusableGrid(
             modifier
         },
     ) {
-        itemsIndexed(
-            items = items,
-            key = { _, item -> key(item) },
-            contentType = { _, item -> contentType(item) },
-        ) { index, item ->
+        items(
+            count = itemCount,
+            key = key,
+            contentType = contentType,
+        ) { index ->
             val itemModifier = if (isTv) {
                 Modifier
                     .then(
@@ -114,7 +120,52 @@ fun <T> TvFocusableGrid(
             } else {
                 Modifier
             }
-            itemContent(index, item, itemModifier)
+            itemContent(index, itemModifier)
         }
+        extraContent()
+    }
+}
+
+/**
+ * List-backed convenience overload. Delegates to the paging [TvFocusableGrid] so both variants share
+ * the same focus contract (initial-focus grab, saveable index clamping, correct modifier order).
+ */
+@Composable
+fun <T> TvFocusableGrid(
+    items: List<T>,
+    key: (T) -> Any,
+    columns: GridCells,
+    modifier: Modifier = Modifier,
+    initialIndex: Int = 0,
+    requestInitialFocus: Boolean = true,
+    state: LazyGridState = rememberLazyGridState(initialFirstVisibleItemIndex = initialIndex),
+    contentPadding: PaddingValues = PaddingValues(0.dp),
+    horizontalArrangement: Arrangement.Horizontal = Arrangement.spacedBy(0.dp),
+    verticalArrangement: Arrangement.Vertical = Arrangement.spacedBy(0.dp),
+    contentType: (T) -> Any? = { null },
+    onFocusedIndexChange: (Int) -> Unit = {},
+    extraContent: LazyGridScope.() -> Unit = {},
+    itemContent: @Composable (
+        index: Int,
+        item: T,
+        modifier: Modifier,
+    ) -> Unit,
+) {
+    TvFocusableGrid(
+        itemCount = items.size,
+        key = { index -> key(items[index]) },
+        columns = columns,
+        modifier = modifier,
+        initialIndex = initialIndex,
+        requestInitialFocus = requestInitialFocus,
+        state = state,
+        contentPadding = contentPadding,
+        horizontalArrangement = horizontalArrangement,
+        verticalArrangement = verticalArrangement,
+        contentType = { index -> contentType(items[index]) },
+        onFocusedIndexChange = onFocusedIndexChange,
+        extraContent = extraContent,
+    ) { index, itemModifier ->
+        itemContent(index, items[index], itemModifier)
     }
 }

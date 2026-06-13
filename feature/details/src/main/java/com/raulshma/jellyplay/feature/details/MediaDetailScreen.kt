@@ -150,6 +150,7 @@ import com.raulshma.jellyplay.core.ui.adaptive.WindowSizeClass
 import com.raulshma.jellyplay.core.ui.adaptive.*
 import com.raulshma.jellyplay.core.ui.image.MediaImage
 import com.raulshma.jellyplay.core.ui.tv.LocalTvMode
+import com.raulshma.jellyplay.core.ui.tv.TvFocusableItemRow
 import com.raulshma.jellyplay.core.ui.tv.tvFocusRestorer
 import com.raulshma.jellyplay.core.ui.tv.tryRequestFocus
 import com.raulshma.jellyplay.core.ui.tv.rememberTvFocusState
@@ -2317,11 +2318,12 @@ private fun DetailContentBody(
                         )
                     }
                     Spacer(Modifier.height(16.dp))
-                    LazyRow(
+                    TvFocusableItemRow(
+                        items = collectionItems,
+                        key = { "collection_${it.id}" },
                         contentPadding = PaddingValues(horizontal = 24.dp),
                         horizontalArrangement = Arrangement.spacedBy(12.dp),
-                    ) {
-                        items(collectionItems, key = { "collection_${it.id}" }, contentType = { "mediaItem" }) { collectionItem ->
+                    ) { _, collectionItem, focusModifier ->
                             val collectionClick = remember(collectionItem.id) { { onItemClick(collectionItem.id) } }
                             FadingItem {
                                 PosterCard(
@@ -2332,10 +2334,9 @@ private fun DetailContentBody(
                                     progressPercent = if (collectionItem.runTimeTicks != null && collectionItem.runTimeTicks!! > 0) {
                                         (collectionItem.playbackPositionTicks?.toFloat() ?: 0f) / collectionItem.runTimeTicks!!.toFloat()
                                     } else 0f,
-                                    modifier = Modifier.width(160.dp),
+                                    modifier = focusModifier.width(160.dp),
                                 )
                             }
-                        }
                     }
                 }
             }
@@ -2354,23 +2355,22 @@ private fun DetailContentBody(
                     }
                     Spacer(Modifier.height(16.dp))
                         CompositionLocalProvider(LocalContentColor provides MaterialTheme.colorScheme.onSurface) {
-                        LazyRow(
+                        TvFocusableItemRow(
+                            items = detail.people,
+                            key = { "person_${it.id}" },
                             contentPadding = PaddingValues(horizontal = 24.dp),
                             horizontalArrangement = Arrangement.spacedBy(16.dp),
-                            modifier = Modifier
-                                .tvFocusRestorer(),
-                        ) {
-                            items(detail.people, key = { "person_${it.id}" }, contentType = { "person" }) { person ->
+                        ) { _, person, focusModifier ->
                                 val personClick = remember(person.id) { { onPersonClick(person.id) } }
                                 FadingItem {
                                     PersonItem(
                                         person = person,
                                         imageUrl = getImageUrl(person.id),
                                         onClick = personClick,
+                                        modifier = focusModifier,
                                     )
                                 }
                 }
-            }
 
         }
                 }
@@ -2395,13 +2395,12 @@ private fun DetailContentBody(
                         )
                     }
                     Spacer(Modifier.height(16.dp))
-                    LazyRow(
+                    TvFocusableItemRow(
+                        items = detail.relatedItems,
+                        key = { "related_${it.id}" },
                         contentPadding = PaddingValues(horizontal = 24.dp),
                         horizontalArrangement = Arrangement.spacedBy(12.dp),
-                        modifier = Modifier
-                            .tvFocusRestorer(),
-                    ) {
-                        items(detail.relatedItems, key = { "related_${it.id}" }, contentType = { "mediaItem" }) { related ->
+                    ) { _, related, focusModifier ->
                             val relatedClick = remember(related.id) { { onItemClick(related.id) } }
                             val adaptiveInfo = LocalAdaptiveInfo.current
                             FadingItem {
@@ -2409,12 +2408,11 @@ private fun DetailContentBody(
                                     item = related,
                                     imageUrl = getImageUrl(related.id),
                                     onClick = relatedClick,
-                                    modifier = Modifier.width(
+                                    modifier = focusModifier.width(
                                         if (adaptiveInfo.windowSizeClass != WindowSizeClass.Compact) 200.dp else 160.dp
                                     ),
                                 )
                             }
-                        }
                     }
                 }
             }
@@ -2482,18 +2480,12 @@ private fun SeerrItemsRow(
             )
         }
         Spacer(Modifier.height(16.dp))
-        LazyRow(
+        TvFocusableItemRow(
+            items = items,
+            key = { "${keyPrefix}_${it.id}" },
             contentPadding = PaddingValues(horizontal = 24.dp),
             horizontalArrangement = Arrangement.spacedBy(12.dp),
-            modifier = Modifier
-                .tvFocusRestorer(),
-        ) {
-            items(
-                count = items.size,
-                key = { index -> "${keyPrefix}_${items[index].id}" },
-                contentType = { contentType },
-            ) { index ->
-                val seerrItem = items[index]
+        ) { _, seerrItem, focusModifier ->
                 FadingItem {
                     SeerrMediaCard(
                         item = seerrItem,
@@ -2511,10 +2503,9 @@ private fun SeerrItemsRow(
                             }
                         },
                         onRequestClick = { onSeerrRequest(seerrItem) },
-                        modifier = Modifier.width(cardWidth),
+                        modifier = focusModifier.width(cardWidth),
                     )
                 }
-            }
         }
     }
 }
@@ -2565,13 +2556,12 @@ private fun SeasonsSection(
 
         Spacer(Modifier.height(16.dp))
 
-        LazyRow(
+        TvFocusableItemRow(
+            items = seasons,
+            key = { it.id },
             contentPadding = PaddingValues(horizontal = 24.dp),
             horizontalArrangement = Arrangement.spacedBy(8.dp),
-            modifier = Modifier
-                .tvFocusRestorer(),
-        ) {
-            itemsIndexed(seasons, key = { _, it -> it.id }, contentType = { _, _ -> "season" }) { index, season ->
+        ) { index, season, focusModifier ->
                 val isSelected = index == selectedSeasonIndex
                 val targetColor = if (isSelected) MaterialTheme.colorScheme.onSurface else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.15f)
                 val targetContentColor = if (isSelected) MaterialTheme.colorScheme.surface else MaterialTheme.colorScheme.onSurface
@@ -2588,7 +2578,7 @@ private fun SeasonsSection(
                 val seasonTabFocusState = rememberTvFocusState(focusedScale = 1.05f)
                 FadingItem {
                     Surface(
-                        modifier = Modifier
+                        modifier = focusModifier
                             .clip(ShapeCache.smooth16)
                             .then(seasonTabFocusState.focusModifier)
                             .then(Modifier.tvFocusIndicator(seasonTabFocusState, ShapeCache.smooth16))
@@ -2604,7 +2594,6 @@ private fun SeasonsSection(
                         )
                     }
                 }
-            }
         }
 
         Spacer(Modifier.height(20.dp))
@@ -2646,13 +2635,12 @@ private fun SeasonsSection(
                     }
                 }
                 currentEpisodes != null && currentEpisodes.isNotEmpty() -> {
-                    LazyRow(
+                    TvFocusableItemRow(
+                        items = currentEpisodes,
+                        key = { "episode_${it.id}" },
                         contentPadding = PaddingValues(horizontal = 24.dp),
                         horizontalArrangement = Arrangement.spacedBy(16.dp),
-                        modifier = Modifier
-                            .tvFocusRestorer(),
-                    ) {
-                        items(currentEpisodes, key = { "episode_${it.id}" }, contentType = { "episode" }) { episode ->
+                    ) { _, episode, focusModifier ->
                             FadingItem {
                                 EpisodeCard(
                                     episode = episode,
@@ -2660,9 +2648,9 @@ private fun SeasonsSection(
                                     isCurrentEpisode = episode.id == currentItemId,
                                     onPlayClick = { onEpisodePlayClick(episode) },
                                     onDetailClick = { onEpisodeDetailClick(episode) },
+                                    modifier = focusModifier,
                                 )
                             }
-                        }
                     }
                 }
                 else -> {
@@ -2695,6 +2683,7 @@ private fun EpisodeCard(
     isCurrentEpisode: Boolean = false,
     onPlayClick: () -> Unit,
     onDetailClick: () -> Unit,
+    modifier: Modifier = Modifier,
 ) {
     val cardInteractionSource = remember { MutableInteractionSource() }
     val isCardPressed by cardInteractionSource.collectIsPressedAsState()
@@ -2735,7 +2724,7 @@ private fun EpisodeCard(
     }
 
     Column(
-        modifier = Modifier
+        modifier = modifier
             .width(280.dp)
             .then(borderModifier)
             .clip(ShapeCache.smooth16)
@@ -2890,6 +2879,7 @@ private fun PersonItem(
     person: PersonInfo,
     imageUrl: String,
     onClick: () -> Unit = {},
+    modifier: Modifier = Modifier,
 ) {
     val interactionSource = remember { androidx.compose.foundation.interaction.MutableInteractionSource() }
     val isPressed by interactionSource.collectIsPressedAsState()
@@ -2903,7 +2893,7 @@ private fun PersonItem(
 
     Column(
         horizontalAlignment = Alignment.CenterHorizontally,
-        modifier = Modifier
+        modifier = modifier
             .width(80.dp)
             .graphicsLayer { scaleX = scale; scaleY = scale }
             .then(personFocusState.focusModifier)
@@ -3082,13 +3072,12 @@ private fun VideosSection(
             )
         }
         Spacer(Modifier.height(16.dp))
-        LazyRow(
+        TvFocusableItemRow(
+            items = videos,
+            key = { it.key ?: "" },
             contentPadding = PaddingValues(horizontal = 24.dp),
             horizontalArrangement = Arrangement.spacedBy(12.dp),
-            modifier = Modifier
-                .tvFocusRestorer(),
-        ) {
-            items(videos, key = { it.key ?: "" }, contentType = { "video" }) { video ->
+        ) { _, video, focusModifier ->
                 val thumbnailUrl = if (video.site?.lowercase() == "youtube") {
                     "https://img.youtube.com/vi/${video.key}/mqdefault.jpg"
                 } else null
@@ -3120,7 +3109,7 @@ private fun VideosSection(
 
                 FadingItem {
                     Card(
-                        modifier = Modifier
+                        modifier = focusModifier
                             .width(240.dp)
                             .aspectRatio(16f / 9f)
                             .then(if (isTv) videoCardFocusState.focusModifier else Modifier)
@@ -3149,7 +3138,7 @@ private fun VideosSection(
                                     Icon(Tabler.Outline.PlayerPlay, contentDescription = null, tint = MaterialTheme.colorScheme.onSurfaceVariant)
                                 }
                             }
-                            
+
                             Box(
                                 modifier = Modifier
                                     .fillMaxSize()
@@ -3163,7 +3152,7 @@ private fun VideosSection(
                                         )
                                     )
                             )
-                            
+
                             Text(
                                 text = video.name ?: "Video",
                                 style = MaterialTheme.typography.labelSmall,
@@ -3174,7 +3163,7 @@ private fun VideosSection(
                                 maxLines = 1,
                                 overflow = TextOverflow.Ellipsis
                             )
-                            
+
                             Icon(
                                 Tabler.Outline.PlayerPlay,
                                 contentDescription = null,
@@ -3184,7 +3173,6 @@ private fun VideosSection(
                         }
                     }
                 }
-            }
         }
     }
 }
