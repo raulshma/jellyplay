@@ -423,7 +423,7 @@ private fun PhotoImage(
     onDoubleTap: () -> Unit,
 ) {
     val imageUrl = remember(photo.id) {
-        viewModel.getImageUrl(photo.id, maxWidth = 1920)
+        viewModel.getImageUrl(photo.id, maxWidth = null)
     }
     var lastTapTime by remember { mutableStateOf(0L) }
 
@@ -544,6 +544,7 @@ private fun PhotoImage(
                     translationY = offsetY
                 },
             contentScale = ContentScale.Fit,
+            size = coil3.size.Size.ORIGINAL,
         )
     }
 }

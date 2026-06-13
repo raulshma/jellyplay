@@ -42,7 +42,7 @@ class PlaybackRepositoryImpl @Inject constructor(
         positionTicks: Long,
     ): Result<Unit> = apiClient.reportPlaybackStopped(itemId, sessionId, positionTicks)
 
-    override fun getImageUrl(itemId: String, imageType: String, maxWidth: Int): String =
+    override fun getImageUrl(itemId: String, imageType: String, maxWidth: Int?): String =
         apiClient.getImageUrl(itemId, imageType, maxWidth)
 
     override fun getBackdropUrl(itemId: String, maxWidth: Int): String =
