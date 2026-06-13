@@ -111,6 +111,7 @@ import com.raulshma.jellyplay.core.ui.tv.isTv
 import com.raulshma.jellyplay.core.ui.tv.rememberTvFocusState
 import com.raulshma.jellyplay.core.ui.tv.tvFocusIndicator
 import com.raulshma.jellyplay.core.ui.tv.tvFocusExitHandler
+import com.raulshma.jellyplay.core.ui.tv.tryRequestFocus
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.collectLatest
 
@@ -872,6 +873,26 @@ private fun HomeContentList(
     val isTv = LocalTvMode.current
     val adaptiveInfo = LocalAdaptiveInfo.current
 
+    // TV focus orchestration: remember which content row last held focus so back-navigation from a
+    // detail screen restores that row instead of always snapping back to the hero. -1 means "no row
+    // focused yet" (fresh entry) -> the hero grabs focus exactly as before, so the fresh-entry path is
+    // unchanged. Mirrors Wholphin HomePage's saveable position + page-owned restore (HomePage.kt:308-347).
+    var homeFocusRow by rememberSaveable { mutableIntStateOf(-1) }
+    val savedRowIsValid = homeFocusRow in 0..sections.lastIndex
+    val rowFocusRequesters = remember(sections.size) { List(sections.size) { FocusRequester() } }
+    if (isTv && savedRowIsValid) {
+        LaunchedEffect(sections.isNotEmpty()) {
+            if (sections.isNotEmpty()) {
+                // Wait a frame (retry a few times) so the LazyColumn has restored scroll and composed
+                // the saved row before we request focus on it.
+                for (attempt in 1..3) {
+                    androidx.compose.runtime.withFrameNanos { }
+                    if (rowFocusRequesters[homeFocusRow].tryRequestFocus("home_restore")) break
+                }
+            }
+        }
+    }
+
     if (sections.isEmpty()) {
         Box(
             Modifier.fillMaxSize().padding(horizontal = contentPad),
@@ -908,6 +929,7 @@ private fun HomeContentList(
                         listState = listState,
                         onItemClick = onItemClick,
                         onDetailsClick = onItemClick,
+                        requestInitialFocus = !savedRowIsValid,
                         onFocusChange = onFocusChange,
                     )
                 }
@@ -968,6 +990,8 @@ private fun HomeContentList(
                         onItemClick = mediaOnItemClick,
                         onPlayClick = mediaOnPlayClick,
                         modifier = sectionModifier,
+                        focusRequester = rowFocusRequesters[index],
+                        onRowFocused = { homeFocusRow = index },
                     )
                 } else {
                     HomeMediaRow(
@@ -979,6 +1003,8 @@ private fun HomeContentList(
                         onPlayClick = mediaOnPlayClick,
                         modifier = sectionModifier,
                         photoFolderChildUrls = photoFolderChildUrls,
+                        focusRequester = rowFocusRequesters[index],
+                        onRowFocused = { homeFocusRow = index },
                     )
                 }
             }

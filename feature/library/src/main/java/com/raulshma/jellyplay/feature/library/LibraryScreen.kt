@@ -12,6 +12,7 @@ import androidx.compose.animation.shrinkVertically
 import androidx.compose.animation.slideInVertically
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.focusGroup
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.Arrangement
@@ -60,13 +61,20 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
+import androidx.compose.ui.ExperimentalComposeUiApi
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusProperties
+import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
@@ -88,8 +96,11 @@ import com.raulshma.jellyplay.core.ui.components.PosterCard
 import com.raulshma.jellyplay.core.ui.adaptive.LocalAdaptiveInfo
 import com.raulshma.jellyplay.core.ui.adaptive.*
 import com.raulshma.jellyplay.core.ui.tv.LocalTvMode
+import com.raulshma.jellyplay.core.ui.tv.TvGrabInitialFocus
 import com.raulshma.jellyplay.core.ui.tv.rememberTvFocusState
 import com.raulshma.jellyplay.core.ui.tv.tvFocusIndicator
+import com.raulshma.jellyplay.core.ui.tv.tryRequestFocus
+import com.raulshma.jellyplay.core.ui.tv.tvFocusRestorer
 import com.raulshma.jellyplay.core.model.LibraryViewMode
 import com.raulshma.jellyplay.core.model.MediaType
 import com.raulshma.jellyplay.feature.library.components.LibraryFilterSheet
@@ -138,6 +149,9 @@ fun LibraryScreen(
 
     val gridState = rememberLazyGridState()
     val listState = rememberLazyListState()
+    val tvGridFocusRequester = remember { FocusRequester() }
+    val tvGridFallbackRequester = remember { FocusRequester() }
+    var tvGridFocusedIndex by rememberSaveable { mutableIntStateOf(0) }
     val hasActiveFilters by remember {
         derivedStateOf {
             filters.mediaTypes.isNotEmpty() ||
@@ -163,6 +177,16 @@ fun LibraryScreen(
     val contentPad = adaptiveInfo.contentPadding(isTv)
     val spacing = adaptiveInfo.itemSpacing(isTv)
     val bottomPad = adaptiveInfo.bottomPadding(isTv)
+
+    // The inline TV grid below wires focusRestorer(fallback)/onEnter but neither grabs focus
+    // proactively; without this, focus is orphaned while paging data loads after first composition.
+    // Also clamps the saved index to the live page count so a filter shrink never leaves it past the end.
+    TvGrabInitialFocus(
+        focusRequester = tvGridFocusRequester,
+        itemCount = pagedItems.itemCount,
+        onReady = { tvGridFocusedIndex = tvGridFocusedIndex.coerceIn(0, (pagedItems.itemCount - 1).coerceAtLeast(0)) },
+        tag = "library_grid_init",
+    )
 
     val gridPadding = PaddingValues(
         start = contentPad,
@@ -483,13 +507,20 @@ fun LibraryScreen(
                                         }
                                     }
                                 } else {
+                                    @OptIn(ExperimentalComposeUiApi::class)
+                                    val tvGridModifier = if (isTv) Modifier
+                                        .focusProperties { onEnter = { tvGridFocusRequester.tryRequestFocus("library_grid") } }
+                                        .focusGroup()
+                                        .tvFocusRestorer(tvGridFallbackRequester)
+                                        .focusRequester(tvGridFocusRequester)
+                                    else Modifier
                                     LazyVerticalGrid(
                                         state = gridState,
                                         columns = GridCells.Adaptive(gridCellSize),
                                         contentPadding = gridPadding,
                                         horizontalArrangement = Arrangement.spacedBy(spacing),
                                         verticalArrangement = Arrangement.spacedBy(spacing),
-                                        modifier = Modifier.fillMaxSize(),
+                                        modifier = Modifier.fillMaxSize().then(tvGridModifier),
                                     ) {
                                         items(
                                             count = pagedItems.itemCount,
@@ -501,6 +532,10 @@ fun LibraryScreen(
                                                 val memoizedClick = remember(item.id, item.mediaType, item.parentId, item.name) {
                                                     { onItemClick(item.id, item.mediaType, item.parentId, item.name) }
                                                 }
+                                                val tvItemModifier = if (isTv) Modifier
+                                                    .onFocusChanged { if (it.hasFocus) tvGridFocusedIndex = index }
+                                                    .then(if (index == tvGridFocusedIndex) Modifier.focusRequester(tvGridFallbackRequester) else Modifier)
+                                                else Modifier
                                                 PosterCard(
                                                     item = item,
                                                     imageUrl = remember(item.id) { viewModel.getImageUrl(item.id) },
@@ -513,6 +548,7 @@ fun LibraryScreen(
                                                     blurHash = item.blurHashes.primary,
                                                     sharedElementKey = "poster_${item.id}",
                                                     photoFolderChildImageUrls = photoFolderChildUrls[item.id].orEmpty(),
+                                                    modifier = tvItemModifier,
                                                 )
                                             }
                                         }

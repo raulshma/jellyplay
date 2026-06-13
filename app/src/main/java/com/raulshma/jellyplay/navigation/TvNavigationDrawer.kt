@@ -1,17 +1,18 @@
 package com.raulshma.jellyplay.navigation
 
+import androidx.activity.compose.BackHandler
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.foundation.background
 import androidx.compose.foundation.focusGroup
 import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyListState
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.selection.selectableGroup
-import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
@@ -19,7 +20,6 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.scale
@@ -33,16 +33,15 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.unit.dp
 import androidx.navigation3.runtime.NavKey
+import androidx.tv.material3.DrawerState
 import androidx.tv.material3.DrawerValue
 import androidx.tv.material3.LocalContentColor as TvLocalContentColor
 import androidx.tv.material3.NavigationDrawer
 import androidx.tv.material3.NavigationDrawerItem
 import androidx.tv.material3.Text as TvText
 import androidx.tv.material3.rememberDrawerState
-import com.raulshma.jellyplay.core.ui.tv.input.onDpadKeyEvent
+import com.raulshma.jellyplay.core.ui.tv.tryRequestFocus
 import com.raulshma.jellyplay.core.ui.tv.tvFocusRestorer
-import kotlinx.coroutines.delay
-import kotlinx.coroutines.launch
 
 data class TvNavItem(
     val route: NavKey,
@@ -59,57 +58,75 @@ fun TvNavigationDrawer(
     onNavigate: (NavKey) -> Unit,
     onBack: () -> Unit,
     modifier: Modifier = Modifier,
+    drawerState: DrawerState = rememberDrawerState(initialValue = DrawerValue.Closed),
+    drawerListState: LazyListState = rememberLazyListState(),
     content: @Composable () -> Unit,
 ) {
-    val contentFocusRequester = remember { FocusRequester() }
     val focusManager = LocalFocusManager.current
-    val drawerScope = rememberCoroutineScope()
-    val railFocusRequesters = remember(primaryItems.size) {
-        List(primaryItems.size) { FocusRequester() }
-    }
+    val selectedItemFocusRequester = remember { FocusRequester() }
+    val drawerSheetFocusRequester = remember { FocusRequester() }
+    var initializationComplete by remember { mutableStateOf(false) }
+    var sheetHasFocus by remember { mutableStateOf(false) }
     var focusedRailIndex by remember { mutableStateOf(0) }
 
-    val drawerState = rememberDrawerState(initialValue = DrawerValue.Closed)
-
     fun selectedRailIndex(): Int =
-        primaryItems.indexOfFirst { it.route == currentTopLevel }.coerceAtLeast(0)
+        primaryItems.indexOfFirst { it.route == currentTopLevel }
+            .takeIf { it >= 0 }
+            ?: 0
 
-    suspend fun focusContent(preferDirectionalMove: Boolean = false) {
-        delay(80)
-        if (preferDirectionalMove && focusManager.moveFocus(FocusDirection.Right)) return
-        try {
-            contentFocusRequester.requestFocus()
-        } catch (_: Exception) {
-        }
-        delay(120)
-        if (preferDirectionalMove && focusManager.moveFocus(FocusDirection.Right)) return
-        try {
-            contentFocusRequester.requestFocus()
-        } catch (_: Exception) {
-        }
+    val selectedIndex = selectedRailIndex()
+
+    fun requestSelectedRailFocus() {
+        if (primaryItems.isEmpty()) return
+        selectedItemFocusRequester.tryRequestFocus("tv_drawer_selected")
     }
 
-    suspend fun focusSelectedRail() {
-        val targetIndex = selectedRailIndex()
-        focusedRailIndex = targetIndex
-        val requester = railFocusRequesters.getOrNull(targetIndex) ?: return
-        try {
-            requester.requestFocus()
-        } catch (_: Exception) {
-        }
-        delay(120)
-        try {
-            requester.requestFocus()
-        } catch (_: Exception) {
+    fun openDrawer() {
+        drawerState.setValue(DrawerValue.Open)
+        requestSelectedRailFocus()
+    }
+
+    fun closeDrawerAndMoveToContent() {
+        drawerState.setValue(DrawerValue.Closed)
+        if (!focusManager.moveFocus(FocusDirection.Right)) {
+            focusManager.clearFocus(force = true)
         }
     }
 
     fun navigateFromDrawer(route: NavKey, railIndex: Int) {
         focusedRailIndex = railIndex
-        drawerScope.launch {
-            drawerState.setValue(DrawerValue.Closed)
-            onNavigate(route)
-            focusContent(preferDirectionalMove = true)
+        closeDrawerAndMoveToContent()
+        onNavigate(route)
+    }
+
+    BackHandler(enabled = drawerState.currentValue == DrawerValue.Open) {
+        closeDrawerAndMoveToContent()
+    }
+
+    BackHandler(enabled = drawerState.currentValue == DrawerValue.Closed) {
+        if (isSubPage) {
+            onBack()
+        } else {
+            openDrawer()
+        }
+    }
+
+    // Grab focus on the drawer sheet when it is programmatically opened, and only then allow the
+    // onFocusChanged -> drawerState write-back. Requesting focus FIRST and flipping the guard AFTER
+    // prevents the first-frame hasFocus==false callback from snapping a freshly-opened drawer closed
+    // (the exact race initializationComplete exists to suppress). Mirrors Wholphin
+    // NavigationDrawerAndroid.kt:96-102.
+    LaunchedEffect(drawerState.currentValue) {
+        if (drawerState.currentValue == DrawerValue.Open && !sheetHasFocus) {
+            drawerSheetFocusRequester.tryRequestFocus("tv_drawer_sheet")
+        }
+        initializationComplete = true
+    }
+
+    LaunchedEffect(drawerState.currentValue, selectedIndex, primaryItems.size) {
+        if (drawerState.currentValue == DrawerValue.Open && primaryItems.isNotEmpty()) {
+            drawerListState.scrollToItem(selectedIndex.coerceIn(0, primaryItems.lastIndex))
+            requestSelectedRailFocus()
         }
     }
 
@@ -117,25 +134,12 @@ fun TvNavigationDrawer(
         drawerState = drawerState,
         modifier = modifier
             .fillMaxSize()
-            .background(MaterialTheme.colorScheme.background)
-            .onDpadKeyEvent(
-                onBack = { e ->
-                    if (e.isKeyUp) {
-                        onBack()
-                    }
-                    true
-                },
-            ),
+            .background(MaterialTheme.colorScheme.background),
         drawerContent = { drawerValue ->
             val isClosed = drawerValue == DrawerValue.Closed
 
-            LaunchedEffect(drawerValue) {
-                if (!isClosed) {
-                    focusSelectedRail()
-                }
-            }
-
-            Column(
+            LazyColumn(
+                state = drawerListState,
                 modifier = Modifier
                     .fillMaxHeight()
                     .width(if (isClosed) 72.dp else 280.dp)
@@ -145,25 +149,24 @@ fun TvNavigationDrawer(
                         top = 8.dp,
                         bottom = 8.dp,
                     )
-                    .verticalScroll(rememberScrollState())
-                    .then(
-                        if (isSubPage) {
-                            Modifier.focusProperties {
-                                @Suppress("DEPRECATION")
-                                exit = { direction: FocusDirection ->
-                                    when (direction) {
-                                        FocusDirection.Right -> contentFocusRequester
-                                        else -> FocusRequester.Default
-                                    }
-                                }
-                            }
-                        } else {
-                            Modifier
-                        },
-                    )
+                    .focusRequester(drawerSheetFocusRequester)
+                    .onFocusChanged {
+                        sheetHasFocus = it.hasFocus
+                        if (initializationComplete) {
+                            drawerState.setValue(if (it.hasFocus) DrawerValue.Open else DrawerValue.Closed)
+                        }
+                    }
+                    .focusGroup()
+                    .tvFocusRestorer(selectedItemFocusRequester)
+                    .focusProperties {
+                        onEnter = {
+                            requestSelectedRailFocus()
+                        }
+                    }
                     .selectableGroup(),
             ) {
-                primaryItems.forEachIndexed { index, item ->
+                items(primaryItems.size) { index ->
+                    val item = primaryItems[index]
                     val isSelected = item.route == currentTopLevel
                     NavigationDrawerItem(
                         selected = isSelected,
@@ -178,7 +181,13 @@ fun TvNavigationDrawer(
                             )
                         },
                         modifier = Modifier
-                            .focusRequester(railFocusRequesters[index])
+                            .then(
+                                if (index == selectedIndex) {
+                                    Modifier.focusRequester(selectedItemFocusRequester)
+                                } else {
+                                    Modifier
+                                },
+                            )
                             .onFocusChanged {
                                 if (it.isFocused || it.hasFocus) {
                                     focusedRailIndex = index
@@ -191,7 +200,6 @@ fun TvNavigationDrawer(
         content = {
             Box(
                 modifier = Modifier
-                    .focusRequester(contentFocusRequester)
                     .focusGroup()
                     .tvFocusRestorer(),
             ) {
@@ -199,12 +207,6 @@ fun TvNavigationDrawer(
             }
         },
     )
-
-    LaunchedEffect(currentTopLevel, isSubPage) {
-        focusedRailIndex = selectedRailIndex()
-        drawerState.setValue(DrawerValue.Closed)
-        focusContent()
-    }
 }
 
 @Composable

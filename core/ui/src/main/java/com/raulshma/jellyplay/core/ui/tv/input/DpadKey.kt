@@ -55,10 +55,14 @@ private fun mapComposeKey(key: Key): Int = when (key) {
 }
 
 private fun nativeKeyCodeToAction(keyCode: Int): DpadAction? = when (keyCode) {
-    NativeKeyEvent.KEYCODE_DPAD_LEFT -> DpadAction.Left
-    NativeKeyEvent.KEYCODE_DPAD_RIGHT -> DpadAction.Right
-    NativeKeyEvent.KEYCODE_DPAD_UP -> DpadAction.Up
-    NativeKeyEvent.KEYCODE_DPAD_DOWN -> DpadAction.Down
+    NativeKeyEvent.KEYCODE_DPAD_LEFT,
+    NativeKeyEvent.KEYCODE_SYSTEM_NAVIGATION_LEFT -> DpadAction.Left
+    NativeKeyEvent.KEYCODE_DPAD_RIGHT,
+    NativeKeyEvent.KEYCODE_SYSTEM_NAVIGATION_RIGHT -> DpadAction.Right
+    NativeKeyEvent.KEYCODE_DPAD_UP,
+    NativeKeyEvent.KEYCODE_SYSTEM_NAVIGATION_UP -> DpadAction.Up
+    NativeKeyEvent.KEYCODE_DPAD_DOWN,
+    NativeKeyEvent.KEYCODE_SYSTEM_NAVIGATION_DOWN -> DpadAction.Down
     NativeKeyEvent.KEYCODE_DPAD_CENTER,
     NativeKeyEvent.KEYCODE_ENTER,
     NativeKeyEvent.KEYCODE_NUMPAD_ENTER -> DpadAction.Select

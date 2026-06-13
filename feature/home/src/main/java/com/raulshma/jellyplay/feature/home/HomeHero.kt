@@ -65,6 +65,7 @@ import com.raulshma.jellyplay.core.ui.adaptive.WindowSizeClass
 import com.raulshma.jellyplay.core.ui.image.MediaImage
 import com.raulshma.jellyplay.core.ui.tv.LocalTvMode
 import com.raulshma.jellyplay.core.ui.tv.rememberTvFocusState
+import com.raulshma.jellyplay.core.ui.tv.tryRequestFocus
 import com.raulshma.jellyplay.core.ui.tv.tvFocusIndicator
 import com.raulshma.jellyplay.core.ui.tv.tvHeroFocusExitHandler
 import com.composables.icons.tabler.Tabler
@@ -83,6 +84,7 @@ fun AnimatedHeroHeader(
     onItemClick: (String) -> Unit,
     onDetailsClick: ((String) -> Unit)? = null,
     onFocusChange: (Boolean) -> Unit = {},
+    requestInitialFocus: Boolean = true,
 ) {
     val parallaxOffset by remember(listState) {
         derivedStateOf {
@@ -129,6 +131,7 @@ fun AnimatedHeroHeader(
             onClick = { onItemClick(currentFeatured.id) },
             onDetailsClick = onDetailsClick?.let { { it(currentFeatured.id) } },
             onFocusChange = onFocusChange,
+            requestInitialFocus = requestInitialFocus,
             isVisible = heroIsVisible,
         )
     }
@@ -146,6 +149,7 @@ fun HeroHeader(
     onDetailsClick: (() -> Unit)? = null,
     onFocusChange: (Boolean) -> Unit = {},
     isVisible: Boolean = true,
+    requestInitialFocus: Boolean = true,
 ) {
     val isTv = LocalTvMode.current
     val adaptiveInfo = LocalAdaptiveInfo.current
@@ -176,9 +180,9 @@ fun HeroHeader(
     val heroPlayFocusRequester = remember { FocusRequester() }
     val heroDetailsFocusRequester = remember { FocusRequester() }
 
-    androidx.compose.runtime.LaunchedEffect(isTv, item.id) {
-        if (isTv) {
-            heroPlayFocusRequester.requestFocus()
+    if (isTv && requestInitialFocus) {
+        androidx.compose.runtime.LaunchedEffect(Unit) {
+            heroPlayFocusRequester.tryRequestFocus("hero_play")
         }
     }
 

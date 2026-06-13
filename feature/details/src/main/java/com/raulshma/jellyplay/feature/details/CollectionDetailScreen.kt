@@ -16,8 +16,6 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.grid.GridCells
-import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
-import androidx.compose.foundation.lazy.grid.itemsIndexed
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
@@ -50,6 +48,7 @@ import com.raulshma.jellyplay.core.ui.components.LoadingScreen
 import com.raulshma.jellyplay.core.ui.components.PosterCard
 import com.raulshma.jellyplay.core.ui.image.MediaImage
 import com.raulshma.jellyplay.core.ui.tv.LocalTvMode
+import com.raulshma.jellyplay.core.ui.tv.TvFocusableGrid
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -101,6 +100,7 @@ fun CollectionDetailScreen(
             isLoading -> {
                 LoadingScreen(modifier = Modifier.padding(padding))
             }
+
             error != null -> {
                 ErrorScreen(
                     message = error!!,
@@ -108,6 +108,7 @@ fun CollectionDetailScreen(
                     modifier = Modifier.padding(padding),
                 )
             }
+
             else -> {
                 Column(
                     modifier = Modifier
@@ -149,7 +150,9 @@ fun CollectionDetailScreen(
                         val gridMin = adaptiveInfo.gridMinSize(isTv)
                         val spacing = adaptiveInfo.itemSpacing(isTv)
 
-                        LazyVerticalGrid(
+                        TvFocusableGrid(
+                            items = items,
+                            key = { it.id },
                             columns = GridCells.Adaptive(gridMin),
                             contentPadding = PaddingValues(
                                 horizontal = contentPad,
@@ -158,30 +161,34 @@ fun CollectionDetailScreen(
                             horizontalArrangement = Arrangement.spacedBy(spacing),
                             verticalArrangement = Arrangement.spacedBy(spacing),
                             modifier = Modifier.fillMaxSize(),
-                        ) {
-                            itemsIndexed(items, key = { _, it -> it.id }, contentType = { _, _ -> "mediaItem" }) { index, item ->
-                                val itemVisible = remember { mutableStateOf(false) }
-                                LaunchedEffect(Unit) { itemVisible.value = true }
-                                AnimatedVisibility(
-                                    visible = itemVisible.value,
-                                    enter = fadeIn(
-                                        animationSpec = tween(300, delayMillis = (index % 12) * 40, easing = AlphaEasing)
-                                    ) + slideInVertically(
-                                        initialOffsetY = { it / 8 },
-                                        animationSpec = tween(300, delayMillis = (index % 12) * 40, easing = FancyTransitionEasing),
+                            contentType = { "mediaItem" },
+                        ) { index, item, focusModifier ->
+                            val itemVisible = remember { mutableStateOf(false) }
+                            LaunchedEffect(Unit) { itemVisible.value = true }
+                            AnimatedVisibility(
+                                visible = itemVisible.value,
+                                enter = fadeIn(
+                                    animationSpec = tween(300, delayMillis = (index % 12) * 40, easing = AlphaEasing)
+                                ) + slideInVertically(
+                                    initialOffsetY = { it / 8 },
+                                    animationSpec = tween(
+                                        300,
+                                        delayMillis = (index % 12) * 40,
+                                        easing = FancyTransitionEasing
                                     ),
-                                ) {
-                                    PosterCard(
-                                        item = item,
-                                        imageUrl = viewModel.getImageUrl(item.id),
-                                        onClick = { onItemClick(item.id) },
-                                        showProgress = item.playbackPositionTicks != null && item.playbackPositionTicks!! > 0,
-                                        progressPercent = if (item.runTimeTicks != null && item.runTimeTicks!! > 0) {
-                                            (item.playbackPositionTicks?.toFloat() ?: 0f) / item.runTimeTicks!!.toFloat()
-                                        } else 0f,
-                                        sharedElementKey = "poster_${item.id}",
-                                    )
-                                }
+                                ),
+                            ) {
+                                PosterCard(
+                                    item = item,
+                                    imageUrl = viewModel.getImageUrl(item.id),
+                                    onClick = { onItemClick(item.id) },
+                                    modifier = focusModifier,
+                                    showProgress = item.playbackPositionTicks != null && item.playbackPositionTicks!! > 0,
+                                    progressPercent = if (item.runTimeTicks != null && item.runTimeTicks!! > 0) {
+                                        (item.playbackPositionTicks?.toFloat() ?: 0f) / item.runTimeTicks!!.toFloat()
+                                    } else 0f,
+                                    sharedElementKey = "poster_${item.id}",
+                                )
                             }
                         }
                     }

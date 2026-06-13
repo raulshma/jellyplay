@@ -116,6 +116,7 @@ import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.withContext
 import com.raulshma.jellyplay.core.designsystem.theme.ArtworkThemeWrapper
 import com.raulshma.jellyplay.core.ui.components.InlineTrailerPlayer
@@ -149,7 +150,7 @@ import com.raulshma.jellyplay.core.ui.adaptive.*
 import com.raulshma.jellyplay.core.ui.image.MediaImage
 import com.raulshma.jellyplay.core.ui.tv.LocalTvMode
 import com.raulshma.jellyplay.core.ui.tv.tvFocusRestorer
-import com.raulshma.jellyplay.core.ui.tv.tvFocusExitHandler
+import com.raulshma.jellyplay.core.ui.tv.tryRequestFocus
 import com.raulshma.jellyplay.core.ui.tv.rememberTvFocusState
 import com.raulshma.jellyplay.core.ui.tv.tvFocusIndicator
 import com.raulshma.jellyplay.core.ui.tv.rememberInitialFocus
@@ -610,13 +611,13 @@ private fun DetailContent(
 
     if (isTv) {
         LaunchedEffect(Unit) {
-            var focused = false
-            androidx.compose.runtime.snapshotFlow { contentVisible }.collect {
-                if (it && !focused) {
-                    focused = true
-                    kotlinx.coroutines.delay(50)
-                    try { contentFocusRequester.requestFocus() } catch (_: Exception) { }
-                }
+            androidx.compose.runtime.snapshotFlow { contentVisible }.first { it }
+            // The Play button carrying contentFocusRequester lives inside AnimatedVisibility(contentVisible),
+            // so it may not be composed/attached on the very frame contentVisible flips true. Wait a frame
+            // and retry briefly so the request is not silently swallowed by tryRequestFocus.
+            for (attempt in 1..3) {
+                androidx.compose.runtime.withFrameNanos { }
+                if (contentFocusRequester.tryRequestFocus("detail_content")) break
             }
         }
     }
@@ -2161,8 +2162,7 @@ private fun DetailContentBody(
                     LazyRow(
                         horizontalArrangement = Arrangement.spacedBy(8.dp),
                         modifier = Modifier
-                            .tvFocusRestorer()
-                            .tvFocusExitHandler(),
+                            .tvFocusRestorer(),
                     ) {
                         items(genres, key = { it }, contentType = { "genre" }) { genre ->
                             FadingItem {
@@ -2350,8 +2350,7 @@ private fun DetailContentBody(
                             contentPadding = PaddingValues(horizontal = 24.dp),
                             horizontalArrangement = Arrangement.spacedBy(16.dp),
                             modifier = Modifier
-                                .tvFocusRestorer()
-                                .tvFocusExitHandler(),
+                                .tvFocusRestorer(),
                         ) {
                             items(detail.people, key = { "person_${it.id}" }, contentType = { "person" }) { person ->
                                 val personClick = remember(person.id) { { onPersonClick(person.id) } }
@@ -2392,8 +2391,7 @@ private fun DetailContentBody(
                         contentPadding = PaddingValues(horizontal = 24.dp),
                         horizontalArrangement = Arrangement.spacedBy(12.dp),
                         modifier = Modifier
-                            .tvFocusRestorer()
-                            .tvFocusExitHandler(),
+                            .tvFocusRestorer(),
                     ) {
                         items(detail.relatedItems, key = { "related_${it.id}" }, contentType = { "mediaItem" }) { related ->
                             val relatedClick = remember(related.id) { { onItemClick(related.id) } }
@@ -2480,8 +2478,7 @@ private fun SeerrItemsRow(
             contentPadding = PaddingValues(horizontal = 24.dp),
             horizontalArrangement = Arrangement.spacedBy(12.dp),
             modifier = Modifier
-                .tvFocusRestorer()
-                .tvFocusExitHandler(),
+                .tvFocusRestorer(),
         ) {
             items(
                 count = items.size,
@@ -2564,8 +2561,7 @@ private fun SeasonsSection(
             contentPadding = PaddingValues(horizontal = 24.dp),
             horizontalArrangement = Arrangement.spacedBy(8.dp),
             modifier = Modifier
-                .tvFocusRestorer()
-                .tvFocusExitHandler(),
+                .tvFocusRestorer(),
         ) {
             itemsIndexed(seasons, key = { _, it -> it.id }, contentType = { _, _ -> "season" }) { index, season ->
                 val isSelected = index == selectedSeasonIndex
@@ -2646,8 +2642,7 @@ private fun SeasonsSection(
                         contentPadding = PaddingValues(horizontal = 24.dp),
                         horizontalArrangement = Arrangement.spacedBy(16.dp),
                         modifier = Modifier
-                            .tvFocusRestorer()
-                            .tvFocusExitHandler(),
+                            .tvFocusRestorer(),
                     ) {
                         items(currentEpisodes, key = { "episode_${it.id}" }, contentType = { "episode" }) { episode ->
                             FadingItem {
@@ -3083,8 +3078,7 @@ private fun VideosSection(
             contentPadding = PaddingValues(horizontal = 24.dp),
             horizontalArrangement = Arrangement.spacedBy(12.dp),
             modifier = Modifier
-                .tvFocusRestorer()
-                .tvFocusExitHandler(),
+                .tvFocusRestorer(),
         ) {
             items(videos, key = { it.key ?: "" }, contentType = { "video" }) { video ->
                 val thumbnailUrl = if (video.site?.lowercase() == "youtube") {

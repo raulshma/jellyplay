@@ -21,7 +21,6 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.lazy.items
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Icon
@@ -69,13 +68,18 @@ import com.raulshma.jellyplay.core.ui.animation.fastEffectsSpec
 import com.raulshma.jellyplay.core.ui.adaptive.LocalJellyPlayUi
 import com.raulshma.jellyplay.core.ui.image.MediaImage
 import com.raulshma.jellyplay.core.ui.image.PhotoFolderPoster
+import com.raulshma.jellyplay.core.ui.tv.TvFocusableItemRow
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 
 private val dominantColorCache = android.util.LruCache<String, Color>(500)
 
 @Composable
-fun rememberDominantColor(imageUrl: String?, fallback: Color = MaterialTheme.colorScheme.surfaceContainer, itemId: String? = null): Color {
+fun rememberDominantColor(
+    imageUrl: String?,
+    fallback: Color = MaterialTheme.colorScheme.surfaceContainer,
+    itemId: String? = null
+): Color {
     val context = LocalContext.current
     val cacheKey = itemId ?: imageUrl
     var color by remember(cacheKey) { mutableStateOf(cacheKey?.let { dominantColorCache.get(it) } ?: fallback) }
@@ -287,14 +291,15 @@ fun PosterCard(
     val animatedVisibilityScope = LocalAnimatedVisibilityScope.current
 
     @OptIn(androidx.compose.animation.ExperimentalSharedTransitionApi::class)
-    val sharedImageModifier = if (sharedElementKey != null && sharedTransitionScope != null && animatedVisibilityScope != null) {
-        with(sharedTransitionScope) {
-            Modifier.sharedElement(
-                rememberSharedContentState(key = sharedElementKey),
-                animatedVisibilityScope = animatedVisibilityScope,
-            )
-        }
-    } else Modifier
+    val sharedImageModifier =
+        if (sharedElementKey != null && sharedTransitionScope != null && animatedVisibilityScope != null) {
+            with(sharedTransitionScope) {
+                Modifier.sharedElement(
+                    rememberSharedContentState(key = sharedElementKey),
+                    animatedVisibilityScope = animatedVisibilityScope,
+                )
+            }
+        } else Modifier
 
     val imageModifier = Modifier
         .fillMaxWidth()
@@ -472,18 +477,20 @@ fun PosterCard(
                 }
                 val isSeries = item.mediaType == MediaType.SERIES
                 val hasValidDuration = item.runTimeTicks != null && item.runTimeTicks!! > 0 && !isSeries
-                val hasWatchProgress = item.playbackPositionTicks != null && item.playbackPositionTicks!! > 0 && !item.isPlayed
-                val remainingTime = remember(hasValidDuration, hasWatchProgress, item.runTimeTicks, item.playbackPositionTicks) {
-                    if (hasWatchProgress && hasValidDuration) {
-                        formatRemainingTimeFromTicks(item.runTimeTicks!!, item.playbackPositionTicks!!)
-                    } else null
-                }
+                val hasWatchProgress =
+                    item.playbackPositionTicks != null && item.playbackPositionTicks!! > 0 && !item.isPlayed
+                val remainingTime =
+                    remember(hasValidDuration, hasWatchProgress, item.runTimeTicks, item.playbackPositionTicks) {
+                        if (hasWatchProgress && hasValidDuration) {
+                            formatRemainingTimeFromTicks(item.runTimeTicks!!, item.playbackPositionTicks!!)
+                        } else null
+                    }
                 val totalTime = remember(hasValidDuration, hasWatchProgress, item.runTimeTicks) {
                     if (hasValidDuration && !hasWatchProgress) {
                         formatDurationFromTicks(item.runTimeTicks!!)
                     } else null
                 }
-                
+
                 val timeText = remainingTime ?: totalTime
                 if (timeText != null) {
                     Text(
@@ -528,27 +535,27 @@ fun MediaRow(
             style = titleStyle,
             modifier = Modifier.padding(horizontal = contentPad, vertical = 8.dp),
         )
-        JellyFocusableRow(
+        TvFocusableItemRow(
+            items = items,
+            key = { "${title}_${it.id}" },
             contentPadding = PaddingValues(horizontal = contentPad),
             horizontalArrangement = Arrangement.spacedBy(spacing),
-        ) {
-            items(items, key = { "${title}_${it.id}" }, contentType = { "mediaItem" }) { item ->
-                val memoizedClick = remember(item) { { onItemClick(item) } }
-                PosterCard(
-                    item = item,
-                    imageUrl = imageUrlBuilder(item),
-                    fallbackUrls = fallbackImageUrlBuilder(item),
-                    onClick = memoizedClick,
-                    modifier = Modifier.width(cardWidth),
-                    showProgress = item.playbackPositionTicks != null && item.playbackPositionTicks!! > 0,
-                    progressPercent = if (item.runTimeTicks != null && item.runTimeTicks!! > 0) {
-                        (item.playbackPositionTicks?.toFloat() ?: 0f) / item.runTimeTicks!!.toFloat()
-                    } else 0f,
-                    blurHash = blurHashBuilder(item),
-                    onPlayClick = onPlayClick?.let { click -> remember(item, click) { { click(item) } } },
-                    photoFolderChildImageUrls = photoFolderChildUrls[item.id].orEmpty(),
-                )
-            }
+        ) { _, item, focusModifier ->
+            val memoizedClick = remember(item) { { onItemClick(item) } }
+            PosterCard(
+                item = item,
+                imageUrl = imageUrlBuilder(item),
+                fallbackUrls = fallbackImageUrlBuilder(item),
+                onClick = memoizedClick,
+                modifier = focusModifier.width(cardWidth),
+                showProgress = item.playbackPositionTicks != null && item.playbackPositionTicks!! > 0,
+                progressPercent = if (item.runTimeTicks != null && item.runTimeTicks!! > 0) {
+                    (item.playbackPositionTicks?.toFloat() ?: 0f) / item.runTimeTicks!!.toFloat()
+                } else 0f,
+                blurHash = blurHashBuilder(item),
+                onPlayClick = onPlayClick?.let { click -> remember(item, click) { { click(item) } } },
+                photoFolderChildImageUrls = photoFolderChildUrls[item.id].orEmpty(),
+            )
         }
     }
 }
