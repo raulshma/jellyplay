@@ -1031,6 +1031,7 @@ private fun SeerrHorizontalSection(
 ) {
     val loadingState = com.raulshma.jellyplay.core.ui.components.LocalSeerrCardLoadingState.current
     val prefetch = com.raulshma.jellyplay.core.ui.components.LocalSeerrPrefetch.current
+    val uniqueItems = remember(items) { items.distinctBy { it.id } }
     Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
         Text(
             text = title,
@@ -1044,7 +1045,7 @@ private fun SeerrHorizontalSection(
             modifier = Modifier
                 .tvFocusRestorer(),
         ) {
-            items(items, key = { it.id }, contentType = { "seerrSearchItem" }) { item ->
+            items(uniqueItems, key = { it.id }, contentType = { "seerrSearchItem" }) { item ->
                 SeerrMediaCard(
                     item = item,
                     imageUrl = item.posterUrl,
@@ -1124,6 +1125,15 @@ private fun ExternalLinksRow(
 private fun CastSection(
     cast: List<Any>, // Can be SeerrCast or SeerrAggregateCast
 ) {
+    val uniqueCast = remember(cast) {
+        cast.distinctBy { member ->
+            when (member) {
+                is SeerrAggregateCast -> member.id
+                is SeerrCast -> member.id
+                else -> member.hashCode()
+            }
+        }
+    }
     Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
         Text(
             text = "Cast",
@@ -1137,7 +1147,7 @@ private fun CastSection(
             modifier = Modifier
                 .tvFocusRestorer(),
         ) {
-            items(cast, key = { member -> when (member) { is SeerrAggregateCast -> member.id; is SeerrCast -> member.id; else -> 0 } }, contentType = { "castMember" }) { member ->
+            items(uniqueCast, key = { member -> when (member) { is SeerrAggregateCast -> member.id; is SeerrCast -> member.id; else -> member.hashCode() } }, contentType = { "castMember" }) { member ->
                 val name: String
                 val character: String
                 val profileUrl: String?
@@ -1203,7 +1213,9 @@ private fun SeasonsSection(
     onSeasonClick: (Int) -> Unit = {},
 ) {
     val isTv = LocalTvMode.current
-    val sortedSeasons = remember(seasons) { seasons.sortedByDescending { it.seasonNumber } }
+    val sortedSeasons = remember(seasons) {
+        seasons.sortedByDescending { it.seasonNumber }.distinctBy { it.seasonNumber }
+    }
 
     Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
         Text(
@@ -1218,7 +1230,7 @@ private fun SeasonsSection(
             modifier = Modifier
                 .tvFocusRestorer(),
         ) {
-            items(sortedSeasons, key = { it.id }, contentType = { "season" }) { season ->
+            items(sortedSeasons, key = { it.seasonNumber }, contentType = { "season" }) { season ->
                 val isSelected = selectedSeasonNumber == season.seasonNumber
                 val borderModifier = if (isSelected) {
                     Modifier.border(
@@ -1584,6 +1596,9 @@ private fun VideosSection(
     videos: List<SeerrRelatedVideo>,
     onVideoClick: (SeerrRelatedVideo) -> Unit,
 ) {
+    val uniqueVideos = remember(videos) {
+        videos.distinctBy { it.key }.filter { !it.key.isNullOrBlank() }
+    }
     Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
         Text(
             text = "Videos",
@@ -1597,7 +1612,7 @@ private fun VideosSection(
             modifier = Modifier
                 .tvFocusRestorer(),
         ) {
-            items(videos, key = { it.key ?: "" }, contentType = { "video" }) { video ->
+            items(uniqueVideos, key = { it.key!! }, contentType = { "video" }) { video ->
                 val thumbnailUrl = if (video.site?.lowercase() == "youtube") {
                     "https://img.youtube.com/vi/${video.key}/mqdefault.jpg"
                 } else null

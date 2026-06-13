@@ -443,6 +443,7 @@ fun SearchScreen(
 
                 // Seerr results horizontal section (shown independently of library results)
                 if (showSeerr) {
+                    val uniqueSeerrResults = remember(seerrResults) { seerrResults.distinctBy { it.id } }
                     Column(
                         modifier = Modifier
                             .fillMaxWidth()
@@ -460,11 +461,11 @@ fun SearchScreen(
                             contentPadding = PaddingValues(end = contentPad),
                         ) {
                             items(
-                                count = seerrResults.size,
-                                key = { index -> "seerr-${seerrResults[index].id}" },
+                                count = uniqueSeerrResults.size,
+                                key = { index -> "seerr-${uniqueSeerrResults[index].id}" },
                                 contentType = { "seerrSearchResult" },
                             ) { index ->
-                                val seerrItem = seerrResults[index]
+                                val seerrItem = uniqueSeerrResults[index]
                                 SeerrMediaCard(
                                     item = seerrItem,
                                     imageUrl = seerrItem.posterUrl,
