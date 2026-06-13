@@ -4,9 +4,7 @@ import com.raulshma.jellyplay.core.data.util.DownloadDelegate
 import com.raulshma.jellyplay.core.data.util.DownloadResult
 import com.raulshma.jellyplay.core.model.MediaDetail
 import javax.inject.Inject
-import javax.inject.Singleton
 
-@Singleton
 class StartMediaDownloadUseCase @Inject constructor(
     private val downloadDelegate: DownloadDelegate,
 ) {

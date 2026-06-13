@@ -73,6 +73,9 @@ class LibraryViewModel @Inject constructor(
     private val _viewMode = stateFlow(LibraryViewMode.GRID)
     val viewMode = _viewMode.flow
 
+    private val _photoFolderChildUrls = stateFlow<Map<String, List<String>>>(emptyMap())
+    val photoFolderChildUrls = _photoFolderChildUrls.flow
+
     @OptIn(ExperimentalCoroutinesApi::class)
     val pagedItems: Flow<PagingData<MediaItem>> = combine(_selectedFolder.flow, _filters.flow) { folder, filters ->
         folder to filters
@@ -163,4 +166,15 @@ class LibraryViewModel @Inject constructor(
 
     fun getImageUrl(itemId: String): String =
         playbackRepository.getImageUrl(itemId, maxWidth = 400)
+
+    fun prefetchPhotoFolderChildUrls(items: List<MediaItem>) {
+        launch {
+            val current = _photoFolderChildUrls.value
+            items.filter { it.mediaType == MediaType.PHOTO_FOLDER && it.id !in current }
+                .forEach { folder ->
+                    val urls = mediaRepository.getPhotoFolderChildImageUrls(folder.id)
+                    _photoFolderChildUrls.set(_photoFolderChildUrls.value + (folder.id to urls))
+                }
+        }
+    }
 }

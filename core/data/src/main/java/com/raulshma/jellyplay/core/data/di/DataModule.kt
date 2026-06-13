@@ -48,9 +48,8 @@ abstract class DataModule {
         @Singleton
         fun provideGetMediaDetailUseCase(
             mediaRepository: com.raulshma.jellyplay.core.data.repository.MediaRepository,
-            playbackRepository: com.raulshma.jellyplay.core.data.repository.PlaybackRepository,
         ): com.raulshma.jellyplay.core.data.usecase.GetMediaDetailUseCase =
-            com.raulshma.jellyplay.core.data.usecase.GetMediaDetailUseCase(mediaRepository, playbackRepository)
+            com.raulshma.jellyplay.core.data.usecase.GetMediaDetailUseCase(mediaRepository)
 
         @dagger.Provides
         @Singleton

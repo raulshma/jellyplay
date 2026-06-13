@@ -122,6 +122,12 @@ fun LibraryScreen(
     val viewMode by viewModel.viewMode.collectAsStateWithLifecycle()
 
     val pagedItems = viewModel.pagedItems.collectAsLazyPagingItems()
+    val photoFolderChildUrls by viewModel.photoFolderChildUrls.collectAsStateWithLifecycle()
+
+    LaunchedEffect(pagedItems.itemCount) {
+        val snapshot = (0 until pagedItems.itemCount).mapNotNull { pagedItems[it] }
+        viewModel.prefetchPhotoFolderChildUrls(snapshot)
+    }
     val networkStatus by com.raulshma.jellyplay.core.ui.components.LocalNetworkStatus.current.collectAsStateWithLifecycle()
 
     val headerStatus = com.raulshma.jellyplay.core.ui.components.resolveHeaderStatus(
@@ -506,6 +512,7 @@ fun LibraryScreen(
                                                     } else 0f,
                                                     blurHash = item.blurHashes.primary,
                                                     sharedElementKey = "poster_${item.id}",
+                                                    photoFolderChildImageUrls = photoFolderChildUrls[item.id].orEmpty(),
                                                 )
                                             }
                                         }

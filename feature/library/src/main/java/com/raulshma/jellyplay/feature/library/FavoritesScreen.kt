@@ -22,6 +22,7 @@ import androidx.compose.foundation.lazy.grid.rememberLazyGridState
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
@@ -56,6 +57,12 @@ fun FavoritesScreen(
     val adaptiveInfo = LocalAdaptiveInfo.current
     val mediaTypeFilter by viewModel.mediaTypeFilter.collectAsStateWithLifecycle()
     val pagingItems = viewModel.pagedItems.collectAsLazyPagingItems()
+    val photoFolderChildUrls by viewModel.photoFolderChildUrls.collectAsStateWithLifecycle()
+
+    LaunchedEffect(pagingItems.itemCount) {
+        val snapshot = (0 until pagingItems.itemCount).mapNotNull { pagingItems[it] }
+        viewModel.prefetchPhotoFolderChildUrls(snapshot)
+    }
 
     JellyPlayScreenScaffold(
         title = "Favorites",
@@ -138,6 +145,7 @@ fun FavoritesScreen(
                                     imageUrl = remember(item.id) { viewModel.getImageUrl(item.id) },
                                     blurHash = item.blurHashes.primary,
                                     onClick = { onItemClick(item.id, item.mediaType, item.parentId, item.name) },
+                                    photoFolderChildImageUrls = photoFolderChildUrls[item.id].orEmpty(),
                                 )
                             }
                         }

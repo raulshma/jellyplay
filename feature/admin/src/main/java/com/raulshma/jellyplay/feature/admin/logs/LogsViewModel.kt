@@ -111,7 +111,7 @@ class LogsViewModel @Inject constructor(
             }
 
             while (_state.value.selectedLogFileName == fileName) {
-                delay(3000)
+                delay(5000)
                 if (_state.value.isLogPollingActive) {
                     val result = apiClient.getLogFileContent(fileName)
                     result.onSuccess { content ->
@@ -217,7 +217,7 @@ class LogsViewModel @Inject constructor(
         pollingJob = launch {
             val knownIds = _state.value.activityEntries.map { it.id }.toMutableSet()
             while (true) {
-                delay(3000)
+                delay(5000)
                 val result = apiClient.getActivityLogEntries(limit = 10)
                 result.onSuccess { entries ->
                     val newEntries = entries.filter { it.id !in knownIds }
