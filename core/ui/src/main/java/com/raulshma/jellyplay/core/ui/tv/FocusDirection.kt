@@ -34,7 +34,6 @@ fun Modifier.tvHeroFocusExitHandler(
         @Suppress("DEPRECATION")
         exit = { focusDirection ->
             when (focusDirection) {
-                FocusDirection.Up -> FocusRequester.Cancel
                 FocusDirection.Down -> {
                     onDownExit()
                     FocusRequester.Default

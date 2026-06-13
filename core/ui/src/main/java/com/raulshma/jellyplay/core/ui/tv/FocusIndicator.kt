@@ -22,6 +22,7 @@ import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.graphics.RectangleShape
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
@@ -173,11 +174,13 @@ fun rememberRowSharedFocusState(
 fun Modifier.tvFocusIndicator(
     focusState: TvFocusState,
     shape: Shape = RectangleShape,
+    color: Color? = null,
 ): Modifier = composed {
     val isTv = LocalTvMode.current
     if (!isTv) return@composed this
 
-    val glowColor = MaterialTheme.colorScheme.primary
+    val glowColor = color ?: MaterialTheme.colorScheme.primary
+    val borderColor = color ?: MaterialTheme.colorScheme.primary
 
     this
         .graphicsLayer {
@@ -200,7 +203,7 @@ fun Modifier.tvFocusIndicator(
             if (focusState.borderWidth > 0.dp) {
                 Modifier.border(
                     width = focusState.borderWidth,
-                    color = MaterialTheme.colorScheme.primary,
+                    color = borderColor,
                     shape = shape,
                 )
             } else {
