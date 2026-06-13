@@ -120,7 +120,7 @@ private val EXPANDED_DISCOVER_PATTERN = listOf(5, 4, 6, 5)
 @Composable
 fun HomeScreen(
     onItemClick: (itemId: String, mediaType: com.raulshma.jellyplay.core.model.MediaType, parentId: String?, itemName: String) -> Unit,
-    onPlayClick: (itemId: String, mediaSourceId: String?, startPosition: Long) -> Unit = { _, _, _ -> },
+    onPlayClick: (itemId: String, mediaSourceId: String?, startPosition: Long, mediaType: com.raulshma.jellyplay.core.model.MediaType, parentId: String?) -> Unit = { _, _, _, _, _ -> },
     onSettingsClick: () -> Unit = {},
     onSyncPlayClick: () -> Unit = {},
     onDownloadsClick: () -> Unit = {},
@@ -177,7 +177,7 @@ private fun MainHomeContent(
     state: HomeUiState,
     viewModel: HomeViewModel,
     onItemClick: (itemId: String, mediaType: com.raulshma.jellyplay.core.model.MediaType, parentId: String?, itemName: String) -> Unit,
-    onPlayClick: (String, String?, Long) -> Unit,
+    onPlayClick: (String, String?, Long, com.raulshma.jellyplay.core.model.MediaType, String?) -> Unit,
     onSettingsClick: () -> Unit,
     onSyncPlayClick: () -> Unit,
     onDownloadsClick: () -> Unit,
@@ -343,7 +343,7 @@ private fun MainHomeContent(
     val mediaOnItemClick = remember { { item: com.raulshma.jellyplay.core.model.MediaItem -> currentOnItemClick(item.id, item.mediaType, item.parentId, item.name) } }
     val currentOnPlayClick by rememberUpdatedState(onPlayClick)
     val mediaOnPlayClick = remember { { item: com.raulshma.jellyplay.core.model.MediaItem ->
-        currentOnPlayClick(item.id, null, item.playbackPositionTicks ?: 0L)
+        currentOnPlayClick(item.id, null, item.playbackPositionTicks ?: 0L, item.mediaType, item.parentId)
     } }
 
     val fallbackImageUrlBuilder = rememberFallbackUrls(viewModel)

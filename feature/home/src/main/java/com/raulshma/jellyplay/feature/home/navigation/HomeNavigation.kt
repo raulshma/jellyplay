@@ -29,8 +29,12 @@ fun EntryProviderScope<NavKey>.homeSection(
             onItemClick = { itemId, mediaType, parentId, itemName ->
                 navigator.navigatePhotoAware(itemId, mediaType, parentId, itemName)
             },
-            onPlayClick = { itemId, mediaSourceId, startPosition ->
-                navigator.navigate(Route.VideoPlayer(itemId, mediaSourceId, startPosition))
+            onPlayClick = { itemId, mediaSourceId, startPosition, mediaType, parentId ->
+                if (mediaType.isPhotoType) {
+                    navigator.navigatePhotoAware(itemId, mediaType, parentId, "")
+                } else {
+                    navigator.navigate(Route.VideoPlayer(itemId, mediaSourceId, startPosition))
+                }
             },
             onSettingsClick = { navigator.navigate(Route.Settings) },
             onSyncPlayClick = { navigator.navigate(Route.SyncPlay) },
