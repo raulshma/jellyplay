@@ -69,9 +69,9 @@ fun FavoritesScreen(
     val pagingItems = viewModel.pagedItems.collectAsLazyPagingItems()
     val photoFolderChildUrls by viewModel.photoFolderChildUrls.collectAsStateWithLifecycle()
 
-    LaunchedEffect(pagingItems.itemCount) {
-        val snapshot = (0 until pagingItems.itemCount).mapNotNull { pagingItems[it] }
-        viewModel.prefetchPhotoFolderChildUrls(snapshot)
+    val snapshot = pagingItems.itemSnapshotList
+    LaunchedEffect(snapshot) {
+        viewModel.prefetchPhotoFolderChildUrls(snapshot.items)
     }
 
     JellyPlayScreenScaffold(

@@ -135,9 +135,9 @@ fun LibraryScreen(
     val pagedItems = viewModel.pagedItems.collectAsLazyPagingItems()
     val photoFolderChildUrls by viewModel.photoFolderChildUrls.collectAsStateWithLifecycle()
 
-    LaunchedEffect(pagedItems.itemCount) {
-        val snapshot = (0 until pagedItems.itemCount).mapNotNull { pagedItems[it] }
-        viewModel.prefetchPhotoFolderChildUrls(snapshot)
+    val snapshot = pagedItems.itemSnapshotList
+    LaunchedEffect(snapshot) {
+        viewModel.prefetchPhotoFolderChildUrls(snapshot.items)
     }
     val networkStatus by com.raulshma.jellyplay.core.ui.components.LocalNetworkStatus.current.collectAsStateWithLifecycle()
 
