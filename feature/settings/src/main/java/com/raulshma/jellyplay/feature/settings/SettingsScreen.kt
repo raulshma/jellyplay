@@ -133,6 +133,7 @@ fun SettingsScreen(
     // child. Without the saveable flag, the search bar steals focus on every return, which the
     // user perceives as "focus reset to the top."
     var isFirstTvEntry by androidx.compose.runtime.saveable.rememberSaveable { mutableStateOf(true) }
+    var lastClickedSettingId by androidx.compose.runtime.saveable.rememberSaveable { mutableStateOf<String?>(null) }
     LaunchedEffect(Unit) {
         if (isTv) {
             kotlinx.coroutines.delay(150)
@@ -140,7 +141,12 @@ fun SettingsScreen(
                 try { searchFocusRequester.requestFocus() } catch (_: Exception) {}
                 isFirstTvEntry = false
             } else {
-                try { listFocusRequester.requestFocus() } catch (_: Exception) {}
+                if (lastClickedSettingId != null) {
+                    kotlinx.coroutines.delay(1000)
+                    lastClickedSettingId = null
+                } else {
+                    try { listFocusRequester.requestFocus() } catch (_: Exception) {}
+                }
             }
         }
     }
@@ -504,15 +510,42 @@ fun SettingsScreen(
                                                         is Route.ServerManagement -> onServerManagement(item.id)
                                                         is Route.UserManagement -> onUserManagement(item.id)
                                                         is Route.SeerrSettings -> onSeerrSettings(item.id)
-                                                        is Route.AppearanceSettings -> onAppearanceSettings(item.id)
-                                                        is Route.PlaybackSettings -> onPlaybackSettings(item.id)
-                                                        is Route.AudioSettings -> onAudioSettings(item.id)
-                                                        is Route.LanguageSettings -> onLanguageSettings(item.id)
-                                                        is Route.NotificationSettings -> onNotificationSettings(item.id)
-                                                        is Route.StorageSettings -> onStorageSettings(item.id)
-                                                        is Route.SecuritySettings -> onSecuritySettings(item.id)
-                                                        is Route.BackupSettings -> onBackupSettings(item.id)
-                                                        Route.About -> onAboutClick()
+                                                        is Route.AppearanceSettings -> {
+                                                            lastClickedSettingId = "appearance"
+                                                            onAppearanceSettings(item.id)
+                                                        }
+                                                        is Route.PlaybackSettings -> {
+                                                            lastClickedSettingId = "playback"
+                                                            onPlaybackSettings(item.id)
+                                                        }
+                                                        is Route.AudioSettings -> {
+                                                            lastClickedSettingId = "audio"
+                                                            onAudioSettings(item.id)
+                                                        }
+                                                        is Route.LanguageSettings -> {
+                                                            lastClickedSettingId = "language"
+                                                            onLanguageSettings(item.id)
+                                                        }
+                                                        is Route.NotificationSettings -> {
+                                                            lastClickedSettingId = "notifications"
+                                                            onNotificationSettings(item.id)
+                                                        }
+                                                        is Route.StorageSettings -> {
+                                                            lastClickedSettingId = "storage"
+                                                            onStorageSettings(item.id)
+                                                        }
+                                                        is Route.SecuritySettings -> {
+                                                            lastClickedSettingId = "security"
+                                                            onSecuritySettings(item.id)
+                                                        }
+                                                        is Route.BackupSettings -> {
+                                                            lastClickedSettingId = "backup"
+                                                            onBackupSettings(item.id)
+                                                        }
+                                                        Route.About -> {
+                                                            lastClickedSettingId = "about"
+                                                            onAboutClick()
+                                                        }
                                                         else -> {}
                                                     }
                                                 }
@@ -613,7 +646,11 @@ fun SettingsScreen(
                             title = "Appearance",
                             subtitle = buildAppearanceSummary(preferences),
                             index = 0, count = 1,
-                            onClick = { onAppearanceSettings(null) },
+                            highlighted = lastClickedSettingId == "appearance",
+                            onClick = {
+                                lastClickedSettingId = "appearance"
+                                onAppearanceSettings(null)
+                            },
                         )
                     }
                 }
@@ -625,7 +662,11 @@ fun SettingsScreen(
                             title = "Playback",
                             subtitle = "Player Engine: ${preferences.preferredPlayer.displayName}",
                             index = 0, count = 1,
-                            onClick = { onPlaybackSettings(null) },
+                            highlighted = lastClickedSettingId == "playback",
+                            onClick = {
+                                lastClickedSettingId = "playback"
+                                onPlaybackSettings(null)
+                            },
                         )
                     }
                 }
@@ -637,7 +678,11 @@ fun SettingsScreen(
                             title = "Audio Player",
                             subtitle = "Default speed: ${if (preferences.audioDefaultSpeed == 1.0f) "1x" else "${preferences.audioDefaultSpeed}x"}",
                             index = 0, count = 1,
-                            onClick = { onAudioSettings(null) },
+                            highlighted = lastClickedSettingId == "audio",
+                            onClick = {
+                                lastClickedSettingId = "audio"
+                                onAudioSettings(null)
+                            },
                         )
                     }
                 }
@@ -649,7 +694,11 @@ fun SettingsScreen(
                             title = "Language & Subtitles",
                             subtitle = "Audio: ${preferences.preferredAudioLanguage ?: "Default"}",
                             index = 0, count = 1,
-                            onClick = { onLanguageSettings(null) },
+                            highlighted = lastClickedSettingId == "language",
+                            onClick = {
+                                lastClickedSettingId = "language"
+                                onLanguageSettings(null)
+                            },
                         )
                     }
                 }
@@ -662,7 +711,11 @@ fun SettingsScreen(
                             title = "Notifications",
                             subtitle = if (notifPrefs.enabled) "Checking ${notifPrefs.checkFrequency.displayName.lowercase()}" else "Disabled",
                             index = 0, count = 1,
-                            onClick = { onNotificationSettings(null) },
+                            highlighted = lastClickedSettingId == "notifications",
+                            onClick = {
+                                lastClickedSettingId = "notifications"
+                                onNotificationSettings(null)
+                            },
                         )
                     }
                 }
@@ -674,7 +727,11 @@ fun SettingsScreen(
                             title = "Storage",
                             subtitle = "Cache: ${viewModel.cacheSizeMb} MB",
                             index = 0, count = 1,
-                            onClick = { onStorageSettings(null) },
+                            highlighted = lastClickedSettingId == "storage",
+                            onClick = {
+                                lastClickedSettingId = "storage"
+                                onStorageSettings(null)
+                            },
                         )
                     }
                 }
@@ -691,7 +748,11 @@ fun SettingsScreen(
                                 else -> "Lock: Off"
                             },
                             index = 0, count = 1,
-                            onClick = { onSecuritySettings(null) },
+                            highlighted = lastClickedSettingId == "security",
+                            onClick = {
+                                lastClickedSettingId = "security"
+                                onSecuritySettings(null)
+                            },
                         )
                     }
                 }
@@ -703,7 +764,11 @@ fun SettingsScreen(
                             title = "Backup & Restore",
                             subtitle = "Export or import app settings",
                             index = 0, count = 1,
-                            onClick = { onBackupSettings(null) },
+                            highlighted = lastClickedSettingId == "backup",
+                            onClick = {
+                                lastClickedSettingId = "backup"
+                                onBackupSettings(null)
+                            },
                         )
                     }
                 }
@@ -799,7 +864,11 @@ fun SettingsScreen(
                             title = "About",
                             subtitle = "App version and licenses",
                             index = 0, count = 1,
-                            onClick = onAboutClick,
+                            highlighted = lastClickedSettingId == "about",
+                            onClick = {
+                                lastClickedSettingId = "about"
+                                onAboutClick()
+                            },
                         )
                     }
                 }

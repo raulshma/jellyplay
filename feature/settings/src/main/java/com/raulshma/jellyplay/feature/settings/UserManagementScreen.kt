@@ -49,6 +49,10 @@ import com.raulshma.jellyplay.core.ui.components.LocalNetworkStatus
 import com.raulshma.jellyplay.core.ui.components.ScreenEmptyState
 import com.raulshma.jellyplay.core.ui.components.resolveHeaderStatus
 import com.raulshma.jellyplay.core.ui.tv.LocalTvMode
+import com.raulshma.jellyplay.core.ui.tv.tvFocusRestorer
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
+import com.raulshma.jellyplay.core.ui.tv.tryRequestFocus
 import com.composables.icons.tabler.Tabler
 import com.composables.icons.tabler.outline.*
 
@@ -78,6 +82,16 @@ fun UserManagementScreen(
     val navOffsetPx = com.raulshma.jellyplay.core.ui.components.LocalFloatingNavOffset.current
     val backgroundColor = com.raulshma.jellyplay.core.ui.components.rememberScreenBackgroundColor()
 
+    val focusRequester = remember { FocusRequester() }
+    LaunchedEffect(isLoading, serverUsers.size) {
+        if (isTv && !isLoading && serverUsers.isNotEmpty()) {
+            for (attempt in 1..3) {
+                androidx.compose.runtime.withFrameNanos { }
+                if (focusRequester.tryRequestFocus("user_management_init")) break
+            }
+        }
+    }
+
     JellyPlayScreenScaffold(
         title = "Switch User",
         onBack = onBack,
@@ -102,6 +116,10 @@ fun UserManagementScreen(
                 }
                 else -> {
                     LazyColumn(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .tvFocusRestorer()
+                            .focusRequester(focusRequester),
                         contentPadding = PaddingValues(contentPad),
                         verticalArrangement = Arrangement.spacedBy(spacing),
                     ) {
