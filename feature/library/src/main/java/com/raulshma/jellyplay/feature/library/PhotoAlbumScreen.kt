@@ -8,6 +8,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
+import androidx.compose.foundation.lazy.grid.rememberLazyGridState
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -23,6 +24,7 @@ import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.snapshotFlow
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.ExperimentalComposeUiApi
@@ -83,6 +85,19 @@ fun PhotoAlbumScreen(
         viewModel.setParentId(parentId)
     }
 
+    val savedScroll = viewModel.scrollPosition
+    val gridState = rememberLazyGridState(
+        initialFirstVisibleItemIndex = savedScroll.first,
+        initialFirstVisibleItemScrollOffset = savedScroll.second,
+    )
+
+    LaunchedEffect(gridState) {
+        snapshotFlow { gridState.firstVisibleItemIndex to gridState.firstVisibleItemScrollOffset }
+            .collect { (index, offset) ->
+                viewModel.saveScrollPosition(index, offset)
+            }
+    }
+
     JellyPlayScreenScaffold(
         title = folderName.ifBlank { "Photos" },
         onBack = onBack,
@@ -132,54 +147,55 @@ fun PhotoAlbumScreen(
             modifier = Modifier.fillMaxSize(),
         ) {
             Box(modifier = Modifier.fillMaxSize()) {
-                when (val refreshState = photos.loadState.refresh) {
-                    is LoadState.Loading -> {
+                when {
+                    photos.loadState.refresh is LoadState.Loading && photos.itemCount == 0 -> {
                         ScreenLoadingState()
                     }
-                    is LoadState.Error -> {
+                    photos.loadState.refresh is LoadState.Error -> {
                         ErrorScreen(
-                            message = refreshState.error.localizedMessage ?: "Failed to load photos",
+                            message = (photos.loadState.refresh as LoadState.Error)
+                                .error.localizedMessage ?: "Failed to load photos",
                             onRetry = { photos.refresh() },
                         )
                     }
-                    is LoadState.NotLoading -> {
-                        if (photos.itemCount == 0) {
-                            ScreenEmptyState(
-                                icon = Tabler.Outline.Photo,
-                                title = "No photos found",
-                            )
-                        } else {
-                            TvFocusableGrid(
-                                itemCount = photos.itemCount,
-                                key = photos.itemKey { it.id },
-                                columns = GridCells.Adaptive(adaptiveInfo.gridCellSize(isTv)),
-                                contentPadding = PaddingValues(
-                                    start = adaptiveInfo.contentPadding(isTv),
-                                    end = adaptiveInfo.contentPadding(isTv),
-                                    top = 8.dp,
-                                    bottom = adaptiveInfo.bottomPadding(isTv),
-                                ),
-                                horizontalArrangement = Arrangement.spacedBy(adaptiveInfo.itemSpacing(isTv)),
-                                verticalArrangement = Arrangement.spacedBy(adaptiveInfo.itemSpacing(isTv)),
-                                modifier = Modifier.fillMaxSize(),
-                                contentType = { "photoItem" },
-                            ) { index, itemModifier ->
-                                val photo = photos[index]
-                                if (photo != null) {
-                                    val imageUrl = remember(photo.id) {
-                                        viewModel.getImageUrl(photo.id, maxWidth = 400)
-                                    }
-                                    val memoizedClick = remember(photo.id, parentId) {
-                                        { onPhotoClick(photo.id, parentId) }
-                                    }
-                                    PhotoGridCard(
-                                        imageUrl = imageUrl,
-                                        contentDescription = photo.name,
-                                        blurHash = photo.blurHashes.primary,
-                                        onClick = memoizedClick,
-                                        modifier = itemModifier,
-                                    )
+                    photos.itemCount == 0 -> {
+                        ScreenEmptyState(
+                            icon = Tabler.Outline.Photo,
+                            title = "No photos found",
+                        )
+                    }
+                    else -> {
+                        TvFocusableGrid(
+                            itemCount = photos.itemCount,
+                            key = photos.itemKey { it.id },
+                            columns = GridCells.Adaptive(adaptiveInfo.gridCellSize(isTv)),
+                            state = gridState,
+                            contentPadding = PaddingValues(
+                                start = adaptiveInfo.contentPadding(isTv),
+                                end = adaptiveInfo.contentPadding(isTv),
+                                top = 8.dp,
+                                bottom = adaptiveInfo.bottomPadding(isTv),
+                            ),
+                            horizontalArrangement = Arrangement.spacedBy(adaptiveInfo.itemSpacing(isTv)),
+                            verticalArrangement = Arrangement.spacedBy(adaptiveInfo.itemSpacing(isTv)),
+                            modifier = Modifier.fillMaxSize(),
+                            contentType = { "photoItem" },
+                        ) { index, itemModifier ->
+                            val photo = photos[index]
+                            if (photo != null) {
+                                val imageUrl = remember(photo.id) {
+                                    viewModel.getImageUrl(photo.id, maxWidth = 400)
                                 }
+                                val memoizedClick = remember(photo.id, parentId) {
+                                    { onPhotoClick(photo.id, parentId) }
+                                }
+                                PhotoGridCard(
+                                    imageUrl = imageUrl,
+                                    contentDescription = photo.name,
+                                    blurHash = photo.blurHashes.primary,
+                                    onClick = memoizedClick,
+                                    modifier = itemModifier,
+                                )
                             }
                         }
                     }

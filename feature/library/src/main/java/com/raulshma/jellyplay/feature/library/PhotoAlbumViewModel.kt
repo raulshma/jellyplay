@@ -29,6 +29,13 @@ class PhotoAlbumViewModel @Inject constructor(
     private val _parentId = stateFlow<String?>(null)
     private val _sortOption = stateFlow(PhotoSortOption.DATE_ADDED)
 
+    var scrollPosition: Pair<Int, Int> = 0 to 0
+        private set
+
+    fun saveScrollPosition(index: Int, offset: Int) {
+        scrollPosition = index to offset
+    }
+
     @OptIn(ExperimentalCoroutinesApi::class)
     val pagedItems: Flow<PagingData<MediaItem>> = combine(_parentId.flow, _sortOption.flow) { parentId, sort ->
         parentId to sort
