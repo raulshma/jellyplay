@@ -496,6 +496,13 @@ private fun MainContent(
                 com.raulshma.jellyplay.core.ui.components.LocalFloatingNavOffset provides (if (!isExpanded && !isFullScreenRoute) bottomNavOffsetHeightPx.floatValue else 0f)
             ) {
             Box(Modifier.fillMaxSize()) {
+            // Hoist the TV drawer state above the isFullScreenRoute branch so it survives visiting a
+            // full-screen route (e.g. the player) and back, instead of being recreated when
+            // TvNavigationDrawer leaves and re-enters composition. Mirrors Wholphin
+            // ApplicationContent.kt:57,68. Fully-qualified to avoid clashing with the mobile
+            // androidx.compose.material3 DrawerState used by LocalDrawerOpener below.
+            val tvDrawerState = androidx.tv.material3.rememberDrawerState(androidx.tv.material3.DrawerValue.Closed)
+            val tvDrawerListState = androidx.compose.foundation.lazy.rememberLazyListState()
             if (isTv && !isFullScreenRoute) {
                 TvMaterial3Theme(
                     colorScheme = tvDarkColorScheme(
@@ -528,6 +535,8 @@ private fun MainContent(
                         isSubPage = tvIsSubPage,
                         onNavigate = { navigator.navigate(it) },
                         onBack = { navigator.goBack() },
+                        drawerState = tvDrawerState,
+                        drawerListState = tvDrawerListState,
                     ) {
                         MainNavDisplay(
                             navigationState = navigationState,
