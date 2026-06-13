@@ -1,7 +1,13 @@
 package com.raulshma.jellyplay.core.ui.tv
 
+import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.animateDpAsState
+import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.rememberInfiniteTransition
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.border
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
@@ -16,6 +22,7 @@ import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.graphics.RectangleShape
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 
@@ -30,10 +37,13 @@ object TvFocusDefaults {
 data class TvFocusState(
     val isFocused: Boolean = false,
     val scale: Float = 1f,
+    val alphaProvider: () -> Float = { 1f },
     val borderWidth: Dp = 0.dp,
     val glowElevation: Dp = 0.dp,
     val focusModifier: Modifier = Modifier,
-)
+) {
+    val alpha: Float get() = alphaProvider()
+}
 
 @Composable
 fun rememberTvFocusState(
@@ -44,11 +54,31 @@ fun rememberTvFocusState(
     var isFocused by remember { mutableStateOf(false) }
 
     val motionScheme = MaterialTheme.motionScheme
-    val animatedScale by animateFloatAsState(
-        targetValue = if (isFocused) focusedScale else 1f,
-        animationSpec = motionScheme.fastSpatialSpec(),
-        label = "tvFocusScale",
+
+    // Breathing fade alpha animation
+    val infiniteTransition = rememberInfiniteTransition(label = "tvFocusBreathing")
+    val breathingAlpha = infiniteTransition.animateFloat(
+        initialValue = 1f,
+        targetValue = 0.65f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(durationMillis = 1200, easing = FastOutSlowInEasing),
+            repeatMode = RepeatMode.Reverse
+        ),
+        label = "breathingAlpha"
     )
+
+    val breathingFraction = animateFloatAsState(
+        targetValue = if (isFocused && isTv) 1f else 0f,
+        animationSpec = motionScheme.fastSpatialSpec(),
+        label = "breathingFraction"
+    )
+
+    // Wrap in lambda to avoid recomposition on every animation frame
+    val alphaProvider = remember(breathingAlpha, breathingFraction) {
+        {
+            1f - (1f - breathingAlpha.value) * breathingFraction.value
+        }
+    }
 
     val animatedBorder by animateDpAsState(
         targetValue = if (isFocused && isTv) focusedBorderWidth else 0.dp,
@@ -72,7 +102,8 @@ fun rememberTvFocusState(
 
     return TvFocusState(
         isFocused = isFocused && isTv,
-        scale = if (isTv) animatedScale else 1f,
+        scale = 1f, // Always 1f to disable scaling on TV focused items
+        alphaProvider = alphaProvider,
         borderWidth = animatedBorder,
         glowElevation = animatedGlowElevation,
         focusModifier = focusModifier,
@@ -87,10 +118,29 @@ fun rememberRowSharedFocusState(
     val isTv = LocalTvMode.current
     var isFocused by remember { mutableStateOf(false) }
 
-    val animatedScale by animateFloatAsState(
-        targetValue = if (isFocused) focusedScale else 1f,
-        label = "tvFocusScaleShared",
+    // Breathing fade alpha animation
+    val infiniteTransition = rememberInfiniteTransition(label = "tvFocusBreathingShared")
+    val breathingAlpha = infiniteTransition.animateFloat(
+        initialValue = 1f,
+        targetValue = 0.65f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(durationMillis = 1200, easing = FastOutSlowInEasing),
+            repeatMode = RepeatMode.Reverse
+        ),
+        label = "breathingAlphaShared"
     )
+
+    val breathingFraction = animateFloatAsState(
+        targetValue = if (isFocused && isTv) 1f else 0f,
+        label = "breathingFractionShared"
+    )
+
+    // Wrap in lambda to avoid recomposition on every animation frame
+    val alphaProvider = remember(breathingAlpha, breathingFraction) {
+        {
+            1f - (1f - breathingAlpha.value) * breathingFraction.value
+        }
+    }
 
     val animatedBorder by animateDpAsState(
         targetValue = if (isFocused && isTv) focusedBorderWidth else 0.dp,
@@ -112,7 +162,8 @@ fun rememberRowSharedFocusState(
 
     return TvFocusState(
         isFocused = isFocused && isTv,
-        scale = if (isTv) animatedScale else 1f,
+        scale = 1f, // Always 1f to disable scaling on TV focused items
+        alphaProvider = alphaProvider,
         borderWidth = animatedBorder,
         glowElevation = animatedGlowElevation,
         focusModifier = focusModifier,
@@ -129,6 +180,9 @@ fun Modifier.tvFocusIndicator(
     val glowColor = MaterialTheme.colorScheme.primary
 
     this
+        .graphicsLayer {
+            alpha = focusState.alphaProvider()
+        }
         .then(
             if (focusState.glowElevation > 0.dp) {
                 Modifier.shadow(
