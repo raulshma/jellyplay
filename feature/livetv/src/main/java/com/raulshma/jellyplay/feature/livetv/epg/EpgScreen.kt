@@ -42,6 +42,12 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import com.raulshma.jellyplay.core.designsystem.theme.ShapeCache
 import com.composables.icons.tabler.Tabler
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.LaunchedEffect
+import com.raulshma.jellyplay.core.ui.tv.tvFocusRestorer
+import com.raulshma.jellyplay.core.ui.tv.tryRequestFocus
 import com.composables.icons.tabler.outline.*
 
 @Composable
@@ -67,6 +73,17 @@ fun EpgScreen(
 
     val backgroundColor = rememberScreenBackgroundColor()
 
+    val focusRequester = remember { FocusRequester() }
+    val programsNotEmpty = viewModel.programs.isNotEmpty()
+    LaunchedEffect(programsNotEmpty) {
+        if (isTv && programsNotEmpty) {
+            for (attempt in 1..3) {
+                androidx.compose.runtime.withFrameNanos { }
+                if (focusRequester.tryRequestFocus("epg_init")) break
+            }
+        }
+    }
+
     JellyPlayScreenScaffold(
         title = "Program Guide",
         onBack = onBack,
@@ -90,7 +107,10 @@ fun EpgScreen(
             )
         } else {
             LazyColumn(
-                modifier = Modifier.fillMaxSize(),
+                modifier = Modifier
+                    .fillMaxSize()
+                    .tvFocusRestorer()
+                    .focusRequester(focusRequester),
                 contentPadding = PaddingValues(
                     start = contentPad,
                     end = contentPad,
