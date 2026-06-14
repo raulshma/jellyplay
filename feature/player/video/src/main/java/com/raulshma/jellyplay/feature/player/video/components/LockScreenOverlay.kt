@@ -45,6 +45,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.raulshma.jellyplay.core.ui.tv.LocalTvMode
+import com.raulshma.jellyplay.core.ui.tv.tryRequestFocus
 import com.composables.icons.tabler.Tabler
 import com.composables.icons.tabler.outline.Lock
 import com.composables.icons.tabler.outline.LockOpen
@@ -94,7 +95,7 @@ internal fun SlideToUnlockOverlay(
 
     LaunchedEffect(visible, isTv) {
         if (visible && isTv) {
-            tvUnlockFocusRequester.requestFocus()
+            tvUnlockFocusRequester.tryRequestFocus("tv_unlock")
         }
     }
 

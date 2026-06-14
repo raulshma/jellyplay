@@ -48,6 +48,7 @@ import androidx.compose.ui.focus.focusRequester
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.LaunchedEffect
 import com.raulshma.jellyplay.core.ui.tv.tvFocusRestorer
+import com.raulshma.jellyplay.core.ui.tv.TvGrabInitialFocus
 import com.raulshma.jellyplay.core.ui.tv.tryRequestFocus
 import com.composables.icons.tabler.outline.*
 
@@ -74,14 +75,11 @@ fun DvrScreen(
 
     val focusRequester = remember { FocusRequester() }
     val hasTimers = viewModel.timers.isNotEmpty() || viewModel.seriesTimers.isNotEmpty()
-    LaunchedEffect(hasTimers) {
-        if (isTv && hasTimers) {
-            for (attempt in 1..3) {
-                androidx.compose.runtime.withFrameNanos { }
-                if (focusRequester.tryRequestFocus("dvr_init")) break
-            }
-        }
-    }
+    TvGrabInitialFocus(
+        focusRequester = focusRequester,
+        itemCount = viewModel.timers.size + viewModel.seriesTimers.size,
+        tag = "dvr_init",
+    )
 
     JellyPlayScreenScaffold(
         title = "Recordings",

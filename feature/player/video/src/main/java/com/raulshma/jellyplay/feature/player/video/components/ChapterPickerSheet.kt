@@ -3,6 +3,8 @@ package com.raulshma.jellyplay.feature.player.video.components
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import com.raulshma.jellyplay.core.ui.tv.rememberTvFocusState
+import com.raulshma.jellyplay.core.ui.tv.tryRequestFocus
+import com.raulshma.jellyplay.core.ui.tv.verticalWrapAround
 import com.raulshma.jellyplay.core.ui.tv.tvFocusIndicator
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -37,6 +39,7 @@ import androidx.compose.ui.unit.sp
 import com.raulshma.jellyplay.core.designsystem.theme.ShapeCache
 import com.raulshma.jellyplay.core.model.ChapterInfo
 import com.raulshma.jellyplay.core.ui.tv.LocalTvMode
+import com.raulshma.jellyplay.core.ui.tv.ifElse
 import com.raulshma.jellyplay.feature.player.video.formatDuration
 import com.composables.icons.tabler.Tabler
 import com.composables.icons.tabler.outline.*
@@ -54,11 +57,7 @@ internal fun ChapterPickerSheet(
 
     LaunchedEffect(isTv, chapters) {
         if (isTv && chapters.isNotEmpty()) {
-            try {
-                focusRequester.requestFocus()
-            } catch (e: Exception) {
-                // ignore
-            }
+            focusRequester.tryRequestFocus("sheet")
         }
     }
 
@@ -79,7 +78,7 @@ internal fun ChapterPickerSheet(
                 modifier = Modifier.padding(horizontal = 24.dp),
             )
             Spacer(Modifier.height(12.dp))
-            LazyColumn {
+            LazyColumn(modifier = Modifier.verticalWrapAround()) {
                 itemsIndexed(chapters, key = { index, chapter -> "${index}_${chapter.startPositionTicks}" }, contentType = { _, _ -> "chapter" }) { index, chapter ->
                     val isCurrentChapter = {
                         val chapterMs = chapter.startPositionTicks / 10_000
@@ -108,7 +107,7 @@ internal fun ChapterPickerSheet(
                         isLast = index == chapters.lastIndex,
                         itemCount = chapters.size,
                         onSelect = { onSelect(chapter.startPositionTicks) },
-                        modifier = if (isTarget) Modifier.focusRequester(focusRequester) else Modifier,
+                        modifier = Modifier.ifElse(isTarget, Modifier.focusRequester(focusRequester)),
                     )
                 }
             }

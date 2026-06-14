@@ -6,15 +6,14 @@ import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.lazy.layout.LazyLayoutCacheWindow
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberUpdatedState
-import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
@@ -23,13 +22,20 @@ import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.unit.dp
 
-@OptIn(androidx.compose.ui.ExperimentalComposeUiApi::class)
+/**
+ * Default cache window for TV horizontal rows — prefetch 2× the viewport ahead and 0.5× behind.
+ * Default Compose cache windows cause visible "popping" of cards during fast D-pad scrolling.
+ */
+@OptIn(androidx.compose.foundation.ExperimentalFoundationApi::class)
+val TvRowCacheWindow = LazyLayoutCacheWindow(aheadFraction = 2f, behindFraction = 0.5f)
+
+@OptIn(androidx.compose.ui.ExperimentalComposeUiApi::class, androidx.compose.foundation.ExperimentalFoundationApi::class)
 @Composable
 fun <T> TvFocusableItemRow(
     items: List<T>,
     key: (T) -> Any,
     modifier: Modifier = Modifier,
-    state: LazyListState = rememberLazyListState(),
+    state: LazyListState = rememberLazyListState(cacheWindow = TvRowCacheWindow),
     contentPadding: PaddingValues = PaddingValues(0.dp),
     horizontalArrangement: Arrangement.Horizontal = Arrangement.spacedBy(0.dp),
     initialIndex: Int = 0,
@@ -47,7 +53,7 @@ fun <T> TvFocusableItemRow(
     val rowFocusRequester = remember { FocusRequester() }
     val fallbackFocusRequester = remember { FocusRequester() }
     val currentOnFocusedIndexChange by rememberUpdatedState(onFocusedIndexChange)
-    var focusedIndex by rememberSaveable { mutableIntStateOf(initialIndex) }
+    var focusedIndex by rememberInt(initialIndex)
     var initialFocusRequested by remember { mutableStateOf(false) }
 
     LaunchedEffect(items.size) {
@@ -85,13 +91,10 @@ fun <T> TvFocusableItemRow(
                 .focusGroup()
                 .tvFocusRestorer(fallbackFocusRequester)
                 .focusRequester(rowFocusRequester)
-                .then(if (focusRequester != null) Modifier.focusRequester(focusRequester) else Modifier)
-                .then(
-                    if (onRowFocused != null) {
-                        Modifier.onFocusChanged { if (it.hasFocus) onRowFocused.invoke() }
-                    } else {
-                        Modifier
-                    },
+                .then(focusRequester?.let { Modifier.focusRequester(it) } ?: Modifier)
+                .ifElse(
+                    condition = onRowFocused != null,
+                    ifTrueModifier = Modifier.onFocusChanged { if (it.hasFocus) onRowFocused?.invoke() },
                 )
         } else {
             modifier
@@ -103,13 +106,7 @@ fun <T> TvFocusableItemRow(
         ) { index, item ->
             val itemModifier = if (isTv) {
                 Modifier
-                    .then(
-                        if (index == currentFocusedIndex) {
-                            Modifier.focusRequester(fallbackFocusRequester)
-                        } else {
-                            Modifier
-                        },
-                    )
+                    .ifElse(index == currentFocusedIndex, Modifier.focusRequester(fallbackFocusRequester))
                     .onFocusChanged {
                         if (it.isFocused || it.hasFocus) {
                             focusedIndex = index

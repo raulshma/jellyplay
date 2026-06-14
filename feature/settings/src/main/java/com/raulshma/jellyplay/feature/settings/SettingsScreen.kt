@@ -76,6 +76,7 @@ import com.raulshma.jellyplay.core.ui.adaptive.LocalAdaptiveInfo
 import com.raulshma.jellyplay.core.ui.adaptive.bottomPadding
 import com.raulshma.jellyplay.core.ui.adaptive.contentPadding
 import com.raulshma.jellyplay.core.ui.tv.LocalTvMode
+import com.raulshma.jellyplay.core.ui.tv.tryRequestFocus
 import com.raulshma.jellyplay.core.ui.tv.tvFocusRestorer
 import com.raulshma.jellyplay.core.ui.tv.rememberTvFocusState
 import com.raulshma.jellyplay.core.ui.tv.tvFocusIndicator
@@ -138,14 +139,14 @@ fun SettingsScreen(
         if (isTv) {
             kotlinx.coroutines.delay(150)
             if (isFirstTvEntry) {
-                try { searchFocusRequester.requestFocus() } catch (_: Exception) {}
+                searchFocusRequester.tryRequestFocus()
                 isFirstTvEntry = false
             } else {
                 if (lastClickedSettingId != null) {
                     kotlinx.coroutines.delay(1000)
                     lastClickedSettingId = null
                 } else {
-                    try { listFocusRequester.requestFocus() } catch (_: Exception) {}
+                    listFocusRequester.tryRequestFocus()
                 }
             }
         }
@@ -223,7 +224,7 @@ fun SettingsScreen(
                                 isSearchActive = true
                                 coroutineScope.launch {
                                     kotlinx.coroutines.delay(100)
-                                    try { searchFocusRequester.requestFocus() } catch (_: Exception) {}
+                                    searchFocusRequester.tryRequestFocus()
                                 }
                             },
                             searchBoxFocusRequester = searchFocusRequester
@@ -254,18 +255,18 @@ fun SettingsScreen(
                                             } else false
                                         },
                                         onLeft = {
-                                            try { leadingFocusRequester.requestFocus() } catch (_: Exception) {}
+                                            leadingFocusRequester.tryRequestFocus()
                                             true
                                         },
                                         onRight = {
-                                            try { trailingFocusRequester.requestFocus() } catch (_: Exception) {}
+                                            trailingFocusRequester.tryRequestFocus()
                                             true
                                         },
                                         onBack = { e ->
                                             if (e.isKeyUp) {
                                                 isSearchActive = false
                                                 searchQuery = ""
-                                                try { listFocusRequester.requestFocus() } catch (_: Exception) {}
+                                                listFocusRequester.tryRequestFocus()
                                             }
                                             true
                                         },
@@ -294,7 +295,7 @@ fun SettingsScreen(
                                             .focusRequester(leadingFocusRequester)
                                             .onDpadKey(
                                                 onRight = {
-                                                    try { searchFocusRequester.requestFocus() } catch (_: Exception) {}
+                                                    searchFocusRequester.tryRequestFocus()
                                                     true
                                                 },
                                             )
@@ -316,7 +317,7 @@ fun SettingsScreen(
                                                     .focusRequester(trailingFocusRequester)
                                                     .onDpadKey(
                                                         onLeft = {
-                                                            try { searchFocusRequester.requestFocus() } catch (_: Exception) {}
+                                                            searchFocusRequester.tryRequestFocus()
                                                             true
                                                         },
                                                     )
@@ -332,7 +333,7 @@ fun SettingsScreen(
                                                     .focusRequester(trailingFocusRequester)
                                                     .onDpadKey(
                                                         onLeft = {
-                                                            try { searchFocusRequester.requestFocus() } catch (_: Exception) {}
+                                                            searchFocusRequester.tryRequestFocus()
                                                             true
                                                         },
                                                     )
@@ -403,7 +404,7 @@ fun SettingsScreen(
                                             if (e.isKeyUp) {
                                                 isSearchActive = false
                                                 searchQuery = ""
-                                                try { listFocusRequester.requestFocus() } catch (_: Exception) {}
+                                                listFocusRequester.tryRequestFocus()
                                             }
                                             true
                                         },

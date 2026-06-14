@@ -4,8 +4,10 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import com.raulshma.jellyplay.core.ui.tv.rememberTvFocusState
+import com.raulshma.jellyplay.core.ui.tv.tryRequestFocus
 import com.raulshma.jellyplay.core.ui.tv.tvFocusIndicator
 import com.raulshma.jellyplay.core.ui.tv.LocalTvMode
+import com.raulshma.jellyplay.core.ui.tv.ifElse
 import com.raulshma.jellyplay.core.ui.tv.components.DpadSlider
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -80,11 +82,7 @@ fun SubtitleStyleSheet(
 
     LaunchedEffect(isTv) {
         if (isTv) {
-            try {
-                focusRequester.requestFocus()
-            } catch (e: Exception) {
-                // ignore
-            }
+            focusRequester.tryRequestFocus("sheet")
         }
     }
 
@@ -329,8 +327,8 @@ fun SubtitleStyleSheet(
                             selected = isSelected,
                         ),
                         modifier = Modifier
-                            .then(if (isTv) chipFocusState.focusModifier else Modifier)
-                            .then(if (isTv) Modifier.tvFocusIndicator(chipFocusState, ShapeCache.smoothPill) else Modifier),
+                            .ifElse(isTv, chipFocusState.focusModifier)
+                            .ifElse(isTv, Modifier.tvFocusIndicator(chipFocusState, ShapeCache.smoothPill)),
                     )
                 }
             }
@@ -466,8 +464,8 @@ fun SubtitleStyleSheet(
                     label = { Text("Reset", style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Medium) },
                     shape = ShapeCache.smoothPill,
                     modifier = Modifier
-                        .then(if (isTv) resetFocusState.focusModifier else Modifier)
-                        .then(if (isTv) Modifier.tvFocusIndicator(resetFocusState, ShapeCache.smoothPill) else Modifier),
+                        .ifElse(isTv, resetFocusState.focusModifier)
+                        .ifElse(isTv, Modifier.tvFocusIndicator(resetFocusState, ShapeCache.smoothPill)),
                 )
             }
         }

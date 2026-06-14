@@ -53,6 +53,8 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.foundation.shape.CircleShape
 import com.raulshma.jellyplay.core.ui.tv.input.onDpadKey
 import com.raulshma.jellyplay.core.ui.tv.LocalTvMode
+import com.raulshma.jellyplay.core.ui.tv.RequestOrRestoreFocus
+import com.raulshma.jellyplay.core.ui.tv.tryRequestFocus
 import com.raulshma.jellyplay.core.ui.tv.rememberTvFocusState
 import com.raulshma.jellyplay.core.ui.tv.tvFocusIndicator
 import com.raulshma.jellyplay.core.designsystem.theme.ShapeCache
@@ -252,9 +254,7 @@ private fun RowScope.SearchExpandedContent(
         singleLine = true,
     )
 
-    LaunchedEffect(Unit) {
-        focusRequester.requestFocus()
-    }
+    RequestOrRestoreFocus(focusRequester, "home_search")
 
     if (searchQuery.isNotEmpty()) {
         val clearFocusState = rememberTvFocusState()

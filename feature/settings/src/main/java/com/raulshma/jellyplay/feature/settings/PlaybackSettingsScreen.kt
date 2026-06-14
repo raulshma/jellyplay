@@ -46,6 +46,7 @@ import com.raulshma.jellyplay.core.ui.adaptive.contentPadding
 import com.raulshma.jellyplay.core.ui.components.JellyPlayScreenScaffold
 import com.raulshma.jellyplay.core.ui.tv.LocalTvMode
 import com.raulshma.jellyplay.core.ui.tv.tvFocusRestorer
+import com.raulshma.jellyplay.core.ui.tv.TvGrabInitialFocus
 import com.raulshma.jellyplay.core.ui.tv.tryRequestFocus
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
@@ -143,14 +144,11 @@ fun PlaybackSettingsScreen(
     val backgroundColor = com.raulshma.jellyplay.core.ui.components.rememberScreenBackgroundColor()
 
     val focusRequester = remember { FocusRequester() }
-    LaunchedEffect(Unit) {
-        if (isTv) {
-            for (attempt in 1..3) {
-                androidx.compose.runtime.withFrameNanos { }
-                if (focusRequester.tryRequestFocus("playback_init")) break
-            }
-        }
-    }
+    TvGrabInitialFocus(
+        focusRequester = focusRequester,
+        itemCount = 1,
+        tag = "playback_init",
+    )
 
     val scrollState = rememberLazyListState()
     val scrollIndex = remember(highlightSettingId) {

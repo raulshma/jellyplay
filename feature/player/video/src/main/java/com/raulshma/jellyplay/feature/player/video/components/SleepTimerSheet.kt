@@ -36,6 +36,8 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.raulshma.jellyplay.core.designsystem.theme.ShapeCache
 import com.raulshma.jellyplay.core.ui.tv.LocalTvMode
+import com.raulshma.jellyplay.core.ui.tv.ifElse
+import com.raulshma.jellyplay.core.ui.tv.tryRequestFocus
 import com.raulshma.jellyplay.core.ui.tv.rememberTvFocusState
 import com.raulshma.jellyplay.core.ui.tv.tvFocusIndicator
 import kotlinx.coroutines.delay
@@ -67,11 +69,7 @@ internal fun SleepTimerSheet(
 
     LaunchedEffect(isTv, isActive) {
         if (isTv) {
-            try {
-                focusRequester.requestFocus()
-            } catch (e: Exception) {
-                // ignore
-            }
+            focusRequester.tryRequestFocus("sheet")
         }
     }
 
@@ -137,7 +135,7 @@ internal fun SleepTimerSheet(
                         val isEndSelected = isActive && isEndOfEpisodeMode
                         val endFocusState = rememberTvFocusState(focusedScale = 1.02f)
                         val shape = ShapeCache.smooth8
-                        val requesterModifier = if (!isActive) Modifier.focusRequester(focusRequester) else Modifier
+                        val requesterModifier = Modifier.ifElse(!isActive, Modifier.focusRequester(focusRequester))
                         Row(
                             modifier = Modifier
                                 .fillMaxWidth()

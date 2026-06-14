@@ -6,7 +6,6 @@ import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.grid.GridCells
-import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -30,7 +29,7 @@ import androidx.paging.compose.itemKey
 import com.raulshma.jellyplay.core.ui.components.ErrorScreen
 import com.raulshma.jellyplay.core.ui.components.HeaderStatusIndicator
 import com.raulshma.jellyplay.core.ui.components.JellyPlayScreenScaffold
-import com.raulshma.jellyplay.core.ui.components.LoadingScreen
+import com.raulshma.jellyplay.core.ui.components.JellyPlayLoadingIndicator
 import com.raulshma.jellyplay.core.ui.components.LocalNetworkStatus
 import com.raulshma.jellyplay.core.ui.components.ScreenEmptyState
 import com.raulshma.jellyplay.core.ui.components.ScreenLoadingState
@@ -39,6 +38,7 @@ import com.raulshma.jellyplay.feature.music.components.AlbumCard
 import com.raulshma.jellyplay.core.ui.adaptive.LocalAdaptiveInfo
 import com.raulshma.jellyplay.core.ui.adaptive.*
 import com.raulshma.jellyplay.core.ui.tv.LocalTvMode
+import com.raulshma.jellyplay.core.ui.tv.TvFocusableGrid
 import com.composables.icons.tabler.Tabler
 import com.composables.icons.tabler.outline.*
 
@@ -116,7 +116,9 @@ fun AlbumsScreen(
                     } else {
                         val adaptiveInfo = LocalAdaptiveInfo.current
                         val isTv = LocalTvMode.current
-                        LazyVerticalGrid(
+                        TvFocusableGrid(
+                            itemCount = albums.itemCount,
+                            key = albums.itemKey { it.id },
                             columns = GridCells.Adaptive(adaptiveInfo.gridCellSize(isTv)),
                             contentPadding = PaddingValues(
                                 start = adaptiveInfo.contentPadding(isTv),
@@ -127,23 +129,19 @@ fun AlbumsScreen(
                             horizontalArrangement = Arrangement.spacedBy(adaptiveInfo.itemSpacing(isTv)),
                             verticalArrangement = Arrangement.spacedBy(adaptiveInfo.itemSpacing(isTv)),
                             modifier = Modifier.fillMaxSize(),
-                        ) {
-                            items(
-                                count = albums.itemCount,
-                                key = albums.itemKey { it.id },
-                                contentType = { "mediaItem" },
-                            ) { index ->
-                                val album = albums[index]
-                                if (album != null) {
-                                    AlbumCard(
-                                        name = album.name,
-                                        artist = album.albumArtist,
-                                        year = album.year,
-                                        imageUrl = viewModel.getImageUrl(album.id),
-                                        onClick = { onItemClick(album.id) },
-                                        blurHash = album.blurHashes.primary,
-                                    )
-                                }
+                            contentType = { "mediaItem" },
+                        ) { index, itemModifier ->
+                            val album = albums[index]
+                            if (album != null) {
+                                AlbumCard(
+                                    name = album.name,
+                                    artist = album.albumArtist,
+                                    year = album.year,
+                                    imageUrl = viewModel.getImageUrl(album.id),
+                                    onClick = { onItemClick(album.id) },
+                                    modifier = itemModifier,
+                                    blurHash = album.blurHashes.primary,
+                                )
                             }
                         }
                     }
@@ -152,8 +150,10 @@ fun AlbumsScreen(
 
             when (val appendState = albums.loadState.append) {
                 is LoadState.Loading -> {
-                    LoadingScreen(
-                        modifier = Modifier.align(Alignment.BottomCenter),
+                    JellyPlayLoadingIndicator(
+                        modifier = Modifier
+                            .align(Alignment.BottomCenter)
+                            .padding(16.dp),
                     )
                 }
                 is LoadState.Error -> {

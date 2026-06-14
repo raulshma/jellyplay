@@ -16,8 +16,6 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.grid.GridCells
-import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
-import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -47,6 +45,7 @@ import com.raulshma.jellyplay.core.ui.components.JellyPlayScreenScaffold
 import com.raulshma.jellyplay.core.ui.components.ScreenEmptyState
 import com.raulshma.jellyplay.core.ui.components.ScreenLoadingState
 import com.raulshma.jellyplay.core.ui.image.MediaImage
+import com.raulshma.jellyplay.core.ui.tv.TvFocusableGrid
 import com.composables.icons.tabler.Tabler
 import com.composables.icons.tabler.outline.*
 
@@ -115,7 +114,9 @@ fun OfflineLibraryScreen(
                         )
                     }
                 } else {
-                    LazyVerticalGrid(
+                    TvFocusableGrid(
+                        items = filteredItems,
+                        key = { it.id },
                         columns = GridCells.Adaptive(minSize = 150.dp),
                         contentPadding = PaddingValues(
                             start = contentPad,
@@ -125,20 +126,20 @@ fun OfflineLibraryScreen(
                         ),
                         horizontalArrangement = Arrangement.spacedBy(12.dp),
                         verticalArrangement = Arrangement.spacedBy(12.dp),
-                        modifier = Modifier.weight(1f)
-                    ) {
-                        items(filteredItems, key = { it.id }, contentType = { "offlineItem" }) { item ->
-                            OfflineMediaCard(
-                                item = item,
-                                onClick = {
-                                    if (item.mediaType == MediaType.SERIES) {
-                                        onItemClick(item.id)
-                                    } else {
-                                        onPlayOffline(item.id, item.mediaType)
-                                    }
-                                },
-                            )
-                        }
+                        contentType = { "offlineItem" },
+                        modifier = Modifier.weight(1f),
+                    ) { _, item, itemModifier ->
+                        OfflineMediaCard(
+                            item = item,
+                            onClick = {
+                                if (item.mediaType == MediaType.SERIES) {
+                                    onItemClick(item.id)
+                                } else {
+                                    onPlayOffline(item.id, item.mediaType)
+                                }
+                            },
+                            modifier = itemModifier,
+                        )
                     }
                 }
             }
@@ -150,9 +151,10 @@ fun OfflineLibraryScreen(
 private fun OfflineMediaCard(
     item: OfflineMediaItem,
     onClick: () -> Unit,
+    modifier: Modifier = Modifier,
 ) {
     Column(
-        modifier = Modifier
+        modifier = modifier
             .fillMaxWidth()
             .clip(ShapeCache.smooth8)
             .clickable(onClick = onClick),

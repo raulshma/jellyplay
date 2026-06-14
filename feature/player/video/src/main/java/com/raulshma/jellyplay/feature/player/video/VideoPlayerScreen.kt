@@ -94,6 +94,7 @@ import com.raulshma.jellyplay.core.model.SubtitleStyle
 import com.raulshma.jellyplay.core.ui.tv.LocalTvMode
 import com.raulshma.jellyplay.core.ui.tv.components.rememberDpadSeekState
 import com.raulshma.jellyplay.core.ui.tv.input.onDpadKeyEvent
+import com.raulshma.jellyplay.core.ui.tv.tryRequestFocus
 import com.raulshma.jellyplay.feature.player.video.components.AspectRatio
 import com.raulshma.jellyplay.feature.player.video.components.AspectRatioSheet
 import com.raulshma.jellyplay.feature.player.video.components.AudioDelaySheet
@@ -496,16 +497,10 @@ fun VideoPlayerScreen(
 
     LaunchedEffect(showControls, isTv, isNextEpisodeVisible, isSkipSegmentVisible) {
         if (isTv && !showControls) {
-            try {
-                if (isNextEpisodeVisible) {
-                    tvNextEpisodeFocusRequester.requestFocus()
-                } else if (isSkipSegmentVisible) {
-                    tvSkipSegmentFocusRequester.requestFocus()
-                } else {
-                    tvPlayerFocusRequester.requestFocus()
-                }
-            } catch (e: Exception) {
-                // ignore if not attached
+            when {
+                isNextEpisodeVisible -> tvNextEpisodeFocusRequester.tryRequestFocus("tv_next_episode")
+                isSkipSegmentVisible -> tvSkipSegmentFocusRequester.tryRequestFocus("tv_skip_segment")
+                else -> tvPlayerFocusRequester.tryRequestFocus("tv_player")
             }
         }
     }

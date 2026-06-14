@@ -91,6 +91,7 @@ import com.raulshma.jellyplay.core.designsystem.theme.ShapeCache
 import com.raulshma.jellyplay.core.ui.components.ErrorScreen
 import com.raulshma.jellyplay.core.ui.components.ExpressiveToolbarIconButton
 import com.raulshma.jellyplay.core.ui.components.GlassDismissTag
+import com.raulshma.jellyplay.core.ui.components.DelayedLoadingScreen
 import com.raulshma.jellyplay.core.ui.components.LoadingScreen
 import com.raulshma.jellyplay.core.ui.components.PosterCard
 import com.raulshma.jellyplay.core.ui.adaptive.LocalAdaptiveInfo
@@ -404,7 +405,7 @@ fun LibraryScreen(
                 Box(modifier = Modifier.fillMaxSize()) {
                     when (pagedItems.loadState.refresh) {
                         is LoadState.Loading -> {
-                            LoadingScreen()
+                            DelayedLoadingScreen()
                         }
 
                         is LoadState.Error -> {

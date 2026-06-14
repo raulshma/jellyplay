@@ -40,6 +40,7 @@ import com.raulshma.jellyplay.core.ui.tv.tvFocusRestorer
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.runtime.LaunchedEffect
+import com.raulshma.jellyplay.core.ui.tv.TvGrabInitialFocus
 import com.raulshma.jellyplay.core.ui.tv.tryRequestFocus
 import com.composables.icons.tabler.Tabler
 import com.composables.icons.tabler.outline.*
@@ -71,14 +72,11 @@ fun SecuritySettingsScreen(
     val canShowBiometric = biometricAvailability == BiometricAuthHelper.Availability.AVAILABLE
     val backgroundColor = com.raulshma.jellyplay.core.ui.components.rememberScreenBackgroundColor()
     val focusRequester = remember { FocusRequester() }
-    LaunchedEffect(Unit) {
-        if (isTv) {
-            for (attempt in 1..3) {
-                androidx.compose.runtime.withFrameNanos { }
-                if (focusRequester.tryRequestFocus("security_init")) break
-            }
-        }
-    }
+    TvGrabInitialFocus(
+        focusRequester = focusRequester,
+        itemCount = 1,
+        tag = "security_init",
+    )
 
     JellyPlayScreenScaffold(
         title = "Security",

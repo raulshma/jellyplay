@@ -29,7 +29,7 @@ import androidx.paging.compose.itemKey
 import com.raulshma.jellyplay.core.ui.components.ErrorScreen
 import com.raulshma.jellyplay.core.ui.components.HeaderStatusIndicator
 import com.raulshma.jellyplay.core.ui.components.JellyPlayScreenScaffold
-import com.raulshma.jellyplay.core.ui.components.LoadingScreen
+import com.raulshma.jellyplay.core.ui.components.JellyPlayLoadingIndicator
 import com.raulshma.jellyplay.core.ui.components.LocalNetworkStatus
 import com.raulshma.jellyplay.core.ui.components.ScreenEmptyState
 import com.raulshma.jellyplay.core.ui.components.ScreenLoadingState
@@ -156,8 +156,10 @@ fun TracksScreen(
 
             when (val appendState = tracks.loadState.append) {
                 is LoadState.Loading -> {
-                    LoadingScreen(
-                        modifier = Modifier.align(Alignment.BottomCenter),
+                    JellyPlayLoadingIndicator(
+                        modifier = Modifier
+                            .align(Alignment.BottomCenter)
+                            .padding(16.dp),
                     )
                 }
                 is LoadState.Error -> {

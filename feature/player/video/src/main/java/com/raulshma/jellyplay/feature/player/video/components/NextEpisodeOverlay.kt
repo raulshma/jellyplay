@@ -2,6 +2,8 @@ package com.raulshma.jellyplay.feature.player.video.components
 
 import androidx.compose.animation.AnimatedVisibility
 import com.raulshma.jellyplay.core.ui.tv.LocalTvMode
+import com.raulshma.jellyplay.core.ui.tv.ifElse
+import com.raulshma.jellyplay.core.ui.tv.tryRequestFocus
 import com.raulshma.jellyplay.core.ui.tv.rememberTvFocusState
 import com.raulshma.jellyplay.core.ui.tv.tvFocusIndicator
 import androidx.compose.animation.core.tween
@@ -91,11 +93,7 @@ fun NextEpisodeOverlay(
     LaunchedEffect(isVisible, isTv) {
         if (isVisible && isTv) {
             kotlinx.coroutines.delay(300)
-            try {
-                tvPlayNextFocusRequester.requestFocus()
-            } catch (e: Exception) {
-                // ignore
-            }
+            tvPlayNextFocusRequester.tryRequestFocus("tv_next_episode")
         }
     }
 
@@ -163,7 +161,7 @@ fun NextEpisodeOverlay(
                                 .clip(CircleShape)
                                 .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.25f))
                                 .border(1.5.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.5f), CircleShape)
-                                .then(if (isTv) Modifier.focusRequester(tvPlayNextFocusRequester) else Modifier)
+                                .ifElse(isTv, Modifier.focusRequester(tvPlayNextFocusRequester))
                                 .then(playFocusState.focusModifier)
                                 .tvFocusIndicator(playFocusState, CircleShape)
                                 .clickable(onClick = onPlayNext),

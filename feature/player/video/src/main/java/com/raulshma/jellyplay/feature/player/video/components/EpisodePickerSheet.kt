@@ -44,6 +44,8 @@ import androidx.compose.ui.unit.dp
 import com.raulshma.jellyplay.core.model.MediaItem
 import com.raulshma.jellyplay.core.ui.image.MediaImage
 import com.raulshma.jellyplay.core.ui.tv.LocalTvMode
+import com.raulshma.jellyplay.core.ui.tv.ifElse
+import com.raulshma.jellyplay.core.ui.tv.tryRequestFocus
 import com.raulshma.jellyplay.core.ui.tv.rememberTvFocusState
 import com.raulshma.jellyplay.core.ui.tv.tvFocusIndicator
 import com.raulshma.jellyplay.core.ui.tv.tvFocusRestorer
@@ -105,11 +107,7 @@ internal fun EpisodePickerSheet(
                 val seasonFocusRequester = remember { FocusRequester() }
                 LaunchedEffect(isTv) {
                     if (isTv) {
-                        try {
-                            seasonFocusRequester.requestFocus()
-                        } catch (e: Exception) {
-                            // ignore
-                        }
+                        seasonFocusRequester.tryRequestFocus("episode_season")
                     }
                 }
 
@@ -141,7 +139,7 @@ internal fun EpisodePickerSheet(
                                 .clip(shape)
                                 .then(seasonFocusState.focusModifier)
                                 .tvFocusIndicator(seasonFocusState, shape)
-                                .then(if (season.id == currentSeasonId || (currentSeasonId == null && season.id == seasons.firstOrNull()?.id)) Modifier.focusRequester(seasonFocusRequester) else Modifier)
+                                .ifElse(season.id == currentSeasonId || (currentSeasonId == null && season.id == seasons.firstOrNull()?.id), Modifier.focusRequester(seasonFocusRequester))
                                 .clickable { onSeasonSelect(season.id) },
                             color = containerColor,
                             contentColor = contentColor,
@@ -185,11 +183,7 @@ internal fun EpisodePickerSheet(
                 val episodeFocusRequester = remember { FocusRequester() }
                 LaunchedEffect(isTv, seasons.isEmpty(), episodes) {
                     if (isTv && (seasons.isEmpty() || currentSeasonId != null) && episodes.isNotEmpty()) {
-                        try {
-                            episodeFocusRequester.requestFocus()
-                        } catch (e: Exception) {
-                            // ignore
-                        }
+                        episodeFocusRequester.tryRequestFocus("episode_list")
                     }
                 }
 
@@ -207,7 +201,7 @@ internal fun EpisodePickerSheet(
                             isCurrent = isCurrent,
                             imageUrl = getImageUrl(episode.id),
                             onClick = { onEpisodeSelect(episode) },
-                            modifier = if (isFirstOrCurrent) Modifier.focusRequester(episodeFocusRequester) else Modifier
+                            modifier = Modifier.ifElse(isFirstOrCurrent, Modifier.focusRequester(episodeFocusRequester))
                         )
                         if (index < episodes.lastIndex) {
                             Box(

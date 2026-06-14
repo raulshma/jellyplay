@@ -38,6 +38,7 @@ import com.raulshma.jellyplay.core.ui.components.ScreenEmptyState
 import com.raulshma.jellyplay.feature.music.components.PagedGrid
 import com.raulshma.jellyplay.core.ui.components.ScreenLoadingState
 import com.raulshma.jellyplay.core.ui.tv.LocalTvMode
+import com.raulshma.jellyplay.core.ui.tv.TvFocusableGrid
 import com.raulshma.jellyplay.feature.music.components.AlbumCard
 import com.raulshma.jellyplay.feature.music.components.ArtistCard
 import com.raulshma.jellyplay.feature.music.components.GenreChip
@@ -120,11 +121,12 @@ private fun ArtistsPage(
         contentPad = contentPad,
         gridMin = gridMin,
         spacing = spacing,
-    ) { artist ->
+    ) { artist, itemModifier ->
         ArtistCard(
             name = artist.name,
             imageUrl = viewModel.getImageUrl(artist.id),
             onClick = { onItemClick(artist.id) },
+            modifier = itemModifier,
             blurHash = artist.blurHashes.primary,
         )
     }
@@ -145,13 +147,14 @@ private fun AlbumsPage(
         contentPad = contentPad,
         gridMin = gridMin,
         spacing = spacing,
-    ) { album ->
+    ) { album, itemModifier ->
         AlbumCard(
             name = album.name,
             artist = album.albumArtist,
             year = album.year,
             imageUrl = viewModel.getImageUrl(album.id),
             onClick = { onItemClick(album.id) },
+            modifier = itemModifier,
             blurHash = album.blurHashes.primary,
         )
     }
@@ -223,19 +226,21 @@ private fun GenresPage(
             title = "No genres found",
         )
     } else {
-        LazyVerticalGrid(
+        TvFocusableGrid(
+            items = genres,
+            key = { it.id },
             columns = GridCells.Adaptive(gridMin),
             contentPadding = PaddingValues(contentPad),
             horizontalArrangement = Arrangement.spacedBy(spacing),
             verticalArrangement = Arrangement.spacedBy(spacing),
             modifier = Modifier.fillMaxSize(),
-        ) {
-            items(genres, key = { it.id }, contentType = { "genre" }) { genre ->
-                GenreChip(
-                    name = genre.name,
-                    onClick = { onItemClick(genre.id, genre.name) },
-                )
-            }
+            contentType = { "genre" },
+        ) { _, genre, itemModifier ->
+            GenreChip(
+                name = genre.name,
+                onClick = { onItemClick(genre.id, genre.name) },
+                modifier = itemModifier,
+            )
         }
     }
 }
@@ -255,22 +260,24 @@ private fun PlaylistsPage(
             title = "No playlists found",
         )
     } else {
-        LazyVerticalGrid(
+        TvFocusableGrid(
+            items = playlists,
+            key = { it.id },
             columns = GridCells.Adaptive(gridMin),
             contentPadding = PaddingValues(contentPad),
             horizontalArrangement = Arrangement.spacedBy(spacing),
             verticalArrangement = Arrangement.spacedBy(spacing),
             modifier = Modifier.fillMaxSize(),
-        ) {
-            items(playlists, key = { it.id }, contentType = { "playlist" }) { playlist ->
-                AlbumCard(
-                    name = playlist.name,
-                    artist = if (playlist.itemCount > 0) "${playlist.itemCount} items" else null,
-                    year = null,
-                    imageUrl = viewModel.getImageUrl(playlist.id),
-                    onClick = { onItemClick(playlist.id) },
-                )
-            }
+            contentType = { "playlist" },
+        ) { _, playlist, itemModifier ->
+            AlbumCard(
+                name = playlist.name,
+                artist = if (playlist.itemCount > 0) "${playlist.itemCount} items" else null,
+                year = null,
+                imageUrl = viewModel.getImageUrl(playlist.id),
+                onClick = { onItemClick(playlist.id) },
+                modifier = itemModifier,
+            )
         }
     }
 }

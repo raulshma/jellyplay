@@ -70,6 +70,7 @@ import com.raulshma.jellyplay.core.ui.tv.LocalTvMode
 import com.raulshma.jellyplay.core.ui.tv.tvFocusRestorer
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
+import com.raulshma.jellyplay.core.ui.tv.TvGrabInitialFocus
 import com.raulshma.jellyplay.core.ui.tv.tryRequestFocus
 import com.raulshma.jellyplay.feature.settings.SeerrSettingsViewModel.ConnectionStatus
 import com.composables.icons.tabler.Tabler
@@ -122,14 +123,11 @@ fun SeerrSettingsScreen(
     }
 
     val focusRequester = remember { FocusRequester() }
-    LaunchedEffect(Unit) {
-        if (isTv) {
-            for (attempt in 1..3) {
-                androidx.compose.runtime.withFrameNanos { }
-                if (focusRequester.tryRequestFocus("seerr_init")) break
-            }
-        }
-    }
+    TvGrabInitialFocus(
+        focusRequester = focusRequester,
+        itemCount = 1,
+        tag = "seerr_init",
+    )
 
     JellyPlayScreenScaffold(
         title = "Seerr Settings",

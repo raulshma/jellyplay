@@ -115,8 +115,7 @@ fun TvNavigationDrawer(
     // Grab focus on the drawer sheet when it is programmatically opened, and only then allow the
     // onFocusChanged -> drawerState write-back. Requesting focus FIRST and flipping the guard AFTER
     // prevents the first-frame hasFocus==false callback from snapping a freshly-opened drawer closed
-    // (the exact race initializationComplete exists to suppress). Mirrors Wholphin
-    // NavigationDrawerAndroid.kt:96-102.
+    // (the exact race initializationComplete exists to suppress).
     LaunchedEffect(drawerState.currentValue) {
         if (drawerState.currentValue == DrawerValue.Open && !sheetHasFocus) {
             drawerSheetFocusRequester.tryRequestFocus("tv_drawer_sheet")

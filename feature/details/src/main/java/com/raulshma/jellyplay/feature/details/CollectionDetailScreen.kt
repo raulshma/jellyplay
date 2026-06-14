@@ -44,6 +44,7 @@ import com.raulshma.jellyplay.core.ui.adaptive.gridMinSize
 import com.raulshma.jellyplay.core.ui.adaptive.itemSpacing
 import com.raulshma.jellyplay.core.ui.components.CircleBgBackButton
 import com.raulshma.jellyplay.core.ui.components.ErrorScreen
+import com.raulshma.jellyplay.core.ui.components.DelayedLoadingScreen
 import com.raulshma.jellyplay.core.ui.components.LoadingScreen
 import com.raulshma.jellyplay.core.ui.components.PosterCard
 import com.raulshma.jellyplay.core.ui.image.MediaImage
@@ -98,7 +99,7 @@ fun CollectionDetailScreen(
     ) { padding ->
         when {
             isLoading -> {
-                LoadingScreen(modifier = Modifier.padding(padding))
+                DelayedLoadingScreen(modifier = Modifier.padding(padding))
             }
 
             error != null -> {
