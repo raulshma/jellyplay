@@ -17,6 +17,7 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import com.raulshma.jellyplay.core.ui.tv.LocalTvMode
+import com.raulshma.jellyplay.core.ui.tv.enableMarqueeOnFocus
 import androidx.compose.material3.ListItem
 import androidx.compose.material3.ListItemDefaults
 import androidx.compose.material3.MaterialTheme
@@ -44,6 +45,7 @@ import com.composables.icons.tabler.Tabler
 import com.composables.icons.tabler.outline.*
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
+import com.raulshma.jellyplay.core.ui.tv.tryRequestFocus
 import androidx.compose.foundation.background
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.ui.graphics.Color
@@ -105,10 +107,8 @@ internal fun SettingListItem(
 
     LaunchedEffect(highlighted) {
         if (highlighted) {
-            try {
-                focusRequester.requestFocus()
-                bringIntoViewRequester.bringIntoView()
-            } catch (_: Exception) {}
+            focusRequester.tryRequestFocus("settings_item")
+            bringIntoViewRequester.bringIntoView()
         }
     }
 
@@ -121,6 +121,7 @@ internal fun SettingListItem(
                 color = headlineColor,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.enableMarqueeOnFocus(focused = tvFocusState.isFocused),
             )
         },
         supportingContent = {
@@ -240,10 +241,8 @@ internal fun SettingToggleItem(
 
     LaunchedEffect(highlighted) {
         if (highlighted) {
-            try {
-                focusRequester.requestFocus()
-                bringIntoViewRequester.bringIntoView()
-            } catch (_: Exception) {}
+            focusRequester.tryRequestFocus("settings_item")
+            bringIntoViewRequester.bringIntoView()
         }
     }
 
@@ -256,6 +255,7 @@ internal fun SettingToggleItem(
                 color = MaterialTheme.colorScheme.onSurface,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.enableMarqueeOnFocus(focused = tvFocusState.isFocused),
             )
         },
         supportingContent = {
@@ -354,6 +354,7 @@ internal fun SettingReorderableToggleItem(
                 color = MaterialTheme.colorScheme.onSurface,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.enableMarqueeOnFocus(focused = tvFocusState.isFocused),
             )
         },
         supportingContent = {

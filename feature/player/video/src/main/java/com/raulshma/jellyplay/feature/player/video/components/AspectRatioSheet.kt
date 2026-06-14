@@ -33,6 +33,9 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.raulshma.jellyplay.core.designsystem.theme.ShapeCache
 import com.raulshma.jellyplay.core.ui.tv.LocalTvMode
+import com.raulshma.jellyplay.core.ui.tv.ifElse
+import com.raulshma.jellyplay.core.ui.tv.tryRequestFocus
+import com.raulshma.jellyplay.core.ui.tv.verticalWrapAround
 import com.raulshma.jellyplay.core.ui.tv.rememberTvFocusState
 import com.raulshma.jellyplay.core.ui.tv.tvFocusIndicator
 import com.composables.icons.tabler.Tabler
@@ -62,11 +65,7 @@ fun AspectRatioSheet(
 
     LaunchedEffect(isTv) {
         if (isTv) {
-            try {
-                focusRequester.requestFocus()
-            } catch (e: Exception) {
-                // ignore
-            }
+            focusRequester.tryRequestFocus("sheet")
         }
     }
 
@@ -100,7 +99,7 @@ fun AspectRatioSheet(
             Spacer(modifier = Modifier.height(20.dp))
 
             if (isTv) {
-                LazyColumn {
+                LazyColumn(modifier = Modifier.verticalWrapAround()) {
                     items(AspectRatio.entries) { ratio ->
                         val isSelected = ratio == currentRatio
                         val isFirstOrSelected = isSelected || (currentRatio !in AspectRatio.entries && ratio == AspectRatio.AUTO)
@@ -116,7 +115,7 @@ fun AspectRatioSheet(
                                     else Color.White.copy(alpha = 0.04f)
                                 )
                                 .then(ratioFocusState.focusModifier)
-                                .then(if (isFirstOrSelected) Modifier.focusRequester(focusRequester) else Modifier)
+                                .ifElse(isFirstOrSelected, Modifier.focusRequester(focusRequester))
                                 .tvFocusIndicator(ratioFocusState, shape)
                                 .clickable { onSelect(ratio); onDismiss() }
                                 .padding(horizontal = 20.dp, vertical = 14.dp),

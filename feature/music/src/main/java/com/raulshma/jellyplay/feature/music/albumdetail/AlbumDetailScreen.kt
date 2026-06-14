@@ -1,7 +1,6 @@
 package com.raulshma.jellyplay.feature.music.albumdetail
 
 import androidx.compose.foundation.background
-import com.raulshma.jellyplay.core.ui.tv.tvFocusable
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -51,6 +50,10 @@ import com.raulshma.jellyplay.core.model.MediaItem
 import com.raulshma.jellyplay.core.ui.adaptive.LocalAdaptiveInfo
 import com.raulshma.jellyplay.core.ui.adaptive.contentPadding
 import com.raulshma.jellyplay.core.ui.tv.LocalTvMode
+import com.raulshma.jellyplay.core.ui.tv.enableMarqueeOnFocus
+import com.raulshma.jellyplay.core.ui.tv.rememberTvFocusState
+import com.raulshma.jellyplay.core.ui.tv.tvFocusIndicator
+import com.raulshma.jellyplay.core.ui.tv.tvFocusRestorer
 import com.raulshma.jellyplay.core.ui.components.CircleBgBackButton
 import com.raulshma.jellyplay.core.ui.components.ErrorScreen
 import com.raulshma.jellyplay.core.ui.components.ScreenLoadingState
@@ -187,7 +190,8 @@ private fun AlbumDetailContent(
         LazyColumn(
             modifier = Modifier
                 .fillMaxSize()
-                .padding(top = 250.dp),
+                .padding(top = 250.dp)
+                .tvFocusRestorer(),
             contentPadding = WindowInsets.navigationBars.asPaddingValues(),
         ) {
             item {
@@ -206,7 +210,7 @@ private fun AlbumDetailContent(
                                 text = artistName,
                                 style = MaterialTheme.typography.bodyMedium,
                                 color = MaterialTheme.colorScheme.primary,
-                                modifier = Modifier.tvFocusable().clickable {
+                                modifier = Modifier.clickable {
                                     if (artistId != null) onArtistClick(artistId)
                                 },
                             )
@@ -322,10 +326,13 @@ private fun TrackItem(
     onAddToQueue: (() -> Unit)? = null,
     onDownloadClick: (() -> Unit)? = null,
 ) {
+    val tvFocusState = rememberTvFocusState()
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .tvFocusable().clickable(onClick = onClick)
+            .then(tvFocusState.focusModifier)
+            .tvFocusIndicator(tvFocusState, ShapeCache.smooth8)
+            .clickable(onClick = onClick)
             .padding(horizontal = 16.dp, vertical = 8.dp),
         horizontalArrangement = Arrangement.spacedBy(12.dp),
         verticalAlignment = Alignment.CenterVertically,
@@ -358,6 +365,7 @@ private fun TrackItem(
                 fontWeight = FontWeight.Medium,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.enableMarqueeOnFocus(focused = tvFocusState.isFocused),
             )
             track.albumArtist?.let {
                 Text(

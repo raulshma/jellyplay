@@ -12,6 +12,7 @@ import androidx.compose.animation.shrinkVertically
 import androidx.compose.animation.slideInVertically
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.focusGroup
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.Arrangement
@@ -60,13 +61,20 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
+import androidx.compose.ui.ExperimentalComposeUiApi
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusProperties
+import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
@@ -83,14 +91,19 @@ import com.raulshma.jellyplay.core.designsystem.theme.ShapeCache
 import com.raulshma.jellyplay.core.ui.components.ErrorScreen
 import com.raulshma.jellyplay.core.ui.components.ExpressiveToolbarIconButton
 import com.raulshma.jellyplay.core.ui.components.GlassDismissTag
+import com.raulshma.jellyplay.core.ui.components.DelayedLoadingScreen
 import com.raulshma.jellyplay.core.ui.components.LoadingScreen
 import com.raulshma.jellyplay.core.ui.components.PosterCard
 import com.raulshma.jellyplay.core.ui.adaptive.LocalAdaptiveInfo
 import com.raulshma.jellyplay.core.ui.adaptive.*
 import com.raulshma.jellyplay.core.ui.tv.LocalTvMode
+import com.raulshma.jellyplay.core.ui.tv.TvFocusableGrid
 import com.raulshma.jellyplay.core.ui.tv.rememberTvFocusState
 import com.raulshma.jellyplay.core.ui.tv.tvFocusIndicator
+import com.raulshma.jellyplay.core.ui.tv.tryRequestFocus
+import com.raulshma.jellyplay.core.ui.tv.tvFocusRestorer
 import com.raulshma.jellyplay.core.model.LibraryViewMode
+import com.raulshma.jellyplay.core.model.MediaType
 import com.raulshma.jellyplay.feature.library.components.LibraryFilterSheet
 import com.raulshma.jellyplay.feature.library.components.LibraryListItem
 import com.raulshma.jellyplay.core.ui.animation.animateContentSizeNoClip
@@ -105,7 +118,7 @@ import kotlinx.coroutines.launch
 )
 @Composable
 fun LibraryScreen(
-    onItemClick: (String) -> Unit,
+    onItemClick: (itemId: String, mediaType: MediaType, parentId: String?, itemName: String) -> Unit,
     onSmartPlaylistsClick: () -> Unit = {},
     onMoodPlaylistsClick: () -> Unit = {},
     onPlaylistsClick: () -> Unit = {},
@@ -121,6 +134,12 @@ fun LibraryScreen(
     val viewMode by viewModel.viewMode.collectAsStateWithLifecycle()
 
     val pagedItems = viewModel.pagedItems.collectAsLazyPagingItems()
+    val photoFolderChildUrls by viewModel.photoFolderChildUrls.collectAsStateWithLifecycle()
+
+    val snapshot = pagedItems.itemSnapshotList
+    LaunchedEffect(snapshot) {
+        viewModel.prefetchPhotoFolderChildUrls(snapshot.items)
+    }
     val networkStatus by com.raulshma.jellyplay.core.ui.components.LocalNetworkStatus.current.collectAsStateWithLifecycle()
 
     val headerStatus = com.raulshma.jellyplay.core.ui.components.resolveHeaderStatus(
@@ -386,7 +405,7 @@ fun LibraryScreen(
                 Box(modifier = Modifier.fillMaxSize()) {
                     when (pagedItems.loadState.refresh) {
                         is LoadState.Loading -> {
-                            LoadingScreen()
+                            DelayedLoadingScreen()
                         }
 
                         is LoadState.Error -> {
@@ -444,16 +463,19 @@ fun LibraryScreen(
                                         ) { index ->
                                             val item = pagedItems[index]
                                             if (item != null) {
-                                                val memoizedClick = remember(item.id) { { onItemClick(item.id) } }
+                                                val memoizedClick = remember(item.id, item.mediaType, item.parentId, item.name) {
+                                                    { onItemClick(item.id, item.mediaType, item.parentId, item.name) }
+                                                }
                                                 val subtitle = remember(item.year, item.mediaType) {
                                                     buildString {
                                                         if (item.year != null) append("${item.year}")
                                                         val typeLabel = when (item.mediaType) {
-                                                            com.raulshma.jellyplay.core.model.MediaType.EPISODE -> "Episode"
-                                                            com.raulshma.jellyplay.core.model.MediaType.SERIES -> "Series"
-                                                            com.raulshma.jellyplay.core.model.MediaType.MOVIE -> "Movie"
-                                                            com.raulshma.jellyplay.core.model.MediaType.AUDIO -> "Audio"
-                                                            com.raulshma.jellyplay.core.model.MediaType.MUSIC -> "Music"
+                                                            MediaType.EPISODE -> "Episode"
+                                                            MediaType.SERIES -> "Series"
+                                                            MediaType.MOVIE -> "Movie"
+                                                            MediaType.AUDIO -> "Audio"
+                                                            MediaType.MUSIC -> "Music"
+                                                            MediaType.PHOTO, MediaType.PHOTO_FOLDER -> "Photo"
                                                             else -> null
                                                         }
                                                         if (typeLabel != null) {
@@ -473,35 +495,36 @@ fun LibraryScreen(
                                         }
                                     }
                                 } else {
-                                    LazyVerticalGrid(
-                                        state = gridState,
+                                    TvFocusableGrid(
+                                        itemCount = pagedItems.itemCount,
+                                        key = pagedItems.itemKey { it.id },
                                         columns = GridCells.Adaptive(gridCellSize),
+                                        state = gridState,
                                         contentPadding = gridPadding,
                                         horizontalArrangement = Arrangement.spacedBy(spacing),
                                         verticalArrangement = Arrangement.spacedBy(spacing),
                                         modifier = Modifier.fillMaxSize(),
-                                    ) {
-                                        items(
-                                            count = pagedItems.itemCount,
-                                            key = pagedItems.itemKey { it.id },
-                                            contentType = { "mediaItem" },
-                                        ) { index ->
-                                            val item = pagedItems[index]
-                                            if (item != null) {
-                                                val memoizedClick = remember(item.id) { { onItemClick(item.id) } }
-                                                PosterCard(
-                                                    item = item,
-                                                    imageUrl = remember(item.id) { viewModel.getImageUrl(item.id) },
-                                                    onClick = memoizedClick,
-                                                    showProgress = item.playbackPositionTicks != null && item.playbackPositionTicks!! > 0,
-                                                    progressPercent = if (item.runTimeTicks != null && item.runTimeTicks!! > 0) {
-                                                        (item.playbackPositionTicks?.toFloat()
-                                                            ?: 0f) / item.runTimeTicks!!.toFloat()
-                                                    } else 0f,
-                                                    blurHash = item.blurHashes.primary,
-                                                    sharedElementKey = "poster_${item.id}",
-                                                )
+                                        contentType = { "mediaItem" },
+                                    ) { index, itemModifier ->
+                                        val item = pagedItems[index]
+                                        if (item != null) {
+                                            val memoizedClick = remember(item.id, item.mediaType, item.parentId, item.name) {
+                                                { onItemClick(item.id, item.mediaType, item.parentId, item.name) }
                                             }
+                                            PosterCard(
+                                                item = item,
+                                                imageUrl = remember(item.id) { viewModel.getImageUrl(item.id) },
+                                                onClick = memoizedClick,
+                                                showProgress = item.playbackPositionTicks != null && item.playbackPositionTicks!! > 0,
+                                                progressPercent = if (item.runTimeTicks != null && item.runTimeTicks!! > 0) {
+                                                    (item.playbackPositionTicks?.toFloat()
+                                                        ?: 0f) / item.runTimeTicks!!.toFloat()
+                                                } else 0f,
+                                                blurHash = item.blurHashes.primary,
+                                                sharedElementKey = "poster_${item.id}",
+                                                photoFolderChildImageUrls = photoFolderChildUrls[item.id].orEmpty(),
+                                                modifier = itemModifier,
+                                            )
                                         }
                                     }
                                 }

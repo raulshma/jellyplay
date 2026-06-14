@@ -6,8 +6,6 @@ import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.grid.GridCells
-import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
-import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.runtime.Composable
@@ -30,6 +28,7 @@ import com.raulshma.jellyplay.feature.music.components.GenreChip
 import com.raulshma.jellyplay.core.ui.adaptive.LocalAdaptiveInfo
 import com.raulshma.jellyplay.core.ui.adaptive.*
 import com.raulshma.jellyplay.core.ui.tv.LocalTvMode
+import com.raulshma.jellyplay.core.ui.tv.TvFocusableGrid
 import com.composables.icons.tabler.Tabler
 import com.composables.icons.tabler.outline.*
 
@@ -91,7 +90,9 @@ fun GenresScreen(
                     else -> {
                         val adaptiveInfo = LocalAdaptiveInfo.current
                         val isTv = LocalTvMode.current
-                        LazyVerticalGrid(
+                        TvFocusableGrid(
+                            items = genres,
+                            key = { it.id },
                             columns = GridCells.Adaptive(adaptiveInfo.gridMinSize(isTv)),
                             contentPadding = PaddingValues(
                                 start = adaptiveInfo.contentPadding(isTv),
@@ -102,13 +103,13 @@ fun GenresScreen(
                             horizontalArrangement = Arrangement.spacedBy(adaptiveInfo.itemSpacing(isTv)),
                             verticalArrangement = Arrangement.spacedBy(adaptiveInfo.itemSpacing(isTv)),
                             modifier = Modifier.fillMaxSize(),
-                        ) {
-                            items(genres, key = { it.id }, contentType = { "genre" }) { genre ->
-                                GenreChip(
-                                    name = genre.name,
-                                    onClick = { onItemClick(genre.id, genre.name) },
-                                )
-                            }
+                            contentType = { "genre" },
+                        ) { _, genre, itemModifier ->
+                            GenreChip(
+                                name = genre.name,
+                                onClick = { onItemClick(genre.id, genre.name) },
+                                modifier = itemModifier,
+                            )
                         }
                     }
                 }

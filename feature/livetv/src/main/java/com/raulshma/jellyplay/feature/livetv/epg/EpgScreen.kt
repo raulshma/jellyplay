@@ -38,11 +38,17 @@ import com.raulshma.jellyplay.core.ui.components.JellyPlayScreenScaffold
 import com.raulshma.jellyplay.core.ui.components.ScreenEmptyState
 import com.raulshma.jellyplay.core.ui.components.rememberScreenBackgroundColor
 import com.raulshma.jellyplay.core.ui.tv.LocalTvMode
-import com.raulshma.jellyplay.core.ui.tv.tvFocusable
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import com.raulshma.jellyplay.core.designsystem.theme.ShapeCache
 import com.composables.icons.tabler.Tabler
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.LaunchedEffect
+import com.raulshma.jellyplay.core.ui.tv.tvFocusRestorer
+import com.raulshma.jellyplay.core.ui.tv.TvGrabInitialFocus
+import com.raulshma.jellyplay.core.ui.tv.tryRequestFocus
 import com.composables.icons.tabler.outline.*
 
 @Composable
@@ -68,6 +74,14 @@ fun EpgScreen(
 
     val backgroundColor = rememberScreenBackgroundColor()
 
+    val focusRequester = remember { FocusRequester() }
+    val programsNotEmpty = viewModel.programs.isNotEmpty()
+    TvGrabInitialFocus(
+        focusRequester = focusRequester,
+        itemCount = viewModel.programs.size,
+        tag = "epg_init",
+    )
+
     JellyPlayScreenScaffold(
         title = "Program Guide",
         onBack = onBack,
@@ -91,7 +105,10 @@ fun EpgScreen(
             )
         } else {
             LazyColumn(
-                modifier = Modifier.fillMaxSize(),
+                modifier = Modifier
+                    .fillMaxSize()
+                    .tvFocusRestorer()
+                    .focusRequester(focusRequester),
                 contentPadding = PaddingValues(
                     start = contentPad,
                     end = contentPad,
@@ -127,7 +144,7 @@ private fun ProgramCard(
             .fillMaxWidth()
             .clip(ShapeCache.smooth16)
             .background(MaterialTheme.colorScheme.onSurface.copy(alpha = 0.05f))
-            .tvFocusable().clickable(onClick = onClick)
+            .clickable(onClick = onClick)
             .padding(horizontal = 16.dp, vertical = 14.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
@@ -183,7 +200,7 @@ private fun ProgramCard(
                     .size(36.dp)
                     .clip(CircleShape)
                     .background(MaterialTheme.colorScheme.onSurface.copy(alpha = 0.08f))
-                    .tvFocusable().clickable(onClick = onRecordClick),
+                    .clickable(onClick = onRecordClick),
                 contentAlignment = Alignment.Center,
             ) {
                 Icon(

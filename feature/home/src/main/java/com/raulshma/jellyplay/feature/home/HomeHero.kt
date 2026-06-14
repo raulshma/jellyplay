@@ -64,7 +64,10 @@ import com.raulshma.jellyplay.core.ui.adaptive.LocalAdaptiveInfo
 import com.raulshma.jellyplay.core.ui.adaptive.WindowSizeClass
 import com.raulshma.jellyplay.core.ui.image.MediaImage
 import com.raulshma.jellyplay.core.ui.tv.LocalTvMode
+import com.raulshma.jellyplay.core.ui.tv.ifElse
+import com.raulshma.jellyplay.core.ui.tv.RequestOrRestoreFocus
 import com.raulshma.jellyplay.core.ui.tv.rememberTvFocusState
+import com.raulshma.jellyplay.core.ui.tv.tryRequestFocus
 import com.raulshma.jellyplay.core.ui.tv.tvFocusIndicator
 import com.raulshma.jellyplay.core.ui.tv.tvHeroFocusExitHandler
 import com.composables.icons.tabler.Tabler
@@ -83,6 +86,8 @@ fun AnimatedHeroHeader(
     onItemClick: (String) -> Unit,
     onDetailsClick: ((String) -> Unit)? = null,
     onFocusChange: (Boolean) -> Unit = {},
+    requestInitialFocus: Boolean = true,
+    focusRequester: FocusRequester? = null,
 ) {
     val parallaxOffset by remember(listState) {
         derivedStateOf {
@@ -129,7 +134,9 @@ fun AnimatedHeroHeader(
             onClick = { onItemClick(currentFeatured.id) },
             onDetailsClick = onDetailsClick?.let { { it(currentFeatured.id) } },
             onFocusChange = onFocusChange,
+            requestInitialFocus = requestInitialFocus,
             isVisible = heroIsVisible,
+            focusRequester = focusRequester,
         )
     }
 }
@@ -146,6 +153,8 @@ fun HeroHeader(
     onDetailsClick: (() -> Unit)? = null,
     onFocusChange: (Boolean) -> Unit = {},
     isVisible: Boolean = true,
+    requestInitialFocus: Boolean = true,
+    focusRequester: FocusRequester? = null,
 ) {
     val isTv = LocalTvMode.current
     val adaptiveInfo = LocalAdaptiveInfo.current
@@ -172,15 +181,15 @@ fun HeroHeader(
         label = "detailsButtonScale",
     )
 
-    val heroTvFocusState = rememberTvFocusState()
-    val heroPlayFocusRequester = remember { FocusRequester() }
+    val playTvFocusState = rememberTvFocusState()
+    val detailsTvFocusState = rememberTvFocusState()
+    val heroPlayFocusRequester = focusRequester ?: remember { FocusRequester() }
     val heroDetailsFocusRequester = remember { FocusRequester() }
 
-    androidx.compose.runtime.LaunchedEffect(isTv, item.id) {
-        if (isTv) {
-            heroPlayFocusRequester.requestFocus()
-        }
-    }
+    RequestOrRestoreFocus(
+        focusRequester = if (isTv && requestInitialFocus) heroPlayFocusRequester else null,
+        debugKey = "hero_play",
+    )
 
     val breathScale: Float
     val playPulseScale: Float
@@ -428,19 +437,14 @@ fun HeroHeader(
             Row(
                 horizontalArrangement = Arrangement.spacedBy(16.dp),
                 verticalAlignment = Alignment.CenterVertically,
-                modifier = Modifier.then(if (isTv) Modifier.tvHeroFocusExitHandler() else Modifier),
+                modifier = Modifier.ifElse(isTv, Modifier.tvHeroFocusExitHandler()),
             ) {
                 val hasProgress = item.playbackPositionTicks != null && item.playbackPositionTicks!! > 0
 
                 Box(
                     modifier = Modifier
                         .height(48.dp)
-                        .then(heroTvFocusState.focusModifier)
-                        .tvFocusIndicator(heroTvFocusState, ShapeCache.smoothPill)
-                        .focusRequester(heroPlayFocusRequester)
-                        .onFocusChanged { focusState ->
-                            onFocusChange(focusState.isFocused || focusState.hasFocus)
-                        }
+                        .tvFocusIndicator(playTvFocusState, ShapeCache.smoothPill, Color.White)
                         .graphicsLayer { scaleX = playScale; scaleY = playScale }
                 ) {
                     if (!isTv) {
@@ -472,6 +476,11 @@ fun HeroHeader(
                             .fillMaxHeight()
                             .clip(ShapeCache.smoothPill)
                             .background(playGradientBrush)
+                            .ifElse(isTv, playTvFocusState.focusModifier)
+                            .focusRequester(heroPlayFocusRequester)
+                            .onFocusChanged { focusState ->
+                                onFocusChange(focusState.isFocused || focusState.hasFocus)
+                            }
                             .clickable(
                                 interactionSource = playInteractionSource,
                                 indication = null,
@@ -500,11 +509,7 @@ fun HeroHeader(
                 Box(
                     modifier = Modifier
                         .height(48.dp)
-                        .tvFocusIndicator(heroTvFocusState, ShapeCache.smoothPill)
-                        .focusRequester(heroDetailsFocusRequester)
-                        .onFocusChanged { focusState ->
-                            onFocusChange(focusState.isFocused || focusState.hasFocus)
-                        }
+                        .tvFocusIndicator(detailsTvFocusState, ShapeCache.smoothPill)
                         .graphicsLayer { scaleX = detailsScale; scaleY = detailsScale }
                 ) {
                     Box(
@@ -516,6 +521,11 @@ fun HeroHeader(
                                 BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.15f)),
                                 ShapeCache.smoothPill
                             )
+                            .ifElse(isTv, detailsTvFocusState.focusModifier)
+                            .focusRequester(heroDetailsFocusRequester)
+                            .onFocusChanged { focusState ->
+                                onFocusChange(focusState.isFocused || focusState.hasFocus)
+                            }
                             .clickable(
                                 interactionSource = detailsInteractionSource,
                                 indication = null,

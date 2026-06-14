@@ -4,6 +4,7 @@ import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.focusGroup
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.Arrangement
@@ -22,11 +23,20 @@ import androidx.compose.foundation.lazy.grid.rememberLazyGridState
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
+import androidx.compose.ui.ExperimentalComposeUiApi
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusProperties
+import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -44,10 +54,11 @@ import com.raulshma.jellyplay.core.ui.components.PosterCard
 import com.raulshma.jellyplay.core.ui.components.rememberScreenBackgroundColor
 import com.raulshma.jellyplay.core.designsystem.theme.ShapeCache
 import com.raulshma.jellyplay.core.ui.tv.LocalTvMode
+import com.raulshma.jellyplay.core.ui.tv.TvFocusableGrid
 
 @Composable
 fun FavoritesScreen(
-    onItemClick: (String) -> Unit,
+    onItemClick: (itemId: String, mediaType: MediaType, parentId: String?, itemName: String) -> Unit,
     onBack: () -> Unit,
     viewModel: FavoritesViewModel = hiltViewModel(),
 ) {
@@ -56,6 +67,12 @@ fun FavoritesScreen(
     val adaptiveInfo = LocalAdaptiveInfo.current
     val mediaTypeFilter by viewModel.mediaTypeFilter.collectAsStateWithLifecycle()
     val pagingItems = viewModel.pagedItems.collectAsLazyPagingItems()
+    val photoFolderChildUrls by viewModel.photoFolderChildUrls.collectAsStateWithLifecycle()
+
+    val snapshot = pagingItems.itemSnapshotList
+    LaunchedEffect(snapshot) {
+        viewModel.prefetchPhotoFolderChildUrls(snapshot.items)
+    }
 
     JellyPlayScreenScaffold(
         title = "Favorites",
@@ -115,7 +132,9 @@ fun FavoritesScreen(
                 }
                 else -> {
                     val gridState = rememberLazyGridState()
-                    LazyVerticalGrid(
+                    TvFocusableGrid(
+                        itemCount = pagingItems.itemCount,
+                        key = { index -> pagingItems[index]?.id ?: index },
                         columns = GridCells.Adaptive(minSize = if (isTv) 180.dp else 150.dp),
                         state = gridState,
                         contentPadding = PaddingValues(
@@ -126,35 +145,34 @@ fun FavoritesScreen(
                         ),
                         horizontalArrangement = Arrangement.spacedBy(if (isTv) 16.dp else 12.dp),
                         verticalArrangement = Arrangement.spacedBy(if (isTv) 20.dp else 16.dp),
-                    ) {
-                        items(
-                            count = pagingItems.itemCount,
-                            key = { index -> pagingItems[index]?.id ?: index }
-                        ) { index ->
-                            val item = pagingItems[index]
-                            if (item != null) {
-                                PosterCard(
-                                    item = item,
-                                    imageUrl = remember(item.id) { viewModel.getImageUrl(item.id) },
-                                    blurHash = item.blurHashes.primary,
-                                    onClick = { onItemClick(item.id) },
-                                )
-                            }
-                        }
-
-                        if (pagingItems.loadState.append is LoadState.Loading) {
-                            item {
-                                Box(
-                                    modifier = Modifier
-                                        .fillMaxWidth()
-                                        .padding(16.dp),
-                                    contentAlignment = Alignment.Center,
-                                ) {
-                                    com.raulshma.jellyplay.core.ui.components.JellyPlayLoadingIndicator(
-                                        color = MaterialTheme.colorScheme.primary,
-                                    )
+                        modifier = Modifier.fillMaxSize(),
+                        extraContent = {
+                            if (pagingItems.loadState.append is LoadState.Loading) {
+                                item {
+                                    Box(
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .padding(16.dp),
+                                        contentAlignment = Alignment.Center,
+                                    ) {
+                                        com.raulshma.jellyplay.core.ui.components.JellyPlayLoadingIndicator(
+                                            color = MaterialTheme.colorScheme.primary,
+                                        )
+                                    }
                                 }
                             }
+                        },
+                    ) { index, itemModifier ->
+                        val item = pagingItems[index]
+                        if (item != null) {
+                            PosterCard(
+                                item = item,
+                                imageUrl = remember(item.id) { viewModel.getImageUrl(item.id) },
+                                blurHash = item.blurHashes.primary,
+                                onClick = { onItemClick(item.id, item.mediaType, item.parentId, item.name) },
+                                photoFolderChildImageUrls = photoFolderChildUrls[item.id].orEmpty(),
+                                modifier = itemModifier,
+                            )
                         }
                     }
                 }

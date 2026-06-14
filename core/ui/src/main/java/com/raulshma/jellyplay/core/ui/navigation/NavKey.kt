@@ -123,6 +123,9 @@ sealed class Route : NavKey {
 
     @Serializable data class MediaInfo(val itemId: String) : Route()
 
+    @Serializable data class PhotoAlbum(val parentId: String, val folderName: String = "") : Route()
+    @Serializable data class PhotoViewer(val itemId: String, val parentId: String? = null) : Route()
+
     @Serializable data object About : Route()
 
     @Serializable data object Licenses : Route()

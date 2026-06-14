@@ -30,10 +30,24 @@ class FavoritesViewModel @Inject constructor(
 
     val mediaTypeFilter = _mediaTypeFilter.flow
 
+    private val _photoFolderChildUrls = stateFlow<Map<String, List<String>>>(emptyMap())
+    val photoFolderChildUrls = _photoFolderChildUrls.flow
+
     fun setMediaTypeFilter(type: MediaType?) {
         _mediaTypeFilter.set(type)
     }
 
     fun getImageUrl(itemId: String): String =
         playbackRepository.getImageUrl(itemId, maxWidth = 400)
+
+    fun prefetchPhotoFolderChildUrls(items: List<MediaItem>) {
+        launch {
+            val current = _photoFolderChildUrls.value
+            items.filter { it.mediaType == MediaType.PHOTO_FOLDER && it.id !in current }
+                .forEach { folder ->
+                    val urls = mediaRepository.getPhotoFolderChildImageUrls(folder.id)
+                    _photoFolderChildUrls.set(_photoFolderChildUrls.value + (folder.id to urls))
+                }
+        }
+    }
 }

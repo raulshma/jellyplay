@@ -12,6 +12,7 @@ import androidx.compose.animation.scaleOut
 import androidx.compose.foundation.background
 import com.raulshma.jellyplay.core.ui.tv.LocalTvMode
 import com.raulshma.jellyplay.core.ui.tv.rememberTvFocusState
+import com.raulshma.jellyplay.core.ui.tv.enableMarqueeOnFocus
 import com.raulshma.jellyplay.core.ui.tv.tvFocusIndicator
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
@@ -176,7 +177,9 @@ fun AlbumCard(
             style = MaterialTheme.typography.bodyMedium,
             maxLines = 1,
             overflow = TextOverflow.Ellipsis,
-            modifier = Modifier.padding(top = 8.dp),
+            modifier = Modifier
+                .padding(top = 8.dp)
+                .enableMarqueeOnFocus(focused = tvFocusState.isFocused),
         )
         
         // Artist and year with expressive styling

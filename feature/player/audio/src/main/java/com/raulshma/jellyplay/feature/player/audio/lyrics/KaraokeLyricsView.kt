@@ -113,17 +113,17 @@ private fun KaraokeLine(
     val activeColor = MaterialTheme.colorScheme.primary
     val inactiveColor = Color.White.copy(alpha = 0.55f)
 
-    val annotated: AnnotatedString = remember(line, positionInLine) {
+    val activeWordIndex by remember {
+        derivedStateOf { LrcParser.findCurrentWordIndex(line, positionInLine) }
+    }
+
+    val annotated: AnnotatedString = remember(activeWordIndex) {
         buildAnnotatedString {
             line.words.forEachIndexed { index, word ->
-                val wordStart = word.timeMs - line.timeMs
-                val wordEnd = wordStart + word.durationMs
-                val isActive = positionInLine >= wordStart && positionInLine < wordEnd
-                val justFinished = index in line.words.indices &&
-                    positionInLine >= wordEnd &&
-                    (line.words.getOrNull(index + 1)?.let { positionInLine < (it.timeMs - line.timeMs) } ?: true)
+                val isActive = index == activeWordIndex
+                val isFinished = index < activeWordIndex
                 val color = when {
-                    isActive || justFinished -> activeColor
+                    isActive || isFinished -> activeColor
                     else -> inactiveColor
                 }
                 withStyle(
@@ -139,10 +139,6 @@ private fun KaraokeLine(
                 }
             }
         }
-    }
-
-    val activeWordIndex by remember(line, positionInLine) {
-        derivedStateOf { LrcParser.findCurrentWordIndex(line, positionInLine) }
     }
 
     val activeScale by animateFloatAsState(

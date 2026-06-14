@@ -5,7 +5,6 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.lazy.grid.GridCells
-import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
@@ -19,6 +18,7 @@ import com.composables.icons.tabler.outline.Search
 import com.raulshma.jellyplay.core.ui.components.ErrorScreen
 import com.raulshma.jellyplay.core.ui.components.ScreenEmptyState
 import com.raulshma.jellyplay.core.ui.components.ScreenLoadingState
+import com.raulshma.jellyplay.core.ui.tv.TvFocusableGrid
 
 @Composable
 fun <T : Any> PagedGrid(
@@ -30,7 +30,7 @@ fun <T : Any> PagedGrid(
     spacing: Dp = 12.dp,
     emptyIcon: ImageVector = Tabler.Outline.Search,
     emptyTitle: String = "Nothing found",
-    itemContent: @Composable (T) -> Unit,
+    itemContent: @Composable (T, Modifier) -> Unit,
 ) {
     Box(modifier = modifier.fillMaxSize()) {
         when (val refreshState = items.loadState.refresh) {
@@ -46,22 +46,19 @@ fun <T : Any> PagedGrid(
                         title = emptyTitle,
                     )
                 } else {
-                    LazyVerticalGrid(
+                    TvFocusableGrid(
+                        itemCount = items.itemCount,
+                        key = items.itemKey(itemKey),
                         columns = GridCells.Adaptive(gridMin),
                         contentPadding = PaddingValues(contentPad),
                         horizontalArrangement = Arrangement.spacedBy(spacing),
                         verticalArrangement = Arrangement.spacedBy(spacing),
                         modifier = Modifier.fillMaxSize(),
-                    ) {
-                        items(
-                            count = items.itemCount,
-                            key = items.itemKey(itemKey),
-                            contentType = { "pagedItem" },
-                        ) { index ->
-                            val item = items[index]
-                            if (item != null) {
-                                itemContent(item)
-                            }
+                        contentType = { "pagedItem" },
+                    ) { index, itemModifier ->
+                        val item = items[index]
+                        if (item != null) {
+                            itemContent(item, itemModifier)
                         }
                     }
                 }

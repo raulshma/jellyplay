@@ -384,8 +384,8 @@ class AudioPlayerViewModel @Inject constructor(
             mediaRepository.getMediaDetail(itemId)
                 .onSuccess { detail ->
                     val hash = detail.item.blurHashes.primary
-                    blurHashCache.put(itemId, hash)
-                    if (hash == null) blurHashCache.put(keySentinel(itemId), "")
+                    if (hash != null) blurHashCache.put(itemId, hash)
+                    else blurHashCache.put(keySentinel(itemId), "")
                     albumArtBlurHash = hash
                 }
         }

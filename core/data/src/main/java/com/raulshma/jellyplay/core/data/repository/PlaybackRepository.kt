@@ -15,7 +15,7 @@ interface PlaybackRepository {
 
     suspend fun reportPlaybackStopped(itemId: String, sessionId: String, positionTicks: Long): Result<Unit>
 
-    fun getImageUrl(itemId: String, imageType: String = "Primary", maxWidth: Int = 400): String
+    fun getImageUrl(itemId: String, imageType: String = "Primary", maxWidth: Int? = 400): String
 
     fun getBackdropUrl(itemId: String, maxWidth: Int = 1280): String
 

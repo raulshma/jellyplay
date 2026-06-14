@@ -36,6 +36,9 @@ import androidx.compose.ui.unit.dp
 import com.raulshma.jellyplay.core.designsystem.theme.ShapeCache
 import com.raulshma.jellyplay.core.model.StreamingQuality
 import com.raulshma.jellyplay.core.ui.tv.LocalTvMode
+import com.raulshma.jellyplay.core.ui.tv.ifElse
+import com.raulshma.jellyplay.core.ui.tv.tryRequestFocus
+import com.raulshma.jellyplay.core.ui.tv.verticalWrapAround
 import com.raulshma.jellyplay.core.ui.tv.rememberTvFocusState
 import com.raulshma.jellyplay.core.ui.tv.tvFocusIndicator
 import com.composables.icons.tabler.Tabler
@@ -53,11 +56,7 @@ fun QualityPickerSheet(
 
     LaunchedEffect(isTv) {
         if (isTv) {
-            try {
-                focusRequester.requestFocus()
-            } catch (e: Exception) {
-                // ignore
-            }
+            focusRequester.tryRequestFocus("sheet")
         }
     }
 
@@ -87,7 +86,7 @@ fun QualityPickerSheet(
             Spacer(Modifier.height(20.dp))
 
             if (isTv) {
-                LazyColumn {
+                LazyColumn(modifier = Modifier.verticalWrapAround()) {
                     items(StreamingQuality.entries) { quality ->
                         val isSelected = quality == currentQuality
                         val isFirstOrSelected = isSelected || (currentQuality !in StreamingQuality.entries && quality == StreamingQuality.AUTO)
@@ -103,7 +102,7 @@ fun QualityPickerSheet(
                                     else Color.White.copy(alpha = 0.04f)
                                 )
                                 .then(qualityFocusState.focusModifier)
-                                .then(if (isFirstOrSelected) Modifier.focusRequester(focusRequester) else Modifier)
+                                .ifElse(isFirstOrSelected, Modifier.focusRequester(focusRequester))
                                 .tvFocusIndicator(qualityFocusState, shape)
                                 .clickable { onSelect(quality); onDismiss() }
                                 .padding(horizontal = 20.dp, vertical = 14.dp),

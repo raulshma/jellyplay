@@ -41,6 +41,11 @@ import com.raulshma.jellyplay.core.ui.adaptive.itemSpacing
 import com.raulshma.jellyplay.core.ui.components.JellyPlayScreenScaffold
 import com.raulshma.jellyplay.core.ui.components.ScreenEmptyState
 import com.raulshma.jellyplay.core.ui.tv.LocalTvMode
+import com.raulshma.jellyplay.core.ui.tv.tvFocusRestorer
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
+import com.raulshma.jellyplay.core.ui.tv.TvGrabInitialFocus
+import com.raulshma.jellyplay.core.ui.tv.tryRequestFocus
 import com.composables.icons.tabler.Tabler
 import com.composables.icons.tabler.outline.*
 
@@ -63,6 +68,13 @@ fun ServerManagementScreen(
     val spacing = adaptiveInfo.itemSpacing(isTv)
     val backgroundColor = com.raulshma.jellyplay.core.ui.components.rememberScreenBackgroundColor()
 
+    val focusRequester = remember { FocusRequester() }
+    TvGrabInitialFocus(
+        focusRequester = focusRequester,
+        itemCount = 1,
+        tag = "server_management_init",
+    )
+
     JellyPlayScreenScaffold(
         title = "Server Management",
         onBack = onBack,
@@ -82,7 +94,10 @@ fun ServerManagementScreen(
             )
         } else {
             LazyColumn(
-                modifier = Modifier.fillMaxSize(),
+                modifier = Modifier
+                    .fillMaxSize()
+                    .tvFocusRestorer()
+                    .focusRequester(focusRequester),
                 contentPadding = PaddingValues(contentPad),
                 verticalArrangement = Arrangement.spacedBy(spacing),
             ) {

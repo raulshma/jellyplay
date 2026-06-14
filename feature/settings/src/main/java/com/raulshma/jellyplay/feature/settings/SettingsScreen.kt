@@ -42,12 +42,8 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
-import androidx.compose.ui.input.key.Key
-import androidx.compose.ui.input.key.KeyEventType
-import androidx.compose.ui.input.key.key
-import androidx.compose.ui.input.key.onKeyEvent
-import androidx.compose.ui.input.key.onPreviewKeyEvent
-import androidx.compose.ui.input.key.type
+import com.raulshma.jellyplay.core.ui.tv.input.onDpadKey
+import com.raulshma.jellyplay.core.ui.tv.input.onDpadKeyEvent
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
@@ -67,7 +63,6 @@ import androidx.compose.material3.ListItem
 import androidx.compose.material3.ListItemDefaults
 import com.raulshma.jellyplay.core.ui.navigation.Route
 import androidx.compose.foundation.layout.statusBarsPadding
-import com.raulshma.jellyplay.core.ui.tv.tvFocusable
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.raulshma.jellyplay.core.designsystem.theme.ShapeCache
@@ -81,6 +76,7 @@ import com.raulshma.jellyplay.core.ui.adaptive.LocalAdaptiveInfo
 import com.raulshma.jellyplay.core.ui.adaptive.bottomPadding
 import com.raulshma.jellyplay.core.ui.adaptive.contentPadding
 import com.raulshma.jellyplay.core.ui.tv.LocalTvMode
+import com.raulshma.jellyplay.core.ui.tv.tryRequestFocus
 import com.raulshma.jellyplay.core.ui.tv.tvFocusRestorer
 import com.raulshma.jellyplay.core.ui.tv.rememberTvFocusState
 import com.raulshma.jellyplay.core.ui.tv.tvFocusIndicator
@@ -132,10 +128,27 @@ fun SettingsScreen(
         animateEntrance = true
     }
 
-    LaunchedEffect(isTv) {
+    // On first TV entry, focus the search bar so the user can quickly type. On re-entry from a
+    // sub-settings screen, focus the list instead — the restored scroll position puts the user
+    // near where they left off, and tvFocusRestorer() on the LazyColumn restores the last-focused
+    // child. Without the saveable flag, the search bar steals focus on every return, which the
+    // user perceives as "focus reset to the top."
+    var isFirstTvEntry by androidx.compose.runtime.saveable.rememberSaveable { mutableStateOf(true) }
+    var lastClickedSettingId by androidx.compose.runtime.saveable.rememberSaveable { mutableStateOf<String?>(null) }
+    LaunchedEffect(Unit) {
         if (isTv) {
             kotlinx.coroutines.delay(150)
-            try { searchFocusRequester.requestFocus() } catch (_: Exception) {}
+            if (isFirstTvEntry) {
+                searchFocusRequester.tryRequestFocus()
+                isFirstTvEntry = false
+            } else {
+                if (lastClickedSettingId != null) {
+                    kotlinx.coroutines.delay(1000)
+                    lastClickedSettingId = null
+                } else {
+                    listFocusRequester.tryRequestFocus()
+                }
+            }
         }
     }
 
@@ -211,7 +224,7 @@ fun SettingsScreen(
                                 isSearchActive = true
                                 coroutineScope.launch {
                                     kotlinx.coroutines.delay(100)
-                                    try { searchFocusRequester.requestFocus() } catch (_: Exception) {}
+                                    searchFocusRequester.tryRequestFocus()
                                 }
                             },
                             searchBoxFocusRequester = searchFocusRequester
@@ -233,48 +246,31 @@ fun SettingsScreen(
                                     .fillMaxWidth()
                                     .focusRequester(searchFocusRequester)
                                     .onFocusEvent { isSearchFocused = it.isFocused }
-                                    .then(if (isTv) Modifier.tvFocusable() else Modifier)
-                                    .onPreviewKeyEvent { keyEvent ->
-                                        if (isTv) {
-                                            when (keyEvent.key) {
-                                                Key.DirectionCenter, Key.Enter -> {
-                                                    if (!isSearchActive) {
-                                                        if (keyEvent.type == KeyEventType.KeyUp) {
-                                                            isSearchActive = true
-                                                        }
-                                                        true
-                                                    } else {
-                                                        false
-                                                    }
-                                                }
-                                                Key.DirectionLeft -> {
-                                                    if (keyEvent.type == KeyEventType.KeyDown) {
-                                                        try {
-                                                            leadingFocusRequester.requestFocus()
-                                                        } catch (_: Exception) {}
-                                                    }
-                                                    true
-                                                }
-                                                Key.DirectionRight -> {
-                                                    if (keyEvent.type == KeyEventType.KeyDown) {
-                                                        try {
-                                                            trailingFocusRequester.requestFocus()
-                                                        } catch (_: Exception) {}
-                                                    }
-                                                    true
-                                                }
-                                                Key.Back -> {
-                                                    if (keyEvent.type == KeyEventType.KeyUp) {
-                                                        isSearchActive = false
-                                                        searchQuery = ""
-                                                        try { listFocusRequester.requestFocus() } catch (_: Exception) {}
-                                                    }
-                                                    true
-                                                }
-                                                else -> false
+                                    
+                                    .onDpadKeyEvent(
+                                        onSelect = { e ->
+                                            if (!isSearchActive && e.isKeyUp) {
+                                                isSearchActive = true
+                                                true
+                                            } else false
+                                        },
+                                        onLeft = {
+                                            leadingFocusRequester.tryRequestFocus()
+                                            true
+                                        },
+                                        onRight = {
+                                            trailingFocusRequester.tryRequestFocus()
+                                            true
+                                        },
+                                        onBack = { e ->
+                                            if (e.isKeyUp) {
+                                                isSearchActive = false
+                                                searchQuery = ""
+                                                listFocusRequester.tryRequestFocus()
                                             }
-                                        } else false
-                                    },
+                                            true
+                                        },
+                                    ),
                                 placeholder = {
                                     Text(
                                         "Search settings...",
@@ -297,16 +293,12 @@ fun SettingsScreen(
                                         iconSize = 20.dp,
                                         modifier = Modifier
                                             .focusRequester(leadingFocusRequester)
-                                            .onPreviewKeyEvent { keyEvent ->
-                                                if (isTv && keyEvent.key == Key.DirectionRight && keyEvent.type == KeyEventType.KeyDown) {
-                                                    try {
-                                                        searchFocusRequester.requestFocus()
-                                                        true
-                                                    } catch (_: Exception) {
-                                                        false
-                                                    }
-                                                } else false
-                                            }
+                                            .onDpadKey(
+                                                onRight = {
+                                                    searchFocusRequester.tryRequestFocus()
+                                                    true
+                                                },
+                                            )
                                     )
                                 },
                                 trailingIcon = {
@@ -323,16 +315,12 @@ fun SettingsScreen(
                                                 iconSize = 18.dp,
                                                 modifier = Modifier
                                                     .focusRequester(trailingFocusRequester)
-                                                    .onPreviewKeyEvent { keyEvent ->
-                                                        if (isTv && keyEvent.key == Key.DirectionLeft && keyEvent.type == KeyEventType.KeyDown) {
-                                                            try {
-                                                                searchFocusRequester.requestFocus()
-                                                                true
-                                                            } catch (_: Exception) {
-                                                                false
-                                                            }
-                                                        } else false
-                                                    }
+                                                    .onDpadKey(
+                                                        onLeft = {
+                                                            searchFocusRequester.tryRequestFocus()
+                                                            true
+                                                        },
+                                                    )
                                             )
                                         } else {
                                             SettingsIconButton(
@@ -343,16 +331,12 @@ fun SettingsScreen(
                                                 iconSize = 20.dp,
                                                 modifier = Modifier
                                                     .focusRequester(trailingFocusRequester)
-                                                    .onPreviewKeyEvent { keyEvent ->
-                                                        if (isTv && keyEvent.key == Key.DirectionLeft && keyEvent.type == KeyEventType.KeyDown) {
-                                                            try {
-                                                                searchFocusRequester.requestFocus()
-                                                                true
-                                                            } catch (_: Exception) {
-                                                                false
-                                                            }
-                                                        } else false
-                                                    }
+                                                    .onDpadKey(
+                                                        onLeft = {
+                                                            searchFocusRequester.tryRequestFocus()
+                                                            true
+                                                        },
+                                                    )
                                             )
                                             AdvancedSettingsToggleButton(
                                                 showAdvanced = preferences.showAdvancedSettings,
@@ -415,14 +399,16 @@ fun SettingsScreen(
                                 modifier = Modifier
                                     .fillMaxWidth()
                                     .padding(vertical = 8.dp)
-                                    .then(if (isTv) Modifier.onPreviewKeyEvent { keyEvent ->
-                                        if (keyEvent.key == Key.Back && keyEvent.type == KeyEventType.KeyUp) {
-                                            isSearchActive = false
-                                            searchQuery = ""
-                                            try { listFocusRequester.requestFocus() } catch (_: Exception) {}
+                                    .then(Modifier.onDpadKeyEvent(
+                                        onBack = { e ->
+                                            if (e.isKeyUp) {
+                                                isSearchActive = false
+                                                searchQuery = ""
+                                                listFocusRequester.tryRequestFocus()
+                                            }
                                             true
-                                        } else false
-                                    } else Modifier),
+                                        },
+                                    )),
                                 verticalArrangement = Arrangement.spacedBy(4.dp),
                                 contentPadding = PaddingValues(horizontal = 16.dp)
                             ) {
@@ -525,15 +511,42 @@ fun SettingsScreen(
                                                         is Route.ServerManagement -> onServerManagement(item.id)
                                                         is Route.UserManagement -> onUserManagement(item.id)
                                                         is Route.SeerrSettings -> onSeerrSettings(item.id)
-                                                        is Route.AppearanceSettings -> onAppearanceSettings(item.id)
-                                                        is Route.PlaybackSettings -> onPlaybackSettings(item.id)
-                                                        is Route.AudioSettings -> onAudioSettings(item.id)
-                                                        is Route.LanguageSettings -> onLanguageSettings(item.id)
-                                                        is Route.NotificationSettings -> onNotificationSettings(item.id)
-                                                        is Route.StorageSettings -> onStorageSettings(item.id)
-                                                        is Route.SecuritySettings -> onSecuritySettings(item.id)
-                                                        is Route.BackupSettings -> onBackupSettings(item.id)
-                                                        Route.About -> onAboutClick()
+                                                        is Route.AppearanceSettings -> {
+                                                            lastClickedSettingId = "appearance"
+                                                            onAppearanceSettings(item.id)
+                                                        }
+                                                        is Route.PlaybackSettings -> {
+                                                            lastClickedSettingId = "playback"
+                                                            onPlaybackSettings(item.id)
+                                                        }
+                                                        is Route.AudioSettings -> {
+                                                            lastClickedSettingId = "audio"
+                                                            onAudioSettings(item.id)
+                                                        }
+                                                        is Route.LanguageSettings -> {
+                                                            lastClickedSettingId = "language"
+                                                            onLanguageSettings(item.id)
+                                                        }
+                                                        is Route.NotificationSettings -> {
+                                                            lastClickedSettingId = "notifications"
+                                                            onNotificationSettings(item.id)
+                                                        }
+                                                        is Route.StorageSettings -> {
+                                                            lastClickedSettingId = "storage"
+                                                            onStorageSettings(item.id)
+                                                        }
+                                                        is Route.SecuritySettings -> {
+                                                            lastClickedSettingId = "security"
+                                                            onSecuritySettings(item.id)
+                                                        }
+                                                        is Route.BackupSettings -> {
+                                                            lastClickedSettingId = "backup"
+                                                            onBackupSettings(item.id)
+                                                        }
+                                                        Route.About -> {
+                                                            lastClickedSettingId = "about"
+                                                            onAboutClick()
+                                                        }
                                                         else -> {}
                                                     }
                                                 }
@@ -564,16 +577,16 @@ fun SettingsScreen(
                         modifier = Modifier
                             .fillMaxSize()
                             .imePadding()
-                            .then(if (isTv) Modifier
+                            .then(Modifier
                                 .tvFocusRestorer()
                                 .focusRequester(listFocusRequester)
-                                .onKeyEvent { keyEvent ->
-                                    if (keyEvent.key == Key.Back && keyEvent.type == KeyEventType.KeyUp) {
-                                        onBack()
+                                .onDpadKeyEvent(
+                                    onBack = { e ->
+                                        if (e.isKeyUp) { onBack() }
                                         true
-                                    } else false
-                                }
-                            else Modifier),
+                                    },
+                                )
+                            ),
                         state = rememberLazyListState(),
                         verticalArrangement = Arrangement.spacedBy(8.dp),
                         contentPadding = PaddingValues(
@@ -634,7 +647,11 @@ fun SettingsScreen(
                             title = "Appearance",
                             subtitle = buildAppearanceSummary(preferences),
                             index = 0, count = 1,
-                            onClick = { onAppearanceSettings(null) },
+                            highlighted = lastClickedSettingId == "appearance",
+                            onClick = {
+                                lastClickedSettingId = "appearance"
+                                onAppearanceSettings(null)
+                            },
                         )
                     }
                 }
@@ -646,7 +663,11 @@ fun SettingsScreen(
                             title = "Playback",
                             subtitle = "Player Engine: ${preferences.preferredPlayer.displayName}",
                             index = 0, count = 1,
-                            onClick = { onPlaybackSettings(null) },
+                            highlighted = lastClickedSettingId == "playback",
+                            onClick = {
+                                lastClickedSettingId = "playback"
+                                onPlaybackSettings(null)
+                            },
                         )
                     }
                 }
@@ -658,7 +679,11 @@ fun SettingsScreen(
                             title = "Audio Player",
                             subtitle = "Default speed: ${if (preferences.audioDefaultSpeed == 1.0f) "1x" else "${preferences.audioDefaultSpeed}x"}",
                             index = 0, count = 1,
-                            onClick = { onAudioSettings(null) },
+                            highlighted = lastClickedSettingId == "audio",
+                            onClick = {
+                                lastClickedSettingId = "audio"
+                                onAudioSettings(null)
+                            },
                         )
                     }
                 }
@@ -670,7 +695,11 @@ fun SettingsScreen(
                             title = "Language & Subtitles",
                             subtitle = "Audio: ${preferences.preferredAudioLanguage ?: "Default"}",
                             index = 0, count = 1,
-                            onClick = { onLanguageSettings(null) },
+                            highlighted = lastClickedSettingId == "language",
+                            onClick = {
+                                lastClickedSettingId = "language"
+                                onLanguageSettings(null)
+                            },
                         )
                     }
                 }
@@ -683,7 +712,11 @@ fun SettingsScreen(
                             title = "Notifications",
                             subtitle = if (notifPrefs.enabled) "Checking ${notifPrefs.checkFrequency.displayName.lowercase()}" else "Disabled",
                             index = 0, count = 1,
-                            onClick = { onNotificationSettings(null) },
+                            highlighted = lastClickedSettingId == "notifications",
+                            onClick = {
+                                lastClickedSettingId = "notifications"
+                                onNotificationSettings(null)
+                            },
                         )
                     }
                 }
@@ -695,7 +728,11 @@ fun SettingsScreen(
                             title = "Storage",
                             subtitle = "Cache: ${viewModel.cacheSizeMb} MB",
                             index = 0, count = 1,
-                            onClick = { onStorageSettings(null) },
+                            highlighted = lastClickedSettingId == "storage",
+                            onClick = {
+                                lastClickedSettingId = "storage"
+                                onStorageSettings(null)
+                            },
                         )
                     }
                 }
@@ -712,7 +749,11 @@ fun SettingsScreen(
                                 else -> "Lock: Off"
                             },
                             index = 0, count = 1,
-                            onClick = { onSecuritySettings(null) },
+                            highlighted = lastClickedSettingId == "security",
+                            onClick = {
+                                lastClickedSettingId = "security"
+                                onSecuritySettings(null)
+                            },
                         )
                     }
                 }
@@ -724,7 +765,11 @@ fun SettingsScreen(
                             title = "Backup & Restore",
                             subtitle = "Export or import app settings",
                             index = 0, count = 1,
-                            onClick = { onBackupSettings(null) },
+                            highlighted = lastClickedSettingId == "backup",
+                            onClick = {
+                                lastClickedSettingId = "backup"
+                                onBackupSettings(null)
+                            },
                         )
                     }
                 }
@@ -820,7 +865,11 @@ fun SettingsScreen(
                             title = "About",
                             subtitle = "App version and licenses",
                             index = 0, count = 1,
-                            onClick = onAboutClick,
+                            highlighted = lastClickedSettingId == "about",
+                            onClick = {
+                                lastClickedSettingId = "about"
+                                onAboutClick()
+                            },
                         )
                     }
                 }

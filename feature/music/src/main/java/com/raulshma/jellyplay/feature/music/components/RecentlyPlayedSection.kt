@@ -14,9 +14,6 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.lazy.LazyRow
-import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
@@ -37,6 +34,7 @@ import com.composables.icons.tabler.Tabler
 import com.composables.icons.tabler.outline.*
 import com.raulshma.jellyplay.core.model.MediaItem
 import com.raulshma.jellyplay.core.ui.image.MediaImage
+import com.raulshma.jellyplay.core.ui.tv.TvFocusableItemRow
 import com.raulshma.jellyplay.core.designsystem.theme.ShapeCache
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
@@ -86,18 +84,19 @@ fun RecentlyPlayedSection(
 
         Spacer(modifier = Modifier.height(16.dp))
 
-        LazyRow(
+        TvFocusableItemRow(
+            items = tracks,
+            key = { it.id },
             contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 24.dp),
             horizontalArrangement = Arrangement.spacedBy(12.dp),
-        ) {
-            itemsIndexed(tracks, key = { _, track -> track.id }) { index, track ->
-                RecentTrackCard(
-                    track = track,
-                    onClick = { onTrackClick(track.id) },
-                    onPlayClick = { onTrackPlayClick(index) },
-                    imageUrl = imageUrlBuilder(track.id),
-                )
-            }
+        ) { index, track, itemModifier ->
+            RecentTrackCard(
+                track = track,
+                onClick = { onTrackClick(track.id) },
+                onPlayClick = { onTrackPlayClick(index) },
+                imageUrl = imageUrlBuilder(track.id),
+                modifier = itemModifier,
+            )
         }
     }
 }

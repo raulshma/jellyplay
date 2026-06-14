@@ -26,8 +26,6 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.LazyRow
-import androidx.compose.foundation.lazy.items
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.MaterialTheme
@@ -60,7 +58,11 @@ import com.raulshma.jellyplay.core.ui.image.MediaImage
 import com.raulshma.jellyplay.core.ui.adaptive.LocalAdaptiveInfo
 import com.raulshma.jellyplay.core.ui.adaptive.WindowSizeClass
 import com.raulshma.jellyplay.core.ui.animation.lessSpringySpec
-import com.raulshma.jellyplay.core.ui.tv.tvFocusable
+import com.raulshma.jellyplay.core.ui.tv.TvFocusableItemRow
+import com.raulshma.jellyplay.core.ui.tv.enableMarqueeOnFocus
+import com.raulshma.jellyplay.core.ui.tv.rememberTvFocusState
+import com.raulshma.jellyplay.core.ui.tv.tvFocusIndicator
+import com.raulshma.jellyplay.core.ui.tv.tvFocusRestorer
 import com.raulshma.jellyplay.core.designsystem.theme.ShapeCache
 import com.composables.icons.tabler.Tabler
 import com.composables.icons.tabler.outline.*
@@ -200,28 +202,30 @@ private fun ArtistDetailContent(
                         )
                     }
                 }
-                LazyRow(
+                TvFocusableItemRow(
+                    items = albums,
+                    key = { it.id },
                     modifier = Modifier
                         .weight(0.6f)
                         .padding(top = 40.dp),
                     contentPadding = PaddingValues(horizontal = 16.dp),
                     horizontalArrangement = Arrangement.spacedBy(12.dp),
-                ) {
-                    items(albums, key = { it.id }, contentType = { "mediaItem" }) { album ->
-                        AlbumCard(
-                            album = album,
-                            imageUrl = getImageUrl(album.id),
-                            onClick = { onAlbumClick(album.id) },
-                            cardWidth = albumCardWidth,
-                        )
-                    }
+                ) { _, album, itemModifier ->
+                    AlbumCard(
+                        album = album,
+                        imageUrl = getImageUrl(album.id),
+                        onClick = { onAlbumClick(album.id) },
+                        cardWidth = albumCardWidth,
+                        modifier = itemModifier,
+                    )
                 }
             }
         } else {
             LazyColumn(
                 modifier = Modifier
                     .fillMaxSize()
-                    .padding(top = 250.dp),
+                    .padding(top = 250.dp)
+                    .tvFocusRestorer(),
                 contentPadding = WindowInsets.navigationBars.asPaddingValues(),
             ) {
                 item {
@@ -247,18 +251,19 @@ private fun ArtistDetailContent(
 
                 if (albums.isNotEmpty()) {
                     item {
-                        LazyRow(
+                        TvFocusableItemRow(
+                            items = albums,
+                            key = { it.id },
                             contentPadding = PaddingValues(horizontal = 16.dp),
                             horizontalArrangement = Arrangement.spacedBy(12.dp),
-                        ) {
-                            items(albums, key = { it.id }, contentType = { "mediaItem" }) { album ->
-                                AlbumCard(
-                                    album = album,
-                                    imageUrl = getImageUrl(album.id),
-                                    onClick = { onAlbumClick(album.id) },
-                                    cardWidth = albumCardWidth,
-                                )
-                            }
+                        ) { _, album, itemModifier ->
+                            AlbumCard(
+                                album = album,
+                                imageUrl = getImageUrl(album.id),
+                                onClick = { onAlbumClick(album.id) },
+                                cardWidth = albumCardWidth,
+                                modifier = itemModifier,
+                            )
                         }
                         Spacer(Modifier.height(16.dp))
                     }
@@ -278,7 +283,9 @@ private fun AlbumCard(
     imageUrl: String,
     onClick: () -> Unit,
     cardWidth: androidx.compose.ui.unit.Dp = 150.dp,
+    modifier: Modifier = Modifier,
 ) {
+    val tvFocusState = rememberTvFocusState()
     val interactionSource = remember { MutableInteractionSource() }
     val isPressed by interactionSource.collectIsPressedAsState()
     val scale by animateFloatAsState(
@@ -309,10 +316,12 @@ private fun AlbumCard(
     }
 
     Column(
-        modifier = Modifier
+        modifier = modifier
             .width(cardWidth)
+            .then(tvFocusState.focusModifier)
+            .tvFocusIndicator(tvFocusState, ShapeCache.smooth8)
             .graphicsLayer { scaleX = scale; scaleY = scale }
-            .tvFocusable().clickable(interactionSource = interactionSource, indication = null, onClick = onClick),
+            .clickable(interactionSource = interactionSource, indication = null, onClick = onClick),
     ) {
         Box(
             modifier = Modifier
@@ -336,6 +345,7 @@ private fun AlbumCard(
             fontWeight = FontWeight.Medium,
             maxLines = 1,
             overflow = TextOverflow.Ellipsis,
+            modifier = Modifier.enableMarqueeOnFocus(focused = tvFocusState.isFocused),
         )
         album.year?.let {
             androidx.compose.material3.Text(

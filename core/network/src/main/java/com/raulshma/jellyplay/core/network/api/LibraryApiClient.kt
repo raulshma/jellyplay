@@ -108,4 +108,9 @@ interface LibraryApiClient {
         maxWidth: Int = 1280,
         tag: String? = null,
     ): String
+
+    suspend fun getChildItemImageUrls(
+        parentId: String,
+        limit: Int = 4,
+    ): List<String>
 }

@@ -33,6 +33,8 @@ import com.raulshma.jellyplay.core.model.MediaSource
 import com.raulshma.jellyplay.core.model.MediaStream
 import com.raulshma.jellyplay.core.model.StreamType
 import com.raulshma.jellyplay.core.ui.tv.LocalTvMode
+import com.raulshma.jellyplay.core.ui.tv.ifElse
+import com.raulshma.jellyplay.core.ui.tv.tryRequestFocus
 import com.raulshma.jellyplay.feature.player.video.TrackOption
 
 @Composable
@@ -62,11 +64,7 @@ fun PlaybackInfoOverlay(
 
     LaunchedEffect(isTv) {
         if (isTv) {
-            try {
-                focusRequester.requestFocus()
-            } catch (e: Exception) {
-                // ignore
-            }
+            focusRequester.tryRequestFocus("sheet")
         }
     }
 
@@ -78,7 +76,7 @@ fun PlaybackInfoOverlay(
         Column(
             modifier = Modifier
                 .padding(20.dp)
-                .then(if (isTv) Modifier.focusRequester(focusRequester).focusable() else Modifier)
+                .ifElse(isTv, Modifier.focusRequester(focusRequester).focusable())
                 .verticalScroll(scrollState),
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {

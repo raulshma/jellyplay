@@ -1,6 +1,7 @@
 package com.raulshma.jellyplay.core.network.api
 
 import com.raulshma.jellyplay.core.model.seerr.SeerrRelatedVideo
+import com.raulshma.jellyplay.core.network.seerr.SeerrApiClientImpl
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.Serializable
@@ -15,11 +16,7 @@ class TmdbApiClientImpl @Inject constructor(
     private val okHttpClient: OkHttpClient,
 ) : TmdbApiClient {
 
-    private val json = Json {
-        ignoreUnknownKeys = true
-        coerceInputValues = true
-        isLenient = true
-    }
+    private val json = SeerrApiClientImpl.lenientJson
 
     private val apiKey = "1f54bd990f1cd6ca033b09cc0412a4d5" // Community TMDB API Key
 

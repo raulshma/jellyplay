@@ -9,6 +9,7 @@ import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutVertically
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.focusable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -36,6 +37,7 @@ import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.material3.TopAppBarScrollBehavior
 import androidx.compose.material3.rememberTopAppBarState
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
@@ -43,6 +45,8 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Brush
 import com.raulshma.jellyplay.core.designsystem.theme.LocalIsSynthwave
@@ -55,12 +59,9 @@ import androidx.compose.ui.unit.dp
 import com.raulshma.jellyplay.core.designsystem.theme.ShapeCache
 import com.raulshma.jellyplay.core.designsystem.theme.isLightColor
 import com.raulshma.jellyplay.core.designsystem.theme.ThemeVariantColors
-import com.raulshma.jellyplay.core.ui.adaptive.LocalAdaptiveInfo
-import com.raulshma.jellyplay.core.ui.adaptive.bottomPadding
-import com.raulshma.jellyplay.core.ui.adaptive.contentPadding
+import com.raulshma.jellyplay.core.ui.adaptive.LocalJellyPlayUi
 import com.raulshma.jellyplay.core.ui.tv.LocalTvMode
-import com.raulshma.jellyplay.core.ui.tv.rememberTvFocusState
-import com.raulshma.jellyplay.core.ui.tv.tvFocusIndicator
+import com.raulshma.jellyplay.core.ui.tv.tryRequestFocus
 import com.composables.icons.tabler.Tabler
 import com.composables.icons.tabler.outline.*
 
@@ -112,7 +113,7 @@ fun JellyPlayScreenScaffold(
         TopBarStyle.None -> null
     }
 
-    val isTv = LocalTvMode.current
+    val isTv = LocalJellyPlayUi.current.isTv
 
     val themeVariant = com.raulshma.jellyplay.core.designsystem.theme.LocalThemeVariant.current
     val backgroundModifier = if (themeVariant == com.raulshma.jellyplay.core.designsystem.theme.ThemeVariant.SYNTHWAVE) {
@@ -199,46 +200,27 @@ fun CircleBgBackButton(
     scrollCollapsed: Float = 0f,
     iconColor: Color? = null,
 ) {
-    val isTv = LocalTvMode.current
-    val tvFocusState = rememberTvFocusState(focusedScale = 1.15f)
+    val isTv = LocalJellyPlayUi.current.isTv
+
+    if (isTv) return
+
     val resolvedIconColor = iconColor
         ?: lerp(Color.White, MaterialTheme.colorScheme.onSurface, scrollCollapsed)
     val bgAlpha = if (scrollCollapsed < 0.5f) 0.3f else 0f
     val bgColor = MaterialTheme.colorScheme.surface.copy(alpha = bgAlpha)
 
-    if (isTv) {
-        Box(
-            modifier = modifier
-                .padding(8.dp)
-                .size(44.dp)
-                .clip(CircleShape)
-                .background(bgColor)
-                .then(tvFocusState.focusModifier)
-                .tvFocusIndicator(tvFocusState, CircleShape)
-                .clickable(onClick = onClick),
-            contentAlignment = Alignment.Center,
-        ) {
-            Icon(
-                Tabler.Outline.ArrowLeft,
-                contentDescription = "Back",
-                tint = resolvedIconColor,
-                modifier = Modifier.size(22.dp),
-            )
-        }
-    } else {
-        IconButton(
-            onClick = onClick,
-            modifier = modifier
-                .padding(8.dp)
-                .clip(CircleShape)
-                .background(bgColor),
-        ) {
-            Icon(
-                Tabler.Outline.ArrowLeft,
-                contentDescription = "Back",
-                tint = resolvedIconColor,
-            )
-        }
+    IconButton(
+        onClick = onClick,
+        modifier = modifier
+            .padding(8.dp)
+            .clip(CircleShape)
+            .background(bgColor),
+    ) {
+        Icon(
+            Tabler.Outline.ArrowLeft,
+            contentDescription = "Back",
+            tint = resolvedIconColor,
+        )
     }
 }
 
@@ -248,8 +230,17 @@ fun ScreenLoadingState(
     message: String? = null,
     modifier: Modifier = Modifier,
 ) {
+    val isTv = com.raulshma.jellyplay.core.ui.tv.LocalTvMode.current
+    val focusRequester = remember { FocusRequester() }
+    // On TV the spinner must hold focus while real data is unavailable, otherwise focus is orphaned
+    // (nothing else on the screen is focusable until the list/grid composes).
+    if (isTv) {
+        LaunchedEffect(Unit) { focusRequester.tryRequestFocus("screen_loading") }
+    }
     Box(
-        modifier = modifier.fillMaxSize(),
+        modifier = modifier
+            .fillMaxSize()
+            .then(if (isTv) Modifier.focusRequester(focusRequester).focusable() else Modifier),
         contentAlignment = Alignment.Center,
     ) {
         Column(

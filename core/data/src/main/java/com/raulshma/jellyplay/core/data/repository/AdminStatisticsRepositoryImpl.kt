@@ -1,5 +1,6 @@
 package com.raulshma.jellyplay.core.data.repository
 
+import android.util.Log
 import com.raulshma.jellyplay.core.database.dao.AuditLogDao
 import com.raulshma.jellyplay.core.database.dao.ScanStateDao
 import com.raulshma.jellyplay.core.database.entity.MediaAuditLogEntity
@@ -57,7 +58,8 @@ class AdminStatisticsRepositoryImpl @Inject constructor(
         try {
             val ninetyDaysAgo = System.currentTimeMillis() - 90L * 24 * 60 * 60 * 1000
             auditLogDao.deleteOlderThan(ninetyDaysAgo)
-        } catch (_: Exception) {
+        } catch (e: Exception) {
+            Log.d("AdminStats", "Failed to cleanup old audit logs", e)
         }
     }
 

@@ -3,6 +3,7 @@ package com.raulshma.jellyplay.navigation
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.animateContentSize
 import androidx.compose.animation.core.Spring
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
@@ -104,7 +105,9 @@ import com.raulshma.jellyplay.MainViewModel
 import com.raulshma.jellyplay.core.data.playback.AudioPlaybackManager
 import com.raulshma.jellyplay.core.model.HomeMode
 import com.raulshma.jellyplay.core.ui.adaptive.LocalAdaptiveInfo
+import com.raulshma.jellyplay.core.ui.adaptive.LocalJellyPlayUi
 import com.raulshma.jellyplay.core.ui.adaptive.WindowSizeClass
+import com.raulshma.jellyplay.core.ui.adaptive.rememberJellyPlayUiEnvironment
 import com.raulshma.jellyplay.core.ui.adaptive.rememberAdaptiveInfo
 import com.raulshma.jellyplay.core.designsystem.theme.TvTypography
 import com.raulshma.jellyplay.core.designsystem.theme.LocalIsSynthwave
@@ -133,12 +136,13 @@ import com.raulshma.jellyplay.core.ui.tv.rememberTvFocusState
 import com.raulshma.jellyplay.core.ui.tv.tvFocusIndicator
 import com.raulshma.jellyplay.core.ui.tv.tvFocusRestorer
 import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusProperties
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.focusRestorer
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.input.key.Key
 import androidx.compose.ui.input.key.key
-import androidx.compose.ui.input.key.onKeyEvent
+
 import androidx.compose.ui.input.key.type
 import androidx.compose.ui.input.key.KeyEventType
 import com.raulshma.jellyplay.feature.auth.navigation.authSection
@@ -321,7 +325,8 @@ private fun MainContent(
     val isAudioPlayerScreen = currentRoute is Route.AudioPlayer
 
     val isFullScreenRoute = isPlayerScreen || isAudioPlayerScreen ||
-            currentRoute is Route.Ambient || currentRoute is Route.Onboarding
+            currentRoute is Route.Ambient || currentRoute is Route.Onboarding ||
+            currentRoute is Route.PhotoViewer
 
     val activeTopLevelRoutes: LinkedHashMap<Route, String> = when (homeMode) {
         HomeMode.VIDEO -> VIDEO_TOP_LEVEL_ROUTES
@@ -446,6 +451,10 @@ private fun MainContent(
     val drawerScope = rememberCoroutineScope()
 
     val adaptiveInfo = rememberAdaptiveInfo()
+    val uiEnvironment = rememberJellyPlayUiEnvironment(
+        adaptiveInfo = adaptiveInfo,
+        isTv = isTv,
+    )
 
     val tvTypography = if (isTv) TvTypography else null
 
@@ -472,6 +481,7 @@ private fun MainContent(
         LocalDrawerOpener provides { drawerScope.launch { drawerState.open() } },
         LocalTvMode provides isTv,
         LocalAdaptiveInfo provides adaptiveInfo,
+        LocalJellyPlayUi provides uiEnvironment,
         LocalTvTypography provides tvTypography,
         LocalPerformanceMode provides preferences.performanceMode,
         LocalFloatingNavVisibility provides isBottomNavVisibleState,
@@ -486,6 +496,12 @@ private fun MainContent(
                 com.raulshma.jellyplay.core.ui.components.LocalFloatingNavOffset provides (if (!isExpanded && !isFullScreenRoute) bottomNavOffsetHeightPx.floatValue else 0f)
             ) {
             Box(Modifier.fillMaxSize()) {
+            // Hoist the TV drawer state above the isFullScreenRoute branch so it survives visiting a
+            // full-screen route (e.g. the player) and back, instead of being recreated when
+            // TvNavigationDrawer leaves and re-enters composition. Fully-qualified to avoid clashing with the mobile
+            // androidx.compose.material3 DrawerState used by LocalDrawerOpener below.
+            val tvDrawerState = androidx.tv.material3.rememberDrawerState(androidx.tv.material3.DrawerValue.Closed)
+            val tvDrawerListState = androidx.compose.foundation.lazy.rememberLazyListState()
             if (isTv && !isFullScreenRoute) {
                 TvMaterial3Theme(
                     colorScheme = tvDarkColorScheme(
@@ -502,34 +518,49 @@ private fun MainContent(
                     )
                 ) {
                 TvScaffold {
-                    TvMainLayout(
-                        isExpanded = true,
-                        isPlayerScreen = false,
-                        animatedNavBarColor = animatedNavBarColor,
-                        activeTopLevelRoutes = activeTopLevelRoutes,
+                    val tvCurrentRoute = navigationState.backStacks[currentTopLevel]?.lastOrNull()
+                    val tvIsSubPage = tvCurrentRoute != null && tvCurrentRoute !in activeTopLevelRoutes.keys
+
+                    val primaryNavItems = activeTopLevelRoutes.entries.map { (route, label) ->
+                        TvNavItem(
+                            route = route,
+                            label = label,
+                            icon = routeToIcon(route),
+                        )
+                    }
+                    TvNavigationDrawer(
+                        primaryItems = primaryNavItems,
                         currentTopLevel = currentTopLevel,
-                        navigator = navigator,
-                        navigationState = navigationState,
-                        onLogout = onLogout,
-                        homeMode = homeMode,
-                        onModeChange = onModeChange,
-                        enterPip = enterPip,
-                        enterVideoMiniMode = enterVideoMiniMode,
+                        isSubPage = tvIsSubPage,
+                        onNavigate = { navigator.navigate(it) },
                         onBack = { navigator.goBack() },
-                        onNowPlayingClick = {
-                            val itemId = audioItemId ?: return@TvMainLayout
-                            navigator.navigate(Route.AudioPlayer(itemId))
-                        },
-                        onAmbientClick = {
-                            navigator.navigate(
-                                Route.Ambient(
-                                    imageUrl = audioArtworkUrl,
-                                    title = audioTitle,
-                                    artist = audioArtist,
+                        drawerState = tvDrawerState,
+                        drawerListState = tvDrawerListState,
+                        currentRoute = tvCurrentRoute,
+                    ) {
+                        MainNavDisplay(
+                            navigationState = navigationState,
+                            navigator = navigator,
+                            onLogout = onLogout,
+                            homeMode = homeMode,
+                            onModeChange = onModeChange,
+                            enterPip = enterPip,
+                            enterVideoMiniMode = enterVideoMiniMode,
+                            onNowPlayingClick = {
+                                val itemId = audioItemId ?: return@MainNavDisplay
+                                navigator.navigate(Route.AudioPlayer(itemId))
+                            },
+                            onAmbientClick = {
+                                navigator.navigate(
+                                    Route.Ambient(
+                                        imageUrl = audioArtworkUrl,
+                                        title = audioTitle,
+                                        artist = audioArtist,
+                                    )
                                 )
-                            )
-                        },
-                    )
+                            },
+                        )
+                    }
                 }
                 }
             } else {
@@ -835,293 +866,14 @@ private fun MainContent(
     }
 }
 
-@Composable
-private fun TvMainLayout(
-    isExpanded: Boolean,
-    isPlayerScreen: Boolean,
-    animatedNavBarColor: Color,
-    activeTopLevelRoutes: LinkedHashMap<Route, String>,
-    currentTopLevel: androidx.navigation3.runtime.NavKey,
-    navigator: Navigator,
-    navigationState: com.raulshma.jellyplay.core.ui.navigation.NavigationState,
-    onLogout: () -> Unit,
-    homeMode: HomeMode,
-    onModeChange: (HomeMode) -> Unit,
-    enterPip: () -> Unit,
-    enterVideoMiniMode: () -> Unit,
-    onBack: () -> Unit,
-    onNowPlayingClick: () -> Unit = {},
-    onAmbientClick: () -> Unit = {},
-) {
-    val contentFocusRequester = remember { FocusRequester() }
-    val railFocusRequesters = remember(activeTopLevelRoutes.size) {
-        List(activeTopLevelRoutes.size) { FocusRequester() }
-    }
-    var focusedRailIndex by remember { mutableStateOf(0) }
-
-    val drawerState = androidx.tv.material3.rememberDrawerState(
-        initialValue = androidx.tv.material3.DrawerValue.Closed
-    )
-    val currentRoute = navigationState.backStacks[currentTopLevel]?.lastOrNull()
-
-    NavigationDrawer(
-        drawerState = drawerState,
-        modifier = Modifier
-            .fillMaxSize()
-            .background(MaterialTheme.colorScheme.background)
-            .onKeyEvent { keyEvent ->
-                if (keyEvent.key == Key.Back && keyEvent.type == KeyEventType.KeyUp) {
-                    onBack()
-                    true
-                } else false
-            },
-        drawerContent = { drawerValue ->
-            val isClosed = drawerValue == androidx.tv.material3.DrawerValue.Closed
-            Column(
-                modifier = Modifier
-                    .fillMaxHeight()
-                    .width(if (isClosed) 72.dp else 280.dp)
-                    .padding(
-                        start = 24.dp,
-                        end = if (isClosed) 24.dp else 16.dp,
-                        top = 8.dp,
-                        bottom = 8.dp
-                    )
-                    .verticalScroll(rememberScrollState())
-                    .focusRestorer()
-                    .selectableGroup(),
-            ) {
-                    activeTopLevelRoutes.entries.toList().forEachIndexed { index, (route, label) ->
-                        val isSelected = route == currentTopLevel
-                        NavigationDrawerItem(
-                            selected = isSelected,
-                            onClick = {
-                                navigator.navigate(route)
-                                focusedRailIndex = index
-                                drawerState.setValue(androidx.tv.material3.DrawerValue.Closed)
-                            },
-                            leadingContent = {
-                                NavIcon(route, label, tint = TvLocalContentColor.current)
-                            },
-                            content = {
-                                TvText(
-                                    label,
-                                    style = MaterialTheme.typography.labelMedium,
-                                )
-                            },
-                            modifier = Modifier
-                                .focusRequester(railFocusRequesters[index])
-                                .onFocusChanged {
-                                    if (it.isFocused || it.hasFocus) {
-                                        focusedRailIndex = index
-                                    }
-                                },
-                        )
-                    }
-
-                    HorizontalDivider(
-                        modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
-                        color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f),
-                    )
-
-                    NavigationDrawerItem(
-                        selected = false,
-                        onClick = {
-                            drawerState.setValue(androidx.tv.material3.DrawerValue.Closed)
-                            navigator.navigate(Route.Downloads)
-                        },
-                        leadingContent = {
-                            TvIcon(Tabler.Outline.Download, contentDescription = null)
-                        },
-                        content = {
-                            TvText("Downloads", style = MaterialTheme.typography.labelMedium)
-                        },
-                    )
-
-                    NavigationDrawerItem(
-                        selected = false,
-                        onClick = {
-                            drawerState.setValue(androidx.tv.material3.DrawerValue.Closed)
-                            navigator.navigate(Route.Favorites)
-                        },
-                        leadingContent = {
-                            TvIcon(Tabler.Outline.Heart, contentDescription = null)
-                        },
-                        content = {
-                            TvText("Favorites", style = MaterialTheme.typography.labelMedium)
-                        },
-                    )
-
-                    NavigationDrawerItem(
-                        selected = false,
-                        onClick = {
-                            drawerState.setValue(androidx.tv.material3.DrawerValue.Closed)
-                            navigator.navigate(Route.SyncPlay)
-                        },
-                        leadingContent = {
-                            TvIcon(Tabler.Outline.Users, contentDescription = null)
-                        },
-                        content = {
-                            TvText("SyncPlay", style = MaterialTheme.typography.labelMedium)
-                        },
-                    )
-
-                    NavigationDrawerItem(
-                        selected = false,
-                        onClick = {
-                            drawerState.setValue(androidx.tv.material3.DrawerValue.Closed)
-                            navigator.navigate(Route.WatchProgressHeatmap)
-                        },
-                        leadingContent = {
-                            TvIcon(Tabler.Outline.ChartBar, contentDescription = null)
-                        },
-                        content = {
-                            TvText("Watch History", style = MaterialTheme.typography.labelMedium)
-                        },
-                    )
-
-                    NavigationDrawerItem(
-                        selected = false,
-                        onClick = {
-                            drawerState.setValue(androidx.tv.material3.DrawerValue.Closed)
-                            navigator.navigate(Route.Requests)
-                        },
-                        leadingContent = {
-                            TvIcon(Tabler.Outline.Inbox, contentDescription = null)
-                        },
-                        content = {
-                            TvText("Requests", style = MaterialTheme.typography.labelMedium)
-                        },
-                    )
-
-                    HorizontalDivider(
-                        modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
-                        color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f),
-                    )
-
-                    NavigationDrawerItem(
-                        selected = false,
-                        onClick = {
-                            drawerState.setValue(androidx.tv.material3.DrawerValue.Closed)
-                            navigator.navigate(Route.ServerManagement())
-                        },
-                        leadingContent = {
-                            TvIcon(Tabler.Outline.Server, contentDescription = null)
-                        },
-                        content = {
-                            TvText("Server Mgmt", style = MaterialTheme.typography.labelMedium)
-                        },
-                    )
-
-                    NavigationDrawerItem(
-                        selected = false,
-                        onClick = {
-                            drawerState.setValue(androidx.tv.material3.DrawerValue.Closed)
-                            navigator.navigate(Route.UserManagement())
-                        },
-                        leadingContent = {
-                            TvIcon(Tabler.Outline.User, contentDescription = null)
-                        },
-                        content = {
-                            TvText("Switch User", style = MaterialTheme.typography.labelMedium)
-                        },
-                    )
-
-                    NavigationDrawerItem(
-                        selected = false,
-                        onClick = {
-                            drawerState.setValue(androidx.tv.material3.DrawerValue.Closed)
-                            navigator.navigate(Route.AdminDashboard)
-                        },
-                        leadingContent = {
-                            TvIcon(Tabler.Outline.Shield, contentDescription = null)
-                        },
-                        content = {
-                            TvText("Admin", style = MaterialTheme.typography.labelMedium)
-                        },
-                    )
-
-                    NavigationDrawerItem(
-                        selected = false,
-                        onClick = {
-                            drawerState.setValue(androidx.tv.material3.DrawerValue.Closed)
-                            navigator.navigate(Route.SeerrSettings())
-                        },
-                        leadingContent = {
-                            TvIcon(Tabler.Outline.Puzzle, contentDescription = null)
-                        },
-                        content = {
-                            TvText("Seerr", style = MaterialTheme.typography.labelMedium)
-                        },
-                    )
-
-                    NavigationDrawerItem(
-                        selected = false,
-                        onClick = {
-                            drawerState.setValue(androidx.tv.material3.DrawerValue.Closed)
-                            navigator.navigate(Route.Settings)
-                        },
-                        leadingContent = {
-                            TvIcon(Tabler.Outline.Settings, contentDescription = null)
-                        },
-                        content = {
-                            TvText("Settings", style = MaterialTheme.typography.labelMedium)
-                        },
-                    )
-
-                    NavigationDrawerItem(
-                        selected = false,
-                        onClick = {
-                            drawerState.setValue(androidx.tv.material3.DrawerValue.Closed)
-                            navigator.navigate(Route.Onboarding)
-                        },
-                        leadingContent = {
-                            TvIcon(Tabler.Outline.Wand, contentDescription = null)
-                        },
-                        content = {
-                            TvText("Setup Wizard", style = MaterialTheme.typography.labelMedium)
-                        },
-                    )
-
-                    NavigationDrawerItem(
-                        selected = false,
-                        onClick = {
-                            drawerState.setValue(androidx.tv.material3.DrawerValue.Closed)
-                            navigator.navigate(Route.About)
-                        },
-                        leadingContent = {
-                            TvIcon(Tabler.Outline.InfoCircle, contentDescription = null)
-                        },
-                        content = {
-                            TvText("About", style = MaterialTheme.typography.labelMedium)
-                        },
-                    )
-                }
-            },
-            content = {
-                MainNavDisplay(
-                    navigationState = navigationState,
-                    navigator = navigator,
-                    onLogout = onLogout,
-                    homeMode = homeMode,
-                    onModeChange = onModeChange,
-                    enterPip = enterPip,
-                    enterVideoMiniMode = enterVideoMiniMode,
-                    modifier = Modifier
-                        .focusRequester(contentFocusRequester)
-                        .tvFocusRestorer(),
-                    onNowPlayingClick = onNowPlayingClick,
-                    onAmbientClick = onAmbientClick,
-                )
-            },
-        )
-
-    LaunchedEffect(currentRoute) {
-        val initialIndex = activeTopLevelRoutes.keys.indexOf(currentTopLevel).coerceAtLeast(0)
-        focusedRailIndex = initialIndex
-        drawerState.setValue(androidx.tv.material3.DrawerValue.Closed)
-        try { contentFocusRequester.requestFocus() } catch (_: Exception) { }
-    }
+private fun routeToIcon(route: Route): ImageVector = when (route) {
+    Route.Home -> Tabler.Outline.Home
+    Route.Library -> Tabler.Outline.Music
+    Route.Search -> Tabler.Outline.Search
+    Route.LiveTv -> Tabler.Outline.DeviceTv
+    Route.MusicBrowse -> Tabler.Outline.Disc
+    Route.Shortcuts -> Tabler.Outline.Apps
+    else -> Tabler.Outline.Home
 }
 
 @Composable
@@ -1129,24 +881,13 @@ private fun NavIcon(route: Route, label: String, selected: Boolean = false, tint
     val scale by androidx.compose.animation.core.animateFloatAsState(
         targetValue = if (selected) 1.15f else 1.0f,
         animationSpec = MaterialTheme.motionScheme.defaultSpatialSpec(),
-        label = "iconScale"
+        label = "iconScale",
     )
-    
-    val icon = when (route) {
-        Route.Home -> Tabler.Outline.Home
-        Route.Library -> Tabler.Outline.Music
-        Route.Search -> Tabler.Outline.Search
-        Route.LiveTv -> Tabler.Outline.DeviceTv
-        Route.MusicBrowse -> Tabler.Outline.Disc
-        Route.Shortcuts -> Tabler.Outline.Apps
-        else -> Tabler.Outline.Home // Fallback
-    }
-
     Icon(
-        imageVector = icon,
+        imageVector = routeToIcon(route),
         contentDescription = label,
         tint = tint,
-        modifier = androidx.compose.ui.Modifier.scale(scale)
+        modifier = androidx.compose.ui.Modifier.scale(scale),
     )
 }
 

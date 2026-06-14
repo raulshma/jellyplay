@@ -2,6 +2,8 @@ package com.raulshma.jellyplay.feature.player.video.components
 
 import androidx.compose.animation.AnimatedVisibility
 import com.raulshma.jellyplay.core.ui.tv.LocalTvMode
+import com.raulshma.jellyplay.core.ui.tv.ifElse
+import com.raulshma.jellyplay.core.ui.tv.tryRequestFocus
 import com.raulshma.jellyplay.core.ui.tv.rememberTvFocusState
 import com.raulshma.jellyplay.core.ui.tv.tvFocusIndicator
 import androidx.compose.animation.core.tween
@@ -106,11 +108,7 @@ private fun SkipButtonOverlay(
     LaunchedEffect(isVisible, isTv) {
         if (isVisible && isTv) {
             kotlinx.coroutines.delay(300)
-            try {
-                tvFocusRequester.requestFocus()
-            } catch (e: Exception) {
-                // ignore
-            }
+            tvFocusRequester.tryRequestFocus("tv_skip_segment")
         }
     }
 
@@ -126,7 +124,7 @@ private fun SkipButtonOverlay(
                 .clip(ShapeCache.smoothPill)
                 .background(Color.White.copy(alpha = 0.12f))
                 .border(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.35f), ShapeCache.smoothPill)
-                .then(if (isTv) Modifier.focusRequester(tvFocusRequester) else Modifier)
+                .ifElse(isTv, Modifier.focusRequester(tvFocusRequester))
                 .then(skipFocusState.focusModifier)
                 .tvFocusIndicator(skipFocusState, ShapeCache.smoothPill)
                 .clickable(onClick = onSkip)
