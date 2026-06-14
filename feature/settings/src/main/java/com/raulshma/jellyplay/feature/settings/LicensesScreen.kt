@@ -39,6 +39,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
+import com.raulshma.jellyplay.core.ui.tv.TvGrabInitialFocus
 import com.raulshma.jellyplay.core.ui.tv.tryRequestFocus
 
 @Composable
@@ -53,14 +54,11 @@ fun LicensesScreen(
     val backgroundColor = com.raulshma.jellyplay.core.ui.components.rememberScreenBackgroundColor()
 
     val focusRequester = remember { FocusRequester() }
-    LaunchedEffect(viewModel.isLoading, viewModel.licenses.size) {
-        if (isTv && !viewModel.isLoading && viewModel.licenses.isNotEmpty()) {
-            for (attempt in 1..3) {
-                androidx.compose.runtime.withFrameNanos { }
-                if (focusRequester.tryRequestFocus("licenses_init")) break
-            }
-        }
-    }
+    TvGrabInitialFocus(
+        focusRequester = focusRequester,
+        itemCount = if (!viewModel.isLoading) viewModel.licenses.size else 0,
+        tag = "licenses_init",
+    )
 
     JellyPlayScreenScaffold(
         title = "Open Source Licenses",

@@ -3,6 +3,7 @@ package com.raulshma.jellyplay.feature.player.video.components
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import com.raulshma.jellyplay.core.ui.tv.rememberTvFocusState
+import com.raulshma.jellyplay.core.ui.tv.tryRequestFocus
 import com.raulshma.jellyplay.core.ui.tv.tvFocusIndicator
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -36,6 +37,8 @@ import androidx.compose.ui.unit.dp
 import com.raulshma.jellyplay.core.designsystem.theme.ShapeCache
 import com.raulshma.jellyplay.core.model.RemoteSubtitleInfo
 import com.raulshma.jellyplay.core.ui.tv.LocalTvMode
+import com.raulshma.jellyplay.core.ui.tv.ifElse
+import com.raulshma.jellyplay.core.ui.tv.verticalWrapAround
 import com.composables.icons.tabler.Tabler
 import com.composables.icons.tabler.outline.*
 
@@ -54,11 +57,7 @@ fun SubtitleDownloadSheet(
 
     LaunchedEffect(isTv) {
         if (isTv) {
-            try {
-                focusRequester.requestFocus()
-            } catch (e: Exception) {
-                // ignore
-            }
+            focusRequester.tryRequestFocus("sheet")
         }
     }
 
@@ -85,7 +84,7 @@ fun SubtitleDownloadSheet(
                 modifier = Modifier
                     .fillMaxWidth()
                     .padding(horizontal = 16.dp)
-                    .then(if (isTv) Modifier.focusRequester(focusRequester) else Modifier)
+                    .ifElse(isTv, Modifier.focusRequester(focusRequester))
                     .then(loadBtnFocus.focusModifier)
                     .tvFocusIndicator(loadBtnFocus, ShapeCache.smoothPill),
             ) {
@@ -113,7 +112,7 @@ fun SubtitleDownloadSheet(
                     modifier = Modifier.padding(horizontal = 24.dp, vertical = 24.dp),
                 )
             } else {
-                LazyColumn {
+                LazyColumn(modifier = Modifier.verticalWrapAround()) {
                     itemsIndexed(subtitles, key = { _, sub -> sub.id }, contentType = { _, _ -> "subtitle" }) { index, sub ->
                         SubtitleDownloadItem(
                             subtitle = sub,

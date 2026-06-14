@@ -83,6 +83,8 @@ import com.raulshma.jellyplay.core.designsystem.theme.StatusColors
 import com.raulshma.jellyplay.core.ui.components.StaggeredSection
 import com.raulshma.jellyplay.core.ui.image.MediaImage
 import com.raulshma.jellyplay.core.ui.tv.LocalTvMode
+import com.raulshma.jellyplay.core.ui.tv.tryRequestFocus
+import com.raulshma.jellyplay.core.ui.tv.ifElse
 import com.raulshma.jellyplay.core.ui.tv.tvFocusRestorer
 import com.raulshma.jellyplay.core.ui.tv.rememberTvFocusState
 import com.raulshma.jellyplay.core.ui.tv.tvFocusIndicator
@@ -412,7 +414,7 @@ private fun SeerrDetailContent(
                 if (it && !focused) {
                     focused = true
                     kotlinx.coroutines.delay(50)
-                    try { contentFocusRequester.requestFocus() } catch (_: Exception) { }
+                    contentFocusRequester.tryRequestFocus()
                 }
             }
         }
@@ -774,10 +776,10 @@ private fun SeerrActionButtons(
                 modifier = Modifier
                     .weight(1f)
                     .then(
-                        if (contentFocusRequester != null) Modifier.focusRequester(contentFocusRequester) else Modifier
+                        contentFocusRequester?.let { Modifier.focusRequester(it) } ?: Modifier
                     )
-                    .then(if (isTv) buttonFocusState.focusModifier else Modifier)
-                    .then(if (isTv) Modifier.tvFocusIndicator(buttonFocusState, ShapeCache.smooth12) else Modifier),
+                    .ifElse(isTv, buttonFocusState.focusModifier)
+                    .ifElse(isTv, Modifier.tvFocusIndicator(buttonFocusState, ShapeCache.smooth12)),
                 shape = ShapeCache.smooth12,
                 colors = ButtonDefaults.buttonColors(
                     containerColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.1f),
@@ -803,10 +805,10 @@ private fun SeerrActionButtons(
                 modifier = Modifier
                     .weight(1f)
                     .then(
-                        if (contentFocusRequester != null) Modifier.focusRequester(contentFocusRequester) else Modifier
+                        contentFocusRequester?.let { Modifier.focusRequester(it) } ?: Modifier
                     )
-                    .then(if (isTv) buttonFocusState.focusModifier else Modifier)
-                    .then(if (isTv) Modifier.tvFocusIndicator(buttonFocusState, ShapeCache.smooth12) else Modifier),
+                    .ifElse(isTv, buttonFocusState.focusModifier)
+                    .ifElse(isTv, Modifier.tvFocusIndicator(buttonFocusState, ShapeCache.smooth12)),
                 shape = ShapeCache.smooth12,
                 colors = ButtonDefaults.buttonColors(
                     containerColor = color.copy(alpha = 0.15f),
@@ -827,10 +829,10 @@ private fun SeerrActionButtons(
                 modifier = Modifier
                     .weight(1f)
                     .then(
-                        if (contentFocusRequester != null) Modifier.focusRequester(contentFocusRequester) else Modifier
+                        contentFocusRequester?.let { Modifier.focusRequester(it) } ?: Modifier
                     )
-                    .then(if (isTv) buttonFocusState.focusModifier else Modifier)
-                    .then(if (isTv) Modifier.tvFocusIndicator(buttonFocusState, ShapeCache.smooth12) else Modifier),
+                    .ifElse(isTv, buttonFocusState.focusModifier)
+                    .ifElse(isTv, Modifier.tvFocusIndicator(buttonFocusState, ShapeCache.smooth12)),
                 shape = ShapeCache.smooth12,
                 colors = ButtonDefaults.buttonColors(
                     containerColor = MaterialTheme.colorScheme.primary,
@@ -1624,8 +1626,8 @@ private fun VideosSection(
                     modifier = Modifier
                         .width(240.dp)
                         .aspectRatio(16f / 9f)
-                        .then(if (isTv) videoCardFocusState.focusModifier else Modifier)
-                        .then(if (isTv) Modifier.tvFocusIndicator(videoCardFocusState, ShapeCache.smooth8) else Modifier)
+                        .ifElse(isTv, videoCardFocusState.focusModifier)
+                        .ifElse(isTv, Modifier.tvFocusIndicator(videoCardFocusState, ShapeCache.smooth8))
                         .clickable {
                             onVideoClick(video)
                         },

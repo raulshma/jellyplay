@@ -12,7 +12,6 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.grid.GridCells
-import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.MaterialTheme
@@ -36,6 +35,7 @@ import com.raulshma.jellyplay.core.ui.components.resolveHeaderStatus
 import com.raulshma.jellyplay.core.ui.adaptive.LocalAdaptiveInfo
 import com.raulshma.jellyplay.core.ui.adaptive.*
 import com.raulshma.jellyplay.core.ui.tv.LocalTvMode
+import com.raulshma.jellyplay.core.ui.tv.TvFocusableGrid
 import com.raulshma.jellyplay.core.designsystem.theme.ShapeCache
 import com.composables.icons.tabler.Tabler
 import com.composables.icons.tabler.outline.*
@@ -67,7 +67,9 @@ fun MoodPlaylistsScreen(
 
         val adaptiveInfo = LocalAdaptiveInfo.current
         val isTv = LocalTvMode.current
-        LazyVerticalGrid(
+        TvFocusableGrid(
+            itemCount = MoodPlaylistsPreset.all.size,
+            key = { MoodPlaylistsPreset.all[it].id },
             columns = GridCells.Adaptive(minSize = adaptiveInfo.gridMinSize(isTv)),
             modifier = Modifier.fillMaxSize(),
             contentPadding = PaddingValues(
@@ -78,14 +80,14 @@ fun MoodPlaylistsScreen(
             ),
             horizontalArrangement = Arrangement.spacedBy(adaptiveInfo.itemSpacing(isTv)),
             verticalArrangement = Arrangement.spacedBy(adaptiveInfo.itemSpacing(isTv)),
-        ) {
-            items(MoodPlaylistsPreset.all.size, key = { MoodPlaylistsPreset.all[it].id }, contentType = { "moodPlaylist" }) { index ->
-                val playlist = MoodPlaylistsPreset.all[index]
-                MoodCard(
-                    playlist = playlist,
-                    onClick = { onPlaylistClick(playlist) },
-                )
-            }
+            contentType = { "moodPlaylist" },
+        ) { index, itemModifier ->
+            val playlist = MoodPlaylistsPreset.all[index]
+            MoodCard(
+                playlist = playlist,
+                onClick = { onPlaylistClick(playlist) },
+                modifier = itemModifier,
+            )
         }
     }
 }
@@ -94,6 +96,7 @@ fun MoodPlaylistsScreen(
 private fun MoodCard(
     playlist: MoodPlaylist,
     onClick: () -> Unit,
+    modifier: Modifier = Modifier,
 ) {
     val backgroundColor = playlist.themeColorHex?.let { hex ->
         try {
@@ -111,7 +114,7 @@ private fun MoodCard(
     }
 
     Card(
-        modifier = Modifier
+        modifier = modifier
             .fillMaxWidth()
             .aspectRatio(1f)
             .clickable(onClick = onClick)

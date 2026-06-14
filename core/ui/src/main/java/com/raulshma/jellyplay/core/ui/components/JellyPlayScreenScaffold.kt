@@ -9,6 +9,7 @@ import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutVertically
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.focusable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -36,6 +37,7 @@ import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.material3.TopAppBarScrollBehavior
 import androidx.compose.material3.rememberTopAppBarState
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
@@ -43,6 +45,8 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Brush
 import com.raulshma.jellyplay.core.designsystem.theme.LocalIsSynthwave
@@ -56,6 +60,8 @@ import com.raulshma.jellyplay.core.designsystem.theme.ShapeCache
 import com.raulshma.jellyplay.core.designsystem.theme.isLightColor
 import com.raulshma.jellyplay.core.designsystem.theme.ThemeVariantColors
 import com.raulshma.jellyplay.core.ui.adaptive.LocalJellyPlayUi
+import com.raulshma.jellyplay.core.ui.tv.LocalTvMode
+import com.raulshma.jellyplay.core.ui.tv.tryRequestFocus
 import com.composables.icons.tabler.Tabler
 import com.composables.icons.tabler.outline.*
 
@@ -224,8 +230,17 @@ fun ScreenLoadingState(
     message: String? = null,
     modifier: Modifier = Modifier,
 ) {
+    val isTv = com.raulshma.jellyplay.core.ui.tv.LocalTvMode.current
+    val focusRequester = remember { FocusRequester() }
+    // On TV the spinner must hold focus while real data is unavailable, otherwise focus is orphaned
+    // (nothing else on the screen is focusable until the list/grid composes).
+    if (isTv) {
+        LaunchedEffect(Unit) { focusRequester.tryRequestFocus("screen_loading") }
+    }
     Box(
-        modifier = modifier.fillMaxSize(),
+        modifier = modifier
+            .fillMaxSize()
+            .then(if (isTv) Modifier.focusRequester(focusRequester).focusable() else Modifier),
         contentAlignment = Alignment.Center,
     ) {
         Column(

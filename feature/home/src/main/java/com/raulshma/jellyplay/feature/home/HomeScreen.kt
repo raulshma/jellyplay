@@ -895,8 +895,8 @@ private fun HomeContentList(
     // TV focus orchestration: remember which content row last held focus so back-navigation from a
     // detail screen restores that row instead of always snapping back to the hero. -1 means "no row
     // focused yet" (fresh entry) -> the hero grabs focus exactly as before, so the fresh-entry path is
-    // unchanged. Mirrors Wholphin HomePage's saveable position + page-owned restore (HomePage.kt:308-347).
-    var homeFocusRow by rememberSaveable { mutableIntStateOf(-1) }
+    // unchanged.
+    var homeFocusRow by com.raulshma.jellyplay.core.ui.tv.rememberInt(-1)
     val savedRowIsValid = homeFocusRow in 0..sections.lastIndex
     val rowFocusRequesters = remember(sections.size) { List(sections.size) { FocusRequester() } }
     if (isTv && savedRowIsValid) {

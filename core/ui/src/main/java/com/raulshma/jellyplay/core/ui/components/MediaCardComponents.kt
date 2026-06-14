@@ -69,6 +69,7 @@ import com.raulshma.jellyplay.core.ui.adaptive.LocalJellyPlayUi
 import com.raulshma.jellyplay.core.ui.image.MediaImage
 import com.raulshma.jellyplay.core.ui.image.PhotoFolderPoster
 import com.raulshma.jellyplay.core.ui.tv.TvFocusableItemRow
+import com.raulshma.jellyplay.core.ui.tv.enableMarqueeOnFocus
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 
@@ -463,6 +464,7 @@ fun PosterCard(
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
                 color = MaterialTheme.colorScheme.onSurface,
+                modifier = Modifier.enableMarqueeOnFocus(focused = focusInteraction.isFocused),
             )
             Row(
                 verticalAlignment = Alignment.CenterVertically,

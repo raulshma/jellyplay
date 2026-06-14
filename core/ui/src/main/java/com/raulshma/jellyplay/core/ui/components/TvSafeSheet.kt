@@ -31,6 +31,7 @@ import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.WindowInsetsControllerCompat
 import com.raulshma.jellyplay.core.designsystem.theme.ShapeCache
 import com.raulshma.jellyplay.core.ui.adaptive.LocalJellyPlayUi
+import com.raulshma.jellyplay.core.ui.tv.tryRequestFocus
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -123,7 +124,7 @@ private fun TvSheetDialog(
     }
 
     LaunchedEffect(Unit) {
-        initialFocus.requestFocus()
+        initialFocus.tryRequestFocus()
     }
 }
 
@@ -135,7 +136,7 @@ private fun ColumnContent(
     Column(
         modifier = Modifier
             .fillMaxWidth()
-            .then(if (initialFocus != null) Modifier.focusRequester(initialFocus) else Modifier),
+            .then(initialFocus?.let { Modifier.focusRequester(it) } ?: Modifier),
         content = content,
     )
 }

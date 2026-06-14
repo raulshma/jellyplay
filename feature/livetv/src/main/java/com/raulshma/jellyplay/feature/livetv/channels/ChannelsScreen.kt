@@ -52,6 +52,7 @@ import androidx.compose.ui.focus.focusRequester
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.LaunchedEffect
 import com.raulshma.jellyplay.core.ui.tv.tvFocusRestorer
+import com.raulshma.jellyplay.core.ui.tv.TvGrabInitialFocus
 import com.raulshma.jellyplay.core.ui.tv.tryRequestFocus
 import com.composables.icons.tabler.outline.*
 
@@ -80,14 +81,11 @@ fun ChannelsScreen(
 
     val focusRequester = remember { FocusRequester() }
     val channelsNotEmpty = viewModel.channels.isNotEmpty()
-    LaunchedEffect(channelsNotEmpty) {
-        if (isTv && channelsNotEmpty) {
-            for (attempt in 1..3) {
-                androidx.compose.runtime.withFrameNanos { }
-                if (focusRequester.tryRequestFocus("channels_init")) break
-            }
-        }
-    }
+    TvGrabInitialFocus(
+        focusRequester = focusRequester,
+        itemCount = viewModel.channels.size,
+        tag = "channels_init",
+    )
 
     JellyPlayScreenScaffold(
         title = "Live TV",

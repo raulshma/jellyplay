@@ -1,5 +1,6 @@
 package com.raulshma.jellyplay.core.ui.components
 
+import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.focusable
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -12,7 +13,10 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
@@ -20,6 +24,9 @@ import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.unit.dp
 import com.raulshma.jellyplay.core.ui.tv.LocalTvMode
 import com.raulshma.jellyplay.core.ui.tv.tryRequestFocus
+import kotlinx.coroutines.delay
+import kotlin.time.Duration
+import kotlin.time.Duration.Companion.milliseconds
 
 @OptIn(ExperimentalMaterial3ExpressiveApi::class)
 @Composable
@@ -27,8 +34,7 @@ fun LoadingScreen(modifier: Modifier = Modifier) {
     val isTv = LocalTvMode.current
     val focusRequester = remember { FocusRequester() }
     // On TV the spinner must hold focus while real data is unavailable, otherwise focus is orphaned
-    // (nothing else on the screen is focusable until the list/grid composes). Mirrors Wholphin's
-    // LoadingPage: focusRequester + focusable + LaunchedEffect(Unit) { tryRequestFocus() }.
+    // (nothing else on the screen is focusable until the list/grid composes).
     if (isTv) {
         LaunchedEffect(Unit) { focusRequester.tryRequestFocus("loading") }
     }
@@ -41,6 +47,43 @@ fun LoadingScreen(modifier: Modifier = Modifier) {
         JellyPlayLoadingIndicator(
             color = MaterialTheme.colorScheme.primary,
         )
+    }
+}
+
+/**
+ * TV-friendly loading page that grabs focus IMMEDIATELY but only shows the spinner after [delay].
+ * Avoids flicker on fast loads while still preventing the D-pad from navigating to nonexistent
+ * elements behind the loading state.
+ *
+ * The focus grab is unconditional on TV — even if the spinner never appears, focus is held so the
+ * D-pad cannot drift to a stale screen underneath. The visible spinner is gated by [delay] (default
+ * 300ms) so loads that complete in <300ms show nothing at all.
+ */
+@Composable
+fun DelayedLoadingScreen(
+    modifier: Modifier = Modifier,
+    delay: Duration = 300.milliseconds,
+) {
+    val isTv = LocalTvMode.current
+    val focusRequester = remember { FocusRequester() }
+    var showSpinner by remember { mutableStateOf(false) }
+
+    LaunchedEffect(Unit) {
+        if (isTv) focusRequester.tryRequestFocus("delayed_loading")
+        kotlinx.coroutines.delay(delay)
+        showSpinner = true
+    }
+    Box(
+        modifier = modifier
+            .fillMaxSize()
+            .then(if (isTv) Modifier.focusRequester(focusRequester).focusable() else Modifier),
+        contentAlignment = Alignment.Center,
+    ) {
+        AnimatedVisibility(visible = showSpinner) {
+            JellyPlayLoadingIndicator(
+                color = MaterialTheme.colorScheme.primary,
+            )
+        }
     }
 }
 

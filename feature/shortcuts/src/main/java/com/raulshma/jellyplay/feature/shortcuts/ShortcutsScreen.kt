@@ -57,6 +57,7 @@ import com.raulshma.jellyplay.core.ui.components.JellyPlayScreenScaffold
 import com.raulshma.jellyplay.core.ui.components.TopBarStyle
 import com.raulshma.jellyplay.core.ui.navigation.Route
 import com.raulshma.jellyplay.core.ui.tv.LocalTvMode
+import com.raulshma.jellyplay.core.ui.tv.tryRequestFocus
 import com.raulshma.jellyplay.core.ui.tv.rememberTvFocusState
 import com.raulshma.jellyplay.core.ui.tv.tvFocusIndicator
 import com.raulshma.jellyplay.core.ui.tv.tvFocusRestorer
@@ -79,10 +80,7 @@ fun ShortcutsScreen(
     LaunchedEffect(isTv, firstShortcutRoute) {
         if (isTv && firstShortcutRoute != null) {
             delay(180)
-            try {
-                firstShortcutFocusRequester.requestFocus()
-            } catch (_: Exception) {
-            }
+            firstShortcutFocusRequester.tryRequestFocus("first_shortcut")
         }
     }
 

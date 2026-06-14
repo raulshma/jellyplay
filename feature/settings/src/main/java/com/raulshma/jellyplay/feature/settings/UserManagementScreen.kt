@@ -52,6 +52,7 @@ import com.raulshma.jellyplay.core.ui.tv.LocalTvMode
 import com.raulshma.jellyplay.core.ui.tv.tvFocusRestorer
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
+import com.raulshma.jellyplay.core.ui.tv.TvGrabInitialFocus
 import com.raulshma.jellyplay.core.ui.tv.tryRequestFocus
 import com.composables.icons.tabler.Tabler
 import com.composables.icons.tabler.outline.*
@@ -83,14 +84,11 @@ fun UserManagementScreen(
     val backgroundColor = com.raulshma.jellyplay.core.ui.components.rememberScreenBackgroundColor()
 
     val focusRequester = remember { FocusRequester() }
-    LaunchedEffect(isLoading, serverUsers.size) {
-        if (isTv && !isLoading && serverUsers.isNotEmpty()) {
-            for (attempt in 1..3) {
-                androidx.compose.runtime.withFrameNanos { }
-                if (focusRequester.tryRequestFocus("user_management_init")) break
-            }
-        }
-    }
+    TvGrabInitialFocus(
+        focusRequester = focusRequester,
+        itemCount = if (!isLoading) serverUsers.size else 0,
+        tag = "user_management_init",
+    )
 
     JellyPlayScreenScaffold(
         title = "Switch User",

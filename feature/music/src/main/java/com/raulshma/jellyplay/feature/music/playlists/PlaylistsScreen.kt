@@ -36,6 +36,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
+import com.raulshma.jellyplay.core.ui.tv.tryRequestFocus
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
@@ -210,7 +211,7 @@ private fun PlaylistNameDialog(
     var name by remember { mutableStateOf(initialName) }
     var overview by remember { mutableStateOf(initialOverview) }
     val nameFocusRequester = remember { FocusRequester() }
-    LaunchedEffect(Unit) { nameFocusRequester.requestFocus() }
+    com.raulshma.jellyplay.core.ui.tv.RequestOrRestoreFocus(nameFocusRequester, "playlist_name")
 
     AlertDialog(
         onDismissRequest = onDismiss,

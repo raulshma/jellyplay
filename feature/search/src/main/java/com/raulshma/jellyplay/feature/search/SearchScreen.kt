@@ -40,10 +40,8 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.DockedSearchBar
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -94,6 +92,9 @@ import com.raulshma.jellyplay.core.ui.navigation.Route
 import com.raulshma.jellyplay.core.ui.adaptive.WindowSizeClass
 import com.raulshma.jellyplay.core.ui.adaptive.*
 import com.raulshma.jellyplay.core.ui.tv.LocalTvMode
+import com.raulshma.jellyplay.core.ui.tv.RequestOrRestoreFocus
+import com.raulshma.jellyplay.core.ui.tv.TvFocusableGrid
+import com.raulshma.jellyplay.core.ui.tv.TvFocusableItemRow
 import com.raulshma.jellyplay.core.ui.tv.tryRequestFocus
 import com.raulshma.jellyplay.feature.search.components.SearchFilterSheet
 import com.raulshma.jellyplay.core.designsystem.theme.ShapeCache
@@ -142,11 +143,10 @@ fun SearchScreen(
     // the drawer rail and expands it. LaunchedEffect(Unit) re-fires on every composition entry
     // (including back-nav from a detail page), which is the desired behavior for a top-level screen.
     val isTvEntry = LocalTvMode.current
-    LaunchedEffect(Unit) {
-        if (isTvEntry) {
-            focusRequester.tryRequestFocus()
-        }
-    }
+    RequestOrRestoreFocus(
+        focusRequester = if (isTvEntry) focusRequester else null,
+        debugKey = "search_field",
+    )
 
     BackHandler(enabled = isSearchFocused || query.isNotBlank() || hasActiveFilters) {
         when {
@@ -456,31 +456,26 @@ fun SearchScreen(
                             fontWeight = FontWeight.SemiBold,
                             modifier = Modifier.padding(bottom = 8.dp),
                         )
-                        LazyRow(
+                        TvFocusableItemRow(
+                            items = uniqueSeerrResults,
+                            key = { it.id },
                             horizontalArrangement = Arrangement.spacedBy(spacing),
                             contentPadding = PaddingValues(end = contentPad),
-                        ) {
-                            items(
-                                count = uniqueSeerrResults.size,
-                                key = { index -> "seerr-${uniqueSeerrResults[index].id}" },
-                                contentType = { "seerrSearchResult" },
-                            ) { index ->
-                                val seerrItem = uniqueSeerrResults[index]
-                                SeerrMediaCard(
-                                    item = seerrItem,
-                                    imageUrl = seerrItem.posterUrl,
-                                    isLoading = seerrLoadingState.isLoading(seerrItem.id),
-                                    onClick = {
-                                        seerrLoadingState.startLoading(seerrItem.id)
-                                        viewModel.prefetchSeerrDetails(seerrItem.id, seerrItem.mediaType) {
-                                            seerrLoadingState.stopLoading(seerrItem.id)
-                                            onNavigate(Route.SeerrDetail(seerrItem.id, seerrItem.mediaType))
-                                        }
-                                    },
-                                    onRequestClick = { requestItem = seerrItem },
-                                    modifier = Modifier.width(seerrCardWidth),
-                                )
-                            }
+                        ) { _, seerrItem, itemModifier ->
+                            SeerrMediaCard(
+                                item = seerrItem,
+                                imageUrl = seerrItem.posterUrl,
+                                isLoading = seerrLoadingState.isLoading(seerrItem.id),
+                                onClick = {
+                                    seerrLoadingState.startLoading(seerrItem.id)
+                                    viewModel.prefetchSeerrDetails(seerrItem.id, seerrItem.mediaType) {
+                                        seerrLoadingState.stopLoading(seerrItem.id)
+                                        onNavigate(Route.SeerrDetail(seerrItem.id, seerrItem.mediaType))
+                                    }
+                                },
+                                onRequestClick = { requestItem = seerrItem },
+                                modifier = itemModifier.width(seerrCardWidth),
+                            )
                         }
                     }
                 }
@@ -639,33 +634,31 @@ fun SearchScreen(
                         }
                         else -> {
                             // ── Library grid ──
-                            LazyVerticalGrid(
+                            TvFocusableGrid(
+                                itemCount = pagedResults.itemCount,
+                                key = pagedResults.itemKey { it.id },
                                 columns = GridCells.Adaptive(gridCellSize),
                                 contentPadding = gridPadding,
                                 horizontalArrangement = Arrangement.spacedBy(spacing),
                                 verticalArrangement = Arrangement.spacedBy(spacing),
                                 modifier = Modifier.fillMaxSize(),
-                            ) {
-                                items(
-                                    count = pagedResults.itemCount,
-                                    key = pagedResults.itemKey { it.id },
-                                    contentType = { "mediaItem" },
-                                ) { index ->
-                                    val item = pagedResults[index]
-                                    if (item != null) {
-                                        AnimatedSearchItem(index = index) {
-                                            PosterCard(
-                                                item = item,
-                                                imageUrl = viewModel.getImageUrl(item.id),
-                                                onClick = { onItemClick(item.id, item.mediaType, item.parentId, item.name) },
-                                                showProgress = item.playbackPositionTicks != null && item.playbackPositionTicks!! > 0,
-                                                progressPercent = if (item.runTimeTicks != null && item.runTimeTicks!! > 0) {
-                                                    (item.playbackPositionTicks?.toFloat() ?: 0f) / item.runTimeTicks!!.toFloat()
-                                                } else 0f,
-                                                blurHash = item.blurHashes.primary,
-                                                sharedElementKey = "poster_${item.id}",
-                                            )
-                                        }
+                                contentType = { "mediaItem" },
+                            ) { index, itemModifier ->
+                                val item = pagedResults[index]
+                                if (item != null) {
+                                    AnimatedSearchItem(index = index) {
+                                        PosterCard(
+                                            item = item,
+                                            imageUrl = viewModel.getImageUrl(item.id),
+                                            onClick = { onItemClick(item.id, item.mediaType, item.parentId, item.name) },
+                                            showProgress = item.playbackPositionTicks != null && item.playbackPositionTicks!! > 0,
+                                            progressPercent = if (item.runTimeTicks != null && item.runTimeTicks!! > 0) {
+                                                (item.playbackPositionTicks?.toFloat() ?: 0f) / item.runTimeTicks!!.toFloat()
+                                            } else 0f,
+                                            blurHash = item.blurHashes.primary,
+                                            sharedElementKey = "poster_${item.id}",
+                                            modifier = itemModifier,
+                                        )
                                     }
                                 }
                             }

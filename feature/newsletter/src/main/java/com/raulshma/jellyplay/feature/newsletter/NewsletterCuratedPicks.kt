@@ -17,8 +17,6 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.lazy.LazyRow
-import androidx.compose.foundation.lazy.items
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
@@ -43,6 +41,7 @@ import com.raulshma.jellyplay.core.model.MediaItem
 import com.raulshma.jellyplay.core.model.MediaType
 import com.raulshma.jellyplay.core.ui.components.formatDurationFromTicks
 import com.raulshma.jellyplay.core.ui.image.MediaImage
+import com.raulshma.jellyplay.core.ui.tv.TvFocusableItemRow
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -108,18 +107,18 @@ fun NewsletterCuratedPicks(
             Spacer(Modifier.height(12.dp))
 
             val dropItems = remember(curatedItems) { curatedItems.drop(1) }
-            LazyRow(
+            TvFocusableItemRow(
+                items = dropItems,
+                key = { it.id },
                 horizontalArrangement = Arrangement.spacedBy(12.dp),
                 contentPadding = PaddingValues(horizontal = 16.dp),
-            ) {
-                items(dropItems, key = { it.id }, contentType = { "curatedPick" }) { item ->
-                    CuratedPickCard(
-                        item = item,
-                        imageUrl = imageUrlBuilder(item.id),
-                        onClick = { onItemClick(item) },
-                        modifier = Modifier.width(160.dp),
-                    )
-                }
+            ) { _, item, itemModifier ->
+                CuratedPickCard(
+                    item = item,
+                    imageUrl = imageUrlBuilder(item.id),
+                    onClick = { onItemClick(item) },
+                    modifier = itemModifier.width(160.dp),
+                )
             }
         }
     }

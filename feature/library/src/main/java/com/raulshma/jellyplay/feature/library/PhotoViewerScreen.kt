@@ -72,9 +72,11 @@ import com.composables.icons.tabler.outline.PlayerPause
 import com.composables.icons.tabler.outline.PlayerPlay
 import com.composables.icons.tabler.outline.Share
 import com.composables.icons.tabler.outline.X
+import com.raulshma.jellyplay.core.ui.components.DelayedLoadingScreen
 import com.raulshma.jellyplay.core.ui.components.LoadingScreen
 import com.raulshma.jellyplay.core.ui.image.MediaImage
 import com.raulshma.jellyplay.core.ui.tv.LocalTvMode
+import com.raulshma.jellyplay.core.ui.tv.tryRequestFocus
 import com.raulshma.jellyplay.core.ui.tv.input.onDpadKeyEvent
 
 @Composable
@@ -117,14 +119,10 @@ fun PhotoViewerScreen(
 
     LaunchedEffect(showFilmstrip) {
         kotlinx.coroutines.delay(100)
-        try {
-            if (showFilmstrip) {
-                filmstripFocusRequester.requestFocus()
-            } else {
-                rootFocusRequester.requestFocus()
-            }
-        } catch (e: Exception) {
-            // Ignore if not attached
+        if (showFilmstrip) {
+            filmstripFocusRequester.tryRequestFocus("photo_filmstrip")
+        } else {
+            rootFocusRequester.tryRequestFocus("photo_root")
         }
     }
 
@@ -191,7 +189,7 @@ fun PhotoViewerScreen(
     ) {
         when {
             isLoading -> {
-                LoadingScreen()
+                DelayedLoadingScreen()
             }
             error != null -> {
                 Box(

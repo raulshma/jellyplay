@@ -22,6 +22,7 @@ import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
 import com.raulshma.jellyplay.core.designsystem.theme.ShapeCache
+import com.raulshma.jellyplay.core.ui.tv.TvFocusableGrid
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
@@ -118,22 +119,21 @@ fun ImagesTab(
                 Text("No images available", color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
         } else {
-            LazyVerticalGrid(
+            TvFocusableGrid(
+                items = state.imageInfos,
+                key = { "${it.imageType}-${it.imageIndex}" },
                 columns = GridCells.Adaptive(160.dp),
                 contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp),
                 horizontalArrangement = Arrangement.spacedBy(12.dp),
                 verticalArrangement = Arrangement.spacedBy(12.dp),
-            ) {
-                state.imageInfos.forEach { imageInfo ->
-                    item(key = "${imageInfo.imageType}-${imageInfo.imageIndex}") {
-                        ImageCard(
-                            imageInfo = imageInfo,
-                            imageUrl = viewModel.getImageUrl(itemId, imageInfo),
-                            onDelete = { showDeleteConfirm = imageInfo },
-                            onClick = { selectedImageInfo = imageInfo },
-                        )
-                    }
-                }
+            ) { _, imageInfo, itemModifier ->
+                ImageCard(
+                    imageInfo = imageInfo,
+                    imageUrl = viewModel.getImageUrl(itemId, imageInfo),
+                    onDelete = { showDeleteConfirm = imageInfo },
+                    onClick = { selectedImageInfo = imageInfo },
+                    modifier = itemModifier,
+                )
             }
         }
     }
@@ -202,10 +202,11 @@ private fun ImageCard(
     imageUrl: String,
     onDelete: () -> Unit,
     onClick: () -> Unit,
+    modifier: Modifier = Modifier,
 ) {
     val context = LocalContext.current
     Card(
-        modifier = Modifier.fillMaxWidth(),
+        modifier = modifier.fillMaxWidth(),
         shape = ShapeCache.smooth16,
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainer),
         onClick = onClick,

@@ -11,8 +11,6 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.lazy.LazyRow
-import androidx.compose.foundation.lazy.items
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -28,6 +26,7 @@ import androidx.compose.ui.unit.sp
 import com.composables.icons.tabler.Tabler
 import com.composables.icons.tabler.outline.*
 import com.raulshma.jellyplay.core.model.MediaItem
+import com.raulshma.jellyplay.core.ui.tv.TvFocusableItemRow
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
 
@@ -72,18 +71,19 @@ fun ArtistsSection(
 
         Spacer(modifier = Modifier.height(16.dp))
 
-        LazyRow(
+        TvFocusableItemRow(
+            items = artists,
+            key = { it.id },
             contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 24.dp),
             horizontalArrangement = Arrangement.spacedBy(16.dp),
-        ) {
-            items(artists, key = { it.id }) { artist ->
-                HeartShapeArtistCard(
-                    artist = artist,
-                    onClick = { onArtistClick(artist.id) },
-                    onPlayClick = { onArtistPlayClick(artist.id) },
-                    imageUrl = imageUrlBuilder(artist.id),
-                )
-            }
+        ) { _, artist, itemModifier ->
+            HeartShapeArtistCard(
+                artist = artist,
+                onClick = { onArtistClick(artist.id) },
+                onPlayClick = { onArtistPlayClick(artist.id) },
+                imageUrl = imageUrlBuilder(artist.id),
+                modifier = itemModifier,
+            )
         }
     }
 }

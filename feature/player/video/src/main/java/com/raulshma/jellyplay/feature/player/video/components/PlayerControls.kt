@@ -80,6 +80,8 @@ import com.raulshma.jellyplay.core.designsystem.theme.PointToPointEasing
 import com.raulshma.jellyplay.core.designsystem.theme.SyncStatusColors
 import com.raulshma.jellyplay.core.ui.animation.AnimationTokens
 import com.raulshma.jellyplay.core.ui.tv.LocalTvMode
+import com.raulshma.jellyplay.core.ui.tv.ifElse
+import com.raulshma.jellyplay.core.ui.tv.tryRequestFocus
 import com.raulshma.jellyplay.core.ui.tv.rememberTvFocusState
 import com.raulshma.jellyplay.core.ui.tv.tvFocusIndicator
 import com.raulshma.jellyplay.core.ui.tv.tvFocusRestorer
@@ -204,7 +206,7 @@ internal fun PlayerControls(
 
     LaunchedEffect(isVisible, isTv) {
         if (isTv && isVisible) {
-            tvPlayPauseFocusRequester.requestFocus()
+            tvPlayPauseFocusRequester.tryRequestFocus()
         }
     }
 
@@ -229,7 +231,7 @@ internal fun PlayerControls(
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .then(if (isTv) Modifier.tvFocusRestorer() else Modifier)
+                    .ifElse(isTv, Modifier.tvFocusRestorer())
                     .then(
                         if (isTv) {
                             Modifier.focusProperties {
@@ -319,7 +321,7 @@ internal fun PlayerControls(
                 horizontalArrangement = Arrangement.spacedBy(16.dp),
                 verticalAlignment = Alignment.CenterVertically,
                 modifier = Modifier
-                    .then(if (isTv) Modifier.tvFocusRestorer() else Modifier)
+                    .ifElse(isTv, Modifier.tvFocusRestorer())
                     .then(
                         if (isTv) {
                             Modifier.focusProperties {
@@ -348,7 +350,7 @@ internal fun PlayerControls(
                     onClick = onPlayPause,
                     modifier = Modifier
                         .size(80.dp)
-                        .then(if (isTv) Modifier.focusRequester(tvPlayPauseFocusRequester) else Modifier),
+                        .ifElse(isTv, Modifier.focusRequester(tvPlayPauseFocusRequester)),
                     shape = CircleShape,
                     colors = IconButtonDefaults.filledIconButtonColors(
                         containerColor = MaterialTheme.colorScheme.primary,
@@ -438,7 +440,7 @@ internal fun PlayerControls(
                     modifier = Modifier
                         .fillMaxWidth()
                         .padding(top = 4.dp)
-                        .then(if (isTv) Modifier.tvFocusRestorer() else Modifier)
+                        .ifElse(isTv, Modifier.tvFocusRestorer())
                         .then(
                             if (isTv) {
                                 Modifier
@@ -1067,11 +1069,7 @@ private fun PlayerOverflowMenu(
             isFirstDialogueBoostRender = false
         } else {
             if (isTv) {
-                try {
-                    dialogueBoostFocusRequester.requestFocus()
-                } catch (e: Exception) {
-                    // ignore
-                }
+                dialogueBoostFocusRequester.tryRequestFocus()
             }
         }
     }
@@ -1081,11 +1079,7 @@ private fun PlayerOverflowMenu(
             isFirstNightModeRender = false
         } else {
             if (isTv) {
-                try {
-                    nightModeFocusRequester.requestFocus()
-                } catch (e: Exception) {
-                    // ignore
-                }
+                nightModeFocusRequester.tryRequestFocus()
             }
         }
     }
@@ -1095,11 +1089,7 @@ private fun PlayerOverflowMenu(
             isFirstAudioNormalizationRender = false
         } else {
             if (isTv) {
-                try {
-                    audioNormalizationFocusRequester.requestFocus()
-                } catch (e: Exception) {
-                    // ignore
-                }
+                audioNormalizationFocusRequester.tryRequestFocus()
             }
         }
     }
@@ -1109,11 +1099,7 @@ private fun PlayerOverflowMenu(
             isFirstChannelMixRender = false
         } else {
             if (isTv) {
-                try {
-                    channelMixFocusRequester.requestFocus()
-                } catch (e: Exception) {
-                    // ignore
-                }
+                channelMixFocusRequester.tryRequestFocus()
             }
         }
     }
