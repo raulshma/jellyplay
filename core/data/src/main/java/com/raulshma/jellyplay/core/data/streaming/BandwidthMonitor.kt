@@ -36,10 +36,10 @@ class BandwidthMonitor @Inject constructor() {
                 _totalBytes.value = (_totalBytes.value - removed.bytes).coerceAtLeast(0L)
                 _totalElapsedMs.value = (_totalElapsedMs.value - removed.elapsedMs).coerceAtLeast(0L)
             }
+            _totalBytes.value = _totalBytes.value + bytesTransferred
+            _totalElapsedMs.value = _totalElapsedMs.value + elapsedMs
+            _estimatedBandwidthKbps.value = computeAverageKbpsInternal()
         }
-        _totalBytes.value = _totalBytes.value + bytesTransferred
-        _totalElapsedMs.value = _totalElapsedMs.value + elapsedMs
-        _estimatedBandwidthKbps.value = computeAverageKbps()
     }
 
     fun reset() {
@@ -49,14 +49,15 @@ class BandwidthMonitor @Inject constructor() {
         _estimatedBandwidthKbps.value = 0.0
     }
 
-    private fun computeAverageKbps(): Double {
-        val (totalBytes, totalMs) = synchronized(samples) {
-            if (samples.isEmpty()) return 0.0
-            samples.sumOf { it.bytes } to samples.sumOf { it.elapsedMs }
-        }
+    private fun computeAverageKbpsInternal(): Double {
+        if (samples.isEmpty()) return 0.0
+        val totalBytes = samples.sumOf { it.bytes }
+        val totalMs = samples.sumOf { it.elapsedMs }
         if (totalMs == 0L) return 0.0
         return (totalBytes * 8.0) / (totalMs / 1000.0) / 1000.0
     }
+
+    fun computeAverageKbps(): Double = synchronized(samples) { computeAverageKbpsInternal() }
 }
 
 data class BandwidthSample(

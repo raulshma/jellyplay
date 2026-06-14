@@ -51,12 +51,10 @@ import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.unit.dp
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.ui.input.key.Key
-import androidx.compose.ui.input.key.KeyEventType
-import androidx.compose.ui.input.key.key
-import androidx.compose.ui.input.key.type
-import androidx.compose.ui.input.key.onPreviewKeyEvent
+import com.raulshma.jellyplay.core.ui.tv.input.onDpadKey
 import com.raulshma.jellyplay.core.ui.tv.LocalTvMode
+import com.raulshma.jellyplay.core.ui.tv.RequestOrRestoreFocus
+import com.raulshma.jellyplay.core.ui.tv.tryRequestFocus
 import com.raulshma.jellyplay.core.ui.tv.rememberTvFocusState
 import com.raulshma.jellyplay.core.ui.tv.tvFocusIndicator
 import com.raulshma.jellyplay.core.designsystem.theme.ShapeCache
@@ -114,15 +112,15 @@ fun HomeTopDock(
                 horizontal = 16.dp,
                 vertical = 8.dp
             )
-            .onPreviewKeyEvent { keyEvent ->
-                if (isSearchFocused && keyEvent.key == Key.Back && keyEvent.type == KeyEventType.KeyDown) {
-                    onClearSearch()
-                    focusManager.clearFocus()
-                    true
-                } else {
-                    false
-                }
-            },
+            .onDpadKey(
+                onBack = {
+                    if (isSearchFocused) {
+                        onClearSearch()
+                        focusManager.clearFocus()
+                        true
+                    } else false
+                },
+            ),
         contentAlignment = Alignment.TopEnd
     ) {
         Column(
@@ -256,9 +254,7 @@ private fun RowScope.SearchExpandedContent(
         singleLine = true,
     )
 
-    LaunchedEffect(Unit) {
-        focusRequester.requestFocus()
-    }
+    RequestOrRestoreFocus(focusRequester, "home_search")
 
     if (searchQuery.isNotEmpty()) {
         val clearFocusState = rememberTvFocusState()

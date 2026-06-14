@@ -41,6 +41,12 @@ import com.raulshma.jellyplay.core.ui.adaptive.bottomPadding
 import com.raulshma.jellyplay.core.ui.adaptive.contentPadding
 import com.raulshma.jellyplay.core.ui.components.JellyPlayScreenScaffold
 import com.raulshma.jellyplay.core.ui.tv.LocalTvMode
+import com.raulshma.jellyplay.core.ui.tv.tvFocusRestorer
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
+import androidx.compose.runtime.LaunchedEffect
+import com.raulshma.jellyplay.core.ui.tv.TvGrabInitialFocus
+import com.raulshma.jellyplay.core.ui.tv.tryRequestFocus
 
 @Composable
 fun AboutScreen(
@@ -53,6 +59,13 @@ fun AboutScreen(
     val context = LocalContext.current
 
     val backgroundColor = com.raulshma.jellyplay.core.ui.components.rememberScreenBackgroundColor()
+
+    val focusRequester = remember { FocusRequester() }
+    TvGrabInitialFocus(
+        focusRequester = focusRequester,
+        itemCount = 1,
+        tag = "about_init",
+    )
 
     JellyPlayScreenScaffold(
         title = "About",
@@ -67,7 +80,9 @@ fun AboutScreen(
                     start = adaptiveInfo.contentPadding(isTv),
                     end = adaptiveInfo.contentPadding(isTv),
                     bottom = adaptiveInfo.bottomPadding(isTv),
-                ),
+                )
+                .tvFocusRestorer()
+                .focusRequester(focusRequester),
         ) {
             Spacer(Modifier.height(24.dp))
 

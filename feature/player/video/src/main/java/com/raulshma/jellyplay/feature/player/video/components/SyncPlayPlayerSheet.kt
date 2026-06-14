@@ -43,6 +43,8 @@ import androidx.compose.material3.DropdownMenuItem
 import com.raulshma.jellyplay.core.model.SyncPlayRepeatMode
 import com.raulshma.jellyplay.core.model.SyncPlayShuffleMode
 import com.raulshma.jellyplay.core.ui.tv.LocalTvMode
+import com.raulshma.jellyplay.core.ui.tv.ifElse
+import com.raulshma.jellyplay.core.ui.tv.tryRequestFocus
 import com.raulshma.jellyplay.core.ui.tv.rememberTvFocusState
 import com.raulshma.jellyplay.core.ui.tv.tvFocusIndicator
 import com.composables.icons.tabler.Tabler
@@ -71,11 +73,7 @@ fun SyncPlayPlayerSheet(
 
     LaunchedEffect(isTv) {
         if (isTv) {
-            try {
-                focusRequester.requestFocus()
-            } catch (e: Exception) {
-                // ignore
-            }
+            focusRequester.tryRequestFocus("sheet")
         }
     }
 
@@ -162,7 +160,7 @@ fun SyncPlayPlayerSheet(
                     onClick = onTogglePlayPause,
                     modifier = Modifier
                         .weight(1f)
-                        .then(if (isTv) Modifier.focusRequester(focusRequester) else Modifier)
+                        .ifElse(isTv, Modifier.focusRequester(focusRequester))
                         .then(toggleFocus.focusModifier)
                         .tvFocusIndicator(toggleFocus, ShapeCache.smoothPill),
                     shape = ShapeCache.smoothPill,

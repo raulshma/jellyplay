@@ -6,6 +6,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import com.raulshma.jellyplay.core.ui.tv.rememberTvFocusState
+import com.raulshma.jellyplay.core.ui.tv.tryRequestFocus
 import com.raulshma.jellyplay.core.ui.tv.tvFocusIndicator
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -39,6 +40,8 @@ import androidx.compose.ui.unit.dp
 import com.raulshma.jellyplay.core.designsystem.theme.ShapeCache
 import com.raulshma.jellyplay.core.ui.animation.AnimationTokens
 import com.raulshma.jellyplay.core.ui.tv.LocalTvMode
+import com.raulshma.jellyplay.core.ui.tv.ifElse
+import com.raulshma.jellyplay.core.ui.tv.verticalWrapAround
 import com.raulshma.jellyplay.feature.player.video.TrackOption
 import com.composables.icons.tabler.Tabler
 import com.composables.icons.tabler.outline.*
@@ -57,11 +60,7 @@ internal fun TrackPickerSheet(
 
     LaunchedEffect(isTv, tracks) {
         if (isTv && tracks.isNotEmpty()) {
-            try {
-                focusRequester.requestFocus()
-            } catch (e: Exception) {
-                // ignore
-            }
+            focusRequester.tryRequestFocus("sheet")
         }
     }
 
@@ -119,7 +118,7 @@ internal fun TrackPickerSheet(
                 }
             }
             Spacer(Modifier.height(12.dp))
-            LazyColumn {
+            LazyColumn(modifier = Modifier.verticalWrapAround()) {
                 itemsIndexed(tracks, key = { _, track -> track.index }, contentType = { _, _ -> "track" }) { index, track ->
                     val isSelected = track.isSelected
                     val isFirst = index == 0
@@ -132,7 +131,7 @@ internal fun TrackPickerSheet(
                             onSelect(track)
                             onDismiss()
                         },
-                        modifier = if (isTarget) Modifier.focusRequester(focusRequester) else Modifier,
+                        modifier = Modifier.ifElse(isTarget, Modifier.focusRequester(focusRequester)),
                     )
                 }
             }

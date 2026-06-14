@@ -797,4 +797,25 @@ class LibraryApiClientImpl @Inject constructor(
 
     override fun getBackdropImageUrl(itemId: String, maxWidth: Int, tag: String?): String =
         getImageUrl(itemId, "Backdrop", maxWidth, null, tag)
+
+    override suspend fun getChildItemImageUrls(parentId: String, limit: Int): List<String> {
+        return try {
+            val api = engine.requireApi()
+            val response = api.itemsApi.getItems(
+                parentId = parentId.toUUID(),
+                includeItemTypes = listOf(BaseItemKind.PHOTO),
+                limit = limit,
+                sortBy = listOf(ItemSortBy.DATE_CREATED),
+                sortOrder = listOf(org.jellyfin.sdk.model.api.SortOrder.DESCENDING),
+                fields = listOf(ItemFields.PRIMARY_IMAGE_ASPECT_RATIO),
+            ).content
+            response.items.mapNotNull { item ->
+                if (item.imageTags?.containsKey(ImageType.PRIMARY) == true) {
+                    getImageUrl(item.id.toString(), "Primary", 200)
+                } else null
+            }
+        } catch (_: Exception) {
+            emptyList()
+        }
+    }
 }

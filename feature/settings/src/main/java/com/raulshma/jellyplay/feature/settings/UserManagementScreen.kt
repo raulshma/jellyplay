@@ -1,7 +1,6 @@
 package com.raulshma.jellyplay.feature.settings
 
 import androidx.compose.animation.AnimatedVisibility
-import com.raulshma.jellyplay.core.ui.tv.tvFocusable
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.slideInVertically
 import androidx.compose.foundation.clickable
@@ -50,6 +49,11 @@ import com.raulshma.jellyplay.core.ui.components.LocalNetworkStatus
 import com.raulshma.jellyplay.core.ui.components.ScreenEmptyState
 import com.raulshma.jellyplay.core.ui.components.resolveHeaderStatus
 import com.raulshma.jellyplay.core.ui.tv.LocalTvMode
+import com.raulshma.jellyplay.core.ui.tv.tvFocusRestorer
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
+import com.raulshma.jellyplay.core.ui.tv.TvGrabInitialFocus
+import com.raulshma.jellyplay.core.ui.tv.tryRequestFocus
 import com.composables.icons.tabler.Tabler
 import com.composables.icons.tabler.outline.*
 
@@ -79,6 +83,13 @@ fun UserManagementScreen(
     val navOffsetPx = com.raulshma.jellyplay.core.ui.components.LocalFloatingNavOffset.current
     val backgroundColor = com.raulshma.jellyplay.core.ui.components.rememberScreenBackgroundColor()
 
+    val focusRequester = remember { FocusRequester() }
+    TvGrabInitialFocus(
+        focusRequester = focusRequester,
+        itemCount = if (!isLoading) serverUsers.size else 0,
+        tag = "user_management_init",
+    )
+
     JellyPlayScreenScaffold(
         title = "Switch User",
         onBack = onBack,
@@ -103,6 +114,10 @@ fun UserManagementScreen(
                 }
                 else -> {
                     LazyColumn(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .tvFocusRestorer()
+                            .focusRequester(focusRequester),
                         contentPadding = PaddingValues(contentPad),
                         verticalArrangement = Arrangement.spacedBy(spacing),
                     ) {
@@ -174,7 +189,7 @@ private fun UserManagementCard(
     ElevatedCard(
         modifier = Modifier
             .fillMaxWidth()
-            .tvFocusable().clickable(onClick = onClick),
+            .clickable(onClick = onClick),
     ) {
         Row(
             modifier = Modifier

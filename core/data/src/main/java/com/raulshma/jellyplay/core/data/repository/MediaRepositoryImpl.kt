@@ -3,6 +3,7 @@ package com.raulshma.jellyplay.core.data.repository
 import androidx.paging.Pager
 import androidx.paging.PagingConfig
 import androidx.paging.PagingData
+import android.util.Log
 import com.raulshma.jellyplay.core.data.cache.TtlCache
 import com.raulshma.jellyplay.core.database.dao.LyricsCacheDao
 import com.raulshma.jellyplay.core.database.entity.LyricsCacheEntity
@@ -62,7 +63,9 @@ class MediaRepositoryImpl @Inject constructor(
         }
     }
 
+    @Volatile
     private var cachedHomeSections: List<HomeSection>? = null
+    @Volatile
     private var cachedHomeSectionsTimestamp: Long = 0L
     private val homeSectionsLock = Any()
 
@@ -71,7 +74,8 @@ class MediaRepositoryImpl @Inject constructor(
         hiddenLibraryIds: Set<String>,
     ): Result<List<HomeSection>> {
         val cached = cachedHomeSections
-        if (cached != null && android.os.SystemClock.elapsedRealtime() - cachedHomeSectionsTimestamp < HOME_SECTIONS_CACHE_TTL_MS) {
+        val timestamp = cachedHomeSectionsTimestamp
+        if (cached != null && android.os.SystemClock.elapsedRealtime() - timestamp < HOME_SECTIONS_CACHE_TTL_MS) {
             return Result.success(cached)
         }
         return apiClient.getHomeSections(enabledSections, hiddenLibraryIds).also { result ->
@@ -535,14 +539,16 @@ class MediaRepositoryImpl @Inject constructor(
         )
         try {
             lyricsCacheDao.deleteOlderThan(System.currentTimeMillis() - 30L * 24 * 60 * 60 * 1000)
-        } catch (_: Exception) {
+        } catch (e: Exception) {
+            Log.d("MediaRepo", "Failed to evict old lyrics cache", e)
         }
     }
 
     override suspend fun cleanupLyricsCache() {
         try {
             lyricsCacheDao.deleteOlderThan(System.currentTimeMillis() - 30L * 24 * 60 * 60 * 1000)
-        } catch (_: Exception) {
+        } catch (e: Exception) {
+            Log.d("MediaRepo", "Failed to cleanup lyrics cache", e)
         }
     }
 
@@ -611,5 +617,17 @@ class MediaRepositoryImpl @Inject constructor(
                 com.raulshma.jellyplay.core.model.LyricsWord(timeMs = timeMs, text = rawWord)
             }.filter { it.text.isNotEmpty() }
         }
+    }
+
+    private val photoFolderChildUrlCache = TtlCache<List<String>>(
+        maxSize = 200,
+        ttlMs = 5 * 60 * 1000L,
+    )
+
+    override suspend fun getPhotoFolderChildImageUrls(folderId: String, limit: Int): List<String> {
+        photoFolderChildUrlCache.get(folderId)?.let { return it }
+        val urls = apiClient.getChildItemImageUrls(folderId, limit)
+        photoFolderChildUrlCache.put(folderId, urls)
+        return urls
     }
 }

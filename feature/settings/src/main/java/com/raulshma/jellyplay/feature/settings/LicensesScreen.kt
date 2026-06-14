@@ -32,6 +32,15 @@ import com.raulshma.jellyplay.core.ui.adaptive.contentPadding
 import com.raulshma.jellyplay.core.ui.components.JellyPlayScreenScaffold
 import com.raulshma.jellyplay.core.ui.components.LoadingScreen
 import com.raulshma.jellyplay.core.ui.tv.LocalTvMode
+import com.raulshma.jellyplay.core.ui.tv.tvFocusRestorer
+import com.raulshma.jellyplay.core.designsystem.theme.ShapeCache
+import androidx.compose.foundation.clickable
+import androidx.compose.ui.draw.clip
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
+import com.raulshma.jellyplay.core.ui.tv.TvGrabInitialFocus
+import com.raulshma.jellyplay.core.ui.tv.tryRequestFocus
 
 @Composable
 fun LicensesScreen(
@@ -43,6 +52,13 @@ fun LicensesScreen(
     val context = LocalContext.current
 
     val backgroundColor = com.raulshma.jellyplay.core.ui.components.rememberScreenBackgroundColor()
+
+    val focusRequester = remember { FocusRequester() }
+    TvGrabInitialFocus(
+        focusRequester = focusRequester,
+        itemCount = if (!viewModel.isLoading) viewModel.licenses.size else 0,
+        tag = "licenses_init",
+    )
 
     JellyPlayScreenScaffold(
         title = "Open Source Licenses",
@@ -66,7 +82,10 @@ fun LicensesScreen(
             }
             else -> {
                 LazyColumn(
-                    modifier = Modifier.fillMaxSize(),
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .tvFocusRestorer()
+                        .focusRequester(focusRequester),
                     contentPadding = PaddingValues(
                         start = adaptiveInfo.contentPadding(isTv),
                         end = adaptiveInfo.contentPadding(isTv),
@@ -98,10 +117,20 @@ private fun LicenseRow(
     licenseType: String,
     version: String,
 ) {
-    Column(
-        modifier = Modifier
+    val isTv = LocalTvMode.current
+    val rowModifier = if (isTv) {
+        Modifier
             .fillMaxWidth()
-            .padding(horizontal = 16.dp, vertical = 8.dp),
+            .clip(ShapeCache.smooth8)
+            .clickable(onClick = {})
+            .padding(horizontal = 16.dp, vertical = 8.dp)
+    } else {
+        Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 16.dp, vertical = 8.dp)
+    }
+    Column(
+        modifier = rowModifier,
     ) {
         Text(
             text = name,

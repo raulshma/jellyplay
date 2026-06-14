@@ -19,7 +19,6 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
-import com.raulshma.jellyplay.core.ui.tv.tvFocusable
 import androidx.compose.foundation.clickable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -44,6 +43,13 @@ import com.raulshma.jellyplay.core.ui.tv.LocalTvMode
 import com.raulshma.jellyplay.core.designsystem.theme.ShapeCache
 import androidx.compose.foundation.background
 import com.composables.icons.tabler.Tabler
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.LaunchedEffect
+import com.raulshma.jellyplay.core.ui.tv.tvFocusRestorer
+import com.raulshma.jellyplay.core.ui.tv.TvGrabInitialFocus
+import com.raulshma.jellyplay.core.ui.tv.tryRequestFocus
 import com.composables.icons.tabler.outline.*
 
 @Composable
@@ -66,6 +72,14 @@ fun DvrScreen(
     val bottomPad = adaptiveInfo.bottomPadding(isTv)
 
     val backgroundColor = rememberScreenBackgroundColor()
+
+    val focusRequester = remember { FocusRequester() }
+    val hasTimers = viewModel.timers.isNotEmpty() || viewModel.seriesTimers.isNotEmpty()
+    TvGrabInitialFocus(
+        focusRequester = focusRequester,
+        itemCount = viewModel.timers.size + viewModel.seriesTimers.size,
+        tag = "dvr_init",
+    )
 
     JellyPlayScreenScaffold(
         title = "Recordings",
@@ -90,7 +104,10 @@ fun DvrScreen(
             )
         } else {
             LazyColumn(
-                modifier = Modifier.fillMaxSize(),
+                modifier = Modifier
+                    .fillMaxSize()
+                    .tvFocusRestorer()
+                    .focusRequester(focusRequester),
                 contentPadding = PaddingValues(
                     start = contentPad,
                     end = contentPad,
@@ -158,7 +175,7 @@ private fun TimerCard(
             .fillMaxWidth()
             .clip(ShapeCache.smooth16)
             .background(MaterialTheme.colorScheme.onSurface.copy(alpha = 0.05f))
-            .tvFocusable().clickable { }
+            .clickable { }
             .padding(horizontal = 16.dp, vertical = 14.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
@@ -233,7 +250,7 @@ private fun TimerCard(
                 .size(36.dp)
                 .clip(CircleShape)
                 .background(MaterialTheme.colorScheme.onSurface.copy(alpha = 0.08f))
-                .tvFocusable().clickable { onCancel(timer.id) },
+                .clickable { onCancel(timer.id) },
             contentAlignment = Alignment.Center,
         ) {
             Icon(
@@ -256,7 +273,7 @@ private fun SeriesTimerCard(
             .fillMaxWidth()
             .clip(ShapeCache.smooth16)
             .background(MaterialTheme.colorScheme.onSurface.copy(alpha = 0.05f))
-            .tvFocusable().clickable { }
+            .clickable { }
             .padding(horizontal = 16.dp, vertical = 14.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
@@ -307,7 +324,7 @@ private fun SeriesTimerCard(
                 .size(36.dp)
                 .clip(CircleShape)
                 .background(MaterialTheme.colorScheme.onSurface.copy(alpha = 0.08f))
-                .tvFocusable().clickable { onCancel(timer.id) },
+                .clickable { onCancel(timer.id) },
             contentAlignment = Alignment.Center,
         ) {
             Icon(

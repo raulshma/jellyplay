@@ -20,7 +20,7 @@ import androidx.compose.ui.window.DialogWindowProvider
 import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.WindowInsetsControllerCompat
-import com.raulshma.jellyplay.core.ui.tv.LocalTvMode
+import com.raulshma.jellyplay.core.ui.adaptive.LocalJellyPlayUi
 import com.raulshma.jellyplay.core.ui.components.TvSafeSheet
 import com.raulshma.jellyplay.feature.player.video.findActivity
 
@@ -32,7 +32,7 @@ fun PlayerModalBottomSheet(
     sheetState: SheetState = rememberModalBottomSheetState(),
     content: @Composable ColumnScope.() -> Unit
 ) {
-    val isTv = LocalTvMode.current
+    val isTv = LocalJellyPlayUi.current.isTv
 
     if (isTv) {
         TvSafeSheet(

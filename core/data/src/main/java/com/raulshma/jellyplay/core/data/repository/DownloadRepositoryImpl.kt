@@ -2,6 +2,7 @@ package com.raulshma.jellyplay.core.data.repository
 
 import android.content.Context
 import android.os.Environment
+import android.util.Log
 import androidx.room.withTransaction
 import androidx.work.Constraints
 import androidx.work.Data
@@ -301,7 +302,7 @@ class DownloadRepositoryImpl @Inject constructor(
                                         source?.trickplayInfo?.let { info ->
                                             try {
                                                 downloadTrickplayData(episode.id, info, download.downloadPath)
-                                            } catch (_: Exception) { }
+                                            } catch (e: Exception) { Log.d(TAG, "Failed to download trickplay data", e) }
                                         }
                                         Pair(offlineEntity, download.id)
                                     } else {
@@ -364,7 +365,7 @@ class DownloadRepositoryImpl @Inject constructor(
                     appendLine("\"interval\":${trickplayInfo.interval},")
                     appendLine("\"bandwidth\":${trickplayInfo.bandwidth}}")
                 })
-            } catch (_: Exception) { }
+            } catch (e: Exception) { Log.d(TAG, "Failed to write trickplay meta.json", e) }
         }
     }
 
@@ -395,7 +396,7 @@ class DownloadRepositoryImpl @Inject constructor(
             .build()
         WorkManager.getInstance(context).enqueueUniqueWork(
             "${DownloadWorker.UNIQUE_WORK_PREFIX}$downloadId",
-            ExistingWorkPolicy.REPLACE,
+            ExistingWorkPolicy.KEEP,
             workRequest,
         )
     }
@@ -409,7 +410,7 @@ class DownloadRepositoryImpl @Inject constructor(
                 .size(512, 512)
                 .build()
             imageLoader.enqueue(request)
-        } catch (_: Exception) { }
+        } catch (e: Exception) { Log.d(TAG, "Failed to preload image to cache", e) }
     }
 
     private fun MediaItem.toOfflineMediaEntity(imageUrl: String?, backdropUrl: String?) = OfflineMediaEntity(
@@ -478,6 +479,7 @@ class DownloadRepositoryImpl @Inject constructor(
     )
 
     companion object {
+        private const val TAG = "DownloadRepository"
         private val FILENAME_SANITIZE_REGEX = Regex("[^a-zA-Z0-9.\\-]")
     }
 }

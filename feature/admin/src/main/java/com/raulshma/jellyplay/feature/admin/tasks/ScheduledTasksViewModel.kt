@@ -66,7 +66,7 @@ class ScheduledTasksViewModel @Inject constructor(
         launch {
             hasRunningTasks.collect { running ->
                 while (running) {
-                    delay(3000)
+                    delay(5000)
                     fetchTasks()
                 }
             }

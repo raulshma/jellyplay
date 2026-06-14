@@ -196,6 +196,14 @@ class MpvPlayerEngine(
         }
 
         override fun initOptions() {
+            val configDir = java.io.File(context.filesDir, "mpv")
+            mpv.setOptionString("config", "yes")
+            mpv.setOptionString("config-dir", configDir.absolutePath)
+
+            val fontsDir = java.io.File(context.cacheDir, "fonts")
+            mpv.setOptionString("sub-fonts-dir", fontsDir.absolutePath + "/")
+            mpv.setOptionString("sub-font-provider", "none")
+
             val mpvCfg = (currentConfig.engineSpecific as? MpvEngineConfig) ?: MpvEngineConfig()
 
             val hwdecValue = mpvCfg.hwdecOverride?.key ?: when (currentConfig.decoderMode) {
@@ -555,6 +563,8 @@ class MpvPlayerEngine(
                     } catch (_: Exception) {
                         m.setPropertyString("sid", "$index")
                     }
+                    m.setPropertyBoolean("sub-visibility", true)
+                    m.setPropertyBoolean("secondary-sub-visibility", true)
                 }
             }
             refreshTracks("select-${type.name.lowercase()}")
@@ -611,6 +621,26 @@ class MpvPlayerEngine(
     }
 
     override fun createSurfaceView(context: Context): View {
+        setupFonts(context)
+        val configDir = java.io.File(context.filesDir, "mpv")
+        if (!configDir.exists()) {
+            configDir.mkdirs()
+        }
+        writeFontsConf(context, configDir)
+        try {
+            writeFontsConf(context, context.filesDir)
+        } catch (e: Exception) {
+            Log.w(TAG, "Failed to write fallback fonts.conf to filesDir", e)
+        }
+
+        try {
+            android.system.Os.setenv("FONTCONFIG_FILE", java.io.File(configDir, "fonts.conf").absolutePath, true)
+            android.system.Os.setenv("FONTCONFIG_PATH", configDir.absolutePath, true)
+            Log.d(TAG, "Set FONTCONFIG environment variables successfully")
+        } catch (t: Throwable) {
+            Log.w(TAG, "Failed to set FONTCONFIG environment variables via Os.setenv", t)
+        }
+
         val view = try {
             PlayerMPVView(context)
         } catch (e: Exception) {
@@ -623,25 +653,6 @@ class MpvPlayerEngine(
 
         try {
             val mpvCfg = (currentConfig.engineSpecific as? MpvEngineConfig) ?: MpvEngineConfig()
-            val configDir = java.io.File(context.filesDir, "mpv")
-            if (!configDir.exists()) {
-                configDir.mkdirs()
-            }
-            writeFontsConf(context, configDir)
-            try {
-                writeFontsConf(context, context.filesDir)
-            } catch (e: Exception) {
-                Log.w(TAG, "Failed to write fallback fonts.conf to filesDir", e)
-            }
-
-            try {
-                android.system.Os.setenv("FONTCONFIG_FILE", java.io.File(configDir, "fonts.conf").absolutePath, true)
-                android.system.Os.setenv("FONTCONFIG_PATH", configDir.absolutePath, true)
-                Log.d(TAG, "Set FONTCONFIG environment variables successfully")
-            } catch (t: Throwable) {
-                Log.w(TAG, "Failed to set FONTCONFIG environment variables via Os.setenv", t)
-            }
-
             view.initialize(configDir.absolutePath, context.cacheDir.absolutePath)
             view.setVo(mpvCfg.videoOutput.key)
             applySubtitleStyleInternal(currentConfig.subtitleStyle)
@@ -1192,10 +1203,68 @@ class MpvPlayerEngine(
         return x
     }
 
+    private fun setupFonts(context: Context) {
+        val destDirs = arrayOf(
+            java.io.File(context.cacheDir, "fonts"),
+            java.io.File(context.filesDir, "mpv"),
+            java.io.File(java.io.File(context.filesDir, "mpv"), "fonts")
+        )
+        val fontNames = arrayOf("subfont.ttf", "sans-serif.ttf", "Arial.ttf")
+
+        for (dir in destDirs) {
+            if (!dir.exists()) {
+                dir.mkdirs()
+            }
+            for (name in fontNames) {
+                val destFile = java.io.File(dir, name)
+                copyFontToDest(context, destFile)
+            }
+        }
+    }
+
+    private fun copyFontToDest(context: Context, destFile: java.io.File): Boolean {
+        if (destFile.exists() && destFile.length() > 0) return true
+
+        // Try copying from assets
+        try {
+            context.assets.open("subfont.ttf").use { input ->
+                destFile.outputStream().use { output ->
+                    input.copyTo(output)
+                }
+            }
+            Log.d(TAG, "Successfully copied font from assets to ${destFile.absolutePath}")
+            return true
+        } catch (e: Exception) {
+            Log.w(TAG, "Failed to copy font from assets to ${destFile.absolutePath}: ${e.message}")
+        }
+
+        // Try copying system fallback fonts
+        val systemFonts = arrayOf(
+            "/system/fonts/Roboto-Regular.ttf",
+            "/system/fonts/NotoSans-Regular.ttf",
+            "/system/fonts/DroidSans.ttf"
+        )
+        for (path in systemFonts) {
+            val systemFontFile = java.io.File(path)
+            if (systemFontFile.exists()) {
+                try {
+                    systemFontFile.inputStream().use { input ->
+                        destFile.outputStream().use { output ->
+                            input.copyTo(output)
+                        }
+                    }
+                    Log.d(TAG, "Successfully copied system font from $path to ${destFile.absolutePath}")
+                    return true
+                } catch (e: Exception) {
+                    Log.w(TAG, "Failed to copy system font from $path to ${destFile.absolutePath}: ${e.message}")
+                }
+            }
+        }
+        return false
+    }
+
     private fun writeFontsConf(context: Context, configDir: java.io.File) {
         val configFile = java.io.File(configDir, "fonts.conf")
-        if (configFile.exists()) return
-
         val cacheDir = java.io.File(context.cacheDir, "fontconfig")
         if (!cacheDir.exists()) {
             cacheDir.mkdirs()
@@ -1226,8 +1295,15 @@ class MpvPlayerEngine(
                     <prefer><family>Droid Sans Mono</family></prefer>
                 </alias>
 
+                <match target="pattern">
+                    <edit name="family" mode="append_last">
+                        <string>sans-serif</string>
+                    </edit>
+                </match>
             </fontconfig>
         """.trimIndent()
+
+        if (configFile.exists() && configFile.readText() == config) return
 
         try {
             configFile.writeText(config)

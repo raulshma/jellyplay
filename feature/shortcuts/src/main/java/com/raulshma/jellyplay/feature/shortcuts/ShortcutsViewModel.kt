@@ -15,9 +15,9 @@ import kotlinx.coroutines.flow.stateIn
 import javax.inject.Inject
 
 enum class ShortcutCategory(val displayName: String) {
-    MEDIA("Media & Browsing"),
-    PERSONAL("Personal Library"),
-    SYSTEM("System & Administration")
+    LIBRARY("Library"),
+    SERVICES("Services"),
+    SYSTEM("System"),
 }
 
 data class ShortcutItem(
@@ -39,136 +39,103 @@ class ShortcutsViewModel @Inject constructor(
 ) : JellyPlayViewModel() {
 
     private val allShortcuts = listOf(
-        // Media & Browsing
-        ShortcutItem(
-            title = "Home",
-            description = "Main dashboard for movies, shows, and music.",
-            icon = Tabler.Outline.Home,
-            route = Route.Home,
-            category = ShortcutCategory.MEDIA,
-        ),
-        ShortcutItem(
-            title = "Library",
-            description = "Browse all your media libraries and directories.",
-            icon = Tabler.Outline.Music,
-            route = Route.Library,
-            category = ShortcutCategory.MEDIA,
-        ),
-        ShortcutItem(
-            title = "Music Browse",
-            description = "Explore music artists, albums, tracks, and playlists.",
-            icon = Tabler.Outline.Disc,
-            route = Route.MusicBrowse,
-            category = ShortcutCategory.MEDIA,
-        ),
-        ShortcutItem(
-            title = "Live TV",
-            description = "Watch active TV channels and broadcasts.",
-            icon = Tabler.Outline.DeviceTv,
-            route = Route.LiveTv,
-            category = ShortcutCategory.MEDIA,
-        ),
-        ShortcutItem(
-            title = "TV Guide",
-            description = "View the TV schedule guide and upcoming programs.",
-            icon = Tabler.Outline.Calendar,
-            route = Route.LiveTvGuide,
-            category = ShortcutCategory.MEDIA,
-        ),
-        ShortcutItem(
-            title = "Search",
-            description = "Find media files, artists, actors, or playlists.",
-            icon = Tabler.Outline.Search,
-            route = Route.Search,
-            category = ShortcutCategory.MEDIA,
-        ),
-
-        // Personal Library
         ShortcutItem(
             title = "Downloads",
-            description = "Manage downloaded content and offline playback.",
+            description = "Offline content and download management.",
             icon = Tabler.Outline.Download,
             route = Route.Downloads,
-            category = ShortcutCategory.PERSONAL,
+            category = ShortcutCategory.LIBRARY,
         ),
         ShortcutItem(
             title = "Favorites",
-            description = "Access all your liked items and bookmarked media.",
+            description = "Liked and bookmarked media.",
             icon = Tabler.Outline.Heart,
             route = Route.Favorites,
-            category = ShortcutCategory.PERSONAL,
+            category = ShortcutCategory.LIBRARY,
+        ),
+        ShortcutItem(
+            title = "Watch History",
+            description = "Progress heatmap and viewing stats.",
+            icon = Tabler.Outline.ChartBar,
+            route = Route.WatchProgressHeatmap,
+            category = ShortcutCategory.LIBRARY,
+        ),
+        ShortcutItem(
+            title = "TV Guide",
+            description = "Live TV schedule and programs.",
+            icon = Tabler.Outline.Calendar,
+            route = Route.LiveTvGuide,
+            category = ShortcutCategory.LIBRARY,
         ),
         ShortcutItem(
             title = "SyncPlay",
-            description = "Synchronize playback to watch together with friends.",
+            description = "Watch together with synchronized playback.",
             icon = Tabler.Outline.Users,
             route = Route.SyncPlay,
-            category = ShortcutCategory.PERSONAL,
+            category = ShortcutCategory.SERVICES,
         ),
         ShortcutItem(
             title = "Requests",
-            description = "Request movies and TV shows via Seerr.",
+            description = "Request movies and TV shows.",
             icon = Tabler.Outline.Inbox,
             route = Route.Requests,
-            category = ShortcutCategory.PERSONAL,
+            category = ShortcutCategory.SERVICES,
         ),
         ShortcutItem(
             title = "Newsletters",
-            description = "Read community and updates newsletters.",
+            description = "Latest newsletters and updates.",
             icon = Tabler.Outline.Mail,
             route = Route.Newsletter,
-            category = ShortcutCategory.PERSONAL,
+            category = ShortcutCategory.SERVICES,
         ),
-
-        // System & Administration
         ShortcutItem(
-            title = "Admin Dashboard",
-            description = "Monitor system health, activity, and tasks.",
-            icon = Tabler.Outline.Shield,
-            route = Route.AdminDashboard,
+            title = "Seerr",
+            description = "Configure Seerr integration.",
+            icon = Tabler.Outline.Puzzle,
+            route = Route.SeerrSettings(),
+            category = ShortcutCategory.SERVICES,
+        ),
+        ShortcutItem(
+            title = "Settings",
+            description = "Appearance, playback, audio, and app options.",
+            icon = Tabler.Outline.Settings,
+            route = Route.Settings,
             category = ShortcutCategory.SYSTEM,
-            requiresAdmin = true,
         ),
         ShortcutItem(
-            title = "Server Config",
-            description = "Configure JellyPlay connection settings.",
+            title = "Server Mgmt",
+            description = "Server connection and configuration.",
             icon = Tabler.Outline.Server,
             route = Route.ServerManagement(),
             category = ShortcutCategory.SYSTEM,
             requiresAdmin = true,
         ),
         ShortcutItem(
-            title = "User Management",
-            description = "Switch users or edit server profiles.",
+            title = "Switch User",
+            description = "Manage server users and profiles.",
             icon = Tabler.Outline.User,
             route = Route.UserManagement(),
             category = ShortcutCategory.SYSTEM,
             requiresAdmin = true,
         ),
         ShortcutItem(
-            title = "Watch History",
-            description = "Check watch progress heatmap and stats.",
-            icon = Tabler.Outline.ChartBar,
-            route = Route.WatchProgressHeatmap,
+            title = "Admin",
+            description = "Dashboard, health, activity, and tasks.",
+            icon = Tabler.Outline.Shield,
+            route = Route.AdminDashboard,
             category = ShortcutCategory.SYSTEM,
+            requiresAdmin = true,
         ),
         ShortcutItem(
             title = "Setup Wizard",
-            description = "Run the initial server configuration wizard.",
+            description = "Run the initial configuration flow.",
             icon = Tabler.Outline.Wand,
             route = Route.Onboarding,
             category = ShortcutCategory.SYSTEM,
         ),
         ShortcutItem(
-            title = "Settings",
-            description = "Customize appearance, playback, and audio.",
-            icon = Tabler.Outline.Settings,
-            route = Route.Settings,
-            category = ShortcutCategory.SYSTEM,
-        ),
-        ShortcutItem(
             title = "About",
-            description = "Learn more about JellyPlay version and licenses.",
+            description = "Version, licenses, and app information.",
             icon = Tabler.Outline.InfoCircle,
             route = Route.About,
             category = ShortcutCategory.SYSTEM,
@@ -180,12 +147,12 @@ class ShortcutsViewModel @Inject constructor(
             val isAdmin = user?.isAdmin == true
             val filteredList = allShortcuts.filter { !it.requiresAdmin || isAdmin }
             ShortcutsUiState(
-                categories = filteredList.groupBy { it.category }
+                categories = filteredList.groupBy { it.category },
             )
         }
         .stateIn(
             scope = viewModelScope,
             started = SharingStarted.WhileSubscribed(5_000),
-            initialValue = ShortcutsUiState()
+            initialValue = ShortcutsUiState(),
         )
 }

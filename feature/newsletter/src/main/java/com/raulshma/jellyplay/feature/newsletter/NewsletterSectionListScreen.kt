@@ -11,8 +11,6 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.grid.GridCells
-import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
-import androidx.compose.foundation.lazy.grid.itemsIndexed
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -35,6 +33,7 @@ import com.raulshma.jellyplay.core.ui.adaptive.gridMinSize
 import com.raulshma.jellyplay.core.ui.adaptive.itemSpacing
 import com.raulshma.jellyplay.core.ui.components.JellyPlayScreenScaffold
 import com.raulshma.jellyplay.core.ui.components.PosterCard
+import com.raulshma.jellyplay.core.ui.tv.TvFocusableGrid
 
 @Composable
 fun NewsletterSectionListScreen(
@@ -84,7 +83,9 @@ fun NewsletterSectionListScreen(
             val gridMin = adaptiveInfo.gridMinSize(false)
             val spacing = adaptiveInfo.itemSpacing(false)
 
-            LazyVerticalGrid(
+            TvFocusableGrid(
+                items = items,
+                key = { it.id },
                 columns = GridCells.Adaptive(gridMin),
                 contentPadding = PaddingValues(
                     start = contentPad,
@@ -94,18 +95,17 @@ fun NewsletterSectionListScreen(
                 ),
                 horizontalArrangement = Arrangement.spacedBy(spacing),
                 verticalArrangement = Arrangement.spacedBy(spacing),
+                contentType = { "mediaItem" },
                 modifier = Modifier
                     .fillMaxSize()
                     .padding(paddingValues),
-            ) {
-                itemsIndexed(items, key = { _, it -> it.id }, contentType = { _, _ -> "mediaItem" }) { _, item ->
-                    NewsletterGridCard(
-                        item = item,
-                        imageUrl = viewModel.getImageUrl(item.id),
-                        onClick = { onItemClick(item) },
-                        modifier = Modifier.fillMaxWidth(),
-                    )
-                }
+            ) { _, item, itemModifier ->
+                NewsletterGridCard(
+                    item = item,
+                    imageUrl = viewModel.getImageUrl(item.id),
+                    onClick = { onItemClick(item) },
+                    modifier = itemModifier,
+                )
             }
         }
     }
@@ -119,7 +119,7 @@ private fun NewsletterGridCard(
     modifier: Modifier = Modifier,
 ) {
     Column(
-        modifier = modifier,
+        modifier = Modifier.fillMaxWidth(),
         verticalArrangement = Arrangement.spacedBy(6.dp),
     ) {
         Box(
@@ -132,6 +132,7 @@ private fun NewsletterGridCard(
                 item = item,
                 imageUrl = imageUrl,
                 onClick = onClick,
+                modifier = modifier,
                 showProgress = item.playbackPositionTicks != null && item.playbackPositionTicks!! > 0,
                 progressPercent = if (item.runTimeTicks != null && item.runTimeTicks!! > 0) {
                     (item.playbackPositionTicks?.toFloat() ?: 0f) / item.runTimeTicks!!.toFloat()

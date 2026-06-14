@@ -76,7 +76,9 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.focus.focusProperties
 import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.FocusDirection
 import androidx.compose.foundation.focusGroup
+import com.raulshma.jellyplay.core.ui.tv.input.onDpadKey
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -110,7 +112,7 @@ import com.raulshma.jellyplay.core.ui.tv.LocalTvMode
 import com.raulshma.jellyplay.core.ui.tv.isTv
 import com.raulshma.jellyplay.core.ui.tv.rememberTvFocusState
 import com.raulshma.jellyplay.core.ui.tv.tvFocusIndicator
-import com.raulshma.jellyplay.core.ui.tv.tvFocusExitHandler
+import com.raulshma.jellyplay.core.ui.tv.tryRequestFocus
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.collectLatest
 
@@ -119,8 +121,8 @@ private val EXPANDED_DISCOVER_PATTERN = listOf(5, 4, 6, 5)
 
 @Composable
 fun HomeScreen(
-    onItemClick: (String) -> Unit,
-    onPlayClick: (itemId: String, mediaSourceId: String?, startPosition: Long) -> Unit = { _, _, _ -> },
+    onItemClick: (itemId: String, mediaType: com.raulshma.jellyplay.core.model.MediaType, parentId: String?, itemName: String) -> Unit,
+    onPlayClick: (itemId: String, mediaSourceId: String?, startPosition: Long, mediaType: com.raulshma.jellyplay.core.model.MediaType, parentId: String?) -> Unit = { _, _, _, _, _ -> },
     onSettingsClick: () -> Unit = {},
     onSyncPlayClick: () -> Unit = {},
     onDownloadsClick: () -> Unit = {},
@@ -176,8 +178,8 @@ fun HomeScreen(
 private fun MainHomeContent(
     state: HomeUiState,
     viewModel: HomeViewModel,
-    onItemClick: (String) -> Unit,
-    onPlayClick: (String, String?, Long) -> Unit,
+    onItemClick: (itemId: String, mediaType: com.raulshma.jellyplay.core.model.MediaType, parentId: String?, itemName: String) -> Unit,
+    onPlayClick: (String, String?, Long, com.raulshma.jellyplay.core.model.MediaType, String?) -> Unit,
     onSettingsClick: () -> Unit,
     onSyncPlayClick: () -> Unit,
     onDownloadsClick: () -> Unit,
@@ -242,6 +244,7 @@ private fun MainHomeContent(
     val isTvForRotation = LocalContext.current.isTv()
     var autoRotateEnabled by remember { mutableStateOf(!isTvForRotation) }
     var focusInHero by remember { mutableStateOf(true) }
+    val heroFocusRequester = remember { FocusRequester() }
 
     LaunchedEffect(showSurprise) {
         if (showSurprise && featuredCandidates.isNotEmpty()) {
@@ -340,11 +343,17 @@ private fun MainHomeContent(
     val mediaImageUrlBuilder = remember { { item: com.raulshma.jellyplay.core.model.MediaItem -> viewModel.getImageUrl(item.id) } }
     val mediaBackdropUrlBuilder = remember { { item: com.raulshma.jellyplay.core.model.MediaItem -> viewModel.getBackdropUrl(item.id) } }
     val currentOnItemClick by rememberUpdatedState(onItemClick)
-    val mediaOnItemClick = remember { { item: com.raulshma.jellyplay.core.model.MediaItem -> currentOnItemClick(item.id) } }
+    val mediaOnItemClick = remember { { item: com.raulshma.jellyplay.core.model.MediaItem -> currentOnItemClick(item.id, item.mediaType, item.parentId, item.name) } }
     val currentOnPlayClick by rememberUpdatedState(onPlayClick)
     val mediaOnPlayClick = remember { { item: com.raulshma.jellyplay.core.model.MediaItem ->
-        currentOnPlayClick(item.id, null, item.playbackPositionTicks ?: 0L)
+        currentOnPlayClick(item.id, null, item.playbackPositionTicks ?: 0L, item.mediaType, item.parentId)
     } }
+
+    val photoFolderChildUrls by viewModel.photoFolderChildUrls.collectAsStateWithLifecycle()
+    LaunchedEffect(state.sections) {
+        val allItems = state.sections.flatMap { it.items }
+        viewModel.prefetchPhotoFolderChildUrls(allItems)
+    }
 
     val fallbackImageUrlBuilder = rememberFallbackUrls(viewModel)
 
@@ -400,8 +409,8 @@ private fun MainHomeContent(
         colorStyle = state.colorStyle,
         accentColorSwatch = state.accentColorSwatch,
     ) {
-        @OptIn(androidx.compose.material3.ExperimentalMaterial3Api::class)
-        ModalNavigationDrawer(
+        HomeScreenDrawer(
+            showDrawer = !isTv,
             drawerState = drawerState,
             drawerContent = @Composable {
                 ModalDrawerSheet(
@@ -610,12 +619,18 @@ private fun MainHomeContent(
             Box(
                 modifier = Modifier
                     .fillMaxSize()
-                    .focusGroup()
                     .focusProperties {
-                        onEnter = { focusDirection ->
-                            if (isSearchFocused) FocusRequester.Cancel else FocusRequester.Default
+                        onEnter = {
+                            if (isSearchFocused) {
+                                FocusRequester.Cancel
+                            } else if (requestedFocusDirection == FocusDirection.Down && state.homeHeroEnabled && featuredItem != null) {
+                                heroFocusRequester
+                            } else {
+                                FocusRequester.Default
+                            }
                         }
                     }
+                    .focusGroup()
             ) {
                 when {
                     state.error != null && state.sections.isEmpty() && state.offlineMode == OfflineMode.ONLINE -> {
@@ -681,10 +696,12 @@ private fun MainHomeContent(
                             seerrPrefetch = seerrPrefetch,
                             onSeerrItemClick = onSeerrItemClick,
                             onOfflineLibraryClick = onOfflineLibraryClick,
-                            onItemClick = onItemClick,
+                            onItemClick = { id -> onItemClick(id, MediaType.UNKNOWN, null, "") },
                             onFocusChange = { focusInHero = it },
                             onSeerrRequest = { viewModel.onEvent(HomeUiEvent.SelectSeerrRequestItem(it)) },
                             onNewsletterClick = onNewsletterClick,
+                            photoFolderChildUrls = photoFolderChildUrls,
+                            heroFocusRequester = heroFocusRequester,
                         )
                     }
                 }
@@ -719,7 +736,7 @@ private fun MainHomeContent(
                                     isSearchExpanded = false
                                     viewModel.onEvent(HomeUiEvent.ClearSearch)
                                     focusManager.clearFocus()
-                                    onItemClick(item.id)
+                                    onItemClick(item.id, item.mediaType, item.parentId, item.name)
                                 },
                                 onSeerrClick = { item ->
                                     isSearchExpanded = false
@@ -736,6 +753,18 @@ private fun MainHomeContent(
                             )
                         }
                     },
+                    modifier = Modifier.then(
+                        if (isTv) {
+                            Modifier.onDpadKey(
+                                onDown = {
+                                    if (!isSearchFocused && state.homeHeroEnabled && featuredItem != null) {
+                                        heroFocusRequester.tryRequestFocus("top_dock_down_hero")
+                                        true
+                                    } else false
+                                }
+                            )
+                        } else Modifier
+                    )
                 )
 
                 if (!isTv) {
@@ -763,7 +792,7 @@ private fun MainHomeContent(
                     )
                 }
 
-                if (!isTv) {
+                if (!isTv && !isSearchFocused) {
                     Box(
                         modifier = Modifier
                             .statusBarsPadding()
@@ -781,20 +810,17 @@ private fun MainHomeContent(
                                     interactionSource = remember { androidx.compose.foundation.interaction.MutableInteractionSource() },
                                     indication = null,
                                     onClick = { scope.launch { drawerState.open() } }
-                                )
-                                .graphicsLayer {
-                                    alpha = if (isSearchFocused) 0f else 1f
-                                },
-                        contentAlignment = Alignment.CenterStart
-                    ) {
-                        Icon(
-                            imageVector = Tabler.Outline.Menu2,
-                            contentDescription = "Open Shortcuts Menu",
-                            tint = appBarIconColorFaded,
-                            modifier = Modifier.size(24.dp)
-                        )
+                                ),
+                            contentAlignment = Alignment.CenterStart
+                        ) {
+                            Icon(
+                                imageVector = Tabler.Outline.Menu2,
+                                contentDescription = "Open Shortcuts Menu",
+                                tint = appBarIconColorFaded,
+                                modifier = Modifier.size(24.dp)
+                            )
+                        }
                     }
-                }
                 }
         }
     }
@@ -860,9 +886,31 @@ private fun HomeContentList(
     onFocusChange: (Boolean) -> Unit,
     onSeerrRequest: (SeerrSearchItem) -> Unit,
     onNewsletterClick: () -> Unit = {},
+    photoFolderChildUrls: Map<String, List<String>> = emptyMap(),
+    heroFocusRequester: FocusRequester? = null,
 ) {
     val isTv = LocalTvMode.current
     val adaptiveInfo = LocalAdaptiveInfo.current
+
+    // TV focus orchestration: remember which content row last held focus so back-navigation from a
+    // detail screen restores that row instead of always snapping back to the hero. -1 means "no row
+    // focused yet" (fresh entry) -> the hero grabs focus exactly as before, so the fresh-entry path is
+    // unchanged.
+    var homeFocusRow by com.raulshma.jellyplay.core.ui.tv.rememberInt(-1)
+    val savedRowIsValid = homeFocusRow in 0..sections.lastIndex
+    val rowFocusRequesters = remember(sections.size) { List(sections.size) { FocusRequester() } }
+    if (isTv && savedRowIsValid) {
+        LaunchedEffect(sections.isNotEmpty()) {
+            if (sections.isNotEmpty()) {
+                // Wait a frame (retry a few times) so the LazyColumn has restored scroll and composed
+                // the saved row before we request focus on it.
+                for (attempt in 1..3) {
+                    androidx.compose.runtime.withFrameNanos { }
+                    if (rowFocusRequesters[homeFocusRow].tryRequestFocus("home_restore")) break
+                }
+            }
+        }
+    }
 
     if (sections.isEmpty()) {
         Box(
@@ -900,7 +948,9 @@ private fun HomeContentList(
                         listState = listState,
                         onItemClick = onItemClick,
                         onDetailsClick = onItemClick,
+                        requestInitialFocus = !savedRowIsValid,
                         onFocusChange = onFocusChange,
+                        focusRequester = heroFocusRequester,
                     )
                 }
             } else {
@@ -960,6 +1010,8 @@ private fun HomeContentList(
                         onItemClick = mediaOnItemClick,
                         onPlayClick = mediaOnPlayClick,
                         modifier = sectionModifier,
+                        focusRequester = rowFocusRequesters[index],
+                        onRowFocused = { homeFocusRow = index },
                     )
                 } else {
                     HomeMediaRow(
@@ -970,6 +1022,9 @@ private fun HomeContentList(
                         onItemClick = mediaOnItemClick,
                         onPlayClick = mediaOnPlayClick,
                         modifier = sectionModifier,
+                        photoFolderChildUrls = photoFolderChildUrls,
+                        focusRequester = rowFocusRequesters[index],
+                        onRowFocused = { homeFocusRow = index },
                     )
                 }
             }
@@ -1082,5 +1137,25 @@ private fun rememberFallbackUrls(
                 )
             } else emptyList()
         }
+    }
+}
+
+@OptIn(androidx.compose.material3.ExperimentalMaterial3Api::class)
+@Composable
+private fun HomeScreenDrawer(
+    showDrawer: Boolean,
+    drawerState: androidx.compose.material3.DrawerState,
+    drawerContent: @Composable () -> Unit,
+    content: @Composable () -> Unit,
+) {
+    if (showDrawer) {
+        ModalNavigationDrawer(
+            drawerState = drawerState,
+            drawerContent = drawerContent,
+        ) {
+            content()
+        }
+    } else {
+        content()
     }
 }

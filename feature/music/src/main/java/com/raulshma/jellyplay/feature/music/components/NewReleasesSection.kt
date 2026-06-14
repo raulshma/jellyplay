@@ -7,8 +7,6 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.lazy.LazyRow
-import androidx.compose.foundation.lazy.items
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -18,6 +16,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.raulshma.jellyplay.core.model.MediaItem
+import com.raulshma.jellyplay.core.ui.tv.TvFocusableItemRow
 
 @Composable
 fun NewReleasesSection(
@@ -64,18 +63,19 @@ fun NewReleasesSection(
 
         Spacer(modifier = Modifier.height(16.dp))
 
-        LazyRow(
+        TvFocusableItemRow(
+            items = albums,
+            key = { it.id },
             contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 24.dp),
             horizontalArrangement = Arrangement.spacedBy(16.dp),
-        ) {
-            items(albums, key = { it.id }, contentType = { "album" }) { album ->
-                CloverShapeAlbumCard(
-                    album = album,
-                    onClick = { onAlbumClick(album.id) },
-                    onPlayClick = { onAlbumPlayClick(album.id) },
-                    imageUrl = imageUrlBuilder(album.id),
-                )
-            }
+        ) { _, album, itemModifier ->
+            CloverShapeAlbumCard(
+                album = album,
+                onClick = { onAlbumClick(album.id) },
+                onPlayClick = { onAlbumPlayClick(album.id) },
+                imageUrl = imageUrlBuilder(album.id),
+                modifier = itemModifier,
+            )
         }
     }
 }

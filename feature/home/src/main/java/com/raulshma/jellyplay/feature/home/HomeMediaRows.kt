@@ -17,8 +17,6 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.lazy.LazyListState
-import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
@@ -31,6 +29,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
@@ -57,6 +56,8 @@ import com.raulshma.jellyplay.core.ui.components.formatRemainingTimeFromTicks
 import com.raulshma.jellyplay.core.ui.components.rememberDominantColor
 import com.raulshma.jellyplay.core.ui.image.MediaImage
 import com.raulshma.jellyplay.core.ui.tv.LocalTvMode
+import com.raulshma.jellyplay.core.ui.tv.TvFocusableItemRow
+import com.raulshma.jellyplay.core.ui.tv.enableMarqueeOnFocus
 import com.raulshma.jellyplay.core.ui.tv.rememberTvFocusState
 import com.raulshma.jellyplay.core.ui.tv.tvFocusIndicator
 import com.raulshma.jellyplay.core.ui.tv.tvFocusRestorer
@@ -70,6 +71,8 @@ fun ContinueWatchingRow(
     onItemClick: (MediaItem) -> Unit,
     onPlayClick: ((MediaItem) -> Unit)? = null,
     modifier: Modifier = Modifier,
+    focusRequester: FocusRequester? = null,
+    onRowFocused: (() -> Unit)? = null,
 ) {
     val adaptiveInfo = LocalAdaptiveInfo.current
     val isTv = LocalTvMode.current
@@ -85,33 +88,30 @@ fun ContinueWatchingRow(
         Text(
             text = title,
             style = if (isTv) MaterialTheme.typography.headlineSmall.copy(fontWeight = FontWeight.SemiBold)
-                   else MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.SemiBold),
+            else MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.SemiBold),
             color = MaterialTheme.colorScheme.onSurface,
             modifier = Modifier.padding(horizontal = contentPad, vertical = 8.dp),
         )
         if (isTv) {
-            LazyRow(
-                modifier = Modifier.tvFocusRestorer(),
+            TvFocusableItemRow(
+                items = items,
+                key = { it.id },
                 contentPadding = PaddingValues(horizontal = contentPad),
                 horizontalArrangement = Arrangement.spacedBy(spacing),
-            ) {
-                items(
-                    count = items.size,
-                    key = { index -> items[index].id },
-                    contentType = { "continueWatchingItem" },
-                ) { index ->
-                    val item = items[index]
-                    val memoizedClick = remember(item) { { onItemClick(item) } }
-                    val memoizedPlayClick = onPlayClick?.let { click -> remember(item, click) { { click(item) } } }
-                    WideMediaCard(
-                        item = item,
-                        imageUrl = imageUrlBuilder(item),
-                        backdropUrl = backdropUrlBuilder(item),
-                        onClick = memoizedClick,
-                        onPlayClick = memoizedPlayClick,
-                        cardWidth = cardWidth,
-                    )
-                }
+                focusRequester = focusRequester,
+                onRowFocused = onRowFocused,
+            ) { _, item, focusModifier ->
+                val memoizedClick = remember(item) { { onItemClick(item) } }
+                val memoizedPlayClick = onPlayClick?.let { click -> remember(item, click) { { click(item) } } }
+                WideMediaCard(
+                    item = item,
+                    imageUrl = imageUrlBuilder(item),
+                    backdropUrl = backdropUrlBuilder(item),
+                    onClick = memoizedClick,
+                    onPlayClick = memoizedPlayClick,
+                    cardWidth = cardWidth,
+                    modifier = focusModifier,
+                )
             }
         } else {
             HorizontalUncontainedCarousel(
@@ -145,6 +145,7 @@ fun WideMediaCard(
     onClick: () -> Unit,
     onPlayClick: (() -> Unit)? = null,
     cardWidth: Dp,
+    modifier: Modifier = Modifier,
 ) {
     val isTv = LocalTvMode.current
     val tvFocusState = rememberTvFocusState()
@@ -186,7 +187,7 @@ fun WideMediaCard(
         .fillMaxWidth()
         .aspectRatio(16f / 9f)
 
-    Column(modifier = Modifier.width(cardWidth)) {
+    Column(modifier = modifier.width(cardWidth)) {
         Card(
             modifier = Modifier
                 .fillMaxWidth()
@@ -317,10 +318,12 @@ fun WideMediaCard(
                 color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.9f),
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.enableMarqueeOnFocus(focused = tvFocusState.isFocused),
             )
             val isSeries = item.mediaType == MediaType.SERIES
             val hasValidDuration = item.runTimeTicks != null && item.runTimeTicks!! > 0 && !isSeries
-            val hasWatchProgress = item.playbackPositionTicks != null && item.playbackPositionTicks!! > 0 && !item.isPlayed
+            val hasWatchProgress =
+                item.playbackPositionTicks != null && item.playbackPositionTicks!! > 0 && !item.isPlayed
             val remainingTime = if (hasWatchProgress && hasValidDuration) {
                 formatRemainingTimeFromTicks(item.runTimeTicks!!, item.playbackPositionTicks!!)
             } else null
@@ -373,7 +376,9 @@ fun WideMediaCard(
                     Text(
                         text = if (remainingTime != null) "$timeText left" else timeText,
                         style = MaterialTheme.typography.labelSmall,
-                        color = if (remainingTime != null) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.55f),
+                        color = if (remainingTime != null) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface.copy(
+                            alpha = 0.55f
+                        ),
                     )
                 }
             }
@@ -390,6 +395,9 @@ fun HomeMediaRow(
     onItemClick: (MediaItem) -> Unit,
     onPlayClick: ((MediaItem) -> Unit)? = null,
     modifier: Modifier = Modifier,
+    photoFolderChildUrls: Map<String, List<String>> = emptyMap(),
+    focusRequester: FocusRequester? = null,
+    onRowFocused: (() -> Unit)? = null,
 ) {
     val adaptiveInfo = LocalAdaptiveInfo.current
     val isTv = LocalTvMode.current
@@ -401,39 +409,36 @@ fun HomeMediaRow(
         Text(
             text = title,
             style = if (isTv) MaterialTheme.typography.headlineSmall.copy(fontWeight = FontWeight.SemiBold)
-                   else MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.SemiBold),
+            else MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.SemiBold),
             color = MaterialTheme.colorScheme.onSurface,
             modifier = Modifier.padding(horizontal = contentPad, vertical = 8.dp),
         )
         if (isTv) {
-            LazyRow(
-                modifier = Modifier.tvFocusRestorer(),
+            TvFocusableItemRow(
+                items = items,
+                key = { it.id },
                 contentPadding = PaddingValues(horizontal = contentPad),
                 horizontalArrangement = Arrangement.spacedBy(spacing),
-            ) {
-                items(
-                    count = items.size,
-                    key = { index -> items[index].id },
-                    contentType = { "mediaItem" },
-                ) { index ->
-                    val item = items[index]
-                    val memoizedClick = remember(item) { { onItemClick(item) } }
-                    val memoizedPlayClick = onPlayClick?.let { click -> remember(item, click) { { click(item) } } }
-                    PosterCard(
-                        item = item,
-                        imageUrl = imageUrlBuilder(item),
-                        fallbackUrls = fallbackImageUrlBuilder(item),
-                        onClick = memoizedClick,
-                        modifier = Modifier.width(cardWidth),
-                        showProgress = item.playbackPositionTicks != null && item.playbackPositionTicks!! > 0,
-                        progressPercent = if (item.runTimeTicks != null && item.runTimeTicks!! > 0) {
-                            (item.playbackPositionTicks?.toFloat() ?: 0f) / item.runTimeTicks!!.toFloat()
-                        } else 0f,
-                        blurHash = item.blurHashes.primary,
-                        onPlayClick = memoizedPlayClick,
-                        sharedElementKey = "poster_${item.id}",
-                    )
-                }
+                focusRequester = focusRequester,
+                onRowFocused = onRowFocused,
+            ) { _, item, focusModifier ->
+                val memoizedClick = remember(item) { { onItemClick(item) } }
+                val memoizedPlayClick = onPlayClick?.let { click -> remember(item, click) { { click(item) } } }
+                PosterCard(
+                    item = item,
+                    imageUrl = imageUrlBuilder(item),
+                    fallbackUrls = fallbackImageUrlBuilder(item),
+                    onClick = memoizedClick,
+                    modifier = focusModifier.width(cardWidth),
+                    showProgress = item.playbackPositionTicks != null && item.playbackPositionTicks!! > 0,
+                    progressPercent = if (item.runTimeTicks != null && item.runTimeTicks!! > 0) {
+                        (item.playbackPositionTicks?.toFloat() ?: 0f) / item.runTimeTicks!!.toFloat()
+                    } else 0f,
+                    blurHash = item.blurHashes.primary,
+                    onPlayClick = memoizedPlayClick,
+                    sharedElementKey = "poster_${item.id}",
+                    photoFolderChildImageUrls = photoFolderChildUrls[item.id].orEmpty(),
+                )
             }
         } else {
             HorizontalUncontainedCarousel(
@@ -459,6 +464,7 @@ fun HomeMediaRow(
                     blurHash = item.blurHashes.primary,
                     onPlayClick = memoizedPlayClick,
                     sharedElementKey = "poster_${item.id}",
+                    photoFolderChildImageUrls = photoFolderChildUrls[item.id].orEmpty(),
                 )
             }
         }

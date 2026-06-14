@@ -59,11 +59,7 @@ import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.input.key.Key
-import androidx.compose.ui.input.key.KeyEventType
-import androidx.compose.ui.input.key.key
-import androidx.compose.ui.input.key.onKeyEvent
-import androidx.compose.ui.input.key.type
+import com.raulshma.jellyplay.core.ui.tv.input.onDpadKey
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.font.FontFamily
@@ -84,6 +80,8 @@ import com.raulshma.jellyplay.core.designsystem.theme.PointToPointEasing
 import com.raulshma.jellyplay.core.designsystem.theme.SyncStatusColors
 import com.raulshma.jellyplay.core.ui.animation.AnimationTokens
 import com.raulshma.jellyplay.core.ui.tv.LocalTvMode
+import com.raulshma.jellyplay.core.ui.tv.ifElse
+import com.raulshma.jellyplay.core.ui.tv.tryRequestFocus
 import com.raulshma.jellyplay.core.ui.tv.rememberTvFocusState
 import com.raulshma.jellyplay.core.ui.tv.tvFocusIndicator
 import com.raulshma.jellyplay.core.ui.tv.tvFocusRestorer
@@ -208,7 +206,7 @@ internal fun PlayerControls(
 
     LaunchedEffect(isVisible, isTv) {
         if (isTv && isVisible) {
-            tvPlayPauseFocusRequester.requestFocus()
+            tvPlayPauseFocusRequester.tryRequestFocus()
         }
     }
 
@@ -233,7 +231,7 @@ internal fun PlayerControls(
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .then(if (isTv) Modifier.tvFocusRestorer() else Modifier)
+                    .ifElse(isTv, Modifier.tvFocusRestorer())
                     .then(
                         if (isTv) {
                             Modifier.focusProperties {
@@ -323,7 +321,7 @@ internal fun PlayerControls(
                 horizontalArrangement = Arrangement.spacedBy(16.dp),
                 verticalAlignment = Alignment.CenterVertically,
                 modifier = Modifier
-                    .then(if (isTv) Modifier.tvFocusRestorer() else Modifier)
+                    .ifElse(isTv, Modifier.tvFocusRestorer())
                     .then(
                         if (isTv) {
                             Modifier.focusProperties {
@@ -352,7 +350,7 @@ internal fun PlayerControls(
                     onClick = onPlayPause,
                     modifier = Modifier
                         .size(80.dp)
-                        .then(if (isTv) Modifier.focusRequester(tvPlayPauseFocusRequester) else Modifier),
+                        .ifElse(isTv, Modifier.focusRequester(tvPlayPauseFocusRequester)),
                     shape = CircleShape,
                     colors = IconButtonDefaults.filledIconButtonColors(
                         containerColor = MaterialTheme.colorScheme.primary,
@@ -442,7 +440,7 @@ internal fun PlayerControls(
                     modifier = Modifier
                         .fillMaxWidth()
                         .padding(top = 4.dp)
-                        .then(if (isTv) Modifier.tvFocusRestorer() else Modifier)
+                        .ifElse(isTv, Modifier.tvFocusRestorer())
                         .then(
                             if (isTv) {
                                 Modifier
@@ -809,40 +807,37 @@ private fun TvControllableSeekBar(
                                 }
                             }
                             .focusable()
-                            .onKeyEvent { keyEvent ->
-                                if (keyEvent.type != KeyEventType.KeyDown) return@onKeyEvent false
-                                if (duration <= 0) return@onKeyEvent false
-                                when (keyEvent.key) {
-                                    Key.DirectionRight -> {
-                                        if (!tvSeekStarted) {
-                                            tvSeekStarted = true
-                                            onSeekStart()
-                                        }
-                                        tvSeekPosition = (tvSeekPosition + seekStep).coerceAtMost(1f)
-                                        onSeek(tvSeekPosition)
-                                        onSeekPositionChange((tvSeekPosition * duration).toLong())
-                                        true
+                            .onDpadKey(
+                                onRight = {
+                                    if (duration <= 0) return@onDpadKey false
+                                    if (!tvSeekStarted) {
+                                        tvSeekStarted = true
+                                        onSeekStart()
                                     }
-                                    Key.DirectionLeft -> {
-                                        if (!tvSeekStarted) {
-                                            tvSeekStarted = true
-                                            onSeekStart()
-                                        }
-                                        tvSeekPosition = (tvSeekPosition - seekStep).coerceAtLeast(0f)
-                                        onSeek(tvSeekPosition)
-                                        onSeekPositionChange((tvSeekPosition * duration).toLong())
-                                        true
+                                    tvSeekPosition = (tvSeekPosition + seekStep).coerceAtMost(1f)
+                                    onSeek(tvSeekPosition)
+                                    onSeekPositionChange((tvSeekPosition * duration).toLong())
+                                    true
+                                },
+                                onLeft = {
+                                    if (duration <= 0) return@onDpadKey false
+                                    if (!tvSeekStarted) {
+                                        tvSeekStarted = true
+                                        onSeekStart()
                                     }
-                                    Key.Enter, Key.NumPadEnter -> {
-                                        if (tvSeekStarted) {
-                                            tvSeekStarted = false
-                                            onSeekEnd()
-                                        }
-                                        true
+                                    tvSeekPosition = (tvSeekPosition - seekStep).coerceAtLeast(0f)
+                                    onSeek(tvSeekPosition)
+                                    onSeekPositionChange((tvSeekPosition * duration).toLong())
+                                    true
+                                },
+                                onSelect = {
+                                    if (tvSeekStarted) {
+                                        tvSeekStarted = false
+                                        onSeekEnd()
                                     }
-                                    else -> false
-                                }
-                            }
+                                    true
+                                },
+                            )
                     } else {
                         Modifier.pointerInput(duration) {
                             if (duration <= 0) return@pointerInput
@@ -1074,11 +1069,7 @@ private fun PlayerOverflowMenu(
             isFirstDialogueBoostRender = false
         } else {
             if (isTv) {
-                try {
-                    dialogueBoostFocusRequester.requestFocus()
-                } catch (e: Exception) {
-                    // ignore
-                }
+                dialogueBoostFocusRequester.tryRequestFocus()
             }
         }
     }
@@ -1088,11 +1079,7 @@ private fun PlayerOverflowMenu(
             isFirstNightModeRender = false
         } else {
             if (isTv) {
-                try {
-                    nightModeFocusRequester.requestFocus()
-                } catch (e: Exception) {
-                    // ignore
-                }
+                nightModeFocusRequester.tryRequestFocus()
             }
         }
     }
@@ -1102,11 +1089,7 @@ private fun PlayerOverflowMenu(
             isFirstAudioNormalizationRender = false
         } else {
             if (isTv) {
-                try {
-                    audioNormalizationFocusRequester.requestFocus()
-                } catch (e: Exception) {
-                    // ignore
-                }
+                audioNormalizationFocusRequester.tryRequestFocus()
             }
         }
     }
@@ -1116,11 +1099,7 @@ private fun PlayerOverflowMenu(
             isFirstChannelMixRender = false
         } else {
             if (isTv) {
-                try {
-                    channelMixFocusRequester.requestFocus()
-                } catch (e: Exception) {
-                    // ignore
-                }
+                channelMixFocusRequester.tryRequestFocus()
             }
         }
     }

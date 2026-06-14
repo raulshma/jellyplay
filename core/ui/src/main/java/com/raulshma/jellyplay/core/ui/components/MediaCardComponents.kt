@@ -21,8 +21,6 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.lazy.LazyRow
-import androidx.compose.foundation.lazy.items
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Icon
@@ -66,21 +64,23 @@ import com.raulshma.jellyplay.core.designsystem.theme.cardBorder
 import com.raulshma.jellyplay.core.designsystem.theme.cardElevation
 import com.raulshma.jellyplay.core.model.MediaItem
 import com.raulshma.jellyplay.core.model.MediaType
-import com.raulshma.jellyplay.core.ui.adaptive.LocalAdaptiveInfo
-import com.raulshma.jellyplay.core.ui.adaptive.*
 import com.raulshma.jellyplay.core.ui.animation.fastEffectsSpec
+import com.raulshma.jellyplay.core.ui.adaptive.LocalJellyPlayUi
 import com.raulshma.jellyplay.core.ui.image.MediaImage
-import com.raulshma.jellyplay.core.ui.tv.LocalTvMode
-import com.raulshma.jellyplay.core.ui.tv.rememberTvFocusState
-import com.raulshma.jellyplay.core.ui.tv.tvFocusIndicator
-import com.raulshma.jellyplay.core.ui.tv.tvFocusRestorer
+import com.raulshma.jellyplay.core.ui.image.PhotoFolderPoster
+import com.raulshma.jellyplay.core.ui.tv.TvFocusableItemRow
+import com.raulshma.jellyplay.core.ui.tv.enableMarqueeOnFocus
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 
 private val dominantColorCache = android.util.LruCache<String, Color>(500)
 
 @Composable
-fun rememberDominantColor(imageUrl: String?, fallback: Color = MaterialTheme.colorScheme.surfaceContainer, itemId: String? = null): Color {
+fun rememberDominantColor(
+    imageUrl: String?,
+    fallback: Color = MaterialTheme.colorScheme.surfaceContainer,
+    itemId: String? = null
+): Color {
     val context = LocalContext.current
     val cacheKey = itemId ?: imageUrl
     var color by remember(cacheKey) { mutableStateOf(cacheKey?.let { dominantColorCache.get(it) } ?: fallback) }
@@ -132,8 +132,7 @@ fun PlayButtonWithProgress(
     modifier: Modifier = Modifier,
     buttonSize: Dp = 36.dp,
 ) {
-    val isTv = LocalTvMode.current
-    val tvFocusState = rememberTvFocusState(focusedScale = 1.15f)
+    val focusInteraction = rememberJellyFocusableInteraction(focusedScale = 1.15f)
     val interactionSource = remember { MutableInteractionSource() }
     val isPressed by interactionSource.collectIsPressedAsState()
     val baseScale by animateFloatAsState(
@@ -142,7 +141,7 @@ fun PlayButtonWithProgress(
         label = "playBtnScale",
     )
     val scale by animateFloatAsState(
-        targetValue = baseScale * tvFocusState.scale,
+        targetValue = baseScale * focusInteraction.scale,
         animationSpec = fastEffectsSpec(),
         label = "playBtnCombinedScale",
     )
@@ -153,9 +152,9 @@ fun PlayButtonWithProgress(
     Box(
         modifier = modifier
             .size(buttonSize)
-            .then(tvFocusState.focusModifier)
+            .then(focusInteraction.modifier)
             .graphicsLayer { scaleX = scale; scaleY = scale }
-            .tvFocusIndicator(tvFocusState, ShapeCache.smooth10)
+            .jellyFocusIndicator(focusInteraction, ShapeCache.smooth10)
             .clip(ShapeCache.smooth10)
             .clickable(
                 interactionSource = interactionSource,
@@ -262,9 +261,11 @@ fun PosterCard(
     blurHash: String? = null,
     onPlayClick: (() -> Unit)? = null,
     sharedElementKey: String? = null,
+    photoFolderChildImageUrls: List<String> = emptyList(),
 ) {
-    val isTv = LocalTvMode.current
-    val tvFocusState = rememberTvFocusState()
+    val uiEnvironment = LocalJellyPlayUi.current
+    val isTv = uiEnvironment.isTv
+    val focusInteraction = rememberJellyFocusableInteraction()
     val interactionSource = remember { MutableInteractionSource() }
     val isPressed by interactionSource.collectIsPressedAsState()
     val baseScale by animateFloatAsState(
@@ -275,11 +276,11 @@ fun PosterCard(
         ),
         label = "cardScale",
     )
-    val scale = baseScale * tvFocusState.scale
+    val scale = baseScale * focusInteraction.scale
     val themeVariant = com.raulshma.jellyplay.core.designsystem.theme.LocalThemeVariant.current
     val elevation = themeVariant.cardElevation(
         isPressed = isPressed,
-        isTvFocused = tvFocusState.isFocused,
+        isTvFocused = focusInteraction.isFocused,
         isTv = isTv,
     )
     val shape = ShapeCache.smooth12
@@ -291,14 +292,15 @@ fun PosterCard(
     val animatedVisibilityScope = LocalAnimatedVisibilityScope.current
 
     @OptIn(androidx.compose.animation.ExperimentalSharedTransitionApi::class)
-    val sharedImageModifier = if (sharedElementKey != null && sharedTransitionScope != null && animatedVisibilityScope != null) {
-        with(sharedTransitionScope) {
-            Modifier.sharedElement(
-                rememberSharedContentState(key = sharedElementKey),
-                animatedVisibilityScope = animatedVisibilityScope,
-            )
-        }
-    } else Modifier
+    val sharedImageModifier =
+        if (sharedElementKey != null && sharedTransitionScope != null && animatedVisibilityScope != null) {
+            with(sharedTransitionScope) {
+                Modifier.sharedElement(
+                    rememberSharedContentState(key = sharedElementKey),
+                    animatedVisibilityScope = animatedVisibilityScope,
+                )
+            }
+        } else Modifier
 
     val imageModifier = Modifier
         .fillMaxWidth()
@@ -325,14 +327,14 @@ fun PosterCard(
         Card(
             modifier = Modifier
                 .fillMaxWidth()
-                .then(tvFocusState.focusModifier)
+                .then(focusInteraction.modifier)
                 .graphicsLayer {
                     scaleX = scale
                     scaleY = scale
                     shadowElevation = elevation.toPx()
                     clip = false
                 }
-                .tvFocusIndicator(tvFocusState, shape)
+                .jellyFocusIndicator(focusInteraction, shape)
                 .clickable(
                     interactionSource = interactionSource,
                     indication = null,
@@ -343,15 +345,23 @@ fun PosterCard(
             elevation = CardDefaults.cardElevation(defaultElevation = 0.dp),
         ) {
             Box {
-                MediaImage(
-                    url = imageUrl,
-                    fallbackUrls = fallbackUrls,
-                    contentDescription = item.name,
-                    blurHash = blurHash,
-                    modifier = imageModifier,
-                    contentScale = ContentScale.Crop,
-                    crossfade = false,
-                )
+                if (item.mediaType == MediaType.PHOTO_FOLDER && photoFolderChildImageUrls.isNotEmpty()) {
+                    PhotoFolderPoster(
+                        imageUrls = photoFolderChildImageUrls,
+                        modifier = imageModifier,
+                        contentDescription = item.name,
+                    )
+                } else {
+                    MediaImage(
+                        url = imageUrl,
+                        fallbackUrls = fallbackUrls,
+                        contentDescription = item.name,
+                        blurHash = blurHash,
+                        modifier = imageModifier,
+                        contentScale = ContentScale.Crop,
+                        crossfade = false,
+                    )
+                }
 
                 Box(
                     modifier = Modifier
@@ -454,6 +464,7 @@ fun PosterCard(
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
                 color = MaterialTheme.colorScheme.onSurface,
+                modifier = Modifier.enableMarqueeOnFocus(focused = focusInteraction.isFocused),
             )
             Row(
                 verticalAlignment = Alignment.CenterVertically,
@@ -468,18 +479,20 @@ fun PosterCard(
                 }
                 val isSeries = item.mediaType == MediaType.SERIES
                 val hasValidDuration = item.runTimeTicks != null && item.runTimeTicks!! > 0 && !isSeries
-                val hasWatchProgress = item.playbackPositionTicks != null && item.playbackPositionTicks!! > 0 && !item.isPlayed
-                val remainingTime = remember(hasValidDuration, hasWatchProgress, item.runTimeTicks, item.playbackPositionTicks) {
-                    if (hasWatchProgress && hasValidDuration) {
-                        formatRemainingTimeFromTicks(item.runTimeTicks!!, item.playbackPositionTicks!!)
-                    } else null
-                }
+                val hasWatchProgress =
+                    item.playbackPositionTicks != null && item.playbackPositionTicks!! > 0 && !item.isPlayed
+                val remainingTime =
+                    remember(hasValidDuration, hasWatchProgress, item.runTimeTicks, item.playbackPositionTicks) {
+                        if (hasWatchProgress && hasValidDuration) {
+                            formatRemainingTimeFromTicks(item.runTimeTicks!!, item.playbackPositionTicks!!)
+                        } else null
+                    }
                 val totalTime = remember(hasValidDuration, hasWatchProgress, item.runTimeTicks) {
                     if (hasValidDuration && !hasWatchProgress) {
                         formatDurationFromTicks(item.runTimeTicks!!)
                     } else null
                 }
-                
+
                 val timeText = remainingTime ?: totalTime
                 if (timeText != null) {
                     Text(
@@ -508,12 +521,14 @@ fun MediaRow(
     modifier: Modifier = Modifier,
     blurHashBuilder: (MediaItem) -> String? = { it.blurHashes.primary },
     onPlayClick: ((MediaItem) -> Unit)? = null,
+    photoFolderChildUrls: Map<String, List<String>> = emptyMap(),
 ) {
-    val adaptiveInfo = LocalAdaptiveInfo.current
-    val isTv = LocalTvMode.current
-    val cardWidth = adaptiveInfo.rowCardWidth(isTv)
-    val contentPad = adaptiveInfo.contentPadding(isTv)
-    val spacing = adaptiveInfo.itemSpacing(isTv)
+    val uiEnvironment = LocalJellyPlayUi.current
+    val isTv = uiEnvironment.isTv
+    val layout = uiEnvironment.layout
+    val cardWidth = layout.rowCardWidth
+    val contentPad = layout.contentPadding
+    val spacing = layout.itemSpacing
     val titleStyle = if (isTv) MaterialTheme.typography.titleLarge else MaterialTheme.typography.titleMedium
 
     Column(modifier = modifier.background(MaterialTheme.colorScheme.background)) {
@@ -522,27 +537,27 @@ fun MediaRow(
             style = titleStyle,
             modifier = Modifier.padding(horizontal = contentPad, vertical = 8.dp),
         )
-        LazyRow(
+        TvFocusableItemRow(
+            items = items,
+            key = { "${title}_${it.id}" },
             contentPadding = PaddingValues(horizontal = contentPad),
             horizontalArrangement = Arrangement.spacedBy(spacing),
-            modifier = Modifier.tvFocusRestorer(),
-        ) {
-            items(items, key = { "${title}_${it.id}" }, contentType = { "mediaItem" }) { item ->
-                val memoizedClick = remember(item) { { onItemClick(item) } }
-                PosterCard(
-                    item = item,
-                    imageUrl = imageUrlBuilder(item),
-                    fallbackUrls = fallbackImageUrlBuilder(item),
-                    onClick = memoizedClick,
-                    modifier = Modifier.width(cardWidth),
-                    showProgress = item.playbackPositionTicks != null && item.playbackPositionTicks!! > 0,
-                    progressPercent = if (item.runTimeTicks != null && item.runTimeTicks!! > 0) {
-                        (item.playbackPositionTicks?.toFloat() ?: 0f) / item.runTimeTicks!!.toFloat()
-                    } else 0f,
-                    blurHash = blurHashBuilder(item),
-                    onPlayClick = onPlayClick?.let { click -> remember(item, click) { { click(item) } } },
-                )
-            }
+        ) { _, item, focusModifier ->
+            val memoizedClick = remember(item) { { onItemClick(item) } }
+            PosterCard(
+                item = item,
+                imageUrl = imageUrlBuilder(item),
+                fallbackUrls = fallbackImageUrlBuilder(item),
+                onClick = memoizedClick,
+                modifier = focusModifier.width(cardWidth),
+                showProgress = item.playbackPositionTicks != null && item.playbackPositionTicks!! > 0,
+                progressPercent = if (item.runTimeTicks != null && item.runTimeTicks!! > 0) {
+                    (item.playbackPositionTicks?.toFloat() ?: 0f) / item.runTimeTicks!!.toFloat()
+                } else 0f,
+                blurHash = blurHashBuilder(item),
+                onPlayClick = onPlayClick?.let { click -> remember(item, click) { { click(item) } } },
+                photoFolderChildImageUrls = photoFolderChildUrls[item.id].orEmpty(),
+            )
         }
     }
 }

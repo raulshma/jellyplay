@@ -41,6 +41,7 @@ import androidx.compose.runtime.remember
 import com.composables.icons.tabler.Tabler
 import com.composables.icons.tabler.outline.*
 import com.raulshma.jellyplay.core.designsystem.theme.ShapeCache
+import com.raulshma.jellyplay.core.ui.tv.tvFocusRestorer
 
 @OptIn(ExperimentalMaterial3ExpressiveApi::class)
 @Composable
@@ -85,6 +86,7 @@ fun AudioPlayerScreensSection(
         LazyRow(
             contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 24.dp),
             horizontalArrangement = Arrangement.spacedBy(16.dp),
+            modifier = Modifier.tvFocusRestorer(),
         ) {
             item {
                 NowPlayingExpressiveCard(

@@ -52,7 +52,6 @@ import com.raulshma.jellyplay.core.ui.adaptive.contentPadding
 import com.raulshma.jellyplay.core.ui.adaptive.itemSpacing
 import com.raulshma.jellyplay.core.ui.image.MediaImage
 import com.raulshma.jellyplay.core.ui.tv.LocalTvMode
-import com.raulshma.jellyplay.core.ui.tv.tvFocusable
 import com.composables.icons.tabler.Tabler
 import com.composables.icons.tabler.outline.*
 
@@ -174,7 +173,7 @@ private fun DownloadItemRow(
     ElevatedCard(
         modifier = Modifier
             .fillMaxWidth()
-            .tvFocusable().clickable(enabled = item.status == DownloadStatus.COMPLETED, onClick = onClick),
+            .clickable(enabled = item.status == DownloadStatus.COMPLETED, onClick = onClick),
     ) {
         Row(
             modifier = Modifier
