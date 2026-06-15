@@ -37,6 +37,7 @@ import okhttp3.Cache
 import okhttp3.OkHttpClient
 import okhttp3.ConnectionPool
 import okhttp3.Protocol
+import okhttp3.logging.HttpLoggingInterceptor
 import javax.inject.Named
 import org.jellyfin.sdk.Jellyfin
 import org.jellyfin.sdk.api.okhttp.OkHttpFactory
@@ -134,18 +135,28 @@ abstract class NetworkModule {
             userPreferencesStore: com.raulshma.jellyplay.core.datastore.UserPreferencesStore,
             bandwidthInterceptor: BandwidthInterceptor,
         ): OkHttpClient {
+            val prefs = userPreferencesStore.preferences.value
             val cacheDir = File(context.cacheDir, "http_cache")
             cacheDir.mkdirs()
-            val cacheMb = userPreferencesStore.preferences.value.maxCacheSizeMb
+            val cacheMb = prefs.maxCacheSizeMb
             val cacheSize = if (cacheMb > 0) cacheMb * 1024L * 1024L else 50L * 1024 * 1024
-            return OkHttpClient.Builder()
-                .connectTimeout(15, TimeUnit.SECONDS)
-                .readTimeout(15, TimeUnit.SECONDS)
-                .writeTimeout(15, TimeUnit.SECONDS)
+            val timeoutPreset = prefs.networkTimeoutPreset
+            val builder = OkHttpClient.Builder()
+                .connectTimeout(timeoutPreset.connectSec, TimeUnit.SECONDS)
+                .readTimeout(timeoutPreset.readSec, TimeUnit.SECONDS)
+                .writeTimeout(timeoutPreset.writeSec, TimeUnit.SECONDS)
                 .cache(Cache(cacheDir, cacheSize))
                 .connectionPool(ConnectionPool(16, 15, TimeUnit.MINUTES))
                 .protocols(listOf(Protocol.HTTP_2, Protocol.HTTP_1_1))
                 .retryOnConnectionFailure(true)
+            if (prefs.verboseNetworkLogging) {
+                builder.addInterceptor(
+                    HttpLoggingInterceptor().apply {
+                        level = HttpLoggingInterceptor.Level.HEADERS
+                    }
+                )
+            }
+            return builder
                 .addNetworkInterceptor(bandwidthInterceptor)
                 .addNetworkInterceptor { chain ->
                     val response = chain.proceed(chain.request())
@@ -182,8 +193,12 @@ abstract class NetworkModule {
         @Named("streaming")
         fun provideStreamingOkHttpClient(
             okHttpClient: OkHttpClient,
-        ): OkHttpClient = okHttpClient.newBuilder()
-            .readTimeout(30, TimeUnit.SECONDS)
-            .build()
+        ): OkHttpClient {
+            val baseReadSec = okHttpClient.readTimeoutMillis.toLong() / 1000L
+            val streamingReadSec = maxOf(baseReadSec, 30L)
+            return okHttpClient.newBuilder()
+                .readTimeout(streamingReadSec, TimeUnit.SECONDS)
+                .build()
+        }
     }
 }

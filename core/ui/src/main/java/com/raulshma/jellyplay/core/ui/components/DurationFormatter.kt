@@ -1,5 +1,16 @@
 package com.raulshma.jellyplay.core.ui.components
 
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.platform.LocalContext
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
+
 private const val TICKS_PER_SECOND = 10_000_000L
 private const val TICKS_PER_MINUTE = TICKS_PER_SECOND * 60
 private const val TICKS_PER_HOUR = TICKS_PER_MINUTE * 60
@@ -52,4 +63,20 @@ fun formatDurationApproxSeconds(seconds: Long): String = when {
     seconds >= 3600 -> String.format("%.1fh", seconds / 3600.0)
     seconds >= 60 -> "${seconds / 60}m"
     else -> "${seconds}s"
+}
+
+@Composable
+fun rememberWallClockTimeString(): String {
+    val context = LocalContext.current
+    val is24Hour = remember(context) { android.text.format.DateFormat.is24HourFormat(context) }
+    val pattern = if (is24Hour) "HH:mm" else "h:mm a"
+    val formatter = remember(pattern) { SimpleDateFormat(pattern, Locale.getDefault()) }
+    var time by remember { mutableStateOf(formatter.format(Date())) }
+    LaunchedEffect(Unit) {
+        while (true) {
+            kotlinx.coroutines.delay(60_000)
+            time = formatter.format(Date())
+        }
+    }
+    return time
 }

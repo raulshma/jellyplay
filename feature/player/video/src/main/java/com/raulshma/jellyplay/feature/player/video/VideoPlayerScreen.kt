@@ -509,7 +509,7 @@ fun VideoPlayerScreen(
         {
             if (isInSyncPlaySession) viewModel.syncPlayTogglePlayPause()
             else if (isCastConnected) viewModel.castPlay()
-            else engine?.play()
+            else viewModel.resumePlayback()
         }
     }
     val doPause: () -> Unit = remember(engine, isInSyncPlaySession, isCastConnected) {
@@ -597,6 +597,7 @@ fun VideoPlayerScreen(
                             .focusable()
                             .onKeyEvent { keyEvent ->
                                 userInteractionCount++
+                                viewModel.onUserInteraction()
                                 if (keyEvent.type == KeyEventType.KeyDown &&
                                     keyEvent.nativeKeyEvent.keyCode == NativeKeyEvent.KEYCODE_SPACE
                                 ) {
@@ -674,6 +675,7 @@ fun VideoPlayerScreen(
                     if (!uiState.gesturesEnabled) return@pointerInput
                     detectTapGestures(
                         onTap = {
+                            viewModel.onUserInteraction()
                             if (uiState.isHoldSpeedActive) {
                                 viewModel.stopHoldSpeed()
                             } else {
@@ -681,9 +683,11 @@ fun VideoPlayerScreen(
                             }
                         },
                         onLongPress = {
+                            viewModel.onUserInteraction()
                             if (uiState.holdSpeedEnabled) viewModel.startHoldSpeed()
                         },
                         onDoubleTap = { offset ->
+                            viewModel.onUserInteraction()
                             val width = size.width
                             when {
                                 offset.x < width * 0.35 -> {
@@ -1007,6 +1011,7 @@ fun VideoPlayerScreen(
                 videoStats = uiState.videoStats,
                 audioTracks = uiState.audioTracks,
                 showPlaybackMetadata = uiState.showPlaybackMetadata,
+                showClock = uiState.showClock,
                 currentAspectRatio = aspectRatio,
                 detectedAspectRatio = detectedAspectRatio,
                 isVisible = showControls && !isInPipMode && !isScreenLocked,
@@ -1185,6 +1190,14 @@ fun VideoPlayerScreen(
                     snackbarHostState.showSnackbar(
                         message = message,
                         duration = androidx.compose.material3.SnackbarDuration.Short,
+                    )
+                }
+            }
+            launch {
+                viewModel.passOutEvents.collect { message ->
+                    snackbarHostState.showSnackbar(
+                        message = message,
+                        duration = androidx.compose.material3.SnackbarDuration.Long,
                     )
                 }
             }

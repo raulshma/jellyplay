@@ -31,6 +31,7 @@ dependencies {
     implementation(libs.androidx.collection.ktx)
     implementation(libs.kotlinx.serialization.json)
     implementation(libs.okhttp)
+    implementation(libs.okhttp.logging.interceptor)
 
     ksp(libs.hilt.android.compiler)
 

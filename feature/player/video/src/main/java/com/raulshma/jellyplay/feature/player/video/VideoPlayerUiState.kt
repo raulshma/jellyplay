@@ -73,6 +73,7 @@ data class VideoPlayerUiState(
     val seekDurationMs: Long = 10_000L,
     val defaultOrientation: OrientationMode = OrientationMode.SENSOR_LANDSCAPE,
     val controlsTimeoutMs: Long = 5_000L,
+    val passOutProtectionHours: Int = 0,
     val gesturesEnabled: Boolean = true,
     val holdSpeedEnabled: Boolean = true,
     val holdSpeedMultiplier: Float = 2.0f,
@@ -119,6 +120,7 @@ data class VideoPlayerUiState(
     val videoEffects: VideoEffectsConfig = VideoEffectsConfig(),
     val isScreenLocked: Boolean = false,
     val showPlaybackMetadata: Boolean = true,
+    val showClock: Boolean = false,
     val keepScreenOnDuringVideo: Boolean = true,
 ) {
 

@@ -17,6 +17,7 @@ import com.raulshma.jellyplay.core.model.CheckFrequency
 import com.raulshma.jellyplay.core.model.ChannelMixMode
 import com.raulshma.jellyplay.core.model.LibraryNotificationConfig
 import com.raulshma.jellyplay.core.model.ColorStyle
+import com.raulshma.jellyplay.core.model.ContinueWatchingClickBehavior
 import com.raulshma.jellyplay.core.model.ContrastLevel
 import com.raulshma.jellyplay.core.model.DecoderMode
 import com.raulshma.jellyplay.core.model.DlnaDeviceRef
@@ -33,6 +34,7 @@ import com.raulshma.jellyplay.core.model.LibVlcEngineConfig
 import com.raulshma.jellyplay.core.model.MediaSegmentType
 import com.raulshma.jellyplay.core.model.MediaStreamSelection
 import com.raulshma.jellyplay.core.model.MpvEngineConfig
+import com.raulshma.jellyplay.core.model.NetworkTimeoutPreset
 import com.raulshma.jellyplay.core.model.OrientationMode
 import com.raulshma.jellyplay.core.model.PlayerType
 import com.raulshma.jellyplay.core.model.PreloadBufferSize
@@ -88,6 +90,7 @@ class UserPreferencesStore @Inject constructor(
         val ACTIVE_USER_ID = stringPreferencesKey("active_user_id")
         val PREFERRED_PLAYER = stringPreferencesKey("preferred_player")
         val PREFERRED_SUBTITLE_LANG = stringPreferencesKey("preferred_subtitle_lang")
+        val SUBTITLES_FORCED_ONLY = booleanPreferencesKey("subtitles_forced_only")
         val PREFERRED_AUDIO_LANG = stringPreferencesKey("preferred_audio_lang")
         val MEDIA_STREAM_SELECTIONS = stringPreferencesKey("media_stream_selections")
         val THEME_MODE = stringPreferencesKey("theme_mode")
@@ -139,6 +142,8 @@ class UserPreferencesStore @Inject constructor(
         val FRAME_RATE_MATCHING = booleanPreferencesKey("frame_rate_matching")
         val NIGHT_MODE_ENABLED = booleanPreferencesKey("night_mode_enabled")
         val VIDEO_GESTURES_ENABLED = booleanPreferencesKey("video_gestures_enabled")
+        val VIDEO_PASS_OUT_PROTECTION_HOURS = intPreferencesKey("video_pass_out_protection_hours")
+        val VIDEO_SKIP_BACK_ON_RESUME_MS = longPreferencesKey("video_skip_back_on_resume_ms")
         val VIDEO_HOLD_SPEED_ENABLED = booleanPreferencesKey("video_hold_speed_enabled")
         val VIDEO_HOLD_SPEED_MULTIPLIER = floatPreferencesKey("video_hold_speed_multiplier")
         val VIDEO_AUTOPLAY_NEXT = booleanPreferencesKey("video_autoplay_next")
@@ -239,6 +244,8 @@ class UserPreferencesStore @Inject constructor(
         val AUTO_PLAY_COUNTDOWN_SEC = intPreferencesKey("auto_play_countdown_sec")
         val SHOW_UNWATCHED_BADGE = booleanPreferencesKey("show_unwatched_badge")
         val HIDE_WATCHED_ITEMS = booleanPreferencesKey("hide_watched_items")
+        val MERGE_CONTINUE_WATCHING_NEXT_UP = booleanPreferencesKey("merge_continue_watching_next_up")
+        val CONTINUE_WATCHING_CLICK_BEHAVIOR = stringPreferencesKey("continue_watching_click_behavior")
         val CELLULAR_STREAMING_QUALITY = stringPreferencesKey("cellular_streaming_quality")
         val SHOW_WATCHED_CHECKMARK = booleanPreferencesKey("show_watched_checkmark")
         val DEFAULT_LIBRARY_SORT_ORDERS = stringPreferencesKey("default_library_sort_orders")
@@ -248,12 +255,16 @@ class UserPreferencesStore @Inject constructor(
         val AUTO_DOWNLOAD_NEW_EPISODES = booleanPreferencesKey("auto_download_new_episodes")
         val INCOGNITO_MODE_ENABLED = booleanPreferencesKey("incognito_mode_enabled")
         val SHOW_TIME_REMAINING = booleanPreferencesKey("show_time_remaining")
+        val SHOW_CLOCK_ON_HOME = booleanPreferencesKey("show_clock_on_home")
+        val SHOW_CLOCK_IN_PLAYER = booleanPreferencesKey("show_clock_in_player")
         val PAUSE_ON_AUDIO_FOCUS_LOSS = booleanPreferencesKey("pause_on_audio_focus_loss")
         val VOLUME_BOOST_ENABLED = booleanPreferencesKey("volume_boost_enabled")
         val VOLUME_BOOST_GAIN = intPreferencesKey("volume_boost_gain")
         val SHOW_SHARE_MEDIA_OPTION = booleanPreferencesKey("show_share_media_option")
         val SHOW_EXTERNAL_RATINGS = booleanPreferencesKey("show_external_ratings")
         val DATA_SAVER_ENABLED = booleanPreferencesKey("data_saver_enabled")
+        val VERBOSE_NETWORK_LOGGING = booleanPreferencesKey("verbose_network_logging")
+        val NETWORK_TIMEOUT_PRESET = stringPreferencesKey("network_timeout_preset")
         val REDUCE_MOTION_ENABLED = booleanPreferencesKey("reduce_motion_enabled")
         val PREFER_AUDIO_DESCRIPTION = booleanPreferencesKey("prefer_audio_description")
         val HIGH_CONTRAST_SUBTITLES = booleanPreferencesKey("high_contrast_subtitles")
@@ -571,6 +582,7 @@ class UserPreferencesStore @Inject constructor(
                 PlayerType.fromStoredName(prefs[Keys.PREFERRED_PLAYER] ?: PlayerType.EXO_PLAYER.name)
             } catch (_: Exception) { PlayerType.EXO_PLAYER },
             preferredSubtitleLanguage = prefs[Keys.PREFERRED_SUBTITLE_LANG],
+            subtitlesForcedOnly = readBool(prefs, Keys.SUBTITLES_FORCED_ONLY, "subtitles_forced_only", false),
             preferredAudioLanguage = prefs[Keys.PREFERRED_AUDIO_LANG],
             mediaStreamSelections = mediaStreamSelections,
             dynamicTheming = readBool(prefs, Keys.DYNAMIC_THEMING, "dynamic_theming", true),
@@ -616,6 +628,8 @@ class UserPreferencesStore @Inject constructor(
             } catch (_: Exception) { OrientationMode.SENSOR_LANDSCAPE },
             videoControlsTimeoutMs = readLong(prefs, Keys.VIDEO_CONTROLS_TIMEOUT_MS, "video_controls_timeout_ms", 5_000L),
             videoGesturesEnabled = readBool(prefs, Keys.VIDEO_GESTURES_ENABLED, "video_gestures_enabled", true),
+            videoPassOutProtectionHours = readInt(prefs, Keys.VIDEO_PASS_OUT_PROTECTION_HOURS, "video_pass_out_protection_hours", 0),
+            videoSkipBackOnResumeMs = readLong(prefs, Keys.VIDEO_SKIP_BACK_ON_RESUME_MS, "video_skip_back_on_resume_ms", 0L),
             videoHoldSpeedEnabled = readBool(prefs, Keys.VIDEO_HOLD_SPEED_ENABLED, "video_hold_speed_enabled", true),
             videoHoldSpeedMultiplier = readFloat(prefs, Keys.VIDEO_HOLD_SPEED_MULTIPLIER, "video_hold_speed_multiplier", 2.0f),
             videoDefaultSpeed = readFloat(prefs, Keys.VIDEO_DEFAULT_SPEED, "video_default_speed", 1.0f),
@@ -759,6 +773,10 @@ class UserPreferencesStore @Inject constructor(
             autoPlayCountdownSec = readInt(prefs, Keys.AUTO_PLAY_COUNTDOWN_SEC, "auto_play_countdown_sec", 10),
             showUnwatchedBadge = readBool(prefs, Keys.SHOW_UNWATCHED_BADGE, "show_unwatched_badge", true),
             hideWatchedItems = readBool(prefs, Keys.HIDE_WATCHED_ITEMS, "hide_watched_items", false),
+            mergeContinueWatchingAndNextUp = readBool(prefs, Keys.MERGE_CONTINUE_WATCHING_NEXT_UP, "merge_continue_watching_next_up", false),
+            continueWatchingClickBehavior = try {
+                ContinueWatchingClickBehavior.valueOf(prefs[Keys.CONTINUE_WATCHING_CLICK_BEHAVIOR] ?: ContinueWatchingClickBehavior.DETAILS.name)
+            } catch (_: Exception) { ContinueWatchingClickBehavior.DETAILS },
             cellularStreamingQuality = try {
                 StreamingQuality.valueOf(prefs[Keys.CELLULAR_STREAMING_QUALITY] ?: StreamingQuality.AUTO.name)
             } catch (_: Exception) { StreamingQuality.AUTO },
@@ -774,12 +792,18 @@ class UserPreferencesStore @Inject constructor(
             autoDownloadNewEpisodes = readBool(prefs, Keys.AUTO_DOWNLOAD_NEW_EPISODES, "auto_download_new_episodes", false),
             incognitoModeEnabled = readBool(prefs, Keys.INCOGNITO_MODE_ENABLED, "incognito_mode_enabled", false),
             showTimeRemaining = readBool(prefs, Keys.SHOW_TIME_REMAINING, "show_time_remaining", false),
+            showClockOnHome = readBool(prefs, Keys.SHOW_CLOCK_ON_HOME, "show_clock_on_home", false),
+            showClockInPlayer = readBool(prefs, Keys.SHOW_CLOCK_IN_PLAYER, "show_clock_in_player", false),
             pauseOnAudioFocusLoss = readBool(prefs, Keys.PAUSE_ON_AUDIO_FOCUS_LOSS, "pause_on_audio_focus_loss", true),
             volumeBoostEnabled = readBool(prefs, Keys.VOLUME_BOOST_ENABLED, "volume_boost_enabled", false),
             volumeBoostGain = readInt(prefs, Keys.VOLUME_BOOST_GAIN, "volume_boost_gain", 0),
             showShareMediaOption = readBool(prefs, Keys.SHOW_SHARE_MEDIA_OPTION, "show_share_media_option", true),
             showExternalRatings = readBool(prefs, Keys.SHOW_EXTERNAL_RATINGS, "show_external_ratings", true),
             dataSaverEnabled = readBool(prefs, Keys.DATA_SAVER_ENABLED, "data_saver_enabled", false),
+            verboseNetworkLogging = readBool(prefs, Keys.VERBOSE_NETWORK_LOGGING, "verbose_network_logging", false),
+            networkTimeoutPreset = try {
+                NetworkTimeoutPreset.valueOf(prefs[Keys.NETWORK_TIMEOUT_PRESET] ?: NetworkTimeoutPreset.DEFAULT.name)
+            } catch (_: Exception) { NetworkTimeoutPreset.DEFAULT },
             reduceMotionEnabled = readBool(prefs, Keys.REDUCE_MOTION_ENABLED, "reduce_motion_enabled", false),
             preferAudioDescription = readBool(prefs, Keys.PREFER_AUDIO_DESCRIPTION, "prefer_audio_description", false),
             highContrastSubtitles = readBool(prefs, Keys.HIGH_CONTRAST_SUBTITLES, "high_contrast_subtitles", false),
@@ -824,6 +848,10 @@ class UserPreferencesStore @Inject constructor(
             if (language != null) it[Keys.PREFERRED_SUBTITLE_LANG] = language
             else it.remove(Keys.PREFERRED_SUBTITLE_LANG)
         }
+    }
+
+    suspend fun setSubtitlesForcedOnly(enabled: Boolean) {
+        context.dataStore.edit { it[Keys.SUBTITLES_FORCED_ONLY] = enabled }
     }
 
     suspend fun setPreferredAudioLanguage(language: String?) {
@@ -987,6 +1015,14 @@ class UserPreferencesStore @Inject constructor(
         context.dataStore.edit { it[Keys.HIDE_WATCHED_ITEMS] = enabled }
     }
 
+    suspend fun setMergeContinueWatchingAndNextUp(enabled: Boolean) {
+        context.dataStore.edit { it[Keys.MERGE_CONTINUE_WATCHING_NEXT_UP] = enabled }
+    }
+
+    suspend fun setContinueWatchingClickBehavior(behavior: ContinueWatchingClickBehavior) {
+        context.dataStore.edit { it[Keys.CONTINUE_WATCHING_CLICK_BEHAVIOR] = behavior.name }
+    }
+
     suspend fun setCellularStreamingQuality(quality: StreamingQuality) {
         context.dataStore.edit { it[Keys.CELLULAR_STREAMING_QUALITY] = quality.name }
     }
@@ -1027,6 +1063,14 @@ class UserPreferencesStore @Inject constructor(
 
     suspend fun setShowTimeRemaining(enabled: Boolean) {
         context.dataStore.edit { it[Keys.SHOW_TIME_REMAINING] = enabled }
+    }
+
+    suspend fun setShowClockOnHome(enabled: Boolean) {
+        context.dataStore.edit { it[Keys.SHOW_CLOCK_ON_HOME] = enabled }
+    }
+
+    suspend fun setShowClockInPlayer(enabled: Boolean) {
+        context.dataStore.edit { it[Keys.SHOW_CLOCK_IN_PLAYER] = enabled }
     }
 
     suspend fun setPauseOnAudioFocusLoss(enabled: Boolean) {
@@ -1131,6 +1175,14 @@ class UserPreferencesStore @Inject constructor(
 
     suspend fun setVideoGesturesEnabled(enabled: Boolean) {
         context.dataStore.edit { it[Keys.VIDEO_GESTURES_ENABLED] = enabled }
+    }
+
+    suspend fun setVideoSkipBackOnResumeMs(ms: Long) {
+        context.dataStore.edit { it[Keys.VIDEO_SKIP_BACK_ON_RESUME_MS] = ms.coerceAtLeast(0L) }
+    }
+
+    suspend fun setVideoPassOutProtectionHours(hours: Int) {
+        context.dataStore.edit { it[Keys.VIDEO_PASS_OUT_PROTECTION_HOURS] = hours.coerceAtLeast(0) }
     }
 
     suspend fun setVideoHoldSpeedEnabled(enabled: Boolean) {
@@ -1479,6 +1531,7 @@ class UserPreferencesStore @Inject constructor(
         context.dataStore.edit { settings ->
             settings[Keys.PREFERRED_PLAYER] = prefs.preferredPlayer.name
             prefs.preferredSubtitleLanguage?.let { settings[Keys.PREFERRED_SUBTITLE_LANG] = it }
+            settings[Keys.SUBTITLES_FORCED_ONLY] = prefs.subtitlesForcedOnly
             prefs.preferredAudioLanguage?.let { settings[Keys.PREFERRED_AUDIO_LANG] = it }
             settings[Keys.MEDIA_STREAM_SELECTIONS] = json.encodeToString(
                 kotlinx.serialization.serializer<Map<String, com.raulshma.jellyplay.core.model.MediaStreamSelection>>(),
@@ -1517,6 +1570,8 @@ class UserPreferencesStore @Inject constructor(
             settings[Keys.VIDEO_DEFAULT_ORIENTATION] = prefs.videoDefaultOrientation.name
             settings[Keys.VIDEO_CONTROLS_TIMEOUT_MS] = prefs.videoControlsTimeoutMs
             settings[Keys.VIDEO_GESTURES_ENABLED] = prefs.videoGesturesEnabled
+            settings[Keys.VIDEO_PASS_OUT_PROTECTION_HOURS] = prefs.videoPassOutProtectionHours
+            settings[Keys.VIDEO_SKIP_BACK_ON_RESUME_MS] = prefs.videoSkipBackOnResumeMs
             settings[Keys.VIDEO_HOLD_SPEED_ENABLED] = prefs.videoHoldSpeedEnabled
             settings[Keys.VIDEO_HOLD_SPEED_MULTIPLIER] = prefs.videoHoldSpeedMultiplier
             settings[Keys.VIDEO_DEFAULT_SPEED] = prefs.videoDefaultSpeed
@@ -1641,6 +1696,8 @@ class UserPreferencesStore @Inject constructor(
             settings[Keys.AUTO_PLAY_COUNTDOWN_SEC] = prefs.autoPlayCountdownSec
             settings[Keys.SHOW_UNWATCHED_BADGE] = prefs.showUnwatchedBadge
             settings[Keys.HIDE_WATCHED_ITEMS] = prefs.hideWatchedItems
+            settings[Keys.MERGE_CONTINUE_WATCHING_NEXT_UP] = prefs.mergeContinueWatchingAndNextUp
+            settings[Keys.CONTINUE_WATCHING_CLICK_BEHAVIOR] = prefs.continueWatchingClickBehavior.name
             settings[Keys.CELLULAR_STREAMING_QUALITY] = prefs.cellularStreamingQuality.name
             settings[Keys.SHOW_WATCHED_CHECKMARK] = prefs.showWatchedCheckmark
             settings[Keys.DEFAULT_LIBRARY_SORT_ORDERS] = json.encodeToString(prefs.defaultLibrarySortOrders)
@@ -1650,12 +1707,16 @@ class UserPreferencesStore @Inject constructor(
             settings[Keys.AUTO_DOWNLOAD_NEW_EPISODES] = prefs.autoDownloadNewEpisodes
             settings[Keys.INCOGNITO_MODE_ENABLED] = prefs.incognitoModeEnabled
             settings[Keys.SHOW_TIME_REMAINING] = prefs.showTimeRemaining
+            settings[Keys.SHOW_CLOCK_ON_HOME] = prefs.showClockOnHome
+            settings[Keys.SHOW_CLOCK_IN_PLAYER] = prefs.showClockInPlayer
             settings[Keys.PAUSE_ON_AUDIO_FOCUS_LOSS] = prefs.pauseOnAudioFocusLoss
             settings[Keys.VOLUME_BOOST_ENABLED] = prefs.volumeBoostEnabled
             settings[Keys.VOLUME_BOOST_GAIN] = prefs.volumeBoostGain
             settings[Keys.SHOW_SHARE_MEDIA_OPTION] = prefs.showShareMediaOption
             settings[Keys.SHOW_EXTERNAL_RATINGS] = prefs.showExternalRatings
             settings[Keys.DATA_SAVER_ENABLED] = prefs.dataSaverEnabled
+            settings[Keys.VERBOSE_NETWORK_LOGGING] = prefs.verboseNetworkLogging
+            settings[Keys.NETWORK_TIMEOUT_PRESET] = prefs.networkTimeoutPreset.name
             settings[Keys.REDUCE_MOTION_ENABLED] = prefs.reduceMotionEnabled
             settings[Keys.PREFER_AUDIO_DESCRIPTION] = prefs.preferAudioDescription
             settings[Keys.HIGH_CONTRAST_SUBTITLES] = prefs.highContrastSubtitles
@@ -1749,6 +1810,14 @@ class UserPreferencesStore @Inject constructor(
 
     suspend fun setDataSaverEnabled(enabled: Boolean) {
         context.dataStore.edit { it[Keys.DATA_SAVER_ENABLED] = enabled }
+    }
+
+    suspend fun setVerboseNetworkLogging(enabled: Boolean) {
+        context.dataStore.edit { it[Keys.VERBOSE_NETWORK_LOGGING] = enabled }
+    }
+
+    suspend fun setNetworkTimeoutPreset(preset: NetworkTimeoutPreset) {
+        context.dataStore.edit { it[Keys.NETWORK_TIMEOUT_PRESET] = preset.name }
     }
 
     suspend fun setReduceMotionEnabled(enabled: Boolean) {

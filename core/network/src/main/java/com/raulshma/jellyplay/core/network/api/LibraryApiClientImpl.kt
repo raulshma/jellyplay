@@ -476,6 +476,23 @@ class LibraryApiClientImpl @Inject constructor(
             }
         }
 
+    override suspend fun getInstantMix(itemId: String, limit: Int): Result<List<MediaItem>> =
+        engine.apiResultWithRetry {
+            val userId = engine.currentUser.value?.id?.toUUID()
+                ?: return@apiResultWithRetry emptyList()
+            engine.run {
+                engine.requireApi().instantMixApi.getInstantMixFromItem(
+                    userId = userId,
+                    itemId = itemId.toUUID(),
+                    limit = limit,
+                    fields = listOf(
+                        ItemFields.OVERVIEW,
+                        ItemFields.PRIMARY_IMAGE_ASPECT_RATIO,
+                    ),
+                ).content.items.map { it.toMediaItem() }.filterByParentalRating()
+            }
+        }
+
     override suspend fun getRecommendations(limit: Int): Result<List<MediaItem>> = runCatching {
         val continueWatching = getContinueWatching(limit = 5).getOrDefault(emptyList())
         val nextUp = getNextUp(limit = 5).getOrDefault(emptyList())

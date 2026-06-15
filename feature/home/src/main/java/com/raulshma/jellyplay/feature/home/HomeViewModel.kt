@@ -80,6 +80,7 @@ class HomeViewModel @Inject constructor(
     private var enabledHomeSectionTypes = HomeSectionType.CONFIGURABLE.toSet()
     private var homeSectionOrder = HomeSectionType.CONFIGURABLE
     private var hiddenLibrarySectionIds = emptySet<String>()
+    private var mergeContinueWatchingAndNextUp = false
     private var lastContinueWatchingIds: Set<String> = emptySet()
     private var seerrPreferences = SeerrPreferences()
 
@@ -126,13 +127,15 @@ class HomeViewModel @Inject constructor(
                 val homeSectionPrefsChanged = hasSeenHomePreferences && (
                     prefs.enabledHomeSectionTypes != enabledHomeSectionTypes ||
                         prefs.homeSectionOrder != homeSectionOrder ||
-                        prefs.hiddenLibrarySectionIds != hiddenLibrarySectionIds
+                        prefs.hiddenLibrarySectionIds != hiddenLibrarySectionIds ||
+                        prefs.mergeContinueWatchingAndNextUp != mergeContinueWatchingAndNextUp
                     )
 
                 hasSeenHomePreferences = true
                 enabledHomeSectionTypes = prefs.enabledHomeSectionTypes
                 homeSectionOrder = prefs.homeSectionOrder
                 hiddenLibrarySectionIds = prefs.hiddenLibrarySectionIds
+                mergeContinueWatchingAndNextUp = prefs.mergeContinueWatchingAndNextUp
                 _uiState.update { it.copy(
                     homeMode = prefs.homeMode,
                     dynamicTheming = prefs.dynamicTheming,
@@ -140,6 +143,8 @@ class HomeViewModel @Inject constructor(
                     colorStyle = prefs.colorStyle,
                     accentColorSwatch = prefs.accentColorSwatch,
                     homeHeroEnabled = prefs.homeHeroEnabled,
+                    showClock = prefs.showClockOnHome,
+                    continueWatchingClickBehavior = prefs.continueWatchingClickBehavior,
                 ) }
 
                 if (homeSectionPrefsChanged) {
@@ -395,9 +400,9 @@ class HomeViewModel @Inject constructor(
             val hiddenLibIds = hiddenLibrarySectionIds
             mediaRepository.getHomeSections(enabledSections, hiddenLibIds)
                 .onSuccess { fetchedSections ->
-                    val orderedSections = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Default) {
+                    val finalSections = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Default) {
                         val orderIndex = homeSectionOrder.withIndex().associate { it.value to it.index }
-                        fetchedSections
+                        val ordered = fetchedSections
                             .mapIndexed { index, section -> index to section }
                             .sortedWith(
                                 compareBy<Pair<Int, com.raulshma.jellyplay.core.model.HomeSection>> {
@@ -405,11 +410,30 @@ class HomeViewModel @Inject constructor(
                                 }.thenBy { it.first },
                             )
                             .map { it.second }
+                        if (mergeContinueWatchingAndNextUp) {
+                            val cw = ordered.firstOrNull { it.type == HomeSectionType.CONTINUE_WATCHING }
+                            val nextUp = ordered.firstOrNull { it.type == HomeSectionType.NEXT_UP }?.items.orEmpty()
+                            if (cw != null) {
+                                val seen = cw.items.mapTo(mutableSetOf()) { it.id }
+                                val mergedItems = cw.items + nextUp.filter { seen.add(it.id) }
+                                ordered.mapNotNull { section ->
+                                    when (section.type) {
+                                        HomeSectionType.CONTINUE_WATCHING -> section.copy(items = mergedItems)
+                                        HomeSectionType.NEXT_UP -> null
+                                        else -> section
+                                    }
+                                }
+                            } else {
+                                ordered.filterNot { it.type == HomeSectionType.NEXT_UP }
+                            }
+                        } else {
+                            ordered
+                        }
                     }
 
-                    _uiState.update { it.copy(sections = orderedSections) }
+                    _uiState.update { it.copy(sections = finalSections) }
 
-                    val continueWatching = orderedSections
+                    val continueWatching = finalSections
                         .find { it.type == HomeSectionType.CONTINUE_WATCHING }
                         ?.items ?: emptyList()
                     val currentIds = continueWatching.map { it.id }.toSet()

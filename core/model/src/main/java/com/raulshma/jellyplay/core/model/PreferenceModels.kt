@@ -158,6 +158,20 @@ enum class PreloadBufferSize(
 
 @Immutable
 @Serializable
+enum class NetworkTimeoutPreset(
+    val displayName: String,
+    val connectSec: Long,
+    val readSec: Long,
+    val writeSec: Long,
+) {
+    FAST("Fast (5s connect / 10s read)", 5, 10, 10),
+    DEFAULT("Default (15s)", 15, 15, 15),
+    RELAXED("Relaxed (30s)", 30, 30, 30),
+    VERY_RELAXED("Very Relaxed (60s)", 60, 60, 60),
+}
+
+@Immutable
+@Serializable
 enum class SyncPlayJoinBehavior(val displayName: String) {
     ALWAYS_JOIN("Always Join"),
     ASK("Always Ask"),
@@ -169,6 +183,14 @@ enum class SyncPlayJoinBehavior(val displayName: String) {
 enum class CastingStrategy(val displayName: String) {
     PREFER_CAST("Prefer Google Cast"),
     PREFER_DLNA("Prefer DLNA"),
+    ASK("Always Ask"),
+}
+
+@Immutable
+@Serializable
+enum class ContinueWatchingClickBehavior(val displayName: String) {
+    DETAILS("Open Details"),
+    PLAY("Resume Playback"),
     ASK("Always Ask"),
 }
 
