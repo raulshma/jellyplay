@@ -46,6 +46,8 @@ import androidx.compose.material3.NavigationDrawerItemDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Surface
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.TextButton
 import com.composables.icons.tabler.Tabler
 import com.composables.icons.tabler.outline.*
 import kotlinx.coroutines.launch
@@ -689,6 +691,7 @@ private fun MainHomeContent(
                             mediaBackdropUrlBuilder = mediaBackdropUrlBuilder,
                             mediaOnItemClick = mediaOnItemClick,
                             mediaOnPlayClick = mediaOnPlayClick,
+                            continueWatchingClickBehavior = state.continueWatchingClickBehavior,
                             fallbackImageUrlBuilder = fallbackImageUrlBuilder,
                             discoverRows = discoverRows,
                             allDiscoverItems = allDiscoverItems,
@@ -717,6 +720,7 @@ private fun MainHomeContent(
                     homeMode = state.homeMode,
                     headerStatus = headerStatus,
                     activeDownloadCount = activeDownloadCount,
+                    showClock = state.showClock,
                     onModeChange = onModeChange,
                     onSearchExpanded = { isSearchExpanded = it },
                     onSearchQueryChange = { viewModel.onEvent(HomeUiEvent.UpdateSearchQuery(it)) },
@@ -875,6 +879,7 @@ private fun HomeContentList(
     mediaBackdropUrlBuilder: (com.raulshma.jellyplay.core.model.MediaItem) -> String,
     mediaOnItemClick: (com.raulshma.jellyplay.core.model.MediaItem) -> Unit,
     mediaOnPlayClick: (com.raulshma.jellyplay.core.model.MediaItem) -> Unit,
+    continueWatchingClickBehavior: com.raulshma.jellyplay.core.model.ContinueWatchingClickBehavior,
     fallbackImageUrlBuilder: (com.raulshma.jellyplay.core.model.MediaItem) -> List<String>,
     discoverRows: List<List<SeerrSearchItem>>,
     allDiscoverItems: List<SeerrSearchItem>,
@@ -891,6 +896,8 @@ private fun HomeContentList(
 ) {
     val isTv = LocalTvMode.current
     val adaptiveInfo = LocalAdaptiveInfo.current
+
+    var askContinueItem by remember { mutableStateOf<com.raulshma.jellyplay.core.model.MediaItem?>(null) }
 
     // TV focus orchestration: remember which content row last held focus so back-navigation from a
     // detail screen restores that row instead of always snapping back to the hero. -1 means "no row
@@ -1002,12 +1009,27 @@ private fun HomeContentList(
                     }
 
                 if (section.type == HomeSectionType.CONTINUE_WATCHING || section.type == HomeSectionType.NEXT_UP) {
+                    val rowItemClick: (com.raulshma.jellyplay.core.model.MediaItem) -> Unit = remember(
+                        section.type, continueWatchingClickBehavior, mediaOnItemClick, mediaOnPlayClick,
+                    ) {
+                        { item ->
+                            if (section.type == HomeSectionType.CONTINUE_WATCHING) {
+                                when (continueWatchingClickBehavior) {
+                                    com.raulshma.jellyplay.core.model.ContinueWatchingClickBehavior.DETAILS -> mediaOnItemClick(item)
+                                    com.raulshma.jellyplay.core.model.ContinueWatchingClickBehavior.PLAY -> mediaOnPlayClick(item)
+                                    com.raulshma.jellyplay.core.model.ContinueWatchingClickBehavior.ASK -> { askContinueItem = item }
+                                }
+                            } else {
+                                mediaOnItemClick(item)
+                            }
+                        }
+                    }
                     ContinueWatchingRow(
                         title = section.title,
                         items = section.items,
                         imageUrlBuilder = mediaImageUrlBuilder,
                         backdropUrlBuilder = mediaBackdropUrlBuilder,
-                        onItemClick = mediaOnItemClick,
+                        onItemClick = rowItemClick,
                         onPlayClick = mediaOnPlayClick,
                         modifier = sectionModifier,
                         focusRequester = rowFocusRequesters[index],
@@ -1121,6 +1143,28 @@ private fun HomeContentList(
                 }
             }
         }
+    }
+
+    val askItem = askContinueItem
+    if (askItem != null) {
+        AlertDialog(
+            onDismissRequest = { askContinueItem = null },
+            icon = { Icon(Tabler.Outline.PlayerPlay, contentDescription = null) },
+            title = { Text(askItem.name) },
+            text = { Text("Resume playback or open details?") },
+            confirmButton = {
+                TextButton(onClick = {
+                    askContinueItem = null
+                    mediaOnPlayClick(askItem)
+                }) { Text("Resume") }
+            },
+            dismissButton = {
+                TextButton(onClick = {
+                    askContinueItem = null
+                    mediaOnItemClick(askItem)
+                }) { Text("Details") }
+            },
+        )
     }
 }
 

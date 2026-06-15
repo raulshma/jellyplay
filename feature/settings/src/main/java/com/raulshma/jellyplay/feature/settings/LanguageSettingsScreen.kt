@@ -92,7 +92,7 @@ fun LanguageSettingsScreen(
     val scrollIndex = remember(highlightSettingId) {
         when (highlightSettingId) {
             in listOf("audio_language", "subtitle_language") -> 0
-            in listOf("subtitle_font_size", "subtitle_color", "subtitle_background", "subtitle_edge_style", "subtitle_sync_offset", "subtitle_vertical_position") -> 1
+            in listOf("subtitle_font_size", "subtitle_forced_only", "subtitle_color", "subtitle_background", "subtitle_edge_style", "subtitle_sync_offset", "subtitle_vertical_position") -> 1
             else -> -1
         }
     }
@@ -167,7 +167,7 @@ fun LanguageSettingsScreen(
                     initiallyExpanded = highlightSettingId in listOf("subtitle_font_size", "subtitle_color", "subtitle_background", "subtitle_edge_style", "subtitle_sync_offset", "subtitle_vertical_position"),
                 ) {
                     var subIdx = 0
-                    val subTotal = if (showAdvanced) 6 else 3
+                    val subTotal = if (showAdvanced) 7 else 4
                     SettingListItem(
                         icon = Tabler.Outline.Typography,
                         title = "Font Size",
@@ -176,6 +176,15 @@ fun LanguageSettingsScreen(
                         highlighted = highlightSettingId == "subtitle_font_size",
                         index = subIdx++, count = subTotal,
                         onClick = { activeDialog = LanguageSettingsDialog.SubtitleFontPicker },
+                    )
+                    SettingToggleItem(
+                        icon = Tabler.Outline.TextSize,
+                        title = "Forced Subtitles Only",
+                        subtitle = if (preferences.subtitlesForcedOnly) "Show subtitles only when forced tracks are present" else "Show subtitles per preferred language",
+                        checked = preferences.subtitlesForcedOnly,
+                        highlighted = highlightSettingId == "subtitle_forced_only",
+                        index = subIdx++, count = subTotal,
+                        onCheckedChange = { viewModel.setSubtitlesForcedOnly(it) },
                     )
                     if (showAdvanced) {
                         SettingListItem(

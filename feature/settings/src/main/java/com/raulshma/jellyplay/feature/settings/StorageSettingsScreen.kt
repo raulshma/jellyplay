@@ -57,7 +57,7 @@ fun StorageSettingsScreen(
     val scrollIndex = remember(highlightSettingId) {
         when (highlightSettingId) {
             in listOf("clear_cache", "wifi_only_downloads", "auto_delete_cache", "max_cache_size") -> 0
-            in listOf("offline_mode", "adaptive_bitrate", "bandwidth_cap", "data_saver") -> 1
+            in listOf("offline_mode", "adaptive_bitrate", "bandwidth_cap", "data_saver", "network_timeout", "verbose_logging") -> 1
             in listOf("download_quality", "smart_downloads") -> 2
             else -> -1
         }
@@ -187,7 +187,7 @@ fun StorageSettingsScreen(
                     modifier = Modifier.padding(vertical = 8.dp),
                     initiallyExpanded = highlightSettingId in listOf("offline_mode", "adaptive_bitrate", "bandwidth_cap", "data_saver"),
                 ) {
-                    val networkTotal = 7
+                    val networkTotal = 9
                     var networkIdx = 0
 
                     SettingToggleItem(
@@ -270,8 +270,31 @@ fun StorageSettingsScreen(
                         subtitle = "Lower image resolutions, cellular cap, disable auto-downloads",
                         checked = preferences.dataSaverEnabled,
                         highlighted = highlightSettingId == "data_saver",
-                        index = networkIdx, count = networkTotal,
+                        index = networkIdx++, count = networkTotal,
                         onCheckedChange = { viewModel.setDataSaverEnabled(it) },
+                    )
+                    SettingListItem(
+                        icon = Tabler.Outline.Clock,
+                        title = "Network Timeouts",
+                        subtitle = "Connect/read/write timeout preset (restart to apply)",
+                        trailingText = preferences.networkTimeoutPreset.displayName.substringBefore(" ("),
+                        highlighted = highlightSettingId == "network_timeout",
+                        index = networkIdx++, count = networkTotal,
+                        onClick = {
+                            val options = com.raulshma.jellyplay.core.model.NetworkTimeoutPreset.entries
+                            val currentIndex = options.indexOf(preferences.networkTimeoutPreset)
+                            val nextIndex = (currentIndex + 1) % options.size
+                            viewModel.setNetworkTimeoutPreset(options[nextIndex])
+                        },
+                    )
+                    SettingToggleItem(
+                        icon = Tabler.Outline.Code,
+                        title = "Verbose Network Logging",
+                        subtitle = if (preferences.verboseNetworkLogging) "Logs request headers (restart to apply)" else "Standard logging",
+                        checked = preferences.verboseNetworkLogging,
+                        highlighted = highlightSettingId == "verbose_logging",
+                        index = networkIdx, count = networkTotal,
+                        onCheckedChange = { viewModel.setVerboseNetworkLogging(it) },
                     )
                 }
             }

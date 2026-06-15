@@ -1,5 +1,7 @@
 package com.raulshma.jellyplay.feature.music.artistdetail
 
+import com.raulshma.jellyplay.core.data.playback.AudioPlaybackManager
+import com.raulshma.jellyplay.core.data.playback.toAudioQueueItem
 import com.raulshma.jellyplay.core.data.repository.MediaRepository
 import com.raulshma.jellyplay.core.data.repository.PlaybackRepository
 import com.raulshma.jellyplay.core.model.MediaItem
@@ -13,6 +15,7 @@ import javax.inject.Inject
 class ArtistDetailViewModel @Inject constructor(
     private val mediaRepository: MediaRepository,
     private val playbackRepository: PlaybackRepository,
+    private val audioPlaybackManager: AudioPlaybackManager,
 ) : JellyPlayViewModel() {
 
     private val _artistName = composeState("")
@@ -29,6 +32,12 @@ class ArtistDetailViewModel @Inject constructor(
 
     private val _error = composeState<String?>(null)
     val error: String? get() = _error.value
+
+    private val _isStartingMix = composeState(false)
+    val isStartingMix: Boolean get() = _isStartingMix.value
+
+    private val _mixFirstTrackId = composeState<String?>(null)
+    val mixFirstTrackId: String? get() = _mixFirstTrackId.value
 
     fun loadArtist(artistId: String) {
         launch {
@@ -54,4 +63,32 @@ class ArtistDetailViewModel @Inject constructor(
 
     fun getBackdropUrl(itemId: String): String =
         playbackRepository.getBackdropUrl(itemId, maxWidth = 1280)
+
+    fun startInstantMix(artistId: String) {
+        launch {
+            _isStartingMix.value = true
+            _error.value = null
+            mediaRepository.getInstantMix(artistId)
+                .onSuccess { mix ->
+                    if (mix.isEmpty()) {
+                        _error.value = "No mix tracks available for this artist"
+                    } else {
+                        val queueItems = mix.map { track ->
+                            track.toAudioQueueItem(
+                                imageUrl = playbackRepository.getImageUrl(track.id, maxWidth = 400),
+                                albumFallback = track.album,
+                            )
+                        }
+                        audioPlaybackManager.playQueue(queueItems, 0)
+                        _mixFirstTrackId.value = mix.first().id
+                    }
+                }
+                .onFailure { _error.value = it.message ?: "Failed to start Instant Mix" }
+            _isStartingMix.value = false
+        }
+    }
+
+    fun consumeMixEvent() {
+        _mixFirstTrackId.value = null
+    }
 }

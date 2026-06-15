@@ -50,6 +50,7 @@ import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.isActive
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.channels.Channel
@@ -115,6 +116,16 @@ class VideoPlayerViewModel @Inject constructor(
     )
     private var videoMediaSession: MediaSession? = null
 
+    private val _passOutEvents = Channel<String>(Channel.BUFFERED)
+    val passOutEvents: kotlinx.coroutines.flow.Flow<String> = _passOutEvents.receiveAsFlow()
+
+    @Volatile
+    private var lastInteractionElapsedMs: Long = android.os.SystemClock.elapsedRealtime()
+
+    fun onUserInteraction() {
+        lastInteractionElapsedMs = android.os.SystemClock.elapsedRealtime()
+    }
+
     val castManagerField: CastManager = castManager
 
     private var lastSeekPositionMs: Long? = null
@@ -125,6 +136,16 @@ class VideoPlayerViewModel @Inject constructor(
         lastSeekTimestamp = System.currentTimeMillis()
         _uiState.update { it.copy(currentPosition = positionMs) }
         playerSessionManager.engine?.seekTo(positionMs)
+    }
+
+    fun resumePlayback() {
+        val engine = playerSessionManager.engine ?: return
+        val skipMs = preferencesStore.preferences.value.videoSkipBackOnResumeMs
+        if (skipMs > 0L && !engine.isPlaying.value) {
+            val target = (engine.currentPositionMs - skipMs).coerceAtLeast(0L)
+            seekTo(target)
+        }
+        engine.play()
     }
 
     private fun getReportPositionMs(): Long {
@@ -204,6 +225,9 @@ class VideoPlayerViewModel @Inject constructor(
                 if (_uiState.value.showPlaybackMetadata != prefs.videoShowPlaybackMetadata) {
                     _uiState.update { it.copy(showPlaybackMetadata = prefs.videoShowPlaybackMetadata) }
                 }
+                if (_uiState.value.showClock != prefs.showClockInPlayer) {
+                    _uiState.update { it.copy(showClock = prefs.showClockInPlayer) }
+                }
                 if (_uiState.value.keepScreenOnDuringVideo != prefs.keepScreenOnDuringVideo) {
                     _uiState.update { it.copy(keepScreenOnDuringVideo = prefs.keepScreenOnDuringVideo) }
                 }
@@ -220,6 +244,35 @@ class VideoPlayerViewModel @Inject constructor(
         launch {
             sleepTimerManager.remainingMs.collect { remaining ->
                 _uiState.update { it.copy(sleepTimerRemainingMs = remaining) }
+            }
+        }
+        launch {
+            // Pass-out protection: pause playback after N hours of no user interaction.
+            val wasPlaying = booleanArrayOf(false)
+            playerSessionManager.sessionState.collect { _ ->
+                val engine = playerSessionManager.engine ?: return@collect
+                val playing = engine.isPlaying.value
+                if (playing && !wasPlaying[0]) {
+                    // Resumed playback — reset the interaction clock so a long paused period
+                    // doesn't immediately trip the timer.
+                    lastInteractionElapsedMs = android.os.SystemClock.elapsedRealtime()
+                }
+                wasPlaying[0] = playing
+            }
+        }
+        launch {
+            while (isActive) {
+                kotlinx.coroutines.delay(60_000)
+                val hours = _uiState.value.passOutProtectionHours
+                if (hours <= 0) continue
+                val engine = playerSessionManager.engine ?: continue
+                if (!engine.isPlaying.value) continue
+                val elapsedMs = android.os.SystemClock.elapsedRealtime() - lastInteractionElapsedMs
+                val thresholdMs = hours * 3_600_000L
+                if (elapsedMs >= thresholdMs) {
+                    engine.pause()
+                    _passOutEvents.trySend("Playback paused — pass-out protection")
+                }
             }
         }
         syncPlayBridge.start()
@@ -417,6 +470,7 @@ class VideoPlayerViewModel @Inject constructor(
                 seekDurationMs = prefs.videoSeekDurationMs,
                 defaultOrientation = prefs.videoDefaultOrientation,
                 controlsTimeoutMs = prefs.videoControlsTimeoutMs,
+                passOutProtectionHours = prefs.videoPassOutProtectionHours,
                 gesturesEnabled = prefs.videoGesturesEnabled,
                 holdSpeedEnabled = prefs.videoHoldSpeedEnabled,
                 holdSpeedMultiplier = prefs.videoHoldSpeedMultiplier,
@@ -430,6 +484,7 @@ class VideoPlayerViewModel @Inject constructor(
                 segmentBehaviors = prefs.segmentBehaviors,
                 videoEpisodeBrowserEnabled = prefs.videoEpisodeBrowserEnabled,
                 showPlaybackMetadata = prefs.videoShowPlaybackMetadata,
+                showClock = prefs.showClockInPlayer,
                 keepScreenOnDuringVideo = prefs.keepScreenOnDuringVideo,
             ) }
             autoplayNext = prefs.videoAutoplayNext
@@ -1333,6 +1388,7 @@ class VideoPlayerViewModel @Inject constructor(
                 segmentBehaviors = currentState.segmentBehaviors,
                 videoEpisodeBrowserEnabled = currentState.videoEpisodeBrowserEnabled,
                 showPlaybackMetadata = currentState.showPlaybackMetadata,
+                showClock = currentState.showClock,
                 keepScreenOnDuringVideo = currentState.keepScreenOnDuringVideo,
                 subtitleStyle = currentState.subtitleStyle,
                 dialogueBoostEnabled = currentState.dialogueBoostEnabled,

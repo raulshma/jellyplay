@@ -66,7 +66,7 @@ fun AppearanceSettingsScreen(
     val scrollState = rememberLazyListState()
     val scrollIndex = remember(highlightSettingId) {
         when (highlightSettingId) {
-            in listOf("theme_mode", "synthwave_mode", "soothing_mode", "dynamic_theming", "oled_mode", "contrast", "library_view_mode", "home_mode", "hero_section", "nav_labels") -> 0
+            in listOf("theme_mode", "synthwave_mode", "soothing_mode", "dynamic_theming", "oled_mode", "contrast", "library_view_mode", "home_mode", "hero_section", "clock_home", "continue_watching_click", "merge_continue_next_up", "nav_labels") -> 0
             in listOf("show_unwatched_badge", "show_watched_checkmark", "hide_watched_items", "show_share_media", "show_external_ratings") -> 1
             in listOf("performance_mode", "reduce_motion") -> 2
             else -> -1
@@ -160,6 +160,9 @@ fun AppearanceSettingsScreen(
                             add("library_view_mode")
                             add("home_mode")
                             add("hero_section")
+                            add("clock_home")
+                            add("continue_watching_click")
+                            add("merge_continue_next_up")
                             add("nav_labels")
                         }
                     }
@@ -348,6 +351,44 @@ fun AppearanceSettingsScreen(
                                     highlighted = highlightSettingId == "hero_section",
                                     index = currentIdx++, count = totalCount,
                                     onCheckedChange = { viewModel.setHomeHeroEnabled(it) },
+                                )
+                            }
+                            "clock_home" -> {
+                                SettingToggleItem(
+                                    icon = Tabler.Outline.Clock,
+                                    title = "Show Clock on Home",
+                                    subtitle = if (preferences.showClockOnHome) "Display current time in top bar" else "No clock on home",
+                                    checked = preferences.showClockOnHome,
+                                    highlighted = highlightSettingId == "clock_home",
+                                    index = currentIdx++, count = totalCount,
+                                    onCheckedChange = { viewModel.setShowClockOnHome(it) },
+                                )
+                            }
+                            "continue_watching_click" -> {
+                                SettingListItem(
+                                    icon = Tabler.Outline.PlayerPlay,
+                                    title = "Continue Watching Tap",
+                                    subtitle = "What happens when you tap a Continue Watching tile",
+                                    trailingText = preferences.continueWatchingClickBehavior.displayName,
+                                    highlighted = highlightSettingId == "continue_watching_click",
+                                    index = currentIdx++, count = totalCount,
+                                    onClick = {
+                                        val options = com.raulshma.jellyplay.core.model.ContinueWatchingClickBehavior.entries
+                                        val currentIndex = options.indexOf(preferences.continueWatchingClickBehavior)
+                                        val nextIndex = (currentIndex + 1) % options.size
+                                        viewModel.setContinueWatchingClickBehavior(options[nextIndex])
+                                    },
+                                )
+                            }
+                            "merge_continue_next_up" -> {
+                                SettingToggleItem(
+                                    icon = Tabler.Outline.LayersLinked,
+                                    title = "Merge Continue & Next Up",
+                                    subtitle = if (preferences.mergeContinueWatchingAndNextUp) "Show Next Up inside Continue Watching" else "Separate Continue Watching and Next Up rows",
+                                    checked = preferences.mergeContinueWatchingAndNextUp,
+                                    highlighted = highlightSettingId == "merge_continue_next_up",
+                                    index = currentIdx++, count = totalCount,
+                                    onCheckedChange = { viewModel.setMergeContinueWatchingAndNextUp(it) },
                                 )
                             }
                             "nav_labels" -> {

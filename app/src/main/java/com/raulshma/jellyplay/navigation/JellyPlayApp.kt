@@ -1,5 +1,9 @@
 package com.raulshma.jellyplay.navigation
 
+import android.content.Intent
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.ActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.animateContentSize
 import androidx.compose.animation.core.Spring
@@ -308,9 +312,31 @@ private fun MainContent(
     )
     val scope = rememberCoroutineScope()
     val context = LocalContext.current
+    var pendingExternalLaunch by remember { mutableStateOf<com.raulshma.jellyplay.ExternalPlayerLaunch?>(null) }
+    val externalPlayerLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.StartActivityForResult(),
+    ) { result: ActivityResult ->
+        val launch = pendingExternalLaunch
+        pendingExternalLaunch = null
+        if (launch != null) {
+            val finalMs = result.data?.let { data ->
+                data.getLongExtra("position", -1L).takeIf { it >= 0 }
+                    ?: data.getLongExtra("positionMs", -1L).takeIf { it >= 0 }
+            }
+            val finalTicks = finalMs?.let { it * 10_000 } ?: -1L
+            viewModel.reportExternalPlaybackStopped(launch, finalTicks)
+        }
+    }
     val navigator = Navigator(navigationState, navigateFilter = { route ->
         if (route is Route.VideoPlayer && preferences.preferredPlayer == com.raulshma.jellyplay.core.model.PlayerType.EXTERNAL) {
-            scope.launch { viewModel.launchExternalPlayer(route, context) }
+            scope.launch {
+                val launch = viewModel.buildExternalPlayerLaunch(route) ?: return@launch
+                viewModel.reportExternalPlaybackStart(launch)
+                pendingExternalLaunch = launch
+                val chooser = Intent.createChooser(launch.intent, "Open with…")
+                runCatching { externalPlayerLauncher.launch(chooser) }
+                    .onFailure { pendingExternalLaunch = null }
+            }
             false
         } else {
             true

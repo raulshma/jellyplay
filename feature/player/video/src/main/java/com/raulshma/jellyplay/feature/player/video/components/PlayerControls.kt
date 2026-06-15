@@ -85,6 +85,7 @@ import com.raulshma.jellyplay.core.ui.tv.tryRequestFocus
 import com.raulshma.jellyplay.core.ui.tv.rememberTvFocusState
 import com.raulshma.jellyplay.core.ui.tv.tvFocusIndicator
 import com.raulshma.jellyplay.core.ui.tv.tvFocusRestorer
+import com.raulshma.jellyplay.core.ui.components.rememberWallClockTimeString
 import com.raulshma.jellyplay.feature.player.video.formatDuration
 import com.raulshma.jellyplay.core.data.cast.CastManager
 import com.composables.icons.tabler.Tabler
@@ -190,6 +191,7 @@ internal fun PlayerControls(
     videoStats: EngineVideoStats = EngineVideoStats(),
     audioTracks: List<TrackOption> = emptyList(),
     showPlaybackMetadata: Boolean = true,
+    showClock: Boolean = false,
     onToggleOrientation: () -> Unit = {},
     tvSkipSegmentFocusRequester: FocusRequester? = null,
     tvNextEpisodeFocusRequester: FocusRequester? = null,
@@ -295,6 +297,14 @@ internal fun PlayerControls(
                             style = MaterialTheme.typography.bodyMedium,
                             color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.8f),
                             modifier = Modifier.padding(end = 8.dp)
+                        )
+                    }
+                    if (showClock) {
+                        Text(
+                            text = rememberWallClockTimeString(),
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.8f),
+                            modifier = Modifier.padding(end = 8.dp),
                         )
                     }
                     if (isInSyncPlaySession) {

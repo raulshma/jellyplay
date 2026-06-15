@@ -192,6 +192,9 @@ class MediaRepositoryImpl @Inject constructor(
     override suspend fun getSimilarItems(itemId: String, limit: Int): Result<List<MediaItem>> =
         apiClient.getSimilarItems(itemId, limit)
 
+    override suspend fun getInstantMix(itemId: String, limit: Int): Result<List<MediaItem>> =
+        apiClient.getInstantMix(itemId, limit)
+
     override suspend fun getItemsByPerson(personId: String, limit: Int): Result<List<MediaItem>> =
         apiClient.getItemsByPerson(personId, limit)
 

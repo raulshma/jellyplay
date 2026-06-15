@@ -396,6 +396,14 @@ class SettingsViewModel @Inject constructor(
 
     fun setVideoGesturesEnabled(enabled: Boolean) = editor.setVideoGesturesEnabled(enabled)
 
+    fun setVideoSkipBackOnResumeMs(ms: Long) {
+        launch { preferencesStore.setVideoSkipBackOnResumeMs(ms) }
+    }
+
+    fun setVideoPassOutProtectionHours(hours: Int) {
+        launch { preferencesStore.setVideoPassOutProtectionHours(hours) }
+    }
+
     fun setVideoDefaultSpeed(speed: Float) {
         launch { preferencesStore.setVideoDefaultSpeed(speed) }
     }
@@ -698,6 +706,14 @@ class SettingsViewModel @Inject constructor(
         launch { preferencesStore.setShowTimeRemaining(enabled) }
     }
 
+    fun setShowClockOnHome(enabled: Boolean) {
+        launch { preferencesStore.setShowClockOnHome(enabled) }
+    }
+
+    fun setShowClockInPlayer(enabled: Boolean) {
+        launch { preferencesStore.setShowClockInPlayer(enabled) }
+    }
+
     fun setPauseOnAudioFocusLoss(enabled: Boolean) {
         launch { preferencesStore.setPauseOnAudioFocusLoss(enabled) }
     }
@@ -734,6 +750,22 @@ class SettingsViewModel @Inject constructor(
         launch { preferencesStore.setDataSaverEnabled(enabled) }
     }
 
+    fun setVerboseNetworkLogging(enabled: Boolean) {
+        launch { preferencesStore.setVerboseNetworkLogging(enabled) }
+    }
+
+    fun setNetworkTimeoutPreset(preset: com.raulshma.jellyplay.core.model.NetworkTimeoutPreset) {
+        launch { preferencesStore.setNetworkTimeoutPreset(preset) }
+    }
+
+    fun setContinueWatchingClickBehavior(behavior: com.raulshma.jellyplay.core.model.ContinueWatchingClickBehavior) {
+        launch { preferencesStore.setContinueWatchingClickBehavior(behavior) }
+    }
+
+    fun setMergeContinueWatchingAndNextUp(enabled: Boolean) {
+        launch { preferencesStore.setMergeContinueWatchingAndNextUp(enabled) }
+    }
+
     fun setReduceMotionEnabled(enabled: Boolean) {
         launch { preferencesStore.setReduceMotionEnabled(enabled) }
     }
@@ -744,6 +776,10 @@ class SettingsViewModel @Inject constructor(
 
     fun setHighContrastSubtitles(enabled: Boolean) {
         launch { preferencesStore.setHighContrastSubtitles(enabled) }
+    }
+
+    fun setSubtitlesForcedOnly(enabled: Boolean) {
+        launch { preferencesStore.setSubtitlesForcedOnly(enabled) }
     }
 
     fun setHideSearchHistory(enabled: Boolean) {

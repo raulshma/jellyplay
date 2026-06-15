@@ -27,8 +27,12 @@ import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.material3.Button
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Text
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -53,6 +57,7 @@ import com.raulshma.jellyplay.core.ui.components.CircleBgBackButton
 import com.raulshma.jellyplay.core.ui.components.ErrorScreen
 import com.raulshma.jellyplay.core.ui.components.ScreenLoadingState
 import com.raulshma.jellyplay.core.ui.components.AnimatedEntrance
+import com.raulshma.jellyplay.core.ui.components.JellyPlayCircularProgressIndicator
 import com.raulshma.jellyplay.core.ui.components.rememberScreenBackgroundColor
 import com.raulshma.jellyplay.core.ui.image.MediaImage
 import com.raulshma.jellyplay.core.ui.adaptive.LocalAdaptiveInfo
@@ -79,6 +84,13 @@ fun ArtistDetailScreen(
 ) {
     LaunchedEffect(artistId) {
         viewModel.loadArtist(artistId)
+    }
+
+    LaunchedEffect(viewModel.mixFirstTrackId) {
+        viewModel.mixFirstTrackId?.let {
+            viewModel.consumeMixEvent()
+            onTrackClick(it)
+        }
     }
 
     val scope = rememberCoroutineScope()
@@ -116,6 +128,8 @@ fun ArtistDetailScreen(
                     getImageUrl = { viewModel.getImageUrl(it) },
                     getBackdropUrl = { viewModel.getBackdropUrl(it) },
                     onAlbumClick = onAlbumClick,
+                    onInstantMix = { viewModel.startInstantMix(artistId) },
+                    isStartingMix = viewModel.isStartingMix,
                     onTrackClick = onTrackClick,
                     onBack = onBack,
                 )
@@ -133,6 +147,8 @@ private fun ArtistDetailContent(
     getImageUrl: (String) -> String,
     getBackdropUrl: (String) -> String,
     onAlbumClick: (String) -> Unit,
+    onInstantMix: () -> Unit,
+    isStartingMix: Boolean,
     onTrackClick: (String) -> Unit,
     onBack: () -> Unit,
 ) {
@@ -194,6 +210,11 @@ private fun ArtistDetailContent(
                         maxLines = 2,
                         overflow = TextOverflow.Ellipsis,
                     )
+                    Spacer(Modifier.height(12.dp))
+                    InstantMixButton(
+                        isStartingMix = isStartingMix,
+                        onClick = onInstantMix,
+                    )
                     Spacer(Modifier.height(16.dp))
                     if (albums.isNotEmpty()) {
                         androidx.compose.material3.Text(
@@ -235,6 +256,13 @@ private fun ArtistDetailContent(
                             style = androidx.compose.material3.MaterialTheme.typography.headlineSmall,
                             maxLines = 2,
                             overflow = TextOverflow.Ellipsis,
+                        )
+
+                        Spacer(Modifier.height(12.dp))
+
+                        InstantMixButton(
+                            isStartingMix = isStartingMix,
+                            onClick = onInstantMix,
                         )
 
                         Spacer(Modifier.height(16.dp))
@@ -353,6 +381,32 @@ private fun AlbumCard(
                 style = androidx.compose.material3.MaterialTheme.typography.bodySmall,
                 color = androidx.compose.material3.MaterialTheme.colorScheme.onSurfaceVariant,
             )
+        }
+    }
+}
+
+@Composable
+private fun InstantMixButton(
+    isStartingMix: Boolean,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    Button(
+        onClick = onClick,
+        enabled = !isStartingMix,
+        modifier = modifier,
+    ) {
+        if (isStartingMix) {
+            JellyPlayCircularProgressIndicator(
+                modifier = Modifier.size(18.dp),
+                color = MaterialTheme.colorScheme.onPrimary,
+            )
+            Spacer(Modifier.size(8.dp))
+            Text("Creating Mix…")
+        } else {
+            Icon(Tabler.Outline.Sparkles, contentDescription = null)
+            Spacer(Modifier.size(8.dp))
+            Text("Instant Mix")
         }
     }
 }

@@ -143,6 +143,36 @@ object SettingsSearchRegistry {
             isAdvanced = true
         ),
         SettingsSearchItem(
+            id = "clock_home",
+            title = "Show Clock on Home",
+            subtitle = "Display the current time in the home screen top bar",
+            category = "Appearance",
+            keywords = listOf("clock", "time", "home", "wall", "current"),
+            route = Route.AppearanceSettings(),
+            icon = Tabler.Outline.Clock,
+            isAdvanced = true
+        ),
+        SettingsSearchItem(
+            id = "continue_watching_click",
+            title = "Continue Watching Tap",
+            subtitle = "Resume playback or open details when tapping a Continue Watching tile",
+            category = "Appearance",
+            keywords = listOf("continue watching", "tap", "click", "resume", "play", "details"),
+            route = Route.AppearanceSettings(),
+            icon = Tabler.Outline.PlayerPlay,
+            isAdvanced = true
+        ),
+        SettingsSearchItem(
+            id = "merge_continue_next_up",
+            title = "Merge Continue & Next Up",
+            subtitle = "Combine Next Up items into the Continue Watching row",
+            category = "Appearance",
+            keywords = listOf("merge", "combine", "continue watching", "next up", "single row"),
+            route = Route.AppearanceSettings(),
+            icon = Tabler.Outline.LayersLinked,
+            isAdvanced = true
+        ),
+        SettingsSearchItem(
             id = "nav_labels",
             title = "Show Navigation Labels",
             subtitle = "Show icons and text labels in bottom navigation",
@@ -304,6 +334,36 @@ object SettingsSearchRegistry {
             keywords = listOf("controls", "timeout", "hide", "overlay"),
             route = Route.PlaybackSettings(),
             icon = Tabler.Outline.Clock,
+            isAdvanced = true
+        ),
+        SettingsSearchItem(
+            id = "skip_back_on_resume",
+            title = "Skip Back on Resume",
+            subtitle = "Jump back a few seconds when un-pausing playback",
+            category = "Playback",
+            keywords = listOf("skip", "back", "resume", "rewind", "unpause", "seek"),
+            route = Route.PlaybackSettings(),
+            icon = Tabler.Outline.History,
+            isAdvanced = true
+        ),
+        SettingsSearchItem(
+            id = "show_clock_player",
+            title = "Show Clock in Player",
+            subtitle = "Display the current wall-clock time in the video player top bar",
+            category = "Playback",
+            keywords = listOf("clock", "time", "player", "wall", "current"),
+            route = Route.PlaybackSettings(),
+            icon = Tabler.Outline.Clock,
+            isAdvanced = true
+        ),
+        SettingsSearchItem(
+            id = "pass_out_protection",
+            title = "Pass-out Protection",
+            subtitle = "Pause playback after a set number of hours with no interaction",
+            category = "Playback",
+            keywords = listOf("pass out", "fall asleep", "auto pause", "sleep", "hours"),
+            route = Route.PlaybackSettings(),
+            icon = Tabler.Outline.Moon,
             isAdvanced = true
         ),
         SettingsSearchItem(
@@ -634,6 +694,15 @@ object SettingsSearchRegistry {
             icon = Tabler.Outline.Typography
         ),
         SettingsSearchItem(
+            id = "subtitle_forced_only",
+            title = "Forced Subtitles Only",
+            subtitle = "Show subtitles only when forced tracks are present",
+            category = "Language & Subtitles",
+            keywords = listOf("forced", "subtitles", "foreign", "parts", "native"),
+            route = Route.LanguageSettings(),
+            icon = Tabler.Outline.TextSize
+        ),
+        SettingsSearchItem(
             id = "subtitle_color",
             title = "Subtitle Text Color",
             subtitle = "Font color of subtitle characters",
@@ -770,6 +839,26 @@ object SettingsSearchRegistry {
             keywords = listOf("data saver", "saving", "cellular usage", "bandwidth"),
             route = Route.StorageSettings(),
             icon = Tabler.Outline.Gauge
+        ),
+        SettingsSearchItem(
+            id = "network_timeout",
+            title = "Network Timeouts",
+            subtitle = "Connect/read/write timeout preset for API requests",
+            category = "Storage",
+            keywords = listOf("timeout", "network", "connect", "read", "write", "slow"),
+            route = Route.StorageSettings(),
+            icon = Tabler.Outline.Clock,
+            isAdvanced = true
+        ),
+        SettingsSearchItem(
+            id = "verbose_logging",
+            title = "Verbose Network Logging",
+            subtitle = "Log HTTP request headers for debugging",
+            category = "Storage",
+            keywords = listOf("verbose", "debug", "logging", "network", "http", "developer"),
+            route = Route.StorageSettings(),
+            icon = Tabler.Outline.Code,
+            isAdvanced = true
         ),
         SettingsSearchItem(
             id = "download_quality",

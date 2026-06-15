@@ -97,6 +97,8 @@ sealed class PlaybackSettingsDialog {
     object VideoSpeedPicker : PlaybackSettingsDialog()
     object VideoSeekDurationPicker : PlaybackSettingsDialog()
     object ControlsTimeoutPicker : PlaybackSettingsDialog()
+    object SkipBackOnResumePicker : PlaybackSettingsDialog()
+    object PassOutProtectionPicker : PlaybackSettingsDialog()
     object SwipeSeekPicker : PlaybackSettingsDialog()
     object PreloadBufferPicker : PlaybackSettingsDialog()
     object AudioDelayPicker : PlaybackSettingsDialog()
@@ -200,7 +202,7 @@ fun PlaybackSettingsScreen(
                     initiallyExpanded = true,
                 ) {
                     var idx = 0
-                    val total = if (showAdvanced) 24 else 9
+                    val total = if (showAdvanced) 27 else 9
 
                     SettingListItem(
                         icon = Tabler.Outline.PlayerPlay,
@@ -284,6 +286,26 @@ fun PlaybackSettingsScreen(
                             highlighted = highlightSettingId == "controls_timeout",
                             index = idx++, count = total,
                             onClick = { activeDialog = PlaybackSettingsDialog.ControlsTimeoutPicker },
+                        )
+                        val skipBackLabel = if (preferences.videoSkipBackOnResumeMs == 0L) "Off" else "${preferences.videoSkipBackOnResumeMs / 1000}s"
+                        SettingListItem(
+                            icon = Tabler.Outline.History,
+                            title = "Skip Back on Resume",
+                            subtitle = "Jump back when un-pausing playback",
+                            trailingText = skipBackLabel,
+                            highlighted = highlightSettingId == "skip_back_on_resume",
+                            index = idx++, count = total,
+                            onClick = { activeDialog = PlaybackSettingsDialog.SkipBackOnResumePicker },
+                        )
+                        val passOutLabel = if (preferences.videoPassOutProtectionHours == 0) "Off" else "${preferences.videoPassOutProtectionHours}h"
+                        SettingListItem(
+                            icon = Tabler.Outline.Moon,
+                            title = "Pass-out Protection",
+                            subtitle = "Pause playback after no interaction",
+                            trailingText = passOutLabel,
+                            highlighted = highlightSettingId == "pass_out_protection",
+                            index = idx++, count = total,
+                            onClick = { activeDialog = PlaybackSettingsDialog.PassOutProtectionPicker },
                         )
                         SettingToggleItem(
                             icon = Tabler.Outline.Clipboard,
@@ -400,6 +422,15 @@ fun PlaybackSettingsScreen(
                             checked = preferences.showTimeRemaining,
                             index = idx++, count = total,
                             onCheckedChange = { viewModel.setShowTimeRemaining(it) },
+                        )
+                        SettingToggleItem(
+                            icon = Tabler.Outline.Clock,
+                            title = "Show Clock",
+                            subtitle = if (preferences.showClockInPlayer) "Display current time in player top bar" else "No clock in player",
+                            checked = preferences.showClockInPlayer,
+                            highlighted = highlightSettingId == "show_clock_player",
+                            index = idx++, count = total,
+                            onCheckedChange = { viewModel.setShowClockInPlayer(it) },
                         )
                         SettingToggleItem(
                             icon = Tabler.Outline.PlayerPause,
@@ -1018,6 +1049,34 @@ fun PlaybackSettingsScreen(
             onDismiss = { activeDialog = PlaybackSettingsDialog.None },
             onSelect = { index ->
                 viewModel.setVideoControlsTimeoutMs(timeouts[index])
+                activeDialog = PlaybackSettingsDialog.None
+            },
+        )
+    }
+
+    if (activeDialog is PlaybackSettingsDialog.SkipBackOnResumePicker) {
+        val durations = listOf(0L, 3_000L, 5_000L, 10_000L, 15_000L, 30_000L)
+        SettingsChipPickerSheet(
+            title = "Skip Back on Resume",
+            options = durations.map { if (it == 0L) "Off" else "${it / 1000}s" },
+            selectedIndex = durations.indexOf(preferences.videoSkipBackOnResumeMs),
+            onDismiss = { activeDialog = PlaybackSettingsDialog.None },
+            onSelect = { index ->
+                viewModel.setVideoSkipBackOnResumeMs(durations[index])
+                activeDialog = PlaybackSettingsDialog.None
+            },
+        )
+    }
+
+    if (activeDialog is PlaybackSettingsDialog.PassOutProtectionPicker) {
+        val hours = listOf(0, 1, 2, 3, 4, 6, 8)
+        SettingsChipPickerSheet(
+            title = "Pass-out Protection",
+            options = hours.map { if (it == 0) "Off" else "${it}h" },
+            selectedIndex = hours.indexOf(preferences.videoPassOutProtectionHours),
+            onDismiss = { activeDialog = PlaybackSettingsDialog.None },
+            onSelect = { index ->
+                viewModel.setVideoPassOutProtectionHours(hours[index])
                 activeDialog = PlaybackSettingsDialog.None
             },
         )

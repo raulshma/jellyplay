@@ -63,6 +63,7 @@ import com.raulshma.jellyplay.core.model.OfflineMode
 import com.raulshma.jellyplay.core.ui.components.HeaderStatus
 import com.raulshma.jellyplay.core.ui.components.HeaderStatusIndicator
 import com.raulshma.jellyplay.core.ui.components.ModeSwitch
+import com.raulshma.jellyplay.core.ui.components.rememberWallClockTimeString
 import com.composables.icons.tabler.Tabler
 import com.composables.icons.tabler.outline.ArrowLeft
 import com.composables.icons.tabler.outline.DotsVertical
@@ -86,6 +87,7 @@ fun HomeTopDock(
     homeMode: HomeMode,
     headerStatus: HeaderStatus,
     activeDownloadCount: Int,
+    showClock: Boolean,
     onModeChange: (HomeMode) -> Unit,
     onSearchExpanded: (Boolean) -> Unit,
     onSearchQueryChange: (String) -> Unit,
@@ -170,6 +172,7 @@ fun HomeTopDock(
                         homeMode = homeMode,
                         headerStatus = headerStatus,
                         appBarIconColorFaded = appBarIconColorFaded,
+                        showClock = showClock,
                         onToggleOffline = onToggleOffline,
                         onModeChange = onModeChange,
                         onSearchExpand = { onSearchExpanded(true) },
@@ -285,10 +288,19 @@ private fun CollapsedDockContent(
     homeMode: HomeMode,
     headerStatus: HeaderStatus,
     appBarIconColorFaded: Color,
+    showClock: Boolean,
     onToggleOffline: () -> Unit,
     onModeChange: (HomeMode) -> Unit,
     onSearchExpand: () -> Unit,
 ) {
+    if (showClock) {
+        Text(
+            text = rememberWallClockTimeString(),
+            color = appBarIconColorFaded,
+            style = MaterialTheme.typography.labelLarge,
+            modifier = Modifier.padding(end = 12.dp),
+        )
+    }
     if (offlineMode != OfflineMode.ONLINE) {
         val onlineFocusState = rememberTvFocusState()
         Box(
