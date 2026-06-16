@@ -455,6 +455,14 @@ class DetailViewModel @Inject constructor(
         }
     }
 
+    fun hideFromNextUp() {
+        val item = _detail.value?.item ?: return
+        val seriesId = item.seriesId ?: item.id
+        launch {
+            preferencesStore.excludeSeriesFromNextUp(seriesId)
+        }
+    }
+
     fun startDownload() {
         val detail = _detail.value ?: run {
             downloadError = "Media details not loaded"

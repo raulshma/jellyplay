@@ -49,6 +49,7 @@ sealed class SecuritySettingsDialog {
     object None : SecuritySettingsDialog()
     object PinDialog : SecuritySettingsDialog()
     object PinDisableAuth : SecuritySettingsDialog()
+    object QuickConnectAuthorize : SecuritySettingsDialog()
 }
 
 @OptIn(ExperimentalMaterial3Api::class, androidx.compose.material3.ExperimentalMaterial3ExpressiveApi::class)
@@ -67,6 +68,9 @@ fun SecuritySettingsScreen(
     var pinConfirm by remember { mutableStateOf("") }
     var pinError by remember { mutableStateOf<String?>(null) }
     var pinDisableAuthError by remember { mutableStateOf<String?>(null) }
+    var qcCode by remember { mutableStateOf("") }
+    var qcError by remember { mutableStateOf<String?>(null) }
+    var qcLoading by remember { mutableStateOf(false) }
 
     val biometricAvailability = rememberBiometricAvailability()
     val canShowBiometric = biometricAvailability == BiometricAuthHelper.Availability.AVAILABLE
@@ -177,6 +181,29 @@ fun SecuritySettingsScreen(
                             },
                         )
                     }
+                }
+            }
+
+            item {
+                SettingsGroup(
+                    icon = Tabler.Outline.Bolt,
+                    title = "Quick Connect Authorizer",
+                    summary = { "Approve Quick Connect codes from other devices" },
+                    modifier = Modifier.padding(vertical = 8.dp),
+                    initiallyExpanded = true,
+                ) {
+                    SettingListItem(
+                        icon = Tabler.Outline.DeviceDesktop,
+                        title = "Authorize Device",
+                        subtitle = "Enter a Quick Connect code to approve another device",
+                        trailingText = "",
+                        index = 0, count = 1,
+                        onClick = {
+                            qcCode = ""
+                            qcError = null
+                            activeDialog = SecuritySettingsDialog.QuickConnectAuthorize
+                        },
+                    )
                 }
             }
 
@@ -340,6 +367,88 @@ fun SecuritySettingsScreen(
                     pinInput = ""
                     pinDisableAuthError = null
                 }) { Text("Cancel") }
+            },
+        )
+    }
+
+    if (activeDialog is SecuritySettingsDialog.QuickConnectAuthorize) {
+        AlertDialog(
+            onDismissRequest = {
+                if (!qcLoading) {
+                    activeDialog = SecuritySettingsDialog.None
+                    qcCode = ""
+                    qcError = null
+                }
+            },
+            title = { Text("Authorize Quick Connect") },
+            text = {
+                Column {
+                    Text(
+                        "Enter the 6-digit code displayed on the other device.",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                    Spacer(Modifier.height(16.dp))
+                    androidx.compose.material3.OutlinedTextField(
+                        value = qcCode,
+                        onValueChange = {
+                            if (it.length <= 6 && it.all { c -> c.isDigit() }) {
+                                qcCode = it
+                                qcError = null
+                            }
+                        },
+                        label = { Text("Quick Connect Code") },
+                        singleLine = true,
+                        isError = qcError != null,
+                        enabled = !qcLoading,
+                        keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(keyboardType = KeyboardType.Number),
+                        modifier = Modifier.fillMaxWidth(),
+                    )
+                    AnimatedVisibility(
+                        visible = qcError != null,
+                        enter = expandVertically(animationSpec = MaterialTheme.motionScheme.defaultEffectsSpec()),
+                        exit = shrinkVertically(animationSpec = MaterialTheme.motionScheme.fastEffectsSpec()),
+                    ) {
+                        qcError?.let { error ->
+                            Text(
+                                error,
+                                color = MaterialTheme.colorScheme.error,
+                                style = MaterialTheme.typography.bodySmall,
+                                modifier = Modifier.padding(top = 8.dp),
+                            )
+                        }
+                    }
+                }
+            },
+            confirmButton = {
+                TextButton(
+                    enabled = !qcLoading && qcCode.length == 6,
+                    onClick = {
+                        qcLoading = true
+                        qcError = null
+                        viewModel.authorizeQuickConnect(qcCode) { success, error ->
+                            qcLoading = false
+                            if (success) {
+                                activeDialog = SecuritySettingsDialog.None
+                                qcCode = ""
+                            } else {
+                                qcError = error ?: "Authorization failed"
+                            }
+                        }
+                    },
+                ) {
+                    Text(if (qcLoading) "Authorizing..." else "Authorize")
+                }
+            },
+            dismissButton = {
+                TextButton(
+                    enabled = !qcLoading,
+                    onClick = {
+                        activeDialog = SecuritySettingsDialog.None
+                        qcCode = ""
+                        qcError = null
+                    },
+                ) { Text("Cancel") }
             },
         )
     }

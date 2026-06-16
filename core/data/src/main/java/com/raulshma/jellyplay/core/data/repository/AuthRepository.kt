@@ -34,6 +34,8 @@ interface AuthRepository {
 
     suspend fun loginWithQuickConnect(serverAddress: String, secret: String): Result<UserInfo>
 
+    suspend fun authorizeQuickConnect(code: String): Result<Boolean>
+
     suspend fun restoreSession(): Result<Unit>
 
     suspend fun logout()

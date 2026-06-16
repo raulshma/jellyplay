@@ -58,6 +58,26 @@ object SettingsSearchRegistry {
 
         // Appearance Settings
         SettingsSearchItem(
+            id = "pinned_home_sections",
+            title = "Pinned Home Sections",
+            subtitle = "Pin collections, playlists, favorites, genres or studios to home",
+            category = "Appearance",
+            keywords = listOf("pinned", "home", "collection", "playlist", "favorites", "genre", "studio", "shelf", "row"),
+            route = Route.PinnedHomeSections(),
+            icon = Tabler.Outline.Pinned,
+            isAdvanced = true
+        ),
+        SettingsSearchItem(
+            id = "home_layout_presets",
+            title = "Home Layout Presets",
+            subtitle = "Save, share, import or reset your home screen layout",
+            category = "Appearance",
+            keywords = listOf("preset", "layout", "home", "save", "load", "import", "export", "share", "reset", "backup", "configuration"),
+            route = Route.HomeLayoutPresets(),
+            icon = Tabler.Outline.Bookmarks,
+            isAdvanced = true
+        ),
+        SettingsSearchItem(
             id = "theme_mode",
             title = "Theme Mode",
             subtitle = "Follow system setting, light mode, or dark mode",
@@ -170,6 +190,36 @@ object SettingsSearchRegistry {
             keywords = listOf("merge", "combine", "continue watching", "next up", "single row"),
             route = Route.AppearanceSettings(),
             icon = Tabler.Outline.LayersLinked,
+            isAdvanced = true
+        ),
+        SettingsSearchItem(
+            id = "next_up_max_days",
+            title = "Next Up Time Window",
+            subtitle = "Only show episodes watched within a time period",
+            category = "Appearance",
+            keywords = listOf("next up", "days", "time window", "recent", "max days", "filter"),
+            route = Route.AppearanceSettings(),
+            icon = Tabler.Outline.CalendarTime,
+            isAdvanced = true
+        ),
+        SettingsSearchItem(
+            id = "next_up_rewatching",
+            title = "Rewatching in Next Up",
+            subtitle = "Include series you are rewatching in Next Up",
+            category = "Appearance",
+            keywords = listOf("next up", "rewatching", "rewatch", "rewatch", "repeat"),
+            route = Route.AppearanceSettings(),
+            icon = Tabler.Outline.History,
+            isAdvanced = true
+        ),
+        SettingsSearchItem(
+            id = "theme_music",
+            title = "Backdrop Theme Music",
+            subtitle = "Play theme songs on detail pages",
+            category = "Appearance",
+            keywords = listOf("theme", "music", "backdrop", "ambience", "song", "score"),
+            route = Route.AppearanceSettings(),
+            icon = Tabler.Outline.Music,
             isAdvanced = true
         ),
         SettingsSearchItem(
@@ -374,6 +424,16 @@ object SettingsSearchRegistry {
             keywords = listOf("trailer", "autoplay", "preview", "details"),
             route = Route.PlaybackSettings(),
             icon = Tabler.Outline.Clipboard,
+            isAdvanced = true
+        ),
+        SettingsSearchItem(
+            id = "cinema_mode",
+            title = "Cinema Mode",
+            subtitle = "Play pre-roll intros before the main feature",
+            category = "Playback",
+            keywords = listOf("cinema", "intro", "preroll", "pre-roll", "trailer"),
+            route = Route.PlaybackSettings(),
+            icon = Tabler.Outline.Video,
             isAdvanced = true
         ),
         SettingsSearchItem(
@@ -667,6 +727,15 @@ object SettingsSearchRegistry {
 
         // Language & Subtitles
         SettingsSearchItem(
+            id = "app_language",
+            title = "Display Language",
+            subtitle = "Override the app interface language",
+            category = "Language & Subtitles",
+            keywords = listOf("language", "display", "interface", "locale", "ui language", "app language"),
+            route = Route.LanguageSettings(),
+            icon = Tabler.Outline.Language
+        ),
+        SettingsSearchItem(
             id = "audio_language",
             title = "Preferred Audio Language",
             subtitle = "Select default audio language track",
@@ -701,6 +770,26 @@ object SettingsSearchRegistry {
             keywords = listOf("forced", "subtitles", "foreign", "parts", "native"),
             route = Route.LanguageSettings(),
             icon = Tabler.Outline.TextSize
+        ),
+        SettingsSearchItem(
+            id = "pgs_direct_play",
+            title = "PGS Direct Play",
+            subtitle = "Render PGS subtitles natively instead of burning in",
+            category = "Language & Subtitles",
+            keywords = listOf("pgs", "subtitle", "direct play", "picture", "image subtitle", "bluray"),
+            route = Route.LanguageSettings(),
+            icon = Tabler.Outline.Photo,
+            isAdvanced = true
+        ),
+        SettingsSearchItem(
+            id = "hdr_subtitle_style",
+            title = "HDR Subtitle Style",
+            subtitle = "Separate subtitle styling for HDR content",
+            category = "Language & Subtitles",
+            keywords = listOf("hdr", "subtitle", "style", "dolby vision", "hdr10", "brightness"),
+            route = Route.LanguageSettings(),
+            icon = Tabler.Outline.Sun,
+            isAdvanced = true
         ),
         SettingsSearchItem(
             id = "subtitle_color",
@@ -861,6 +950,16 @@ object SettingsSearchRegistry {
             isAdvanced = true
         ),
         SettingsSearchItem(
+            id = "user_data_sync",
+            title = "Background User-Data Sync",
+            subtitle = "Periodically refresh favourites, played, and progress from server",
+            category = "Storage",
+            keywords = listOf("sync", "background", "user-data", "favorites", "played", "progress", "worker"),
+            route = Route.StorageSettings(),
+            icon = Tabler.Outline.Refresh,
+            isAdvanced = true
+        ),
+        SettingsSearchItem(
             id = "download_quality",
             title = "Download Quality Profile",
             subtitle = "Preferred video resolution for downloaded offline media",
@@ -897,6 +996,15 @@ object SettingsSearchRegistry {
             keywords = listOf("biometric", "fingerprint", "face lock", "iris", "sensors"),
             route = Route.SecuritySettings(),
             icon = Tabler.Outline.Fingerprint
+        ),
+        SettingsSearchItem(
+            id = "quick_connect_authorize",
+            title = "Authorize Quick Connect",
+            subtitle = "Approve Quick Connect codes from other devices",
+            category = "Security",
+            keywords = listOf("quick connect", "authorize", "approve", "code", "device", "pair"),
+            route = Route.SecuritySettings(),
+            icon = Tabler.Outline.Bolt
         ),
 
         // Backup

@@ -202,7 +202,7 @@ fun PlaybackSettingsScreen(
                     initiallyExpanded = true,
                 ) {
                     var idx = 0
-                    val total = if (showAdvanced) 27 else 9
+                    val total = if (showAdvanced) 28 else 9
 
                     SettingListItem(
                         icon = Tabler.Outline.PlayerPlay,
@@ -316,6 +316,26 @@ fun PlaybackSettingsScreen(
                             index = idx++, count = total,
                             onCheckedChange = { viewModel.setTrailerAutoplay(it) },
                         )
+                        SettingToggleItem(
+                            icon = Tabler.Outline.Video,
+                            title = "Cinema Mode",
+                            subtitle = if (preferences.cinemaModeEnabled) "Play intros/trailers before main feature" else "Skip pre-roll intros",
+                            checked = preferences.cinemaModeEnabled,
+                            highlighted = highlightSettingId == "cinema_mode",
+                            index = idx++, count = total,
+                            onCheckedChange = { viewModel.setCinemaModeEnabled(it) },
+                        )
+                        if (isTv) {
+                            SettingToggleItem(
+                                icon = Tabler.Outline.DeviceTv,
+                                title = "Watch Next Row",
+                                subtitle = if (preferences.androidTvWatchNextEnabled) "Publish Continue / Next Up to Android TV home" else "Do not publish to system Watch Next row",
+                                checked = preferences.androidTvWatchNextEnabled,
+                                highlighted = highlightSettingId == "android_tv_watch_next",
+                                index = idx++, count = total,
+                                onCheckedChange = { viewModel.setAndroidTvWatchNextEnabled(it) },
+                            )
+                        }
                         SettingToggleItem(
                             icon = Tabler.Outline.List,
                             title = "Episode Browser",

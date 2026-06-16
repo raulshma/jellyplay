@@ -69,6 +69,7 @@ class JellyPlayApplication : Application(), SingletonImageLoader.Factory, Config
             audioPlaybackManager.start()
             nowPlayingWidgetUpdater.start()
             com.raulshma.jellyplay.widget.WidgetWorkScheduler.enqueuePeriodic(this@JellyPlayApplication)
+            com.raulshma.jellyplay.core.data.worker.UserDataSyncScheduler.enqueuePeriodic(this@JellyPlayApplication)
             recoverPendingDownloads()
             cleanupStuckDownloads()
             notificationScheduler.scheduleOrUpdate()

@@ -14,6 +14,7 @@ import com.raulshma.jellyplay.core.model.DecoderMode
 import com.raulshma.jellyplay.core.model.LibVlcEngineConfig
 import com.raulshma.jellyplay.core.model.SubtitleStyle
 import com.raulshma.jellyplay.core.model.TrackType
+import com.raulshma.jellyplay.core.model.VideoEffectsConfig
 import com.raulshma.jellyplay.core.model.parseLanguageFromLabel
 import kotlinx.coroutines.channels.awaitClose
 import kotlinx.coroutines.delay
@@ -394,15 +395,24 @@ class LibVlcPlayerEngine(
     private fun applyVideoFilters(effects: VideoEffectsConfig) {
         try {
             val mp = mediaPlayer ?: return
-            val hasAdjust = effects.brightness != 0f || effects.contrast != 1f || effects.saturation != 1f
+            val hasAdjust = effects.brightness != 0f || effects.contrast != 1f || effects.saturation != 1f || effects.hue != 0f
             if (hasAdjust) {
                 val brightnessVal = (1.0f + effects.brightness).coerceIn(0.0f, 2.0f)
                 val contrastVal = effects.contrast.coerceIn(0.0f, 2.0f)
                 val saturationVal = effects.saturation.coerceIn(0.0f, 3.0f)
+                val hueVal = effects.hue.toInt().coerceIn(0, 360)
                 val media = mp.media
                 media?.addOption(":brightness=${(brightnessVal * 100).toInt()}")
                 media?.addOption(":contrast=${(contrastVal * 100).toInt()}")
                 media?.addOption(":saturation=${(saturationVal * 100).toInt()}")
+                media?.addOption(":hue=$hueVal")
+            }
+            if (effects.rotationDegrees != 0f) {
+                // LibVLC accepts only 0/90/180/270 via the transform option
+                val discrete = (kotlin.math.round(effects.rotationDegrees / 90f).toInt() * 90) % 360
+                if (discrete != 0) {
+                    mp.media?.addOption(":transform-type{angle=$discrete}")
+                }
             }
         } catch (_: Exception) {}
     }

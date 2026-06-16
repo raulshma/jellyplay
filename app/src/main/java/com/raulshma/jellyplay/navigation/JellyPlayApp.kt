@@ -357,6 +357,27 @@ private fun MainContent(
     val activeTopLevelRoutes: LinkedHashMap<Route, String> = when (homeMode) {
         HomeMode.VIDEO -> VIDEO_TOP_LEVEL_ROUTES
         HomeMode.MUSIC -> MUSIC_TOP_LEVEL_ROUTES
+    }.let { routes ->
+        val hidden = preferences.hiddenNavItems
+        val order = preferences.navItemOrder
+        val filtered = routes.filterKeys { route ->
+            route::class.simpleName !in hidden
+        }
+        if (order.isEmpty()) {
+            LinkedHashMap(filtered)
+        } else {
+            val ordered = linkedMapOf<Route, String>()
+            for (name in order) {
+                val entry = filtered.entries.find { it.key::class.simpleName == name }
+                if (entry != null) ordered[entry.key] = entry.value
+            }
+            for (entry in filtered) {
+                if (entry.key::class.simpleName !in order) {
+                    ordered[entry.key] = entry.value
+                }
+            }
+            ordered
+        }
     }
 
     val onModeChange: (HomeMode) -> Unit = { mode ->

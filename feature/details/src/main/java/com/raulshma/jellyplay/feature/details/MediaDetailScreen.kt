@@ -357,6 +357,7 @@ fun MediaDetailScreen(
                 }
             },
             preferences = preferences,
+            onHideFromNextUp = remember(viewModel) { { viewModel.hideFromNextUp() } },
         )
 
         // Seerr request dialog
@@ -513,6 +514,7 @@ private fun DetailContent(
     relatedVideos: List<SeerrRelatedVideo> = emptyList(),
     onVideoClick: (SeerrRelatedVideo) -> Unit = {},
     preferences: UserPreferences,
+    onHideFromNextUp: () -> Unit = {},
 ) {
     val item = detail?.item
     val listState = rememberLazyListState()
@@ -1120,6 +1122,18 @@ private fun DetailContent(
                                         enabled = !isDownloadingSeries,
                                         leadingIcon = {
                                             Icon(Tabler.Outline.Download, contentDescription = null)
+                                        }
+                                    )
+                                }
+                                if (isSeries || item?.seriesId != null) {
+                                    DropdownMenuItem(
+                                        text = { Text("Hide from Next Up") },
+                                        onClick = {
+                                            menuExpanded = false
+                                            onHideFromNextUp()
+                                        },
+                                        leadingIcon = {
+                                            Icon(Tabler.Outline.EyeOff, contentDescription = null)
                                         }
                                     )
                                 }

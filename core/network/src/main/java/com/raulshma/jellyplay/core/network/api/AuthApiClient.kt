@@ -37,6 +37,8 @@ interface AuthApiClient {
         secret: String,
     ): Result<UserInfo>
 
+    suspend fun authorizeQuickConnect(code: String): Result<Boolean>
+
     suspend fun postCapabilities(): Result<Unit>
 
     fun getServerUrl(): String?

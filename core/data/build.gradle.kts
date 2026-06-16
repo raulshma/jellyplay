@@ -54,6 +54,8 @@ dependencies {
     implementation(libs.coil.compose)
     implementation(libs.coil.network.okhttp)
     implementation(libs.navigation3.runtime)
+    // TV provider (Watch Next / preview channels) — R8 strips for phone release.
+    implementation(libs.tvprovider)
 
     testImplementation(libs.junit)
     testImplementation(libs.mockk)

@@ -47,6 +47,8 @@ import com.composables.icons.tabler.outline.*
 @Composable
 fun AppearanceSettingsScreen(
     onBack: () -> Unit,
+    onPinnedHomeSections: (String?) -> Unit = {},
+    onHomeLayoutPresets: (String?) -> Unit = {},
     highlightSettingId: String? = null,
     viewModel: SettingsViewModel = hiltViewModel(),
 ) {
@@ -66,7 +68,7 @@ fun AppearanceSettingsScreen(
     val scrollState = rememberLazyListState()
     val scrollIndex = remember(highlightSettingId) {
         when (highlightSettingId) {
-            in listOf("theme_mode", "synthwave_mode", "soothing_mode", "dynamic_theming", "oled_mode", "contrast", "library_view_mode", "home_mode", "hero_section", "clock_home", "continue_watching_click", "merge_continue_next_up", "nav_labels") -> 0
+            in listOf("theme_mode", "synthwave_mode", "soothing_mode", "dynamic_theming", "oled_mode", "contrast", "library_view_mode", "home_mode", "hero_section", "clock_home", "continue_watching_click", "merge_continue_next_up", "next_up_max_days", "next_up_rewatching", "theme_music", "nav_labels") -> 0
             in listOf("show_unwatched_badge", "show_watched_checkmark", "hide_watched_items", "show_share_media", "show_external_ratings") -> 1
             in listOf("performance_mode", "reduce_motion") -> 2
             else -> -1
@@ -163,6 +165,9 @@ fun AppearanceSettingsScreen(
                             add("clock_home")
                             add("continue_watching_click")
                             add("merge_continue_next_up")
+                            add("next_up_max_days")
+                            add("next_up_rewatching")
+                            add("theme_music")
                             add("nav_labels")
                         }
                     }
@@ -391,6 +396,45 @@ fun AppearanceSettingsScreen(
                                     onCheckedChange = { viewModel.setMergeContinueWatchingAndNextUp(it) },
                                 )
                             }
+                            "next_up_max_days" -> {
+                                val dayOptions = listOf(0, 7, 14, 30, 60, 90)
+                                val dayLabels = mapOf(0 to "Unlimited", 7 to "7 days", 14 to "14 days", 30 to "30 days", 60 to "60 days", 90 to "90 days")
+                                SettingListItem(
+                                    icon = Tabler.Outline.CalendarTime,
+                                    title = "Next Up Time Window",
+                                    subtitle = "Only show episodes watched within this period",
+                                    trailingText = dayLabels[preferences.nextUpMaxDays] ?: "${preferences.nextUpMaxDays} days",
+                                    highlighted = highlightSettingId == "next_up_max_days",
+                                    index = currentIdx++, count = totalCount,
+                                    onClick = {
+                                        val currentIndex = dayOptions.indexOf(preferences.nextUpMaxDays)
+                                        val nextIndex = (currentIndex + 1) % dayOptions.size
+                                        viewModel.setNextUpMaxDays(dayOptions[nextIndex])
+                                    },
+                                )
+                            }
+                            "next_up_rewatching" -> {
+                                SettingToggleItem(
+                                    icon = Tabler.Outline.History,
+                                    title = "Rewatching in Next Up",
+                                    subtitle = if (preferences.nextUpRewatching) "Include rewatched series" else "Hide series you are rewatching",
+                                    checked = preferences.nextUpRewatching,
+                                    highlighted = highlightSettingId == "next_up_rewatching",
+                                    index = currentIdx++, count = totalCount,
+                                    onCheckedChange = { viewModel.setNextUpRewatching(it) },
+                                )
+                            }
+                            "theme_music" -> {
+                                SettingToggleItem(
+                                    icon = Tabler.Outline.Music,
+                                    title = "Backdrop Theme Music",
+                                    subtitle = if (preferences.backdropThemeMusicEnabled) "Play theme songs on detail pages" else "No theme music during browsing",
+                                    checked = preferences.backdropThemeMusicEnabled,
+                                    highlighted = highlightSettingId == "theme_music",
+                                    index = currentIdx++, count = totalCount,
+                                    onCheckedChange = { viewModel.setBackdropThemeMusicEnabled(it) },
+                                )
+                            }
                             "nav_labels" -> {
                                 SettingToggleItem(
                                     icon = Tabler.Outline.TextSize,
@@ -523,6 +567,26 @@ fun AppearanceSettingsScreen(
                     },
                     modifier = Modifier.padding(vertical = 8.dp),
                 ) {
+                    SettingListItem(
+                        icon = Tabler.Outline.Pinned,
+                        title = "Pinned Home Sections",
+                        subtitle = "Pin collections, playlists, favorites, genres or studios to home",
+                        trailingText = if (preferences.pinnedHomeSections.isEmpty()) "" else "${preferences.pinnedHomeSections.size}",
+                        highlighted = highlightSettingId == "pinned_home_sections",
+                        index = 0, count = 1,
+                        onClick = { onPinnedHomeSections(if (highlightSettingId == "pinned_home_sections") "pinned_add" else null) },
+                    )
+
+                    SettingListItem(
+                        icon = Tabler.Outline.Bookmarks,
+                        title = "Home Layout Presets",
+                        subtitle = "Save, share, import or reset your home layout",
+                        trailingText = if (preferences.homeLayoutPresets.isEmpty()) "" else "${preferences.homeLayoutPresets.size}",
+                        highlighted = highlightSettingId == "home_layout_presets",
+                        index = 0, count = 1,
+                        onClick = { onHomeLayoutPresets(if (highlightSettingId == "home_layout_presets") "preset_list" else null) },
+                    )
+
                     val homeSectionOrder = remember { mutableStateListOf<HomeSectionType>().apply { addAll(preferences.homeSectionOrder) } }
                     val itemHeights = remember { mutableStateMapOf<HomeSectionType, Int>() }
                     var draggingSection by remember { mutableStateOf<HomeSectionType?>(null) }

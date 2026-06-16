@@ -30,7 +30,9 @@ import com.raulshma.jellyplay.core.model.PlaylistItem
 import com.raulshma.jellyplay.core.model.MediaItem
 import com.raulshma.jellyplay.core.model.NetworkStatus
 import com.raulshma.jellyplay.core.model.MediaType
+import com.raulshma.jellyplay.core.model.PinnedHomeSection
 import com.raulshma.jellyplay.core.model.SearchResult
+import com.raulshma.jellyplay.core.model.Studio
 import com.raulshma.jellyplay.core.model.SyncPlayGroup
 import com.raulshma.jellyplay.core.model.SyncPlayGroupInfo
 import com.raulshma.jellyplay.core.model.SyncPlayRepeatMode
@@ -67,21 +69,38 @@ class MediaRepositoryImpl @Inject constructor(
     private var cachedHomeSections: List<HomeSection>? = null
     @Volatile
     private var cachedHomeSectionsTimestamp: Long = 0L
+    @Volatile
+    private var cachedHomeSectionsKey: String = ""
     private val homeSectionsLock = Any()
 
     override suspend fun getHomeSections(
         enabledSections: Set<HomeSectionType>,
         hiddenLibraryIds: Set<String>,
+        nextUpRewatching: Boolean,
+        nextUpMaxDays: Int,
+        nextUpExcludedSeriesIds: Set<String>,
+        pinnedSections: List<PinnedHomeSection>,
     ): Result<List<HomeSection>> {
+        val cacheKey = "${enabledSections.sortedBy { it.name }}|$hiddenLibraryIds|$nextUpRewatching|$nextUpMaxDays|$nextUpExcludedSeriesIds|$pinnedSections"
         val cached = cachedHomeSections
         val timestamp = cachedHomeSectionsTimestamp
-        if (cached != null && android.os.SystemClock.elapsedRealtime() - timestamp < HOME_SECTIONS_CACHE_TTL_MS) {
+        if (cached != null && cacheKey == cachedHomeSectionsKey &&
+            android.os.SystemClock.elapsedRealtime() - timestamp < HOME_SECTIONS_CACHE_TTL_MS
+        ) {
             return Result.success(cached)
         }
-        return apiClient.getHomeSections(enabledSections, hiddenLibraryIds).also { result ->
+        return apiClient.getHomeSections(
+            enabledSections,
+            hiddenLibraryIds,
+            nextUpRewatching,
+            nextUpMaxDays,
+            nextUpExcludedSeriesIds,
+            pinnedSections,
+        ).also { result ->
             result.getOrNull()?.let { sections ->
                 synchronized(homeSectionsLock) {
                     cachedHomeSections = sections
+                    cachedHomeSectionsKey = cacheKey
                     cachedHomeSectionsTimestamp = android.os.SystemClock.elapsedRealtime()
                 }
             }
@@ -128,6 +147,9 @@ class MediaRepositoryImpl @Inject constructor(
             }
         }
     }
+
+    override suspend fun getIntros(itemId: String): Result<List<MediaItem>> =
+        apiClient.getIntros(itemId)
 
     override suspend fun search(
         query: String,
@@ -183,11 +205,28 @@ class MediaRepositoryImpl @Inject constructor(
     override suspend fun getGenres(parentId: String?): Result<List<Genre>> =
         apiClient.getGenres(parentId)
 
+    override suspend fun getStudios(parentId: String?): Result<List<Studio>> =
+        apiClient.getStudios(parentId)
+
+    override suspend fun getItemsByStudio(
+        studioId: String,
+        mediaTypes: List<MediaType>?,
+        startIndex: Int,
+        limit: Int,
+    ): Result<SearchResult> = apiClient.getItemsByStudio(studioId, mediaTypes, startIndex, limit)
+
     override suspend fun getArtistAlbums(artistId: String, limit: Int): Result<List<MediaItem>> =
         apiClient.getArtistAlbums(artistId, limit)
 
     override suspend fun getAlbumTracks(albumId: String): Result<List<MediaItem>> =
         apiClient.getAlbumTracks(albumId)
+
+    override suspend fun getMusicVideos(parentId: String, limit: Int): Result<List<MediaItem>> =
+        apiClient.getMediaItems(
+            parentId = parentId,
+            mediaTypes = listOf(MediaType.MUSIC_VIDEO),
+            limit = limit,
+        ).map { it.items }
 
     override suspend fun getSimilarItems(itemId: String, limit: Int): Result<List<MediaItem>> =
         apiClient.getSimilarItems(itemId, limit)
@@ -197,6 +236,9 @@ class MediaRepositoryImpl @Inject constructor(
 
     override suspend fun getItemsByPerson(personId: String, limit: Int): Result<List<MediaItem>> =
         apiClient.getItemsByPerson(personId, limit)
+
+    override suspend fun getThemeSongs(itemId: String): Result<List<MediaItem>> =
+        apiClient.getThemeSongs(itemId)
 
     override suspend fun getSeasons(seriesId: String): Result<List<MediaItem>> =
         apiClient.getSeasons(seriesId)
@@ -552,6 +594,15 @@ class MediaRepositoryImpl @Inject constructor(
             lyricsCacheDao.deleteOlderThan(System.currentTimeMillis() - 30L * 24 * 60 * 60 * 1000)
         } catch (e: Exception) {
             Log.d("MediaRepo", "Failed to cleanup lyrics cache", e)
+        }
+    }
+
+    override suspend fun invalidateCaches() {
+        invalidateDetailCache()
+        synchronized(homeSectionsLock) {
+            cachedHomeSections = null
+            cachedHomeSectionsTimestamp = 0L
+            cachedHomeSectionsKey = ""
         }
     }
 

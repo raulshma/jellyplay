@@ -159,6 +159,7 @@ smooth-corner-rect = { group = "com.github.racra", name = "smooth-corner-rect-an
 
 # Android TV
 tv-material = { group = "androidx.tv", name = "tv-material", version.ref = "tvMaterial" }
+tvprovider = { group = "androidx.tvprovider", name = "tvprovider", version = "1.1.0-alpha01" }
 
 # Biometric
 biometric-ktx = { group = "androidx.biometric", name = "biometric", version.ref = "biometric" }

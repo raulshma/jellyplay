@@ -65,6 +65,18 @@ class PhotoViewerViewModel @Inject constructor(
     private val _saveResult = composeState<SaveResult?>(null)
     val saveResult: androidx.compose.runtime.State<SaveResult?> get() = _saveResult.asState()
 
+    private val _showAdjustments = composeState(false)
+    val showAdjustments: androidx.compose.runtime.State<Boolean> get() = _showAdjustments.asState()
+
+    private val _brightness = composeState(1f)
+    val brightness: androidx.compose.runtime.State<Float> get() = _brightness.asState()
+
+    private val _contrast = composeState(1f)
+    val contrast: androidx.compose.runtime.State<Float> get() = _contrast.asState()
+
+    private val _saturation = composeState(1f)
+    val saturation: androidx.compose.runtime.State<Float> get() = _saturation.asState()
+
     private var slideshowJob: Job? = null
 
     fun load(itemId: String, parentId: String?) {
@@ -155,6 +167,28 @@ class PhotoViewerViewModel @Inject constructor(
         _isSlideshowActive.value = false
         slideshowJob?.cancel()
         slideshowJob = null
+    }
+
+    fun toggleAdjustments() {
+        _showAdjustments.value = !_showAdjustments.value
+    }
+
+    fun setBrightness(value: Float) {
+        _brightness.value = value.coerceIn(0f, 2f)
+    }
+
+    fun setContrast(value: Float) {
+        _contrast.value = value.coerceIn(0f, 2f)
+    }
+
+    fun setSaturation(value: Float) {
+        _saturation.value = value.coerceIn(0f, 2f)
+    }
+
+    fun resetAdjustments() {
+        _brightness.value = 1f
+        _contrast.value = 1f
+        _saturation.value = 1f
     }
 
     fun setSlideshowInterval(intervalMs: Long) {
