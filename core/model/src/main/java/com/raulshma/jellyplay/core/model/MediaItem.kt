@@ -14,6 +14,7 @@ enum class MediaType {
     AUDIO,
     ALBUM,
     ARTIST,
+    MUSIC_VIDEO,
     COLLECTION,
     PHOTO,
     PHOTO_FOLDER,
@@ -24,6 +25,9 @@ enum class MediaType {
 
 val MediaType.isAudioType: Boolean
     get() = this == MediaType.AUDIO || this == MediaType.MUSIC || this == MediaType.ALBUM || this == MediaType.ARTIST
+
+val MediaType.isVideoType: Boolean
+    get() = this == MediaType.MOVIE || this == MediaType.EPISODE || this == MediaType.MUSIC_VIDEO
 
 val MediaType.isMusicTrack: Boolean
     get() = this == MediaType.AUDIO || this == MediaType.MUSIC

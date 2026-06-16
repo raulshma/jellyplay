@@ -10,7 +10,9 @@ import com.raulshma.jellyplay.core.model.LyricsResult
 import com.raulshma.jellyplay.core.model.MediaDetail
 import com.raulshma.jellyplay.core.model.MediaItem
 import com.raulshma.jellyplay.core.model.MediaType
+import com.raulshma.jellyplay.core.model.PinnedHomeSection
 import com.raulshma.jellyplay.core.model.SearchResult
+import com.raulshma.jellyplay.core.model.Studio
 import kotlinx.coroutines.flow.Flow
 
 interface MediaRepository : LiveTvRepository, SyncPlayRepository, NewsletterRepository, PlaylistRepository {
@@ -18,6 +20,10 @@ interface MediaRepository : LiveTvRepository, SyncPlayRepository, NewsletterRepo
     suspend fun getHomeSections(
         enabledSections: Set<HomeSectionType> = HomeSectionType.CONFIGURABLE.toSet(),
         hiddenLibraryIds: Set<String> = emptySet(),
+        nextUpRewatching: Boolean = false,
+        nextUpMaxDays: Int = 0,
+        nextUpExcludedSeriesIds: Set<String> = emptySet(),
+        pinnedSections: List<PinnedHomeSection> = emptyList(),
     ): Result<List<HomeSection>>
 
     suspend fun getLibraryFolders(): Result<List<LibraryFolder>>
@@ -39,6 +45,13 @@ interface MediaRepository : LiveTvRepository, SyncPlayRepository, NewsletterRepo
     ): Result<SearchResult>
 
     suspend fun getMediaDetail(itemId: String): Result<MediaDetail>
+
+    /**
+     * Cinema Mode intros. Returns the list of trailers/intros configured on the
+     * server for the given item (via Jellyfin's built-in intros endpoint).
+     * Returns an empty list when no intros are available.
+     */
+    suspend fun getIntros(itemId: String): Result<List<MediaItem>>
 
     suspend fun search(
         query: String,
@@ -63,15 +76,28 @@ interface MediaRepository : LiveTvRepository, SyncPlayRepository, NewsletterRepo
 
     suspend fun getGenres(parentId: String? = null): Result<List<Genre>>
 
+    suspend fun getStudios(parentId: String? = null): Result<List<Studio>>
+
+    suspend fun getItemsByStudio(
+        studioId: String,
+        mediaTypes: List<MediaType>? = null,
+        startIndex: Int = 0,
+        limit: Int = 50,
+    ): Result<SearchResult>
+
     suspend fun getArtistAlbums(artistId: String, limit: Int = 50): Result<List<MediaItem>>
 
     suspend fun getAlbumTracks(albumId: String): Result<List<MediaItem>>
+
+    suspend fun getMusicVideos(parentId: String, limit: Int = 50): Result<List<MediaItem>>
 
     suspend fun getSimilarItems(itemId: String, limit: Int = 12): Result<List<MediaItem>>
 
     suspend fun getInstantMix(itemId: String, limit: Int = 100): Result<List<MediaItem>>
 
     suspend fun getItemsByPerson(personId: String, limit: Int = 50): Result<List<MediaItem>>
+
+    suspend fun getThemeSongs(itemId: String): Result<List<MediaItem>>
 
     suspend fun getSeasons(seriesId: String): Result<List<MediaItem>>
 
@@ -119,6 +145,14 @@ interface MediaRepository : LiveTvRepository, SyncPlayRepository, NewsletterRepo
     suspend fun markUnplayed(itemId: String): Result<Unit>
 
     suspend fun cleanupLyricsCache()
+
+    /**
+     * Drop in-memory caches so the next repository call fetches fresh user-data
+     * (favorites, played state, playback positions) from the server. Used by the
+     * background user-data sync worker to keep this device's view of the library
+     * in sync with changes made on other clients.
+     */
+    suspend fun invalidateCaches()
 
     suspend fun getPhotoFolderChildImageUrls(folderId: String, limit: Int = 4): List<String>
 }

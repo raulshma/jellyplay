@@ -3,7 +3,12 @@ package com.raulshma.jellyplay.feature.player.video.components
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.LinearEasing
+import androidx.compose.animation.core.RepeatMode
+import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
+import androidx.compose.animation.core.animateFloat
 import com.raulshma.jellyplay.core.designsystem.theme.ShapeCache
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
@@ -217,6 +222,17 @@ private fun SeekCircleOverlay(
 ) {
     val primaryColor = MaterialTheme.colorScheme.primary
 
+    val infiniteTransition = rememberInfiniteTransition(label = "seek_ripple")
+    val rippleAnim by infiniteTransition.animateFloat(
+        initialValue = 0f,
+        targetValue = 1f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(durationMillis = 900, easing = FastOutSlowInEasing),
+            repeatMode = RepeatMode.Restart,
+        ),
+        label = "seek_ripple_progress",
+    )
+
     AnimatedVisibility(
         visible = true,
         enter = playerGestureFeedbackEnter(),
@@ -226,41 +242,61 @@ private fun SeekCircleOverlay(
         Box(
             modifier = Modifier.fillMaxSize(),
         ) {
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.Center,
+            Box(
                 modifier = Modifier
                     .align(if (isLeft) Alignment.CenterStart else Alignment.CenterEnd)
                     .padding(horizontal = 48.dp)
+                    .drawBehind {
+                        val center = Offset(size.width / 2f, size.height / 2f)
+                        val maxRadius = size.minDimension * 0.9f
+                        for (i in 0..2) {
+                            val phase = (rippleAnim + i * 0.33f) % 1f
+                            val radius = maxRadius * phase
+                            val alpha = (1f - phase) * 0.35f
+                            if (radius > 0f && alpha > 0f) {
+                                drawCircle(
+                                    color = primaryColor.copy(alpha = alpha),
+                                    radius = radius,
+                                    center = center,
+                                )
+                            }
+                        }
+                    },
+                contentAlignment = Alignment.Center,
             ) {
-                if (isLeft) {
-                    Icon(
-                        imageVector = Tabler.Outline.PlayerTrackPrev,
-                        contentDescription = null,
-                        tint = primaryColor,
-                        modifier = Modifier.size(20.dp),
-                    )
-                    Spacer(modifier = Modifier.width(6.dp))
-                    Text(
-                        text = "-${seekOffsetMs / 1000}s",
-                        color = Color.White,
-                        fontSize = 15.sp,
-                        fontWeight = FontWeight.Bold,
-                    )
-                } else {
-                    Text(
-                        text = "+${seekOffsetMs / 1000}s",
-                        color = Color.White,
-                        fontSize = 15.sp,
-                        fontWeight = FontWeight.Bold,
-                    )
-                    Spacer(modifier = Modifier.width(6.dp))
-                    Icon(
-                        imageVector = Tabler.Outline.PlayerTrackNext,
-                        contentDescription = null,
-                        tint = primaryColor,
-                        modifier = Modifier.size(20.dp),
-                    )
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.Center,
+                ) {
+                    if (isLeft) {
+                        Icon(
+                            imageVector = Tabler.Outline.PlayerTrackPrev,
+                            contentDescription = null,
+                            tint = primaryColor,
+                            modifier = Modifier.size(20.dp),
+                        )
+                        Spacer(modifier = Modifier.width(6.dp))
+                        Text(
+                            text = "-${seekOffsetMs / 1000}s",
+                            color = Color.White,
+                            fontSize = 15.sp,
+                            fontWeight = FontWeight.Bold,
+                        )
+                    } else {
+                        Text(
+                            text = "+${seekOffsetMs / 1000}s",
+                            color = Color.White,
+                            fontSize = 15.sp,
+                            fontWeight = FontWeight.Bold,
+                        )
+                        Spacer(modifier = Modifier.width(6.dp))
+                        Icon(
+                            imageVector = Tabler.Outline.PlayerTrackNext,
+                            contentDescription = null,
+                            tint = primaryColor,
+                            modifier = Modifier.size(20.dp),
+                        )
+                    }
                 }
             }
         }

@@ -171,6 +171,9 @@ class AuthRepositoryImpl @Inject constructor(
         }
     }
 
+    override suspend fun authorizeQuickConnect(code: String): Result<Boolean> =
+        apiClient.authorizeQuickConnect(code)
+
     override suspend fun restoreSession(): Result<Unit> = runCatching {
         val serverId: String? = preferencesStore.activeServerId.first()
         val userId: String? = preferencesStore.activeUserId.first()

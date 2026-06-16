@@ -193,6 +193,10 @@ class AuthApiClientImpl @Inject constructor(
         engine.requireApi().sessionApi.postFullCapabilities(data = JellyfinApiEngine.CACHED_CAPABILITIES)
     }
 
+    override suspend fun authorizeQuickConnect(code: String): Result<Boolean> = engine.apiResultWithRetry {
+        engine.requireApi().quickConnectApi.authorizeQuickConnect(code = code).content
+    }
+
     override fun getServerUrl(): String? = engine.currentServer.value?.address
 
     override fun getAccessToken(): String? = engine.currentUser.value?.accessToken

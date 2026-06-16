@@ -26,6 +26,7 @@ import com.raulshma.jellyplay.core.model.MpvVideoOutput
 import com.raulshma.jellyplay.core.model.SubtitleEdgeType
 import com.raulshma.jellyplay.core.model.SubtitleStyle
 import com.raulshma.jellyplay.core.model.TrackType
+import com.raulshma.jellyplay.core.model.VideoEffectsConfig
 import kotlinx.coroutines.channels.awaitClose
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
@@ -519,15 +520,32 @@ class MpvPlayerEngine(
             val hasBrightness = effects.brightness != 0f
             val hasContrast = effects.contrast != 1f
             val hasSaturation = effects.saturation != 1f
-            if (hasBrightness || hasContrast || hasSaturation) {
+            val hasHue = effects.hue != 0f
+            val hasRgbGain = effects.redGain != 1f || effects.greenGain != 1f || effects.blueGain != 1f
+            if (hasBrightness || hasContrast || hasSaturation || hasHue || hasRgbGain) {
                 val eqParts = mutableListOf<String>()
                 if (hasBrightness) eqParts.add("brightness=${effects.brightness}")
                 if (hasContrast) eqParts.add("contrast=${effects.contrast}")
                 if (hasSaturation) eqParts.add("saturation=${effects.saturation}")
+                if (hasHue) eqParts.add("hue=${effects.hue}")
+                if (effects.redGain != 1f) eqParts.add("rr=${effects.redGain}")
+                if (effects.greenGain != 1f) eqParts.add("gg=${effects.greenGain}")
+                if (effects.blueGain != 1f) eqParts.add("bb=${effects.blueGain}")
                 filters.add("eq=${eqParts.joinToString(":")}")
             }
             if (effects.sharpness > 0f) {
                 filters.add("unsharp=5:5:${(effects.sharpness * 1.5f).coerceIn(0.5f, 3.0f)}")
+            }
+            if (effects.gaussianBlur > 0f) {
+                // lavfi gblur sigma ~ half the user value to keep 0..10 range sensible
+                filters.add("lavfi=[gblur=sigma=${effects.gaussianBlur / 2f}]")
+            }
+            if (effects.rotationDegrees != 0f) {
+                // mpv rotate only accepts discrete 90/180/270 steps; snap to nearest.
+                val discrete = (kotlin.math.round(effects.rotationDegrees / 90f).toInt() * 90) % 360
+                if (discrete != 0) {
+                    filters.add("rotate=$discrete")
+                }
             }
             if (filters.isNotEmpty()) {
                 mpvView?.mpv?.setPropertyString("vf", filters.joinToString(","))

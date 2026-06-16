@@ -187,7 +187,7 @@ fun StorageSettingsScreen(
                     modifier = Modifier.padding(vertical = 8.dp),
                     initiallyExpanded = highlightSettingId in listOf("offline_mode", "adaptive_bitrate", "bandwidth_cap", "data_saver"),
                 ) {
-                    val networkTotal = 9
+                    val networkTotal = 10
                     var networkIdx = 0
 
                     SettingToggleItem(
@@ -295,6 +295,15 @@ fun StorageSettingsScreen(
                         highlighted = highlightSettingId == "verbose_logging",
                         index = networkIdx, count = networkTotal,
                         onCheckedChange = { viewModel.setVerboseNetworkLogging(it) },
+                    )
+                    SettingToggleItem(
+                        icon = Tabler.Outline.Refresh,
+                        title = "Background Sync",
+                        subtitle = if (preferences.userDataSyncEnabled) "Periodically refresh favourites / played / progress from server" else "No background user-data refresh",
+                        checked = preferences.userDataSyncEnabled,
+                        highlighted = highlightSettingId == "user_data_sync",
+                        index = networkIdx, count = networkTotal,
+                        onCheckedChange = { viewModel.setUserDataSyncEnabled(it) },
                     )
                 }
             }
