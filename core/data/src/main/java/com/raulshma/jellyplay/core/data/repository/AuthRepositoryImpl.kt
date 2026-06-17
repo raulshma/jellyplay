@@ -294,7 +294,10 @@ class AuthRepositoryImpl @Inject constructor(
 
     override suspend fun logout() {
         apiClient.disconnect()
-        preferencesStore.clearAll()
+        // Clear only the active session selection — preserve the stable
+        // device id and all user preferences (theme/player/EQ/onboarding/…)
+        // so re-login does not orphan server-side sessions or reset settings.
+        preferencesStore.clearSession()
     }
 
     override suspend fun switchUser(userId: String): Result<Unit> = runCatching {

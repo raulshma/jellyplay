@@ -38,8 +38,7 @@ class BandwidthInterceptor @Inject constructor() : Interceptor {
             .body(CountingBody(responseBody) { bytesTransferred ->
                 addSample(bytesTransferred, responseBody.contentLength())
             })
-            .build()
-    }
+            .build()    }
 
     private fun addSample(bytesTransferred: Long, contentLength: Long) {
         if (bytesTransferred <= 0) return
@@ -89,7 +88,11 @@ class BandwidthInterceptor @Inject constructor() : Interceptor {
                         totalBytesRead += bytesRead
                     }
                     if (bytesRead == -1L || totalBytesRead - lastSampleBytes >= sampleIntervalBytes) {
-                        onComplete(totalBytesRead)
+                        // Report the delta since the previous sample, not the
+                        // cumulative total. addSample sums per-sample byte
+                        // counts; passing cumulative values would double-count
+                        // and over-estimate throughput by ~Nx.
+                        onComplete(totalBytesRead - lastSampleBytes)
                         lastSampleBytes = totalBytesRead
                     }
                     return bytesRead

@@ -39,6 +39,7 @@ data class PlayerSessionState(
     val subtitle: String = "",
     val playMethodString: String = "Direct Play",
     val playMethod: PlayMethod = PlayMethod.DIRECT_PLAY,
+    val isDirectPlayForced: Boolean = false,
     val isReady: Boolean = false,
     val offlineTrickplayDir: java.io.File? = null,
     val streamUrl: String? = null,
@@ -157,18 +158,10 @@ class PlayerSessionManager(
         }
         val streams = source?.mediaStreams ?: emptyList()
 
-        val playMethodStr = when {
-            source?.supportsDirectPlay == true -> "Direct Play"
-            source?.supportsDirectStream == true -> "Direct Stream"
-            source?.supportsTranscoding == true -> "Transcode"
-            else -> "Direct Play"
-        }
-        val resolvedPlayMethod = when {
-            source?.supportsDirectPlay == true -> PlayMethod.DIRECT_PLAY
-            source?.supportsDirectStream == true -> PlayMethod.DIRECT_STREAM
-            source?.supportsTranscoding == true -> PlayMethod.TRANSCODE
-            else -> PlayMethod.DIRECT_PLAY
-        }
+        val serverSupportsDirectPlay = source?.supportsDirectPlay == true
+        val playMethodStr = "Direct Play"
+        val resolvedPlayMethod = PlayMethod.DIRECT_PLAY
+        val isDirectPlayForced = !serverSupportsDirectPlay
 
         _sessionState.update {
             it.copy(
@@ -179,6 +172,7 @@ class PlayerSessionManager(
                 mediaStreams = streams,
                 playMethodString = playMethodStr,
                 playMethod = resolvedPlayMethod,
+                isDirectPlayForced = isDirectPlayForced,
             )
         }
 
@@ -283,7 +277,8 @@ class PlayerSessionManager(
             headers = headers,
             preferredAudioLanguage = prefs.preferredAudioLanguage,
             preferredSubtitleLanguage = prefs.preferredSubtitleLanguage,
-            maxVideoBitrate = adaptiveBitrateManager.resolveMaxBitrate(prefs.streamingQuality)?.toInt(),
+            maxVideoBitrate = if (prefs.forceDirectPlay) null
+                else adaptiveBitrateManager.resolveMaxBitrate(prefs.streamingQuality)?.toInt(),
             serverUrl = serverUrl,
             authToken = token,
             minBufferMs = prefs.videoPreloadBufferSize.minBufferMs,

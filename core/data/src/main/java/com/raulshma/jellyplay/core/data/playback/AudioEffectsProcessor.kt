@@ -225,6 +225,31 @@ class AudioEffectsProcessor @Inject constructor() {
         }
     }
 
+    fun setEqualizerEnabled(enabled: Boolean) {
+        _equalizerEnabled.value = enabled
+        applyEqualizer()
+    }
+
+    fun setBassBoostEnabled(enabled: Boolean) {
+        _bassBoostEnabled.value = enabled
+        applyBassBoost()
+    }
+
+    fun setVirtualizerEnabled(enabled: Boolean) {
+        _virtualizerEnabled.value = enabled
+        applyVirtualizer()
+    }
+
+    fun setDialogueBoostEnabled(enabled: Boolean) {
+        _dialogueBoostEnabled.value = enabled
+        applyDialogueBoost()
+    }
+
+    fun setNightModeEnabled(enabled: Boolean) {
+        _nightModeEnabled.value = enabled
+        applyNightMode()
+    }
+
     fun attachAudioEffects(audioSessionId: Int) {
         if (audioSessionId == C.AUDIO_SESSION_ID_UNSET) return
         if (_equalizerEnabled.value) {

@@ -98,7 +98,7 @@ class VideoPlayerCleanupTest {
     }
 
     @Test
-    fun syncPlayBridge_reset_clearsStateAndResetsCore() {
+    fun `syncPlayBridge_reset_clearsStateAndResetsCore`() {
         val syncPlayManager = mockk<SyncPlayManager>(relaxed = true)
         val playbackCore = mockk<SyncPlayPlaybackCore>(relaxed = true)
         every { syncPlayManager.playbackCore } returns playbackCore
@@ -116,6 +116,9 @@ class VideoPlayerCleanupTest {
         bridge.reset()
 
         verify { playbackCore.reset() }
+        // reset() must also release the callbacks held by the @Singleton core
+        // so it cannot retain the destroyed ViewModel/bridge after teardown.
+        verify { playbackCore.clearCallbacks() }
         assertFalse(uiState.value.isSyncPlaySyncing)
     }
 

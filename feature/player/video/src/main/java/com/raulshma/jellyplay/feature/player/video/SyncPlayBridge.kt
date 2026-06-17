@@ -124,6 +124,11 @@ internal class SyncPlayBridge(
 
     fun reset() {
         syncPlayManager.playbackCore.reset()
+        // Clear the callbacks held by the @Singleton playback core so it does
+        // not retain this bridge (and through it the destroyed ViewModel) after
+        // the player screen leaves composition. reset() is the teardown path
+        // invoked from VideoPlayerViewModel.onCleared() -> releaseInternals().
+        syncPlayManager.playbackCore.clearCallbacks()
         currentPlaylistItemId = null
         eventJob?.cancel()
         eventJob = null

@@ -59,6 +59,16 @@ class JellyPlayApplication : Application(), SingletonImageLoader.Factory, Config
     override fun onCreate() {
         super.onCreate()
         SentryAndroid.init(this) { options ->
+            // Strip query strings from HTTP breadcrumb URLs that may carry the
+            // Jellyfin access token (e.g. ".../stream?api_key=…").
+            options.setBeforeBreadcrumb { breadcrumb, _ ->
+                val data = breadcrumb.data
+                val url = data["url"] as? String
+                if (url != null && (url.contains("api_key=") || url.contains("token="))) {
+                    data["url"] = url.substringBefore("?")
+                }
+                breadcrumb
+            }
             options.dsn?.let { dsn ->
                 if (dsn.isNotBlank()) {
                     configureSentryUserContext()

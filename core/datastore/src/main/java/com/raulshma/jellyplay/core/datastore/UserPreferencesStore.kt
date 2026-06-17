@@ -102,6 +102,7 @@ class UserPreferencesStore @Inject constructor(
         val CONTRAST_LEVEL = stringPreferencesKey("contrast_level")
         val SUBTITLE_STYLE = stringPreferencesKey("subtitle_style")
         val STREAMING_QUALITY = stringPreferencesKey("streaming_quality")
+        val FORCE_DIRECT_PLAY = booleanPreferencesKey("force_direct_play")
         val PIN_HASH = stringPreferencesKey("pin_hash")
         val DIALOGUE_BOOST_STRENGTH = stringPreferencesKey("dialogue_boost_strength")
         val DECODER_MODE = stringPreferencesKey("decoder_mode")
@@ -669,6 +670,7 @@ class UserPreferencesStore @Inject constructor(
             streamingQuality = try {
                 StreamingQuality.valueOf(prefs[Keys.STREAMING_QUALITY] ?: StreamingQuality.AUTO.name)
             } catch (_: Exception) { StreamingQuality.AUTO },
+            forceDirectPlay = readBool(prefs, Keys.FORCE_DIRECT_PLAY, "force_direct_play", true),
             maxCacheSizeMb = readInt(prefs, Keys.MAX_CACHE_SIZE_MB, "max_cache_size_mb", 0),
             autoDeleteCache = readBool(prefs, Keys.AUTO_DELETE_CACHE, "auto_delete_cache", true),
             pinLockEnabled = readBool(prefs, Keys.PIN_LOCK_ENABLED, "pin_lock_enabled", false),
@@ -1039,6 +1041,10 @@ class UserPreferencesStore @Inject constructor(
         context.dataStore.edit { it[Keys.STREAMING_QUALITY] = quality.name }
     }
 
+    suspend fun setForceDirectPlay(enabled: Boolean) {
+        context.dataStore.edit { it[Keys.FORCE_DIRECT_PLAY] = enabled }
+    }
+
     suspend fun setMaxCacheSize(sizeMb: Int) {
         context.dataStore.edit { it[Keys.MAX_CACHE_SIZE_MB] = sizeMb }
     }
@@ -1323,6 +1329,20 @@ class UserPreferencesStore @Inject constructor(
 
     suspend fun clearAll() {
         context.dataStore.edit { it.clear() }
+    }
+
+    /**
+     * Clears only the active server/user selection, preserving the stable
+     * [DEVICE_ID], user preferences (theme, player, equalizer, onboarding, …)
+     * and everything else. Use this on logout instead of [clearAll] so the
+     * device id stays stable for Jellyfin session tracking and the user does
+     * not lose all preferences on re-login.
+     */
+    suspend fun clearSession() {
+        context.dataStore.edit { prefs ->
+            prefs.remove(Keys.ACTIVE_SERVER_ID)
+            prefs.remove(Keys.ACTIVE_USER_ID)
+        }
     }
 
     fun verifyPin(input: String, storedHash: String?): Boolean {

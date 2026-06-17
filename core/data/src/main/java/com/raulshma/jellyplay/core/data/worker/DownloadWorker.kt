@@ -257,20 +257,26 @@ class DownloadWorker @AssistedInject constructor(
             }
 
             if (cancelled.get()) {
-                val finalBytes = totalDownloaded.get()
                 val currentEntity = dao.getDownloadById(downloadId)
                 val cancelStatus = if (currentEntity == null || currentEntity.status == DownloadStatus.CANCELLED.name) {
                     DownloadStatus.CANCELLED.name
                 } else {
                     DownloadStatus.PAUSED.name
                 }
-                dao.updateProgressWithSpeed(downloadId, finalBytes, cancelStatus, 0L)
+                // Multi-connection writes bytes at scattered offsets via
+                // RandomAccessFile.seek(); the cumulative byte count is NOT a
+                // valid resumable prefix. Delete the partial and reset bytes
+                // to 0 so the next attempt starts fresh (a single-connection
+                // resume would otherwise append to a gapped file and corrupt it).
+                runCatching { if (file.exists()) file.delete() }
+                dao.updateProgressWithSpeed(downloadId, 0L, cancelStatus, 0L)
                 return Result.success()
             }
 
             val finalBytes = totalDownloaded.get()
             if (totalSize > 0L && finalBytes < totalSize) {
-                dao.updateProgressWithSpeed(downloadId, finalBytes, DownloadStatus.FAILED.name, 0L)
+                runCatching { if (file.exists()) file.delete() }
+                dao.updateProgressWithSpeed(downloadId, 0L, DownloadStatus.FAILED.name, 0L)
                 return Result.retry()
             }
 
@@ -279,12 +285,14 @@ class DownloadWorker @AssistedInject constructor(
             Result.success()
         } catch (e: java.io.IOException) {
             if (totalDownloaded.get() > 0) {
-                dao.updateProgressWithSpeed(downloadId, totalDownloaded.get(), DownloadStatus.PAUSED.name, 0L)
+                runCatching { if (file.exists()) file.delete() }
+                dao.updateProgressWithSpeed(downloadId, 0L, DownloadStatus.PAUSED.name, 0L)
             }
             Result.retry()
         } catch (e: Exception) {
             if (totalDownloaded.get() > 0) {
-                dao.updateProgressWithSpeed(downloadId, totalDownloaded.get(), DownloadStatus.FAILED.name, 0L)
+                runCatching { if (file.exists()) file.delete() }
+                dao.updateProgressWithSpeed(downloadId, 0L, DownloadStatus.FAILED.name, 0L)
             }
             Result.failure()
         }
