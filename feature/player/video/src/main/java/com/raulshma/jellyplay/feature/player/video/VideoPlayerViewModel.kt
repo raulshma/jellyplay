@@ -316,17 +316,18 @@ class VideoPlayerViewModel @Inject constructor(
                 val itemId = session.currentItemId
                 val prefs = cachedPreferences
                 val stored = itemId?.let { prefs.mediaStreamSelections[it] }
-                _uiState.update { state ->
-                    state.copy(
-                        title = session.title,
-                        subtitle = session.subtitle,
-                        currentMediaSource = session.currentMediaSource,
-                        mediaStreams = session.mediaStreams,
-                        playMethod = session.playMethodString,
-                        hasAudioOverride = stored?.audioStreamIndex != null,
-                        hasSubtitleOverride = stored?.subtitleStreamIndex != null,
-                    )
-                }
+                    _uiState.update { state ->
+                        state.copy(
+                            title = session.title,
+                            subtitle = session.subtitle,
+                            currentMediaSource = session.currentMediaSource,
+                            mediaStreams = session.mediaStreams,
+                            playMethod = session.playMethodString,
+                            isDirectPlayForced = session.isDirectPlayForced,
+                            hasAudioOverride = stored?.audioStreamIndex != null,
+                            hasSubtitleOverride = stored?.subtitleStreamIndex != null,
+                        )
+                    }
             }
         }
 
@@ -538,6 +539,8 @@ class VideoPlayerViewModel @Inject constructor(
                 showPlaybackMetadata = prefs.videoShowPlaybackMetadata,
                 showClock = prefs.showClockInPlayer,
                 keepScreenOnDuringVideo = prefs.keepScreenOnDuringVideo,
+                streamingQuality = prefs.streamingQuality,
+                forceDirectPlay = prefs.forceDirectPlay,
             ) }
             autoplayNext = prefs.videoAutoplayNext
 
@@ -783,6 +786,25 @@ class VideoPlayerViewModel @Inject constructor(
             preferencesStore.setAudioDelay(ms)
         }
     }
+
+    fun setSubtitleDelay(ms: Long) {
+        val current = _uiState.value.subtitleStyle
+        if (current.offsetMs == ms) return
+        setSubtitleStyle(current.copy(offsetMs = ms))
+    }
+
+    fun setForceDirectPlay(enabled: Boolean) {
+        if (_uiState.value.forceDirectPlay == enabled) return
+        _uiState.update { it.copy(forceDirectPlay = enabled) }
+        launch {
+            preferencesStore.setForceDirectPlay(enabled)
+        }
+        val maxBitrate = if (enabled) null
+            else adaptiveBitrateManager.resolveMaxBitrate(_uiState.value.streamingQuality)?.toInt()
+        playerSessionManager.engine?.setMaxVideoBitrate(maxBitrate)
+    }
+
+    fun toggleForceDirectPlay() = setForceDirectPlay(!_uiState.value.forceDirectPlay)
 
     fun setDecoderMode(mode: DecoderMode) {
         _uiState.update { it.copy(decoderMode = mode) }

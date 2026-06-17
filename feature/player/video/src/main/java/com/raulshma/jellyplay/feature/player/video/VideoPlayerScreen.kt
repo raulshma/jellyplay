@@ -99,7 +99,7 @@ import com.raulshma.jellyplay.core.ui.tv.input.onDpadKeyEvent
 import com.raulshma.jellyplay.core.ui.tv.tryRequestFocus
 import com.raulshma.jellyplay.feature.player.video.components.AspectRatio
 import com.raulshma.jellyplay.feature.player.video.components.AspectRatioSheet
-import com.raulshma.jellyplay.feature.player.video.components.AudioDelaySheet
+import com.raulshma.jellyplay.feature.player.video.components.AVSyncSheet
 import com.raulshma.jellyplay.core.model.MediaSegmentType
 import com.raulshma.jellyplay.feature.player.video.components.DecoderPickerSheet
 import com.raulshma.jellyplay.feature.player.video.components.EpisodePickerSheet
@@ -1118,7 +1118,7 @@ fun VideoPlayerScreen(
                 onDialogueBoostStrengthChange = { viewModel.setDialogueBoostStrength(it) },
                 onNightModeClick = { viewModel.toggleNightMode() },
                 onNightModeStrengthChange = { viewModel.setNightModeStrength(it) },
-                onAudioDelayClick = { currentSheet = PlayerSheet.AudioDelay },
+                onAVSyncClick = { currentSheet = PlayerSheet.AVSync },
                 onDecoderClick = { currentSheet = PlayerSheet.Decoder },
                 onPassthroughClick = { viewModel.setAudioPassthrough(!uiState.audioPassthrough) },
                 onSubtitleDownloadClick = {
@@ -1139,7 +1139,9 @@ fun VideoPlayerScreen(
                 onVideoStatsClick = { viewModel.toggleVideoStats() },
                 bufferedPosition = uiState.bufferedPosition,
                 streamingQuality = uiState.streamingQuality,
+                forceDirectPlay = uiState.forceDirectPlay,
                 onQualityClick = { currentSheet = PlayerSheet.Quality },
+                onForceDirectPlayToggle = { viewModel.toggleForceDirectPlay() },
                 audioNormalizationMode = uiState.audioNormalizationMode,
                 audioNormalizationEnabled = uiState.audioNormalizationEnabled,
                 channelMixMode = uiState.channelMixMode,
@@ -1581,10 +1583,12 @@ private fun PlayerSheetRouter(
                 capabilities = uiState.engineCapabilities,
             )
         }
-        is PlayerSheet.AudioDelay -> {
-            AudioDelaySheet(
-                currentDelayMs = uiState.audioDelayMs,
-                onDelayChange = { viewModel.setAudioDelay(it) },
+        is PlayerSheet.AVSync -> {
+            AVSyncSheet(
+                currentAudioDelayMs = uiState.audioDelayMs,
+                currentSubtitleDelayMs = uiState.subtitleStyle.offsetMs,
+                onAudioDelayChange = { viewModel.setAudioDelay(it) },
+                onSubtitleDelayChange = { viewModel.setSubtitleDelay(it) },
                 onDismiss = dismissSheet,
             )
         }

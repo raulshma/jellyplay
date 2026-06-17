@@ -73,7 +73,9 @@ class JellyfinWebSocketClient @Inject constructor(
         val device = deviceId ?: return
 
         val wsUrl = buildWsUrl(serverAddress, accessToken, device)
-        Log.d(TAG, "Connecting WebSocket to $wsUrl")
+        // Log only the base endpoint — the full URL carries the access token
+        // and deviceId as query parameters.
+        Log.d(TAG, "Connecting WebSocket to ${serverAddress.trimEnd('/')}/socket")
         val request = Request.Builder().url(wsUrl).build()
         webSocket = okHttpClient.newWebSocket(request, object : WebSocketListener() {
             override fun onOpen(webSocket: WebSocket, response: Response) {

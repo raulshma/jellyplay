@@ -9,8 +9,8 @@ sealed class PlayerSheet {
     data object PlaybackInfo : PlayerSheet()
     data object AspectRatio : PlayerSheet()
     data object SubtitleStyle : PlayerSheet()
-    
-    data object AudioDelay : PlayerSheet()
+
+    data object AVSync : PlayerSheet()
     data object Decoder : PlayerSheet()
     data object SubtitleDownload : PlayerSheet()
     data object Episodes : PlayerSheet()

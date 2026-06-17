@@ -17,7 +17,7 @@ class PlayerSheetTest {
             PlayerSheet.PlaybackInfo,
             PlayerSheet.AspectRatio,
             PlayerSheet.SubtitleStyle,
-            PlayerSheet.AudioDelay,
+            PlayerSheet.AVSync,
             PlayerSheet.Decoder,
             PlayerSheet.SubtitleDownload,
         )

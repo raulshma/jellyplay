@@ -144,6 +144,13 @@ abstract class NetworkModule {
             
             val loggingInterceptor = HttpLoggingInterceptor().apply {
                 level = HttpLoggingInterceptor.Level.HEADERS
+                // Never expose credentials in logcat, even when verbose network
+                // logging is enabled.
+                redactHeader("X-Emby-Token")
+                redactHeader("X-Api-Key")
+                redactHeader("Authorization")
+                redactHeader("Cookie")
+                redactHeader("Set-Cookie")
             }
             
             val builder = OkHttpClient.Builder()

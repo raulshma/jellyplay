@@ -204,6 +204,18 @@ class AudioPlaybackManager @Inject constructor(
             _isPlaying.value = isPlaying
         }
 
+        override fun onAudioSessionIdChanged(audioSessionId: Int) {
+            // ExoPlayer allocates its AudioTrack (and the real audio session id)
+            // lazily after prepare(). At createPlayer() time the id is still
+            // AUDIO_SESSION_ID_UNSET, so effects attached there bind to nothing.
+            // Re-attach every effect to the now-valid session id whenever it
+            // changes, mirroring the video ExoPlayerEngine pattern.
+            effectsProcessor.attachAudioEffects(audioSessionId)
+            if (effectsProcessor.nightModeEnabled.value) {
+                effectsProcessor.applyNightMode()
+            }
+        }
+
         override fun onPlaybackStateChanged(playbackState: Int) {
             if (playbackState == Player.STATE_ENDED) {
                 onTrackEnded()
@@ -236,6 +248,16 @@ class AudioPlaybackManager @Inject constructor(
                 val prevPreset = currentPreferences.equalizerPreset
                 val prevBalance = currentPreferences.lrBalance
                 val prevPitch = currentPreferences.pitchSemitones
+                val prevEqEnabled = currentPreferences.equalizerEnabled
+                val prevBassEnabled = currentPreferences.bassBoostEnabled
+                val prevBassStrength = currentPreferences.bassBoostStrength
+                val prevVirtEnabled = currentPreferences.virtualizerEnabled
+                val prevVirtStrength = currentPreferences.virtualizerStrength
+                val prevDialogueEnabled = currentPreferences.dialogueBoostEnabled
+                val prevDialogueStrength = currentPreferences.dialogueBoostStrength
+                val prevNightEnabled = currentPreferences.nightModeEnabled
+                val prevNightStrength = currentPreferences.nightModeStrength
+                val prevReverb = currentPreferences.reverbPreset
 
                 currentPreferences = prefs
 
@@ -250,6 +272,42 @@ class AudioPlaybackManager @Inject constructor(
                 }
                 if (prefs.pitchSemitones != prevPitch) {
                     setPitchSemitones(prefs.pitchSemitones)
+                }
+                // Strengths must be applied before their enabled flag so the
+                // effect uses the correct value when it attaches.
+                if (prefs.bassBoostStrength != prevBassStrength) {
+                    effectsProcessor.setBassBoostStrength(prefs.bassBoostStrength)
+                }
+                if (prefs.virtualizerStrength != prevVirtStrength) {
+                    effectsProcessor.setVirtualizerStrength(prefs.virtualizerStrength)
+                }
+                if (prefs.dialogueBoostStrength != prevDialogueStrength) {
+                    effectsProcessor.setDialogueBoostStrength(prefs.dialogueBoostStrength)
+                }
+                if (prefs.nightModeStrength != prevNightStrength) {
+                    effectsProcessor.setNightModeStrength(prefs.nightModeStrength)
+                }
+                // Restore effect-enabled state from persisted preferences so
+                // effects survive process restart. Each setter updates the flag
+                // and re-applies (a no-op when no player exists yet; the flags
+                // are honored when onAudioSessionIdChanged attaches effects).
+                if (prefs.equalizerEnabled != prevEqEnabled) {
+                    effectsProcessor.setEqualizerEnabled(prefs.equalizerEnabled)
+                }
+                if (prefs.bassBoostEnabled != prevBassEnabled) {
+                    effectsProcessor.setBassBoostEnabled(prefs.bassBoostEnabled)
+                }
+                if (prefs.virtualizerEnabled != prevVirtEnabled) {
+                    effectsProcessor.setVirtualizerEnabled(prefs.virtualizerEnabled)
+                }
+                if (prefs.dialogueBoostEnabled != prevDialogueEnabled) {
+                    effectsProcessor.setDialogueBoostEnabled(prefs.dialogueBoostEnabled)
+                }
+                if (prefs.nightModeEnabled != prevNightEnabled) {
+                    effectsProcessor.setNightModeEnabled(prefs.nightModeEnabled)
+                }
+                if (prefs.reverbPreset != prevReverb) {
+                    effectsProcessor.setReverbPreset(prefs.reverbPreset)
                 }
             }
         }
@@ -1077,7 +1135,7 @@ class AudioPlaybackManager @Inject constructor(
         val nextItem = _queue.value.getOrNull(actualIndex) ?: return
         _isCrossfading.value = true
 
-        scope.launch {
+        crossfadeJob = scope.launch {
             val detail = mediaRepository.getMediaDetail(nextItem.id)
             detail.onSuccess { d ->
                 val source = d.mediaSources.firstOrNull()
@@ -1120,6 +1178,11 @@ class AudioPlaybackManager @Inject constructor(
                 cfPlayer.play()
 
                 performVolumeCrossfade(crossfadeMs, actualIndex, nextItem)
+            }.onFailure {
+                // A transient failure (e.g. network error fetching the next
+                // item's detail) must release the crossfade flag so that the
+                // next attempt is not permanently blocked.
+                _isCrossfading.value = false
             }
         }
     }
@@ -1139,8 +1202,10 @@ class AudioPlaybackManager @Inject constructor(
 
         for (i in 1..steps) {
             if (!scope.isActive || !_isCrossfading.value) {
-                primary.volume = targetVolume
-                secondary.volume = 0.0f
+                // Crossfade was cancelled (cancelCrossfade already restored
+                // the primary player's volume and released the secondary) or
+                // the scope is no longer active. Do NOT touch `secondary`
+                // here — it may already be released by cancelCrossfade().
                 return
             }
 
@@ -1339,7 +1404,10 @@ class AudioPlaybackManager @Inject constructor(
         progressJob?.cancel()
         exoPlayer?.removeListener(playerListener)
         mediaSession?.let { sessionManager.clearSession(it) }
-        mediaSession?.release()
+        // JellyPlayPlaybackService.onDestroy() may already have released this
+        // session. Guard the release so a double-release cannot skip the
+        // exoPlayer/effects cleanup that follows.
+        try { mediaSession?.release() } catch (_: Exception) { }
         mediaSession = null
         exoPlayer?.release()
         exoPlayer = null
