@@ -197,16 +197,20 @@
                 android:id="@+id/widget_progress"
                 style="?android:attr/progressBarStyleHorizontal"
                 android:layout_width="match_parent"
-                android:layout_height="6dp"
+                android:layout_height="16dp"
                 android:layout_gravity="center_vertical"
                 android:max="1000"
                 android:progress="0"
                 android:progressBackgroundTint="#33FFFFFF"
-                android:progressTint="#FFFFFFFF" />
+                android:progressTint="#FFFFFFFF"
+                android:splitTrack="false"
+                android:thumb="@drawable/widget_seek_thumb"
+                android:thumbOffset="0dp"
+                android:thumbTint="#FFFFFFFF" />
 
             <LinearLayout
                 android:layout_width="match_parent"
-                android:layout_height="28dp"
+                android:layout_height="48dp"
                 android:orientation="horizontal"
                 android:weightSum="7">
 

@@ -7,6 +7,7 @@ import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
 import android.net.Uri
+import android.os.Bundle
 import android.widget.RemoteViews
 import com.raulshma.jellyplay.MainActivity
 import com.raulshma.jellyplay.R
@@ -34,6 +35,17 @@ class ContinueWatchingWidget : AppWidgetProvider() {
         for (appWidgetId in appWidgetIds) {
             updateWidget(context, appWidgetManager, appWidgetId)
         }
+    }
+
+    override fun onAppWidgetOptionsChanged(
+        context: Context,
+        appWidgetManager: AppWidgetManager,
+        appWidgetId: Int,
+        newOptions: Bundle
+    ) {
+        super.onAppWidgetOptionsChanged(context, appWidgetManager, appWidgetId, newOptions)
+        updateWidget(context, appWidgetManager, appWidgetId)
+        appWidgetManager.notifyAppWidgetViewDataChanged(appWidgetId, R.id.cw_widget_list)
     }
 
     override fun onReceive(context: Context, intent: Intent) {
@@ -77,6 +89,34 @@ class ContinueWatchingWidget : AppWidgetProvider() {
         ) {
             val views = RemoteViews(context.packageName, R.layout.continue_watching_widget)
 
+            // Apply responsive rules
+            val options = appWidgetManager.getAppWidgetOptions(appWidgetId)
+            if (options != null) {
+                val config = context.resources.configuration
+                val isLandscape = config.orientation == android.content.res.Configuration.ORIENTATION_LANDSCAPE
+                val minWidth = options.getInt(AppWidgetManager.OPTION_APPWIDGET_MIN_WIDTH)
+                val minHeight = options.getInt(AppWidgetManager.OPTION_APPWIDGET_MIN_HEIGHT)
+                val maxWidth = options.getInt(AppWidgetManager.OPTION_APPWIDGET_MAX_WIDTH)
+                val maxHeight = options.getInt(AppWidgetManager.OPTION_APPWIDGET_MAX_HEIGHT)
+                var width = if (isLandscape) maxWidth else minWidth
+                var height = if (isLandscape) minHeight else maxHeight
+
+                if (width <= 0) width = 280
+                if (height <= 0) height = 220
+
+                if (height < 150) {
+                    views.setViewVisibility(R.id.cw_widget_header, android.view.View.GONE)
+                } else {
+                    views.setViewVisibility(R.id.cw_widget_header, android.view.View.VISIBLE)
+                }
+
+                if (width < 220) {
+                    views.setViewVisibility(R.id.cw_widget_see_all, android.view.View.GONE)
+                } else {
+                    views.setViewVisibility(R.id.cw_widget_see_all, android.view.View.VISIBLE)
+                }
+            }
+
             // Header click opens the continue-watching newsletter list.
             val headerUri = Uri.parse(
                 "${DeepLinkHandler.SCHEME_CUSTOM}://newsletter/CONTINUE_WATCHING",
@@ -117,7 +157,10 @@ class ContinueWatchingWidget : AppWidgetProvider() {
             views.setPendingIntentTemplate(R.id.cw_widget_list, templatePending)
 
             // Bind the list adapter.
-            val serviceIntent = Intent(context, ContinueWatchingWidgetService::class.java)
+            val serviceIntent = Intent(context, ContinueWatchingWidgetService::class.java).apply {
+                putExtra(AppWidgetManager.EXTRA_APPWIDGET_ID, appWidgetId)
+                data = Uri.parse(toUri(Intent.URI_INTENT_SCHEME))
+            }
             views.setRemoteAdapter(R.id.cw_widget_list, serviceIntent)
             views.setEmptyView(R.id.cw_widget_list, R.id.cw_widget_empty)
 

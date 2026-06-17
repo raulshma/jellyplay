@@ -1,8 +1,10 @@
 package com.raulshma.jellyplay
 
+import android.content.Context
 import android.content.Intent
 import android.net.Uri
 import android.os.Build
+import dagger.hilt.android.qualifiers.ApplicationContext
 import android.widget.Toast
 import com.raulshma.jellyplay.core.data.network.NetworkMonitor
 import com.raulshma.jellyplay.core.data.playback.AudioPlaybackManager
@@ -35,6 +37,7 @@ import javax.inject.Inject
 
 @HiltViewModel
 class MainViewModel @Inject constructor(
+    @ApplicationContext private val context: Context,
     private val authRepository: AuthRepository,
     val preferencesStore: UserPreferencesStore,
     val networkMonitor: NetworkMonitor,
@@ -111,6 +114,19 @@ class MainViewModel @Inject constructor(
                             // Ignored
                         }
                         remoteControlReceiver.start()
+                        launch {
+                            com.raulshma.jellyplay.widget.WidgetWorkScheduler.refreshLibraryNow(context)
+                        }
+                        launch {
+                            com.raulshma.jellyplay.widget.WidgetWorkScheduler.refreshSeerrNow(context)
+                        }
+                        // Force every placed widget to re-read its cached data
+                        // from the store. The Continue Watching widget has no
+                        // worker of its own (data is pushed by HomeViewModel),
+                        // so this is what makes it pick up freshly restored
+                        // state on cold start; for Library/Seerr it surfaces
+                        // any cached items while the worker run completes.
+                        com.raulshma.jellyplay.widget.ContinueWatchingWidget.triggerUpdate(context)
                     }
                 } else {
                     webSocketClient.disconnect()

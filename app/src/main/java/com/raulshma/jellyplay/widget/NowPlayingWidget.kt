@@ -7,6 +7,7 @@ import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
 import android.graphics.Bitmap
+import android.os.Bundle
 import android.util.Log
 import android.widget.RemoteViews
 import com.raulshma.jellyplay.MainActivity
@@ -16,6 +17,9 @@ import dagger.hilt.EntryPoint
 import dagger.hilt.InstallIn
 import dagger.hilt.android.EntryPointAccessors
 import dagger.hilt.components.SingletonComponent
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
 
 class NowPlayingWidget : AppWidgetProvider() {
 
@@ -32,6 +36,54 @@ class NowPlayingWidget : AppWidgetProvider() {
     ) {
         for (appWidgetId in appWidgetIds) {
             updateAppWidget(context, appWidgetManager, appWidgetId)
+        }
+    }
+
+    override fun onAppWidgetOptionsChanged(
+        context: Context,
+        appWidgetManager: AppWidgetManager,
+        appWidgetId: Int,
+        newOptions: Bundle
+    ) {
+        super.onAppWidgetOptionsChanged(context, appWidgetManager, appWidgetId, newOptions)
+        val entryPoint = EntryPointAccessors.fromApplication(
+            context.applicationContext,
+            WidgetEntryPoint::class.java,
+        )
+        val manager = entryPoint.audioPlaybackManager()
+        val title = manager.title.value
+        val artist = manager.artist.value
+        val isPlaying = manager.isPlaying.value
+        val position = manager.currentPosition.value
+        val duration = manager.duration.value
+        val itemId = manager.currentPlayingItemId.value
+
+        val artUrl = manager.albumArtUrl.value
+        val pending = goAsync()
+        val scope = CoroutineScope(Dispatchers.IO)
+        scope.launch {
+            val art = if (!artUrl.isNullOrBlank()) {
+                WidgetImageLoader.loadPoster(context.applicationContext, artUrl)
+            } else null
+
+            val mainHandler = android.os.Handler(context.mainLooper)
+            mainHandler.post {
+                val views = RemoteViews(context.packageName, R.layout.now_playing_widget)
+                wireClickIntents(context, views)
+                bindState(
+                    views = views,
+                    title = title,
+                    subtitle = artist.ifBlank { null },
+                    isPlaying = isPlaying,
+                    albumArt = art,
+                    positionMs = position,
+                    durationMs = duration,
+                    isEmptyState = itemId == null,
+                )
+                applyResponsiveLayout(context, appWidgetManager, appWidgetId, views)
+                appWidgetManager.updateAppWidget(appWidgetId, views)
+                pending.finish()
+            }
         }
     }
 
@@ -123,6 +175,41 @@ class NowPlayingWidget : AppWidgetProvider() {
         ) {
             val views = RemoteViews(context.packageName, R.layout.now_playing_widget)
             wireClickIntents(context, views)
+            try {
+                val entryPoint = EntryPointAccessors.fromApplication(
+                    context.applicationContext,
+                    WidgetEntryPoint::class.java,
+                )
+                val manager = entryPoint.audioPlaybackManager()
+                val title = manager.title.value
+                val artist = manager.artist.value
+                val isPlaying = manager.isPlaying.value
+                val position = manager.currentPosition.value
+                val duration = manager.duration.value
+                val itemId = manager.currentPlayingItemId.value
+                bindState(
+                    views = views,
+                    title = title,
+                    subtitle = artist.ifBlank { null },
+                    isPlaying = isPlaying,
+                    albumArt = null,
+                    positionMs = position,
+                    durationMs = duration,
+                    isEmptyState = itemId == null,
+                )
+            } catch (e: Exception) {
+                bindState(
+                    views = views,
+                    title = null,
+                    subtitle = null,
+                    isPlaying = false,
+                    albumArt = null,
+                    positionMs = 0L,
+                    durationMs = 0L,
+                    isEmptyState = true,
+                )
+            }
+            applyResponsiveLayout(context, appWidgetManager, appWidgetId, views)
             appWidgetManager.updateAppWidget(appWidgetId, views)
         }
 
@@ -154,7 +241,74 @@ class NowPlayingWidget : AppWidgetProvider() {
                     durationMs = durationMs,
                     isEmptyState = isEmptyState,
                 )
+                applyResponsiveLayout(context, appWidgetManager, appWidgetId, views)
                 appWidgetManager.updateAppWidget(appWidgetId, views)
+            }
+        }
+
+        private fun applyResponsiveLayout(
+            context: Context,
+            appWidgetManager: AppWidgetManager,
+            appWidgetId: Int,
+            views: RemoteViews,
+        ) {
+            val options = appWidgetManager.getAppWidgetOptions(appWidgetId) ?: return
+            val config = context.resources.configuration
+            val isLandscape = config.orientation == android.content.res.Configuration.ORIENTATION_LANDSCAPE
+
+            val minWidth = options.getInt(AppWidgetManager.OPTION_APPWIDGET_MIN_WIDTH)
+            val minHeight = options.getInt(AppWidgetManager.OPTION_APPWIDGET_MIN_HEIGHT)
+            val maxWidth = options.getInt(AppWidgetManager.OPTION_APPWIDGET_MAX_WIDTH)
+            val maxHeight = options.getInt(AppWidgetManager.OPTION_APPWIDGET_MAX_HEIGHT)
+
+            var width = if (isLandscape) maxWidth else minWidth
+            var height = if (isLandscape) minHeight else maxHeight
+
+            if (width <= 0) width = 280
+            if (height <= 0) height = 110
+
+            // Responsive width rules
+            if (width < 180) {
+                views.setViewVisibility(R.id.widget_album_art, android.view.View.GONE)
+                views.setViewVisibility(R.id.widget_progress_container, android.view.View.GONE)
+                views.setViewVisibility(R.id.widget_position, android.view.View.GONE)
+                views.setViewVisibility(R.id.widget_subtitle, android.view.View.GONE)
+
+                views.setViewVisibility(R.id.widget_rewind, android.view.View.GONE)
+                views.setViewVisibility(R.id.widget_forward, android.view.View.GONE)
+                views.setViewVisibility(R.id.widget_prev, android.view.View.GONE)
+                views.setViewVisibility(R.id.widget_next, android.view.View.GONE)
+                views.setViewVisibility(R.id.widget_play_pause, android.view.View.VISIBLE)
+            } else if (width < 280) {
+                views.setViewVisibility(R.id.widget_album_art, android.view.View.VISIBLE)
+                views.setViewVisibility(R.id.widget_subtitle, android.view.View.VISIBLE)
+
+                views.setViewVisibility(R.id.widget_rewind, android.view.View.GONE)
+                views.setViewVisibility(R.id.widget_forward, android.view.View.GONE)
+                views.setViewVisibility(R.id.widget_prev, android.view.View.VISIBLE)
+                views.setViewVisibility(R.id.widget_next, android.view.View.VISIBLE)
+                views.setViewVisibility(R.id.widget_play_pause, android.view.View.VISIBLE)
+            } else {
+                views.setViewVisibility(R.id.widget_album_art, android.view.View.VISIBLE)
+                views.setViewVisibility(R.id.widget_subtitle, android.view.View.VISIBLE)
+
+                views.setViewVisibility(R.id.widget_rewind, android.view.View.VISIBLE)
+                views.setViewVisibility(R.id.widget_forward, android.view.View.VISIBLE)
+                views.setViewVisibility(R.id.widget_prev, android.view.View.VISIBLE)
+                views.setViewVisibility(R.id.widget_next, android.view.View.VISIBLE)
+                views.setViewVisibility(R.id.widget_play_pause, android.view.View.VISIBLE)
+            }
+
+            // Responsive height rules
+            if (height < 100) {
+                views.setViewVisibility(R.id.widget_progress_container, android.view.View.GONE)
+                views.setViewVisibility(R.id.widget_position, android.view.View.GONE)
+            } else {
+                views.setViewVisibility(R.id.widget_progress_container, android.view.View.VISIBLE)
+                views.setViewVisibility(R.id.widget_position, android.view.View.VISIBLE)
+            }
+            if (height < 70) {
+                views.setViewVisibility(R.id.widget_subtitle, android.view.View.GONE)
             }
         }
 

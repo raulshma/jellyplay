@@ -1,36 +1,63 @@
 package com.raulshma.jellyplay.feature.player.video.components
 
+import androidx.activity.compose.BackHandler
+import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.tween
+import androidx.compose.foundation.background
+import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.foundation.gestures.detectVerticalDragGestures
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
-import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.imePadding
+import androidx.compose.foundation.layout.offset
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.SheetState
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableFloatStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
-import androidx.compose.ui.platform.LocalView
-import androidx.compose.ui.window.DialogWindowProvider
-import androidx.core.view.WindowCompat
-import androidx.core.view.WindowInsetsCompat
-import androidx.core.view.WindowInsetsControllerCompat
+import androidx.compose.ui.unit.IntOffset
+import androidx.compose.ui.unit.dp
 import com.raulshma.jellyplay.core.ui.adaptive.LocalJellyPlayUi
 import com.raulshma.jellyplay.core.ui.components.TvSafeSheet
-import com.raulshma.jellyplay.feature.player.video.findActivity
+import kotlinx.coroutines.launch
+import kotlin.math.roundToInt
+
+private val SheetTopShape = RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp)
+private const val SHEET_ANIM_MS = 280
+private const val SNAP_MS = 180
+private const val MAX_SCRIM_ALPHA = 0.5f
+private const val DISMISS_FRACTION = 0.18f
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun PlayerModalBottomSheet(
     onDismissRequest: () -> Unit,
     modifier: Modifier = Modifier,
-    sheetState: SheetState = rememberModalBottomSheetState(),
-    content: @Composable ColumnScope.() -> Unit
+    @Suppress("UNUSED_PARAMETER") sheetState: SheetState = rememberModalBottomSheetState(),
+    content: @Composable ColumnScope.() -> Unit,
 ) {
     val isTv = LocalJellyPlayUi.current.isTv
 
@@ -41,73 +68,122 @@ fun PlayerModalBottomSheet(
             content()
         }
     } else {
-        val colorScheme = MaterialTheme.colorScheme
-        val typography = MaterialTheme.typography
-        val focusManager = LocalFocusManager.current
-        val keyboardController = LocalSoftwareKeyboardController.current
-        val context = LocalContext.current
+        InWindowPlayerSheet(
+            onDismissRequest = onDismissRequest,
+            modifier = modifier,
+            content = content,
+        )
+    }
+}
 
-        DisposableEffect(Unit) {
-            onDispose {
-                keyboardController?.hide()
-                focusManager.clearFocus(force = true)
-                context.findActivity()?.let { act ->
-                    val window = act.window
-                    val controller = WindowCompat.getInsetsController(window, window.decorView)
-                    controller.systemBarsBehavior =
-                        WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
-                    controller.hide(WindowInsetsCompat.Type.systemBars())
+/**
+ * A bottom sheet rendered inside the player's own composition/window rather than in a
+ * separate [androidx.compose.material3.ModalBottomSheet] Dialog window.
+ *
+ * A Material3 ModalBottomSheet opens a brand-new top-level window that does NOT inherit the
+ * activity's immersive mode, so the status/navigation bars briefly flash on every open. By
+ * keeping the sheet in-window, it inherits the player's immersive (edge-to-edge) window and the
+ * system bars never appear — exactly the desired behavior (bars only show on an edge swipe,
+ * handled by the activity's BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE).
+ */
+@Composable
+private fun InWindowPlayerSheet(
+    onDismissRequest: () -> Unit,
+    modifier: Modifier,
+    content: @Composable ColumnScope.() -> Unit,
+) {
+    val density = LocalDensity.current
+    val colorScheme = MaterialTheme.colorScheme
+    val typography = MaterialTheme.typography
+    val focusManager = LocalFocusManager.current
+    val keyboardController = LocalSoftwareKeyboardController.current
+    val scope = rememberCoroutineScope()
+
+    BoxWithConstraints(modifier = modifier.fillMaxSize()) {
+        val fullHeightPx = with(density) { maxHeight.toPx() }
+        val sheetOffset = remember { Animatable(fullHeightPx) }
+        var liveDrag by remember { mutableFloatStateOf(0f) }
+
+        LaunchedEffect(Unit) {
+            sheetOffset.animateTo(0f, tween(SHEET_ANIM_MS))
+        }
+
+        val dismiss: () -> Unit = remember(onDismissRequest) {
+            {
+                scope.launch {
+                    keyboardController?.hide()
+                    focusManager.clearFocus(force = true)
+                    sheetOffset.animateTo(fullHeightPx, tween(SHEET_ANIM_MS))
+                    onDismissRequest()
                 }
             }
         }
 
-        ModalBottomSheet(
-            onDismissRequest = {
-                keyboardController?.hide()
-                focusManager.clearFocus(force = true)
-                onDismissRequest()
-            },
-            modifier = modifier,
-            sheetState = sheetState,
-            containerColor = colorScheme.surfaceContainer,
-            contentColor = colorScheme.onSurface,
-            contentWindowInsets = { WindowInsets(0, 0, 0, 0) },
+        BackHandler(enabled = true, onBack = dismiss)
+
+        val translationY = (sheetOffset.value + liveDrag).coerceAtLeast(0f)
+        val progress = (translationY / fullHeightPx).coerceIn(0f, 1f)
+        val scrimAlpha = (1f - progress) * MAX_SCRIM_ALPHA
+
+        Box(
+            Modifier
+                .fillMaxSize()
+                .background(Color.Black.copy(alpha = scrimAlpha))
+                .pointerInput(Unit) { detectTapGestures(onTap = { dismiss() }) },
+        )
+
+        Column(
+            modifier = Modifier
+                .align(Alignment.BottomCenter)
+                .fillMaxWidth()
+                .heightIn(max = maxHeight)
+                .imePadding()
+                .offset { IntOffset(0, translationY.roundToInt()) }
+                .clip(SheetTopShape)
+                .background(colorScheme.surfaceContainer),
         ) {
-            val view = LocalView.current
-            DisposableEffect(view) {
-                val checkAndHide = {
-                    val window = (view.parent as? DialogWindowProvider)?.window
-                    window?.let {
-                        val controller = WindowCompat.getInsetsController(it, it.decorView)
-                        controller.systemBarsBehavior =
-                            WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
-                        controller.hide(WindowInsetsCompat.Type.systemBars())
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .pointerInput(fullHeightPx) {
+                        detectVerticalDragGestures(
+                            onVerticalDrag = { _, dragAmount ->
+                                liveDrag = (liveDrag + dragAmount).coerceAtLeast(0f)
+                            },
+                            onDragEnd = {
+                                scope.launch {
+                                    val current = (sheetOffset.value + liveDrag)
+                                        .coerceIn(0f, fullHeightPx)
+                                    sheetOffset.snapTo(current)
+                                    liveDrag = 0f
+                                    if (current > fullHeightPx * DISMISS_FRACTION) {
+                                        dismiss()
+                                    } else {
+                                        sheetOffset.animateTo(0f, tween(SNAP_MS))
+                                    }
+                                }
+                            },
+                            onDragCancel = {
+                                liveDrag = 0f
+                            },
+                        )
                     }
-                }
-                if (view.isAttachedToWindow) {
-                    checkAndHide()
-                }
-                val listener = object : android.view.View.OnAttachStateChangeListener {
-                    override fun onViewAttachedToWindow(v: android.view.View) {
-                        checkAndHide()
-                    }
-                    override fun onViewDetachedFromWindow(v: android.view.View) {}
-                }
-                view.addOnAttachStateChangeListener(listener)
-                onDispose {
-                    view.removeOnAttachStateChangeListener(listener)
-                }
+                    .padding(top = 12.dp, bottom = 8.dp),
+                contentAlignment = Alignment.Center,
+            ) {
+                Box(
+                    Modifier
+                        .size(width = 40.dp, height = 4.dp)
+                        .clip(CircleShape)
+                        .background(Color.White.copy(alpha = 0.25f)),
+                )
             }
+
             MaterialTheme(
                 colorScheme = colorScheme,
                 typography = typography,
             ) {
-                Column(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .weight(1f, fill = false),
-                    content = content,
-                )
+                content()
             }
         }
     }
