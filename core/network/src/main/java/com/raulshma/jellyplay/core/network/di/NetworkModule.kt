@@ -135,27 +135,40 @@ abstract class NetworkModule {
             userPreferencesStore: com.raulshma.jellyplay.core.datastore.UserPreferencesStore,
             bandwidthInterceptor: BandwidthInterceptor,
         ): OkHttpClient {
-            val prefs = userPreferencesStore.preferences.value
+            val initialPrefs = userPreferencesStore.preferences.value
             val cacheDir = File(context.cacheDir, "http_cache")
             cacheDir.mkdirs()
-            val cacheMb = prefs.maxCacheSizeMb
+            val cacheMb = initialPrefs.maxCacheSizeMb
             val cacheSize = if (cacheMb > 0) cacheMb * 1024L * 1024L else 50L * 1024 * 1024
-            val timeoutPreset = prefs.networkTimeoutPreset
+            val initialTimeout = initialPrefs.networkTimeoutPreset
+            
+            val loggingInterceptor = HttpLoggingInterceptor().apply {
+                level = HttpLoggingInterceptor.Level.HEADERS
+            }
+            
             val builder = OkHttpClient.Builder()
-                .connectTimeout(timeoutPreset.connectSec, TimeUnit.SECONDS)
-                .readTimeout(timeoutPreset.readSec, TimeUnit.SECONDS)
-                .writeTimeout(timeoutPreset.writeSec, TimeUnit.SECONDS)
+                .connectTimeout(initialTimeout.connectSec, TimeUnit.SECONDS)
+                .readTimeout(initialTimeout.readSec, TimeUnit.SECONDS)
+                .writeTimeout(initialTimeout.writeSec, TimeUnit.SECONDS)
                 .cache(Cache(cacheDir, cacheSize))
                 .connectionPool(ConnectionPool(16, 15, TimeUnit.MINUTES))
                 .protocols(listOf(Protocol.HTTP_2, Protocol.HTTP_1_1))
                 .retryOnConnectionFailure(true)
-            if (prefs.verboseNetworkLogging) {
-                builder.addInterceptor(
-                    HttpLoggingInterceptor().apply {
-                        level = HttpLoggingInterceptor.Level.HEADERS
+                .addInterceptor { chain ->
+                    val prefs = userPreferencesStore.preferences.value
+                    val timeoutPreset = prefs.networkTimeoutPreset
+                    
+                    val newChain = chain
+                        .withConnectTimeout(timeoutPreset.connectSec.toInt(), TimeUnit.SECONDS)
+                        .withReadTimeout(timeoutPreset.readSec.toInt(), TimeUnit.SECONDS)
+                        .withWriteTimeout(timeoutPreset.writeSec.toInt(), TimeUnit.SECONDS)
+                    
+                    if (prefs.verboseNetworkLogging) {
+                        loggingInterceptor.intercept(newChain)
+                    } else {
+                        newChain.proceed(newChain.request())
                     }
-                )
-            }
+                }
             return builder
                 .addNetworkInterceptor(bandwidthInterceptor)
                 .addNetworkInterceptor { chain ->

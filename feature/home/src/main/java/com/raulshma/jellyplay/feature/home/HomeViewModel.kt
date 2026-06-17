@@ -452,7 +452,17 @@ class HomeViewModel @Inject constructor(
                                     }
                                 }
                             } else {
-                                ordered.filterNot { it.type == HomeSectionType.NEXT_UP }
+                                val nextUpSection = ordered.firstOrNull { it.type == HomeSectionType.NEXT_UP }
+                                if (nextUpSection != null) {
+                                    ordered.mapNotNull { section ->
+                                        when (section.type) {
+                                            HomeSectionType.NEXT_UP -> section.copy(type = HomeSectionType.CONTINUE_WATCHING)
+                                            else -> section
+                                        }
+                                    }
+                                } else {
+                                    ordered
+                                }
                             }
                         } else {
                             ordered
@@ -487,7 +497,7 @@ class HomeViewModel @Inject constructor(
                                     .build()
                                 androidx.work.WorkManager.getInstance(context).enqueueUniqueWork(
                                     com.raulshma.jellyplay.core.data.worker.TvWatchNextWorker.UNIQUE_WORK_NAME,
-                                    androidx.work.ExistingWorkPolicy.KEEP,
+                                    androidx.work.ExistingWorkPolicy.REPLACE,
                                     request,
                                 )
                             } catch (_: Exception) {

@@ -68,6 +68,7 @@ import com.composables.icons.tabler.Tabler
 import com.composables.icons.tabler.outline.ChevronLeft
 import com.composables.icons.tabler.outline.ChevronRight
 import com.composables.icons.tabler.outline.Download
+import com.composables.icons.tabler.outline.Adjustments
 import com.composables.icons.tabler.outline.InfoCircle
 import com.composables.icons.tabler.outline.PlayerPause
 import com.composables.icons.tabler.outline.PlayerPlay
@@ -332,7 +333,7 @@ fun PhotoViewerScreen(
                                     OverlayActionButton(
                                         onClick = { viewModel.toggleAdjustments() },
                                     ) {
-                                        Icon(Tabler.Outline.InfoCircle, contentDescription = "Adjust", tint = Color.White, modifier = Modifier.size(20.dp))
+                                        Icon(Tabler.Outline.Adjustments, contentDescription = "Adjust", tint = Color.White, modifier = Modifier.size(20.dp))
                                     }
                                 }
                             }

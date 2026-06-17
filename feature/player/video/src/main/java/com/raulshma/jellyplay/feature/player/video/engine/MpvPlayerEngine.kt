@@ -528,9 +528,9 @@ class MpvPlayerEngine(
                 if (hasContrast) eqParts.add("contrast=${effects.contrast}")
                 if (hasSaturation) eqParts.add("saturation=${effects.saturation}")
                 if (hasHue) eqParts.add("hue=${effects.hue}")
-                if (effects.redGain != 1f) eqParts.add("rr=${effects.redGain}")
-                if (effects.greenGain != 1f) eqParts.add("gg=${effects.greenGain}")
-                if (effects.blueGain != 1f) eqParts.add("bb=${effects.blueGain}")
+                if (effects.redGain != 1f) eqParts.add("gamma_r=${effects.redGain}")
+                if (effects.greenGain != 1f) eqParts.add("gamma_g=${effects.greenGain}")
+                if (effects.blueGain != 1f) eqParts.add("gamma_b=${effects.blueGain}")
                 filters.add("eq=${eqParts.joinToString(":")}")
             }
             if (effects.sharpness > 0f) {
@@ -540,13 +540,10 @@ class MpvPlayerEngine(
                 // lavfi gblur sigma ~ half the user value to keep 0..10 range sensible
                 filters.add("lavfi=[gblur=sigma=${effects.gaussianBlur / 2f}]")
             }
-            if (effects.rotationDegrees != 0f) {
-                // mpv rotate only accepts discrete 90/180/270 steps; snap to nearest.
-                val discrete = (kotlin.math.round(effects.rotationDegrees / 90f).toInt() * 90) % 360
-                if (discrete != 0) {
-                    filters.add("rotate=$discrete")
-                }
-            }
+            val rawDiscrete = kotlin.math.round(effects.rotationDegrees / 90f).toInt() * 90
+            val discrete = ((rawDiscrete % 360) + 360) % 360
+            mpvView?.mpv?.setPropertyDouble("video-rotate", discrete.toDouble())
+
             if (filters.isNotEmpty()) {
                 mpvView?.mpv?.setPropertyString("vf", filters.joinToString(","))
             } else {

@@ -54,4 +54,6 @@ dependencies {
     implementation(libs.work.runtime.ktx)
 
     testImplementation(libs.junit)
+    testImplementation(libs.mockk)
+    testImplementation(libs.coroutines.test)
 }

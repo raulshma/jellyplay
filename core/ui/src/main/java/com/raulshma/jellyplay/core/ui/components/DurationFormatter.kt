@@ -73,6 +73,9 @@ fun rememberWallClockTimeString(): String {
     val formatter = remember(pattern) { SimpleDateFormat(pattern, Locale.getDefault()) }
     var time by remember { mutableStateOf(formatter.format(Date())) }
     LaunchedEffect(Unit) {
+        val initialDelay = 60_000 - (System.currentTimeMillis() % 60_000)
+        kotlinx.coroutines.delay(initialDelay)
+        time = formatter.format(Date())
         while (true) {
             kotlinx.coroutines.delay(60_000)
             time = formatter.format(Date())

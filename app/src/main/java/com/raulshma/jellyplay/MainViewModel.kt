@@ -217,6 +217,7 @@ class MainViewModel @Inject constructor(
         val intent = Intent(Intent.ACTION_VIEW).apply {
             setDataAndType(Uri.parse(url), "video/*")
             putExtra("title", title)
+            putExtra("return_result", true)
             val startMs = route.startPositionTicks / 10_000
             if (startMs > 0) putExtra("position", startMs)
         }

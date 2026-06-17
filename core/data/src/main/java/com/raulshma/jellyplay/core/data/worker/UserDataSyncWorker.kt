@@ -48,7 +48,7 @@ class UserDataSyncWorker @AssistedInject constructor(
                     HomeSectionType.CONTINUE_WATCHING,
                     HomeSectionType.NEXT_UP,
                 ),
-            )
+            ).getOrThrow()
         }.fold(
             onSuccess = { Result.success() },
             onFailure = {

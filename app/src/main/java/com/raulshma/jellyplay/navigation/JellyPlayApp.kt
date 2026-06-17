@@ -320,8 +320,12 @@ private fun MainContent(
         pendingExternalLaunch = null
         if (launch != null) {
             val finalMs = result.data?.let { data ->
-                data.getLongExtra("position", -1L).takeIf { it >= 0 }
-                    ?: data.getLongExtra("positionMs", -1L).takeIf { it >= 0 }
+                val pos = data.extras?.get("position") ?: data.extras?.get("positionMs")
+                val ms = when (pos) {
+                    is Number -> pos.toLong()
+                    else -> -1L
+                }
+                ms.takeIf { it >= 0 }
             }
             val finalTicks = finalMs?.let { it * 10_000 } ?: -1L
             viewModel.reportExternalPlaybackStopped(launch, finalTicks)
@@ -335,7 +339,10 @@ private fun MainContent(
                 pendingExternalLaunch = launch
                 val chooser = Intent.createChooser(launch.intent, "Open with…")
                 runCatching { externalPlayerLauncher.launch(chooser) }
-                    .onFailure { pendingExternalLaunch = null }
+                    .onFailure {
+                        pendingExternalLaunch = null
+                        android.widget.Toast.makeText(context, "No video player found", android.widget.Toast.LENGTH_LONG).show()
+                    }
             }
             false
         } else {

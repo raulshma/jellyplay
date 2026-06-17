@@ -382,37 +382,8 @@ class LibVlcPlayerEngine(
                 mp.setSpuDelay(config.subtitleDelayMs * 1000L)
             }
             
-            if (oldConfig.subtitleStyle != config.subtitleStyle) {
+            if (oldConfig.subtitleStyle != config.subtitleStyle || oldConfig.videoEffects != config.videoEffects) {
                 reloadMediaForSubtitleStyleChange()
-            }
-
-            if (oldConfig.videoEffects != config.videoEffects) {
-                applyVideoFilters(config.videoEffects)
-            }
-        } catch (_: Exception) {}
-    }
-
-    private fun applyVideoFilters(effects: VideoEffectsConfig) {
-        try {
-            val mp = mediaPlayer ?: return
-            val hasAdjust = effects.brightness != 0f || effects.contrast != 1f || effects.saturation != 1f || effects.hue != 0f
-            if (hasAdjust) {
-                val brightnessVal = (1.0f + effects.brightness).coerceIn(0.0f, 2.0f)
-                val contrastVal = effects.contrast.coerceIn(0.0f, 2.0f)
-                val saturationVal = effects.saturation.coerceIn(0.0f, 3.0f)
-                val hueVal = effects.hue.toInt().coerceIn(0, 360)
-                val media = mp.media
-                media?.addOption(":brightness=${(brightnessVal * 100).toInt()}")
-                media?.addOption(":contrast=${(contrastVal * 100).toInt()}")
-                media?.addOption(":saturation=${(saturationVal * 100).toInt()}")
-                media?.addOption(":hue=$hueVal")
-            }
-            if (effects.rotationDegrees != 0f) {
-                // LibVLC accepts only 0/90/180/270 via the transform option
-                val discrete = (kotlin.math.round(effects.rotationDegrees / 90f).toInt() * 90) % 360
-                if (discrete != 0) {
-                    mp.media?.addOption(":transform-type{angle=$discrete}")
-                }
             }
         } catch (_: Exception) {}
     }
@@ -622,6 +593,35 @@ class LibVlcPlayerEngine(
         val media = Media(vlc, Uri.parse(request.uri))
         val hwDecoding = currentConfig.decoderMode != DecoderMode.SW_ONLY
         media.setHWDecoderEnabled(hwDecoding, hwDecoding)
+
+        // Apply video effects options
+        val effects = currentConfig.videoEffects
+        val hasAdjust = effects.brightness != 0f || effects.contrast != 1f || effects.saturation != 1f || effects.hue != 0f
+        val filters = mutableListOf<String>()
+        if (hasAdjust) {
+            filters.add("adjust")
+        }
+        if (effects.rotationDegrees != 0f) {
+            val rawDiscrete = kotlin.math.round(effects.rotationDegrees / 90f).toInt() * 90
+            val discrete = ((rawDiscrete % 360) + 360) % 360
+            if (discrete != 0) {
+                filters.add("transform")
+                media.addOption(":transform-type=$discrete")
+            }
+        }
+        if (filters.isNotEmpty()) {
+            media.addOption(":video-filter=${filters.joinToString(":")}")
+        }
+        if (hasAdjust) {
+            val brightnessVal = (1.0f + effects.brightness).coerceIn(0.0f, 2.0f)
+            val contrastVal = effects.contrast.coerceIn(0.0f, 2.0f)
+            val saturationVal = effects.saturation.coerceIn(0.0f, 3.0f)
+            val hueVal = effects.hue.toInt().coerceIn(0, 360)
+            media.addOption(":brightness=$brightnessVal")
+            media.addOption(":contrast=$contrastVal")
+            media.addOption(":saturation=$saturationVal")
+            media.addOption(":hue=$hueVal")
+        }
 
         if (isLowRamDevice) {
             media.addOption(":clock-jitter=0")

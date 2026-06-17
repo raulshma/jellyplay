@@ -253,8 +253,11 @@ class VideoPlayerViewModel @Inject constructor(
                 if (_uiState.value.showClock != prefs.showClockInPlayer) {
                     _uiState.update { it.copy(showClock = prefs.showClockInPlayer) }
                 }
-                if (_uiState.value.keepScreenOnDuringVideo != prefs.keepScreenOnDuringVideo) {
+                 if (_uiState.value.keepScreenOnDuringVideo != prefs.keepScreenOnDuringVideo) {
                     _uiState.update { it.copy(keepScreenOnDuringVideo = prefs.keepScreenOnDuringVideo) }
+                }
+                if (_uiState.value.passOutProtectionHours != prefs.videoPassOutProtectionHours) {
+                    _uiState.update { it.copy(passOutProtectionHours = prefs.videoPassOutProtectionHours) }
                 }
                 if (oldPrefs.volumeBoostEnabled != prefs.volumeBoostEnabled ||
                     oldPrefs.volumeBoostGain != prefs.volumeBoostGain ||
@@ -273,16 +276,22 @@ class VideoPlayerViewModel @Inject constructor(
         }
         launch {
             // Pass-out protection: pause playback after N hours of no user interaction.
-            val wasPlaying = booleanArrayOf(false)
-            playerSessionManager.sessionState.collect { _ ->
-                val engine = playerSessionManager.engine ?: return@collect
-                val playing = engine.isPlaying.value
-                if (playing && !wasPlaying[0]) {
-                    // Resumed playback — reset the interaction clock so a long paused period
-                    // doesn't immediately trip the timer.
-                    lastInteractionElapsedMs = android.os.SystemClock.elapsedRealtime()
+            var engineJob: kotlinx.coroutines.Job? = null
+            playerSessionManager.engineFlow.collect { engine ->
+                engineJob?.cancel()
+                if (engine != null) {
+                    engineJob = launch {
+                        val wasPlaying = booleanArrayOf(false)
+                        engine.isPlaying.collect { playing ->
+                            if (playing && !wasPlaying[0]) {
+                                // Resumed playback — reset the interaction clock so a long paused period
+                                // doesn't immediately trip the timer.
+                                lastInteractionElapsedMs = android.os.SystemClock.elapsedRealtime()
+                            }
+                            wasPlaying[0] = playing
+                        }
+                    }
                 }
-                wasPlaying[0] = playing
             }
         }
         launch {

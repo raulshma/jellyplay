@@ -29,9 +29,15 @@ class TvWatchNextWorker @AssistedInject constructor(
 
     override suspend fun doWork(): Result {
         val prefs = preferencesStore.preferences.firstOrNull() ?: return Result.success()
-        if (!prefs.androidTvWatchNextEnabled) return Result.success()
-
         val publisher = TvWatchNextPublisher(applicationContext, mediaRepository, playbackRepository)
+
+        if (!prefs.androidTvWatchNextEnabled) {
+            return publisher.clear().fold(
+                onSuccess = { Result.success() },
+                onFailure = { Result.failure() },
+            )
+        }
+
         return publisher.publish().fold(
             onSuccess = { Result.success() },
             onFailure = {
