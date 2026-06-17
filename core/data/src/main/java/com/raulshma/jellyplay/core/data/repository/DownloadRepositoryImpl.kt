@@ -20,8 +20,13 @@ import com.raulshma.jellyplay.core.database.entity.OfflineMediaEntity
 import com.raulshma.jellyplay.core.data.worker.DownloadWorker
 import com.raulshma.jellyplay.core.model.DownloadItem
 import com.raulshma.jellyplay.core.model.DownloadStatus
+import com.raulshma.jellyplay.core.model.MediaSegment
+import com.raulshma.jellyplay.core.model.MediaStream
 import com.raulshma.jellyplay.core.model.MediaType
 import com.raulshma.jellyplay.core.model.MediaItem
+import com.raulshma.jellyplay.core.model.OfflineSubtitleEntry
+import com.raulshma.jellyplay.core.model.OfflineSubtitleManifest
+import com.raulshma.jellyplay.core.model.StreamType
 import com.raulshma.jellyplay.core.model.TrickplayInfo
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.Dispatchers
@@ -34,6 +39,9 @@ import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.sync.Semaphore
 import kotlinx.coroutines.sync.withPermit
 import kotlinx.coroutines.withContext
+import kotlinx.serialization.json.Json
+import okhttp3.OkHttpClient
+import okhttp3.Request
 import java.io.File
 import java.util.UUID
 import javax.inject.Inject
@@ -47,6 +55,7 @@ class DownloadRepositoryImpl @Inject constructor(
     private val database: JellyPlayDatabase,
     private val mediaRepository: MediaRepository,
     private val playbackRepository: PlaybackRepository,
+    private val httpClient: OkHttpClient,
     private val preferencesStore: com.raulshma.jellyplay.core.datastore.UserPreferencesStore,
 ) : DownloadRepository {
 
@@ -95,10 +104,7 @@ class DownloadRepositoryImpl @Inject constructor(
             }
             if (existing.downloadPath.isNotBlank()) {
                 File(existing.downloadPath).let { f -> if (f.exists()) f.delete() }
-                File(existing.downloadPath).parentFile?.let { parent ->
-                    val oldTrickplayDir = File(parent, "trickplay")
-                    if (oldTrickplayDir.exists()) oldTrickplayDir.deleteRecursively()
-                }
+                DownloadArtifacts.cleanup(File(existing.downloadPath).parentFile)
             }
             downloadDao.deleteDownloadById(existing.id)
         }
@@ -304,6 +310,15 @@ class DownloadRepositoryImpl @Inject constructor(
                                                 downloadTrickplayData(episode.id, info, download.downloadPath)
                                             } catch (e: Exception) { Log.d(TAG, "Failed to download trickplay data", e) }
                                         }
+                                        // Bundle external subtitles + intro/outro segments for offline use.
+                                        if (source != null) {
+                                            try {
+                                                downloadExternalSubtitles(episode.id, source.id, source.mediaStreams, download.downloadPath)
+                                            } catch (e: Exception) { Log.d(TAG, "Failed to download external subtitles", e) }
+                                        }
+                                        try {
+                                            downloadMediaSegments(episode.id, download.downloadPath)
+                                        } catch (e: Exception) { Log.d(TAG, "Failed to download media segments", e) }
                                         Pair(offlineEntity, download.id)
                                     } else {
                                         Pair(offlineEntity, null)
@@ -366,6 +381,125 @@ class DownloadRepositoryImpl @Inject constructor(
                     appendLine("\"bandwidth\":${trickplayInfo.bandwidth}}")
                 })
             } catch (e: Exception) { Log.d(TAG, "Failed to write trickplay meta.json", e) }
+        }
+    }
+
+    override suspend fun downloadExternalSubtitles(
+        itemId: String,
+        mediaSourceId: String,
+        mediaStreams: List<MediaStream>,
+        downloadPath: String,
+    ) {
+        withContext(Dispatchers.IO) {
+            try {
+                val parentDir = File(downloadPath).parentFile ?: return@withContext
+                val subtitleStreams = mediaStreams.filter {
+                    it.type == StreamType.SUBTITLE && (it.isExternal || !it.deliveryUrl.isNullOrBlank())
+                }
+                if (subtitleStreams.isEmpty()) return@withContext
+
+                val subtitlesDir = File(parentDir, DownloadArtifacts.SUBTITLES_DIR).apply { mkdirs() }
+                val entries = mutableListOf<OfflineSubtitleEntry>()
+
+                for (stream in subtitleStreams) {
+                    try {
+                        val subUrl = when {
+                            !stream.deliveryUrl.isNullOrBlank() ->
+                                playbackRepository.getSubtitleDeliveryUrl(stream.deliveryUrl!!)
+                            stream.isExternal ->
+                                playbackRepository.buildSubtitleDeliveryUrl(itemId, mediaSourceId, stream.index, stream.codec)
+                            else -> continue
+                        }
+                        if (subUrl.isBlank()) continue
+
+                        val fileName = "${stream.index}.${subtitleFileExtension(stream.codec)}"
+                        val target = File(subtitlesDir, fileName)
+                        if (!downloadToFile(subUrl, target)) continue
+
+                        entries.add(
+                            OfflineSubtitleEntry(
+                                index = stream.index,
+                                fileName = fileName,
+                                language = stream.language,
+                                codec = stream.codec,
+                                title = stream.title,
+                                displayTitle = stream.displayTitle,
+                                isDefault = stream.isDefault,
+                                isForced = stream.isForced,
+                            )
+                        )
+                    } catch (e: Exception) {
+                        Log.d(TAG, "Failed to download subtitle stream ${stream.index} for $itemId", e)
+                    }
+                }
+
+                // Only persist a manifest when at least one subtitle was saved.
+                // Otherwise remove the dir so the player never reads a stale manifest.
+                if (entries.isNotEmpty()) {
+                    File(subtitlesDir, DownloadArtifacts.SUBTITLE_MANIFEST_FILE)
+                        .writeText(json.encodeToString(OfflineSubtitleManifest(entries)))
+                } else if (subtitlesDir.exists()) {
+                    subtitlesDir.deleteRecursively()
+                }
+            } catch (e: Exception) {
+                Log.d(TAG, "Failed to download external subtitles for $itemId", e)
+            }
+        }
+    }
+
+    override suspend fun downloadMediaSegments(itemId: String, downloadPath: String) {
+        withContext(Dispatchers.IO) {
+            try {
+                val segments = playbackRepository.getMediaSegments(itemId).getOrDefault(emptyList())
+                if (segments.isEmpty()) return@withContext
+                val parentDir = File(downloadPath).parentFile ?: return@withContext
+                File(parentDir, DownloadArtifacts.SEGMENTS_FILE)
+                    .writeText(json.encodeToString(segments))
+            } catch (e: Exception) {
+                Log.d(TAG, "Failed to download media segments for $itemId", e)
+            }
+        }
+    }
+
+    override suspend fun loadLocalSubtitleManifest(
+        downloadPath: String,
+    ): OfflineSubtitleManifest? = withContext(Dispatchers.IO) {
+        val dir = File(downloadPath).parentFile ?: return@withContext null
+        val file = File(dir, "${DownloadArtifacts.SUBTITLES_DIR}/${DownloadArtifacts.SUBTITLE_MANIFEST_FILE}")
+        if (!file.exists()) return@withContext null
+        runCatching { json.decodeFromString<OfflineSubtitleManifest>(file.readText()) }.getOrNull()
+    }
+
+    override suspend fun loadLocalSegments(itemId: String): List<MediaSegment>? = withContext(Dispatchers.IO) {
+        val download = downloadDao.getDownloadByMediaItemId(itemId) ?: return@withContext null
+        val dir = File(download.downloadPath).parentFile ?: return@withContext null
+        val file = File(dir, DownloadArtifacts.SEGMENTS_FILE)
+        if (!file.exists()) return@withContext null
+        runCatching { json.decodeFromString<List<MediaSegment>>(file.readText()) }.getOrNull()
+    }
+
+    private fun subtitleFileExtension(codec: String?): String = when (codec?.lowercase()) {
+        "subrip", "srt" -> "srt"
+        "ass" -> "ass"
+        "ssa" -> "ass"
+        "webvtt", "vtt" -> "vtt"
+        "mov_text", "ttml" -> "ttml"
+        "sub" -> "sub"
+        else -> "srt"
+    }
+
+    private fun downloadToFile(url: String, target: File): Boolean {
+        return try {
+            httpClient.newCall(Request.Builder().url(url).build()).execute().use { resp ->
+                if (!resp.isSuccessful) return@use false
+                resp.body?.byteStream()?.use { input ->
+                    target.outputStream().use { output -> input.copyTo(output) }
+                }
+                target.exists() && target.length() > 0
+            }
+        } catch (e: Exception) {
+            Log.d(TAG, "Failed to download file from $url", e)
+            false
         }
     }
 
@@ -443,10 +577,7 @@ class DownloadRepositoryImpl @Inject constructor(
         if (entity.downloadPath.isNotBlank()) {
             val file = File(entity.downloadPath)
             if (file.exists()) file.delete()
-            file.parentFile?.let { parent ->
-                val trickplayDir = File(parent, "trickplay")
-                if (trickplayDir.exists()) trickplayDir.deleteRecursively()
-            }
+            DownloadArtifacts.cleanup(file.parentFile)
         }
         database.withTransaction {
             downloadDao.deleteDownloadById(entity.id)
@@ -481,5 +612,6 @@ class DownloadRepositoryImpl @Inject constructor(
     companion object {
         private const val TAG = "DownloadRepository"
         private val FILENAME_SANITIZE_REGEX = Regex("[^a-zA-Z0-9.\\-]")
+        private val json = Json { ignoreUnknownKeys = true }
     }
 }

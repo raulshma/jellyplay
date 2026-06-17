@@ -511,6 +511,21 @@ class DetailViewModel @Inject constructor(
                                 downloadRepository.downloadTrickplayData(item.id, info, downloadItem.downloadPath)
                             }
                         }
+                        // Bundle external subtitles + intro/outro segments for offline use.
+                        launch {
+                            try {
+                                downloadRepository.downloadExternalSubtitles(
+                                    item.id, source.id, source.mediaStreams, downloadItem.downloadPath,
+                                )
+                            } catch (_: Exception) {
+                            }
+                        }
+                        launch {
+                            try {
+                                downloadRepository.downloadMediaSegments(item.id, downloadItem.downloadPath)
+                            } catch (_: Exception) {
+                            }
+                        }
                     }
                 }.onFailure { error ->
                     downloadError = error.message ?: "Download failed"

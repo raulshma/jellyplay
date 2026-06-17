@@ -1140,6 +1140,13 @@ class VideoPlayerViewModel @Inject constructor(
 
     private fun fetchMediaSegments(itemId: String) {
         launch {
+            // Offline-first: prefer segments bundled with the download so skip
+            // controls (intro/outro/recap) work without a server round-trip.
+            val local = downloadRepository.loadLocalSegments(itemId)
+            if (local != null) {
+                _uiState.update { it.copy(segments = local) }
+                return@launch
+            }
             val segments = playbackRepository.getMediaSegments(itemId).getOrDefault(emptyList())
             _uiState.update { it.copy(segments = segments) }
         }
