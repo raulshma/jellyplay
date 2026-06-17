@@ -85,9 +85,8 @@ class UserPreferencesStore @Inject constructor(
 ) {
     private val scope = externalScope
 
-    private val sharedPrefs: StateFlow<Preferences> = context.dataStore.data
+    private val sharedPrefs: Flow<Preferences> = context.dataStore.data
         .catch { _ -> emit(emptyPreferences()) }
-        .stateIn(scope, SharingStarted.Eagerly, emptyPreferences())
 
     private object Keys {
         val ACTIVE_SERVER_ID = stringPreferencesKey("active_server_id")

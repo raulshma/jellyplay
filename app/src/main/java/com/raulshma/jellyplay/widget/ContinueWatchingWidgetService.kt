@@ -1,5 +1,6 @@
 package com.raulshma.jellyplay.widget
 
+import android.appwidget.AppWidgetManager
 import android.content.Context
 import android.content.Intent
 import android.net.Uri
@@ -46,13 +47,18 @@ class ContinueWatchingWidgetService : RemoteViewsService() {
         )
         val store = entryPoint.preferencesStore()
         val playbackRepo = entryPoint.playbackRepository()
-        return ContinueWatchingFactory(applicationContext, store, playbackRepo)
+        val appWidgetId = intent.getIntExtra(
+            AppWidgetManager.EXTRA_APPWIDGET_ID,
+            AppWidgetManager.INVALID_APPWIDGET_ID
+        )
+        return ContinueWatchingFactory(applicationContext, store, playbackRepo, appWidgetId)
     }
 
     private class ContinueWatchingFactory(
         private val context: Context,
         private val store: UserPreferencesStore,
         private val playbackRepository: PlaybackRepository,
+        private val appWidgetId: Int,
     ) : RemoteViewsFactory {
 
         private var items: List<MediaItem> = emptyList()
@@ -74,8 +80,44 @@ class ContinueWatchingWidgetService : RemoteViewsService() {
             val view = RemoteViews(context.packageName, R.layout.continue_watching_item)
             view.setTextViewText(R.id.cw_item_title, item.name)
             view.setTextViewText(R.id.cw_item_subtitle, buildSubtitle(item))
+
+            // Apply responsive rules based on widget options
+            var hideProgress = false
+            var hidePoster = false
+
+            if (appWidgetId != AppWidgetManager.INVALID_APPWIDGET_ID) {
+                val appWidgetManager = AppWidgetManager.getInstance(context)
+                val options = appWidgetManager.getAppWidgetOptions(appWidgetId)
+                if (options != null) {
+                    val config = context.resources.configuration
+                    val isLandscape = config.orientation == android.content.res.Configuration.ORIENTATION_LANDSCAPE
+                    val minWidth = options.getInt(AppWidgetManager.OPTION_APPWIDGET_MIN_WIDTH)
+                    val minHeight = options.getInt(AppWidgetManager.OPTION_APPWIDGET_MIN_HEIGHT)
+                    val maxWidth = options.getInt(AppWidgetManager.OPTION_APPWIDGET_MAX_WIDTH)
+                    val maxHeight = options.getInt(AppWidgetManager.OPTION_APPWIDGET_MAX_HEIGHT)
+                    var width = if (isLandscape) maxWidth else minWidth
+                    var height = if (isLandscape) minHeight else maxHeight
+
+                    if (width <= 0) width = 280
+                    if (height <= 0) height = 220
+
+                    if (width < 240) {
+                        hideProgress = true
+                    }
+                    if (width < 180) {
+                        hidePoster = true
+                    }
+                }
+            }
+
+            if (hidePoster) {
+                view.setViewVisibility(R.id.cw_item_poster, View.GONE)
+            } else {
+                view.setViewVisibility(R.id.cw_item_poster, View.VISIBLE)
+            }
+
             val progress = computeProgress(item)
-            if (progress != null) {
+            if (progress != null && !hideProgress) {
                 view.setProgressBar(R.id.cw_item_progress, 100, progress, false)
                 view.setViewVisibility(R.id.cw_item_progress, View.VISIBLE)
                 view.setViewVisibility(R.id.cw_item_remaining, View.VISIBLE)
@@ -91,14 +133,16 @@ class ContinueWatchingWidgetService : RemoteViewsService() {
 
             val imageId = item.seriesId ?: item.id
             val posterUrl = playbackRepository.getImageUrl(imageId, maxWidth = 300)
-            val posterBitmap = if (!posterUrl.isNullOrBlank()) {
+            val posterBitmap = if (!posterUrl.isNullOrBlank() && !hidePoster) {
                 runBlocking { WidgetImageLoader.loadPoster(context, posterUrl) }
             } else null
 
-            if (posterBitmap != null) {
-                view.setImageViewBitmap(R.id.cw_item_poster, posterBitmap)
-            } else {
-                view.setImageViewResource(R.id.cw_item_poster, R.drawable.ic_banner)
+            if (!hidePoster) {
+                if (posterBitmap != null) {
+                    view.setImageViewBitmap(R.id.cw_item_poster, posterBitmap)
+                } else {
+                    view.setImageViewResource(R.id.cw_item_poster, R.drawable.ic_banner)
+                }
             }
 
             val deepLinkUri = Uri.parse("${DeepLinkHandler.SCHEME_CUSTOM}://media/${item.id}")

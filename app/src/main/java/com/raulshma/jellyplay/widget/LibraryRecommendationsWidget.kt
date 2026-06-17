@@ -7,6 +7,7 @@ import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
 import android.net.Uri
+import android.os.Bundle
 import android.widget.RemoteViews
 import com.raulshma.jellyplay.MainActivity
 import com.raulshma.jellyplay.R
@@ -60,6 +61,17 @@ class LibraryRecommendationsWidget : AppWidgetProvider() {
             updateAppWidget(context, appWidgetManager, id)
         }
         triggerInitialRefresh(context)
+    }
+
+    override fun onAppWidgetOptionsChanged(
+        context: Context,
+        appWidgetManager: AppWidgetManager,
+        appWidgetId: Int,
+        newOptions: Bundle
+    ) {
+        super.onAppWidgetOptionsChanged(context, appWidgetManager, appWidgetId, newOptions)
+        updateAppWidget(context, appWidgetManager, appWidgetId)
+        appWidgetManager.notifyAppWidgetViewDataChanged(appWidgetId, R.id.lr_widget_grid)
     }
 
     override fun onEnabled(context: Context) {
@@ -116,13 +128,42 @@ class LibraryRecommendationsWidget : AppWidgetProvider() {
             val views = RemoteViews(context.packageName, R.layout.library_recommendations_widget)
             views.setTextViewText(R.id.lr_widget_subtitle, readSourceLabel(context))
 
+            // Apply responsive rules
+            val options = appWidgetManager.getAppWidgetOptions(appWidgetId)
+            if (options != null) {
+                val config = context.resources.configuration
+                val isLandscape = config.orientation == android.content.res.Configuration.ORIENTATION_LANDSCAPE
+                val minWidth = options.getInt(AppWidgetManager.OPTION_APPWIDGET_MIN_WIDTH)
+                val minHeight = options.getInt(AppWidgetManager.OPTION_APPWIDGET_MIN_HEIGHT)
+                val maxWidth = options.getInt(AppWidgetManager.OPTION_APPWIDGET_MAX_WIDTH)
+                val maxHeight = options.getInt(AppWidgetManager.OPTION_APPWIDGET_MAX_HEIGHT)
+                var width = if (isLandscape) maxWidth else minWidth
+                var height = if (isLandscape) minHeight else maxHeight
+
+                if (width <= 0) width = 280
+                if (height <= 0) height = 250
+
+                if (height < 130) {
+                    views.setViewVisibility(R.id.lr_widget_header, android.view.View.GONE)
+                } else {
+                    views.setViewVisibility(R.id.lr_widget_header, android.view.View.VISIBLE)
+                    if (height < 180) {
+                        views.setViewVisibility(R.id.lr_widget_subtitle, android.view.View.GONE)
+                        views.setViewVisibility(R.id.lr_widget_refresh, android.view.View.GONE)
+                    } else {
+                        views.setViewVisibility(R.id.lr_widget_subtitle, android.view.View.VISIBLE)
+                        views.setViewVisibility(R.id.lr_widget_refresh, android.view.View.VISIBLE)
+                    }
+                }
+            }
+
             val openApp = PendingIntent.getActivity(
                 context,
                 REQUEST_CODE_HEADER,
                 WidgetDeepLinks.openAppIntent(context),
                 PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
             )
-            views.setOnClickPendingIntent(R.id.lr_widget_header, openApp)
+            views.setOnClickPendingIntent(R.id.lr_widget_header_text_container, openApp)
             views.setOnClickPendingIntent(R.id.lr_widget_empty, openApp)
 
             val refreshIntent = Intent(context, LibraryRecommendationsWidget::class.java).apply {
@@ -150,10 +191,12 @@ class LibraryRecommendationsWidget : AppWidgetProvider() {
                 PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_MUTABLE,
             )
             views.setPendingIntentTemplate(R.id.lr_widget_grid, templatePending)
-            views.setRemoteAdapter(
-                R.id.lr_widget_grid,
-                Intent(context, LibraryRecommendationsWidgetService::class.java),
-            )
+
+            val serviceIntent = Intent(context, LibraryRecommendationsWidgetService::class.java).apply {
+                putExtra(AppWidgetManager.EXTRA_APPWIDGET_ID, appWidgetId)
+                data = Uri.parse(toUri(Intent.URI_INTENT_SCHEME))
+            }
+            views.setRemoteAdapter(R.id.lr_widget_grid, serviceIntent)
             views.setEmptyView(R.id.lr_widget_grid, R.id.lr_widget_empty)
 
             appWidgetManager.updateAppWidget(appWidgetId, views)

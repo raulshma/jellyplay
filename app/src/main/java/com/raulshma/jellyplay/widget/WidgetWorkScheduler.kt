@@ -31,9 +31,10 @@ object WidgetWorkScheduler {
 
     private val REFRESH_PERIOD: Duration = Duration.ofHours(6)
     private val REFRESH_FLEX: Duration = Duration.ofMinutes(30)
-    private const val COOLDOWN_MS = 30_000L
+    private const val COOLDOWN_MS = 5_000L
 
-    private val LAST_REFRESH_KEY = longPreferencesKey("widget_last_refresh_ms")
+    private val LAST_LIBRARY_REFRESH_KEY = longPreferencesKey("widget_library_last_refresh_ms")
+    private val LAST_SEERR_REFRESH_KEY = longPreferencesKey("widget_seerr_last_refresh_ms")
 
     private val Context.widgetCooldownStore: DataStore<Preferences> by preferencesDataStore(name = "widget_cooldown")
 
@@ -71,7 +72,7 @@ object WidgetWorkScheduler {
      * cooldown.
      */
     suspend fun refreshLibraryNow(context: Context): Boolean {
-        if (!claimRefreshSlot(context)) return false
+        if (!claimRefreshSlot(context, LAST_LIBRARY_REFRESH_KEY)) return false
         val constraints = Constraints.Builder()
             .setRequiredNetworkType(NetworkType.CONNECTED)
             .build()
@@ -92,7 +93,7 @@ object WidgetWorkScheduler {
      * cooldown.
      */
     suspend fun refreshSeerrNow(context: Context): Boolean {
-        if (!claimRefreshSlot(context)) return false
+        if (!claimRefreshSlot(context, LAST_SEERR_REFRESH_KEY)) return false
         val constraints = Constraints.Builder()
             .setRequiredNetworkType(NetworkType.CONNECTED)
             .build()
@@ -107,12 +108,12 @@ object WidgetWorkScheduler {
         return true
     }
 
-    private suspend fun claimRefreshSlot(context: Context): Boolean {
+    private suspend fun claimRefreshSlot(context: Context, key: Preferences.Key<Long>): Boolean {
         val now = System.currentTimeMillis()
         val store = context.widgetCooldownStore
-        val last = store.data.first()[LAST_REFRESH_KEY] ?: 0L
+        val last = store.data.first()[key] ?: 0L
         if (last > 0L && now - last < COOLDOWN_MS) return false
-        store.edit { it[LAST_REFRESH_KEY] = now }
+        store.edit { it[key] = now }
         return true
     }
 }

@@ -29,7 +29,7 @@ class LibraryRecommendationsWidgetWorker @AssistedInject constructor(
 ) : CoroutineWorker(appContext, params) {
 
     override suspend fun doWork(): Result = runCatching {
-        authRepository.restoreSession()
+        authRepository.restoreSession().getOrThrow()
         val server = authRepository.currentServer.first()
         if (server == null) {
             WidgetPersistHelper.persistLibraryItems(applicationContext, userPreferencesStore, emptyList(), versionBumpOnly = true)
@@ -58,8 +58,8 @@ class LibraryRecommendationsWidgetWorker @AssistedInject constructor(
     }.fold(
         onSuccess = { Result.success() },
         onFailure = { e ->
+            Log.e(TAG, "Worker execution failed", e)
             if (isPermanentFailure(e)) {
-                Log.w(TAG, "Permanent failure, not retrying", e)
                 Result.failure()
             } else {
                 Result.retry()

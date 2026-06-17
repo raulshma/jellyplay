@@ -478,10 +478,19 @@ class HomeViewModel @Inject constructor(
                     if (currentIds != lastContinueWatchingIds) {
                         lastContinueWatchingIds = currentIds
                         preferencesStore.setContinueWatching(continueWatching)
+                        // Explicit-component broadcast: implicit broadcasts to
+                        // manifest-registered receivers are blocked on
+                        // Android O+, and the widget's intent-filter only
+                        // carries APPWIDGET_UPDATE, so we target the receiver
+                        // class directly to guarantee delivery in-process.
                         val intent = android.content.Intent(
                             "com.raulshma.jellyplay.widget.ACTION_REFRESH_CONTINUE_WATCHING",
-                        )
-                        intent.setPackage(context.packageName)
+                        ).apply {
+                            setClassName(
+                                context.packageName,
+                                "com.raulshma.jellyplay.widget.ContinueWatchingWidget",
+                            )
+                        }
                         context.sendBroadcast(intent)
                         // Refresh the Android TV "Watch Next" OS row so the
                         // system home stays in sync with the user's progress.

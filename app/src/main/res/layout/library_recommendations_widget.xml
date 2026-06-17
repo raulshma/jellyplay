@@ -15,6 +15,7 @@
         android:orientation="horizontal">
 
         <LinearLayout
+            android:id="@+id/lr_widget_header_text_container"
             android:layout_width="0dp"
             android:layout_height="wrap_content"
             android:layout_weight="1"
@@ -42,14 +43,16 @@
                 android:textSize="11sp" />
         </LinearLayout>
 
-        <ImageView
+        <ImageButton
             android:id="@+id/lr_widget_refresh"
-            android:layout_width="32dp"
-            android:layout_height="32dp"
+            android:layout_width="48dp"
+            android:layout_height="48dp"
             android:background="?android:attr/selectableItemBackgroundBorderless"
             android:contentDescription="@string/widget_refresh"
-            android:padding="6dp"
-            android:src="@drawable/widget_ic_refresh" />
+            android:padding="12dp"
+            android:src="@drawable/widget_ic_refresh"
+            android:clickable="true"
+            android:focusable="true" />
     </LinearLayout>
 
     <GridView
