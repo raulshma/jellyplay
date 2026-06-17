@@ -75,6 +75,9 @@ import com.composables.icons.tabler.outline.Wand
 import com.composables.icons.tabler.outline.Wifi
 import com.composables.icons.tabler.outline.WifiOff
 import com.composables.icons.tabler.outline.X
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.foundation.border
+import com.composables.icons.tabler.outline.Clock
 
 @Composable
 fun HomeTopDock(
@@ -112,7 +115,7 @@ fun HomeTopDock(
             .statusBarsPadding()
             .padding(
                 horizontal = 16.dp,
-                vertical = 8.dp
+                vertical = 4.dp
             )
             .onDpadKey(
                 onBack = {
@@ -146,7 +149,12 @@ fun HomeTopDock(
                 modifier = Modifier
                     .then(if (isSearchFocused) Modifier.fillMaxWidth() else Modifier.wrapContentWidth())
                     .height(64.dp)
-                    .padding(horizontal = 8.dp),
+                    .padding(
+                        start = 8.dp,
+                        top = 0.dp,
+                        end = if (isSearchFocused) 8.dp else 0.dp,
+                        bottom = 0.dp
+                    ),
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.End
             ) {
@@ -294,12 +302,36 @@ private fun CollapsedDockContent(
     onSearchExpand: () -> Unit,
 ) {
     if (showClock) {
-        Text(
-            text = rememberWallClockTimeString(),
-            color = appBarIconColorFaded,
-            style = MaterialTheme.typography.labelLarge,
-            modifier = Modifier.padding(end = 12.dp),
-        )
+        Row(
+            modifier = Modifier
+                .padding(end = 12.dp)
+                .background(
+                    color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.35f),
+                    shape = RoundedCornerShape(12.dp)
+                )
+                .border(
+                    width = 0.5.dp,
+                    color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.2f),
+                    shape = RoundedCornerShape(12.dp)
+                )
+                .padding(horizontal = 10.dp, vertical = 6.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(6.dp)
+        ) {
+            Icon(
+                imageVector = Tabler.Outline.Clock,
+                contentDescription = null,
+                tint = appBarIconColorFaded,
+                modifier = Modifier.size(14.dp)
+            )
+            Text(
+                text = rememberWallClockTimeString(),
+                color = appBarIconColorFaded,
+                style = MaterialTheme.typography.labelMedium.copy(
+                    fontWeight = FontWeight.SemiBold
+                ),
+            )
+        }
     }
     if (offlineMode != OfflineMode.ONLINE) {
         val onlineFocusState = rememberTvFocusState()

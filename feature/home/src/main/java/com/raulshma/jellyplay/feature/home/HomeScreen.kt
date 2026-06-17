@@ -802,20 +802,20 @@ private fun MainHomeContent(
                             .statusBarsPadding()
                             .padding(
                                 horizontal = 16.dp,
-                                vertical = 8.dp
+                                vertical = 4.dp
                             )
                             .align(Alignment.TopStart)
                     ) {
                         Box(
                             modifier = Modifier
-                                .size(64.dp)
+                                .size(width = 40.dp, height = 64.dp)
                                 .clip(RoundedCornerShape(16.dp))
                                 .clickable(
                                     interactionSource = remember { androidx.compose.foundation.interaction.MutableInteractionSource() },
                                     indication = null,
                                     onClick = { scope.launch { drawerState.open() } }
                                 ),
-                            contentAlignment = Alignment.CenterStart
+                            contentAlignment = Alignment.Center
                         ) {
                             Icon(
                                 imageVector = Tabler.Outline.Menu2,

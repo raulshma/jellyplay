@@ -14,18 +14,18 @@ import androidx.compose.ui.unit.IntSize
 @Suppress("UNCHECKED_CAST")
 internal val ExpressiveMotionScheme: MotionScheme = object : MotionScheme {
     private val defaultSpatialSpec = spring<Any>(
-        dampingRatio = Spring.DampingRatioMediumBouncy,
+        dampingRatio = Spring.DampingRatioNoBouncy,
         stiffness = Spring.StiffnessMedium
     )
 
     private val fastSpatialSpec = spring<Any>(
-        dampingRatio = Spring.DampingRatioLowBouncy,
+        dampingRatio = Spring.DampingRatioNoBouncy,
         stiffness = Spring.StiffnessHigh
     )
 
     private val slowSpatialSpec = spring<Any>(
-        dampingRatio = Spring.DampingRatioMediumBouncy,
-        stiffness = 800f
+        dampingRatio = Spring.DampingRatioNoBouncy,
+        stiffness = Spring.StiffnessMediumLow
     )
 
     private val defaultEffectsSpec = tween<Any>(
