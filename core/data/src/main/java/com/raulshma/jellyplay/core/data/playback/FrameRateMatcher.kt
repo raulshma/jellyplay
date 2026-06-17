@@ -11,7 +11,12 @@ object FrameRateMatcher {
     @Volatile
     private var originalModeId: Int? = null
 
-    fun matchFrameRate(activity: Activity, frameRate: Float?) {
+    fun matchFrameRate(
+        activity: Activity,
+        frameRate: Float?,
+        targetWidth: Int? = null,
+        targetHeight: Int? = null,
+    ) {
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.M) return
         if (frameRate == null || frameRate <= 0f) return
 
@@ -21,8 +26,16 @@ object FrameRateMatcher {
 
         originalModeId = originalModeId ?: currentMode.modeId
 
-        val targetMode = modes
-            .filter { it.physicalWidth == currentMode.physicalWidth && it.physicalHeight == currentMode.physicalHeight }
+        val resolutionFiltered = if (targetWidth != null && targetHeight != null) {
+            modes.filter { mode ->
+                (mode.physicalWidth == targetWidth && mode.physicalHeight == targetHeight) ||
+                    (mode.physicalWidth == currentMode.physicalWidth && mode.physicalHeight == currentMode.physicalHeight)
+            }
+        } else {
+            modes.filter { it.physicalWidth == currentMode.physicalWidth && it.physicalHeight == currentMode.physicalHeight }
+        }
+
+        val targetMode = resolutionFiltered
             .minByOrNull { kotlin.math.abs(it.refreshRate - frameRate) }
             ?: return
 
@@ -30,7 +43,7 @@ object FrameRateMatcher {
             val params = activity.window.attributes
             params.preferredDisplayModeId = targetMode.modeId
             activity.window.attributes = params
-            Log.d(TAG, "Switched display to mode ${targetMode.modeId} (${targetMode.refreshRate}Hz) for ${frameRate}fps content")
+            Log.d(TAG, "Switched display to mode ${targetMode.modeId} (${targetMode.physicalWidth}x${targetMode.physicalHeight} @ ${targetMode.refreshRate}Hz) for ${frameRate}fps content")
         }
     }
 

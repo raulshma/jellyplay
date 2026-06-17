@@ -30,10 +30,12 @@ import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.composables.icons.tabler.Tabler
 import com.composables.icons.tabler.outline.ChevronRight
+import com.composables.icons.tabler.outline.Download
 import com.composables.icons.tabler.outline.ExternalLink
 import com.composables.icons.tabler.outline.Heart
 import com.composables.icons.tabler.outline.InfoCircle
 import com.composables.icons.tabler.outline.License
+import com.composables.icons.tabler.outline.Refresh
 import com.composables.icons.tabler.outline.Server
 import com.raulshma.jellyplay.core.designsystem.theme.ShapeCache
 import com.raulshma.jellyplay.core.ui.adaptive.LocalAdaptiveInfo
@@ -154,6 +156,67 @@ fun AboutScreen(
                 icon = { Icon(Tabler.Outline.ExternalLink, contentDescription = null, modifier = Modifier.size(20.dp)) },
                 title = "Open Source Licenses",
                 onClick = onLicensesClick,
+            )
+
+            Spacer(Modifier.height(16.dp))
+
+            SettingsGroupHeader("Diagnostics")
+            SettingsClickableRow(
+                icon = {
+                    Icon(
+                        if (viewModel.isCollectingLogs) Tabler.Outline.Refresh else Tabler.Outline.Download,
+                        contentDescription = null,
+                        modifier = Modifier.size(20.dp),
+                    )
+                },
+                title = if (viewModel.isCollectingLogs) "Collecting logs..." else "Send App Logs",
+                onClick = {
+                    if (!viewModel.isCollectingLogs) {
+                        viewModel.sendAppLogs { uri ->
+                            if (uri != null) {
+                                val shareIntent = android.content.Intent(android.content.Intent.ACTION_SEND).apply {
+                                    type = "text/plain"
+                                    putExtra(android.content.Intent.EXTRA_SUBJECT, "JellyPlay Logs v${viewModel.appVersion}")
+                                    putExtra(android.content.Intent.EXTRA_STREAM, uri)
+                                    addFlags(android.content.Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                                }
+                                context.startActivity(
+                                    android.content.Intent.createChooser(shareIntent, "Send Logs"),
+                                )
+                            }
+                        }
+                    }
+                },
+            )
+            SettingsClickableRow(
+                icon = {
+                    Icon(
+                        if (viewModel.isCheckingUpdate) Tabler.Outline.Refresh else Tabler.Outline.Refresh,
+                        contentDescription = null,
+                        modifier = Modifier.size(20.dp),
+                    )
+                },
+                title = when {
+                    viewModel.isCheckingUpdate -> "Checking for updates..."
+                    viewModel.updateInfo?.isUpdateAvailable == true ->
+                        "Update available: v${viewModel.updateInfo!!.latestVersion}"
+                    viewModel.updateInfo != null -> "Up to date (v${viewModel.updateInfo!!.latestVersion})"
+                    else -> "Check for Updates"
+                },
+                onClick = {
+                    val info = viewModel.updateInfo
+                    if (info?.isUpdateAvailable == true && info.downloadUrl.isNotBlank()) {
+                        try {
+                            val intent = android.content.Intent(
+                                android.content.Intent.ACTION_VIEW,
+                                android.net.Uri.parse(info.downloadUrl),
+                            )
+                            context.startActivity(intent)
+                        } catch (_: Exception) {}
+                    } else if (!viewModel.isCheckingUpdate) {
+                        viewModel.checkForUpdate()
+                    }
+                },
             )
 
             Spacer(Modifier.height(16.dp))

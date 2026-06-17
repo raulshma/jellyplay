@@ -99,14 +99,26 @@ class LibraryViewModel @Inject constructor(
     private fun loadViewMode() {
         launch {
             preferencesStore.preferences.collect { prefs ->
-                _viewMode.set(prefs.libraryViewMode)
+                val folderId = _selectedFolder.value?.id
+                val perLibrary = folderId?.let { id ->
+                    prefs.libraryViewModes[id]?.let { modeName ->
+                        runCatching { LibraryViewMode.valueOf(modeName) }.getOrNull()
+                    }
+                }
+                _viewMode.set(perLibrary ?: prefs.libraryViewMode)
             }
         }
     }
 
     fun setViewMode(mode: LibraryViewMode) {
         _viewMode.set(mode)
-        launch { preferencesStore.setLibraryViewMode(mode) }
+        launch {
+            preferencesStore.setLibraryViewMode(mode)
+            val folderId = _selectedFolder.value?.id
+            if (folderId != null) {
+                preferencesStore.setLibraryViewMode(folderId, mode.name)
+            }
+        }
     }
 
     private fun loadFolders() {
@@ -129,12 +141,21 @@ class LibraryViewModel @Inject constructor(
     fun selectFolder(folder: LibraryFolder?) {
         _selectedFolder.set(folder)
         if (folder != null) {
-            val savedOrder = preferencesStore.preferences.value.defaultLibrarySortOrders[folder.id]
+            val prefs = preferencesStore.preferences.value
+            val savedOrder = prefs.defaultLibrarySortOrders[folder.id]
             if (savedOrder != null) {
                 val option = SortOption.entries.find { it.name == savedOrder || it.apiValue == savedOrder } ?: SortOption.SORT_NAME
                 _filters.set(_filters.value.copy(sortBy = option))
             } else {
                 _filters.set(_filters.value.copy(sortBy = SortOption.SORT_NAME))
+            }
+            val savedViewMode = prefs.libraryViewModes[folder.id]?.let { modeName ->
+                runCatching { LibraryViewMode.valueOf(modeName) }.getOrNull()
+            }
+            if (savedViewMode != null) {
+                _viewMode.set(savedViewMode)
+            } else {
+                _viewMode.set(prefs.libraryViewMode)
             }
         }
     }

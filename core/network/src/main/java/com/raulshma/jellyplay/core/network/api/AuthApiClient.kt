@@ -12,6 +12,8 @@ interface AuthApiClient {
 
     suspend fun connectToServer(address: String): Result<ServerInfo>
 
+    suspend fun getServerInfo(address: String): Result<ServerInfo>
+
     suspend fun authenticateUser(
         serverAddress: String,
         username: String,
@@ -36,6 +38,8 @@ interface AuthApiClient {
         serverInfo: ServerInfo,
         secret: String,
     ): Result<UserInfo>
+
+    suspend fun authorizeQuickConnect(code: String): Result<Boolean>
 
     suspend fun postCapabilities(): Result<Unit>
 

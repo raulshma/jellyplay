@@ -250,7 +250,20 @@ internal class TrackSelectionHelper(
                         }
                     }
                 } else {
-                    val match = subtitleTracks.firstOrNull { it.index >= 0 && isLanguageMatch(it.language, prefSubLang) }
+                    val forcedOnly = currentPrefs.subtitlesForcedOnly
+                    val match = if (forcedOnly) {
+                        val forcedStream = streams
+                            .firstOrNull { it.type == StreamType.SUBTITLE && it.isForced && isLanguageMatch(it.language, prefSubLang) }
+                            ?: streams.firstOrNull { it.type == StreamType.SUBTITLE && it.isForced }
+                        if (forcedStream != null) {
+                            val forcedLabel = forcedStream.displayTitle ?: forcedStream.title ?: forcedStream.language
+                            subtitleTracks.firstOrNull { it.index >= 0 && it.label == forcedLabel }
+                        } else {
+                            null
+                        }
+                    } else {
+                        subtitleTracks.firstOrNull { it.index >= 0 && isLanguageMatch(it.language, prefSubLang) }
+                    }
                     if (match != null) {
                         selectSubtitleTrack(match, isUserOverride = false)
                     } else {

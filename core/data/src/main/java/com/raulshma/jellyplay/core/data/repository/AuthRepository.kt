@@ -24,6 +24,12 @@ interface AuthRepository {
 
     suspend fun switchServer(serverId: String): Result<Unit>
 
+    suspend fun addServerAddress(serverId: String, address: String): Result<Unit>
+
+    suspend fun removeServerAddress(serverId: String, address: String): Result<Unit>
+
+    suspend fun switchServerAddress(serverId: String, address: String): Result<Unit>
+
     suspend fun login(serverAddress: String, username: String, password: String): Result<UserInfo>
 
     suspend fun isQuickConnectEnabled(): Result<Boolean>
@@ -33,6 +39,8 @@ interface AuthRepository {
     suspend fun pollQuickConnect(secret: String): Result<QuickConnectState>
 
     suspend fun loginWithQuickConnect(serverAddress: String, secret: String): Result<UserInfo>
+
+    suspend fun authorizeQuickConnect(code: String): Result<Boolean>
 
     suspend fun restoreSession(): Result<Unit>
 

@@ -1,0 +1,588 @@
+package com.raulshma.jellyplay.feature.settings
+
+import android.content.Intent
+import android.widget.Toast
+import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.Icon
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.platform.LocalClipboardManager
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.AnnotatedString
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.KeyboardCapitalization
+import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.dp
+import androidx.hilt.navigation.compose.hiltViewModel
+import androidx.compose.foundation.text.KeyboardOptions
+import com.composables.icons.tabler.Tabler
+import com.composables.icons.tabler.outline.*
+import com.raulshma.jellyplay.core.designsystem.theme.ShapeCache
+import com.raulshma.jellyplay.core.designsystem.theme.expressiveListShape
+import com.raulshma.jellyplay.core.model.HomeLayoutConfig
+import com.raulshma.jellyplay.core.model.HomeLayoutPreset
+import com.raulshma.jellyplay.core.ui.adaptive.LocalAdaptiveInfo
+import com.raulshma.jellyplay.core.ui.adaptive.bottomPadding
+import com.raulshma.jellyplay.core.ui.adaptive.contentPadding
+import com.raulshma.jellyplay.core.ui.components.JellyPlayScreenScaffold
+import com.raulshma.jellyplay.core.ui.components.rememberScreenBackgroundColor
+import com.raulshma.jellyplay.core.ui.tv.LocalTvMode
+import com.raulshma.jellyplay.core.ui.tv.TvGrabInitialFocus
+import com.raulshma.jellyplay.core.ui.tv.enableMarqueeOnFocus
+import com.raulshma.jellyplay.core.ui.tv.rememberTvFocusState
+import com.raulshma.jellyplay.core.ui.tv.tvFocusIndicator
+import com.raulshma.jellyplay.core.ui.tv.tvFocusRestorer
+import java.text.DateFormat
+import java.util.Date
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun HomeLayoutPresetsScreen(
+    onBack: () -> Unit,
+    highlightSettingId: String? = null,
+    viewModel: SettingsViewModel = hiltViewModel(),
+) {
+    val presets = viewModel.homeLayoutPresets
+    val isTv = LocalTvMode.current
+    val backgroundColor = rememberScreenBackgroundColor()
+    val adaptiveInfo = LocalAdaptiveInfo.current
+    val context = LocalContext.current
+    val clipboard = LocalClipboardManager.current
+
+    val focusRequester = remember { FocusRequester() }
+    TvGrabInitialFocus(focusRequester = focusRequester, itemCount = 1, tag = "home_presets_init")
+
+    var showSaveSheet by remember { mutableStateOf(false) }
+    var showImportSheet by remember { mutableStateOf(false) }
+    var actionTarget by remember { mutableStateOf<HomeLayoutPreset?>(null) }
+    var resetConfirm by remember { mutableStateOf(false) }
+
+    val scrollState = rememberLazyListState()
+
+    JellyPlayScreenScaffold(
+        title = "Home Layout Presets",
+        onBack = onBack,
+        backgroundColor = backgroundColor,
+    ) { innerPadding ->
+        LazyColumn(
+            state = scrollState,
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(innerPadding)
+                .tvFocusRestorer()
+                .focusRequester(focusRequester),
+            contentPadding = PaddingValues(
+                start = adaptiveInfo.contentPadding(isTv),
+                end = adaptiveInfo.contentPadding(isTv),
+                bottom = adaptiveInfo.bottomPadding(isTv),
+            ),
+        ) {
+            item {
+                SettingsGroup(
+                    icon = Tabler.Outline.Bookmarks,
+                    title = "Layout Presets",
+                    summary = {
+                        if (presets.isEmpty()) "No saved presets" else "${presets.size} saved preset${if (presets.size != 1) "s" else ""}"
+                    },
+                    modifier = Modifier.padding(vertical = 8.dp),
+                    initiallyExpanded = true,
+                ) {
+                    ActionRow(
+                        icon = Tabler.Outline.DeviceFloppy,
+                        title = "Save Current Layout",
+                        subtitle = "Snapshot your current home layout as a named preset",
+                        index = 0,
+                        count = 4,
+                        onClick = { showSaveSheet = true },
+                    )
+                    ActionRow(
+                        icon = Tabler.Outline.Download,
+                        title = "Import Preset",
+                        subtitle = "Load a preset from pasted JSON (e.g. shared or from the web)",
+                        index = 1,
+                        count = 4,
+                        onClick = { showImportSheet = true },
+                    )
+                    ActionRow(
+                        icon = Tabler.Outline.Share,
+                        title = "Share Current Layout",
+                        subtitle = "Export your current layout as shareable JSON",
+                        index = 2,
+                        count = 4,
+                        onClick = {
+                            val json = viewModel.exportCurrentLayoutJson()
+                            clipboard.setText(AnnotatedString(json))
+                            val share = Intent(Intent.ACTION_SEND).apply {
+                                type = "application/json"
+                                putExtra(Intent.EXTRA_SUBJECT, "JellyPlay Home Layout")
+                                putExtra(Intent.EXTRA_TEXT, json)
+                            }
+                            context.startActivity(Intent.createChooser(share, "Share Home Layout"))
+                        },
+                    )
+                    ActionRow(
+                        icon = Tabler.Outline.Refresh,
+                        title = "Reset to Default",
+                        subtitle = "Restore the factory home layout",
+                        index = 3,
+                        count = 4,
+                        isDestructive = true,
+                        onClick = { resetConfirm = true },
+                    )
+                }
+            }
+
+            if (presets.isNotEmpty()) {
+                item {
+                    SettingsGroup(
+                        icon = Tabler.Outline.Bookmarks,
+                        title = "Saved Presets",
+                        summary = { "Tap a preset to load, share or delete it" },
+                        modifier = Modifier.padding(vertical = 8.dp),
+                        initiallyExpanded = highlightSettingId == "preset_list",
+                    ) {
+                        val totalCount = presets.size
+                        presets.forEachIndexed { index, preset ->
+                            PresetRow(
+                                preset = preset,
+                                index = index,
+                                count = totalCount,
+                                onClick = { actionTarget = preset },
+                            )
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    if (showSaveSheet) {
+        SavePresetSheet(
+            existingNames = presets.map { it.name }.toSet(),
+            onDismiss = { showSaveSheet = false },
+            onSave = { name ->
+                viewModel.saveCurrentLayoutAsPreset(name)
+                showSaveSheet = false
+                Toast.makeText(context, "Saved \"$name\"", Toast.LENGTH_SHORT).show()
+            },
+        )
+    }
+
+    if (showImportSheet) {
+        ImportPresetSheet(
+            error = viewModel.presetImportError,
+            onDismiss = {
+                showImportSheet = false
+                viewModel.clearPresetImportError()
+            },
+            onImport = { raw ->
+                viewModel.importPresetFromJson(raw) { result ->
+                    result.onSuccess { (config, name) ->
+                        viewModel.applyPreset(config)
+                        if (!name.isNullOrBlank()) {
+                            viewModel.saveCurrentLayoutAsPreset(name)
+                        }
+                        showImportSheet = false
+                        viewModel.clearPresetImportError()
+                        Toast.makeText(context, "Preset applied", Toast.LENGTH_SHORT).show()
+                    }
+                }
+            },
+        )
+    }
+
+    actionTarget?.let { preset ->
+        PresetActionSheet(
+            preset = preset,
+            onDismiss = { actionTarget = null },
+            onLoad = {
+                viewModel.applyPreset(preset.config)
+                actionTarget = null
+                Toast.makeText(context, "Applied \"${preset.name}\"", Toast.LENGTH_SHORT).show()
+            },
+            onShare = {
+                val json = viewModel.exportPresetJson(preset)
+                clipboard.setText(AnnotatedString(json))
+                val share = Intent(Intent.ACTION_SEND).apply {
+                    type = "application/json"
+                    putExtra(Intent.EXTRA_SUBJECT, "JellyPlay Home Layout: ${preset.name}")
+                    putExtra(Intent.EXTRA_TEXT, json)
+                }
+                context.startActivity(Intent.createChooser(share, "Share \"${preset.name}\""))
+            },
+            onDelete = {
+                viewModel.deleteHomeLayoutPreset(preset.id)
+                actionTarget = null
+                Toast.makeText(context, "Deleted \"${preset.name}\"", Toast.LENGTH_SHORT).show()
+            },
+        )
+    }
+
+    if (resetConfirm) {
+        AlertDialog(
+            onDismissRequest = { resetConfirm = false },
+            title = { Text("Reset Home Layout") },
+            text = { Text("Reset all home layout settings to their defaults? Saved presets are kept.") },
+            confirmButton = {
+                TextButton(onClick = {
+                    viewModel.resetHomeLayout()
+                    resetConfirm = false
+                    Toast.makeText(context, "Home layout reset", Toast.LENGTH_SHORT).show()
+                }) { Text("Reset") }
+            },
+            dismissButton = { TextButton(onClick = { resetConfirm = false }) { Text("Cancel") } },
+        )
+    }
+}
+
+@Composable
+private fun ActionRow(
+    icon: androidx.compose.ui.graphics.vector.ImageVector,
+    title: String,
+    subtitle: String,
+    index: Int,
+    count: Int,
+    isDestructive: Boolean = false,
+    onClick: () -> Unit,
+) {
+    val shape = expressiveListShape(index, count, innerRadius = 0.dp)
+    val tvFocusState = rememberTvFocusState(focusedScale = 1.01f)
+    val headlineColor = if (isDestructive) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurface
+    androidx.compose.material3.ListItem(
+        headlineContent = {
+            Text(
+                title,
+                style = MaterialTheme.typography.bodyLarge,
+                fontWeight = FontWeight.Medium,
+                color = headlineColor,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.enableMarqueeOnFocus(focused = tvFocusState.isFocused),
+            )
+        },
+        supportingContent = {
+            Text(
+                subtitle,
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                maxLines = 2,
+                overflow = TextOverflow.Ellipsis,
+            )
+        },
+        leadingContent = {
+            Icon(
+                icon,
+                contentDescription = null,
+                tint = if (isDestructive) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.size(22.dp),
+            )
+        },
+        trailingContent = {
+            Icon(
+                Tabler.Outline.ChevronRight,
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.4f),
+                modifier = Modifier.size(18.dp),
+            )
+        },
+        colors = androidx.compose.material3.ListItemDefaults.colors(
+            containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f),
+        ),
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(shape)
+            .then(tvFocusState.focusModifier)
+            .tvFocusIndicator(tvFocusState, shape)
+            .clickable(onClick = onClick),
+    )
+}
+
+@Composable
+private fun PresetRow(
+    preset: HomeLayoutPreset,
+    index: Int,
+    count: Int,
+    onClick: () -> Unit,
+) {
+    val shape = expressiveListShape(index, count, innerRadius = 0.dp)
+    val tvFocusState = rememberTvFocusState(focusedScale = 1.01f)
+    val dateLabel = remember(preset.createdAt) {
+        runCatching { DateFormat.getDateInstance(DateFormat.MEDIUM).format(Date(preset.createdAt)) }
+            .getOrDefault("")
+    }
+    androidx.compose.material3.ListItem(
+        headlineContent = {
+            Text(
+                preset.name,
+                style = MaterialTheme.typography.bodyLarge,
+                fontWeight = FontWeight.Medium,
+                color = MaterialTheme.colorScheme.onSurface,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.enableMarqueeOnFocus(focused = tvFocusState.isFocused),
+            )
+        },
+        supportingContent = {
+            Text(
+                "Saved $dateLabel • ${preset.config.pinnedHomeSections.size} pinned",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
+        },
+        leadingContent = {
+            Box(
+                modifier = Modifier
+                    .size(36.dp)
+                    .clip(CircleShape)
+                    .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.12f)),
+                contentAlignment = Alignment.Center,
+            ) {
+                Icon(
+                    Tabler.Outline.Bookmarks,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.primary,
+                    modifier = Modifier.size(18.dp),
+                )
+            }
+        },
+        trailingContent = {
+            Icon(
+                Tabler.Outline.DotsVertical,
+                contentDescription = "Preset actions",
+                tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f),
+                modifier = Modifier.size(18.dp),
+            )
+        },
+        colors = androidx.compose.material3.ListItemDefaults.colors(
+            containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f),
+        ),
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(shape)
+            .then(tvFocusState.focusModifier)
+            .tvFocusIndicator(tvFocusState, shape)
+            .clickable(onClick = onClick),
+    )
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun SavePresetSheet(
+    existingNames: Set<String>,
+    onDismiss: () -> Unit,
+    onSave: (String) -> Unit,
+) {
+    var name by remember { mutableStateOf("") }
+    val isDuplicate = name.trim() in existingNames
+    val canSave = name.isNotBlank() && !isDuplicate
+
+    AdaptiveSheet(onDismissRequest = onDismiss) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 24.dp)
+                .padding(bottom = 32.dp),
+        ) {
+            Text(
+                "Save Current Layout",
+                style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Bold),
+            )
+            Spacer(Modifier.height(16.dp))
+            OutlinedTextField(
+                value = name,
+                onValueChange = { name = it },
+                label = { Text("Preset name") },
+                singleLine = true,
+                isError = isDuplicate,
+                supportingText = if (isDuplicate) {
+                    { Text("A preset with this name already exists") }
+                } else null,
+                keyboardOptions = KeyboardOptions(capitalization = KeyboardCapitalization.Words),
+                modifier = Modifier.fillMaxWidth(),
+            )
+            Spacer(Modifier.height(20.dp))
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.End,
+            ) {
+                TextButton(onClick = onDismiss) { Text("Cancel") }
+                Spacer(Modifier.width(8.dp))
+                androidx.compose.material3.Button(
+                    onClick = { onSave(name) },
+                    enabled = canSave,
+                    shape = ShapeCache.smoothPill,
+                ) { Text("Save") }
+            }
+        }
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun ImportPresetSheet(
+    error: String?,
+    onDismiss: () -> Unit,
+    onImport: (String) -> Unit,
+) {
+    var raw by remember { mutableStateOf("") }
+
+    AdaptiveSheet(onDismissRequest = onDismiss) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 24.dp)
+                .padding(bottom = 32.dp),
+        ) {
+            Text(
+                "Import Preset",
+                style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Bold),
+            )
+            Spacer(Modifier.height(8.dp))
+            Text(
+                "Paste a shared JellyPlay home layout JSON below, then apply it.",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            Spacer(Modifier.height(16.dp))
+            OutlinedTextField(
+                value = raw,
+                onValueChange = { raw = it },
+                label = { Text("Preset JSON") },
+                minLines = 4,
+                maxLines = 8,
+                isError = error != null,
+                supportingText = if (error != null) {
+                    { Text(error, maxLines = 3, overflow = TextOverflow.Ellipsis) }
+                } else null,
+                modifier = Modifier.fillMaxWidth(),
+            )
+            Spacer(Modifier.height(20.dp))
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.End,
+            ) {
+                TextButton(onClick = onDismiss) { Text("Cancel") }
+                Spacer(Modifier.width(8.dp))
+                androidx.compose.material3.Button(
+                    onClick = { onImport(raw) },
+                    enabled = raw.isNotBlank(),
+                    shape = ShapeCache.smoothPill,
+                ) { Text("Apply") }
+            }
+        }
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun PresetActionSheet(
+    preset: HomeLayoutPreset,
+    onDismiss: () -> Unit,
+    onLoad: () -> Unit,
+    onShare: () -> Unit,
+    onDelete: () -> Unit,
+) {
+    val actions = remember {
+        listOf(
+            Triple(Tabler.Outline.DeviceFloppy, "Load", "Apply this preset to your home"),
+            Triple(Tabler.Outline.Share, "Share", "Copy / send the preset JSON"),
+            Triple(Tabler.Outline.Trash, "Delete", "Remove this preset"),
+        )
+    }
+    AdaptiveSheet(onDismissRequest = onDismiss) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(bottom = 32.dp),
+        ) {
+            Text(
+                preset.name,
+                style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Bold),
+                modifier = Modifier.padding(horizontal = 24.dp),
+            )
+            Spacer(Modifier.height(12.dp))
+            LazyColumn {
+                items(actions.size, key = { actions[it].second }, contentType = { "preset_action" }) { index ->
+                    val (icon, title, subtitle) = actions[index]
+                    val isDestructive = title == "Delete"
+                    val shape = expressiveListShape(index, actions.size, innerRadius = 0.dp)
+                    val tvFocusState = rememberTvFocusState(focusedScale = 1.01f)
+                    val headlineColor = if (isDestructive) MaterialTheme.colorScheme.error
+                    else MaterialTheme.colorScheme.onSurface
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 16.dp, vertical = 2.dp)
+                            .clip(shape)
+                            .background(MaterialTheme.colorScheme.onSurface.copy(alpha = 0.04f))
+                            .then(tvFocusState.focusModifier)
+                            .tvFocusIndicator(tvFocusState, shape)
+                            .clickable {
+                                when (title) {
+                                    "Load" -> onLoad()
+                                    "Share" -> onShare()
+                                    "Delete" -> onDelete()
+                                }
+                            }
+                            .padding(horizontal = 20.dp, vertical = 14.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Icon(
+                            icon,
+                            contentDescription = null,
+                            tint = if (isDestructive) MaterialTheme.colorScheme.error
+                            else MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.size(22.dp),
+                        )
+                        Spacer(Modifier.width(14.dp))
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(
+                                title,
+                                style = MaterialTheme.typography.bodyLarge.copy(fontWeight = FontWeight.Medium),
+                                color = headlineColor,
+                            )
+                            Text(
+                                subtitle,
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+                        }
+                    }
+                }
+            }
+        }
+    }
+}

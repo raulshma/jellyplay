@@ -85,6 +85,7 @@ import com.raulshma.jellyplay.core.ui.tv.tryRequestFocus
 import com.raulshma.jellyplay.core.ui.tv.rememberTvFocusState
 import com.raulshma.jellyplay.core.ui.tv.tvFocusIndicator
 import com.raulshma.jellyplay.core.ui.tv.tvFocusRestorer
+import com.raulshma.jellyplay.core.ui.components.rememberWallClockTimeString
 import com.raulshma.jellyplay.feature.player.video.formatDuration
 import com.raulshma.jellyplay.core.data.cast.CastManager
 import com.composables.icons.tabler.Tabler
@@ -190,6 +191,7 @@ internal fun PlayerControls(
     videoStats: EngineVideoStats = EngineVideoStats(),
     audioTracks: List<TrackOption> = emptyList(),
     showPlaybackMetadata: Boolean = true,
+    showClock: Boolean = false,
     onToggleOrientation: () -> Unit = {},
     tvSkipSegmentFocusRequester: FocusRequester? = null,
     tvNextEpisodeFocusRequester: FocusRequester? = null,
@@ -286,16 +288,49 @@ internal fun PlayerControls(
                             )
                         }
                     }
-                    if (duration > 0) {
-                        val remainingMs = (duration - currentPosition).coerceAtLeast(0)
-                        val realRemainingMs = if (playbackSpeed > 0f) (remainingMs / playbackSpeed).toLong() else remainingMs
-                        val endsAt = rememberEndsAtTime(realRemainingMs)
-                        Text(
-                            text = "Ends at $endsAt",
-                            style = MaterialTheme.typography.bodyMedium,
-                            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.8f),
-                            modifier = Modifier.padding(end = 8.dp)
-                        )
+                    val showEndsAt = duration > 0
+                    if (showClock || showEndsAt) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                            modifier = Modifier.padding(end = 12.dp)
+                        ) {
+                            if (showClock) {
+                                Row(
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.spacedBy(4.dp)
+                                ) {
+                                    Icon(
+                                        imageVector = Tabler.Outline.Clock,
+                                        contentDescription = "Current time",
+                                        tint = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.8f),
+                                        modifier = Modifier.size(16.dp)
+                                    )
+                                    Text(
+                                        text = rememberWallClockTimeString(),
+                                        style = MaterialTheme.typography.bodyMedium,
+                                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.8f),
+                                    )
+                                }
+                            }
+                            if (showClock && showEndsAt) {
+                                Text(
+                                    text = "•",
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f),
+                                )
+                            }
+                            if (showEndsAt) {
+                                val remainingMs = (duration - currentPosition).coerceAtLeast(0)
+                                val realRemainingMs = if (playbackSpeed > 0f) (remainingMs / playbackSpeed).toLong() else remainingMs
+                                val endsAt = rememberEndsAtTime(realRemainingMs)
+                                Text(
+                                    text = "Ends at $endsAt",
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.8f),
+                                )
+                            }
+                        }
                     }
                     if (isInSyncPlaySession) {
                         Spacer(Modifier.width(8.dp))

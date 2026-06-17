@@ -42,7 +42,7 @@ import com.raulshma.jellyplay.core.ui.viewmodel.JellyPlayViewModel
 import com.raulshma.jellyplay.feature.player.video.components.AspectRatio
 import com.raulshma.jellyplay.feature.player.video.engine.MpvPlayerEngine
 import com.raulshma.jellyplay.feature.player.video.engine.SubtitleSource
-import com.raulshma.jellyplay.feature.player.video.engine.VideoEffectsConfig
+import com.raulshma.jellyplay.core.model.VideoEffectsConfig
 
 import com.raulshma.jellyplay.feature.player.video.trickplay.TrickplayManager
 import com.raulshma.jellyplay.core.data.remote.ActivePlayerController
@@ -50,6 +50,7 @@ import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.isActive
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.channels.Channel
@@ -106,6 +107,25 @@ class VideoPlayerViewModel @Inject constructor(
     private var playSessionId: String = java.util.UUID.randomUUID().toString()
     private var autoplayNext: Boolean = false
     private var cachedPreferences: com.raulshma.jellyplay.core.model.UserPreferences = com.raulshma.jellyplay.core.model.UserPreferences()
+
+    /**
+     * Active Cinema Mode pre-roll context. Non-null only between the moment
+     * intros are queued and the moment the main feature begins loading.
+     * Captures the original [initialize] arguments so the main feature can be
+     * resumed once all intros have been consumed (or skipped).
+     */
+    private data class CinemaIntroContext(
+        val mainItemId: String,
+        val mainMediaSourceId: String?,
+        val mainStartPositionTicks: Long,
+        val mainSubtitleStreamIndex: Int?,
+        val mainAudioStreamIndex: Int?,
+        val intros: List<com.raulshma.jellyplay.core.model.MediaItem>,
+        val currentIndex: Int,
+    )
+
+    private var cinemaIntroContext: CinemaIntroContext? = null
+
     private val trickplayManager = TrickplayManager(
         playbackRepository = playbackRepository,
         lowRamDevice = run {
@@ -114,6 +134,16 @@ class VideoPlayerViewModel @Inject constructor(
         },
     )
     private var videoMediaSession: MediaSession? = null
+
+    private val _passOutEvents = Channel<String>(Channel.BUFFERED)
+    val passOutEvents: kotlinx.coroutines.flow.Flow<String> = _passOutEvents.receiveAsFlow()
+
+    @Volatile
+    private var lastInteractionElapsedMs: Long = android.os.SystemClock.elapsedRealtime()
+
+    fun onUserInteraction() {
+        lastInteractionElapsedMs = android.os.SystemClock.elapsedRealtime()
+    }
 
     val castManagerField: CastManager = castManager
 
@@ -125,6 +155,16 @@ class VideoPlayerViewModel @Inject constructor(
         lastSeekTimestamp = System.currentTimeMillis()
         _uiState.update { it.copy(currentPosition = positionMs) }
         playerSessionManager.engine?.seekTo(positionMs)
+    }
+
+    fun resumePlayback() {
+        val engine = playerSessionManager.engine ?: return
+        val skipMs = preferencesStore.preferences.value.videoSkipBackOnResumeMs
+        if (skipMs > 0L && !engine.isPlaying.value) {
+            val target = (engine.currentPositionMs - skipMs).coerceAtLeast(0L)
+            seekTo(target)
+        }
+        engine.play()
     }
 
     private fun getReportPositionMs(): Long {
@@ -150,7 +190,13 @@ class VideoPlayerViewModel @Inject constructor(
         getMediaEngine = { playerSessionManager.engine },
         getIncognitoModeEnabled = { cachedPreferences.incognitoModeEnabled },
         onAutoSkip = { segment -> skipSegment(segment) },
-        onPlaybackEndedNoNext = { _closePlayer.trySend(Unit) },
+        onPlaybackEndedNoNext = {
+            if (cinemaIntroContext != null) {
+                advanceCinemaIntro()
+            } else {
+                _closePlayer.trySend(Unit)
+            }
+        },
         onWatchedThresholdReached = { itemId ->
             if (cachedPreferences.smartDownloadsEnabled) {
                 launch {
@@ -204,8 +250,14 @@ class VideoPlayerViewModel @Inject constructor(
                 if (_uiState.value.showPlaybackMetadata != prefs.videoShowPlaybackMetadata) {
                     _uiState.update { it.copy(showPlaybackMetadata = prefs.videoShowPlaybackMetadata) }
                 }
-                if (_uiState.value.keepScreenOnDuringVideo != prefs.keepScreenOnDuringVideo) {
+                if (_uiState.value.showClock != prefs.showClockInPlayer) {
+                    _uiState.update { it.copy(showClock = prefs.showClockInPlayer) }
+                }
+                 if (_uiState.value.keepScreenOnDuringVideo != prefs.keepScreenOnDuringVideo) {
                     _uiState.update { it.copy(keepScreenOnDuringVideo = prefs.keepScreenOnDuringVideo) }
+                }
+                if (_uiState.value.passOutProtectionHours != prefs.videoPassOutProtectionHours) {
+                    _uiState.update { it.copy(passOutProtectionHours = prefs.videoPassOutProtectionHours) }
                 }
                 if (oldPrefs.volumeBoostEnabled != prefs.volumeBoostEnabled ||
                     oldPrefs.volumeBoostGain != prefs.volumeBoostGain ||
@@ -220,6 +272,41 @@ class VideoPlayerViewModel @Inject constructor(
         launch {
             sleepTimerManager.remainingMs.collect { remaining ->
                 _uiState.update { it.copy(sleepTimerRemainingMs = remaining) }
+            }
+        }
+        launch {
+            // Pass-out protection: pause playback after N hours of no user interaction.
+            var engineJob: kotlinx.coroutines.Job? = null
+            playerSessionManager.engineFlow.collect { engine ->
+                engineJob?.cancel()
+                if (engine != null) {
+                    engineJob = launch {
+                        val wasPlaying = booleanArrayOf(false)
+                        engine.isPlaying.collect { playing ->
+                            if (playing && !wasPlaying[0]) {
+                                // Resumed playback — reset the interaction clock so a long paused period
+                                // doesn't immediately trip the timer.
+                                lastInteractionElapsedMs = android.os.SystemClock.elapsedRealtime()
+                            }
+                            wasPlaying[0] = playing
+                        }
+                    }
+                }
+            }
+        }
+        launch {
+            while (isActive) {
+                kotlinx.coroutines.delay(60_000)
+                val hours = _uiState.value.passOutProtectionHours
+                if (hours <= 0) continue
+                val engine = playerSessionManager.engine ?: continue
+                if (!engine.isPlaying.value) continue
+                val elapsedMs = android.os.SystemClock.elapsedRealtime() - lastInteractionElapsedMs
+                val thresholdMs = hours * 3_600_000L
+                if (elapsedMs >= thresholdMs) {
+                    engine.pause()
+                    _passOutEvents.trySend("Playback paused — pass-out protection")
+                }
             }
         }
         syncPlayBridge.start()
@@ -327,6 +414,24 @@ class VideoPlayerViewModel @Inject constructor(
         subtitleStreamIndex: Int? = null,
         audioStreamIndex: Int? = null,
     ) {
+        initializeInternal(
+            itemId = itemId,
+            mediaSourceId = mediaSourceId,
+            startPositionTicks = startPositionTicks,
+            subtitleStreamIndex = subtitleStreamIndex,
+            audioStreamIndex = audioStreamIndex,
+            allowCinemaMode = true,
+        )
+    }
+
+    private fun initializeInternal(
+        itemId: String,
+        mediaSourceId: String?,
+        startPositionTicks: Long,
+        subtitleStreamIndex: Int?,
+        audioStreamIndex: Int?,
+        allowCinemaMode: Boolean,
+    ) {
         released = false
         lastSeekPositionMs = null
         lastSeekTimestamp = 0L
@@ -417,6 +522,7 @@ class VideoPlayerViewModel @Inject constructor(
                 seekDurationMs = prefs.videoSeekDurationMs,
                 defaultOrientation = prefs.videoDefaultOrientation,
                 controlsTimeoutMs = prefs.videoControlsTimeoutMs,
+                passOutProtectionHours = prefs.videoPassOutProtectionHours,
                 gesturesEnabled = prefs.videoGesturesEnabled,
                 holdSpeedEnabled = prefs.videoHoldSpeedEnabled,
                 holdSpeedMultiplier = prefs.videoHoldSpeedMultiplier,
@@ -430,15 +536,40 @@ class VideoPlayerViewModel @Inject constructor(
                 segmentBehaviors = prefs.segmentBehaviors,
                 videoEpisodeBrowserEnabled = prefs.videoEpisodeBrowserEnabled,
                 showPlaybackMetadata = prefs.videoShowPlaybackMetadata,
+                showClock = prefs.showClockInPlayer,
                 keepScreenOnDuringVideo = prefs.keepScreenOnDuringVideo,
             ) }
             autoplayNext = prefs.videoAutoplayNext
+
+            if (allowCinemaMode && shouldAttemptCinemaMode(prefs, itemId, startPositionTicks)) {
+                val intros = mediaRepository.getIntros(itemId).getOrDefault(emptyList())
+                if (intros.isNotEmpty()) {
+                    cinemaIntroContext = CinemaIntroContext(
+                        mainItemId = itemId,
+                        mainMediaSourceId = mediaSourceId,
+                        mainStartPositionTicks = startPositionTicks,
+                        mainSubtitleStreamIndex = subtitleStreamIndex,
+                        mainAudioStreamIndex = audioStreamIndex,
+                        intros = intros,
+                        currentIndex = 0,
+                    )
+                    loadCinemaIntro(intros.first())
+                    return@launch
+                }
+            }
 
             playerSessionManager.loadMedia(itemId, mediaSourceId, startPositionTicks)
 
             val sessionState = playerSessionManager.sessionState.value
             val source = sessionState.currentMediaSource
             val detail = sessionState.mediaDetail
+
+            // Restore per-item persisted video filters (if any) before playback kicks off.
+            val hydratedEffects = prefs.videoEffectsByItem[itemId] ?: VideoEffectsConfig()
+            if (_uiState.value.videoEffects != hydratedEffects) {
+                _uiState.update { it.copy(videoEffects = hydratedEffects) }
+                updateConfigWithUiStateDebounced()
+            }
 
             if (sessionState.streamUrl != null) {
                 _uiState.update { it.copy(streamUrl = sessionState.streamUrl) }
@@ -809,6 +940,14 @@ class VideoPlayerViewModel @Inject constructor(
     fun setVideoEffects(effects: VideoEffectsConfig) {
         _uiState.update { it.copy(videoEffects = effects) }
         updateConfigWithUiStateDebounced()
+        // Persist per item so the same filter preset is restored next time.
+        // Skip when in Cinema Mode pre-roll — the intro is transient.
+        val itemId = playerSessionManager.sessionState.value.currentItemId
+        if (itemId != null && cinemaIntroContext == null) {
+            launch {
+                preferencesStore.setVideoEffectsForItem(itemId, effects)
+            }
+        }
     }
 
      private fun updateConfigWithUiState() {
@@ -902,6 +1041,10 @@ class VideoPlayerViewModel @Inject constructor(
 
     fun skipIntro() {
         val state = _uiState.value
+        if (state.cinemaIntroState != null) {
+            advanceCinemaIntro()
+            return
+        }
         val seg = state.activeSegment
         if (seg != null && seg.type == com.raulshma.jellyplay.core.model.MediaSegmentType.INTRO) {
             skipSegment(seg)
@@ -913,8 +1056,97 @@ class VideoPlayerViewModel @Inject constructor(
         }
     }
 
+    /**
+     * Cinema Mode is only attempted on fresh starts (never on resume / next-episode
+     * auto-advance / SyncPlay / external player / mini-mode reclaim). Server-side
+     * intros are best-effort: any failure returns an empty list and falls back to
+     * normal playback.
+     */
+    private fun shouldAttemptCinemaMode(
+        prefs: com.raulshma.jellyplay.core.model.UserPreferences,
+        itemId: String,
+        startPositionTicks: Long,
+    ): Boolean {
+        if (!prefs.cinemaModeEnabled) return false
+        if (startPositionTicks != 0L) return false
+        if (prefs.preferredPlayer == PlayerType.EXTERNAL) return false
+        if (syncPlayManager.isInSyncPlaySession) return false
+        // Skip for non-video items — intros are only meaningful for movies/episodes.
+        val existingDetail = mediaDetail
+        if (existingDetail != null && existingDetail.item.id == itemId) {
+            val type = existingDetail.item.mediaType
+            if (type != com.raulshma.jellyplay.core.model.MediaType.MOVIE &&
+                type != com.raulshma.jellyplay.core.model.MediaType.EPISODE &&
+                type != com.raulshma.jellyplay.core.model.MediaType.UNKNOWN
+            ) {
+                return false
+            }
+        }
+        return true
+    }
+
+    private fun loadCinemaIntro(intro: com.raulshma.jellyplay.core.model.MediaItem) {
+        val context = cinemaIntroContext ?: return
+        launch {
+            _uiState.update {
+                it.copy(
+                    cinemaIntroState = CinemaIntroUiState(
+                        title = intro.name.ifBlank { "Intro" },
+                        currentIndex = context.currentIndex + 1,
+                        totalCount = context.intros.size,
+                    ),
+                )
+            }
+            // Pre-roll intros are not part of the user's library history — skip
+            // server-side playback reporting and segment/next-episode/trickplay
+            // bookkeeping for them.
+            playerSessionManager.loadMedia(intro.id, null, 0L)
+            createVideoMediaSession(
+                intro.id,
+                playerSessionManager.sessionState.value.title,
+                playerSessionManager.sessionState.value.subtitle,
+            )
+            progressReporter.startPositionTracking()
+        }
+    }
+
+    /**
+     * Advance to the next pre-roll intro, or — once all intros are exhausted —
+     * resume normal playback of the main feature. Idempotent: callers may invoke
+     * this on either an end-of-playback callback or an explicit "skip" tap.
+     */
+    private fun advanceCinemaIntro() {
+        val context = cinemaIntroContext ?: return
+        val nextIndex = context.currentIndex + 1
+        if (nextIndex < context.intros.size) {
+            cinemaIntroContext = context.copy(currentIndex = nextIndex)
+            loadCinemaIntro(context.intros[nextIndex])
+            return
+        }
+        // Out of intros — restore the main feature. Clear cinema state first so
+        // the recursive [initializeInternal] call cannot re-enter cinema mode.
+        cinemaIntroContext = null
+        _uiState.update { it.copy(cinemaIntroState = null) }
+        progressReporter.cancelJobs()
+        initializeInternal(
+            itemId = context.mainItemId,
+            mediaSourceId = context.mainMediaSourceId,
+            startPositionTicks = context.mainStartPositionTicks,
+            subtitleStreamIndex = context.mainSubtitleStreamIndex,
+            audioStreamIndex = context.mainAudioStreamIndex,
+            allowCinemaMode = false,
+        )
+    }
+
     private fun fetchMediaSegments(itemId: String) {
         launch {
+            // Offline-first: prefer segments bundled with the download so skip
+            // controls (intro/outro/recap) work without a server round-trip.
+            val local = downloadRepository.loadLocalSegments(itemId)
+            if (local != null) {
+                _uiState.update { it.copy(segments = local) }
+                return@launch
+            }
             val segments = playbackRepository.getMediaSegments(itemId).getOrDefault(emptyList())
             _uiState.update { it.copy(segments = segments) }
         }
@@ -1318,6 +1550,7 @@ class VideoPlayerViewModel @Inject constructor(
         equalizerEnabled = false
         lastSeekPositionMs = null
         lastSeekTimestamp = 0L
+        cinemaIntroContext = null
 
         _uiState.update { currentState ->
             VideoPlayerUiState(
@@ -1333,6 +1566,7 @@ class VideoPlayerViewModel @Inject constructor(
                 segmentBehaviors = currentState.segmentBehaviors,
                 videoEpisodeBrowserEnabled = currentState.videoEpisodeBrowserEnabled,
                 showPlaybackMetadata = currentState.showPlaybackMetadata,
+                showClock = currentState.showClock,
                 keepScreenOnDuringVideo = currentState.keepScreenOnDuringVideo,
                 subtitleStyle = currentState.subtitleStyle,
                 dialogueBoostEnabled = currentState.dialogueBoostEnabled,

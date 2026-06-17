@@ -31,6 +31,8 @@ data class HomeUiState(
     val offlineLibrary: List<OfflineMediaItem> = emptyList(),
     val discoverEnabled: Boolean = false,
     val homeHeroEnabled: Boolean = true,
+    val showClock: Boolean = false,
+    val continueWatchingClickBehavior: com.raulshma.jellyplay.core.model.ContinueWatchingClickBehavior = com.raulshma.jellyplay.core.model.ContinueWatchingClickBehavior.DETAILS,
     val discoverSections: Map<DiscoverSectionType, List<SeerrSearchItem>> = emptyMap(),
     val searchState: HomeSearchState = HomeSearchState(),
     val seerrRequestState: SeerrRequestState = SeerrRequestState(),

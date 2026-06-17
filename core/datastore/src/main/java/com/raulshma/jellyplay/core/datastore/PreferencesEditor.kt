@@ -40,6 +40,7 @@ class PreferencesEditor(
     fun setAudioAutoplayNext(enabled: Boolean) = scope.launch { store.setAudioAutoplayNext(enabled) }
     fun setSubtitleStyle(style: SubtitleStyle) = scope.launch { store.setSubtitleStyle(style) }
     fun setPreferredSubtitleLanguage(language: String?) = scope.launch { store.setPreferredSubtitleLanguage(language) }
+    fun setSubtitlesForcedOnly(enabled: Boolean) = scope.launch { store.setSubtitlesForcedOnly(enabled) }
     fun setPinLockEnabled(enabled: Boolean) = scope.launch { store.setPinLockEnabled(enabled) }
     fun setPinHash(hash: String?) = scope.launch { store.setPinHash(hash) }
     fun setBiometricLockEnabled(enabled: Boolean) = scope.launch { store.setBiometricLockEnabled(enabled) }

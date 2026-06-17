@@ -225,6 +225,10 @@ class SettingsViewModel @Inject constructor(
         launch { preferencesStore.setTrailerAutoplay(enabled) }
     }
 
+    fun setCinemaModeEnabled(enabled: Boolean) {
+        launch { preferencesStore.setCinemaModeEnabled(enabled) }
+    }
+
     fun setPreferredAudioLanguage(language: String?) {
         launch { preferencesStore.setPreferredAudioLanguage(language) }
     }
@@ -396,6 +400,14 @@ class SettingsViewModel @Inject constructor(
 
     fun setVideoGesturesEnabled(enabled: Boolean) = editor.setVideoGesturesEnabled(enabled)
 
+    fun setVideoSkipBackOnResumeMs(ms: Long) {
+        launch { preferencesStore.setVideoSkipBackOnResumeMs(ms) }
+    }
+
+    fun setVideoPassOutProtectionHours(hours: Int) {
+        launch { preferencesStore.setVideoPassOutProtectionHours(hours) }
+    }
+
     fun setVideoDefaultSpeed(speed: Float) {
         launch { preferencesStore.setVideoDefaultSpeed(speed) }
     }
@@ -529,6 +541,218 @@ class SettingsViewModel @Inject constructor(
         val current = preferences.hiddenLibrarySectionIds.toMutableSet()
         if (visible) current.remove(libraryId) else current.add(libraryId)
         setHiddenLibrarySectionIds(current)
+    }
+
+    // ------------------------------------------------------------------
+    // Pinned home sections (collections / playlists / favorites / genres /
+    // studios pinned to the home screen).
+    // ------------------------------------------------------------------
+
+    /** A browseable, pinnable option surfaced in the "Add pinned section" picker. */
+    data class PinnableOption(
+        val sourceId: String,
+        val title: String,
+        val subtitle: String? = null,
+    )
+
+    var pinnedBrowseOptions by composeState<List<PinnableOption>>(emptyList())
+        private set
+
+    var pinnedBrowseLoading by composeState(false)
+        private set
+
+    var pinnedBrowseError by composeState<String?>(null)
+        private set
+
+    private var pinnedBrowseJob: Job? = null
+
+    val pinnedHomeSections: List<com.raulshma.jellyplay.core.model.PinnedHomeSection>
+        get() = preferences.pinnedHomeSections
+
+    fun addPinnedHomeSection(section: com.raulshma.jellyplay.core.model.PinnedHomeSection) {
+        launch { preferencesStore.addPinnedHomeSection(section) }
+    }
+
+    fun removePinnedHomeSection(sectionId: String) {
+        launch { preferencesStore.removePinnedHomeSection(sectionId) }
+    }
+
+    fun setPinnedHomeSections(sections: List<com.raulshma.jellyplay.core.model.PinnedHomeSection>) {
+        launch { preferencesStore.setPinnedHomeSections(sections) }
+    }
+
+    /** Moves a pinned section from [from] to [to], clamped to valid bounds. */
+    fun movePinnedHomeSection(from: Int, to: Int) {
+        val current = preferences.pinnedHomeSections.toMutableList()
+        if (from !in current.indices || to !in current.indices) return
+        val moved = current.removeAt(from)
+        current.add(to, moved)
+        setPinnedHomeSections(current)
+    }
+
+    /**
+     * Loads the browseable list of pinnable sources for the given [type]. For
+     * FAVORITES the list is a single sentinel option (favorites is a server-side
+     * filter, not a discrete item) so the picker can confirm in one tap.
+     */
+    fun loadPinnableOptions(type: com.raulshma.jellyplay.core.model.PinnedSectionType) {
+        pinnedBrowseJob?.cancel()
+        pinnedBrowseJob = launch {
+            pinnedBrowseLoading = true
+            pinnedBrowseError = null
+            val result = runCatching {
+                when (type) {
+                    com.raulshma.jellyplay.core.model.PinnedSectionType.COLLECTION ->
+                        mediaRepository.getMediaItems(
+                            mediaTypes = listOf(com.raulshma.jellyplay.core.model.MediaType.COLLECTION),
+                            limit = 100,
+                        ).getOrDefault(
+                            com.raulshma.jellyplay.core.model.SearchResult(emptyList(), 0, 0)
+                        ).items.map { PinnableOption(it.id, it.name) }
+
+                    com.raulshma.jellyplay.core.model.PinnedSectionType.PLAYLIST ->
+                        mediaRepository.getPlaylists(limit = 100).getOrDefault(emptyList())
+                            .map { PinnableOption(it.id, it.name, "${it.itemCount} items") }
+
+                    com.raulshma.jellyplay.core.model.PinnedSectionType.GENRE ->
+                        mediaRepository.getGenres().getOrDefault(emptyList())
+                            .map { PinnableOption(it.id, it.name) }
+
+                    com.raulshma.jellyplay.core.model.PinnedSectionType.STUDIO ->
+                        mediaRepository.getStudios().getOrDefault(emptyList())
+                            .map { PinnableOption(it.id, it.name) }
+
+                    com.raulshma.jellyplay.core.model.PinnedSectionType.FAVORITES ->
+                        listOf(PinnableOption(
+                            com.raulshma.jellyplay.core.model.PinnedHomeSection.FAVORITES_SOURCE_ID,
+                            "Favorites",
+                            "All your favorited items",
+                        ))
+                }
+            }
+            result.onSuccess {
+                pinnedBrowseOptions = it
+                pinnedBrowseLoading = false
+            }.onFailure { throwable ->
+                pinnedBrowseOptions = emptyList()
+                pinnedBrowseError = throwable.message ?: throwable::class.simpleName
+                pinnedBrowseLoading = false
+            }
+        }
+    }
+
+    fun clearPinnedBrowse() {
+        pinnedBrowseJob?.cancel()
+        pinnedBrowseOptions = emptyList()
+        pinnedBrowseLoading = false
+        pinnedBrowseError = null
+    }
+
+    // ------------------------------------------------------------------
+    // Home layout presets (save / load / import / export / reset).
+    // ------------------------------------------------------------------
+
+    private val presetJson = Json { prettyPrint = true; encodeDefaults = true; ignoreUnknownKeys = true }
+
+    val homeLayoutPresets: List<com.raulshma.jellyplay.core.model.HomeLayoutPreset>
+        get() = preferences.homeLayoutPresets
+
+    var presetImportError by composeState<String?>(null)
+        private set
+
+    /** Snapshots the current home-screen layout into a named preset and saves it. */
+    fun saveCurrentLayoutAsPreset(name: String, idOverride: String? = null) {
+        val config = com.raulshma.jellyplay.core.model.HomeLayoutConfig(
+            enabledHomeSectionTypes = preferences.enabledHomeSectionTypes,
+            homeSectionOrder = preferences.homeSectionOrder,
+            hiddenLibrarySectionIds = preferences.hiddenLibrarySectionIds,
+            mergeContinueWatchingAndNextUp = preferences.mergeContinueWatchingAndNextUp,
+            nextUpMaxDays = preferences.nextUpMaxDays,
+            nextUpRewatching = preferences.nextUpRewatching,
+            pinnedHomeSections = preferences.pinnedHomeSections,
+            homeHeroEnabled = preferences.homeHeroEnabled,
+            continueWatchingClickBehavior = preferences.continueWatchingClickBehavior,
+        )
+        val preset = com.raulshma.jellyplay.core.model.HomeLayoutPreset(
+            id = idOverride ?: java.util.UUID.randomUUID().toString(),
+            name = name.trim().ifBlank { "Preset" },
+            config = config,
+        )
+        launch { preferencesStore.saveHomeLayoutPreset(preset) }
+    }
+
+    /** Applies a preset's layout to the current preferences. */
+    fun applyPreset(config: com.raulshma.jellyplay.core.model.HomeLayoutConfig) {
+        launch {
+            preferencesStore.setEnabledHomeSectionTypes(config.enabledHomeSectionTypes)
+            preferencesStore.setHomeSectionOrder(config.homeSectionOrder)
+            preferencesStore.setHiddenLibrarySectionIds(config.hiddenLibrarySectionIds)
+            preferencesStore.setMergeContinueWatchingAndNextUp(config.mergeContinueWatchingAndNextUp)
+            preferencesStore.setNextUpMaxDays(config.nextUpMaxDays)
+            preferencesStore.setNextUpRewatching(config.nextUpRewatching)
+            preferencesStore.setPinnedHomeSections(config.pinnedHomeSections)
+            preferencesStore.setHomeHeroEnabled(config.homeHeroEnabled)
+            preferencesStore.setContinueWatchingClickBehavior(config.continueWatchingClickBehavior)
+        }
+    }
+
+    fun deleteHomeLayoutPreset(presetId: String) {
+        launch { preferencesStore.deleteHomeLayoutPreset(presetId) }
+    }
+
+    /** Serializes a preset to a shareable pretty-printed JSON string. */
+    fun exportPresetJson(preset: com.raulshma.jellyplay.core.model.HomeLayoutPreset): String =
+        presetJson.encodeToString(com.raulshma.jellyplay.core.model.HomeLayoutPreset.serializer(), preset)
+
+    /** Serializes the *current* layout (without saving) for quick sharing. */
+    fun exportCurrentLayoutJson(): String {
+        val config = com.raulshma.jellyplay.core.model.HomeLayoutConfig(
+            enabledHomeSectionTypes = preferences.enabledHomeSectionTypes,
+            homeSectionOrder = preferences.homeSectionOrder,
+            hiddenLibrarySectionIds = preferences.hiddenLibrarySectionIds,
+            mergeContinueWatchingAndNextUp = preferences.mergeContinueWatchingAndNextUp,
+            nextUpMaxDays = preferences.nextUpMaxDays,
+            nextUpRewatching = preferences.nextUpRewatching,
+            pinnedHomeSections = preferences.pinnedHomeSections,
+            homeHeroEnabled = preferences.homeHeroEnabled,
+            continueWatchingClickBehavior = preferences.continueWatchingClickBehavior,
+        )
+        return presetJson.encodeToString(com.raulshma.jellyplay.core.model.HomeLayoutConfig.serializer(), config)
+    }
+
+    /**
+     * Parses pasted/imported JSON. Accepts either a full [HomeLayoutPreset] or
+     * a bare [HomeLayoutConfig]. Returns the parsed config (and optional name
+     * when a full preset was supplied).
+     */
+    fun importPresetFromJson(
+        raw: String,
+        onResult: (Result<Pair<com.raulshma.jellyplay.core.model.HomeLayoutConfig, String?>>) -> Unit,
+    ) {
+        launch {
+            val result = runCatching {
+                val text = raw.trim()
+                val parser = Json { ignoreUnknownKeys = true; encodeDefaults = true }
+                if (text.contains("\"config\"")) {
+                    val preset = parser.decodeFromString<com.raulshma.jellyplay.core.model.HomeLayoutPreset>(text)
+                    preset.config to preset.name
+                } else {
+                    val config = parser.decodeFromString<com.raulshma.jellyplay.core.model.HomeLayoutConfig>(text)
+                    config to null
+                }
+            }
+            presetImportError = result.exceptionOrNull()?.message
+            onResult(result)
+        }
+    }
+
+    fun clearPresetImportError() {
+        presetImportError = null
+    }
+
+    /** Resets the home layout to factory defaults. */
+    fun resetHomeLayout() {
+        applyPreset(com.raulshma.jellyplay.core.model.HomeLayoutConfig.DEFAULT)
     }
 
     fun setNavBarShowLabels(show: Boolean) = editor.setNavBarShowLabels(show)
@@ -698,6 +922,14 @@ class SettingsViewModel @Inject constructor(
         launch { preferencesStore.setShowTimeRemaining(enabled) }
     }
 
+    fun setShowClockOnHome(enabled: Boolean) {
+        launch { preferencesStore.setShowClockOnHome(enabled) }
+    }
+
+    fun setShowClockInPlayer(enabled: Boolean) {
+        launch { preferencesStore.setShowClockInPlayer(enabled) }
+    }
+
     fun setPauseOnAudioFocusLoss(enabled: Boolean) {
         launch { preferencesStore.setPauseOnAudioFocusLoss(enabled) }
     }
@@ -734,6 +966,88 @@ class SettingsViewModel @Inject constructor(
         launch { preferencesStore.setDataSaverEnabled(enabled) }
     }
 
+    fun setVerboseNetworkLogging(enabled: Boolean) {
+        launch { preferencesStore.setVerboseNetworkLogging(enabled) }
+    }
+
+    fun setNetworkTimeoutPreset(preset: com.raulshma.jellyplay.core.model.NetworkTimeoutPreset) {
+        launch { preferencesStore.setNetworkTimeoutPreset(preset) }
+    }
+
+    fun setContinueWatchingClickBehavior(behavior: com.raulshma.jellyplay.core.model.ContinueWatchingClickBehavior) {
+        launch { preferencesStore.setContinueWatchingClickBehavior(behavior) }
+    }
+
+    fun setMergeContinueWatchingAndNextUp(enabled: Boolean) {
+        launch { preferencesStore.setMergeContinueWatchingAndNextUp(enabled) }
+    }
+
+    fun setNextUpMaxDays(days: Int) {
+        launch { preferencesStore.setNextUpMaxDays(days) }
+    }
+
+    fun setNextUpRewatching(enabled: Boolean) {
+        launch { preferencesStore.setNextUpRewatching(enabled) }
+    }
+
+    fun setAppLanguage(language: String?) {
+        launch {
+            preferencesStore.setAppLanguage(language)
+            if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.TIRAMISU) {
+                val localeManager = context.getSystemService(android.app.LocaleManager::class.java)
+                localeManager?.applicationLocales = if (language != null) {
+                    android.os.LocaleList.forLanguageTags(language)
+                } else {
+                    android.os.LocaleList.getEmptyLocaleList()
+                }
+            }
+        }
+    }
+
+    fun setPgsSubtitleDirectPlay(enabled: Boolean) {
+        launch { preferencesStore.setPgsSubtitleDirectPlay(enabled) }
+    }
+
+    fun setBackdropThemeMusicEnabled(enabled: Boolean) {
+        launch { preferencesStore.setBackdropThemeMusicEnabled(enabled) }
+    }
+
+    fun setHiddenNavItems(items: Set<String>) {
+        launch { preferencesStore.setHiddenNavItems(items) }
+    }
+
+    fun setNavItemOrder(order: List<String>) {
+        launch { preferencesStore.setNavItemOrder(order) }
+    }
+
+    fun setSelfUpdateCheckEnabled(enabled: Boolean) {
+        launch { preferencesStore.setSelfUpdateCheckEnabled(enabled) }
+    }
+
+    fun setHdrSubtitleStyleEnabled(enabled: Boolean) {
+        launch { preferencesStore.setHdrSubtitleStyleEnabled(enabled) }
+    }
+
+    fun setHdrSubtitleStyle(style: com.raulshma.jellyplay.core.model.SubtitleStyle) {
+        launch { preferencesStore.setHdrSubtitleStyle(style) }
+    }
+
+    fun authorizeQuickConnect(code: String, onResult: (success: Boolean, error: String?) -> Unit) {
+        launch {
+            authRepository.authorizeQuickConnect(code)
+                .onSuccess { authorized ->
+                    if (authorized) {
+                        onResult(true, null)
+                    } else {
+                        onResult(false, "Code not found or already used")
+                    }
+                }
+                .onFailure { e ->
+                    onResult(false, e.message ?: "Authorization failed")
+                }
+        }
+    }
+
     fun setReduceMotionEnabled(enabled: Boolean) {
         launch { preferencesStore.setReduceMotionEnabled(enabled) }
     }
@@ -744,6 +1058,10 @@ class SettingsViewModel @Inject constructor(
 
     fun setHighContrastSubtitles(enabled: Boolean) {
         launch { preferencesStore.setHighContrastSubtitles(enabled) }
+    }
+
+    fun setSubtitlesForcedOnly(enabled: Boolean) {
+        launch { preferencesStore.setSubtitlesForcedOnly(enabled) }
     }
 
     fun setHideSearchHistory(enabled: Boolean) {
@@ -780,6 +1098,32 @@ class SettingsViewModel @Inject constructor(
 
     fun setKidsModeMaxRating(rating: String) {
         launch { preferencesStore.setKidsModeMaxRating(rating) }
+    }
+
+    fun setAndroidTvWatchNextEnabled(enabled: Boolean) {
+        launch {
+            preferencesStore.setAndroidTvWatchNextEnabled(enabled)
+            try {
+                val request = androidx.work.OneTimeWorkRequestBuilder<com.raulshma.jellyplay.core.data.worker.TvWatchNextWorker>()
+                    .setConstraints(
+                        androidx.work.Constraints.Builder()
+                            .setRequiredNetworkType(androidx.work.NetworkType.CONNECTED)
+                            .build(),
+                    )
+                    .build()
+                androidx.work.WorkManager.getInstance(context).enqueueUniqueWork(
+                    com.raulshma.jellyplay.core.data.worker.TvWatchNextWorker.UNIQUE_WORK_NAME,
+                    androidx.work.ExistingWorkPolicy.REPLACE,
+                    request,
+                )
+            } catch (_: Exception) {
+                // WorkManager not initialised / unavailable — ignore.
+            }
+        }
+    }
+
+    fun setUserDataSyncEnabled(enabled: Boolean) {
+        launch { preferencesStore.setUserDataSyncEnabled(enabled) }
     }
 
     fun setSynthwaveMode(enabled: Boolean) {

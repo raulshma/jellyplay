@@ -14,6 +14,7 @@ import com.raulshma.jellyplay.core.model.DecoderMode
 import com.raulshma.jellyplay.core.model.LibVlcEngineConfig
 import com.raulshma.jellyplay.core.model.SubtitleStyle
 import com.raulshma.jellyplay.core.model.TrackType
+import com.raulshma.jellyplay.core.model.VideoEffectsConfig
 import com.raulshma.jellyplay.core.model.parseLanguageFromLabel
 import kotlinx.coroutines.channels.awaitClose
 import kotlinx.coroutines.delay
@@ -381,28 +382,8 @@ class LibVlcPlayerEngine(
                 mp.setSpuDelay(config.subtitleDelayMs * 1000L)
             }
             
-            if (oldConfig.subtitleStyle != config.subtitleStyle) {
+            if (oldConfig.subtitleStyle != config.subtitleStyle || oldConfig.videoEffects != config.videoEffects) {
                 reloadMediaForSubtitleStyleChange()
-            }
-
-            if (oldConfig.videoEffects != config.videoEffects) {
-                applyVideoFilters(config.videoEffects)
-            }
-        } catch (_: Exception) {}
-    }
-
-    private fun applyVideoFilters(effects: VideoEffectsConfig) {
-        try {
-            val mp = mediaPlayer ?: return
-            val hasAdjust = effects.brightness != 0f || effects.contrast != 1f || effects.saturation != 1f
-            if (hasAdjust) {
-                val brightnessVal = (1.0f + effects.brightness).coerceIn(0.0f, 2.0f)
-                val contrastVal = effects.contrast.coerceIn(0.0f, 2.0f)
-                val saturationVal = effects.saturation.coerceIn(0.0f, 3.0f)
-                val media = mp.media
-                media?.addOption(":brightness=${(brightnessVal * 100).toInt()}")
-                media?.addOption(":contrast=${(contrastVal * 100).toInt()}")
-                media?.addOption(":saturation=${(saturationVal * 100).toInt()}")
             }
         } catch (_: Exception) {}
     }
@@ -612,6 +593,35 @@ class LibVlcPlayerEngine(
         val media = Media(vlc, Uri.parse(request.uri))
         val hwDecoding = currentConfig.decoderMode != DecoderMode.SW_ONLY
         media.setHWDecoderEnabled(hwDecoding, hwDecoding)
+
+        // Apply video effects options
+        val effects = currentConfig.videoEffects
+        val hasAdjust = effects.brightness != 0f || effects.contrast != 1f || effects.saturation != 1f || effects.hue != 0f
+        val filters = mutableListOf<String>()
+        if (hasAdjust) {
+            filters.add("adjust")
+        }
+        if (effects.rotationDegrees != 0f) {
+            val rawDiscrete = kotlin.math.round(effects.rotationDegrees / 90f).toInt() * 90
+            val discrete = ((rawDiscrete % 360) + 360) % 360
+            if (discrete != 0) {
+                filters.add("transform")
+                media.addOption(":transform-type=$discrete")
+            }
+        }
+        if (filters.isNotEmpty()) {
+            media.addOption(":video-filter=${filters.joinToString(":")}")
+        }
+        if (hasAdjust) {
+            val brightnessVal = (1.0f + effects.brightness).coerceIn(0.0f, 2.0f)
+            val contrastVal = effects.contrast.coerceIn(0.0f, 2.0f)
+            val saturationVal = effects.saturation.coerceIn(0.0f, 3.0f)
+            val hueVal = effects.hue.toInt().coerceIn(0, 360)
+            media.addOption(":brightness=$brightnessVal")
+            media.addOption(":contrast=$contrastVal")
+            media.addOption(":saturation=$saturationVal")
+            media.addOption(":hue=$hueVal")
+        }
 
         if (isLowRamDevice) {
             media.addOption(":clock-jitter=0")

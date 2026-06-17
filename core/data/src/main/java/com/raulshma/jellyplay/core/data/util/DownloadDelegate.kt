@@ -4,6 +4,7 @@ import com.raulshma.jellyplay.core.data.repository.DownloadRepository
 import com.raulshma.jellyplay.core.data.repository.PlaybackRepository
 import com.raulshma.jellyplay.core.model.DownloadItem
 import com.raulshma.jellyplay.core.model.MediaDetail
+import com.raulshma.jellyplay.core.model.MediaStream
 import com.raulshma.jellyplay.core.model.MediaType
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -17,6 +18,7 @@ data class DownloadRequest(
     val imageUrl: String,
     val imageBlurHash: String?,
     val trickplayInfo: com.raulshma.jellyplay.core.model.TrickplayInfo? = null,
+    val mediaStreams: List<MediaStream> = emptyList(),
 )
 
 data class DownloadResult(
@@ -49,6 +51,7 @@ class DownloadDelegate @Inject constructor(
             imageUrl = imageUrl,
             imageBlurHash = item.blurHashes.primary,
             trickplayInfo = source.trickplayInfo,
+            mediaStreams = source.mediaStreams,
         )
     }
 
@@ -84,6 +87,20 @@ class DownloadDelegate @Inject constructor(
                             downloadRepository.downloadTrickplayData(request.mediaItemId, info, downloadItem.downloadPath)
                         } catch (_: Exception) {}
                     }
+                    // Bundle external subtitles + intro/outro segments for offline use.
+                    if (request.mediaStreams.isNotEmpty()) {
+                        try {
+                            downloadRepository.downloadExternalSubtitles(
+                                request.mediaItemId,
+                                request.mediaSourceId,
+                                request.mediaStreams,
+                                downloadItem.downloadPath,
+                            )
+                        } catch (_: Exception) {}
+                    }
+                    try {
+                        downloadRepository.downloadMediaSegments(request.mediaItemId, downloadItem.downloadPath)
+                    } catch (_: Exception) {}
                 }
                 DownloadResult(downloadItem = downloadItem, error = null)
             },

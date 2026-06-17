@@ -10,7 +10,9 @@ import com.raulshma.jellyplay.feature.settings.AudioSettingsScreen
 import com.raulshma.jellyplay.feature.settings.BackupSettingsScreen
 import com.raulshma.jellyplay.feature.settings.LanguageSettingsScreen
 import com.raulshma.jellyplay.feature.settings.LicensesScreen
+import com.raulshma.jellyplay.feature.settings.HomeLayoutPresetsScreen
 import com.raulshma.jellyplay.feature.settings.NotificationSettingsScreen
+import com.raulshma.jellyplay.feature.settings.PinnedHomeSectionsScreen
 import com.raulshma.jellyplay.feature.settings.PlaybackSettingsScreen
 import com.raulshma.jellyplay.feature.settings.SeerrSettingsScreen
 import com.raulshma.jellyplay.feature.settings.SecuritySettingsScreen
@@ -74,6 +76,22 @@ fun EntryProviderScope<NavKey>.settingsSection(
 
     entry<Route.AppearanceSettings> { entry ->
         AppearanceSettingsScreen(
+            onBack = { navigator.goBack() },
+            onPinnedHomeSections = { id -> navigator.navigate(Route.PinnedHomeSections(id)) },
+            onHomeLayoutPresets = { id -> navigator.navigate(Route.HomeLayoutPresets(id)) },
+            highlightSettingId = entry.highlightSettingId,
+        )
+    }
+
+    entry<Route.PinnedHomeSections> { entry ->
+        PinnedHomeSectionsScreen(
+            onBack = { navigator.goBack() },
+            highlightSettingId = entry.highlightSettingId,
+        )
+    }
+
+    entry<Route.HomeLayoutPresets> { entry ->
+        HomeLayoutPresetsScreen(
             onBack = { navigator.goBack() },
             highlightSettingId = entry.highlightSettingId,
         )

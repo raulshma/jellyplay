@@ -23,6 +23,7 @@ import com.raulshma.jellyplay.core.model.seerr.SeerrRequestResult
 import com.raulshma.jellyplay.core.model.HomeSectionType
 import com.raulshma.jellyplay.core.model.NetworkStatus
 import com.raulshma.jellyplay.core.model.OfflineMode
+import com.raulshma.jellyplay.core.model.PinnedHomeSection
 import com.raulshma.jellyplay.core.model.seerr.SeerrPreferences
 import com.raulshma.jellyplay.core.model.seerr.SeerrSearchItem
 import com.raulshma.jellyplay.core.ui.viewmodel.JellyPlayViewModel
@@ -80,6 +81,12 @@ class HomeViewModel @Inject constructor(
     private var enabledHomeSectionTypes = HomeSectionType.CONFIGURABLE.toSet()
     private var homeSectionOrder = HomeSectionType.CONFIGURABLE
     private var hiddenLibrarySectionIds = emptySet<String>()
+    private var mergeContinueWatchingAndNextUp = false
+    private var nextUpMaxDays = 0
+    private var nextUpRewatching = false
+    private var nextUpExcludedSeriesIds = emptySet<String>()
+    private var pinnedHomeSections = emptyList<PinnedHomeSection>()
+    private var androidTvWatchNextEnabled = true
     private var lastContinueWatchingIds: Set<String> = emptySet()
     private var seerrPreferences = SeerrPreferences()
 
@@ -126,13 +133,24 @@ class HomeViewModel @Inject constructor(
                 val homeSectionPrefsChanged = hasSeenHomePreferences && (
                     prefs.enabledHomeSectionTypes != enabledHomeSectionTypes ||
                         prefs.homeSectionOrder != homeSectionOrder ||
-                        prefs.hiddenLibrarySectionIds != hiddenLibrarySectionIds
+                        prefs.hiddenLibrarySectionIds != hiddenLibrarySectionIds ||
+                        prefs.mergeContinueWatchingAndNextUp != mergeContinueWatchingAndNextUp ||
+                        prefs.nextUpMaxDays != nextUpMaxDays ||
+                        prefs.nextUpRewatching != nextUpRewatching ||
+                        prefs.nextUpExcludedSeriesIds != nextUpExcludedSeriesIds ||
+                        prefs.pinnedHomeSections != pinnedHomeSections
                     )
 
                 hasSeenHomePreferences = true
                 enabledHomeSectionTypes = prefs.enabledHomeSectionTypes
                 homeSectionOrder = prefs.homeSectionOrder
                 hiddenLibrarySectionIds = prefs.hiddenLibrarySectionIds
+                mergeContinueWatchingAndNextUp = prefs.mergeContinueWatchingAndNextUp
+                nextUpMaxDays = prefs.nextUpMaxDays
+                nextUpRewatching = prefs.nextUpRewatching
+                nextUpExcludedSeriesIds = prefs.nextUpExcludedSeriesIds
+                pinnedHomeSections = prefs.pinnedHomeSections
+                androidTvWatchNextEnabled = prefs.androidTvWatchNextEnabled
                 _uiState.update { it.copy(
                     homeMode = prefs.homeMode,
                     dynamicTheming = prefs.dynamicTheming,
@@ -140,6 +158,8 @@ class HomeViewModel @Inject constructor(
                     colorStyle = prefs.colorStyle,
                     accentColorSwatch = prefs.accentColorSwatch,
                     homeHeroEnabled = prefs.homeHeroEnabled,
+                    showClock = prefs.showClockOnHome,
+                    continueWatchingClickBehavior = prefs.continueWatchingClickBehavior,
                 ) }
 
                 if (homeSectionPrefsChanged) {
@@ -380,6 +400,12 @@ class HomeViewModel @Inject constructor(
         }
     }
 
+    fun excludeSeriesFromNextUp(seriesId: String) {
+        launch {
+            preferencesStore.excludeSeriesFromNextUp(seriesId)
+        }
+    }
+
     private suspend fun fetchAndUpdateSections() {
         if (!refreshMutex.tryLock()) return
         try {
@@ -393,11 +419,18 @@ class HomeViewModel @Inject constructor(
             lastRefreshTime = System.currentTimeMillis()
             val enabledSections = enabledHomeSectionTypes
             val hiddenLibIds = hiddenLibrarySectionIds
-            mediaRepository.getHomeSections(enabledSections, hiddenLibIds)
+            mediaRepository.getHomeSections(
+                enabledSections,
+                hiddenLibIds,
+                nextUpRewatching,
+                nextUpMaxDays,
+                nextUpExcludedSeriesIds,
+                pinnedHomeSections,
+            )
                 .onSuccess { fetchedSections ->
-                    val orderedSections = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Default) {
+                    val finalSections = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Default) {
                         val orderIndex = homeSectionOrder.withIndex().associate { it.value to it.index }
-                        fetchedSections
+                        val ordered = fetchedSections
                             .mapIndexed { index, section -> index to section }
                             .sortedWith(
                                 compareBy<Pair<Int, com.raulshma.jellyplay.core.model.HomeSection>> {
@@ -405,11 +438,40 @@ class HomeViewModel @Inject constructor(
                                 }.thenBy { it.first },
                             )
                             .map { it.second }
+                        if (mergeContinueWatchingAndNextUp) {
+                            val cw = ordered.firstOrNull { it.type == HomeSectionType.CONTINUE_WATCHING }
+                            val nextUp = ordered.firstOrNull { it.type == HomeSectionType.NEXT_UP }?.items.orEmpty()
+                            if (cw != null) {
+                                val seen = cw.items.mapTo(mutableSetOf()) { it.id }
+                                val mergedItems = cw.items + nextUp.filter { seen.add(it.id) }
+                                ordered.mapNotNull { section ->
+                                    when (section.type) {
+                                        HomeSectionType.CONTINUE_WATCHING -> section.copy(items = mergedItems)
+                                        HomeSectionType.NEXT_UP -> null
+                                        else -> section
+                                    }
+                                }
+                            } else {
+                                val nextUpSection = ordered.firstOrNull { it.type == HomeSectionType.NEXT_UP }
+                                if (nextUpSection != null) {
+                                    ordered.mapNotNull { section ->
+                                        when (section.type) {
+                                            HomeSectionType.NEXT_UP -> section.copy(type = HomeSectionType.CONTINUE_WATCHING)
+                                            else -> section
+                                        }
+                                    }
+                                } else {
+                                    ordered
+                                }
+                            }
+                        } else {
+                            ordered
+                        }
                     }
 
-                    _uiState.update { it.copy(sections = orderedSections) }
+                    _uiState.update { it.copy(sections = finalSections) }
 
-                    val continueWatching = orderedSections
+                    val continueWatching = finalSections
                         .find { it.type == HomeSectionType.CONTINUE_WATCHING }
                         ?.items ?: emptyList()
                     val currentIds = continueWatching.map { it.id }.toSet()
@@ -421,6 +483,27 @@ class HomeViewModel @Inject constructor(
                         )
                         intent.setPackage(context.packageName)
                         context.sendBroadcast(intent)
+                        // Refresh the Android TV "Watch Next" OS row so the
+                        // system home stays in sync with the user's progress.
+                        // Worker is a no-op on phones and respects its preference.
+                        if (androidTvWatchNextEnabled) {
+                            try {
+                                val request = androidx.work.OneTimeWorkRequestBuilder<com.raulshma.jellyplay.core.data.worker.TvWatchNextWorker>()
+                                    .setConstraints(
+                                        androidx.work.Constraints.Builder()
+                                            .setRequiredNetworkType(androidx.work.NetworkType.CONNECTED)
+                                            .build(),
+                                    )
+                                    .build()
+                                androidx.work.WorkManager.getInstance(context).enqueueUniqueWork(
+                                    com.raulshma.jellyplay.core.data.worker.TvWatchNextWorker.UNIQUE_WORK_NAME,
+                                    androidx.work.ExistingWorkPolicy.REPLACE,
+                                    request,
+                                )
+                            } catch (_: Exception) {
+                                // WorkManager not initialised / unavailable — ignore.
+                            }
+                        }
                     }
 
                     _uiState.update { it.copy(error = null) }

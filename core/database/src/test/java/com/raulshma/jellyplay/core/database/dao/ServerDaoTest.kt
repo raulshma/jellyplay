@@ -121,4 +121,50 @@ class ServerDaoTest {
         val result = serverDao.getServerById("s1")
         assertEquals("Replaced", result!!.name)
     }
+
+    @Test
+    fun `updateServer round-trips alternateAddresses column`() = runTest {
+        val alternates = """["https://192.168.1.100:8096","https://lan.example.com"]"""
+        serverDao.insertServer(
+            ServerEntity(id = "s1", name = "Server 1", address = "https://s1.com")
+        )
+        serverDao.updateServer(
+            ServerEntity(
+                id = "s1",
+                name = "Server 1",
+                address = "https://s1.com",
+                alternateAddresses = alternates,
+            )
+        )
+
+        val result = serverDao.getServerById("s1")
+        assertEquals(alternates, result!!.alternateAddresses)
+    }
+
+    @Test
+    fun `updateServer preserves alternateAddresses across partial updates`() = runTest {
+        val alternates = """["https://192.168.1.100:8096"]"""
+        serverDao.insertServer(
+            ServerEntity(
+                id = "s1",
+                name = "Server 1",
+                address = "https://s1.com",
+                alternateAddresses = alternates,
+            )
+        )
+        serverDao.updateServer(
+            ServerEntity(
+                id = "s1",
+                name = "Server 1 (renamed)",
+                address = "https://s1.com",
+                accessToken = "token-abc",
+                alternateAddresses = alternates,
+            )
+        )
+
+        val result = serverDao.getServerById("s1")
+        assertEquals("Server 1 (renamed)", result!!.name)
+        assertEquals("token-abc", result.accessToken)
+        assertEquals(alternates, result.alternateAddresses)
+    }
 }

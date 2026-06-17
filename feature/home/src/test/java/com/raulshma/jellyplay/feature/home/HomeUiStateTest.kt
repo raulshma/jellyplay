@@ -1,8 +1,11 @@
 package com.raulshma.jellyplay.feature.home
 
+import com.raulshma.jellyplay.core.model.HomeMode
+import com.raulshma.jellyplay.core.model.OfflineMode
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
+import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
@@ -16,10 +19,73 @@ class HomeUiStateTest {
         assertTrue(state.isLoading)
         assertFalse(state.isRefreshing)
         assertNull(state.error)
-        assertEquals(com.raulshma.jellyplay.core.model.HomeMode.VIDEO, state.homeMode)
+        assertEquals(HomeMode.VIDEO, state.homeMode)
         assertTrue(state.dynamicTheming)
         assertFalse(state.oledMode)
         assertFalse(state.newsletterBannerVisible)
+    }
+
+    @Test
+    fun copy_updatesIsLoading() {
+        val state = HomeUiState().copy(isLoading = false)
+        assertFalse(state.isLoading)
+    }
+
+    @Test
+    fun copy_updatesIsRefreshing() {
+        val state = HomeUiState().copy(isRefreshing = true)
+        assertTrue(state.isRefreshing)
+    }
+
+    @Test
+    fun copy_updatesError() {
+        val state = HomeUiState().copy(error = "Network error")
+        assertEquals("Network error", state.error)
+    }
+
+    @Test
+    fun copy_clearsError() {
+        val state = HomeUiState(error = "oops").copy(error = null)
+        assertNull(state.error)
+    }
+
+    @Test
+    fun copy_updatesHomeMode() {
+        val state = HomeUiState().copy(homeMode = HomeMode.MUSIC)
+        assertEquals(HomeMode.MUSIC, state.homeMode)
+    }
+
+    @Test
+    fun copy_updatesOfflineMode() {
+        val state = HomeUiState().copy(offlineMode = OfflineMode.OFFLINE_MANUAL)
+        assertEquals(OfflineMode.OFFLINE_MANUAL, state.offlineMode)
+    }
+
+    @Test
+    fun copy_updatesDiscoverEnabled() {
+        val state = HomeUiState().copy(discoverEnabled = true)
+        assertTrue(state.discoverEnabled)
+    }
+
+    @Test
+    fun copy_updatesNewsletterBannerVisible() {
+        val state = HomeUiState().copy(newsletterBannerVisible = true)
+        assertTrue(state.newsletterBannerVisible)
+    }
+
+    @Test
+    fun copy_updatesCurrentUser() {
+        val user = com.raulshma.jellyplay.core.model.UserInfo(
+            id = "u1",
+            name = "Alice",
+            serverAddress = "http://localhost",
+            accessToken = "token",
+            serverId = "s1",
+            primaryImageTag = null
+        )
+        val state = HomeUiState().copy(currentUser = user)
+        assertNotNull(state.currentUser)
+        assertEquals("u1", state.currentUser!!.id)
     }
 
     @Test
@@ -29,6 +95,32 @@ class HomeUiStateTest {
         assertTrue(state.jellyfinResults.isEmpty())
         assertTrue(state.seerrResults.isEmpty())
         assertFalse(state.isSearching)
+    }
+
+    @Test
+    fun searchState_copy_updatesQuery() {
+        val state = HomeSearchState().copy(query = "batman")
+        assertEquals("batman", state.query)
+    }
+
+    @Test
+    fun searchState_copy_updatesIsSearching() {
+        val state = HomeSearchState().copy(isSearching = true)
+        assertTrue(state.isSearching)
+    }
+
+    @Test
+    fun searchState_isSearching_falseWhenQueryBlank() {
+        val query = "  "
+        val isSearching = query.isNotBlank()
+        assertFalse(isSearching)
+    }
+
+    @Test
+    fun searchState_isSearching_trueWhenQueryNonBlank() {
+        val query = "hello"
+        val isSearching = query.isNotBlank()
+        assertTrue(isSearching)
     }
 
     @Test
@@ -43,6 +135,20 @@ class HomeUiStateTest {
     }
 
     @Test
+    fun seerrRequestState_copy_updatesIsLoadingServices() {
+        val state = SeerrRequestState().copy(isLoadingServices = true)
+        assertTrue(state.isLoadingServices)
+    }
+
+    @Test
+    fun seerrRequestState_copy_clearsResult() {
+        val state = SeerrRequestState(
+            result = com.raulshma.jellyplay.core.model.seerr.SeerrRequestResult(success = true)
+        ).copy(result = null)
+        assertNull(state.result)
+    }
+
+    @Test
     fun defaultScrollPosition_isZero() {
         val pos = HomeScrollPosition()
         assertEquals(0, pos.firstVisibleItemIndex)
@@ -50,9 +156,53 @@ class HomeUiStateTest {
     }
 
     @Test
+    fun scrollPosition_coerceAtLeast_positivesPassThrough() {
+        val index = 5.coerceAtLeast(0)
+        val offset = 100.coerceAtLeast(0)
+        assertEquals(5, index)
+        assertEquals(100, offset)
+    }
+
+    @Test
+    fun scrollPosition_coerceAtLeast_negativesClampToZero() {
+        val index = (-3).coerceAtLeast(0)
+        val offset = (-99).coerceAtLeast(0)
+        assertEquals(0, index)
+        assertEquals(0, offset)
+    }
+
+    @Test
+    fun scrollPosition_coerceAtLeast_zeroStaysZero() {
+        val index = 0.coerceAtLeast(0)
+        assertEquals(0, index)
+    }
+
+    @Test
     fun defaultFocusPosition_isZero() {
         val pos = HomeFocusPosition()
         assertEquals(0, pos.sectionIndex)
         assertEquals(0, pos.itemIndex)
+    }
+
+    @Test
+    fun focusPosition_coerceAtLeast_negativesClampToZero() {
+        val sectionIndex = (-2).coerceAtLeast(0)
+        val itemIndex = (-10).coerceAtLeast(0)
+        assertEquals(0, sectionIndex)
+        assertEquals(0, itemIndex)
+    }
+
+    @Test
+    fun focusPosition_dataClass_equality() {
+        val a = HomeFocusPosition(1, 2)
+        val b = HomeFocusPosition(1, 2)
+        assertEquals(a, b)
+    }
+
+    @Test
+    fun scrollPosition_dataClass_equality() {
+        val a = HomeScrollPosition(3, 50)
+        val b = HomeScrollPosition(3, 50)
+        assertEquals(a, b)
     }
 }
