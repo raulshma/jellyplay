@@ -138,7 +138,7 @@ class ResilientSeerrApiClientTest {
 
     @Test
     fun `retries on HTTP 500 up to MAX_RETRIES times`() = runBlocking {
-        repeat(ResilientSeerrApiClient.MAX_RETRIES) {
+        repeat(ResilientSeerrApiClient.MAX_RETRIES + 1) {
             mockWebServer.enqueue(MockResponse().setResponseCode(500).setBody("{\"message\":\"Internal Server Error\"}"))
         }
 
@@ -146,7 +146,7 @@ class ResilientSeerrApiClientTest {
         val result = resilientClient.testConnection(baseUrl, SeerrCredentials.ApiKey("apikey"))
 
         assertTrue("Expected failure after exhausting retries", result.isFailure)
-        assertEquals(ResilientSeerrApiClient.MAX_RETRIES, mockWebServer.requestCount)
+        assertEquals(ResilientSeerrApiClient.MAX_RETRIES + 1, mockWebServer.requestCount)
     }
 
     @Test

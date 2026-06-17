@@ -93,7 +93,7 @@ class ModelSerializationTest {
     @Test
     fun `media type enum values`() {
         val types = MediaType.entries
-        assertEquals(12, types.size)
+        assertEquals(15, types.size)
         assertEquals(MediaType.MOVIE, types[0])
         assertEquals(MediaType.SERIES, types[1])
         assertEquals(MediaType.SEASON, types[2])

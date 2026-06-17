@@ -32,16 +32,17 @@ object LrcParser {
 
             val lineMatch = LINE_REGEX.find(line) ?: return@forEach
             val text = lineMatch.groupValues.last()
-            val lineStartTimes = TIME_REGEX.findAll(line).map { match ->
+            val prefixEnd = line.length - text.length
+            val prefix = line.substring(0, prefixEnd)
+            val lineStartTimes = TIME_REGEX.findAll(prefix).map { match ->
                 val minutes = match.groupValues[1].toLong()
                 val seconds = match.groupValues[2].toDouble()
                 minutes * 60_000 + (seconds * 1000).toLong()
             }.toList()
 
-            val words = parseInlineWordTimings(text)
-
             lineStartTimes.forEach { timeMs ->
                 val adjustedTime = timeMs + offsetMs
+                val words = parseInlineWordTimings(text, adjustedTime)
                 val adjustedWords = if (words.isNotEmpty()) {
                     words.map { it.copy(timeMs = it.timeMs + offsetMs) }
                 } else emptyList()
@@ -77,24 +78,46 @@ object LrcParser {
      * Returns a list of [LyricsWord] in order. Returns empty list if no inline
      * timestamps are present.
      */
-    private fun parseInlineWordTimings(text: String): List<LyricsWord> {
+    private fun parseInlineWordTimings(text: String, lineStartTimeMs: Long): List<LyricsWord> {
         if (text.isBlank()) return emptyList()
         val matches = TIME_REGEX.findAll(text).toList()
         if (matches.isEmpty()) return emptyList()
 
-        return matches.mapIndexed { index, match ->
+        val words = mutableListOf<LyricsWord>()
+
+        // 1. First word (before the first inline timestamp)
+        val firstMatch = matches.first()
+        val firstWordText = text.substring(0, firstMatch.range.first).trim()
+        if (firstWordText.isNotEmpty()) {
+            words.add(
+                LyricsWord(
+                    timeMs = lineStartTimeMs,
+                    text = firstWordText,
+                    durationMs = 0L
+                )
+            )
+        }
+
+        // 2. Subsequent words
+        matches.forEachIndexed { index, match ->
             val minutes = match.groupValues[1].toLong()
             val seconds = match.groupValues[2].toDouble()
             val timeMs = minutes * 60_000 + (seconds * 1000).toLong()
             val wordStart = match.range.last + 1
             val wordEnd = matches.getOrNull(index + 1)?.range?.first ?: text.length
             val rawWord = text.substring(wordStart, wordEnd).trim()
-            LyricsWord(
-                timeMs = timeMs,
-                text = rawWord,
-                durationMs = 0L,
-            )
-        }.filter { it.text.isNotEmpty() }
+            if (rawWord.isNotEmpty()) {
+                words.add(
+                    LyricsWord(
+                        timeMs = timeMs,
+                        text = rawWord,
+                        durationMs = 0L,
+                    )
+                )
+            }
+        }
+
+        return words
     }
 
     private fun computeWordDurations(words: List<LyricsWord>, lineDuration: Long): List<LyricsWord> {

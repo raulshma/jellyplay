@@ -41,7 +41,7 @@ class TvWatchNextPublisher(
 
         val sections = mediaRepository.getHomeSections(
             enabledSections = setOf(HomeSectionType.CONTINUE_WATCHING, HomeSectionType.NEXT_UP),
-        ).getOrDefault(emptyList())
+        ).getOrThrow()
 
         val continueWatching = sections.firstOrNull { it.type == HomeSectionType.CONTINUE_WATCHING }?.items.orEmpty()
         val nextUp = sections.firstOrNull { it.type == HomeSectionType.NEXT_UP }?.items.orEmpty()
@@ -58,22 +58,28 @@ class TvWatchNextPublisher(
 
         // Remember items the user removed from the Watch Next row so we don't
         // re-add them on every refresh.
+        val savedRemovedIds = prefs.getStringSet(KEY_USER_REMOVED, emptySet())?.toMutableSet() ?: mutableSetOf()
         val userRemovedIds = existing.filterNot { it.isBrowsable }
-            .map { it.internalProviderId }
-            .filterNotNull()
-            .toMutableSet()
-        if (userRemovedIds.isNotEmpty()) {
-            prefs.edit(true) {
-                putStringSet(KEY_USER_REMOVED, userRemovedIds)
+            .mapNotNull { it.internalProviderId }
+
+        var prefsChanged = false
+        for (id in userRemovedIds) {
+            if (savedRemovedIds.add(id)) {
+                prefsChanged = true
             }
         }
-        val savedRemovedIds = prefs.getStringSet(KEY_USER_REMOVED, emptySet()) ?: emptySet()
+        if (prefsChanged) {
+            prefs.edit(true) {
+                putStringSet(KEY_USER_REMOVED, savedRemovedIds)
+            }
+        }
 
         // Remove programs no longer in candidates (or revived by the user).
+        val candidateIds = candidates.map { it.id }.toSet()
         existing
             .filter { prog ->
                 val id = prog.internalProviderId ?: return@filter false
-                id !in candidates.map { it.id } || id in savedRemovedIds
+                id !in candidateIds || id in savedRemovedIds
             }
             .forEach { prog ->
                 context.contentResolver.delete(
@@ -83,6 +89,22 @@ class TvWatchNextPublisher(
                 )
             }
 
+        // Update existing candidates that are already in the row and weren't dismissed.
+        val existingMap = existing.associateBy { it.internalProviderId }
+        val toUpdate = candidates.filter { it.id in existingIds && it.id !in savedRemovedIds }
+        toUpdate.forEach { candidate ->
+            val existingProg = existingMap[candidate.id]
+            if (existingProg != null) {
+                val updatedProgram = convert(candidate)
+                context.contentResolver.update(
+                    TvContractCompat.buildWatchNextProgramUri(existingProg.id),
+                    updatedProgram.toContentValues(),
+                    null,
+                    null,
+                )
+            }
+        }
+
         // Insert new candidates that aren't already in the row and weren't dismissed.
         val toAdd = candidates.filter { it.id !in existingIds && it.id !in savedRemovedIds }
         if (toAdd.isNotEmpty()) {
@@ -91,6 +113,21 @@ class TvWatchNextPublisher(
                 TvContractCompat.WatchNextPrograms.CONTENT_URI,
                 values,
             )
+        }
+    }
+
+    suspend fun clear(): Result<Unit> = runCatching {
+        if (!isTv()) return@runCatching
+        val existing = queryExistingPrograms()
+        existing.forEach { prog ->
+            context.contentResolver.delete(
+                TvContractCompat.buildWatchNextProgramUri(prog.id),
+                null,
+                null,
+            )
+        }
+        prefs.edit(true) {
+            remove(KEY_USER_REMOVED)
         }
     }
 

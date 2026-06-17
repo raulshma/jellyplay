@@ -1101,7 +1101,25 @@ class SettingsViewModel @Inject constructor(
     }
 
     fun setAndroidTvWatchNextEnabled(enabled: Boolean) {
-        launch { preferencesStore.setAndroidTvWatchNextEnabled(enabled) }
+        launch {
+            preferencesStore.setAndroidTvWatchNextEnabled(enabled)
+            try {
+                val request = androidx.work.OneTimeWorkRequestBuilder<com.raulshma.jellyplay.core.data.worker.TvWatchNextWorker>()
+                    .setConstraints(
+                        androidx.work.Constraints.Builder()
+                            .setRequiredNetworkType(androidx.work.NetworkType.CONNECTED)
+                            .build(),
+                    )
+                    .build()
+                androidx.work.WorkManager.getInstance(context).enqueueUniqueWork(
+                    com.raulshma.jellyplay.core.data.worker.TvWatchNextWorker.UNIQUE_WORK_NAME,
+                    androidx.work.ExistingWorkPolicy.REPLACE,
+                    request,
+                )
+            } catch (_: Exception) {
+                // WorkManager not initialised / unavailable — ignore.
+            }
+        }
     }
 
     fun setUserDataSyncEnabled(enabled: Boolean) {

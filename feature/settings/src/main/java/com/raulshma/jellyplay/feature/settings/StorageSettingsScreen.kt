@@ -293,7 +293,7 @@ fun StorageSettingsScreen(
                         subtitle = if (preferences.verboseNetworkLogging) "Logs request headers (restart to apply)" else "Standard logging",
                         checked = preferences.verboseNetworkLogging,
                         highlighted = highlightSettingId == "verbose_logging",
-                        index = networkIdx, count = networkTotal,
+                        index = networkIdx++, count = networkTotal,
                         onCheckedChange = { viewModel.setVerboseNetworkLogging(it) },
                     )
                     SettingToggleItem(
@@ -302,7 +302,7 @@ fun StorageSettingsScreen(
                         subtitle = if (preferences.userDataSyncEnabled) "Periodically refresh favourites / played / progress from server" else "No background user-data refresh",
                         checked = preferences.userDataSyncEnabled,
                         highlighted = highlightSettingId == "user_data_sync",
-                        index = networkIdx, count = networkTotal,
+                        index = networkIdx++, count = networkTotal,
                         onCheckedChange = { viewModel.setUserDataSyncEnabled(it) },
                     )
                 }

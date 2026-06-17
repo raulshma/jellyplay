@@ -371,7 +371,17 @@ fun VideoPlayerScreen(
 
     LaunchedEffect(uiState.frameRateMatching, uiState.videoFrameRate) {
         if (uiState.frameRateMatching && uiState.videoFrameRate != null) {
-            activity?.let { if (!it.isDestroyed && !it.isFinishing) FrameRateMatcher.matchFrameRate(it, uiState.videoFrameRate) }
+            val videoStream = uiState.mediaStreams.firstOrNull { it.type == com.raulshma.jellyplay.core.model.StreamType.VIDEO }
+            activity?.let {
+                if (!it.isDestroyed && !it.isFinishing) {
+                    FrameRateMatcher.matchFrameRate(
+                        activity = it,
+                        frameRate = uiState.videoFrameRate,
+                        targetWidth = videoStream?.width,
+                        targetHeight = videoStream?.height,
+                    )
+                }
+            }
         }
     }
 
