@@ -9,12 +9,16 @@ import com.raulshma.jellyplay.core.model.LyricsResult
 import com.raulshma.jellyplay.core.model.MediaDetail
 import com.raulshma.jellyplay.core.model.MediaItem
 import com.raulshma.jellyplay.core.model.MediaType
+import com.raulshma.jellyplay.core.model.PinnedHomeSection
+import com.raulshma.jellyplay.core.model.PinnedSectionType
 import com.raulshma.jellyplay.core.model.PersonInfo
 import com.raulshma.jellyplay.core.model.Playlist
 import com.raulshma.jellyplay.core.model.PlaylistItem
 import com.raulshma.jellyplay.core.model.SearchResult
+import com.raulshma.jellyplay.core.model.Studio
 import com.raulshma.jellyplay.core.network.LyricsApi
 import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.sync.Semaphore
 import org.jellyfin.sdk.model.api.BaseItemKind
@@ -42,6 +46,10 @@ class LibraryApiClientImpl @Inject constructor(
     override suspend fun getHomeSections(
         enabledSections: Set<HomeSectionType>,
         hiddenLibraryIds: Set<String>,
+        nextUpRewatching: Boolean,
+        nextUpMaxDays: Int,
+        nextUpExcludedSeriesIds: Set<String>,
+        pinnedSections: List<PinnedHomeSection>,
     ): Result<List<HomeSection>> = engine.apiResultWithRetry {
         coroutineScope {
             val sections = mutableListOf<HomeSection>()
@@ -52,7 +60,10 @@ class LibraryApiClientImpl @Inject constructor(
                 else Result.success(emptyList())
             }
             val nextUpDeferred = async {
-                if (HomeSectionType.NEXT_UP in enabledSections) getNextUp()
+                if (HomeSectionType.NEXT_UP in enabledSections) getNextUp(
+                    enableRewatching = nextUpRewatching,
+                    maxDays = nextUpMaxDays,
+                )
                 else Result.success(emptyList())
             }
             val foldersDeferred = async {
@@ -62,6 +73,9 @@ class LibraryApiClientImpl @Inject constructor(
                     Result.success(emptyList())
                 }
             }
+            // Kick off pinned-section fetches concurrently with the standard
+            // sections so they add no extra wall-clock latency to home loading.
+            val pinnedDeferred = async { fetchPinnedSections(pinnedSections) }
 
             val continueWatchingResult = continueWatchingDeferred.await()
             val nextUpResult = nextUpDeferred.await()
@@ -83,7 +97,9 @@ class LibraryApiClientImpl @Inject constructor(
             if (HomeSectionType.NEXT_UP in enabledSections) {
                 nextUpResult
                     .onSuccess { list ->
+                        // Drop items whose series is in the user's "remove from Next Up" blocklist.
                         val filtered = list.filter { it.id !in continueWatchingIds }
+                            .filter { it.seriesId == null || it.seriesId !in nextUpExcludedSeriesIds }
                         if (filtered.isNotEmpty()) {
                             sections.add(HomeSection("next_up", "Next Up", HomeSectionType.NEXT_UP, filtered))
                         }
@@ -154,11 +170,73 @@ class LibraryApiClientImpl @Inject constructor(
                     .onFailure { if (firstError == null) firstError = it }
             }
 
+            // Append user-pinned sections (collections / playlists / favorites /
+            // genres / studios). They are always fetched regardless of the
+            // enabledSections filter, and appended after the standard sections so
+            // the HomeViewModel's ordering logic places them at the end of the
+            // home screen in the user-chosen pin order.
+            pinnedDeferred.await().forEach { section -> sections.add(section) }
+
             if (sections.isEmpty() && firstError != null) {
                 throw firstError!!
             }
             sections
         }
+    }
+
+    /**
+     * Fetches the items for each [PinnedHomeSection] concurrently (bounded by a
+     * semaphore to avoid flooding the server). Empty results are dropped so the
+     * home screen never shows an empty pinned row. Order is preserved so the
+     * caller's list order maps directly to home row order.
+     */
+    private suspend fun fetchPinnedSections(
+        pinnedSections: List<PinnedHomeSection>,
+    ): List<HomeSection> {
+        if (pinnedSections.isEmpty()) return emptyList()
+        val semaphore = Semaphore(4)
+        return coroutineScope {
+            val deferred = pinnedSections.map { pinned ->
+                async {
+                    semaphore.acquire()
+                    try {
+                        val items = getPinnedSectionItems(pinned)
+                        if (items.isNotEmpty()) {
+                            HomeSection(
+                                id = "pinned_${pinned.id}",
+                                title = pinned.title,
+                                type = HomeSectionType.PINNED,
+                                items = items,
+                            )
+                        } else null
+                    } catch (_: Exception) {
+                        // A single failing pin (e.g. deleted collection) must not
+                        // break the whole home screen; just drop that row.
+                        null
+                    } finally {
+                        semaphore.release()
+                    }
+                }
+            }
+            deferred.awaitAll().filterNotNull()
+        }
+    }
+
+    /** Resolves the items for a single pinned section using its source type. */
+    private suspend fun getPinnedSectionItems(pinned: PinnedHomeSection): List<MediaItem> = when (pinned.type) {
+        PinnedSectionType.COLLECTION -> getCollectionItems(pinned.sourceId, limit = 20)
+            .getOrNull()?.items.orEmpty()
+        // Playlists and collections are both parent-scoped item queries; reusing
+        // getCollectionItems avoids excluding episode items (getMediaItems drops
+        // seasons/episodes), which matters for video playlists.
+        PinnedSectionType.PLAYLIST -> getCollectionItems(pinned.sourceId, limit = 20)
+            .getOrNull()?.items.orEmpty()
+        PinnedSectionType.FAVORITES -> getFavorites(limit = 20)
+            .getOrNull()?.items.orEmpty()
+        PinnedSectionType.GENRE -> getItemsByGenre(pinned.sourceId, limit = 20)
+            .getOrNull()?.items.orEmpty()
+        PinnedSectionType.STUDIO -> getItemsByStudio(pinned.sourceId, limit = 20)
+            .getOrNull()?.items.orEmpty()
     }
 
     override suspend fun getLatestMedia(parentId: String, limit: Int): Result<List<MediaItem>> =
@@ -180,9 +258,20 @@ class LibraryApiClientImpl @Inject constructor(
             }
         }
 
-    override suspend fun getNextUp(limit: Int): Result<List<MediaItem>> = engine.apiResultWithRetry {
+    override suspend fun getNextUp(
+        limit: Int,
+        enableRewatching: Boolean,
+        maxDays: Int,
+    ): Result<List<MediaItem>> = engine.apiResultWithRetry {
+        val cutoff = if (maxDays > 0) {
+            java.time.LocalDateTime.now().minusDays(maxDays.toLong())
+        } else {
+            null
+        }
         val response = engine.requireApi().tvShowsApi.getNextUp(
             limit = limit,
+            enableRewatching = enableRewatching,
+            nextUpDateCutoff = cutoff,
             fields = listOf(
                 ItemFields.OVERVIEW,
                 ItemFields.PRIMARY_IMAGE_ASPECT_RATIO,
@@ -378,6 +467,18 @@ class LibraryApiClientImpl @Inject constructor(
         }
     }
 
+    override suspend fun getIntros(itemId: String): Result<List<MediaItem>> = engine.apiResultWithRetry {
+        val userId = engine.currentUser.value?.id?.toUUID()
+            ?: throw IllegalStateException("Not authenticated")
+        val response = engine.requireApi().userLibraryApi.getIntros(
+            itemId = itemId.toUUID(),
+            userId = userId,
+        ).content
+        engine.run {
+            (response?.items ?: emptyList()).map { it.toMediaItem() }.filterByParentalRating()
+        }
+    }
+
     override suspend fun getSearchHints(
         query: String,
         mediaTypes: List<MediaType>?,
@@ -436,6 +537,47 @@ class LibraryApiClientImpl @Inject constructor(
         )
     }
 
+    override suspend fun getStudios(
+        parentId: String?,
+        startIndex: Int,
+        limit: Int,
+    ): Result<List<Studio>> = engine.apiResultWithRetry {
+        val userId = engine.currentUser.value?.id?.toUUID()
+        val response = engine.requireApi().studiosApi.getStudios(
+            parentId = parentId?.let { it.toUUID() },
+            userId = userId,
+            startIndex = startIndex,
+            limit = limit,
+        ).content
+        response.items.map { item ->
+            Studio(id = item.id.toString(), name = item.name ?: "")
+        }
+    }
+
+    override suspend fun getItemsByStudio(
+        studioId: String,
+        mediaTypes: List<MediaType>?,
+        startIndex: Int,
+        limit: Int,
+    ): Result<SearchResult> = engine.apiResultWithRetry {
+        val response = engine.requireApi().itemsApi.getItems(
+            studioIds = listOf(studioId.toUUID()),
+            includeItemTypes = mediaTypes?.mapNotNull { it.toBaseItemKind() },
+            startIndex = startIndex,
+            limit = limit,
+            recursive = true,
+            fields = listOf(
+                ItemFields.OVERVIEW,
+                ItemFields.PRIMARY_IMAGE_ASPECT_RATIO,
+            ),
+        ).content
+        SearchResult(
+            items = engine.run { response.items.map { it.toMediaItem() }.filterByParentalRating() },
+            totalRecordCount = response.totalRecordCount,
+            startIndex = startIndex,
+        )
+    }
+
     override suspend fun getArtistAlbums(artistId: String, limit: Int): Result<List<MediaItem>> = engine.apiResultWithRetry {
         val response = engine.requireApi().itemsApi.getItems(
             albumArtistIds = listOf(artistId.toUUID()),
@@ -472,6 +614,23 @@ class LibraryApiClientImpl @Inject constructor(
                 engine.requireApi().libraryApi.getSimilarItems(
                     itemId = itemId.toUUID(),
                     limit = limit,
+                ).content.items.map { it.toMediaItem() }.filterByParentalRating()
+            }
+        }
+
+    override suspend fun getInstantMix(itemId: String, limit: Int): Result<List<MediaItem>> =
+        engine.apiResultWithRetry {
+            val userId = engine.currentUser.value?.id?.toUUID()
+                ?: return@apiResultWithRetry emptyList()
+            engine.run {
+                engine.requireApi().instantMixApi.getInstantMixFromItem(
+                    userId = userId,
+                    itemId = itemId.toUUID(),
+                    limit = limit,
+                    fields = listOf(
+                        ItemFields.OVERVIEW,
+                        ItemFields.PRIMARY_IMAGE_ASPECT_RATIO,
+                    ),
                 ).content.items.map { it.toMediaItem() }.filterByParentalRating()
             }
         }
@@ -514,6 +673,14 @@ class LibraryApiClientImpl @Inject constructor(
                     ItemFields.OVERVIEW,
                     ItemFields.PRIMARY_IMAGE_ASPECT_RATIO,
                 ),
+            ).content
+            engine.run { response.items.map { it.toMediaItem() }.filterByParentalRating() }
+        }
+
+    override suspend fun getThemeSongs(itemId: String): Result<List<MediaItem>> =
+        engine.apiResultWithRetry {
+            val response = engine.requireApi().libraryApi.getThemeSongs(
+                itemId = itemId.toUUID(),
             ).content
             engine.run { response.items.map { it.toMediaItem() }.filterByParentalRating() }
         }

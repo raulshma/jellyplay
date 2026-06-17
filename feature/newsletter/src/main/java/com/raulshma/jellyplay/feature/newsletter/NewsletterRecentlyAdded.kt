@@ -258,6 +258,7 @@ internal val MediaType.label: String
         MediaType.AUDIO -> "Audio"
         MediaType.ALBUM -> "Album"
         MediaType.ARTIST -> "Artist"
+        MediaType.MUSIC_VIDEO -> "Music Video"
         MediaType.COLLECTION -> "Collection"
         MediaType.PHOTO, MediaType.PHOTO_FOLDER -> "Photo"
         MediaType.LIVE_TV -> "Live TV"

@@ -58,6 +58,26 @@ object SettingsSearchRegistry {
 
         // Appearance Settings
         SettingsSearchItem(
+            id = "pinned_home_sections",
+            title = "Pinned Home Sections",
+            subtitle = "Pin collections, playlists, favorites, genres or studios to home",
+            category = "Appearance",
+            keywords = listOf("pinned", "home", "collection", "playlist", "favorites", "genre", "studio", "shelf", "row"),
+            route = Route.PinnedHomeSections(),
+            icon = Tabler.Outline.Pinned,
+            isAdvanced = true
+        ),
+        SettingsSearchItem(
+            id = "home_layout_presets",
+            title = "Home Layout Presets",
+            subtitle = "Save, share, import or reset your home screen layout",
+            category = "Appearance",
+            keywords = listOf("preset", "layout", "home", "save", "load", "import", "export", "share", "reset", "backup", "configuration"),
+            route = Route.HomeLayoutPresets(),
+            icon = Tabler.Outline.Bookmarks,
+            isAdvanced = true
+        ),
+        SettingsSearchItem(
             id = "theme_mode",
             title = "Theme Mode",
             subtitle = "Follow system setting, light mode, or dark mode",
@@ -140,6 +160,66 @@ object SettingsSearchRegistry {
             keywords = listOf("hero", "banner", "featured", "home", "carousel"),
             route = Route.AppearanceSettings(),
             icon = Tabler.Outline.LayersLinked,
+            isAdvanced = true
+        ),
+        SettingsSearchItem(
+            id = "clock_home",
+            title = "Show Clock on Home",
+            subtitle = "Display the current time in the home screen top bar",
+            category = "Appearance",
+            keywords = listOf("clock", "time", "home", "wall", "current"),
+            route = Route.AppearanceSettings(),
+            icon = Tabler.Outline.Clock,
+            isAdvanced = true
+        ),
+        SettingsSearchItem(
+            id = "continue_watching_click",
+            title = "Continue Watching Tap",
+            subtitle = "Resume playback or open details when tapping a Continue Watching tile",
+            category = "Appearance",
+            keywords = listOf("continue watching", "tap", "click", "resume", "play", "details"),
+            route = Route.AppearanceSettings(),
+            icon = Tabler.Outline.PlayerPlay,
+            isAdvanced = true
+        ),
+        SettingsSearchItem(
+            id = "merge_continue_next_up",
+            title = "Merge Continue & Next Up",
+            subtitle = "Combine Next Up items into the Continue Watching row",
+            category = "Appearance",
+            keywords = listOf("merge", "combine", "continue watching", "next up", "single row"),
+            route = Route.AppearanceSettings(),
+            icon = Tabler.Outline.LayersLinked,
+            isAdvanced = true
+        ),
+        SettingsSearchItem(
+            id = "next_up_max_days",
+            title = "Next Up Time Window",
+            subtitle = "Only show episodes watched within a time period",
+            category = "Appearance",
+            keywords = listOf("next up", "days", "time window", "recent", "max days", "filter"),
+            route = Route.AppearanceSettings(),
+            icon = Tabler.Outline.CalendarTime,
+            isAdvanced = true
+        ),
+        SettingsSearchItem(
+            id = "next_up_rewatching",
+            title = "Rewatching in Next Up",
+            subtitle = "Include series you are rewatching in Next Up",
+            category = "Appearance",
+            keywords = listOf("next up", "rewatching", "rewatch", "rewatch", "repeat"),
+            route = Route.AppearanceSettings(),
+            icon = Tabler.Outline.History,
+            isAdvanced = true
+        ),
+        SettingsSearchItem(
+            id = "theme_music",
+            title = "Backdrop Theme Music",
+            subtitle = "Play theme songs on detail pages",
+            category = "Appearance",
+            keywords = listOf("theme", "music", "backdrop", "ambience", "song", "score"),
+            route = Route.AppearanceSettings(),
+            icon = Tabler.Outline.Music,
             isAdvanced = true
         ),
         SettingsSearchItem(
@@ -307,6 +387,36 @@ object SettingsSearchRegistry {
             isAdvanced = true
         ),
         SettingsSearchItem(
+            id = "skip_back_on_resume",
+            title = "Skip Back on Resume",
+            subtitle = "Jump back a few seconds when un-pausing playback",
+            category = "Playback",
+            keywords = listOf("skip", "back", "resume", "rewind", "unpause", "seek"),
+            route = Route.PlaybackSettings(),
+            icon = Tabler.Outline.History,
+            isAdvanced = true
+        ),
+        SettingsSearchItem(
+            id = "show_clock_player",
+            title = "Show Clock in Player",
+            subtitle = "Display the current wall-clock time in the video player top bar",
+            category = "Playback",
+            keywords = listOf("clock", "time", "player", "wall", "current"),
+            route = Route.PlaybackSettings(),
+            icon = Tabler.Outline.Clock,
+            isAdvanced = true
+        ),
+        SettingsSearchItem(
+            id = "pass_out_protection",
+            title = "Pass-out Protection",
+            subtitle = "Pause playback after a set number of hours with no interaction",
+            category = "Playback",
+            keywords = listOf("pass out", "fall asleep", "auto pause", "sleep", "hours"),
+            route = Route.PlaybackSettings(),
+            icon = Tabler.Outline.Moon,
+            isAdvanced = true
+        ),
+        SettingsSearchItem(
             id = "autoplay_trailers",
             title = "Autoplay Trailers",
             subtitle = "Automatically play media trailers on details pages",
@@ -314,6 +424,16 @@ object SettingsSearchRegistry {
             keywords = listOf("trailer", "autoplay", "preview", "details"),
             route = Route.PlaybackSettings(),
             icon = Tabler.Outline.Clipboard,
+            isAdvanced = true
+        ),
+        SettingsSearchItem(
+            id = "cinema_mode",
+            title = "Cinema Mode",
+            subtitle = "Play pre-roll intros before the main feature",
+            category = "Playback",
+            keywords = listOf("cinema", "intro", "preroll", "pre-roll", "trailer"),
+            route = Route.PlaybackSettings(),
+            icon = Tabler.Outline.Video,
             isAdvanced = true
         ),
         SettingsSearchItem(
@@ -607,6 +727,15 @@ object SettingsSearchRegistry {
 
         // Language & Subtitles
         SettingsSearchItem(
+            id = "app_language",
+            title = "Display Language",
+            subtitle = "Override the app interface language",
+            category = "Language & Subtitles",
+            keywords = listOf("language", "display", "interface", "locale", "ui language", "app language"),
+            route = Route.LanguageSettings(),
+            icon = Tabler.Outline.Language
+        ),
+        SettingsSearchItem(
             id = "audio_language",
             title = "Preferred Audio Language",
             subtitle = "Select default audio language track",
@@ -632,6 +761,35 @@ object SettingsSearchRegistry {
             keywords = listOf("subtitle size", "font size", "text size", "bigger"),
             route = Route.LanguageSettings(),
             icon = Tabler.Outline.Typography
+        ),
+        SettingsSearchItem(
+            id = "subtitle_forced_only",
+            title = "Forced Subtitles Only",
+            subtitle = "Show subtitles only when forced tracks are present",
+            category = "Language & Subtitles",
+            keywords = listOf("forced", "subtitles", "foreign", "parts", "native"),
+            route = Route.LanguageSettings(),
+            icon = Tabler.Outline.TextSize
+        ),
+        SettingsSearchItem(
+            id = "pgs_direct_play",
+            title = "PGS Direct Play",
+            subtitle = "Render PGS subtitles natively instead of burning in",
+            category = "Language & Subtitles",
+            keywords = listOf("pgs", "subtitle", "direct play", "picture", "image subtitle", "bluray"),
+            route = Route.LanguageSettings(),
+            icon = Tabler.Outline.Photo,
+            isAdvanced = true
+        ),
+        SettingsSearchItem(
+            id = "hdr_subtitle_style",
+            title = "HDR Subtitle Style",
+            subtitle = "Separate subtitle styling for HDR content",
+            category = "Language & Subtitles",
+            keywords = listOf("hdr", "subtitle", "style", "dolby vision", "hdr10", "brightness"),
+            route = Route.LanguageSettings(),
+            icon = Tabler.Outline.Sun,
+            isAdvanced = true
         ),
         SettingsSearchItem(
             id = "subtitle_color",
@@ -772,6 +930,36 @@ object SettingsSearchRegistry {
             icon = Tabler.Outline.Gauge
         ),
         SettingsSearchItem(
+            id = "network_timeout",
+            title = "Network Timeouts",
+            subtitle = "Connect/read/write timeout preset for API requests",
+            category = "Storage",
+            keywords = listOf("timeout", "network", "connect", "read", "write", "slow"),
+            route = Route.StorageSettings(),
+            icon = Tabler.Outline.Clock,
+            isAdvanced = true
+        ),
+        SettingsSearchItem(
+            id = "verbose_logging",
+            title = "Verbose Network Logging",
+            subtitle = "Log HTTP request headers for debugging",
+            category = "Storage",
+            keywords = listOf("verbose", "debug", "logging", "network", "http", "developer"),
+            route = Route.StorageSettings(),
+            icon = Tabler.Outline.Code,
+            isAdvanced = true
+        ),
+        SettingsSearchItem(
+            id = "user_data_sync",
+            title = "Background User-Data Sync",
+            subtitle = "Periodically refresh favourites, played, and progress from server",
+            category = "Storage",
+            keywords = listOf("sync", "background", "user-data", "favorites", "played", "progress", "worker"),
+            route = Route.StorageSettings(),
+            icon = Tabler.Outline.Refresh,
+            isAdvanced = true
+        ),
+        SettingsSearchItem(
             id = "download_quality",
             title = "Download Quality Profile",
             subtitle = "Preferred video resolution for downloaded offline media",
@@ -808,6 +996,15 @@ object SettingsSearchRegistry {
             keywords = listOf("biometric", "fingerprint", "face lock", "iris", "sensors"),
             route = Route.SecuritySettings(),
             icon = Tabler.Outline.Fingerprint
+        ),
+        SettingsSearchItem(
+            id = "quick_connect_authorize",
+            title = "Authorize Quick Connect",
+            subtitle = "Approve Quick Connect codes from other devices",
+            category = "Security",
+            keywords = listOf("quick connect", "authorize", "approve", "code", "device", "pair"),
+            route = Route.SecuritySettings(),
+            icon = Tabler.Outline.Bolt
         ),
 
         // Backup

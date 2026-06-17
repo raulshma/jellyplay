@@ -16,6 +16,7 @@ data class ServerEntity(
     val userId: String? = null,
     val accessToken: String? = null,
     val lastConnected: Long = System.currentTimeMillis(),
+    val alternateAddresses: String? = null,
 )
 
 @Entity(

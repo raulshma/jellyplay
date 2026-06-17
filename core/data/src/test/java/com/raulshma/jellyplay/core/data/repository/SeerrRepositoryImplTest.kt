@@ -6,6 +6,8 @@ import com.raulshma.jellyplay.core.model.seerr.SeerrAuthMethod
 import com.raulshma.jellyplay.core.model.seerr.SeerrCredentials
 import com.raulshma.jellyplay.core.model.seerr.SeerrPreferences
 import com.raulshma.jellyplay.core.model.seerr.SeerrStatusResponse
+import com.raulshma.jellyplay.core.model.seerr.SeerrRequestCount
+import com.raulshma.jellyplay.core.model.seerr.SeerrCurrentUser
 import com.raulshma.jellyplay.core.network.seerr.SeerrApiClient
 import io.mockk.coEvery
 import io.mockk.coVerify
@@ -38,6 +40,8 @@ class SeerrRepositoryImplTest {
         every { seerrPreferencesStore.preferences } returns MutableStateFlow(validPrefs)
         every { secureCredentialsStore.getApiKey() } returns "test-api-key"
         every { secureCredentialsStore.getSessionCookie() } returns ""
+        coEvery { seerrApiClient.getRequestCount(any(), any()) } returns Result.success(SeerrRequestCount())
+        coEvery { seerrApiClient.getCurrentUser(any(), any()) } returns Result.success(SeerrCurrentUser(permissions = 2L))
         repository = SeerrRepositoryImpl(seerrApiClient, seerrPreferencesStore, secureCredentialsStore)
     }
 

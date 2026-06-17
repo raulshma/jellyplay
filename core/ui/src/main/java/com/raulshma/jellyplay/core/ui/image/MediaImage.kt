@@ -14,6 +14,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.ColorFilter
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
@@ -35,6 +36,7 @@ fun MediaImage(
     blurHash: String? = null,
     crossfade: Boolean = true,
     size: CoilSize = CoilSize(512, 512),
+    colorFilter: ColorFilter? = null,
 ) {
     val performanceMode = com.raulshma.jellyplay.core.ui.components.LocalPerformanceMode.current
     val effectiveSize = if (performanceMode) CoilSize(256, 256) else size
@@ -80,6 +82,7 @@ fun MediaImage(
                 contentDescription = contentDescription,
                 modifier = Modifier.fillMaxSize(),
                 contentScale = contentScale,
+                colorFilter = colorFilter,
                 onState = { state ->
                     if (state is AsyncImagePainter.State.Error) {
                         if (currentIndex < allUrls.size - 1) {

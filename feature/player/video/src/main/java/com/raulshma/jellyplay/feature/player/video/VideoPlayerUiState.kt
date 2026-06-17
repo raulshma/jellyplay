@@ -25,9 +25,20 @@ import com.raulshma.jellyplay.core.model.MediaItem as JellyfinMediaItem
 import com.raulshma.jellyplay.feature.player.video.components.AspectRatio
 import com.raulshma.jellyplay.feature.player.video.engine.EngineCapabilities
 import com.raulshma.jellyplay.feature.player.video.engine.EngineVideoStats
-import com.raulshma.jellyplay.feature.player.video.engine.VideoEffectsConfig
+import com.raulshma.jellyplay.core.model.VideoEffectsConfig
 import com.raulshma.jellyplay.core.model.PersonInfo
 import com.raulshma.jellyplay.core.model.LyricsLine
+
+/**
+ * Lightweight description of an in-progress pre-roll intro for Cinema Mode.
+ * Surfaced to the UI to render a "Skip Intro" affordance.
+ */
+@Immutable
+data class CinemaIntroUiState(
+    val title: String,
+    val currentIndex: Int,
+    val totalCount: Int,
+)
 
 @Immutable
 data class VideoPlayerUiState(
@@ -73,6 +84,7 @@ data class VideoPlayerUiState(
     val seekDurationMs: Long = 10_000L,
     val defaultOrientation: OrientationMode = OrientationMode.SENSOR_LANDSCAPE,
     val controlsTimeoutMs: Long = 5_000L,
+    val passOutProtectionHours: Int = 0,
     val gesturesEnabled: Boolean = true,
     val holdSpeedEnabled: Boolean = true,
     val holdSpeedMultiplier: Float = 2.0f,
@@ -119,7 +131,9 @@ data class VideoPlayerUiState(
     val videoEffects: VideoEffectsConfig = VideoEffectsConfig(),
     val isScreenLocked: Boolean = false,
     val showPlaybackMetadata: Boolean = true,
+    val showClock: Boolean = false,
     val keepScreenOnDuringVideo: Boolean = true,
+    val cinemaIntroState: CinemaIntroUiState? = null,
 ) {
 
     @Transient

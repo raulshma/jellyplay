@@ -78,6 +78,13 @@ fun AlbumDetailScreen(
         viewModel.loadAlbum(albumId)
     }
 
+    LaunchedEffect(viewModel.mixFirstTrackId) {
+        viewModel.mixFirstTrackId?.let {
+            viewModel.consumeMixEvent()
+            onTrackClick(it)
+        }
+    }
+
     val trackDownloads by viewModel.trackDownloads.collectAsStateWithLifecycle()
     var isRefreshing by remember { mutableStateOf(false) }
 
@@ -115,6 +122,8 @@ fun AlbumDetailScreen(
                         }
                     },
                     onAddToQueue = { track -> viewModel.addToQueue(track) },
+                    onInstantMix = { viewModel.startInstantMix(albumId) },
+                    isStartingMix = viewModel.isStartingMix,
                     onDownloadTrack = { track -> viewModel.downloadTrack(track) },
                     onDownloadAlbum = { viewModel.downloadAlbum() },
                     onDeleteAlbum = { viewModel.deleteAlbumDownloads() },
@@ -137,6 +146,8 @@ private fun AlbumDetailContent(
     onTrackClick: (String) -> Unit,
     onPlayAlbum: (List<MediaItem>, Int) -> Unit,
     onAddToQueue: (MediaItem) -> Unit,
+    onInstantMix: () -> Unit,
+    isStartingMix: Boolean,
     onDownloadTrack: (MediaItem) -> Unit,
     onDownloadAlbum: () -> Unit,
     onDeleteAlbum: () -> Unit,
@@ -242,6 +253,27 @@ private fun AlbumDetailContent(
                             Icon(Tabler.Outline.PlayerPlay, contentDescription = null)
                             Spacer(Modifier.size(8.dp))
                             Text("Play All")
+                        }
+
+                        androidx.compose.material3.IconButton(
+                            onClick = onInstantMix,
+                            enabled = !isStartingMix,
+                            modifier = Modifier
+                                .background(MaterialTheme.colorScheme.surfaceVariant, CircleShape)
+                                .size(40.dp)
+                        ) {
+                            if (isStartingMix) {
+                                JellyPlayCircularProgressIndicator(
+                                    modifier = Modifier.size(20.dp),
+                                    color = MaterialTheme.colorScheme.primary
+                                )
+                            } else {
+                                Icon(
+                                    imageVector = Tabler.Outline.Sparkles,
+                                    contentDescription = "Instant Mix",
+                                    tint = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            }
                         }
 
                         val allDownloaded = remember(tracks, trackDownloads) {

@@ -22,6 +22,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -67,6 +68,7 @@ import com.composables.icons.tabler.Tabler
 import com.composables.icons.tabler.outline.ChevronLeft
 import com.composables.icons.tabler.outline.ChevronRight
 import com.composables.icons.tabler.outline.Download
+import com.composables.icons.tabler.outline.Adjustments
 import com.composables.icons.tabler.outline.InfoCircle
 import com.composables.icons.tabler.outline.PlayerPause
 import com.composables.icons.tabler.outline.PlayerPlay
@@ -97,6 +99,10 @@ fun PhotoViewerScreen(
     val isSlideshowActive by viewModel.isSlideshowActive
     val isSaving by viewModel.isSaving
     val saveResult by viewModel.saveResult
+    val showAdjustments by viewModel.showAdjustments
+    val brightness by viewModel.brightness
+    val contrast by viewModel.contrast
+    val saturation by viewModel.saturation
 
     LaunchedEffect(itemId, parentId) {
         viewModel.load(itemId, parentId)
@@ -204,6 +210,26 @@ fun PhotoViewerScreen(
                 }
             }
             photo != null -> {
+                val photoColorFilter = remember(brightness, contrast, saturation) {
+                    if (brightness == 1f && contrast == 1f && saturation == 1f) {
+                        null
+                    } else {
+                        val cm = android.graphics.ColorMatrix()
+                        cm.setSaturation(saturation)
+                        val ct = (1f - contrast) * 128f
+                        val b = (brightness - 1f) * 128f
+                        val contrastBrightness = android.graphics.ColorMatrix(floatArrayOf(
+                            contrast, 0f, 0f, 0f, b + ct,
+                            0f, contrast, 0f, 0f, b + ct,
+                            0f, 0f, contrast, 0f, b + ct,
+                            0f, 0f, 0f, 1f, 0f,
+                        ))
+                        cm.postConcat(contrastBrightness)
+                        androidx.compose.ui.graphics.ColorFilter.colorMatrix(
+                            androidx.compose.ui.graphics.ColorMatrix(cm.array)
+                        )
+                    }
+                }
                 PhotoImage(
                     photo = photo!!,
                     viewModel = viewModel,
@@ -220,6 +246,7 @@ fun PhotoViewerScreen(
                             scale = 2.5f
                         }
                     },
+                    colorFilter = photoColorFilter,
                 )
 
                 AnimatedVisibility(
@@ -301,6 +328,12 @@ fun PhotoViewerScreen(
                                         onClick = { showInfo = !showInfo },
                                     ) {
                                         Icon(Tabler.Outline.InfoCircle, contentDescription = "Info", tint = Color.White, modifier = Modifier.size(20.dp))
+                                    }
+
+                                    OverlayActionButton(
+                                        onClick = { viewModel.toggleAdjustments() },
+                                    ) {
+                                        Icon(Tabler.Outline.Adjustments, contentDescription = "Adjust", tint = Color.White, modifier = Modifier.size(20.dp))
                                     }
                                 }
                             }
@@ -385,6 +418,61 @@ fun PhotoViewerScreen(
                     )
                 }
 
+                AnimatedVisibility(
+                    visible = showAdjustments,
+                    enter = fadeIn(tween(300)) + slideInVertically(tween(300)) { it / 3 },
+                    exit = fadeOut(tween(200)) + slideOutVertically(tween(200)) { it / 3 },
+                ) {
+                    androidx.compose.material3.Surface(
+                        modifier = Modifier
+                            .align(Alignment.BottomCenter)
+                            .fillMaxWidth()
+                            .padding(16.dp),
+                        color = Color.Black.copy(alpha = 0.8f),
+                        shape = androidx.compose.foundation.shape.RoundedCornerShape(12.dp),
+                    ) {
+                        Column(
+                            modifier = Modifier.padding(16.dp),
+                        ) {
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically,
+                            ) {
+                                Text(
+                                    text = "Adjustments",
+                                    color = Color.White,
+                                    style = MaterialTheme.typography.titleSmall,
+                                )
+                                androidx.compose.material3.TextButton(
+                                    onClick = { viewModel.resetAdjustments() },
+                                ) {
+                                    Text("Reset", color = MaterialTheme.colorScheme.primary)
+                                }
+                            }
+                            Spacer(Modifier.height(12.dp))
+                            Text("Brightness ${(brightness * 100).toInt()}%", color = Color.White, style = MaterialTheme.typography.bodySmall)
+                            androidx.compose.material3.Slider(
+                                value = brightness,
+                                onValueChange = { viewModel.setBrightness(it) },
+                                valueRange = 0f..2f,
+                            )
+                            Text("Contrast ${(contrast * 100).toInt()}%", color = Color.White, style = MaterialTheme.typography.bodySmall)
+                            androidx.compose.material3.Slider(
+                                value = contrast,
+                                onValueChange = { viewModel.setContrast(it) },
+                                valueRange = 0f..2f,
+                            )
+                            Text("Saturation ${(saturation * 100).toInt()}%", color = Color.White, style = MaterialTheme.typography.bodySmall)
+                            androidx.compose.material3.Slider(
+                                value = saturation,
+                                onValueChange = { viewModel.setSaturation(it) },
+                                valueRange = 0f..2f,
+                            )
+                        }
+                    }
+                }
+
                 if (siblings.size > 1) {
                     Box(
                         modifier = Modifier
@@ -419,6 +507,7 @@ private fun PhotoImage(
     onOffsetChange: (x: Float, y: Float) -> Unit,
     onTap: () -> Unit,
     onDoubleTap: () -> Unit,
+    colorFilter: androidx.compose.ui.graphics.ColorFilter? = null,
 ) {
     val imageUrl = remember(photo.id) {
         viewModel.getImageUrl(photo.id, maxWidth = null)
@@ -543,6 +632,7 @@ private fun PhotoImage(
                 },
             contentScale = ContentScale.Fit,
             size = coil3.size.Size.ORIGINAL,
+            colorFilter = colorFilter,
         )
     }
 }

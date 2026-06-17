@@ -455,6 +455,14 @@ class DetailViewModel @Inject constructor(
         }
     }
 
+    fun hideFromNextUp() {
+        val item = _detail.value?.item ?: return
+        val seriesId = item.seriesId ?: item.id
+        launch {
+            preferencesStore.excludeSeriesFromNextUp(seriesId)
+        }
+    }
+
     fun startDownload() {
         val detail = _detail.value ?: run {
             downloadError = "Media details not loaded"
@@ -501,6 +509,21 @@ class DetailViewModel @Inject constructor(
                         source.trickplayInfo?.let { info ->
                             launch {
                                 downloadRepository.downloadTrickplayData(item.id, info, downloadItem.downloadPath)
+                            }
+                        }
+                        // Bundle external subtitles + intro/outro segments for offline use.
+                        launch {
+                            try {
+                                downloadRepository.downloadExternalSubtitles(
+                                    item.id, source.id, source.mediaStreams, downloadItem.downloadPath,
+                                )
+                            } catch (_: Exception) {
+                            }
+                        }
+                        launch {
+                            try {
+                                downloadRepository.downloadMediaSegments(item.id, downloadItem.downloadPath)
+                            } catch (_: Exception) {
                             }
                         }
                     }

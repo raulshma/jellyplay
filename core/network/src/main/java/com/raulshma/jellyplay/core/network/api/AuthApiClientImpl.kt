@@ -47,6 +47,22 @@ class AuthApiClientImpl @Inject constructor(
         }
     }
 
+    override suspend fun getServerInfo(address: String): Result<ServerInfo> = runCatching {
+        val normalizedAddress = address.trim().trimEnd('/').let {
+            if (it.startsWith("http://") || it.startsWith("https://")) it
+            else "https://$it"
+        }
+        withContext(Dispatchers.IO) {
+            val client = engine.jellyfin.createApi(normalizedAddress)
+            val systemInfo = client.systemApi.getPublicSystemInfo().content
+            ServerInfo(
+                id = systemInfo.id?.toString() ?: java.util.UUID.randomUUID().toString(),
+                name = systemInfo.serverName ?: "Jellyfin Server",
+                address = normalizedAddress,
+            )
+        }
+    }
+
     override suspend fun authenticateUser(
         serverAddress: String,
         username: String,
@@ -191,6 +207,10 @@ class AuthApiClientImpl @Inject constructor(
 
     override suspend fun postCapabilities(): Result<Unit> = engine.apiResultWithRetry {
         engine.requireApi().sessionApi.postFullCapabilities(data = JellyfinApiEngine.CACHED_CAPABILITIES)
+    }
+
+    override suspend fun authorizeQuickConnect(code: String): Result<Boolean> = engine.apiResultWithRetry {
+        engine.requireApi().quickConnectApi.authorizeQuickConnect(code = code).content
     }
 
     override fun getServerUrl(): String? = engine.currentServer.value?.address

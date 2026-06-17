@@ -175,7 +175,18 @@ class MainViewModel @Inject constructor(
     suspend fun launchExternalPlayer(
         route: Route.VideoPlayer,
         context: android.content.Context,
-    ) {
+    ): ExternalPlayerLaunch? {
+        val launch = buildExternalPlayerLaunch(route) ?: return null
+        try {
+            context.startActivity(Intent.createChooser(launch.intent, "Open with…"))
+        } catch (_: Exception) {
+            Toast.makeText(context, "No video player found", Toast.LENGTH_LONG).show()
+            return null
+        }
+        return launch
+    }
+
+    suspend fun buildExternalPlayerLaunch(route: Route.VideoPlayer): ExternalPlayerLaunch? {
         val download = downloadRepository.getDownloadByMediaItemId(route.itemId)
         val localFile = download?.let {
             java.io.File(it.downloadPath).takeIf { f -> f.exists() }
@@ -189,7 +200,7 @@ class MainViewModel @Inject constructor(
             val offlineItem = offlineRepository.getOfflineItem(route.itemId)
             title = offlineItem?.name ?: download.name
         } else {
-            val detail = mediaRepository.getMediaDetail(route.itemId).getOrNull() ?: return
+            val detail = mediaRepository.getMediaDetail(route.itemId).getOrNull() ?: return null
             val source = if (route.mediaSourceId != null) {
                 detail.mediaSources.find { it.id == route.mediaSourceId }
             } else {
@@ -206,14 +217,52 @@ class MainViewModel @Inject constructor(
         val intent = Intent(Intent.ACTION_VIEW).apply {
             setDataAndType(Uri.parse(url), "video/*")
             putExtra("title", title)
+            putExtra("return_result", true)
             val startMs = route.startPositionTicks / 10_000
             if (startMs > 0) putExtra("position", startMs)
         }
 
-        try {
-            context.startActivity(Intent.createChooser(intent, "Open with…"))
-        } catch (_: Exception) {
-            Toast.makeText(context, "No video player found", Toast.LENGTH_LONG).show()
+        return ExternalPlayerLaunch(
+            intent = intent,
+            itemId = route.itemId,
+            startPositionTicks = route.startPositionTicks,
+            playSessionId = java.util.UUID.randomUUID().toString(),
+        )
+    }
+
+    fun reportExternalPlaybackStart(playerLaunch: ExternalPlayerLaunch) {
+        launch {
+            runCatching {
+                playbackRepository.reportPlaybackStart(
+                    com.raulshma.jellyplay.core.model.PlaybackStartInfo(
+                        itemId = playerLaunch.itemId,
+                        sessionId = playerLaunch.playSessionId,
+                        startPositionTicks = playerLaunch.startPositionTicks,
+                    )
+                )
+            }
+        }
+    }
+
+    fun reportExternalPlaybackStopped(playerLaunch: ExternalPlayerLaunch, finalPositionTicks: Long) {
+        val positionTicks = if (finalPositionTicks > 0) finalPositionTicks else playerLaunch.startPositionTicks
+        launch {
+            runCatching {
+                kotlinx.coroutines.withTimeout(5_000) {
+                    playbackRepository.reportPlaybackStopped(
+                        itemId = playerLaunch.itemId,
+                        sessionId = playerLaunch.playSessionId,
+                        positionTicks = positionTicks,
+                    )
+                }
+            }
         }
     }
 }
+
+data class ExternalPlayerLaunch(
+    val intent: Intent,
+    val itemId: String,
+    val startPositionTicks: Long,
+    val playSessionId: String,
+)

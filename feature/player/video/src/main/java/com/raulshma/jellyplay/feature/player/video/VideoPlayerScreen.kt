@@ -12,6 +12,7 @@ import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.background
 import androidx.compose.foundation.focusable
+import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.foundation.layout.Arrangement
@@ -60,6 +61,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.key.KeyEventType
 import androidx.compose.ui.input.key.NativeKeyEvent
 import androidx.compose.ui.input.key.onKeyEvent
@@ -102,6 +104,7 @@ import com.raulshma.jellyplay.core.model.MediaSegmentType
 import com.raulshma.jellyplay.feature.player.video.components.DecoderPickerSheet
 import com.raulshma.jellyplay.feature.player.video.components.EpisodePickerSheet
 import com.raulshma.jellyplay.feature.player.video.components.HdrBadge
+import com.raulshma.jellyplay.feature.player.video.components.IntroSkipOverlay
 import com.raulshma.jellyplay.feature.player.video.components.SegmentSkipOverlay
 import com.raulshma.jellyplay.feature.player.video.components.NextEpisodeOverlay
 import com.raulshma.jellyplay.feature.player.video.components.PlaybackInfoOverlay
@@ -173,11 +176,13 @@ fun VideoPlayerScreen(
     var seekPositionMs by remember { mutableLongStateOf(0L) }
     var playerViewRef by remember { mutableStateOf<android.view.View?>(null) }
     var lastAppliedSubtitleStyle by remember { mutableStateOf<SubtitleStyle?>(null) }
+    var videoZoom by remember { mutableFloatStateOf(1f) }
 
     val isTv = LocalTvMode.current
 
     val tvPlayerFocusRequester = remember { FocusRequester() }
     val tvSkipSegmentFocusRequester = remember { FocusRequester() }
+    val tvCinemaIntroFocusRequester = remember { FocusRequester() }
     val tvNextEpisodeFocusRequester = remember { FocusRequester() }
     var userInteractionCount by remember { mutableIntStateOf(0) }
 
@@ -366,7 +371,17 @@ fun VideoPlayerScreen(
 
     LaunchedEffect(uiState.frameRateMatching, uiState.videoFrameRate) {
         if (uiState.frameRateMatching && uiState.videoFrameRate != null) {
-            activity?.let { if (!it.isDestroyed && !it.isFinishing) FrameRateMatcher.matchFrameRate(it, uiState.videoFrameRate) }
+            val videoStream = uiState.mediaStreams.firstOrNull { it.type == com.raulshma.jellyplay.core.model.StreamType.VIDEO }
+            activity?.let {
+                if (!it.isDestroyed && !it.isFinishing) {
+                    FrameRateMatcher.matchFrameRate(
+                        activity = it,
+                        frameRate = uiState.videoFrameRate,
+                        targetWidth = videoStream?.width,
+                        targetHeight = videoStream?.height,
+                    )
+                }
+            }
         }
     }
 
@@ -461,6 +476,7 @@ fun VideoPlayerScreen(
     val shouldShowUpNext = uiState.shouldShowUpNext
     val activeSegment = uiState.activeSegment
     val activeSegmentBehavior = activeSegment?.let { uiState.behaviorForType(it.type) }
+    val cinemaIntroState = uiState.cinemaIntroState
 
     LaunchedEffect(aspectRatio, detectedAspectRatio, engine) {
         val effectiveRatio = if (aspectRatio == AspectRatio.AUTO) {
@@ -490,14 +506,17 @@ fun VideoPlayerScreen(
     val isInSyncPlaySession = uiState.isInSyncPlaySession
 
     val isNextEpisodeVisible = nextEpisode != null && shouldShowUpNext
+    val isCinemaIntroVisible = cinemaIntroState != null && !isInPipMode
     val isSkipSegmentVisible = activeSegment != null &&
             activeSegmentBehavior == com.raulshma.jellyplay.core.model.SegmentBehavior.SHOW_BUTTON &&
             !isInPipMode &&
+            !isCinemaIntroVisible &&
             !(activeSegment.type == com.raulshma.jellyplay.core.model.MediaSegmentType.OUTRO && shouldShowUpNext)
 
-    LaunchedEffect(showControls, isTv, isNextEpisodeVisible, isSkipSegmentVisible) {
+    LaunchedEffect(showControls, isTv, isNextEpisodeVisible, isSkipSegmentVisible, isCinemaIntroVisible) {
         if (isTv && !showControls) {
             when {
+                isCinemaIntroVisible -> tvCinemaIntroFocusRequester.tryRequestFocus("tv_cinema_intro")
                 isNextEpisodeVisible -> tvNextEpisodeFocusRequester.tryRequestFocus("tv_next_episode")
                 isSkipSegmentVisible -> tvSkipSegmentFocusRequester.tryRequestFocus("tv_skip_segment")
                 else -> tvPlayerFocusRequester.tryRequestFocus("tv_player")
@@ -509,7 +528,7 @@ fun VideoPlayerScreen(
         {
             if (isInSyncPlaySession) viewModel.syncPlayTogglePlayPause()
             else if (isCastConnected) viewModel.castPlay()
-            else engine?.play()
+            else viewModel.resumePlayback()
         }
     }
     val doPause: () -> Unit = remember(engine, isInSyncPlaySession, isCastConnected) {
@@ -597,6 +616,7 @@ fun VideoPlayerScreen(
                             .focusable()
                             .onKeyEvent { keyEvent ->
                                 userInteractionCount++
+                                viewModel.onUserInteraction()
                                 if (keyEvent.type == KeyEventType.KeyDown &&
                                     keyEvent.nativeKeyEvent.keyCode == NativeKeyEvent.KEYCODE_SPACE
                                 ) {
@@ -674,6 +694,7 @@ fun VideoPlayerScreen(
                     if (!uiState.gesturesEnabled) return@pointerInput
                     detectTapGestures(
                         onTap = {
+                            viewModel.onUserInteraction()
                             if (uiState.isHoldSpeedActive) {
                                 viewModel.stopHoldSpeed()
                             } else {
@@ -681,9 +702,11 @@ fun VideoPlayerScreen(
                             }
                         },
                         onLongPress = {
+                            viewModel.onUserInteraction()
                             if (uiState.holdSpeedEnabled) viewModel.startHoldSpeed()
                         },
                         onDoubleTap = { offset ->
+                            viewModel.onUserInteraction()
                             val width = size.width
                             when {
                                 offset.x < width * 0.35 -> {
@@ -695,11 +718,44 @@ fun VideoPlayerScreen(
                                     currentDoSeekForward()
                                 }
                                 else -> {
-                                    currentDoTogglePlayPause()
+                                    if (videoZoom > 1f) {
+                                        videoZoom = 1f
+                                    } else {
+                                        currentDoTogglePlayPause()
+                                    }
                                 }
                             }
                         },
                     )
+                }
+                .pointerInput(uiState.gesturesEnabled, isScreenLocked) {
+                    if (isScreenLocked) return@pointerInput
+                    if (!uiState.gesturesEnabled) return@pointerInput
+                    awaitEachGesture {
+                        var prevDistance = 0f
+                        do {
+                            val event = awaitPointerEvent()
+                            val pointers = event.changes.filter { it.pressed }
+                            if (pointers.size >= 2) {
+                                val p0 = pointers[0].position
+                                val p1 = pointers[1].position
+                                val distance = kotlin.math.sqrt(
+                                    (p0.x - p1.x) * (p0.x - p1.x) + (p0.y - p1.y) * (p0.y - p1.y)
+                                )
+                                if (prevDistance > 0f && distance > 0f) {
+                                    val zoom = distance / prevDistance
+                                    if (zoom != 1f) {
+                                        videoZoom = (videoZoom * zoom).coerceIn(1f, 3f)
+                                        viewModel.onUserInteraction()
+                                    }
+                                }
+                                prevDistance = distance
+                                pointers.forEach { it.consume() }
+                            } else {
+                                prevDistance = 0f
+                            }
+                        } while (event.changes.any { it.pressed })
+                    }
                 },
         ) {
             if (engine != null) {
@@ -719,7 +775,12 @@ fun VideoPlayerScreen(
                                 viewModel.applySubtitleStyleToView(view)
                             }
                         },
-                        modifier = Modifier.fillMaxSize(),
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .graphicsLayer {
+                                scaleX = videoZoom
+                                scaleY = videoZoom
+                            },
                     )
                 }
             }
@@ -879,6 +940,17 @@ fun VideoPlayerScreen(
                 )
             }
 
+            if (cinemaIntroState != null && !isInPipMode) {
+                IntroSkipOverlay(
+                    isVisible = true,
+                    onSkip = { viewModel.skipIntro() },
+                    focusRequester = tvCinemaIntroFocusRequester,
+                    modifier = Modifier
+                        .align(Alignment.BottomEnd)
+                        .padding(bottom = 100.dp, end = 40.dp),
+                )
+            }
+
             if (activeSegment != null && activeSegmentBehavior == com.raulshma.jellyplay.core.model.SegmentBehavior.SHOW_BUTTON && !isInPipMode) {
                 val hideForUpNext = activeSegment.type == com.raulshma.jellyplay.core.model.MediaSegmentType.OUTRO && shouldShowUpNext
                 if (!hideForUpNext) {
@@ -1007,6 +1079,7 @@ fun VideoPlayerScreen(
                 videoStats = uiState.videoStats,
                 audioTracks = uiState.audioTracks,
                 showPlaybackMetadata = uiState.showPlaybackMetadata,
+                showClock = uiState.showClock,
                 currentAspectRatio = aspectRatio,
                 detectedAspectRatio = detectedAspectRatio,
                 isVisible = showControls && !isInPipMode && !isScreenLocked,
@@ -1081,7 +1154,7 @@ fun VideoPlayerScreen(
                 sleepTimerDisplayText = if (uiState.sleepTimerEndOfEpisode) "End of episode" else formatDuration(uiState.sleepTimerRemainingMs),
                 onSleepTimerClick = { currentSheet = PlayerSheet.SleepTimer },
                 supportsVideoFilters = uiState.engineCapabilities.supportsVideoFilters,
-                videoFiltersActive = uiState.videoEffects != com.raulshma.jellyplay.feature.player.video.engine.VideoEffectsConfig(),
+                videoFiltersActive = uiState.videoEffects != com.raulshma.jellyplay.core.model.VideoEffectsConfig(),
                 onVideoFilterClick = { currentSheet = PlayerSheet.VideoFilter },
                 onLockClick = {
                     viewModel.setScreenLocked(true)
@@ -1185,6 +1258,14 @@ fun VideoPlayerScreen(
                     snackbarHostState.showSnackbar(
                         message = message,
                         duration = androidx.compose.material3.SnackbarDuration.Short,
+                    )
+                }
+            }
+            launch {
+                viewModel.passOutEvents.collect { message ->
+                    snackbarHostState.showSnackbar(
+                        message = message,
+                        duration = androidx.compose.material3.SnackbarDuration.Long,
                     )
                 }
             }

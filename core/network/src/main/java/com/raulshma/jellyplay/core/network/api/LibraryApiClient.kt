@@ -8,18 +8,24 @@ import com.raulshma.jellyplay.core.model.LyricsResult
 import com.raulshma.jellyplay.core.model.MediaDetail
 import com.raulshma.jellyplay.core.model.MediaItem
 import com.raulshma.jellyplay.core.model.MediaType
+import com.raulshma.jellyplay.core.model.PinnedHomeSection
 import com.raulshma.jellyplay.core.model.Playlist
 import com.raulshma.jellyplay.core.model.PlaylistItem
 import com.raulshma.jellyplay.core.model.SearchResult
+import com.raulshma.jellyplay.core.model.Studio
 
 interface LibraryApiClient {
     suspend fun getHomeSections(
         enabledSections: Set<HomeSectionType> = HomeSectionType.CONFIGURABLE.toSet(),
         hiddenLibraryIds: Set<String> = emptySet(),
+        nextUpRewatching: Boolean = false,
+        nextUpMaxDays: Int = 0,
+        nextUpExcludedSeriesIds: Set<String> = emptySet(),
+        pinnedSections: List<PinnedHomeSection> = emptyList(),
     ): Result<List<HomeSection>>
 
     suspend fun getLatestMedia(parentId: String, limit: Int = 16): Result<List<MediaItem>>
-    suspend fun getNextUp(limit: Int = 20): Result<List<MediaItem>>
+    suspend fun getNextUp(limit: Int = 20, enableRewatching: Boolean = false, maxDays: Int = 0): Result<List<MediaItem>>
     suspend fun getContinueWatching(limit: Int = 20): Result<List<MediaItem>>
     suspend fun getLibraryFolders(): Result<List<LibraryFolder>>
 
@@ -35,6 +41,13 @@ interface LibraryApiClient {
     ): Result<SearchResult>
 
     suspend fun getMediaDetail(itemId: String): Result<MediaDetail>
+
+    /**
+     * Fetch intros/trailers configured by the Jellyfin Cinema Mode intros plugin
+     * for the given item. Returns an empty list when cinema mode is disabled or
+     * no intros are configured server-side.
+     */
+    suspend fun getIntros(itemId: String): Result<List<MediaItem>>
 
     suspend fun getSearchHints(
         query: String,
@@ -56,11 +69,26 @@ interface LibraryApiClient {
         limit: Int = 50,
     ): Result<SearchResult>
 
+    suspend fun getStudios(
+        parentId: String? = null,
+        startIndex: Int = 0,
+        limit: Int = 100,
+    ): Result<List<Studio>>
+
+    suspend fun getItemsByStudio(
+        studioId: String,
+        mediaTypes: List<MediaType>? = null,
+        startIndex: Int = 0,
+        limit: Int = 50,
+    ): Result<SearchResult>
+
     suspend fun getArtistAlbums(artistId: String, limit: Int = 50): Result<List<MediaItem>>
     suspend fun getAlbumTracks(albumId: String): Result<List<MediaItem>>
     suspend fun getSimilarItems(itemId: String, limit: Int = 12): Result<List<MediaItem>>
+    suspend fun getInstantMix(itemId: String, limit: Int = 100): Result<List<MediaItem>>
     suspend fun getRecommendations(limit: Int = 20): Result<List<MediaItem>>
     suspend fun getItemsByPerson(personId: String, limit: Int = 50): Result<List<MediaItem>>
+    suspend fun getThemeSongs(itemId: String): Result<List<MediaItem>>
     suspend fun getSeasons(seriesId: String): Result<List<MediaItem>>
     suspend fun getEpisodes(seriesId: String, seasonId: String): Result<List<MediaItem>>
 

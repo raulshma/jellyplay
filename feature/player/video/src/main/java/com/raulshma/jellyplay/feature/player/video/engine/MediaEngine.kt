@@ -11,6 +11,7 @@ import com.raulshma.jellyplay.core.model.EngineSpecificConfig
 import com.raulshma.jellyplay.core.model.EqualizerSettings
 import com.raulshma.jellyplay.core.model.SubtitleStyle
 import com.raulshma.jellyplay.core.model.TrackType
+import com.raulshma.jellyplay.core.model.VideoEffectsConfig
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.StateFlow
 
@@ -39,13 +40,6 @@ data class SubtitleSource(
     val isDefault: Boolean = false,
     val isForced: Boolean = false,
     val id: String,
-)
-
-data class VideoEffectsConfig(
-    val brightness: Float = 0f,
-    val contrast: Float = 1f,
-    val saturation: Float = 1f,
-    val sharpness: Float = 0f,
 )
 
 data class EngineConfig(

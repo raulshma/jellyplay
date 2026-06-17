@@ -22,6 +22,12 @@ class ServerManagementViewModel @Inject constructor(
     private val _isSwitching = composeState(false)
     val isSwitching: Boolean get() = _isSwitching.value
 
+    private val _addressOperationMessage = composeState<String?>(null)
+    val addressOperationMessage: String? get() = _addressOperationMessage.value
+
+    private val _isAddressOperationInProgress = composeState(false)
+    val isAddressOperationInProgress: Boolean get() = _isAddressOperationInProgress.value
+
     init {
         launch {
             authRepository.servers.collect { serverList ->
@@ -54,5 +60,37 @@ class ServerManagementViewModel @Inject constructor(
                 }
             }
         }
+    }
+
+    fun addServerAddress(serverId: String, address: String) {
+        launch {
+            _isAddressOperationInProgress.value = true
+            _addressOperationMessage.value = null
+            authRepository.addServerAddress(serverId, address)
+                .onSuccess { _addressOperationMessage.value = "Address added" }
+                .onFailure { _addressOperationMessage.value = it.message ?: "Failed to add address" }
+            _isAddressOperationInProgress.value = false
+        }
+    }
+
+    fun removeServerAddress(serverId: String, address: String) {
+        launch {
+            authRepository.removeServerAddress(serverId, address)
+        }
+    }
+
+    fun switchServerAddress(serverId: String, address: String) {
+        launch {
+            _isAddressOperationInProgress.value = true
+            _addressOperationMessage.value = null
+            authRepository.switchServerAddress(serverId, address)
+                .onSuccess { _addressOperationMessage.value = "Switched to $address" }
+                .onFailure { _addressOperationMessage.value = it.message ?: "Failed to switch address" }
+            _isAddressOperationInProgress.value = false
+        }
+    }
+
+    fun clearAddressOperationMessage() {
+        _addressOperationMessage.value = null
     }
 }

@@ -37,6 +37,12 @@ class AlbumDetailViewModel @Inject constructor(
     private val _error = composeState<String?>(null)
     val error: String? get() = _error.value
 
+    private val _isStartingMix = composeState(false)
+    val isStartingMix: Boolean get() = _isStartingMix.value
+
+    private val _mixFirstTrackId = composeState<String?>(null)
+    val mixFirstTrackId: String? get() = _mixFirstTrackId.value
+
     fun loadAlbum(albumId: String) {
         launch {
             _isLoading.value = true
@@ -68,6 +74,34 @@ class AlbumDetailViewModel @Inject constructor(
             albumFallback = detail?.item?.name,
         )
         audioPlaybackManager.addToQueue(queueItem)
+    }
+
+    fun startInstantMix(albumId: String) {
+        launch {
+            _isStartingMix.value = true
+            _error.value = null
+            mediaRepository.getInstantMix(albumId)
+                .onSuccess { mix ->
+                    if (mix.isEmpty()) {
+                        _error.value = "No mix tracks available for this album"
+                    } else {
+                        val queueItems = mix.map { track ->
+                            track.toAudioQueueItem(
+                                imageUrl = playbackRepository.getImageUrl(track.id, maxWidth = 400),
+                                albumFallback = detail?.item?.name,
+                            )
+                        }
+                        audioPlaybackManager.playQueue(queueItems, 0)
+                        _mixFirstTrackId.value = mix.first().id
+                    }
+                }
+                .onFailure { _error.value = it.message ?: "Failed to start Instant Mix" }
+            _isStartingMix.value = false
+        }
+    }
+
+    fun consumeMixEvent() {
+        _mixFirstTrackId.value = null
     }
 
     fun getImageUrl(itemId: String): String =

@@ -1,5 +1,9 @@
 package com.raulshma.jellyplay.navigation
 
+import android.content.Intent
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.ActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.animateContentSize
 import androidx.compose.animation.core.Spring
@@ -308,9 +312,38 @@ private fun MainContent(
     )
     val scope = rememberCoroutineScope()
     val context = LocalContext.current
+    var pendingExternalLaunch by remember { mutableStateOf<com.raulshma.jellyplay.ExternalPlayerLaunch?>(null) }
+    val externalPlayerLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.StartActivityForResult(),
+    ) { result: ActivityResult ->
+        val launch = pendingExternalLaunch
+        pendingExternalLaunch = null
+        if (launch != null) {
+            val finalMs = result.data?.let { data ->
+                val pos = data.extras?.get("position") ?: data.extras?.get("positionMs")
+                val ms = when (pos) {
+                    is Number -> pos.toLong()
+                    else -> -1L
+                }
+                ms.takeIf { it >= 0 }
+            }
+            val finalTicks = finalMs?.let { it * 10_000 } ?: -1L
+            viewModel.reportExternalPlaybackStopped(launch, finalTicks)
+        }
+    }
     val navigator = Navigator(navigationState, navigateFilter = { route ->
         if (route is Route.VideoPlayer && preferences.preferredPlayer == com.raulshma.jellyplay.core.model.PlayerType.EXTERNAL) {
-            scope.launch { viewModel.launchExternalPlayer(route, context) }
+            scope.launch {
+                val launch = viewModel.buildExternalPlayerLaunch(route) ?: return@launch
+                viewModel.reportExternalPlaybackStart(launch)
+                pendingExternalLaunch = launch
+                val chooser = Intent.createChooser(launch.intent, "Open with…")
+                runCatching { externalPlayerLauncher.launch(chooser) }
+                    .onFailure {
+                        pendingExternalLaunch = null
+                        android.widget.Toast.makeText(context, "No video player found", android.widget.Toast.LENGTH_LONG).show()
+                    }
+            }
             false
         } else {
             true
@@ -331,6 +364,27 @@ private fun MainContent(
     val activeTopLevelRoutes: LinkedHashMap<Route, String> = when (homeMode) {
         HomeMode.VIDEO -> VIDEO_TOP_LEVEL_ROUTES
         HomeMode.MUSIC -> MUSIC_TOP_LEVEL_ROUTES
+    }.let { routes ->
+        val hidden = preferences.hiddenNavItems
+        val order = preferences.navItemOrder
+        val filtered = routes.filterKeys { route ->
+            route::class.simpleName !in hidden
+        }
+        if (order.isEmpty()) {
+            LinkedHashMap(filtered)
+        } else {
+            val ordered = linkedMapOf<Route, String>()
+            for (name in order) {
+                val entry = filtered.entries.find { it.key::class.simpleName == name }
+                if (entry != null) ordered[entry.key] = entry.value
+            }
+            for (entry in filtered) {
+                if (entry.key::class.simpleName !in order) {
+                    ordered[entry.key] = entry.value
+                }
+            }
+            ordered
+        }
     }
 
     val onModeChange: (HomeMode) -> Unit = { mode ->

@@ -74,6 +74,7 @@ internal fun BaseItemKind.toMediaType(): MediaType = when (this) {
     BaseItemKind.MUSIC_ALBUM -> MediaType.ALBUM
     BaseItemKind.AUDIO -> MediaType.AUDIO
     BaseItemKind.MUSIC_ARTIST -> MediaType.ARTIST
+    BaseItemKind.MUSIC_VIDEO -> MediaType.MUSIC_VIDEO
     BaseItemKind.BOX_SET -> MediaType.COLLECTION
     BaseItemKind.PHOTO -> MediaType.PHOTO
     BaseItemKind.PHOTO_ALBUM -> MediaType.PHOTO_FOLDER
@@ -90,6 +91,7 @@ internal fun MediaType.toBaseItemKind(): BaseItemKind? = when (this) {
     MediaType.ALBUM -> BaseItemKind.MUSIC_ALBUM
     MediaType.AUDIO -> BaseItemKind.AUDIO
     MediaType.ARTIST -> BaseItemKind.MUSIC_ARTIST
+    MediaType.MUSIC_VIDEO -> BaseItemKind.MUSIC_VIDEO
     MediaType.COLLECTION -> BaseItemKind.BOX_SET
     MediaType.PHOTO -> BaseItemKind.PHOTO
     MediaType.PHOTO_FOLDER -> BaseItemKind.PHOTO_ALBUM
