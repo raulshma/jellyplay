@@ -12,6 +12,8 @@ interface AuthApiClient {
 
     suspend fun connectToServer(address: String): Result<ServerInfo>
 
+    suspend fun getServerInfo(address: String): Result<ServerInfo>
+
     suspend fun authenticateUser(
         serverAddress: String,
         username: String,

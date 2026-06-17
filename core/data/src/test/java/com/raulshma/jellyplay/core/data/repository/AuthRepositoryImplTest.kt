@@ -9,16 +9,22 @@ import com.raulshma.jellyplay.core.datastore.UserPreferencesStore
 import com.raulshma.jellyplay.core.model.ServerInfo
 import com.raulshma.jellyplay.core.model.UserInfo
 import com.raulshma.jellyplay.core.network.JellyfinApiClient
+import androidx.room.withTransaction
 import io.mockk.coEvery
 import io.mockk.coVerify
 import io.mockk.every
 import io.mockk.mockk
+import io.mockk.mockkStatic
+import io.mockk.slot
+import io.mockk.unmockkStatic
 import io.mockk.verify
 import kotlinx.coroutines.flow.firstOrNull
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNotNull
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
@@ -213,6 +219,234 @@ class AuthRepositoryImplTest {
 
         val flow = repository.isAuthenticated
         assertFalse(flow.first() ?: true)
+    }
+
+    // ------------------------------------------------------------------
+    // Multi-address management (feature #2)
+    // ------------------------------------------------------------------
+
+    private val altAddress = "https://192.168.1.100:8096"
+    private val altAddressJson = """["$altAddress"]"""
+
+    private fun serverEntityWithAlt() = testServerEntity.copy(
+        alternateAddresses = altAddressJson,
+    )
+
+    @Test
+    fun `addServerAddress validates and persists alternate address`() = runTest {
+        coEvery { serverDao.getServerById("server-1") } returns testServerEntity
+        coEvery {
+            apiClient.getServerInfo(altAddress)
+        } returns Result.success(testServer.copy(address = altAddress))
+
+        val result = repository.addServerAddress("server-1", altAddress)
+
+        assertTrue(result.isSuccess)
+        val captured = slot<ServerEntity>()
+        coVerify { serverDao.updateServer(capture(captured)) }
+        assertNotNull(captured.captured.alternateAddresses)
+        assertTrue(captured.captured.alternateAddresses!!.contains(altAddress))
+    }
+
+    @Test
+    fun `addServerAddress normalizes bare host to https`() = runTest {
+        coEvery { serverDao.getServerById("server-1") } returns testServerEntity
+        coEvery {
+            apiClient.getServerInfo("https://lan.example.com")
+        } returns Result.success(testServer.copy(address = "https://lan.example.com"))
+
+        val result = repository.addServerAddress("server-1", "lan.example.com")
+
+        assertTrue(result.isSuccess)
+        val captured = slot<ServerEntity>()
+        coVerify { serverDao.updateServer(capture(captured)) }
+        assertTrue(captured.captured.alternateAddresses!!.contains("https://lan.example.com"))
+    }
+
+    @Test
+    fun `addServerAddress rejects duplicate of primary address`() = runTest {
+        coEvery { serverDao.getServerById("server-1") } returns serverEntityWithAlt()
+
+        val result = repository.addServerAddress("server-1", testServerEntity.address)
+
+        assertTrue(result.isFailure)
+        coVerify(exactly = 0) { serverDao.updateServer(any()) }
+    }
+
+    @Test
+    fun `addServerAddress rejects duplicate of existing alternate`() = runTest {
+        coEvery { serverDao.getServerById("server-1") } returns serverEntityWithAlt()
+
+        val result = repository.addServerAddress("server-1", altAddress)
+
+        assertTrue(result.isFailure)
+        coVerify(exactly = 0) { serverDao.updateServer(any()) }
+    }
+
+    @Test
+    fun `addServerAddress rejects address pointing to a different server`() = runTest {
+        coEvery { serverDao.getServerById("server-1") } returns serverEntityWithAlt()
+        coEvery {
+            apiClient.getServerInfo(altAddress)
+        } returns Result.success(testServer.copy(id = "other-server", address = altAddress))
+
+        val result = repository.addServerAddress("server-1", altAddress)
+
+        assertTrue(result.isFailure)
+        coVerify(exactly = 0) { serverDao.updateServer(any()) }
+    }
+
+    @Test
+    fun `addServerAddress rejects unreachable address`() = runTest {
+        coEvery { serverDao.getServerById("server-1") } returns serverEntityWithAlt()
+        coEvery {
+            apiClient.getServerInfo(altAddress)
+        } returns Result.failure(Exception("Connection refused"))
+
+        val result = repository.addServerAddress("server-1", altAddress)
+
+        assertTrue(result.isFailure)
+        coVerify(exactly = 0) { serverDao.updateServer(any()) }
+    }
+
+    @Test
+    fun `addServerAddress fails when server not found`() = runTest {
+        coEvery { serverDao.getServerById("missing") } returns null
+
+        val result = repository.addServerAddress("missing", altAddress)
+
+        assertTrue(result.isFailure)
+        coVerify(exactly = 0) { serverDao.updateServer(any()) }
+        coVerify(exactly = 0) { apiClient.getServerInfo(any()) }
+    }
+
+    @Test
+    fun `removeServerAddress filters it out and writes back`() = runTest {
+        coEvery { serverDao.getServerById("server-1") } returns serverEntityWithAlt()
+
+        val result = repository.removeServerAddress("server-1", altAddress)
+
+        assertTrue(result.isSuccess)
+        val captured = slot<ServerEntity>()
+        coVerify { serverDao.updateServer(capture(captured)) }
+        assertNull(captured.captured.alternateAddresses)
+    }
+
+    @Test
+    fun `removeServerAddress keeps remaining alternates`() = runTest {
+        val json = """["https://a.example.com","https://b.example.com"]"""
+        coEvery { serverDao.getServerById("server-1") } returns testServerEntity.copy(
+            alternateAddresses = json,
+        )
+
+        repository.removeServerAddress("server-1", "https://a.example.com")
+
+        val captured = slot<ServerEntity>()
+        coVerify { serverDao.updateServer(capture(captured)) }
+        assertNotNull(captured.captured.alternateAddresses)
+        assertFalse(captured.captured.alternateAddresses!!.contains("https://a.example.com"))
+        assertTrue(captured.captured.alternateAddresses!!.contains("https://b.example.com"))
+    }
+
+    @Test
+    fun `removeServerAddress fails when server not found`() = runTest {
+        coEvery { serverDao.getServerById("missing") } returns null
+
+        val result = repository.removeServerAddress("missing", altAddress)
+
+        assertTrue(result.isFailure)
+        coVerify(exactly = 0) { serverDao.updateServer(any()) }
+    }
+
+    @Test
+    fun `switchServerAddress promotes alternate, demotes old primary and reconfigures client`() = runTest {
+        coEvery { serverDao.getServerById("server-1") } returns serverEntityWithAlt()
+        every { apiClient.currentUser } returns flowOf(testUser)
+
+        val result = repository.switchServerAddress("server-1", altAddress)
+
+        assertTrue(result.isSuccess)
+        val captured = slot<ServerEntity>()
+        coVerify { serverDao.updateServer(capture(captured)) }
+        assertEquals(altAddress, captured.captured.address)
+        assertNotNull(captured.captured.alternateAddresses)
+        assertTrue(captured.captured.alternateAddresses!!.contains(testServerEntity.address))
+        assertFalse(captured.captured.alternateAddresses!!.contains(altAddress))
+        coVerify { apiClient.setServer(any()) }
+        coVerify { apiClient.setUser(match { it.serverAddress == altAddress }) }
+    }
+
+    @Test
+    fun `switchServerAddress rejects address not in alternates`() = runTest {
+        coEvery { serverDao.getServerById("server-1") } returns serverEntityWithAlt()
+
+        val result = repository.switchServerAddress("server-1", "https://unknown.example.com")
+
+        assertTrue(result.isFailure)
+        coVerify(exactly = 0) { serverDao.updateServer(any()) }
+        coVerify(exactly = 0) { apiClient.setServer(any()) }
+    }
+
+    @Test
+    fun `switchServerAddress fails when server not found`() = runTest {
+        coEvery { serverDao.getServerById("missing") } returns null
+
+        val result = repository.switchServerAddress("missing", altAddress)
+
+        assertTrue(result.isFailure)
+        coVerify(exactly = 0) { serverDao.updateServer(any()) }
+    }
+
+    @Test
+    fun `persistSession preserves alternate addresses on re-login`() = runTest {
+        val serverWithAlts = serverEntityWithAlt()
+        coEvery { serverDao.getServerByAddress(testServerEntity.address) } returns serverWithAlts
+        coEvery { serverDao.getServerById("server-1") } returns serverWithAlts
+        coEvery {
+            apiClient.authenticateUser(any<ServerInfo>(), "testuser", "pass")
+        } returns Result.success(testUser)
+        every { apiClient.currentServer } returns flowOf(testServer)
+
+        mockkStatic("androidx.room.RoomDatabaseKt")
+        coEvery { database.withTransaction(any<suspend () -> Unit>()) } coAnswers {
+            secondArg<suspend () -> Unit>().invoke()
+        }
+
+        try {
+            val result = repository.login(testServerEntity.address, "testuser", "pass")
+
+            assertTrue(result.isSuccess)
+            val updatedSlot = slot<ServerEntity>()
+            coVerify { serverDao.updateServer(capture(updatedSlot)) }
+            assertEquals(altAddressJson, updatedSlot.captured.alternateAddresses)
+        } finally {
+            unmockkStatic("androidx.room.RoomDatabaseKt")
+        }
+    }
+
+    @Test
+    fun `persistSession stores null alternates for brand-new server`() = runTest {
+        coEvery { serverDao.getServerByAddress(testServerEntity.address) } returns null
+        coEvery { serverDao.getServerById("server-1") } returns null
+        coEvery {
+            apiClient.authenticateUser(eq(testServerEntity.address), "testuser", "pass")
+        } returns Result.success(testUser)
+        every { apiClient.currentServer } returns flowOf(testServer)
+
+        mockkStatic("androidx.room.RoomDatabaseKt")
+        coEvery { database.withTransaction(any<suspend () -> Unit>()) } coAnswers {
+            secondArg<suspend () -> Unit>().invoke()
+        }
+
+        try {
+            repository.login(testServerEntity.address, "testuser", "pass")
+
+            val updatedSlot = slot<ServerEntity>()
+            coVerify { serverDao.updateServer(capture(updatedSlot)) }
+            assertNull(updatedSlot.captured.alternateAddresses)
+        } finally {
+            unmockkStatic("androidx.room.RoomDatabaseKt")
+        }
     }
 
     private suspend fun <T> kotlinx.coroutines.flow.Flow<T>.first(): T? =

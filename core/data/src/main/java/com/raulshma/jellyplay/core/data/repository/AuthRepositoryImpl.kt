@@ -110,6 +110,77 @@ class AuthRepositoryImpl @Inject constructor(
         }
     }
 
+    override suspend fun addServerAddress(serverId: String, address: String): Result<Unit> = runCatching {
+        val normalizedAddress = address.trim().trimEnd('/').let {
+            if (it.startsWith("http://") || it.startsWith("https://")) it
+            else "https://$it"
+        }
+        val serverEntity = serverDao.getServerById(serverId)
+            ?: return Result.failure(Exception("Server not found"))
+        if (serverEntity.address == normalizedAddress) {
+            return Result.failure(Exception("Address is already the primary address"))
+        }
+        val currentAlternates = serverEntity.alternateAddresses?.let {
+            runCatching { json.decodeFromString<List<String>>(it) }.getOrDefault(emptyList())
+        } ?: emptyList()
+        if (normalizedAddress in currentAlternates) {
+            return Result.failure(Exception("Address is already an alternate"))
+        }
+        val info = apiClient.getServerInfo(normalizedAddress).getOrElse {
+            return Result.failure(Exception("Could not connect to server at $normalizedAddress"))
+        }
+        if (info.id != serverId) {
+            return Result.failure(Exception("This address points to a different server"))
+        }
+        val updated = currentAlternates + normalizedAddress
+        serverDao.updateServer(
+            serverEntity.copy(alternateAddresses = json.encodeToString(updated))
+        )
+    }
+
+    override suspend fun removeServerAddress(serverId: String, address: String): Result<Unit> = runCatching {
+        val serverEntity = serverDao.getServerById(serverId)
+            ?: return Result.failure(Exception("Server not found"))
+        val currentAlternates = serverEntity.alternateAddresses?.let {
+            runCatching { json.decodeFromString<List<String>>(it) }.getOrDefault(emptyList())
+        } ?: emptyList()
+        val updated = currentAlternates - address
+        serverDao.updateServer(
+            serverEntity.copy(
+                alternateAddresses = if (updated.isEmpty()) null else json.encodeToString(updated)
+            )
+        )
+    }
+
+    override suspend fun switchServerAddress(serverId: String, address: String): Result<Unit> = runCatching {
+        val serverEntity = serverDao.getServerById(serverId)
+            ?: return Result.failure(Exception("Server not found"))
+        val normalizedAddress = address.trim().trimEnd('/')
+        val currentAlternates = serverEntity.alternateAddresses?.let {
+            runCatching { json.decodeFromString<List<String>>(it) }.getOrDefault(emptyList())
+        } ?: emptyList()
+        if (normalizedAddress !in currentAlternates) {
+            return Result.failure(Exception("Address not found in alternate addresses"))
+        }
+        val oldPrimary = serverEntity.address
+        val newAlternates = (currentAlternates - normalizedAddress) + oldPrimary
+        serverDao.updateServer(
+            serverEntity.copy(
+                address = normalizedAddress,
+                alternateAddresses = json.encodeToString(newAlternates),
+            )
+        )
+        val updatedServer = serverEntity.copy(
+            address = normalizedAddress,
+            alternateAddresses = json.encodeToString(newAlternates),
+        ).toServerInfo()
+        apiClient.setServer(updatedServer)
+        val currentUser = apiClient.currentUser.first()
+        if (currentUser != null) {
+            apiClient.setUser(currentUser.copy(serverAddress = normalizedAddress))
+        }
+    }
+
     override suspend fun login(
         serverAddress: String,
         username: String,
@@ -261,6 +332,7 @@ class AuthRepositoryImpl @Inject constructor(
 
     private suspend fun persistSession(server: ServerInfo, user: UserInfo, fallbackUsername: String = "") {
         val existingServer = serverDao.getServerById(server.id)
+        val preservedAlternateAddresses = existingServer?.alternateAddresses
         if (existingServer == null) {
             serverDao.insertServer(
                 ServerEntity(
@@ -291,6 +363,7 @@ class AuthRepositoryImpl @Inject constructor(
                     userId = user.id,
                     accessToken = user.accessToken,
                     lastConnected = System.currentTimeMillis(),
+                    alternateAddresses = preservedAlternateAddresses,
                 )
             )
         }
@@ -305,6 +378,9 @@ class AuthRepositoryImpl @Inject constructor(
         userId = userId,
         accessToken = accessToken,
         isConnected = accessToken != null,
+        alternateAddresses = alternateAddresses?.let {
+            runCatching { json.decodeFromString<List<String>>(it) }.getOrDefault(emptyList())
+        } ?: emptyList(),
     )
 
     private fun UserEntity.toUserInfo(serverAddress: String = "") = UserInfo(

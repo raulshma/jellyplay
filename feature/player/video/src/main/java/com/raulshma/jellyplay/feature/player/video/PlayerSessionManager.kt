@@ -130,6 +130,9 @@ class PlayerSessionManager(
 
             initializeEngine(playerType, detail, null, url, startPositionTicks, prefs)
 
+            // Attach external subtitles bundled with the download (offline subs).
+            loadOfflineSubtitles(localDownload.downloadPath)
+
             val trickplayDir = com.raulshma.jellyplay.feature.player.video.trickplay.OfflineTrickplayHelper
                 .getLocalTrickplayDir(localDownload.downloadPath)
 
@@ -358,6 +361,29 @@ class PlayerSessionManager(
         val updatedSubtitles = last.externalSubtitles + source
         lastPlaybackRequest = last.copy(externalSubtitles = updatedSubtitles)
         _engine.value?.addExternalSubtitle(source)
+    }
+
+    private suspend fun loadOfflineSubtitles(downloadPath: String) {
+        val manifest = downloadRepository.loadLocalSubtitleManifest(downloadPath) ?: return
+        if (manifest.subtitles.isEmpty()) return
+        val parentDir = java.io.File(downloadPath).parentFile ?: return
+        val subtitlesDir = java.io.File(parentDir, "subtitles")
+        for (entry in manifest.subtitles) {
+            val file = java.io.File(subtitlesDir, entry.fileName)
+            if (!file.exists()) continue
+            addExternalSubtitle(
+                SubtitleSource(
+                    url = Uri.fromFile(file).toString(),
+                    label = entry.displayTitle ?: entry.title ?: entry.language ?: "Subtitle ${entry.index}",
+                    language = entry.language,
+                    mimeType = null,
+                    codec = entry.codec,
+                    isDefault = entry.isDefault,
+                    isForced = entry.isForced,
+                    id = "offline:${entry.index}",
+                )
+            )
+        }
     }
 
     fun release() {

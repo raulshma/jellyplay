@@ -58,5 +58,30 @@ interface DownloadRepository {
         downloadPath: String,
     )
 
+    /**
+     * Downloads every external/deliverable subtitle stream in [mediaStreams] for
+     * offline playback, storing them under `<video-dir>/subtitles/` alongside a
+     * [com.raulshma.jellyplay.core.model.OfflineSubtitleManifest]. Failures for
+     * individual streams are tolerated (best-effort) and never abort the download.
+     */
+    suspend fun downloadExternalSubtitles(
+        itemId: String,
+        mediaSourceId: String,
+        mediaStreams: List<com.raulshma.jellyplay.core.model.MediaStream>,
+        downloadPath: String,
+    )
+
+    /**
+     * Fetches media segments (intro/outro/recap/…) for [itemId] and persists them
+     * to `<video-dir>/segments.json` so skip controls work for offline playback.
+     */
+    suspend fun downloadMediaSegments(itemId: String, downloadPath: String)
+
+    /** Returns the locally-cached subtitle manifest for a downloaded item, if any. */
+    suspend fun loadLocalSubtitleManifest(downloadPath: String): com.raulshma.jellyplay.core.model.OfflineSubtitleManifest?
+
+    /** Returns locally-cached media segments for a downloaded item, if any. */
+    suspend fun loadLocalSegments(itemId: String): List<com.raulshma.jellyplay.core.model.MediaSegment>?
+
     fun enqueueDownload(downloadId: String)
 }
