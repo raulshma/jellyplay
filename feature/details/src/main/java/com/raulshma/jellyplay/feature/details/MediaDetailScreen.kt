@@ -615,14 +615,15 @@ private fun DetailContent(
     val scrollBehavior = TopAppBarDefaults.exitUntilCollapsedScrollBehavior(rememberTopAppBarState())
 
     if (isTv) {
-        LaunchedEffect(Unit) {
-            androidx.compose.runtime.snapshotFlow { contentVisible }.first { it }
-            // The Play button carrying contentFocusRequester lives inside AnimatedVisibility(contentVisible),
-            // so it may not be composed/attached on the very frame contentVisible flips true. Wait a frame
-            // and retry briefly so the request is not silently swallowed by tryRequestFocus.
-            for (attempt in 1..3) {
-                androidx.compose.runtime.withFrameNanos { }
-                if (contentFocusRequester.tryRequestFocus("detail_content")) break
+        LaunchedEffect(contentVisible) {
+            if (contentVisible) {
+                // The Play button carrying contentFocusRequester lives inside AnimatedVisibility(contentVisible),
+                // so it may not be composed/attached on the very frame contentVisible flips true. Wait a frame
+                // and retry briefly so the request is not silently swallowed by tryRequestFocus.
+                for (attempt in 1..20) {
+                    androidx.compose.runtime.withFrameNanos { }
+                    if (contentFocusRequester.tryRequestFocus("detail_content")) break
+                }
             }
         }
     }
@@ -1692,7 +1693,8 @@ private fun DetailActionButtons(
                 .height(52.dp)
                 .clip(ShapeCache.smooth14)
                 .background(
-                    if (canPlayPrimary) MaterialTheme.colorScheme.primary
+                    if (isTv && playTvFocusState.isFocused) MaterialTheme.colorScheme.onPrimary
+                    else if (canPlayPrimary) MaterialTheme.colorScheme.primary
                     else MaterialTheme.colorScheme.primary.copy(alpha = 0.45f)
                 )
                 .then(
@@ -1702,7 +1704,7 @@ private fun DetailActionButtons(
                     if (isTv) playTvFocusState.focusModifier else Modifier
                 )
                 .then(
-                    if (isTv) Modifier.tvFocusIndicator(playTvFocusState, ShapeCache.smooth14) else Modifier
+                    if (isTv) Modifier.tvFocusIndicator(playTvFocusState, ShapeCache.smooth14, color = MaterialTheme.colorScheme.onPrimary) else Modifier
                 )
                 .graphicsLayer { scaleX = playScale; scaleY = playScale }
                 .clickable(
@@ -1737,9 +1739,18 @@ private fun DetailActionButtons(
                 )
             }
             Row(verticalAlignment = Alignment.CenterVertically) {
-                Icon(Tabler.Outline.PlayerPlay, contentDescription = null, modifier = Modifier.size(22.dp), tint = MaterialTheme.colorScheme.onPrimary)
+                Icon(
+                    Tabler.Outline.PlayerPlay,
+                    contentDescription = null,
+                    modifier = Modifier.size(22.dp),
+                    tint = if (isTv && playTvFocusState.isFocused) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onPrimary
+                )
                 Spacer(Modifier.size(6.dp))
-                Text(playLabel, style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.onPrimary)
+                Text(
+                    playLabel,
+                    style = MaterialTheme.typography.titleMedium,
+                    color = if (isTv && playTvFocusState.isFocused) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onPrimary
+                )
             }
         }
     }
@@ -1852,14 +1863,15 @@ private fun DetailActionButtons(
                         .width(200.dp)
                         .clip(ShapeCache.smooth16)
                         .background(
-                            if (canPlayPrimary) MaterialTheme.colorScheme.primary
+                            if (isTv && playHFocusState.isFocused) MaterialTheme.colorScheme.onPrimary
+                            else if (canPlayPrimary) MaterialTheme.colorScheme.primary
                             else MaterialTheme.colorScheme.primary.copy(alpha = 0.45f)
                         )
                         .then(
                             contentFocusRequester?.let { Modifier.focusRequester(it) } ?: Modifier
                         )
                         .ifElse(isTv, playHFocusState.focusModifier)
-                        .ifElse(isTv, Modifier.tvFocusIndicator(playHFocusState, ShapeCache.smooth16))
+                        .ifElse(isTv, Modifier.tvFocusIndicator(playHFocusState, ShapeCache.smooth16, color = MaterialTheme.colorScheme.onPrimary))
                         .graphicsLayer { scaleX = playScale; scaleY = playScale }
                         .clickable(
                             interactionSource = playInteractionSource,
@@ -1888,9 +1900,18 @@ private fun DetailActionButtons(
                         )
                     }
                     Row(verticalAlignment = Alignment.CenterVertically) {
-                        Icon(Tabler.Outline.PlayerPlay, contentDescription = null, modifier = Modifier.size(24.dp), tint = MaterialTheme.colorScheme.onPrimary)
+                        Icon(
+                            Tabler.Outline.PlayerPlay,
+                            contentDescription = null,
+                            modifier = Modifier.size(24.dp),
+                            tint = if (isTv && playHFocusState.isFocused) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onPrimary
+                        )
                         Spacer(Modifier.size(8.dp))
-                        Text(playLabel, style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.onPrimary)
+                        Text(
+                            playLabel,
+                            style = MaterialTheme.typography.titleMedium,
+                            color = if (isTv && playHFocusState.isFocused) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onPrimary
+                        )
                     }
                 }
             }
