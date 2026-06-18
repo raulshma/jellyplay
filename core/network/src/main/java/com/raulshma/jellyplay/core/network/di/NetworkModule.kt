@@ -142,7 +142,28 @@ abstract class NetworkModule {
             val cacheSize = if (cacheMb > 0) cacheMb * 1024L * 1024L else 50L * 1024 * 1024
             val initialTimeout = initialPrefs.networkTimeoutPreset
             
-            val loggingInterceptor = HttpLoggingInterceptor().apply {
+            // Custom logger that strips Jellyfin access tokens from log lines.
+            // OkHttp's HttpLoggingInterceptor has redactHeader(...) but no
+            // equivalent for query params in 5.x, and the SDK embeds the access
+            // token as ?api_key=... on stream/image/subtitle/WebSocket URLs.
+            // The logger replaces the query string of any URL line containing a
+            // token-bearing param with "[redacted]" so verbose network logging
+            // can never leak credentials to logcat.
+            val tokenParamPattern = Regex(
+                "(?i)(\\?|&)(api_key|apikey|token|x-emby-token|accesstoken)=[^&\\s]+",
+            )
+            val loggingInterceptor = HttpLoggingInterceptor { message ->
+                val safe = if (tokenParamPattern.containsMatchIn(message)) {
+                    tokenParamPattern.replace(message) { mr ->
+                        val sep = mr.value.first()
+                        val key = mr.value.drop(1).substringBefore("=")
+                        "$sep$key=[redacted]"
+                    }
+                } else {
+                    message
+                }
+                HttpLoggingInterceptor.Logger.DEFAULT.log(safe)
+            }.apply {
                 level = HttpLoggingInterceptor.Level.HEADERS
                 // Never expose credentials in logcat, even when verbose network
                 // logging is enabled.

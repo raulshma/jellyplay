@@ -26,6 +26,8 @@ data class UserPreferences(
     val pinHash: String? = null,
     val biometricLockEnabled: Boolean = false,
     val autoLockTimerMs: Long = 30_000L,
+    val pinFailedAttempts: Int = 0,
+    val pinLockoutUntilEpochMs: Long = 0L,
     val dialogueBoostEnabled: Boolean = false,
     val dialogueBoostStrength: EffectStrength = EffectStrength.MODERATE,
     val equalizerEnabled: Boolean = false,

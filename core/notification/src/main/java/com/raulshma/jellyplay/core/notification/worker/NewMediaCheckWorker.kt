@@ -8,8 +8,8 @@ import androidx.core.content.ContextCompat
 import androidx.hilt.work.HiltWorker
 import androidx.work.CoroutineWorker
 import androidx.work.WorkerParameters
-import com.raulshma.jellyplay.core.database.dao.SeenMediaDao
-import com.raulshma.jellyplay.core.database.entity.SeenMediaEntity
+import com.raulshma.jellyplay.core.data.repository.SeenMediaRecord
+import com.raulshma.jellyplay.core.data.repository.SeenMediaRepository
 import com.raulshma.jellyplay.core.data.repository.MediaRepository
 import com.raulshma.jellyplay.core.datastore.UserPreferencesStore
 import com.raulshma.jellyplay.core.model.LibraryFolder
@@ -29,7 +29,7 @@ class NewMediaCheckWorker @AssistedInject constructor(
     @Assisted appContext: Context,
     @Assisted workerParams: WorkerParameters,
     private val mediaRepository: MediaRepository,
-    private val seenMediaDao: SeenMediaDao,
+    private val seenMediaRepository: SeenMediaRepository,
     private val preferencesStore: UserPreferencesStore,
     private val dispatcher: NotificationDispatcher,
     private val scheduler: NotificationScheduler,
@@ -74,7 +74,7 @@ class NewMediaCheckWorker @AssistedInject constructor(
         }
         if (enabledFolders.isEmpty()) return
 
-        val isFirstScan = seenMediaDao.count() == 0
+        val isFirstScan = seenMediaRepository.count() == 0
         val newItemsByLibrary = mutableMapOf<LibraryFolder, List<com.raulshma.jellyplay.core.model.MediaItem>>()
 
         for (folder in enabledFolders) {
@@ -97,17 +97,17 @@ class NewMediaCheckWorker @AssistedInject constructor(
             if (filtered.isEmpty()) continue
 
             val itemIds = filtered.map { it.id }
-            val seenIds = seenMediaDao.getSeenIds(itemIds).toSet()
+            val seenIds = seenMediaRepository.getSeenIds(itemIds)
             val newItems = filtered.filter { it.id !in seenIds }
 
             if (newItems.isNotEmpty()) {
-                seenMediaDao.insertAll(
+                seenMediaRepository.markAsSeen(
                     newItems.map { item ->
-                        SeenMediaEntity(
+                        SeenMediaRecord(
                             itemId = item.id,
                             libraryId = folder.id,
                             mediaType = item.mediaType.name,
-                            seenAt = System.currentTimeMillis(),
+                            seenAtEpochMs = System.currentTimeMillis(),
                         )
                     }
                 )
@@ -118,7 +118,7 @@ class NewMediaCheckWorker @AssistedInject constructor(
         }
 
         val thirtyDaysAgo = System.currentTimeMillis() - THIRTY_DAYS_MS
-        seenMediaDao.pruneOlderThan(thirtyDaysAgo)
+        seenMediaRepository.pruneOlderThan(thirtyDaysAgo)
 
         if (newItemsByLibrary.isNotEmpty()) {
             dispatcher.dispatch(newItemsByLibrary, prefs)

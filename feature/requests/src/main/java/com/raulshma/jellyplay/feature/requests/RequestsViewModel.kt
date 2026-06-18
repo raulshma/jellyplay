@@ -60,6 +60,11 @@ class RequestsViewModel @Inject constructor(
         .stateIn(scope, SharingStarted.WhileSubscribed(5_000), 0)
 
     init {
+        // Start Seerr background polling while the Requests UI is active so
+        // the pending-count badge and current user stay fresh. Polling is
+        // stopped in onCleared() to avoid battery drain when the user leaves.
+        // The repository is a Singleton, so this is safe across recompositions.
+        seerrRepository.startPolling()
         launch {
             seerrRepository.getRequestCount().onSuccess { count ->
                 if (count.pending == 0 && _state.value.filter == SeerrRequestFilter.PENDING) {
@@ -68,6 +73,11 @@ class RequestsViewModel @Inject constructor(
             }
             loadRequests(refresh = true)
         }
+    }
+
+    override fun onCleared() {
+        super.onCleared()
+        seerrRepository.stopPolling()
     }
 
     fun loadRequests(refresh: Boolean = false) {

@@ -25,7 +25,11 @@ android {
 dependencies {
     implementation(project(":core:model"))
     implementation(project(":core:data"))
-    implementation(project(":core:database"))
+    // core:database intentionally NOT declared — the notification module
+    // consumes SeenMediaRepository from core:data and must not reach into
+    // Room DAOs/entities directly (schema changes in core:database shouldn't
+    // ripple into sibling modules). core:datastore still declared because
+    // the scheduler/worker read UserPreferencesStore.notificationPreferences.
     implementation(project(":core:datastore"))
 
     implementation(libs.hilt.android)

@@ -374,6 +374,16 @@ class AudioEffectsProcessor @Inject constructor() {
     }
 
     fun reattachForCrossfade(audioSessionId: Int) {
+        // Re-attach effects that hold their own audiofx session to the new
+        // ExoPlayer's session id. LoudnessEnhancer (NightMode) is included
+        // here for symmetry with attachAudioEffects + applyNightMode so the
+        // crossfade path is self-sufficient even if the player's
+        // onAudioSessionIdChanged callback doesn't fire (e.g. when the new
+        // session id happens to equal the previous one). No-op when the new
+        // session id is still AUDIO_SESSION_ID_UNSET — the listener path
+        // (AudioPlaybackManager.playerListener.onAudioSessionIdChanged) takes
+        // over once the AudioTrack actually opens.
+        if (audioSessionId == C.AUDIO_SESSION_ID_UNSET) return
         if (_reverbPreset.value != ReverbPreset.NONE) {
             reverbHelper.detach()
             reverbHelper.attach(audioSessionId)
@@ -382,6 +392,9 @@ class AudioEffectsProcessor @Inject constructor() {
         visualizerHelper.attach(audioSessionId)
         if (visualizerHelper.isEnabled) {
             visualizerHelper.setEnabled(true)
+        }
+        if (_nightModeEnabled.value) {
+            attachLoudnessEnhancer(audioSessionId, nightModeGainForStrength)
         }
     }
 

@@ -310,7 +310,18 @@ class SettingsViewModel @Inject constructor(
     }
 
     fun verifyPin(pin: String): Boolean {
-        return preferencesStore.verifyPin(pin, preferences.pinHash)
+        val stored = preferences.pinHash ?: return false
+        // Don't rate-limit the in-settings PIN verification as aggressively as
+        // the lock-screen unlock — the user is already authenticated to reach
+        // this point. We still upgrade the hash on success.
+        val valid = preferencesStore.verifyPin(pin, stored)
+        // Silently upgrade a legacy unsalted-SHA-256 PIN hash to PBKDF2 (v2)
+        // after a successful verify, so existing users get the stronger hash
+        // without having to re-enter their PIN via the "set PIN" flow.
+        if (valid && preferencesStore.pinHashNeedsMigration(stored)) {
+            launch { preferencesStore.upgradePinHashIfLegacy(pin) }
+        }
+        return valid
     }
 
     fun setBiometricLockEnabled(enabled: Boolean) = editor.setBiometricLockEnabled(enabled)

@@ -38,5 +38,9 @@ dependencies {
     implementation(libs.compose.ui.google.fonts)
     implementation(libs.androidx.core.ktx)
     implementation(project(":core:model"))
-    api(libs.smooth.corner.rect)
+    // Smooth-corner-rect is implementation-scoped so the third-party type
+    // (AbsoluteSmoothCornerShape) stays off the design-system's API surface.
+    // Consumers outside :core:designsystem request shapes via the
+    // smoothCornerShape(...) wrappers in JellyPlayShape.kt.
+    implementation(libs.smooth.corner.rect)
 }

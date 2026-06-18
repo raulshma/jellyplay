@@ -19,4 +19,15 @@ interface CastStrategy {
     fun stopDiscovery()
     fun connect(context: android.content.Context, device: CastDevice)
     fun disconnect(context: android.content.Context)
+
+    /**
+     * Releases strategy-owned listeners and resources. Called once when the
+     * owning [CastManager] is released. Default implementation is a no-op so
+     * strategies that own no listeners (e.g. DLNA) don't need to override.
+     *
+     * Implementations must be idempotent — [CastManager.release] may invoke
+     * this more than once across the application lifecycle (e.g. once on
+     * logout and once on process shutdown).
+     */
+    fun release() {}
 }
