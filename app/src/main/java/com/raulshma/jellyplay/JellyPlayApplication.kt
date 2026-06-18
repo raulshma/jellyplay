@@ -60,12 +60,42 @@ class JellyPlayApplication : Application(), SingletonImageLoader.Factory, Config
         super.onCreate()
         SentryAndroid.init(this) { options ->
             // Strip query strings from HTTP breadcrumb URLs that may carry the
-            // Jellyfin access token (e.g. ".../stream?api_key=…").
+            // Jellyfin access token (e.g. ".../stream?api_key=…"). The previous
+            // implementation was case-sensitive and only inspected the "url"
+            // data key, missing "ApiKey" variants and breadcrumbs whose message
+            // contained a logged request line.
             options.setBeforeBreadcrumb { breadcrumb, _ ->
                 val data = breadcrumb.data
                 val url = data["url"] as? String
-                if (url != null && (url.contains("api_key=") || url.contains("token="))) {
-                    data["url"] = url.substringBefore("?")
+                if (url != null && url.contains("?")) {
+                    val query = url.substringAfter("?")
+                    // Match token-bearing query params case-insensitively.
+                    val tokenParamNames = setOf(
+                        "api_key", "apikey", "token", "x-emby-token", "accesstoken",
+                    )
+                    val carriesToken = query.split("&").any { kv ->
+                        val key = kv.substringBefore("=").lowercase()
+                        key in tokenParamNames
+                    }
+                    if (carriesToken) {
+                        data["url"] = url.substringBefore("?")
+                    }
+                }
+                // Drop breadcrumbs whose message contains a literal token
+                // pattern (e.g. an OkHttp log line of
+                // "GET .../stream?api_key=abc123"). Returning null drops the
+                // breadcrumb entirely rather than redacting in place, which is
+                // safer because we can't know where in the message the token is.
+                val message = breadcrumb.message
+                if (message != null) {
+                    val lower = message.lowercase()
+                    val tokenPatterns = listOf(
+                        "api_key=", "apikey=", "x-emby-token:", "x-emby-token=",
+                        "accesstoken=",
+                    )
+                    if (tokenPatterns.any { lower.contains(it) }) {
+                        return@setBeforeBreadcrumb null
+                    }
                 }
                 breadcrumb
             }
@@ -101,6 +131,11 @@ class JellyPlayApplication : Application(), SingletonImageLoader.Factory, Config
 
     private suspend fun recoverPendingDownloads() {
         try {
+            // KEEP (not REPLACE): the unique-work name is stable across process
+            // restarts, so if the previous worker is still in-flight WorkManager
+            // will keep it. Replacing here would cancel an active download and
+            // risk orphaned partial bytes between the cancel and the new
+            // worker's setForeground call.
             val pending = downloadDao.getDownloadsByStatus(DownloadStatus.PENDING.name)
             for (download in pending) {
                 val workRequest = OneTimeWorkRequestBuilder<DownloadWorker>()
@@ -112,7 +147,7 @@ class JellyPlayApplication : Application(), SingletonImageLoader.Factory, Config
                     .build()
                 WorkManager.getInstance(this).enqueueUniqueWork(
                     "${DownloadWorker.UNIQUE_WORK_PREFIX}${download.id}",
-                    ExistingWorkPolicy.REPLACE,
+                    ExistingWorkPolicy.KEEP,
                     workRequest,
                 )
             }
@@ -128,7 +163,7 @@ class JellyPlayApplication : Application(), SingletonImageLoader.Factory, Config
                     .build()
                 WorkManager.getInstance(this).enqueueUniqueWork(
                     "${DownloadWorker.UNIQUE_WORK_PREFIX}${download.id}",
-                    ExistingWorkPolicy.REPLACE,
+                    ExistingWorkPolicy.KEEP,
                     workRequest,
                 )
             }
@@ -144,7 +179,16 @@ class JellyPlayApplication : Application(), SingletonImageLoader.Factory, Config
             for (download in failed) {
                 if (download.downloadPath.isNotBlank()) {
                     val file = java.io.File(download.downloadPath)
-                    if (file.exists() && file.length() == 0L) {
+                    // Delete partial files unconditionally. Multi-connection
+                    // downloads use RandomAccessFile scattered writes that
+                    // cannot be resumed (DownloadWorker deletes the partial
+                    // file on cancel/failure for the same reason), so a non-
+                    // zero FAILED file is wasted storage. The DB row stays
+                    // FAILED so the user sees the failure in the UI and can
+                    // retry manually. Previously only 0-byte files were
+                    // deleted, which left e.g. a 50 MB file that failed at
+                    // 80 % sitting on disk forever.
+                    if (file.exists()) {
                         file.delete()
                     }
                 }

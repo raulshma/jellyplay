@@ -445,6 +445,24 @@ class CastManager @Inject constructor(
         externalListener = null
         resetCastState()
         strategies.values.forEach { it.stopDiscovery() }
+        // Remove the CastContext.SessionManagerListener so it doesn't keep
+        // firing on a stale CastContext after logout/re-login. Without this
+        // the listener can fire on the wrong user's sessions, and the
+        // Singleton retains a reference to a dead CastContext.
+        if (googleSessionListenerRegistered) {
+            try {
+                val castContext = CastContext.getSharedInstance(context)
+                castContext.sessionManager.removeSessionManagerListener(
+                    googleSessionListener, CastSession::class.java,
+                )
+            } catch (_: Exception) {
+                // Cast SDK may already be torn down.
+            }
+            googleSessionListenerRegistered = false
+        }
+        // Delegate to per-strategy release hooks (GoogleCastStrategy owns its
+        // own session/state listeners; DLNA owns its own discovery sockets).
+        strategies.values.forEach { runCatching { it.release() } }
         coroutineScope.cancel()
     }
 

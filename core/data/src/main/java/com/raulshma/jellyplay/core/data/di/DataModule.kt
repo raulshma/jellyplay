@@ -14,11 +14,15 @@ import com.raulshma.jellyplay.core.data.repository.PlaybackRepository
 import com.raulshma.jellyplay.core.data.repository.PlaybackRepositoryImpl
 import com.raulshma.jellyplay.core.data.repository.SearchHistoryRepository
 import com.raulshma.jellyplay.core.data.repository.SearchHistoryRepositoryImpl
+import com.raulshma.jellyplay.core.data.repository.SeenMediaRepository
+import com.raulshma.jellyplay.core.data.repository.SeenMediaRepositoryImpl
 import com.raulshma.jellyplay.core.data.repository.WatchHistoryRepository
 import com.raulshma.jellyplay.core.data.repository.WatchHistoryRepositoryImpl
 import com.raulshma.jellyplay.core.data.util.ImageUrlProvider
 import com.raulshma.jellyplay.core.data.util.ImageUrlProviderImpl
 import com.raulshma.jellyplay.core.data.util.DownloadDelegate
+import com.raulshma.jellyplay.core.data.worker.TvWatchNextScheduler
+import com.raulshma.jellyplay.core.data.worker.TvWatchNextSchedulerImpl
 import dagger.Binds
 import dagger.Module
 import dagger.hilt.InstallIn
@@ -37,26 +41,13 @@ abstract class DataModule {
             playbackRepository: com.raulshma.jellyplay.core.data.repository.PlaybackRepository,
         ): DownloadDelegate = DownloadDelegate(downloadRepository, playbackRepository)
 
-        @dagger.Provides
-        @Singleton
-        fun provideGetHomeSectionsUseCase(
-            mediaRepository: com.raulshma.jellyplay.core.data.repository.MediaRepository,
-        ): com.raulshma.jellyplay.core.data.usecase.GetHomeSectionsUseCase =
-            com.raulshma.jellyplay.core.data.usecase.GetHomeSectionsUseCase(mediaRepository)
-
-        @dagger.Provides
-        @Singleton
-        fun provideGetMediaDetailUseCase(
-            mediaRepository: com.raulshma.jellyplay.core.data.repository.MediaRepository,
-        ): com.raulshma.jellyplay.core.data.usecase.GetMediaDetailUseCase =
-            com.raulshma.jellyplay.core.data.usecase.GetMediaDetailUseCase(mediaRepository)
-
-        @dagger.Provides
-        @Singleton
-        fun provideStartMediaDownloadUseCase(
-            downloadDelegate: DownloadDelegate,
-        ): com.raulshma.jellyplay.core.data.usecase.StartMediaDownloadUseCase =
-            com.raulshma.jellyplay.core.data.usecase.StartMediaDownloadUseCase(downloadDelegate)
+        // Note: GetHomeSectionsUseCase, GetMediaDetailUseCase, and
+        // StartMediaDownloadUseCase previously had explicit @Provides @Singleton
+        // methods here. They were removed because each use case already has
+        // @Inject constructor — Hilt provides them automatically (unscoped,
+        // which is the correct scope for stateless transformers). No consumer
+        // in the codebase injects these directly today; they remain available
+        // for future use via constructor injection.
     }
 
     @Binds
@@ -94,4 +85,12 @@ abstract class DataModule {
     @Binds
     @Singleton
     abstract fun bindImageUrlProvider(impl: ImageUrlProviderImpl): ImageUrlProvider
+
+    @Binds
+    @Singleton
+    abstract fun bindSeenMediaRepository(impl: SeenMediaRepositoryImpl): SeenMediaRepository
+
+    @Binds
+    @Singleton
+    abstract fun bindTvWatchNextScheduler(impl: TvWatchNextSchedulerImpl): TvWatchNextScheduler
 }

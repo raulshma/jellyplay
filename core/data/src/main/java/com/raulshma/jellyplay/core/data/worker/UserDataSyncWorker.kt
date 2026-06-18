@@ -1,6 +1,7 @@
 package com.raulshma.jellyplay.core.data.worker
 
 import android.content.Context
+import android.util.Log
 import androidx.hilt.work.HiltWorker
 import androidx.work.CoroutineWorker
 import androidx.work.WorkerParameters
@@ -51,14 +52,26 @@ class UserDataSyncWorker @AssistedInject constructor(
             ).getOrThrow()
         }.fold(
             onSuccess = { Result.success() },
-            onFailure = {
-                if (runAttemptCount < MAX_RETRIES) Result.retry() else Result.success()
+            onFailure = { error ->
+                // Report failure after exhausting retries so WorkManager
+                // observability surfaces persistent problems. The next
+                // periodic run (12 h, UserDataSyncScheduler.SYNC_INTERVAL)
+                // still fires and will try again. Previously this returned
+                // Result.success() after MAX_RETRIES, hiding persistent
+                // failures from operators.
+                if (runAttemptCount < MAX_RETRIES) {
+                    Result.retry()
+                } else {
+                    Log.w(TAG, "UserDataSync exhausted $MAX_RETRIES retries", error)
+                    Result.failure()
+                }
             },
         )
     }
 
     companion object {
         const val UNIQUE_PERIODIC_NAME = "com.raulshma.jellyplay.work.user_data_sync"
+        private const val TAG = "UserDataSyncWorker"
         private const val MAX_RETRIES = 3
     }
 }

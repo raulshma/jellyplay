@@ -72,7 +72,6 @@ import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
-import java.security.MessageDigest
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -304,10 +303,30 @@ class UserPreferencesStore @Inject constructor(
         val HIDDEN_NAV_ITEMS = stringPreferencesKey("hidden_nav_items")
         val NAV_ITEM_ORDER = stringPreferencesKey("nav_item_order")
         val SELF_UPDATE_CHECK_ENABLED = booleanPreferencesKey("self_update_check_enabled")
+        val PIN_FAILED_ATTEMPTS = intPreferencesKey("pin_failed_attempts")
+        val PIN_LOCKOUT_UNTIL_MS = longPreferencesKey("pin_lockout_until_ms")
+    }
+
+    private companion object {
+        // PIN rate-limiting policy. After MAX_PIN_ATTEMPTS failed attempts the
+        // account is locked for PIN_LOCKOUT_DURATIONS_MS[escalation]. Each
+        // subsequent batch of failed attempts escalates the index by one until
+        // the cap. The durations roughly track common mobile-OS lockout
+        // policies (30s → 1m → 5m → 15m → 1h).
+        // Hashing constants (PBKDF2 iterations, salt size, format prefix) live
+        // in [PinHasher] so the security-critical logic is unit-testable
+        // without an Android Context.
+        const val MAX_PIN_ATTEMPTS = 5
+        val PIN_LOCKOUT_DURATIONS_MS = longArrayOf(
+            30_000L,
+            60_000L,
+            5 * 60_000L,
+            15 * 60_000L,
+            60 * 60_000L,
+        )
     }
 
     private val json = Json { ignoreUnknownKeys = true }
-    private val sha256Digest by lazy { MessageDigest.getInstance("SHA-256") }
 
     init {
         scope.launch { migrateToTypedKeys() }
@@ -676,6 +695,8 @@ class UserPreferencesStore @Inject constructor(
             pinHash = prefs[Keys.PIN_HASH],
             biometricLockEnabled = readBool(prefs, Keys.BIOMETRIC_LOCK_ENABLED, "biometric_lock_enabled", false),
             autoLockTimerMs = readLong(prefs, Keys.AUTO_LOCK_TIMER_MS, "auto_lock_timer_ms", 30_000L),
+            pinFailedAttempts = prefs[Keys.PIN_FAILED_ATTEMPTS] ?: 0,
+            pinLockoutUntilEpochMs = prefs[Keys.PIN_LOCKOUT_UNTIL_MS] ?: 0L,
             dialogueBoostEnabled = readBool(prefs, Keys.DIALOGUE_BOOST_ENABLED, "dialogue_boost_enabled", false),
             dialogueBoostStrength = try {
                 EffectStrength.valueOf(prefs[Keys.DIALOGUE_BOOST_STRENGTH] ?: EffectStrength.MODERATE.name)
@@ -1063,6 +1084,107 @@ class UserPreferencesStore @Inject constructor(
         }
     }
 
+    /**
+     * Silently upgrades a legacy (unsalted SHA-256) PIN hash to the v2 PBKDF2
+     * format after the user has successfully unlocked with [pin]. No-op when
+     * the stored hash is already v2 or when no PIN is set. Safe to call after
+     * every successful [verifyPin] — callers do not need to gate on
+     * [pinHashNeedsMigration] first.
+     *
+     * @return `true` if the hash was upgraded, `false` otherwise.
+     */
+    suspend fun upgradePinHashIfLegacy(pin: String): Boolean {
+        if (pin.isBlank()) return false
+        val current = preferences.value.pinHash ?: return false
+        if (!pinHashNeedsMigration(current)) return false
+        // Re-verify against the legacy hash before persisting — protects
+        // against an inadvertent upgrade with the wrong PIN if the caller
+        // invokes this without first verifying.
+        if (!PinHasher.verify(pin, current)) return false
+        val upgraded = hashPin(pin)
+        // Persist only if the user hasn't cleared the PIN concurrently.
+        context.dataStore.edit { prefs ->
+            if (prefs[Keys.PIN_HASH] == current) {
+                prefs[Keys.PIN_HASH] = upgraded
+            }
+        }
+        return true
+    }
+
+    // ----- PIN rate limiting -------------------------------------------------
+    //
+    // Policy: after MAX_PIN_ATTEMPTS failed verifications, apply an exponential
+    // backoff lockout (30s, 1m, 5m, 15m, 1h, capped). The lockout state
+    // survives process death because it is persisted in DataStore. Successful
+    // verification clears the counters.
+
+    fun getPinLockoutState(): com.raulshma.jellyplay.core.model.PinLockoutState {
+        val prefs = preferences.value
+        val until = prefs.pinLockoutUntilEpochMs
+        val now = System.currentTimeMillis()
+        // If the lockout has expired but the counter hasn't been reset yet,
+        // expose the unlocked state and reset the failed-attempt count to the
+        // threshold so the user gets exactly one attempt before the next
+        // escalation (standard ATM-style behaviour).
+        return if (until > 0L && now >= until) {
+            com.raulshma.jellyplay.core.model.PinLockoutState(
+                failedAttempts = MAX_PIN_ATTEMPTS,
+                lockoutUntilEpochMs = 0L,
+            )
+        } else {
+            com.raulshma.jellyplay.core.model.PinLockoutState(
+                failedAttempts = prefs.pinFailedAttempts,
+                lockoutUntilEpochMs = until,
+            )
+        }
+    }
+
+    /**
+     * Records a failed PIN attempt and applies the rate-limit policy. Returns
+     * the resulting [PinLockoutState] so the caller can render the lockout
+     * message immediately.
+     */
+    suspend fun recordFailedPinAttempt(): com.raulshma.jellyplay.core.model.PinLockoutState {
+        var resultState: com.raulshma.jellyplay.core.model.PinLockoutState = com.raulshma.jellyplay.core.model.PinLockoutState.NOT_LOCKED
+        context.dataStore.edit { prefs ->
+            val now = System.currentTimeMillis()
+            val previousUntil = prefs[Keys.PIN_LOCKOUT_UNTIL_MS] ?: 0L
+            val previousAttempts = if (previousUntil > 0L && now >= previousUntil) {
+                // Previous lockout expired: give the user another attempt
+                // before re-escalating.
+                MAX_PIN_ATTEMPTS
+            } else {
+                prefs[Keys.PIN_FAILED_ATTEMPTS] ?: 0
+            }
+            val newAttempts = previousAttempts + 1
+            prefs[Keys.PIN_FAILED_ATTEMPTS] = newAttempts
+
+            val lockoutUntil = if (newAttempts >= MAX_PIN_ATTEMPTS) {
+                val escalations = (newAttempts - MAX_PIN_ATTEMPTS).coerceAtMost(PIN_LOCKOUT_DURATIONS_MS.lastIndex)
+                val durationMs = PIN_LOCKOUT_DURATIONS_MS[escalations]
+                val until = now + durationMs
+                prefs[Keys.PIN_LOCKOUT_UNTIL_MS] = until
+                until
+            } else {
+                prefs[Keys.PIN_LOCKOUT_UNTIL_MS] = 0L
+                0L
+            }
+            resultState = com.raulshma.jellyplay.core.model.PinLockoutState(
+                failedAttempts = newAttempts,
+                lockoutUntilEpochMs = lockoutUntil,
+            )
+        }
+        return resultState
+    }
+
+    /** Clears the failed-attempt counter and any active lockout. Call on successful unlock. */
+    suspend fun resetPinLockout() {
+        context.dataStore.edit { prefs ->
+            prefs[Keys.PIN_FAILED_ATTEMPTS] = 0
+            prefs[Keys.PIN_LOCKOUT_UNTIL_MS] = 0L
+        }
+    }
+
     suspend fun setBiometricLockEnabled(enabled: Boolean) {
         context.dataStore.edit { it[Keys.BIOMETRIC_LOCK_ENABLED] = enabled }
     }
@@ -1344,17 +1466,17 @@ class UserPreferencesStore @Inject constructor(
         }
     }
 
-    fun verifyPin(input: String, storedHash: String?): Boolean {
-        if (storedHash == null) return false
-        return hashPin(input) == storedHash
-    }
+    fun verifyPin(input: String, storedHash: String?): Boolean = PinHasher.verify(input, storedHash)
 
-    fun hashPin(pin: String): String {
-        val digest = (sha256Digest.clone() as MessageDigest)
-        return digest
-            .digest(pin.toByteArray())
-            .joinToString("") { "%02x".format(it) }
-    }
+    fun hashPin(pin: String): String = PinHasher.hash(pin)
+
+    /**
+     * Returns `true` when [storedHash] is in the legacy unsalted-SHA-256
+     * format and should be upgraded to PBKDF2 (v2) on the next successful
+     * unlock. Callers with write access should re-hash the user's PIN with
+     * [hashPin] after a successful [verifyPin] when this returns true.
+     */
+    fun pinHashNeedsMigration(storedHash: String?): Boolean = PinHasher.needsMigration(storedHash)
 
     suspend fun setContinueWatching(items: List<com.raulshma.jellyplay.core.model.MediaItem>) {
         context.dataStore.edit { it[Keys.CONTINUE_WATCHING] = json.encodeToString(items) }

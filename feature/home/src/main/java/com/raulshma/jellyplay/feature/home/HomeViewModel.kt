@@ -16,6 +16,7 @@ import com.raulshma.jellyplay.core.data.seerr.SeerrRequestDelegate
 import com.raulshma.jellyplay.core.datastore.SeerrPreferencesStore
 import com.raulshma.jellyplay.core.datastore.UserPreferencesStore
 import com.raulshma.jellyplay.core.data.repository.AuthRepository
+import com.raulshma.jellyplay.core.data.worker.TvWatchNextScheduler
 import com.raulshma.jellyplay.core.model.UserInfo
 import com.raulshma.jellyplay.core.model.seerr.DiscoverSectionType
 import com.raulshma.jellyplay.core.model.seerr.SeerrSearchResponse
@@ -63,6 +64,7 @@ class HomeViewModel @Inject constructor(
     private val seerrRequestDelegate: SeerrRequestDelegate,
     private val seerrPreferencesStore: SeerrPreferencesStore,
     private val authRepository: AuthRepository,
+    private val tvWatchNextScheduler: TvWatchNextScheduler,
     @param:dagger.hilt.android.qualifiers.ApplicationContext private val context: android.content.Context,
 ) : JellyPlayViewModel(), DefaultLifecycleObserver {
 
@@ -496,22 +498,7 @@ class HomeViewModel @Inject constructor(
                         // system home stays in sync with the user's progress.
                         // Worker is a no-op on phones and respects its preference.
                         if (androidTvWatchNextEnabled) {
-                            try {
-                                val request = androidx.work.OneTimeWorkRequestBuilder<com.raulshma.jellyplay.core.data.worker.TvWatchNextWorker>()
-                                    .setConstraints(
-                                        androidx.work.Constraints.Builder()
-                                            .setRequiredNetworkType(androidx.work.NetworkType.CONNECTED)
-                                            .build(),
-                                    )
-                                    .build()
-                                androidx.work.WorkManager.getInstance(context).enqueueUniqueWork(
-                                    com.raulshma.jellyplay.core.data.worker.TvWatchNextWorker.UNIQUE_WORK_NAME,
-                                    androidx.work.ExistingWorkPolicy.REPLACE,
-                                    request,
-                                )
-                            } catch (_: Exception) {
-                                // WorkManager not initialised / unavailable — ignore.
-                            }
+                            tvWatchNextScheduler.scheduleRefresh()
                         }
                     }
 

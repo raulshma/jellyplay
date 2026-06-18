@@ -29,6 +29,7 @@ import com.raulshma.jellyplay.core.model.OfflineSubtitleManifest
 import com.raulshma.jellyplay.core.model.StreamType
 import com.raulshma.jellyplay.core.model.TrickplayInfo
 import dagger.hilt.android.qualifiers.ApplicationContext
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
@@ -326,7 +327,18 @@ class DownloadRepositoryImpl @Inject constructor(
                                 } else {
                                     null
                                 }
-                            } catch (_: Exception) {
+                            } catch (ce: CancellationException) {
+                                // Preserve structured concurrency: if the parent
+                                // scope (e.g. user navigated away) is cancelled,
+                                // the cancellation must propagate instead of
+                                // being silently turned into a null result.
+                                throw ce
+                            } catch (e: Exception) {
+                                // Surface the per-episode failure so the user
+                                // has a clue why an episode is missing from the
+                                // queue. Future: aggregate a failure count and
+                                // expose it through the Result/uiState.
+                                Log.w(TAG, "Failed to queue episode ${episode.id} (${episode.name})", e)
                                 null
                             }
                             }

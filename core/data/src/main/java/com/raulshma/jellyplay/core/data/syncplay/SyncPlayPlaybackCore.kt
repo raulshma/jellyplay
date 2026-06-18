@@ -347,12 +347,20 @@ class SyncPlayPlaybackCore @Inject constructor(
 
     private fun isSyncCorrectionWarranted(): Boolean {
         val cb = callbacks ?: return false
-        val lastReported = lastPlayCommandTimeMs
-        val latest = cb.currentPositionMs()
-        val delta = kotlin.math.abs(lastReported - latest).toDouble()
-        val drift = delta
+        // We need a play command to derive the server-expected position from.
+        // Without one there is no reference to drift against.
+        val cmd = lastCommand ?: return false
         val toleranceMs = userPreferencesStore.preferences.value.syncPlayToleranceMs
-        return drift >= toleranceMs
+        // Compare the local playback position to the server-expected position
+        // (the original command's ticks advanced by real elapsed time). The
+        // previous implementation subtracted a wall-clock timestamp
+        // (lastPlayCommandTimeMs, set via System.currentTimeMillis()) from the
+        // media playback position — different units — so the tolerance gate
+        // was effectively always true and the preference had no effect.
+        val serverPosTicks = estimateCurrentTicks(cmd.positionTicks, cmd.whenMs)
+        val serverPosMs = serverPosTicks / 10_000
+        val driftMs = kotlin.math.abs(cb.currentPositionMs() - serverPosMs)
+        return driftMs >= toleranceMs
     }
 
     private fun scheduleEnableSync() {

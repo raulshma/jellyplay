@@ -1,6 +1,7 @@
 package com.raulshma.jellyplay.core.data.worker
 
 import android.Manifest
+import android.app.ForegroundServiceStartNotAllowedException
 import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.app.PendingIntent
@@ -63,7 +64,20 @@ class DownloadWorker @AssistedInject constructor(
         val notificationId = downloadId.hashCode() and 0x7FFFFFFF
         try {
             setForeground(createForegroundInfo(notificationId, entity.name, 0, 0L, entity.totalSizeBytes, 0L))
-        } catch (_: Exception) {
+        } catch (e: Exception) {
+            // On Android 12+ a background-launched worker cannot promote itself
+            // to a foreground service. Continuing would let the OS kill the
+            // worker within seconds (leaving the download "started but never
+            // progressing"). Retry so WorkManager re-attempts when the app is
+            // in a state that allows foreground promotion.
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S &&
+                e is ForegroundServiceStartNotAllowedException
+            ) {
+                return Result.retry()
+            }
+            // Other failures (e.g. notification permission missing on some
+            // OEMs): fall through and attempt the download as a background
+            // worker — best-effort.
         }
 
         val existingBytes = entity.downloadedBytes

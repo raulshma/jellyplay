@@ -108,7 +108,16 @@ class TimeSyncManager @Inject constructor(
                 }
 
                 Log.d(TAG, "Time sync: offset=${offsetMs.get()}ms, ping=${lastPingMs.get()}ms, delay=${delay}ms")
+            }.onFailure { error ->
+                // Surface the failure so a silent 401 (expired token) or
+                // persistent network error doesn't leave SyncPlay operating
+                // with a stale offset forever. Previously this path was
+                // invisible — only onSuccess logged.
+                Log.w(TAG, "Time sync API failed", error)
             }
+        } catch (ce: kotlinx.coroutines.CancellationException) {
+            // Never swallow cancellation — breaks structured concurrency.
+            throw ce
         } catch (e: Exception) {
             Log.w(TAG, "Time sync failed", e)
         }
