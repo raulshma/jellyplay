@@ -3,6 +3,7 @@ package com.raulshma.jellyplay.widget
 import android.appwidget.AppWidgetManager
 import android.content.Context
 import android.content.Intent
+import android.graphics.Bitmap
 import android.view.View
 import android.widget.RemoteViews
 import android.widget.RemoteViewsService
@@ -52,6 +53,9 @@ class SeerrRecommendationsWidgetService : RemoteViewsService() {
 
         private var items: List<SeerrWidgetItem> = emptyList()
         private var loadedVersion: Long = -1L
+        // Poster cache populated in [onDataSetChanged] so [getViewAt] never
+        // performs network I/O on the binder thread.
+        private var posterCache: Map<String, Bitmap?> = emptyMap()
 
         override fun onCreate() = Unit
 
@@ -60,10 +64,19 @@ class SeerrRecommendationsWidgetService : RemoteViewsService() {
             if (version == loadedVersion) return
             items = runBlocking { store.seerrWidgetItems.first() }
             loadedVersion = version
+            // Pre-fetch posters concurrently so each `getViewAt` is a map lookup.
+            // `posterUrl` is nullable; blank/null entries fall through to the placeholder.
+            posterCache = if (items.isEmpty()) {
+                emptyMap()
+            } else {
+                val nonNullUrls = items.map { it.posterUrl }.filterNotNull()
+                runBlocking { WidgetImageLoader.preloadPosters(context, nonNullUrls) }
+            }
         }
 
         override fun onDestroy() {
             items = emptyList()
+            posterCache = emptyMap()
         }
 
         override fun getCount(): Int = items.size
@@ -114,9 +127,7 @@ class SeerrRecommendationsWidgetService : RemoteViewsService() {
                 view.setViewVisibility(R.id.sr_item_text_container, View.VISIBLE)
             }
 
-            val bitmap = runBlocking {
-                WidgetImageLoader.loadPoster(context, item.posterUrl)
-            }
+            val bitmap = posterCache[item.posterUrl]
             if (bitmap != null) {
                 view.setImageViewBitmap(R.id.sr_item_poster, bitmap)
             } else {

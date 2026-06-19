@@ -33,6 +33,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.unit.IntOffset
+import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
 import com.raulshma.jellyplay.core.model.HomeMode
 import com.composables.icons.tabler.Tabler
@@ -41,9 +42,6 @@ import com.raulshma.jellyplay.core.ui.tv.LocalTvMode
 import com.raulshma.jellyplay.core.ui.tv.rememberTvFocusState
 import com.raulshma.jellyplay.core.ui.tv.tvFocusIndicator
 
-/**
- * A private helper for linear interpolation of floats.
- */
 private fun lerp(start: Float, stop: Float, fraction: Float): Float {
     return start + fraction * (stop - start)
 }
@@ -62,8 +60,6 @@ fun MorphingMusicVideoIcon(
         val W = size.width
         val H = size.height
 
-        // --- 1. Note Heads / Film Reels ---
-        // Left Circle (Note Head / Top Left Film Reel)
         val cx1 = W * 0.34f
         val cy1 = lerp(H * 0.70f, H * 0.32f, progress)
         val r1 = W * 0.12f
@@ -86,7 +82,6 @@ fun MorphingMusicVideoIcon(
             )
         }
 
-        // Right Circle (Note Head / Top Right Film Reel)
         val cx2 = W * 0.66f
         val cy2 = lerp(H * 0.60f, H * 0.32f, progress)
         val r2 = W * 0.12f
@@ -109,8 +104,6 @@ fun MorphingMusicVideoIcon(
             )
         }
 
-        // --- 2. Stems / Camera Body ---
-        // Left Stem / Left half of camera body
         val cornerRadius = CornerRadius(lerp(1.dp.toPx(), 3.5f.dp.toPx(), progress))
         drawRoundRect(
             color = color,
@@ -125,7 +118,6 @@ fun MorphingMusicVideoIcon(
             cornerRadius = cornerRadius
         )
 
-        // Right Stem / Right half of camera body
         drawRoundRect(
             color = color,
             topLeft = Offset(
@@ -139,7 +131,6 @@ fun MorphingMusicVideoIcon(
             cornerRadius = cornerRadius
         )
 
-        // --- 3. Connecting Beam / Camera Lens ---
         // A 4-point polygon connecting the two stems in Music mode,
         // and collapsing into a triangle in Video mode.
         val path = Path().apply {
@@ -181,12 +172,11 @@ fun ModeSwitch(
 ) {
     val isMusic = currentMode == HomeMode.MUSIC
 
-    // Smooth bouncy spring transition progress (0.0 = Music, 1.0 = Video)
     val progress by animateFloatAsState(
         targetValue = if (isMusic) 0f else 1f,
         animationSpec = spring(
-            dampingRatio = 0.76f, // premium spring behavior
-            stiffness = 280f      // natural speed
+            dampingRatio = 0.76f,
+            stiffness = 280f,
         ),
         label = "mode_switch_progress"
     )
@@ -195,7 +185,6 @@ fun ModeSwitch(
         (bg.red * 0.299f + bg.green * 0.587f + bg.blue * 0.114f) > 0.5f
     }
 
-    // Sleek HSL-aligned theme colors
     val primaryColor = MaterialTheme.colorScheme.primary
     val trackBgColor = if (isLightTheme) {
         MaterialTheme.colorScheme.surfaceContainerHighest
@@ -208,6 +197,7 @@ fun ModeSwitch(
 
     val interactionSource = remember { MutableInteractionSource() }
     val isTv = LocalTvMode.current
+    val layoutDirection = androidx.compose.ui.platform.LocalLayoutDirection.current
     val tvFocusState = rememberTvFocusState(focusedScale = 1.08f)
 
     val width = 76.dp
@@ -255,13 +245,19 @@ fun ModeSwitch(
             )
         }
 
-        // Bouncy Sliding Selection Thumb
         Box(
             modifier = Modifier
                 .offset {
                     val maxOffset = (width - thumbSize - 8.dp) // 76.dp - 28.dp - 8.dp = 40.dp
+                    val xPx = progress * maxOffset.toPx()
+                    // Mirror the thumb's travel in RTL: the parent Box aligns the thumb to
+                    // TopStart (which becomes TopEnd visually in RTL), so a positive `x`
+                    // pushes the thumb further off-screen. Negate to slide toward the visual
+                    // start edge as `progress` increases — matches how CenterStart/CenterEnd
+                    // icons are mirrored above.
+                    val directedX = if (layoutDirection == LayoutDirection.Rtl) -xPx else xPx
                     IntOffset(
-                        x = (progress * maxOffset.toPx()).toInt(),
+                        x = directedX.toInt(),
                         y = 0
                     )
                 }

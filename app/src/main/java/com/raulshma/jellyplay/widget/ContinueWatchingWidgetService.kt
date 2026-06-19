@@ -3,6 +3,7 @@ package com.raulshma.jellyplay.widget
 import android.appwidget.AppWidgetManager
 import android.content.Context
 import android.content.Intent
+import android.graphics.Bitmap
 import android.net.Uri
 import android.view.View
 import android.widget.RemoteViews
@@ -62,15 +63,35 @@ class ContinueWatchingWidgetService : RemoteViewsService() {
     ) : RemoteViewsFactory {
 
         private var items: List<MediaItem> = emptyList()
+        // Poster cache populated in [onDataSetChanged] so [getViewAt] never
+        // performs network I/O on the binder thread. Keyed by image id (matches
+        // the lookup key used by `playbackRepository.getImageUrl(...)`).
+        private var posterCache: Map<String, Bitmap?> = emptyMap()
 
         override fun onCreate() = Unit
 
         override fun onDataSetChanged() {
             items = runBlocking { store.continueWatching.first() }
+            // Pre-fetch posters concurrently so each `getViewAt` is a map lookup.
+            // A slow URL is bounded by `WidgetImageLoader`'s internal timeout.
+            val urlById = items.associate { item ->
+                val id = item.seriesId ?: item.id
+                id to playbackRepository.getImageUrl(id, maxWidth = 300)
+            }
+            posterCache = if (urlById.isEmpty()) {
+                emptyMap()
+            } else {
+                runBlocking {
+                    WidgetImageLoader.preloadPosters(context, urlById.values)
+                }.let { urlToBitmap ->
+                    urlById.mapValues { (_, url) -> urlToBitmap[url] }
+                }
+            }
         }
 
         override fun onDestroy() {
             items = emptyList()
+            posterCache = emptyMap()
         }
 
         override fun getCount(): Int = items.size
@@ -132,9 +153,8 @@ class ContinueWatchingWidgetService : RemoteViewsService() {
             }
 
             val imageId = item.seriesId ?: item.id
-            val posterUrl = playbackRepository.getImageUrl(imageId, maxWidth = 300)
-            val posterBitmap = if (!posterUrl.isNullOrBlank() && !hidePoster) {
-                runBlocking { WidgetImageLoader.loadPoster(context, posterUrl) }
+            val posterBitmap = if (!hidePoster) {
+                posterCache[imageId]
             } else null
 
             if (!hidePoster) {

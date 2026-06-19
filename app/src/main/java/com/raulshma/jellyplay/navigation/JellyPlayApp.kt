@@ -127,6 +127,9 @@ import com.raulshma.jellyplay.core.ui.components.MiniPlayer
 import com.raulshma.jellyplay.core.ui.components.LocalPerformanceMode
 import com.raulshma.jellyplay.core.ui.components.LocalFloatingNavVisibility
 import com.raulshma.jellyplay.core.ui.navigation.ALL_TOP_LEVEL_ROUTE_KEYS
+import com.raulshma.jellyplay.core.ui.navigation.DETAIL_ROUTE_CLASS_NAMES
+import com.raulshma.jellyplay.core.ui.navigation.isDetail
+import com.raulshma.jellyplay.core.ui.navigation.isModal
 import com.raulshma.jellyplay.core.ui.navigation.MUSIC_TOP_LEVEL_ROUTES
 import com.raulshma.jellyplay.core.ui.navigation.Navigator
 import com.raulshma.jellyplay.core.ui.navigation.Route
@@ -175,46 +178,16 @@ import com.composables.icons.tabler.outline.*
 
 internal val LocalDrawerOpener = androidx.compose.runtime.compositionLocalOf { {} }
 
-private val DETAIL_ROUTE_CLASS_NAMES: Set<String> = setOf(
-    "MediaDetail",
-    "MetadataEditor",
-    "SeerrDetail",
-    "PersonDetail",
-    "MediaInfo",
-    "CollectionDetail",
-    "OfflineSeries",
-    "ArtistDetail",
-    "AlbumDetail",
-    "SmartPlaylistDetail",
-    "MoodPlaylistDetail",
-    "PlaylistDetail",
-    "GenreDetail",
-    "NewsletterSectionList",
-    "UserStatisticsDetail",
-)
 
-private fun isDetailRoute(route: Route): Boolean = when (route) {
-    is Route.MediaDetail,
-    is Route.MetadataEditor,
-    is Route.SeerrDetail,
-    is Route.PersonDetail,
-    is Route.MediaInfo,
-    is Route.CollectionDetail,
-    is Route.OfflineSeries,
-    is Route.ArtistDetail,
-    is Route.AlbumDetail,
-    is Route.SmartPlaylistDetail,
-    is Route.MoodPlaylistDetail,
-    is Route.PlaylistDetail,
-    is Route.GenreDetail,
-    is Route.NewsletterSectionList,
-    is Route.UserStatisticsDetail -> true
-    else -> false
-}
 
 private fun isDetailScene(scene: Scene<NavKey>): Boolean {
-    val className = scene.entries.lastOrNull()?.contentKey?.toString()?.substringBefore('(')
-        ?: return false
+    // Prefer the typed Route.isDetail extension when the content key is a
+    // Route (the common case). Fall back to class-name string matching for
+    // any non-Route NavKey the host might encounter.
+    val key = scene.entries.lastOrNull()?.contentKey ?: return false
+    val route = key as? Route
+    if (route != null) return route.isDetail
+    val className = key.toString().substringBefore('(')
     return className in DETAIL_ROUTE_CLASS_NAMES
 }
 
@@ -549,6 +522,30 @@ private fun MainContent(
                 LocalNavigationBarColor provides navBarColorState,
                 com.raulshma.jellyplay.core.ui.components.LocalFloatingNavOffset provides (if (!isExpanded && !isFullScreenRoute) bottomNavOffsetHeightPx.floatValue else 0f)
             ) {
+            // Hoist the saveable-state holder above the isTv/isFullScreenRoute branches so that
+            // navigation-entry saveable state (scroll position, form fields, etc.) survives
+            // transitions between phone <-> TV <-> full-screen layouts. Previously each
+            // MainNavDisplay call site created its own holder, so saveable state was lost on
+            // every layout-branch switch (e.g. entering the player and back).
+            val saveableStateHolder = rememberSaveableStateHolder()
+            val entryDecorator = rememberSaveableStateHolderNavEntryDecorator<NavKey>(saveableStateHolder)
+
+            // Hoist the audio-mini-player navigation callbacks so all three layout branches
+            // (TvContent / PhoneContent / FullScreenContent) can share identical instances
+            // instead of allocating fresh lambdas per call site.
+            val onNowPlayingClick: () -> Unit = {
+                audioItemId?.let { itemId -> navigator.navigate(Route.AudioPlayer(itemId)) }
+            }
+            val onAmbientClick: () -> Unit = {
+                navigator.navigate(
+                    Route.Ambient(
+                        imageUrl = audioArtworkUrl,
+                        title = audioTitle,
+                        artist = audioArtist,
+                    )
+                )
+            }
+
             Box(Modifier.fillMaxSize()) {
             // Hoist the TV drawer state above the isFullScreenRoute branch so it survives visiting a
             // full-screen route (e.g. the player) and back, instead of being recreated when
@@ -557,355 +554,83 @@ private fun MainContent(
             val tvDrawerState = androidx.tv.material3.rememberDrawerState(androidx.tv.material3.DrawerValue.Closed)
             val tvDrawerListState = androidx.compose.foundation.lazy.rememberLazyListState()
             if (isTv && !isFullScreenRoute) {
-                TvMaterial3Theme(
-                    colorScheme = tvDarkColorScheme(
-                        background = MaterialTheme.colorScheme.background,
-                        surface = MaterialTheme.colorScheme.surfaceContainer,
-                        onBackground = MaterialTheme.colorScheme.onSurface,
-                        onSurface = MaterialTheme.colorScheme.onSurface,
-                        primary = MaterialTheme.colorScheme.primary,
-                        onPrimary = MaterialTheme.colorScheme.onPrimary,
-                        secondary = MaterialTheme.colorScheme.secondary,
-                        onSecondary = MaterialTheme.colorScheme.onSecondary,
-                        border = MaterialTheme.colorScheme.outline,
-                        borderVariant = MaterialTheme.colorScheme.outlineVariant,
-                    )
-                ) {
-                TvScaffold {
-                    val tvCurrentRoute = navigationState.backStacks[currentTopLevel]?.lastOrNull()
-                    val tvIsSubPage = tvCurrentRoute != null && tvCurrentRoute !in activeTopLevelRoutes.keys
-
-                    val primaryNavItems = activeTopLevelRoutes.entries.map { (route, label) ->
-                        TvNavItem(
-                            route = route,
-                            label = label,
-                            icon = routeToIcon(route),
-                        )
-                    }
-                    TvNavigationDrawer(
-                        primaryItems = primaryNavItems,
-                        currentTopLevel = currentTopLevel,
-                        isSubPage = tvIsSubPage,
-                        onNavigate = { navigator.navigate(it) },
-                        onBack = { navigator.goBack() },
-                        drawerState = tvDrawerState,
-                        drawerListState = tvDrawerListState,
-                        currentRoute = tvCurrentRoute,
-                    ) {
-                        MainNavDisplay(
-                            navigationState = navigationState,
-                            navigator = navigator,
-                            onLogout = onLogout,
-                            homeMode = homeMode,
-                            onModeChange = onModeChange,
-                            enterPip = enterPip,
-                            enterVideoMiniMode = enterVideoMiniMode,
-                            onNowPlayingClick = {
-                                val itemId = audioItemId ?: return@MainNavDisplay
-                                navigator.navigate(Route.AudioPlayer(itemId))
-                            },
-                            onAmbientClick = {
-                                navigator.navigate(
-                                    Route.Ambient(
-                                        imageUrl = audioArtworkUrl,
-                                        title = audioTitle,
-                                        artist = audioArtist,
-                                    )
-                                )
-                            },
-                        )
-                    }
-                }
-                }
+                TvContent(
+                    navigationState = navigationState,
+                    currentTopLevel = currentTopLevel,
+                    activeTopLevelRoutes = activeTopLevelRoutes,
+                    navigator = navigator,
+                    onLogout = onLogout,
+                    homeMode = homeMode,
+                    onModeChange = onModeChange,
+                    enterPip = enterPip,
+                    enterVideoMiniMode = enterVideoMiniMode,
+                    saveableStateHolder = saveableStateHolder,
+                    entryDecorator = entryDecorator,
+                    onNowPlayingClick = onNowPlayingClick,
+                    onAmbientClick = onAmbientClick,
+                    tvDrawerState = tvDrawerState,
+                    tvDrawerListState = tvDrawerListState,
+                )
             } else {
-                val systemNavBarBottom = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()
-                val contentPadding = PaddingValues(0.dp)
                 if (!isFullScreenRoute) {
-                    ModalNavigationDrawer(
+                    PhoneContent(
+                        navigationState = navigationState,
+                        currentTopLevel = currentTopLevel,
+                        activeTopLevelRoutes = activeTopLevelRoutes,
+                        navigator = navigator,
+                        onLogout = onLogout,
+                        homeMode = homeMode,
+                        onModeChange = onModeChange,
+                        enterPip = enterPip,
+                        enterVideoMiniMode = enterVideoMiniMode,
+                        saveableStateHolder = saveableStateHolder,
+                        entryDecorator = entryDecorator,
+                        onNowPlayingClick = onNowPlayingClick,
+                        onAmbientClick = onAmbientClick,
                         drawerState = drawerState,
-                        drawerContent = {
-                            ModalDrawerSheet(
-                                drawerShape = RoundedCornerShape(topEnd = 28.dp, bottomEnd = 28.dp),
-                                drawerContainerColor = MaterialTheme.colorScheme.surfaceContainer,
-                            ) {
-                                Column(
-                                    modifier = Modifier
-                                        .fillMaxHeight()
-                                        .padding(vertical = 48.dp),
-                                ) {
-                                    Text(
-                                        "JellyPlay",
-                                        style = MaterialTheme.typography.headlineSmall,
-                                        fontWeight = FontWeight.Bold,
-                                        color = MaterialTheme.colorScheme.primary,
-                                        modifier = Modifier.padding(horizontal = 28.dp, vertical = 16.dp),
-                                    )
-                                    Spacer(Modifier.height(8.dp))
-                                    DrawerItem(
-                                        icon = Tabler.Outline.Inbox,
-                                        label = "Requests",
-                                        onClick = {
-                                            navigator.navigate(Route.Requests)
-                                            drawerScope.launch { drawerState.close() }
-                                        },
-                                    )
-                                    DrawerItem(
-                                        icon = Tabler.Outline.Settings,
-                                        label = "Settings",
-                                        onClick = {
-                                            navigator.navigate(Route.Settings)
-                                            drawerScope.launch { drawerState.close() }
-                                        },
-                                    )
-                                    DrawerItem(
-                                        icon = Tabler.Outline.InfoCircle,
-                                        label = "About",
-                                        onClick = {
-                                            navigator.navigate(Route.About)
-                                            drawerScope.launch { drawerState.close() }
-                                        },
-                                    )
-                                }
-                            }
-                        },
-                    ) {
-                    val nestedScrollConnection = remember {
-                        object : NestedScrollConnection {
-                            override fun onPreScroll(available: Offset, source: NestedScrollSource): Offset {
-                                val delta = available.y
-                                if (delta < -15f) {
-                                    isBottomNavVisible = false
-                                } else if (delta > 15f) {
-                                    isBottomNavVisible = true
-                                }
-                                return Offset.Zero
-                            }
-                        }
-                    }
-
-                    NavigationSuiteScaffold(
-                        navigationSuiteType = if (!isExpanded) NavigationSuiteType.None else NavigationSuiteType.NavigationRail,
-                        navigationItems = {
-                            activeTopLevelRoutes.forEach { (route, label) ->
-                                NavigationSuiteItem(
-                                    selected = route == currentTopLevel,
-                                    onClick = { navigator.navigate(route) },
-                                    icon = { NavIcon(route, label, selected = route == currentTopLevel) },
-                                    label = { Text(label) },
-                                )
-                            }
-                        },
-                        navigationSuiteColors = NavigationSuiteDefaults.colors(
-                            navigationBarContainerColor = if (isAudioPlayerScreen) Color.Transparent else MaterialTheme.colorScheme.surface,
-                            navigationRailContainerColor = animatedNavBarColor,
-                        ),
-                    ) {
-                        val appBackgroundModifier = if (isSynthwave) {
-                            Modifier.background(
-                                androidx.compose.ui.graphics.Brush.verticalGradient(
-                                    colors = listOf(Color(0xFF0D061A), Color(0xFF1B0B3A))
-                                )
-                            )
-                        } else {
-                            Modifier.background(MaterialTheme.colorScheme.background)
-                        }
-
-                        Box(
-                            modifier = Modifier
-                                .fillMaxSize()
-                                .then(appBackgroundModifier)
-                                .then(if (!isExpanded) Modifier.nestedScroll(nestedScrollConnection) else Modifier)
-                        ) {
-                            Box(modifier = Modifier.fillMaxSize()) {
-                                MainNavDisplay(
-                                    navigationState = navigationState,
-                                    navigator = navigator,
-                                    onLogout = onLogout,
-                                    homeMode = homeMode,
-                                    onModeChange = onModeChange,
-                                    enterPip = enterPip,
-                                    enterVideoMiniMode = enterVideoMiniMode,
-                                    innerPadding = contentPadding,
-                                    onNowPlayingClick = {
-                                        val itemId = audioItemId ?: return@MainNavDisplay
-                                        navigator.navigate(Route.AudioPlayer(itemId))
-                                    },
-                                    onAmbientClick = {
-                                        navigator.navigate(
-                                            Route.Ambient(
-                                                imageUrl = audioArtworkUrl,
-                                                title = audioTitle,
-                                                artist = audioArtist,
-                                            )
-                                        )
-                                    },
-                                )
-                            }
-                            if (showMiniPlayer && isExpanded) {
-                                Box(
-                                    modifier = Modifier
-                                        .align(Alignment.BottomCenter)
-                                        .padding(bottom = systemNavBarBottom + 2.dp)
-                                ) {
-                                    MiniPlayer(
-                                        isVisible = true,
-                                        title = audioTitle,
-                                        artist = audioArtist,
-                                        artworkUri = audioArtworkUrl,
-                                        isPlaying = isAudioPlaying,
-                                        onClick = {
-                                            val itemId = audioItemId ?: return@MiniPlayer
-                                            navigator.navigate(Route.AudioPlayer(itemId))
-                                        },
-                                        onClose = {
-                                            audioPlaybackManager.stopAndRelease()
-                                            isMiniPlayerDismissed = true
-                                        },
-                                        onPlayPause = {
-                                            audioPlaybackManager.togglePlayPause()
-                                        },
-                                        onSkipNext = {
-                                            audioPlaybackManager.skipToNext()
-                                        },
-                                    )
-                                }
-                            }
-                            if (!isExpanded && showMiniPlayer) {
-                                Box(
-                                    modifier = Modifier
-                                        .align(Alignment.BottomCenter)
-                                        .padding(bottom = systemNavBarBottom + 60.dp)
-                                        .offset {
-                                            val maxOffset = 60.dp.toPx()
-                                            val yOffset = (-bottomNavOffsetHeightPx.floatValue).coerceAtMost(maxOffset)
-                                            IntOffset(x = 0, y = yOffset.roundToInt())
-                                        }
-                                ) {
-                                    MiniPlayer(
-                                        isVisible = true,
-                                        title = audioTitle,
-                                        artist = audioArtist,
-                                        artworkUri = audioArtworkUrl,
-                                        isPlaying = isAudioPlaying,
-                                        onClick = {
-                                            val itemId = audioItemId ?: return@MiniPlayer
-                                            navigator.navigate(Route.AudioPlayer(itemId))
-                                        },
-                                        onClose = {
-                                            audioPlaybackManager.stopAndRelease()
-                                            isMiniPlayerDismissed = true
-                                        },
-                                        onPlayPause = {
-                                            audioPlaybackManager.togglePlayPause()
-                                        },
-                                        onSkipNext = {
-                                            audioPlaybackManager.skipToNext()
-                                        },
-                                    )
-                                }
-                            }
-                            if (isVideoMiniMode) {
-                                VideoMiniPlayer(
-                                    isVisible = true,
-                                    engine = videoMiniPlayerState.engine,
-                                    title = videoMiniTitle,
-                                    subtitle = videoMiniSubtitle,
-                                    isPlaying = videoMiniIsPlaying,
-                                    onClick = {
-                                        val itemId = videoMiniItemId ?: return@VideoMiniPlayer
-                                        navigator.navigate(Route.VideoPlayer(itemId))
-                                    },
-                                    onClose = {
-                                        videoMiniPlayerState.release()
-                                    },
-                                    onPlayPause = {
-                                        videoMiniPlayerState.togglePlayPause()
-                                    },
-                                    modifier = Modifier
-                                        .align(Alignment.BottomEnd)
-                                        .padding(end = 8.dp, bottom = systemNavBarBottom + (if (!isExpanded) 64.dp else 8.dp))
-                                        .fillMaxWidth(0.45f)
-                                        .offset {
-                                            if (!isExpanded) {
-                                                val maxOffset = 64.dp.toPx()
-                                                val yOffset = (-bottomNavOffsetHeightPx.floatValue).coerceAtMost(maxOffset)
-                                                IntOffset(x = 0, y = yOffset.roundToInt())
-                                            } else {
-                                                IntOffset.Zero
-                                            }
-                                        },
-                                )
-                            }
-                            if (!isExpanded) {
-                                FloatingNavigationBar(
-                                    routes = activeTopLevelRoutes,
-                                    currentTopLevel = currentTopLevel,
-                                    onNavigate = { navigator.navigate(it) },
-                                    showLabels = preferences.navBarShowLabels,
-                                    containerColor = animatedNavBarColor,
-                                    modifier = Modifier
-                                        .align(Alignment.BottomCenter)
-                                        .padding(bottom = systemNavBarBottom + 4.dp)
-                                        .padding(horizontal = 16.dp)
-                                        .offset { IntOffset(x = 0, y = -bottomNavOffsetHeightPx.floatValue.roundToInt()) }
-                                )
-                            }
-                        }
-                    }
-                    }
+                        drawerScope = drawerScope,
+                        isAudioPlayerScreen = isAudioPlayerScreen,
+                        isSynthwave = isSynthwave,
+                        isExpanded = isExpanded,
+                        isBottomNavVisibleState = isBottomNavVisibleState,
+                        bottomNavOffsetHeightPx = bottomNavOffsetHeightPx,
+                        showMiniPlayer = showMiniPlayer,
+                        audioPlaybackManager = audioPlaybackManager,
+                        isAudioPlaying = isAudioPlaying,
+                        audioItemId = audioItemId,
+                        audioTitle = audioTitle,
+                        audioArtist = audioArtist,
+                        audioArtworkUrl = audioArtworkUrl,
+                        onDismissMiniPlayer = { isMiniPlayerDismissed = true },
+                        isVideoMiniMode = isVideoMiniMode,
+                        videoMiniPlayerState = videoMiniPlayerState,
+                        videoMiniTitle = videoMiniTitle,
+                        videoMiniSubtitle = videoMiniSubtitle,
+                        videoMiniIsPlaying = videoMiniIsPlaying,
+                        videoMiniItemId = videoMiniItemId,
+                        animatedNavBarColor = animatedNavBarColor,
+                        showNavBarLabels = preferences.navBarShowLabels,
+                    )
                 } else {
-                    Box(
-                        modifier = Modifier
-                            .fillMaxSize()
-                            .background(MaterialTheme.colorScheme.background)
-                    ) {
-                        MainNavDisplay(
-                            navigationState = navigationState,
-                            navigator = navigator,
-                            onLogout = onLogout,
-                            homeMode = homeMode,
-                            onModeChange = onModeChange,
-                            enterPip = enterPip,
-                            enterVideoMiniMode = enterVideoMiniMode,
-                            innerPadding = contentPadding,
-                            onNowPlayingClick = {
-                                val itemId = audioItemId ?: return@MainNavDisplay
-                                navigator.navigate(Route.AudioPlayer(itemId))
-                            },
-                            onAmbientClick = {
-                                navigator.navigate(
-                                    Route.Ambient(
-                                        imageUrl = audioArtworkUrl,
-                                        title = audioTitle,
-                                        artist = audioArtist,
-                                    )
-                                )
-                            },
-                        )
-                        if (isVideoMiniMode) {
-                            VideoMiniPlayer(
-                                isVisible = true,
-                                engine = videoMiniPlayerState.engine,
-                                title = videoMiniTitle,
-                                subtitle = videoMiniSubtitle,
-                                isPlaying = videoMiniIsPlaying,
-                                onClick = {
-                                    val itemId = videoMiniItemId ?: return@VideoMiniPlayer
-                                    navigator.navigate(Route.VideoPlayer(itemId))
-                                },
-                                onClose = {
-                                    videoMiniPlayerState.release()
-                                },
-                                onPlayPause = {
-                                    videoMiniPlayerState.togglePlayPause()
-                                },
-                                modifier = Modifier
-                                    .align(Alignment.BottomEnd)
-                                    .padding(end = 8.dp, bottom = 8.dp)
-                                    .fillMaxWidth(0.5f),
-                            )
-                        }
-                    }
+                    FullScreenContent(
+                        navigationState = navigationState,
+                        navigator = navigator,
+                        onLogout = onLogout,
+                        homeMode = homeMode,
+                        onModeChange = onModeChange,
+                        enterPip = enterPip,
+                        enterVideoMiniMode = enterVideoMiniMode,
+                        saveableStateHolder = saveableStateHolder,
+                        entryDecorator = entryDecorator,
+                        onNowPlayingClick = onNowPlayingClick,
+                        onAmbientClick = onAmbientClick,
+                        isVideoMiniMode = isVideoMiniMode,
+                        videoMiniPlayerState = videoMiniPlayerState,
+                        videoMiniTitle = videoMiniTitle,
+                        videoMiniSubtitle = videoMiniSubtitle,
+                        videoMiniIsPlaying = videoMiniIsPlaying,
+                        videoMiniItemId = videoMiniItemId,
+                    )
                 }
                 }
                 androidx.compose.material3.SnackbarHost(
@@ -916,6 +641,414 @@ private fun MainContent(
                 )
             }
             }
+        }
+    }
+}
+
+/**
+ * TV form-factor layout:_TV Material3 theme + [TvNavigationDrawer] host wrapping a single
+ * [MainNavDisplay]. Extracted from [MainContent] so the per-form-factor scaffolding stays
+ * isolated and the orchestrator stays a clean when-branch picker.
+ */
+@Composable
+private fun TvContent(
+    navigationState: com.raulshma.jellyplay.core.ui.navigation.NavigationState,
+    currentTopLevel: NavKey,
+    activeTopLevelRoutes: LinkedHashMap<Route, String>,
+    navigator: Navigator,
+    onLogout: () -> Unit,
+    homeMode: HomeMode,
+    onModeChange: (HomeMode) -> Unit,
+    enterPip: () -> Unit,
+    enterVideoMiniMode: () -> Unit,
+    saveableStateHolder: androidx.compose.runtime.saveable.SaveableStateHolder,
+    entryDecorator: NavEntryDecorator<NavKey>,
+    onNowPlayingClick: () -> Unit,
+    onAmbientClick: () -> Unit,
+    tvDrawerState: androidx.tv.material3.DrawerState,
+    tvDrawerListState: androidx.compose.foundation.lazy.LazyListState,
+) {
+    TvMaterial3Theme(
+        colorScheme = tvDarkColorScheme(
+            background = MaterialTheme.colorScheme.background,
+            surface = MaterialTheme.colorScheme.surfaceContainer,
+            onBackground = MaterialTheme.colorScheme.onSurface,
+            onSurface = MaterialTheme.colorScheme.onSurface,
+            primary = MaterialTheme.colorScheme.primary,
+            onPrimary = MaterialTheme.colorScheme.onPrimary,
+            secondary = MaterialTheme.colorScheme.secondary,
+            onSecondary = MaterialTheme.colorScheme.onSecondary,
+            border = MaterialTheme.colorScheme.outline,
+            borderVariant = MaterialTheme.colorScheme.outlineVariant,
+        )
+    ) {
+        TvScaffold {
+            val tvCurrentRoute = navigationState.backStacks[currentTopLevel]?.lastOrNull()
+            val tvIsSubPage = tvCurrentRoute != null && tvCurrentRoute !in activeTopLevelRoutes.keys
+
+            val primaryNavItems = activeTopLevelRoutes.entries.map { (route, label) ->
+                TvNavItem(
+                    route = route,
+                    label = label,
+                    icon = routeToIcon(route),
+                )
+            }
+            TvNavigationDrawer(
+                primaryItems = primaryNavItems,
+                currentTopLevel = currentTopLevel,
+                isSubPage = tvIsSubPage,
+                onNavigate = { navigator.navigate(it) },
+                onBack = { navigator.goBack() },
+                drawerState = tvDrawerState,
+                drawerListState = tvDrawerListState,
+                currentRoute = tvCurrentRoute,
+            ) {
+                MainNavDisplay(
+                    navigationState = navigationState,
+                    navigator = navigator,
+                    onLogout = onLogout,
+                    homeMode = homeMode,
+                    onModeChange = onModeChange,
+                    enterPip = enterPip,
+                    enterVideoMiniMode = enterVideoMiniMode,
+                    saveableStateHolder = saveableStateHolder,
+                    entryDecorator = entryDecorator,
+                    onNowPlayingClick = onNowPlayingClick,
+                    onAmbientClick = onAmbientClick,
+                )
+            }
+        }
+    }
+}
+
+/**
+ * Phone (and large-screen NavigationRail) layout: hamburger [ModalNavigationDrawer] +
+ * [NavigationSuiteScaffold] hosting [MainNavDisplay] with floating mini-player(s) and the
+ * optional [FloatingNavigationBar]. All scroll-coupled bottom-nav state is owned here.
+ */
+@Composable
+private fun PhoneContent(
+    navigationState: com.raulshma.jellyplay.core.ui.navigation.NavigationState,
+    currentTopLevel: NavKey,
+    activeTopLevelRoutes: LinkedHashMap<Route, String>,
+    navigator: Navigator,
+    onLogout: () -> Unit,
+    homeMode: HomeMode,
+    onModeChange: (HomeMode) -> Unit,
+    enterPip: () -> Unit,
+    enterVideoMiniMode: () -> Unit,
+    saveableStateHolder: androidx.compose.runtime.saveable.SaveableStateHolder,
+    entryDecorator: NavEntryDecorator<NavKey>,
+    onNowPlayingClick: () -> Unit,
+    onAmbientClick: () -> Unit,
+    drawerState: androidx.compose.material3.DrawerState,
+    drawerScope: kotlinx.coroutines.CoroutineScope,
+    isAudioPlayerScreen: Boolean,
+    isSynthwave: Boolean,
+    isExpanded: Boolean,
+    isBottomNavVisibleState: androidx.compose.runtime.MutableState<Boolean>,
+    bottomNavOffsetHeightPx: androidx.compose.runtime.MutableFloatState,
+    showMiniPlayer: Boolean,
+    audioPlaybackManager: AudioPlaybackManager,
+    isAudioPlaying: Boolean,
+    audioItemId: String?,
+    audioTitle: String,
+    audioArtist: String,
+    audioArtworkUrl: String,
+    onDismissMiniPlayer: () -> Unit,
+    isVideoMiniMode: Boolean,
+    videoMiniPlayerState: com.raulshma.jellyplay.feature.player.video.VideoMiniPlayerState,
+    videoMiniTitle: String,
+    videoMiniSubtitle: String,
+    videoMiniIsPlaying: Boolean,
+    videoMiniItemId: String?,
+    animatedNavBarColor: Color,
+    showNavBarLabels: Boolean,
+) {
+    val systemNavBarBottom = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()
+    var isBottomNavVisible by isBottomNavVisibleState
+
+    ModalNavigationDrawer(
+        drawerState = drawerState,
+        drawerContent = {
+            ModalDrawerSheet(
+                drawerShape = RoundedCornerShape(topEnd = 28.dp, bottomEnd = 28.dp),
+                drawerContainerColor = MaterialTheme.colorScheme.surfaceContainer,
+            ) {
+                Column(
+                    modifier = Modifier
+                        .fillMaxHeight()
+                        .padding(vertical = 48.dp),
+                ) {
+                    Text(
+                        "JellyPlay",
+                        style = MaterialTheme.typography.headlineSmall,
+                        fontWeight = FontWeight.Bold,
+                        color = MaterialTheme.colorScheme.primary,
+                        modifier = Modifier.padding(horizontal = 28.dp, vertical = 16.dp),
+                    )
+                    Spacer(Modifier.height(8.dp))
+                    DrawerItem(
+                        icon = Tabler.Outline.Inbox,
+                        label = "Requests",
+                        onClick = {
+                            navigator.navigate(Route.Requests)
+                            drawerScope.launch { drawerState.close() }
+                        },
+                    )
+                    DrawerItem(
+                        icon = Tabler.Outline.Settings,
+                        label = "Settings",
+                        onClick = {
+                            navigator.navigate(Route.Settings)
+                            drawerScope.launch { drawerState.close() }
+                        },
+                    )
+                    DrawerItem(
+                        icon = Tabler.Outline.InfoCircle,
+                        label = "About",
+                        onClick = {
+                            navigator.navigate(Route.About)
+                            drawerScope.launch { drawerState.close() }
+                        },
+                    )
+                }
+            }
+        },
+    ) {
+        val nestedScrollConnection = remember {
+            object : NestedScrollConnection {
+                override fun onPreScroll(available: Offset, source: NestedScrollSource): Offset {
+                    val delta = available.y
+                    if (delta < -15f) {
+                        isBottomNavVisible = false
+                    } else if (delta > 15f) {
+                        isBottomNavVisible = true
+                    }
+                    return Offset.Zero
+                }
+            }
+        }
+
+        NavigationSuiteScaffold(
+            navigationSuiteType = if (!isExpanded) NavigationSuiteType.None else NavigationSuiteType.NavigationRail,
+            navigationItems = {
+                activeTopLevelRoutes.forEach { (route, label) ->
+                    NavigationSuiteItem(
+                        selected = route == currentTopLevel,
+                        onClick = { navigator.navigate(route) },
+                        icon = { NavIcon(route, label, selected = route == currentTopLevel) },
+                        label = { Text(label) },
+                    )
+                }
+            },
+            navigationSuiteColors = NavigationSuiteDefaults.colors(
+                navigationBarContainerColor = if (isAudioPlayerScreen) Color.Transparent else MaterialTheme.colorScheme.surface,
+                navigationRailContainerColor = animatedNavBarColor,
+            ),
+        ) {
+            val appBackgroundModifier = if (isSynthwave) {
+                Modifier.background(
+                    com.raulshma.jellyplay.core.designsystem.theme.synthwaveBackgroundBrush()
+                )
+            } else {
+                Modifier.background(MaterialTheme.colorScheme.background)
+            }
+
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .then(appBackgroundModifier)
+                    .then(if (!isExpanded) Modifier.nestedScroll(nestedScrollConnection) else Modifier)
+            ) {
+                Box(modifier = Modifier.fillMaxSize()) {
+                    MainNavDisplay(
+                        navigationState = navigationState,
+                        navigator = navigator,
+                        onLogout = onLogout,
+                        homeMode = homeMode,
+                        onModeChange = onModeChange,
+                        enterPip = enterPip,
+                        enterVideoMiniMode = enterVideoMiniMode,
+                        saveableStateHolder = saveableStateHolder,
+                        entryDecorator = entryDecorator,
+                        onNowPlayingClick = onNowPlayingClick,
+                        onAmbientClick = onAmbientClick,
+                    )
+                }
+                if (showMiniPlayer && isExpanded) {
+                    Box(
+                        modifier = Modifier
+                            .align(Alignment.BottomCenter)
+                            .padding(bottom = systemNavBarBottom + 2.dp)
+                    ) {
+                        MiniPlayer(
+                            isVisible = true,
+                            title = audioTitle,
+                            artist = audioArtist,
+                            artworkUri = audioArtworkUrl,
+                            isPlaying = isAudioPlaying,
+                            onClick = onNowPlayingClick,
+                            onClose = {
+                                audioPlaybackManager.stopAndRelease()
+                                onDismissMiniPlayer()
+                            },
+                            onPlayPause = {
+                                audioPlaybackManager.togglePlayPause()
+                            },
+                            onSkipNext = {
+                                audioPlaybackManager.skipToNext()
+                            },
+                        )
+                    }
+                }
+                if (!isExpanded && showMiniPlayer) {
+                    Box(
+                        modifier = Modifier
+                            .align(Alignment.BottomCenter)
+                            .padding(bottom = systemNavBarBottom + 60.dp)
+                            .offset {
+                                val maxOffset = 60.dp.toPx()
+                                val yOffset = (-bottomNavOffsetHeightPx.floatValue).coerceAtMost(maxOffset)
+                                IntOffset(x = 0, y = yOffset.roundToInt())
+                            }
+                    ) {
+                        MiniPlayer(
+                            isVisible = true,
+                            title = audioTitle,
+                            artist = audioArtist,
+                            artworkUri = audioArtworkUrl,
+                            isPlaying = isAudioPlaying,
+                            onClick = onNowPlayingClick,
+                            onClose = {
+                                audioPlaybackManager.stopAndRelease()
+                                onDismissMiniPlayer()
+                            },
+                            onPlayPause = {
+                                audioPlaybackManager.togglePlayPause()
+                            },
+                            onSkipNext = {
+                                audioPlaybackManager.skipToNext()
+                            },
+                        )
+                    }
+                }
+                if (isVideoMiniMode) {
+                    VideoMiniPlayer(
+                        isVisible = true,
+                        engine = videoMiniPlayerState.engine,
+                        title = videoMiniTitle,
+                        subtitle = videoMiniSubtitle,
+                        isPlaying = videoMiniIsPlaying,
+                        onClick = {
+                            val itemId = videoMiniItemId ?: return@VideoMiniPlayer
+                            navigator.navigate(Route.VideoPlayer(itemId))
+                        },
+                        onClose = {
+                            videoMiniPlayerState.release()
+                        },
+                        onPlayPause = {
+                            videoMiniPlayerState.togglePlayPause()
+                        },
+                        modifier = Modifier
+                            .align(Alignment.BottomEnd)
+                            .padding(end = 8.dp, bottom = systemNavBarBottom + (if (!isExpanded) 64.dp else 8.dp))
+                            .fillMaxWidth(0.45f)
+                            .offset {
+                                if (!isExpanded) {
+                                    val maxOffset = com.raulshma.jellyplay.core.designsystem.theme.Dimensions.floatingNavHeight.toPx()
+                                    val yOffset = (-bottomNavOffsetHeightPx.floatValue).coerceAtMost(maxOffset)
+                                    IntOffset(x = 0, y = yOffset.roundToInt())
+                                } else {
+                                    IntOffset.Zero
+                                }
+                            },
+                    )
+                }
+                if (!isExpanded) {
+                    FloatingNavigationBar(
+                        routes = activeTopLevelRoutes,
+                        currentTopLevel = currentTopLevel,
+                        onNavigate = { navigator.navigate(it) },
+                        showLabels = showNavBarLabels,
+                        containerColor = animatedNavBarColor,
+                        modifier = Modifier
+                            .align(Alignment.BottomCenter)
+                            .padding(bottom = systemNavBarBottom + 4.dp)
+                            .padding(horizontal = 16.dp)
+                            .offset { IntOffset(x = 0, y = -bottomNavOffsetHeightPx.floatValue.roundToInt()) }
+                    )
+                }
+            }
+        }
+    }
+}
+
+/**
+ * Full-screen layout (player / onboarding / ambient / photo viewer): bare [Box] with
+ * [MainNavDisplay] and an optional picture-in-picture [VideoMiniPlayer]. Deliberately
+ * omits drawer / nav-bar / mini-player chrome.
+ */
+@Composable
+private fun FullScreenContent(
+    navigationState: com.raulshma.jellyplay.core.ui.navigation.NavigationState,
+    navigator: Navigator,
+    onLogout: () -> Unit,
+    homeMode: HomeMode,
+    onModeChange: (HomeMode) -> Unit,
+    enterPip: () -> Unit,
+    enterVideoMiniMode: () -> Unit,
+    saveableStateHolder: androidx.compose.runtime.saveable.SaveableStateHolder,
+    entryDecorator: NavEntryDecorator<NavKey>,
+    onNowPlayingClick: () -> Unit,
+    onAmbientClick: () -> Unit,
+    isVideoMiniMode: Boolean,
+    videoMiniPlayerState: com.raulshma.jellyplay.feature.player.video.VideoMiniPlayerState,
+    videoMiniTitle: String,
+    videoMiniSubtitle: String,
+    videoMiniIsPlaying: Boolean,
+    videoMiniItemId: String?,
+) {
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(MaterialTheme.colorScheme.background)
+    ) {
+        MainNavDisplay(
+            navigationState = navigationState,
+            navigator = navigator,
+            onLogout = onLogout,
+            homeMode = homeMode,
+            onModeChange = onModeChange,
+            enterPip = enterPip,
+            enterVideoMiniMode = enterVideoMiniMode,
+            saveableStateHolder = saveableStateHolder,
+            entryDecorator = entryDecorator,
+            onNowPlayingClick = onNowPlayingClick,
+            onAmbientClick = onAmbientClick,
+        )
+        if (isVideoMiniMode) {
+            VideoMiniPlayer(
+                isVisible = true,
+                engine = videoMiniPlayerState.engine,
+                title = videoMiniTitle,
+                subtitle = videoMiniSubtitle,
+                isPlaying = videoMiniIsPlaying,
+                onClick = {
+                    val itemId = videoMiniItemId ?: return@VideoMiniPlayer
+                    navigator.navigate(Route.VideoPlayer(itemId))
+                },
+                onClose = {
+                    videoMiniPlayerState.release()
+                },
+                onPlayPause = {
+                    videoMiniPlayerState.togglePlayPause()
+                },
+                modifier = Modifier
+                    .align(Alignment.BottomEnd)
+                    .padding(end = 8.dp, bottom = 8.dp)
+                    .fillMaxWidth(0.5f),
+            )
         }
     }
 }
@@ -955,14 +1088,13 @@ private fun MainNavDisplay(
     enterPip: () -> Unit,
     enterVideoMiniMode: () -> Unit = {},
     innerPadding: PaddingValues = PaddingValues(0.dp),
+    saveableStateHolder: androidx.compose.runtime.saveable.SaveableStateHolder,
+    entryDecorator: NavEntryDecorator<NavKey>,
     modifier: Modifier = Modifier,
     onNowPlayingClick: () -> Unit = {},
     onAmbientClick: () -> Unit = {},
 ) {
     val currentBackStack = navigationState.backStacks[navigationState.topLevelRoute.value] ?: return
-
-    val saveableStateHolder = rememberSaveableStateHolder()
-    val entryDecorator = rememberSaveableStateHolderNavEntryDecorator<NavKey>(saveableStateHolder)
 
     val paddingDecorator = remember(innerPadding) {
         NavEntryDecorator<NavKey>(
@@ -1003,24 +1135,8 @@ private fun MainNavDisplay(
                     val initialLast = initialState
                     val targetRoute = targetLast.entries.lastOrNull()?.contentKey as? Route
                     val initialRoute = initialLast.entries.lastOrNull()?.contentKey as? Route
-                    val isModalRoute = targetRoute == Route.Settings ||
-                            targetRoute == Route.Downloads ||
-                            targetRoute == Route.SyncPlay ||
-                            targetRoute == Route.SeerrSettings ||
-                            targetRoute == Route.AdminDashboard ||
-                            targetRoute == Route.ScheduledTasks ||
-                            targetRoute == Route.Devices ||
-                            targetRoute == Route.Logs ||
-                            targetRoute == Route.Requests
-                    val isModalPop = initialRoute == Route.Settings ||
-                            initialRoute == Route.Downloads ||
-                            initialRoute == Route.SyncPlay ||
-                            initialRoute == Route.SeerrSettings ||
-                            initialRoute == Route.AdminDashboard ||
-                            initialRoute == Route.ScheduledTasks ||
-                            initialRoute == Route.Devices ||
-                            initialRoute == Route.Logs ||
-                            initialRoute == Route.Requests
+                    val isModalRoute = targetRoute?.isModal == true
+                    val isModalPop = initialRoute?.isModal == true
                     val isTabSwitch = targetRoute != null && initialRoute != null &&
                             ALL_TOP_LEVEL_ROUTE_KEYS.contains(targetRoute) &&
                             ALL_TOP_LEVEL_ROUTE_KEYS.contains(initialRoute)
@@ -1085,15 +1201,7 @@ private fun MainNavDisplay(
                     val targetLast = targetState
                     val initialLast = initialState
                     val initialRoute = initialLast.entries.lastOrNull()?.contentKey as? Route
-                    val isModalPop = initialRoute == Route.Settings ||
-                            initialRoute == Route.Downloads ||
-                            initialRoute == Route.SyncPlay ||
-                            initialRoute == Route.SeerrSettings ||
-                            initialRoute == Route.AdminDashboard ||
-                            initialRoute == Route.ScheduledTasks ||
-                            initialRoute == Route.Devices ||
-                            initialRoute == Route.Logs ||
-                            initialRoute == Route.Requests
+                    val isModalPop = initialRoute?.isModal == true
                     when {
                         isModalPop -> {
                             fadeIn(fastEffects) togetherWith fadeOut(

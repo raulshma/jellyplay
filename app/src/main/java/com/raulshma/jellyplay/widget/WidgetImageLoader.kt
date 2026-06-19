@@ -13,7 +13,11 @@ import coil3.request.ImageRequest
 import coil3.request.allowHardware
 import coil3.toBitmap
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.withTimeoutOrNull
 
 /**
  * Centralised Coil → Bitmap pipeline used by every widget factory.
@@ -31,19 +35,44 @@ object WidgetImageLoader {
 
     private const val WIDGET_IMAGE_TARGET = 480
 
+    // Cap any single poster load so a slow Jellyfin server can't pin the
+    // widget's binder thread indefinitely. Returning `null` makes the factory
+    // fall back to its placeholder drawable — preferable to a frozen cell.
+    private const val WIDGET_LOAD_TIMEOUT_MS = 2_000L
+
     suspend fun loadPoster(context: Context, url: String?, cornerRadiusDp: Float = 10f): Bitmap? {
         if (url.isNullOrBlank()) return null
-        return withContext(Dispatchers.IO) {
-            runCatching {
-                val request = ImageRequest.Builder(context)
-                    .data(url)
-                    .size(WIDGET_IMAGE_TARGET, WIDGET_IMAGE_TARGET)
-                    .allowHardware(false)
-                    .build()
-                val image = context.imageLoader.execute(request).image
-                image?.toBitmap()?.let { applyRoundedCorners(context, it, cornerRadiusDp) }
-            }.getOrNull()
+        return withTimeoutOrNull(WIDGET_LOAD_TIMEOUT_MS) {
+            withContext(Dispatchers.IO) {
+                runCatching {
+                    val request = ImageRequest.Builder(context)
+                        .data(url)
+                        .size(WIDGET_IMAGE_TARGET, WIDGET_IMAGE_TARGET)
+                        .allowHardware(false)
+                        .build()
+                    val image = context.imageLoader.execute(request).image
+                    image?.toBitmap()?.let { applyRoundedCorners(context, it, cornerRadiusDp) }
+                }.getOrNull()
+            }
         }
+    }
+
+    /**
+     * Pre-fetches every poster concurrently so `RemoteViewsFactory.getViewAt`
+     * can read from the resulting cache instead of doing per-cell network I/O
+     * on the binder thread. A single slow URL won't blow the budget — each
+     * individual load is bounded by [WIDGET_LOAD_TIMEOUT_MS] via [loadPoster].
+     */
+    suspend fun preloadPosters(
+        context: Context,
+        urls: Collection<String>,
+        cornerRadiusDp: Float = 10f,
+    ): Map<String, Bitmap?> = coroutineScope {
+        urls.filter { it.isNotBlank() }
+            .distinct()
+            .map { url -> async { url to loadPoster(context, url, cornerRadiusDp) } }
+            .awaitAll()
+            .toMap()
     }
 
     private fun applyRoundedCorners(context: Context, bitmap: Bitmap, cornerRadiusDp: Float = 10f): Bitmap {

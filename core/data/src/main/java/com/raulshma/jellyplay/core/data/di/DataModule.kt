@@ -21,8 +21,10 @@ import com.raulshma.jellyplay.core.data.repository.WatchHistoryRepositoryImpl
 import com.raulshma.jellyplay.core.data.util.ImageUrlProvider
 import com.raulshma.jellyplay.core.data.util.ImageUrlProviderImpl
 import com.raulshma.jellyplay.core.data.util.DownloadDelegate
+import com.raulshma.jellyplay.core.data.network.OkHttpConfigProviderImpl
 import com.raulshma.jellyplay.core.data.worker.TvWatchNextScheduler
 import com.raulshma.jellyplay.core.data.worker.TvWatchNextSchedulerImpl
+import com.raulshma.jellyplay.core.network.config.OkHttpConfigProvider
 import dagger.Binds
 import dagger.Module
 import dagger.hilt.InstallIn
@@ -93,4 +95,8 @@ abstract class DataModule {
     @Binds
     @Singleton
     abstract fun bindTvWatchNextScheduler(impl: TvWatchNextSchedulerImpl): TvWatchNextScheduler
+
+    @Binds
+    @Singleton
+    abstract fun bindOkHttpConfigProvider(impl: OkHttpConfigProviderImpl): OkHttpConfigProvider
 }

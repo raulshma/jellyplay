@@ -2,9 +2,6 @@ package com.raulshma.jellyplay.feature.details
 
 import android.content.Context
 import androidx.compose.runtime.Immutable
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.setValue
-import androidx.compose.runtime.snapshots.Snapshot
 import com.raulshma.jellyplay.core.data.offline.OfflineModeManager
 import com.raulshma.jellyplay.core.data.repository.DownloadRepository
 import com.raulshma.jellyplay.core.data.repository.MediaRepository
@@ -37,9 +34,12 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.stateIn
-import kotlinx.coroutines.withContext
+import kotlinx.coroutines.flow.update
 import javax.inject.Inject
 
 @OptIn(ExperimentalCoroutinesApi::class)
@@ -60,114 +60,136 @@ class DetailViewModel @Inject constructor(
     val preferences: StateFlow<UserPreferences> = preferencesStore.preferences
         .stateIn(scope, SharingStarted.WhileSubscribed(5_000), UserPreferences())
 
-    private val _detail = composeState<MediaDetail?>(null)
-    val detail: androidx.compose.runtime.State<MediaDetail?> get() = _detail.asState()
-
-    private val _seerrRecommendations = stateFlow<List<SeerrSearchItem>>(emptyList())
-    val seerrRecommendations: StateFlow<List<SeerrSearchItem>> = _seerrRecommendations.flow
-
-    private val _seerrSimilar = stateFlow<List<SeerrSearchItem>>(emptyList())
-    val seerrSimilar: StateFlow<List<SeerrSearchItem>> = _seerrSimilar.flow
-
-    private val _relatedVideos = stateFlow<List<SeerrRelatedVideo>>(emptyList())
-    val relatedVideos: StateFlow<List<SeerrRelatedVideo>> = _relatedVideos.flow
-
-    val isSeerrConnected: StateFlow<Boolean> = seerrRepository.isConnected()
-        .stateIn(scope, SharingStarted.WhileSubscribed(5_000), false)
-
-    val isSeerrRecommendationsEnabled: StateFlow<Boolean> = seerrRepository.isRecommendationsEnabled()
-        .stateIn(scope, SharingStarted.WhileSubscribed(5_000), false)
+    // Single source of truth for detail-screen state. All mutations
+    // funnel through [_uiState.update]; the [uiState] aggregator additionally
+    // folds in [SeerrRequestStateHolder] state via combine() so observers see a
+    // single atomic snapshot.
+    private val _uiState = MutableStateFlow(DetailUiState())
 
     private val seerrRequestState = com.raulshma.jellyplay.core.data.seerr.SeerrRequestStateHolder(scope, seerrRequestDelegate)
+
+    val uiState: StateFlow<DetailUiState> = combine(
+        _uiState,
+        seerrRequestState.requestResult,
+        seerrRequestState.radarrServers,
+        seerrRequestState.sonarrServers,
+        seerrRequestState.isLoadingServices,
+    ) { primary, requestResult, radarrServers, sonarrServers, isLoadingServices ->
+        primary.copy(
+            seerrRequestResult = requestResult,
+            seerrRadarrServers = radarrServers,
+            seerrSonarrServers = sonarrServers,
+            isLoadingSeerrServices = isLoadingServices,
+        )
+    }.let { intermediate ->
+        combine(
+            intermediate,
+            seerrRequestState.tvSeasons,
+            seerrRepository.isConnected(),
+            seerrRepository.isRecommendationsEnabled(),
+        ) { partial, tvSeasons, isSeerrConnected, isSeerrRecommendationsEnabled ->
+            partial.copy(
+                seerrTvSeasons = tvSeasons,
+                isSeerrConnected = isSeerrConnected,
+                isSeerrRecommendationsEnabled = isSeerrRecommendationsEnabled,
+            )
+        }
+    }.stateIn(scope, SharingStarted.WhileSubscribed(5_000), DetailUiState())
+
+    // ---- Backward-compatible property accessors ----
+    // Each projects a single field out of [_uiState] (or [uiState] for seerr
+    // delegate state) so existing call sites keep working without churn. New
+    // call sites should prefer `viewModel.uiState.collectAsStateWithLifecycle()`
+    // for atomic snapshots.
+    val detail: StateFlow<MediaDetail?> = _uiState
+        .map { it.detail }
+        .stateIn(scope, SharingStarted.WhileSubscribed(5_000), null)
+    val isLoading: StateFlow<Boolean> = _uiState
+        .map { it.isLoading }
+        .stateIn(scope, SharingStarted.WhileSubscribed(5_000), false)
+    val error: StateFlow<String?> = _uiState
+        .map { it.error }
+        .stateIn(scope, SharingStarted.WhileSubscribed(5_000), null)
+    val seerrRecommendations: StateFlow<List<SeerrSearchItem>> = _uiState
+        .map { it.seerrRecommendations }
+        .stateIn(scope, SharingStarted.WhileSubscribed(5_000), emptyList())
+    val seerrSimilar: StateFlow<List<SeerrSearchItem>> = _uiState
+        .map { it.seerrSimilar }
+        .stateIn(scope, SharingStarted.WhileSubscribed(5_000), emptyList())
+    val relatedVideos: StateFlow<List<SeerrRelatedVideo>> = _uiState
+        .map { it.relatedVideos }
+        .stateIn(scope, SharingStarted.WhileSubscribed(5_000), emptyList())
+    val isSeerrConnected: StateFlow<Boolean> = uiState
+        .map { it.isSeerrConnected }
+        .stateIn(scope, SharingStarted.WhileSubscribed(5_000), false)
+    val isSeerrRecommendationsEnabled: StateFlow<Boolean> = uiState
+        .map { it.isSeerrRecommendationsEnabled }
+        .stateIn(scope, SharingStarted.WhileSubscribed(5_000), false)
     val seerrRequestResult: StateFlow<SeerrRequestResult?> get() = seerrRequestState.requestResult
     val radarrServers: StateFlow<List<SeerrRadarrServiceDetail>> get() = seerrRequestState.radarrServers
     val sonarrServers: StateFlow<List<SeerrSonarrServiceDetail>> get() = seerrRequestState.sonarrServers
     val isLoadingSeerrServices: StateFlow<Boolean> get() = seerrRequestState.isLoadingServices
     val seerrTvSeasons: StateFlow<List<SeerrSeason>> get() = seerrRequestState.tvSeasons
 
-    private var loadJob: Job? = null
+    // Direct (non-observable) readers for property-style access at call sites
+    // that previously used `var ... by composeState(...)`. Each reads the
+    // current snapshot from [_uiState].
+    val seasons: List<MediaItem> get() = _uiState.value.seasons
+    val episodes: Map<String, List<MediaItem>> get() = _uiState.value.episodes
+    val albumTracks: List<MediaItem> get() = _uiState.value.albumTracks
+    val collectionItems: List<MediaItem> get() = _uiState.value.collectionItems
+    val fetchedSeasonIds: Set<String> get() = _uiState.value.fetchedSeasonIds
+    val isDownloading: Boolean get() = _uiState.value.isDownloading
+    val downloadError: String? get() = _uiState.value.downloadError
+    val isDownloadingSeries: Boolean get() = _uiState.value.isDownloadingSeries
+    val seriesDownloadResult: SeriesDownloadResult? get() = _uiState.value.seriesDownloadResult
+    val downloadSheetEpisodes: Map<String, List<MediaItem>> get() = _uiState.value.downloadSheetEpisodes
+    val downloadSheetLoadingSeasons: Set<String> get() = _uiState.value.downloadSheetLoadingSeasons
+    val downloadedEpisodeIds: Set<String> get() = _uiState.value.downloadedEpisodeIds
+    val smartPlayTarget: DetailUiState.SmartPlayTarget? get() = _uiState.value.smartPlayTarget
+    val selectedSubtitleIndex: Int? get() = _uiState.value.selectedSubtitleIndex
+    val selectedAudioIndex: Int? get() = _uiState.value.selectedAudioIndex
 
-    private val _isLoading = composeState(false)
-    val isLoading: androidx.compose.runtime.State<Boolean> get() = _isLoading.asState()
-    private val _error = composeState<String?>(null)
-    val error: androidx.compose.runtime.State<String?> get() = _error.asState()
-
-    var seasons by composeState<List<MediaItem>>(emptyList())
-        private set
-    var episodes by composeState<Map<String, List<MediaItem>>>(emptyMap())
-        private set
+    // Internal caches (not observable UI state).
     private val episodesMap = java.util.Collections.synchronizedMap(mutableMapOf<String, List<MediaItem>>())
-    var albumTracks by composeState<List<MediaItem>>(emptyList())
-        private set
-    var collectionItems by composeState<List<MediaItem>>(emptyList())
-        private set
-    var fetchedSeasonIds by composeState<Set<String>>(emptySet())
-        private set
-    var isDownloading by composeState(false)
-        private set
-    var downloadError by composeState<String?>(null)
-        private set
+    private val downloadSheetEpisodesMap = java.util.Collections.synchronizedMap(mutableMapOf<String, List<MediaItem>>())
+    private var downloadSheetFetchedSeasonIds: Set<String> = emptySet()
+    private var loadJob: Job? = null
+    private var currentSeriesId: String? = null
+    private var seerrDataLoaded = false
+    private var seerrDataGeneration = 0L
 
     fun clearDownloadError() {
-        downloadError = null
+        _uiState.update { it.copy(downloadError = null) }
     }
-    var isDownloadingSeries by composeState(false)
-        private set
-
-    var seriesDownloadResult by composeState<SeriesDownloadResult?>(null)
-        private set
-
-    var downloadSheetEpisodes by composeState<Map<String, List<MediaItem>>>(emptyMap())
-        private set
-    private val downloadSheetEpisodesMap = java.util.Collections.synchronizedMap(mutableMapOf<String, List<MediaItem>>())
-    var downloadSheetLoadingSeasons by composeState<Set<String>>(emptySet())
-        private set
-    private var downloadSheetFetchedSeasonIds by composeState<Set<String>>(emptySet())
-    var downloadedEpisodeIds by composeState<Set<String>>(emptySet())
-        private set
 
     fun clearSeriesDownloadResult() {
-        seriesDownloadResult = null
+        _uiState.update { it.copy(seriesDownloadResult = null) }
     }
 
-    var smartPlayTarget by composeState<SmartPlayTarget?>(null)
-        private set
-
-    var selectedSubtitleIndex by composeState<Int?>(null)
-        private set
-    var selectedAudioIndex by composeState<Int?>(null)
-        private set
-
     fun selectSubtitle(index: Int?) {
-        selectedSubtitleIndex = index
-        val itemId = _detail.value?.item?.id ?: return
+        _uiState.update { it.copy(selectedSubtitleIndex = index) }
+        val itemId = _uiState.value.detail?.item?.id ?: return
         launch {
             preferencesStore.setMediaStreamSelection(
                 itemId = itemId,
                 subtitleStreamIndex = index,
-                audioStreamIndex = selectedAudioIndex,
+                audioStreamIndex = _uiState.value.selectedAudioIndex,
             )
         }
     }
 
     fun selectAudio(index: Int?) {
-        selectedAudioIndex = index
-        val itemId = _detail.value?.item?.id ?: return
+        _uiState.update { it.copy(selectedAudioIndex = index) }
+        val itemId = _uiState.value.detail?.item?.id ?: return
         launch {
             preferencesStore.setMediaStreamSelection(
                 itemId = itemId,
                 audioStreamIndex = index,
-                subtitleStreamIndex = selectedSubtitleIndex,
+                subtitleStreamIndex = _uiState.value.selectedSubtitleIndex,
             )
         }
     }
-
-    @Immutable
-    data class SmartPlayTarget(
-        val episode: MediaItem,
-        val label: String,
-        val startPositionTicks: Long,
-    )
 
     fun getDownloadFlow(itemId: String): Flow<com.raulshma.jellyplay.core.model.DownloadItem?> =
         downloadRepository.getDownloadByMediaItemIdFlow(itemId)
@@ -175,58 +197,68 @@ class DetailViewModel @Inject constructor(
     fun loadItem(itemId: String) {
         loadJob?.cancel()
         loadJob = launch {
-            Snapshot.withMutableSnapshot {
-                _detail.value = null
-                _isLoading.value = true
-                _error.value = null
-                seasons = emptyList()
-                episodes = emptyMap()
-                episodesMap.clear()
-                fetchedSeasonIds = emptySet()
-                collectionItems = emptyList()
-                smartPlayTarget = null
-                selectedSubtitleIndex = null
-                selectedAudioIndex = null
-                seerrDataLoaded = false
-                _seerrRecommendations.set(emptyList())
-                _seerrSimilar.set(emptyList())
-                _relatedVideos.set(emptyList())
-                isDownloading = false
-                isDownloadingSeries = false
-                downloadError = null
-                seriesDownloadResult = null
+            // Single atomic reset — collapses what used to be ~14 separate
+            // composeState/stateFlow mutations into one emission so observers
+            // see one recomposition, not fourteen.
+            _uiState.update {
+                it.copy(
+                    detail = null,
+                    isLoading = true,
+                    error = null,
+                    seasons = emptyList(),
+                    episodes = emptyMap(),
+                    fetchedSeasonIds = emptySet(),
+                    collectionItems = emptyList(),
+                    smartPlayTarget = null,
+                    selectedSubtitleIndex = null,
+                    selectedAudioIndex = null,
+                    seerrRecommendations = emptyList(),
+                    seerrSimilar = emptyList(),
+                    relatedVideos = emptyList(),
+                    isDownloading = false,
+                    isDownloadingSeries = false,
+                    downloadError = null,
+                    seriesDownloadResult = null,
+                )
             }
+            episodesMap.clear()
+            seerrDataLoaded = false
             mediaRepository.getMediaDetail(itemId)
                 .onSuccess { detail ->
-                    _detail.value = detail
                     val storedSelection = preferences.value.mediaStreamSelections[itemId]
-                    selectedSubtitleIndex = storedSelection?.subtitleStreamIndex
-                    selectedAudioIndex = storedSelection?.audioStreamIndex
-                    if (detail.item.mediaType == MediaType.SERIES) {
+                    _uiState.update {
+                        it.copy(
+                            detail = detail,
+                            selectedSubtitleIndex = storedSelection?.subtitleStreamIndex,
+                            selectedAudioIndex = storedSelection?.audioStreamIndex,
+                        )
+                    }
+                    val itemType = detail.item.mediaType
+                    if (itemType == MediaType.SERIES) {
                         loadSeasons(itemId)
-                    } else if (detail.item.mediaType == MediaType.EPISODE && detail.item.seriesId != null) {
+                    } else if (itemType == MediaType.EPISODE && detail.item.seriesId != null) {
                         loadSeasons(detail.item.seriesId!!)
-                    } else if (detail.item.mediaType == MediaType.ALBUM) {
+                    } else if (itemType == MediaType.ALBUM) {
                         loadAlbumTracks(itemId)
-                    } else if (detail.item.mediaType == MediaType.COLLECTION) {
+                    } else if (itemType == MediaType.COLLECTION) {
                         loadCollectionItems(itemId)
                     } else {
-                        smartPlayTarget = null
+                        _uiState.update { state -> state.copy(smartPlayTarget = null) }
                     }
                 }
-                .onFailure { _error.value = it.message ?: "Failed to load details" }
-            _isLoading.value = false
+                .onFailure { err ->
+                    _uiState.update { it.copy(error = err.message ?: "Failed to load details") }
+                }
+            _uiState.update { it.copy(isLoading = false) }
         }
     }
-
-    private var currentSeriesId: String? = null
 
     private fun loadSeasons(seriesId: String) {
         currentSeriesId = seriesId
         launch {
             mediaRepository.getSeasons(seriesId)
                 .onSuccess { seasonList ->
-                    seasons = seasonList
+                    _uiState.update { it.copy(seasons = seasonList) }
                     if (seasonList.isNotEmpty()) {
                         loadEpisodes(seriesId, seasonList.first().id)
                     }
@@ -235,7 +267,7 @@ class DetailViewModel @Inject constructor(
     }
 
     fun loadEpisodesForSeason(seriesId: String, seasonId: String) {
-        if (fetchedSeasonIds.contains(seasonId)) return
+        if (_uiState.value.fetchedSeasonIds.contains(seasonId)) return
         loadEpisodes(seriesId, seasonId)
     }
 
@@ -244,9 +276,10 @@ class DetailViewModel @Inject constructor(
             mediaRepository.getEpisodes(seriesId, seasonId)
                 .onSuccess { episodeList ->
                     episodesMap[seasonId] = episodeList
-                    episodes = episodesMap.toMap()
+                    _uiState.update { it.copy(episodes = episodesMap.toMap()) }
 
                     if (episodeList.isEmpty()) {
+                        val seasons = _uiState.value.seasons
                         val seasonIndex = seasons.indexOfFirst { it.id == seasonId }
                         if (seasonIndex >= 0 && seasonIndex < seasons.size - 1) {
                             val nextSeasonId = seasons[seasonIndex + 1].id
@@ -259,15 +292,16 @@ class DetailViewModel @Inject constructor(
                     }
                 }
                 .onFailure {
-                    if (!episodes.containsKey(seasonId)) {
+                    if (!_uiState.value.episodes.containsKey(seasonId)) {
                         episodesMap[seasonId] = emptyList()
-                        episodes = episodesMap.toMap()
+                        _uiState.update { it.copy(episodes = episodesMap.toMap()) }
                     }
 
+                    val seasons = _uiState.value.seasons
                     val seasonIndex = seasons.indexOfFirst { it.id == seasonId }
                     if (seasonIndex >= 0 && seasonIndex < seasons.size - 1) {
                         val nextSeasonId = seasons[seasonIndex + 1].id
-                        if (!fetchedSeasonIds.contains(nextSeasonId)) {
+                        if (!_uiState.value.fetchedSeasonIds.contains(nextSeasonId)) {
                             loadEpisodes(seriesId, nextSeasonId)
                         } else {
                             maybeComputeSmartPlayTarget()
@@ -276,47 +310,48 @@ class DetailViewModel @Inject constructor(
                         maybeComputeSmartPlayTarget()
                     }
                 }
-            fetchedSeasonIds = fetchedSeasonIds + seasonId
+            _uiState.update { it.copy(fetchedSeasonIds = it.fetchedSeasonIds + seasonId) }
         }
     }
 
     private fun loadAlbumTracks(albumId: String) {
         launch {
             mediaRepository.getAlbumTracks(albumId)
-                .onSuccess { albumTracks = it }
+                .onSuccess { tracks -> _uiState.update { it.copy(albumTracks = tracks) } }
         }
     }
 
     private fun loadCollectionItems(collectionId: String) {
         launch {
             mediaRepository.getCollectionItems(collectionId, limit = 100)
-                .onSuccess { result -> collectionItems = result.items }
+                .onSuccess { result -> _uiState.update { it.copy(collectionItems = result.items) } }
         }
     }
 
     fun playAlbum(startIndex: Int = 0) {
-        if (albumTracks.isEmpty()) return
-        val queueItems = albumTracks.map { track ->
+        val tracks = _uiState.value.albumTracks
+        if (tracks.isEmpty()) return
+        val queueItems = tracks.map { track ->
             track.toAudioQueueItem(
                 imageUrl = playbackRepository.getImageUrl(track.id, maxWidth = 400),
-                albumFallback = _detail.value?.item?.name,
+                albumFallback = _uiState.value.detail?.item?.name,
             )
         }
         audioPlaybackManager.playQueue(queueItems, startIndex)
     }
 
     private fun maybeComputeSmartPlayTarget() {
-        val item = _detail.value?.item ?: return
+        val item = _uiState.value.detail?.item ?: return
         when (item.mediaType) {
             MediaType.SERIES -> computeSeriesSmartPlayTarget()
             MediaType.EPISODE -> computeEpisodeSmartPlayTarget(item)
-            else -> smartPlayTarget = null
+            else -> _uiState.update { it.copy(smartPlayTarget = null) }
         }
     }
 
     private fun computeSeriesSmartPlayTarget() {
         launch(Dispatchers.Default) {
-            val allEpisodes = episodes.values.flatten()
+            val allEpisodes = _uiState.value.episodes.values.flatten()
             if (allEpisodes.isEmpty()) {
                 if (hasMoreSeasonsToLoad()) {
                     loadNextUnfetchedSeason()
@@ -329,11 +364,15 @@ class DetailViewModel @Inject constructor(
             if (resumeEpisode != null) {
                 val s = resumeEpisode.seasonNumber ?: 1
                 val e = resumeEpisode.episodeNumber ?: resumeEpisode.indexNumber ?: 1
-                smartPlayTarget = SmartPlayTarget(
-                    episode = resumeEpisode,
-                    label = "Resume S${s}:E${e}",
-                    startPositionTicks = resumeEpisode.playbackPositionTicks ?: 0,
-                )
+                _uiState.update {
+                    it.copy(
+                        smartPlayTarget = DetailUiState.SmartPlayTarget(
+                            episode = resumeEpisode,
+                            label = "Resume S${s}:E${e}",
+                            startPositionTicks = resumeEpisode.playbackPositionTicks ?: 0,
+                        )
+                    )
+                }
                 return@launch
             }
 
@@ -344,16 +383,16 @@ class DetailViewModel @Inject constructor(
                 val hasWatchedBefore = sorted
                     .takeWhile { it.id != nextEpisode.id }
                     .any { it.isPlayed || (it.playbackPositionTicks ?: 0L) > 0L }
-                val label = if (hasWatchedBefore) {
-                    "Next Up S${s}:E${e}"
-                } else {
-                    "Play S${s}:E${e}"
+                val label = if (hasWatchedBefore) "Next Up S${s}:E${e}" else "Play S${s}:E${e}"
+                _uiState.update {
+                    it.copy(
+                        smartPlayTarget = DetailUiState.SmartPlayTarget(
+                            episode = nextEpisode,
+                            label = label,
+                            startPositionTicks = 0,
+                        )
+                    )
                 }
-                smartPlayTarget = SmartPlayTarget(
-                    episode = nextEpisode,
-                    label = label,
-                    startPositionTicks = 0,
-                )
                 return@launch
             }
 
@@ -365,48 +404,59 @@ class DetailViewModel @Inject constructor(
             val first = sorted.first()
             val s = first.seasonNumber ?: 1
             val e = first.episodeNumber ?: first.indexNumber ?: 1
-            smartPlayTarget = SmartPlayTarget(
-                episode = first,
-                label = "Replay S${s}:E${e}",
-                startPositionTicks = 0,
-            )
+            _uiState.update {
+                it.copy(
+                    smartPlayTarget = DetailUiState.SmartPlayTarget(
+                        episode = first,
+                        label = "Replay S${s}:E${e}",
+                        startPositionTicks = 0,
+                    )
+                )
+            }
         }
     }
 
     private fun hasMoreSeasonsToLoad(): Boolean {
-        return seasons.any { season -> !fetchedSeasonIds.contains(season.id) }
+        val state = _uiState.value
+        return state.seasons.any { season -> !state.fetchedSeasonIds.contains(season.id) }
     }
 
     private fun loadNextUnfetchedSeason() {
         val seriesId = currentSeriesId ?: return
-        val nextSeason = seasons.firstOrNull { season -> !fetchedSeasonIds.contains(season.id) }
+        val state = _uiState.value
+        val nextSeason = state.seasons.firstOrNull { season -> !state.fetchedSeasonIds.contains(season.id) }
         if (nextSeason != null) {
             loadEpisodes(seriesId, nextSeason.id)
         } else {
-            smartPlayTarget = null
+            _uiState.update { it.copy(smartPlayTarget = null) }
         }
     }
 
     private fun computeEpisodeSmartPlayTarget(currentEpisode: MediaItem) {
         launch(Dispatchers.Default) {
-            val allEpisodes = episodes.values.flatten().sortedByPlaybackOrder()
+            val allEpisodes = _uiState.value.episodes.values.flatten().sortedByPlaybackOrder()
             if (allEpisodes.isEmpty()) {
-                smartPlayTarget = null
+                _uiState.update { it.copy(smartPlayTarget = null) }
                 return@launch
             }
             val currentIndex = allEpisodes.indexOfFirst { it.id == currentEpisode.id }
             if (currentIndex < 0) {
-                smartPlayTarget = null
+                _uiState.update { it.copy(smartPlayTarget = null) }
                 return@launch
             }
             val s = currentEpisode.seasonNumber ?: 1
             val e = currentEpisode.episodeNumber ?: currentEpisode.indexNumber ?: 1
             val hasProgress = (currentEpisode.playbackPositionTicks ?: 0) > 0 && !currentEpisode.isPlayed
-            smartPlayTarget = SmartPlayTarget(
-                episode = currentEpisode,
-                label = if (hasProgress) "Resume S${s}:E${e}" else "Play S${s}:E${e}",
-                startPositionTicks = currentEpisode.playbackPositionTicks ?: 0,
-            )
+            val label = if (hasProgress) "Resume S${s}:E${e}" else "Play S${s}:E${e}"
+            _uiState.update {
+                it.copy(
+                    smartPlayTarget = DetailUiState.SmartPlayTarget(
+                        episode = currentEpisode,
+                        label = label,
+                        startPositionTicks = currentEpisode.playbackPositionTicks ?: 0,
+                    )
+                )
+            }
         }
     }
 
@@ -423,40 +473,53 @@ class DetailViewModel @Inject constructor(
         )
 
     fun toggleFavorite() {
-        val itemId = _detail.value?.item?.id ?: return
-        val currentIsFavorite = _detail.value?.item?.isFavorite ?: return
+        val detail = _uiState.value.detail ?: return
+        val itemId = detail.item.id
+        val currentIsFavorite = detail.item.isFavorite
         launch {
             mediaRepository.toggleFavorite(itemId)
                 .onSuccess {
-                    _detail.value = _detail.value?.copy(
-                        item = _detail.value!!.item.copy(isFavorite = !currentIsFavorite)
-                    )
+                    _uiState.update { state ->
+                        state.copy(
+                            detail = state.detail?.copy(
+                                item = state.detail.item.copy(isFavorite = !currentIsFavorite)
+                            )
+                        )
+                    }
                 }
         }
     }
 
     fun markPlayed() {
-        val itemId = _detail.value?.item?.id ?: return
+        val itemId = _uiState.value.detail?.item?.id ?: return
         launch {
             mediaRepository.markPlayed(itemId)
-            _detail.value = _detail.value?.copy(
-                item = _detail.value!!.item.copy(isPlayed = true)
-            )
+            _uiState.update { state ->
+                state.copy(
+                    detail = state.detail?.copy(
+                        item = state.detail.item.copy(isPlayed = true)
+                    )
+                )
+            }
         }
     }
 
     fun markUnplayed() {
-        val itemId = _detail.value?.item?.id ?: return
+        val itemId = _uiState.value.detail?.item?.id ?: return
         launch {
             mediaRepository.markUnplayed(itemId)
-            _detail.value = _detail.value?.copy(
-                item = _detail.value!!.item.copy(isPlayed = false)
-            )
+            _uiState.update { state ->
+                state.copy(
+                    detail = state.detail?.copy(
+                        item = state.detail.item.copy(isPlayed = false)
+                    )
+                )
+            }
         }
     }
 
     fun hideFromNextUp() {
-        val item = _detail.value?.item ?: return
+        val item = _uiState.value.detail?.item ?: return
         val seriesId = item.seriesId ?: item.id
         launch {
             preferencesStore.excludeSeriesFromNextUp(seriesId)
@@ -464,24 +527,22 @@ class DetailViewModel @Inject constructor(
     }
 
     fun startDownload() {
-        val detail = _detail.value ?: run {
-            downloadError = "Media details not loaded"
+        val detail = _uiState.value.detail ?: run {
+            _uiState.update { it.copy(downloadError = "Media details not loaded") }
             return
         }
         val item = detail.item
         val source = detail.mediaSources.firstOrNull() ?: run {
-            downloadError = "No media source available for download"
+            _uiState.update { it.copy(downloadError = "No media source available for download") }
             return
         }
 
         launch {
-            isDownloading = true
-            downloadError = null
+            _uiState.update { it.copy(isDownloading = true, downloadError = null) }
             try {
                 val streamUrl = playbackRepository.getStreamUrl(item.id, source.id)
                 if (streamUrl.isBlank()) {
-                    downloadError = "Could not get stream URL"
-                    isDownloading = false
+                    _uiState.update { it.copy(downloadError = "Could not get stream URL", isDownloading = false) }
                     return@launch
                 }
                 val imageUrl = playbackRepository.getImageUrl(item.id, maxWidth = 300)
@@ -528,12 +589,12 @@ class DetailViewModel @Inject constructor(
                         }
                     }
                 }.onFailure { error ->
-                    downloadError = error.message ?: "Download failed"
+                    _uiState.update { it.copy(downloadError = error.message ?: "Download failed") }
                 }
             } catch (e: Exception) {
-                downloadError = e.message ?: "Download failed"
+                _uiState.update { it.copy(downloadError = e.message ?: "Download failed") }
             }
-            isDownloading = false
+            _uiState.update { it.copy(isDownloading = false) }
         }
     }
 
@@ -541,66 +602,74 @@ class DetailViewModel @Inject constructor(
         playbackRepository.getImageUrl(itemId, maxWidth = 400)
 
     fun downloadSeries(episodeIds: Map<String, List<String>>? = null) {
-        val detail = _detail.value ?: run {
-            seriesDownloadResult = SeriesDownloadResult(error = "Media details not loaded")
+        val detail = _uiState.value.detail ?: run {
+            _uiState.update { it.copy(seriesDownloadResult = SeriesDownloadResult(error = "Media details not loaded")) }
             return
         }
         val item = detail.item
         if (item.mediaType != MediaType.SERIES) {
-            seriesDownloadResult = SeriesDownloadResult(error = "This is not a series")
+            _uiState.update { it.copy(seriesDownloadResult = SeriesDownloadResult(error = "This is not a series")) }
             return
         }
 
         launch {
-            isDownloadingSeries = true
-            seriesDownloadResult = null
+            _uiState.update { it.copy(isDownloadingSeries = true, seriesDownloadResult = null) }
             downloadRepository.downloadSeries(item.id, episodeIds)
                 .onSuccess { downloadIds ->
-                    seriesDownloadResult = SeriesDownloadResult(
-                        queuedCount = downloadIds.size,
-                    )
+                    _uiState.update {
+                        it.copy(
+                            seriesDownloadResult = SeriesDownloadResult(queuedCount = downloadIds.size),
+                        )
+                    }
                 }
                 .onFailure { error ->
-                    seriesDownloadResult = SeriesDownloadResult(
-                        error = error.message ?: "Failed to queue downloads",
-                    )
+                    _uiState.update {
+                        it.copy(
+                            seriesDownloadResult = SeriesDownloadResult(error = error.message ?: "Failed to queue downloads"),
+                        )
+                    }
                 }
-            isDownloadingSeries = false
+            _uiState.update { it.copy(isDownloadingSeries = false) }
         }
     }
 
     fun loadDownloadSheetEpisodes(seasonId: String) {
         if (seasonId in downloadSheetFetchedSeasonIds) return
         val seriesId = currentSeriesId ?: return
-        downloadSheetLoadingSeasons = downloadSheetLoadingSeasons + seasonId
+        _uiState.update { it.copy(downloadSheetLoadingSeasons = it.downloadSheetLoadingSeasons + seasonId) }
         launch {
             mediaRepository.getEpisodes(seriesId, seasonId)
                 .onSuccess { episodeList ->
                     downloadSheetEpisodesMap[seasonId] = episodeList
-                    downloadSheetEpisodes = downloadSheetEpisodesMap.toMap()
+                    _uiState.update { it.copy(downloadSheetEpisodes = downloadSheetEpisodesMap.toMap()) }
                 }
                 .onFailure {
                     downloadSheetEpisodesMap[seasonId] = emptyList()
-                    downloadSheetEpisodes = downloadSheetEpisodesMap.toMap()
+                    _uiState.update { it.copy(downloadSheetEpisodes = downloadSheetEpisodesMap.toMap()) }
                 }
             downloadSheetFetchedSeasonIds = downloadSheetFetchedSeasonIds + seasonId
-            downloadSheetLoadingSeasons = downloadSheetLoadingSeasons - seasonId
+            _uiState.update { it.copy(downloadSheetLoadingSeasons = it.downloadSheetLoadingSeasons - seasonId) }
         }
     }
 
     fun loadDownloadedEpisodeIds() {
         val seriesId = currentSeriesId ?: return
         launch {
-            downloadedEpisodeIds = downloadRepository.getDownloadedEpisodeIdsForSeries(seriesId)
+            val ids = downloadRepository.getDownloadedEpisodeIdsForSeries(seriesId)
+            _uiState.update { it.copy(downloadedEpisodeIds = ids) }
         }
     }
 
     fun resetDownloadSheetState() {
         downloadSheetEpisodesMap.clear()
-        downloadSheetEpisodes = emptyMap()
-        downloadSheetLoadingSeasons = emptySet()
         downloadSheetFetchedSeasonIds = emptySet()
-        downloadedEpisodeIds = emptySet()
+        _uiState.update {
+            it.copy(
+                downloadSheetEpisodes = emptyMap(),
+                downloadSheetLoadingSeasons = emptySet(),
+                downloadedEpisodeIds = emptySet(),
+            )
+        }
     }
 
     fun getBackdropUrl(itemId: String): String =
@@ -613,9 +682,13 @@ class DetailViewModel @Inject constructor(
     private fun loadSeerrData(detail: MediaDetail, generation: Long) {
         launch {
             if (generation != seerrDataGeneration) return@launch
-            _seerrRecommendations.set(emptyList())
-            _seerrSimilar.set(emptyList())
-            _relatedVideos.set(emptyList())
+            _uiState.update {
+                it.copy(
+                    seerrRecommendations = emptyList(),
+                    seerrSimilar = emptyList(),
+                    relatedVideos = emptyList(),
+                )
+            }
 
             if (offlineModeManager.networkStatus.value == NetworkStatus.Local) return@launch
 
@@ -636,12 +709,14 @@ class DetailViewModel @Inject constructor(
                     seerrRepository.getTvDetails(tmdbId).map { it.relatedVideos }
                 }
                 if (generation == seerrDataGeneration) {
-                    _relatedVideos.set(videosResult.getOrElse { emptyList() })
+                    val videos = videosResult.getOrElse { emptyList() }
+                    _uiState.update { it.copy(relatedVideos = videos) }
                 }
             } else {
                 val videosResult = tmdbApiClient.getVideos(tmdbId, mediaType == MediaType.MOVIE)
                 if (generation == seerrDataGeneration) {
-                    _relatedVideos.set(videosResult.getOrElse { emptyList() })
+                    val videos = videosResult.getOrElse { emptyList() }
+                    _uiState.update { it.copy(relatedVideos = videos) }
                 }
             }
 
@@ -660,16 +735,17 @@ class DetailViewModel @Inject constructor(
                     val recs = recsDeferred.await()
                     val similar = similarDeferred.await()
                     if (generation == seerrDataGeneration) {
-                        _seerrRecommendations.set(recs.results.take(20))
-                        _seerrSimilar.set(similar.results.take(20))
+                        _uiState.update {
+                            it.copy(
+                                seerrRecommendations = recs.results.take(20),
+                                seerrSimilar = similar.results.take(20),
+                            )
+                        }
                     }
                 }
             }
         }
     }
-
-    private var seerrDataLoaded = false
-    private var seerrDataGeneration = 0L
 
     fun loadSeerrDataIfNeeded(detail: MediaDetail) {
         if (seerrDataLoaded) return

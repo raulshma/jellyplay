@@ -198,9 +198,6 @@ fun LibraryScreen(
             )
         } else {
             Column(modifier = Modifier.fillMaxSize()) {
-                // ═══════════════════════════════════════════════════════════════
-                // ── Header Section
-                // ═══════════════════════════════════════════════════════════════
                 Column(
                     modifier = Modifier
                         .fillMaxWidth()
@@ -215,7 +212,6 @@ fun LibraryScreen(
                         .statusBarsPadding()
                         .padding(top = 16.dp),
                 ) {
-                    // ── Title row ──
                     AnimatedVisibility(
                         visible = headerVisible,
                         enter = fadeIn(
@@ -251,7 +247,6 @@ fun LibraryScreen(
 
                     Spacer(Modifier.height(16.dp))
 
-                    // ── Folder chips (glass pill with spring shape morphing) ──
                     AnimatedVisibility(
                         visible = headerVisible && folders.size > 1,
                         enter = fadeIn(
@@ -286,7 +281,6 @@ fun LibraryScreen(
                         }
                     }
 
-                    // ── Active filters bar ──
                     AnimatedVisibility(
                         visible = hasActiveFilters,
                         enter = fadeIn(
@@ -382,7 +376,6 @@ fun LibraryScreen(
                         }
                     }
 
-                    // ── Item count ──
                     AnimatedVisibility(
                         visible = headerVisible && pagedItems.itemCount > 0,
                         enter = fadeIn(MaterialTheme.motionScheme.defaultEffectsSpec()),
@@ -399,9 +392,6 @@ fun LibraryScreen(
                     }
                 }
 
-                // ═══════════════════════════════════════════════════════════════
-                // ── Grid Content
-                // ═══════════════════════════════════════════════════════════════
                 Box(modifier = Modifier.fillMaxSize()) {
                     when (pagedItems.loadState.refresh) {
                         is LoadState.Loading -> {
@@ -532,7 +522,6 @@ fun LibraryScreen(
                         }
                     }
 
-                    // ── Scroll-aware Floating Toolbar ──
                     if (!isTv && pagedItems.itemCount > 0) {
                         androidx.compose.animation.AnimatedVisibility(
                             visible = toolbarExpanded,
@@ -540,7 +529,7 @@ fun LibraryScreen(
                                 .align(Alignment.BottomCenter)
                                 .padding(bottom = 64.dp + WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding())
                                 .offset {
-                                    val maxOffset = 64.dp.toPx()
+                                    val maxOffset = com.raulshma.jellyplay.core.designsystem.theme.Dimensions.floatingNavHeight.toPx()
                                     val yOffset = (-navOffsetPx).coerceAtMost(maxOffset)
                                     androidx.compose.ui.unit.IntOffset(x = 0, y = yOffset.toInt())
                                 },
@@ -623,7 +612,6 @@ fun LibraryScreen(
                         }
                     }
 
-                    // ── Append loading ──
                     if (pagedItems.loadState.append is LoadState.Loading) {
                         Box(
                             modifier = Modifier
@@ -649,7 +637,6 @@ fun LibraryScreen(
                         }
                     }
 
-                    // ── Append error ──
                     if (pagedItems.loadState.append is LoadState.Error) {
                         val appendError = pagedItems.loadState.append as LoadState.Error
                         Text(
@@ -680,11 +667,6 @@ fun LibraryScreen(
         )
     }
 }
-
-
-// ─────────────────────────────────────────────────────────────────────────────
-// ── Subcomponents
-// ─────────────────────────────────────────────────────────────────────────────
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable

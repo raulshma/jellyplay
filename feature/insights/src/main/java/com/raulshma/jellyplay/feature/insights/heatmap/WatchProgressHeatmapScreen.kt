@@ -525,21 +525,9 @@ private fun HeatmapGrid(
     val isDark = !isLightColor(MaterialTheme.colorScheme.background)
     val levelColors = remember(isDark) {
         if (isDark) {
-            arrayOf(
-                Color(0xFF161B22),
-                Color(0xFF0E4429),
-                Color(0xFF006D32),
-                Color(0xFF26A641),
-                Color(0xFF39D353),
-            )
+            com.raulshma.jellyplay.core.designsystem.theme.HeatmapPalette.dark
         } else {
-            arrayOf(
-                Color(0xFFEBEDF0),
-                Color(0xFF9BE9A8),
-                Color(0xFF40C463),
-                Color(0xFF30A14E),
-                Color(0xFF216E39),
-            )
+            com.raulshma.jellyplay.core.designsystem.theme.HeatmapPalette.light
         }
     }
 

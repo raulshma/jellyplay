@@ -24,6 +24,40 @@ object ThemeVariantColors {
     val SOOTHING_LIGHT_TINT = Color(0xFFFFFFFF).copy(alpha = 0.88f)
 }
 
+/**
+ * The vertical gradient used as the synthwave app/detail background. Exposed
+ * here so every caller (JellyPlayApp, MediaDetailScreen, SeerrDetailScreen,
+ * ...) paints the same gradient without re-typing the hex tokens. Callers
+ * should gate this on `ThemeVariant.SYNTHWAVE` and fall back to the M3
+ * background colour otherwise.
+ */
+fun synthwaveBackgroundBrush(): Brush = Brush.verticalGradient(
+    colors = listOf(ThemeVariantColors.SYNTHWAVE_BACKGROUND, ThemeVariantColors.SYNTHWAVE_BACKGROUND_END),
+)
+
+/**
+ * GitHub-style five-step activity palette for the watch-progress heatmap.
+ * Index 0 is the empty/lowest cell; index 4 is the most-active cell. The dark
+ * and light variants mirror GitHub's own dark/light heatmap colours so the
+ * heatmap stays legible in either theme.
+ */
+object HeatmapPalette {
+    val dark: Array<Color> = arrayOf(
+        Color(0xFF161B22),
+        Color(0xFF0E4429),
+        Color(0xFF006D32),
+        Color(0xFF26A641),
+        Color(0xFF39D353),
+    )
+    val light: Array<Color> = arrayOf(
+        Color(0xFFEBEDF0),
+        Color(0xFF9BE9A8),
+        Color(0xFF40C463),
+        Color(0xFF30A14E),
+        Color(0xFF216E39),
+    )
+}
+
 @Composable
 fun ThemeVariant.cardBorder(
     primary: Color = Color.Unspecified,
