@@ -1,0 +1,234 @@
+package com.raulshma.jellyplay.feature.player.video
+
+import android.content.Context
+import com.raulshma.jellyplay.core.data.cast.CastManager
+import com.raulshma.jellyplay.core.data.playback.AdaptiveBitrateManager
+import com.raulshma.jellyplay.core.data.playback.PlaybackSessionManager
+import com.raulshma.jellyplay.core.data.playback.PlayerLifecycleManager
+import com.raulshma.jellyplay.core.data.playback.SleepTimerManager
+import com.raulshma.jellyplay.core.data.remote.ActivePlayerController
+import com.raulshma.jellyplay.core.data.repository.DownloadRepository
+import com.raulshma.jellyplay.core.data.repository.MediaRepository
+import com.raulshma.jellyplay.core.data.repository.OfflineRepository
+import com.raulshma.jellyplay.core.data.repository.PlaybackRepository
+import com.raulshma.jellyplay.core.data.syncplay.SyncPlayManager
+import com.raulshma.jellyplay.core.data.syncplay.SyncPlayPlaybackCore
+import com.raulshma.jellyplay.core.datastore.UserPreferencesStore
+import com.raulshma.jellyplay.core.model.EffectStrength
+import com.raulshma.jellyplay.core.model.UserPreferences
+import com.raulshma.jellyplay.feature.player.video.components.AspectRatio
+import io.mockk.every
+import io.mockk.mockk
+import io.mockk.verify
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.test.UnconfinedTestDispatcher
+import kotlinx.coroutines.test.resetMain
+import kotlinx.coroutines.test.setMain
+import okhttp3.OkHttpClient
+import org.junit.After
+import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
+import org.junit.Assert.assertTrue
+import org.junit.Before
+import org.junit.Test
+
+@OptIn(ExperimentalCoroutinesApi::class)
+class VideoPlayerViewModelTest {
+
+    private val testDispatcher = UnconfinedTestDispatcher()
+
+    private lateinit var viewModel: VideoPlayerViewModel
+
+    @Before
+    fun setUp() {
+        Dispatchers.setMain(testDispatcher)
+
+        val context = mockk<Context>(relaxed = true)
+        val mediaRepository = mockk<MediaRepository>(relaxed = true)
+        val playbackRepository = mockk<PlaybackRepository>(relaxed = true)
+        val downloadRepository = mockk<DownloadRepository>(relaxed = true)
+        val offlineRepository = mockk<OfflineRepository>(relaxed = true)
+        val preferencesStore = mockk<UserPreferencesStore>(relaxed = true)
+        val sessionManager = mockk<PlaybackSessionManager>(relaxed = true)
+        val castManager = mockk<CastManager>(relaxed = true)
+        val syncPlayManager = mockk<SyncPlayManager>(relaxed = true)
+        val okHttpClient = mockk<OkHttpClient>(relaxed = true)
+        val adaptiveBitrateManager = mockk<AdaptiveBitrateManager>(relaxed = true)
+        val activePlayerController = mockk<ActivePlayerController>(relaxed = true)
+        val playerLifecycleManager = PlayerLifecycleManager(preferencesStore)
+        val videoMiniPlayerState = mockk<VideoMiniPlayerState>(relaxed = true)
+        val sleepTimerManager = mockk<SleepTimerManager>(relaxed = true)
+
+        every { preferencesStore.preferences } returns MutableStateFlow(UserPreferences())
+        every { sleepTimerManager.remainingMs } returns MutableStateFlow(0L)
+        val playbackCore = mockk<SyncPlayPlaybackCore>(relaxed = true)
+        every { syncPlayManager.playbackCore } returns playbackCore
+
+        viewModel = VideoPlayerViewModel(
+            context = context,
+            mediaRepository = mediaRepository,
+            playbackRepository = playbackRepository,
+            downloadRepository = downloadRepository,
+            offlineRepository = offlineRepository,
+            preferencesStore = preferencesStore,
+            sessionManager = sessionManager,
+            castManager = castManager,
+            syncPlayManager = syncPlayManager,
+            okHttpClient = okHttpClient,
+            adaptiveBitrateManager = adaptiveBitrateManager,
+            activePlayerController = activePlayerController,
+            playerLifecycleManager = playerLifecycleManager,
+            videoMiniPlayerState = videoMiniPlayerState,
+            sleepTimerManager = sleepTimerManager,
+        )
+    }
+
+    @After
+    fun tearDown() {
+        Dispatchers.resetMain()
+    }
+
+    @Test
+    fun seekTo_updatesCurrentPosition() {
+        viewModel.seekTo(5_000L)
+        assertEquals(5_000L, viewModel.uiState.value.currentPosition)
+    }
+
+    @Test
+    fun seekTo_multipleCalls_keepsLatestPosition() {
+        viewModel.seekTo(1_000L)
+        viewModel.seekTo(2_000L)
+        viewModel.seekTo(3_000L)
+        assertEquals(3_000L, viewModel.uiState.value.currentPosition)
+    }
+
+    @Test
+    fun getReportPositionMs_afterRecentSeek_returnsSeekPosition() {
+        viewModel.seekTo(42_000L)
+        assertEquals(42_000L, callGetReportPositionMs())
+    }
+
+    @Test
+    fun getReportPositionMs_withNoPriorSeek_returnsZero() {
+        assertEquals(0L, callGetReportPositionMs())
+    }
+
+    @Test
+    fun setPlaybackSpeed_updatesState() {
+        viewModel.setPlaybackSpeed(1.5f)
+        assertEquals(1.5f, viewModel.uiState.value.playbackSpeed, 0.001f)
+    }
+
+    @Test
+    fun setPlaybackSpeed_zeroOrNegative_stillSetsState() {
+        viewModel.setPlaybackSpeed(0f)
+        assertEquals(0f, viewModel.uiState.value.playbackSpeed, 0.001f)
+    }
+
+    @Test
+    fun startHoldSpeed_activatesAndStoresHoldMultiplier() {
+        viewModel.setPlaybackSpeed(1.0f)
+        viewModel.startHoldSpeed()
+        assertTrue(viewModel.uiState.value.isHoldSpeedActive)
+        assertEquals(viewModel.uiState.value.holdSpeedMultiplier, viewModel.uiState.value.playbackSpeed, 0.001f)
+    }
+
+    @Test
+    fun startHoldSpeed_whenAlreadyActive_isIdempotent() {
+        viewModel.startHoldSpeed()
+        val first = viewModel.uiState.value.playbackSpeed
+        viewModel.startHoldSpeed()
+        assertTrue(viewModel.uiState.value.isHoldSpeedActive)
+        assertEquals(first, viewModel.uiState.value.playbackSpeed, 0.001f)
+    }
+
+    @Test
+    fun stopHoldSpeed_restoresPreviousSpeed() {
+        viewModel.setPlaybackSpeed(1.25f)
+        viewModel.startHoldSpeed()
+        assertTrue(viewModel.uiState.value.isHoldSpeedActive)
+
+        viewModel.stopHoldSpeed()
+        assertFalse(viewModel.uiState.value.isHoldSpeedActive)
+        assertEquals(1.25f, viewModel.uiState.value.playbackSpeed, 0.001f)
+    }
+
+    @Test
+    fun stopHoldSpeed_whenNotActive_isNoOp() {
+        viewModel.stopHoldSpeed()
+        assertFalse(viewModel.uiState.value.isHoldSpeedActive)
+    }
+
+    @Test
+    fun setAspectRatio_updatesStateExplicitRatio() {
+        viewModel.setAspectRatio(AspectRatio.RATIO_21_9)
+        assertEquals(AspectRatio.RATIO_21_9, viewModel.uiState.value.aspectRatio)
+    }
+
+    @Test
+    fun setAspectRatio_off_doesNotMutateDetected() {
+        viewModel.setAspectRatio(AspectRatio.FIT)
+        assertEquals(AspectRatio.FIT, viewModel.uiState.value.aspectRatio)
+    }
+
+    @Test
+    fun toggleDialogueBoost_flipsEnabled() {
+        val before = viewModel.uiState.value.dialogueBoostEnabled
+        viewModel.toggleDialogueBoost()
+        assertEquals(!before, viewModel.uiState.value.dialogueBoostEnabled)
+        viewModel.toggleDialogueBoost()
+        assertEquals(before, viewModel.uiState.value.dialogueBoostEnabled)
+    }
+
+    @Test
+    fun setDialogueBoostStrength_updatesState() {
+        viewModel.setDialogueBoostStrength(EffectStrength.HIGH)
+        assertEquals(EffectStrength.HIGH, viewModel.uiState.value.dialogueBoostStrength)
+    }
+
+    @Test
+    fun toggleNightMode_flipsEnabled() {
+        val before = viewModel.uiState.value.nightModeEnabled
+        viewModel.toggleNightMode()
+        assertEquals(!before, viewModel.uiState.value.nightModeEnabled)
+    }
+
+    @Test
+    fun setNightModeStrength_updatesState() {
+        viewModel.setNightModeStrength(EffectStrength.HIGH)
+        assertEquals(EffectStrength.HIGH, viewModel.uiState.value.nightModeStrength)
+    }
+
+    @Test
+    fun toggleForceDirectPlay_flipsValue() {
+        val before = viewModel.uiState.value.forceDirectPlay
+        viewModel.toggleForceDirectPlay()
+        assertEquals(!before, viewModel.uiState.value.forceDirectPlay)
+    }
+
+    @Test
+    fun toggleVideoStats_flipsEnabled() {
+        val before = viewModel.uiState.value.showVideoStats
+        viewModel.toggleVideoStats()
+        assertEquals(!before, viewModel.uiState.value.showVideoStats)
+    }
+
+    @Test
+    fun release_resetsUiState() {
+        viewModel.setPlaybackSpeed(2.0f)
+        viewModel.seekTo(9_000L)
+
+        viewModel.release()
+
+        assertTrue(viewModel.uiState.value.title.isEmpty())
+        assertEquals(1.0f, viewModel.uiState.value.playbackSpeed, 0.001f)
+    }
+
+    private fun callGetReportPositionMs(): Long {
+        val fn = VideoPlayerViewModel::class.java.getDeclaredMethod("getReportPositionMs")
+        fn.isAccessible = true
+        return fn.invoke(viewModel) as Long
+    }
+}
