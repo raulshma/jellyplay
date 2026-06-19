@@ -155,6 +155,7 @@ class DetailViewModel @Inject constructor(
     private val downloadSheetEpisodesMap = java.util.Collections.synchronizedMap(mutableMapOf<String, List<MediaItem>>())
     private var downloadSheetFetchedSeasonIds: Set<String> = emptySet()
     private var loadJob: Job? = null
+    private var currentItemId: String? = null
     private var currentSeriesId: String? = null
     private var seerrDataLoaded = false
     private var seerrDataGeneration = 0L
@@ -195,6 +196,11 @@ class DetailViewModel @Inject constructor(
         downloadRepository.getDownloadByMediaItemIdFlow(itemId)
 
     fun loadItem(itemId: String) {
+        // Record the item we're loading synchronously so that a stale
+        // loadSeerrDataIfNeeded() call (from a freshly-composed screen still
+        // observing the previous item's detail via the shared ViewModel) can be
+        // rejected before it loads the wrong item's trailers/videos.
+        currentItemId = itemId
         loadJob?.cancel()
         loadJob = launch {
             // Single atomic reset — collapses what used to be ~14 separate
@@ -223,6 +229,13 @@ class DetailViewModel @Inject constructor(
             }
             episodesMap.clear()
             seerrDataLoaded = false
+            // Bump the seerr generation so any in-flight trailer/video/recommendation
+            // fetch from the *previous* item is invalidated and cannot write its stale
+            // results onto this item's screen (the VM is shared across detail navigations).
+            seerrDataGeneration++
+            // Clear download-sheet caches too, since the same VM instance is reused.
+            downloadSheetEpisodesMap.clear()
+            downloadSheetFetchedSeasonIds = emptySet()
             mediaRepository.getMediaDetail(itemId)
                 .onSuccess { detail ->
                     val storedSelection = preferences.value.mediaStreamSelections[itemId]
@@ -748,6 +761,12 @@ class DetailViewModel @Inject constructor(
     }
 
     fun loadSeerrDataIfNeeded(detail: MediaDetail) {
+        // Reject details that don't belong to the item currently being viewed.
+        // Because the DetailViewModel is shared across detail navigations, a
+        // freshly-composed screen briefly observes the *previous* item's detail
+        // and may invoke this with a stale MediaDetail — which would load (and
+        // cache) the wrong item's trailers/videos and block the real item's load.
+        if (detail.item.id != currentItemId) return
         if (seerrDataLoaded) return
         seerrDataLoaded = true
         val generation = ++seerrDataGeneration
