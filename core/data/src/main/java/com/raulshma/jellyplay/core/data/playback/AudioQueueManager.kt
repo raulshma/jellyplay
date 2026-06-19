@@ -2,6 +2,21 @@ package com.raulshma.jellyplay.core.data.playback
 
 import kotlinx.coroutines.flow.StateFlow
 
+/**
+ * Contract for mutating the audio play queue.
+ *
+ * **Thread contract:** every method on this interface MUST be invoked from
+ * the application main thread. The implementation forwards mutations
+ * directly to the underlying [androidx.media3.exoplayer.ExoPlayer] which
+ * throws `IllegalStateException` when accessed off the application
+ * `Looper`. In DEBUG builds the implementation asserts this contract at
+ * the entry of each method so off-main callers fail loudly instead of
+ * crashing inside ExoPlayer.
+ *
+ * Background-thread callers (e.g. SyncPlay queue mutations, work-manager
+ * callbacks) must hop to `Dispatchers.Main` before invoking any method
+ * here.
+ */
 interface AudioQueueManager {
     val queue: StateFlow<List<AudioQueueItem>>
     val currentIndex: StateFlow<Int>

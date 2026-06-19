@@ -3,6 +3,7 @@ package com.raulshma.jellyplay.widget
 import android.appwidget.AppWidgetManager
 import android.content.Context
 import android.content.Intent
+import android.graphics.Bitmap
 import android.view.View
 import android.widget.RemoteViews
 import android.widget.RemoteViewsService
@@ -56,21 +57,32 @@ class LibraryRecommendationsWidgetService : RemoteViewsService() {
 
         private var items: List<LibraryWidgetItem> = emptyList()
         private var loadedVersion: Long = -1L
+        // Poster cache populated in [onDataSetChanged] so [getViewAt] never
+        // performs network I/O on the binder thread.
+        private var posterCache: Map<String, Bitmap?> = emptyMap()
 
         override fun onCreate() = Unit
 
         override fun onDataSetChanged() {
             val flow = store.libraryWidgetItems
             val version = runBlocking { store.libraryWidgetVersion.first() }
+            if (version == loadedVersion) return
             val fresh = runBlocking { flow.first() }
-            if (version != loadedVersion) {
-                items = fresh
-                loadedVersion = version
+            items = fresh
+            loadedVersion = version
+            // Pre-fetch posters concurrently so each `getViewAt` is a map lookup.
+            // `posterUrl` is nullable; blank/null entries fall through to the placeholder.
+            posterCache = if (items.isEmpty()) {
+                emptyMap()
+            } else {
+                val nonNullUrls = items.map { it.posterUrl }.filterNotNull()
+                runBlocking { WidgetImageLoader.preloadPosters(context, nonNullUrls) }
             }
         }
 
         override fun onDestroy() {
             items = emptyList()
+            posterCache = emptyMap()
         }
 
         override fun getCount(): Int = items.size
@@ -115,9 +127,7 @@ class LibraryRecommendationsWidgetService : RemoteViewsService() {
                 view.setViewVisibility(R.id.lr_item_text_container, View.VISIBLE)
             }
 
-            val bitmap = runBlocking {
-                WidgetImageLoader.loadPoster(context, item.posterUrl)
-            }
+            val bitmap = posterCache[item.posterUrl]
             if (bitmap != null) {
                 view.setImageViewBitmap(R.id.lr_item_poster, bitmap)
             } else {

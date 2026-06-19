@@ -53,6 +53,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.rememberUpdatedState
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
 import kotlinx.coroutines.flow.conflate
@@ -168,15 +169,22 @@ fun VideoPlayerScreen(
 
     val isInPipMode by viewModel.playerLifecycleManager.isInPipMode.collectAsStateWithLifecycle()
 
-    var showControls by remember { mutableStateOf(true) }
-    var controlsHasFocus by remember { mutableStateOf(false) }
-    var currentSheet by remember { mutableStateOf<PlayerSheet>(PlayerSheet.None) }
-    var isSeeking by remember { mutableStateOf(false) }
-    var isOverflowMenuOpen by remember { mutableStateOf(false) }
-    var seekPositionMs by remember { mutableLongStateOf(0L) }
+    // Ephemeral UI state. Migrated to `rememberSaveable` so a configuration
+    // change (locale switch, rotation outside the player's locked orientation)
+    // doesn't reset seek progress, the open sheet, or gesture state mid-stream.
+    // References to non-saveable types (View, Bitmap, Job, SubtitleStyle cache)
+    // remain on `remember` below — they're either re-derived or non-restorable.
+    var showControls by rememberSaveable { mutableStateOf(true) }
+    var controlsHasFocus by rememberSaveable { mutableStateOf(false) }
+    var currentSheet by rememberSaveable(stateSaver = PlayerSheetSaver) {
+        mutableStateOf(PlayerSheet.None)
+    }
+    var isSeeking by rememberSaveable { mutableStateOf(false) }
+    var isOverflowMenuOpen by rememberSaveable { mutableStateOf(false) }
+    var seekPositionMs by rememberSaveable { mutableLongStateOf(0L) }
     var playerViewRef by remember { mutableStateOf<android.view.View?>(null) }
     var lastAppliedSubtitleStyle by remember { mutableStateOf<SubtitleStyle?>(null) }
-    var videoZoom by remember { mutableFloatStateOf(1f) }
+    var videoZoom by rememberSaveable { mutableFloatStateOf(1f) }
 
     val isTv = LocalTvMode.current
 
@@ -184,22 +192,22 @@ fun VideoPlayerScreen(
     val tvSkipSegmentFocusRequester = remember { FocusRequester() }
     val tvCinemaIntroFocusRequester = remember { FocusRequester() }
     val tvNextEpisodeFocusRequester = remember { FocusRequester() }
-    var userInteractionCount by remember { mutableIntStateOf(0) }
+    var userInteractionCount by rememberSaveable { mutableIntStateOf(0) }
 
-    var brightnessOverlay by remember { mutableFloatStateOf(-1f) }
-    var volumeOverlay by remember { mutableFloatStateOf(-1f) }
-    var externalLaunched by remember { mutableStateOf(false) }
-    var gestureSeekPositionMs by remember { mutableLongStateOf(0L) }
-    var gestureStartPositionMs by remember { mutableLongStateOf(0L) }
-    var gestureDeltaMs by remember { mutableLongStateOf(0L) }
-    var isGestureSeeking by remember { mutableStateOf(false) }
-    var gestureTrickplayVisible by remember { mutableStateOf(false) }
+    var brightnessOverlay by rememberSaveable { mutableFloatStateOf(-1f) }
+    var volumeOverlay by rememberSaveable { mutableFloatStateOf(-1f) }
+    var externalLaunched by rememberSaveable { mutableStateOf(false) }
+    var gestureSeekPositionMs by rememberSaveable { mutableLongStateOf(0L) }
+    var gestureStartPositionMs by rememberSaveable { mutableLongStateOf(0L) }
+    var gestureDeltaMs by rememberSaveable { mutableLongStateOf(0L) }
+    var isGestureSeeking by rememberSaveable { mutableStateOf(false) }
+    var gestureTrickplayVisible by rememberSaveable { mutableStateOf(false) }
 
     LaunchedEffect(showControls) {
         viewModel.setControlsVisible(showControls)
     }
 
-    var volumeGestureAccumulator by remember { mutableFloatStateOf(0f) }
+    var volumeGestureAccumulator by rememberSaveable { mutableFloatStateOf(0f) }
     var overlayDismissJob by remember { mutableStateOf<kotlinx.coroutines.Job?>(null) }
 
     val isScreenLocked = uiState.isScreenLocked

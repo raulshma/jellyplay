@@ -10,6 +10,7 @@ import `is`.xyz.mpv.BaseMPVView
 import `is`.xyz.mpv.MPV
 import `is`.xyz.mpv.MPVNode
 import com.raulshma.jellyplay.core.data.playback.DialogueBoostHelper
+import com.raulshma.jellyplay.core.data.playback.EqualizerHelper
 import com.raulshma.jellyplay.core.data.playback.MediaStreamVolume
 import com.raulshma.jellyplay.core.data.playback.NightModeHelper
 import com.raulshma.jellyplay.core.model.AudioNormalizationMode
@@ -114,7 +115,13 @@ class MpvPlayerEngine(
     @Volatile private var lastLoggedSubtitleText: String? = null
     
     private var currentConfig = EngineConfig()
-    private val dialogueBoost = DialogueBoostHelper()
+    // mpv handles its own internal EQ via af filters; this helper exists
+    // solely to host the dialogue-boost overlay (see DialogueBoostHelper
+    // kdoc) on the engine's audio session. User EQ settings never flow
+    // through it — the helper stays at FLAT base levels with only the
+    // boost offsets overlaid.
+    private val equalizerHelper = EqualizerHelper()
+    private val dialogueBoost = DialogueBoostHelper(equalizerHelper)
     private val nightMode = NightModeHelper()
 
     private var wasPlayingBeforeActivityPause = false
@@ -347,6 +354,7 @@ class MpvPlayerEngine(
         _currentCues.value = emptyList()
         mainHandler.removeCallbacksAndMessages(null)
         dialogueBoost.detach()
+        equalizerHelper.detach()
         nightMode.detach()
         engineScope.cancel()
         val view = mpvView
@@ -499,6 +507,11 @@ class MpvPlayerEngine(
                 if (oldAudioFx.dialogueBoostStrength != newAudioFx.dialogueBoostStrength ||
                     oldAudioFx.dialogueBoostEnabled != newAudioFx.dialogueBoostEnabled
                 ) {
+                    // The boost overlay rides on the EqualizerHelper's
+                    // priority-0 Equalizer; attach + enable it whenever
+                    // boost is on so the overlay has somewhere to land.
+                    equalizerHelper.attach(sid)
+                    equalizerHelper.setEnabled(newAudioFx.dialogueBoostEnabled)
                     dialogueBoost.attach(sid)
                     dialogueBoost.setStrength(newAudioFx.dialogueBoostStrength)
                     dialogueBoost.setEnabled(newAudioFx.dialogueBoostEnabled)

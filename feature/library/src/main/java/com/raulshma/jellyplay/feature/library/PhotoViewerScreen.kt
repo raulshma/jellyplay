@@ -10,6 +10,7 @@ import androidx.compose.animation.slideOutVertically
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.focusable
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.interaction.MutableInteractionSource
@@ -23,6 +24,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -133,9 +135,16 @@ fun PhotoViewerScreen(
     }
 
     LaunchedEffect(saveResult) {
-        if (saveResult is SaveResult.Success) {
-            kotlinx.coroutines.delay(2000)
-            viewModel.clearSaveResult()
+        when (val result = saveResult) {
+            is SaveResult.Success -> {
+                android.widget.Toast.makeText(context, "Saved to gallery", android.widget.Toast.LENGTH_SHORT).show()
+                viewModel.clearSaveResult()
+            }
+            is SaveResult.Error -> {
+                android.widget.Toast.makeText(context, result.message, android.widget.Toast.LENGTH_LONG).show()
+                viewModel.clearSaveResult()
+            }
+            else -> {}
         }
     }
 
@@ -325,13 +334,23 @@ fun PhotoViewerScreen(
                                     }
 
                                     OverlayActionButton(
-                                        onClick = { showInfo = !showInfo },
+                                        onClick = {
+                                            showInfo = !showInfo
+                                            if (showInfo) {
+                                                viewModel.hideAdjustments()
+                                            }
+                                        },
                                     ) {
                                         Icon(Tabler.Outline.InfoCircle, contentDescription = "Info", tint = Color.White, modifier = Modifier.size(20.dp))
                                     }
 
                                     OverlayActionButton(
-                                        onClick = { viewModel.toggleAdjustments() },
+                                        onClick = {
+                                            viewModel.toggleAdjustments()
+                                            if (viewModel.showAdjustments.value) {
+                                                showInfo = false
+                                            }
+                                        },
                                     ) {
                                         Icon(Tabler.Outline.Adjustments, contentDescription = "Adjust", tint = Color.White, modifier = Modifier.size(20.dp))
                                     }
@@ -389,32 +408,20 @@ fun PhotoViewerScreen(
                             }
                         }
 
-                        if (saveResult is SaveResult.Success) {
-                            Surface(
-                                modifier = Modifier.align(Alignment.BottomStart),
-                                color = Color.Black.copy(alpha = 0.7f),
-                                shape = RoundedCornerShape(8.dp),
-                            ) {
-                                Text(
-                                    text = "Saved to gallery",
-                                    color = Color.White,
-                                    style = MaterialTheme.typography.bodySmall,
-                                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
-                                )
-                            }
-                        }
+
                     }
                 }
 
                 AnimatedVisibility(
                     visible = showInfo,
-                    enter = fadeIn(tween(300)) + slideInVertically(tween(300)) { -it / 3 },
-                    exit = fadeOut(tween(200)) + slideOutVertically(tween(200)) { -it / 3 },
+                    enter = fadeIn(tween(300)) + slideInVertically(tween(300)) { it / 3 },
+                    exit = fadeOut(tween(200)) + slideOutVertically(tween(200)) { it / 3 },
                 ) {
                     PhotoInfoOverlay(
                         photo = photo,
                         detail = photoDetail,
                         onDismiss = { showInfo = false },
+                        modifier = Modifier.align(Alignment.BottomCenter),
                     )
                 }
 
@@ -427,6 +434,7 @@ fun PhotoViewerScreen(
                         modifier = Modifier
                             .align(Alignment.BottomCenter)
                             .fillMaxWidth()
+                            .navigationBarsPadding()
                             .padding(16.dp),
                         color = Color.Black.copy(alpha = 0.8f),
                         shape = androidx.compose.foundation.shape.RoundedCornerShape(12.dp),
@@ -444,10 +452,20 @@ fun PhotoViewerScreen(
                                     color = Color.White,
                                     style = MaterialTheme.typography.titleSmall,
                                 )
-                                androidx.compose.material3.TextButton(
-                                    onClick = { viewModel.resetAdjustments() },
+                                Row(
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.spacedBy(8.dp)
                                 ) {
-                                    Text("Reset", color = MaterialTheme.colorScheme.primary)
+                                    androidx.compose.material3.TextButton(
+                                        onClick = { viewModel.resetAdjustments() },
+                                    ) {
+                                        Text("Reset", color = MaterialTheme.colorScheme.primary)
+                                    }
+                                    OverlayIconButton(
+                                        onClick = { viewModel.hideAdjustments() }
+                                    ) {
+                                        Icon(Tabler.Outline.X, contentDescription = "Close", tint = Color.White, modifier = Modifier.size(18.dp))
+                                    }
                                 }
                             }
                             Spacer(Modifier.height(12.dp))
@@ -642,10 +660,12 @@ private fun PhotoInfoOverlay(
     photo: com.raulshma.jellyplay.core.model.MediaItem?,
     detail: com.raulshma.jellyplay.core.model.MediaDetail?,
     onDismiss: () -> Unit,
+    modifier: Modifier = Modifier,
 ) {
     Surface(
-        modifier = Modifier
+        modifier = modifier
             .fillMaxWidth()
+            .navigationBarsPadding()
             .padding(16.dp),
         color = Color.Black.copy(alpha = 0.85f),
         shape = RoundedCornerShape(12.dp),
@@ -667,40 +687,52 @@ private fun PhotoInfoOverlay(
                     color = Color.White,
                     fontWeight = FontWeight.SemiBold,
                     maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.weight(1f),
                 )
+                Spacer(modifier = Modifier.width(8.dp))
                 OverlayIconButton(onClick = onDismiss) {
                     Icon(Tabler.Outline.X, contentDescription = "Close", tint = Color.White, modifier = Modifier.size(18.dp))
                 }
             }
 
             if (detail != null) {
-                InfoRow("Date", detail.dateCreated)
-                InfoRow("Tags", detail.tagItems.takeIf { it.isNotEmpty() }?.joinToString(", ") { it.name })
-                InfoRow("People", detail.people.takeIf { it.isNotEmpty() }?.joinToString(", ") { it.name })
+                val scrollState = androidx.compose.foundation.rememberScrollState()
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .heightIn(max = 220.dp)
+                        .verticalScroll(scrollState),
+                    verticalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
+                    InfoRow("Date", detail.dateCreated)
+                    InfoRow("Tags", detail.tagItems.takeIf { it.isNotEmpty() }?.joinToString(", ") { it.name })
+                    InfoRow("People", detail.people.takeIf { it.isNotEmpty() }?.joinToString(", ") { it.name })
 
-                val mediaSource = detail.mediaSources.firstOrNull()
-                if (mediaSource != null) {
-                    InfoRow("File", mediaSource.name)
-                    InfoRow("Size", mediaSource.size?.let { bytes ->
-                        when {
-                            bytes >= 1_000_000_000 -> "%.1f GB".format(bytes / 1_000_000_000.0)
-                            bytes >= 1_000_000 -> "%.1f MB".format(bytes / 1_000_000.0)
-                            else -> "%.1f KB".format(bytes / 1_000.0)
+                    val mediaSource = detail.mediaSources.firstOrNull()
+                    if (mediaSource != null) {
+                        InfoRow("File", mediaSource.name)
+                        InfoRow("Size", mediaSource.size?.let { bytes ->
+                            when {
+                                bytes >= 1_000_000_000 -> "%.1f GB".format(bytes / 1_000_000_000.0)
+                                bytes >= 1_000_000 -> "%.1f MB".format(bytes / 1_000_000.0)
+                                else -> "%.1f KB".format(bytes / 1_000.0)
+                            }
+                        })
+                        mediaSource.mediaStreams.firstOrNull { it.width != null && it.height != null }?.let { stream ->
+                            InfoRow("Resolution", "${stream.width} x ${stream.height}")
                         }
-                    })
-                    mediaSource.mediaStreams.firstOrNull { it.width != null && it.height != null }?.let { stream ->
-                        InfoRow("Resolution", "${stream.width} x ${stream.height}")
                     }
-                }
 
-                val overview = photo?.overview
-                if (overview != null) {
-                    Text(
-                        text = overview,
-                        style = MaterialTheme.typography.bodySmall,
-                        color = Color.White.copy(alpha = 0.7f),
-                        maxLines = 3,
-                    )
+                    val overview = photo?.overview
+                    if (overview != null) {
+                        Text(
+                            text = overview,
+                            style = MaterialTheme.typography.bodySmall,
+                            color = Color.White.copy(alpha = 0.7f),
+                            maxLines = 3,
+                        )
+                    }
                 }
             }
         }

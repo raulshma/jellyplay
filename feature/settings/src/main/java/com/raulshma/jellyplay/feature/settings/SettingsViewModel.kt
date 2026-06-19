@@ -4,6 +4,7 @@ import android.content.Context
 import android.net.Uri
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.snapshotFlow
 import com.raulshma.jellyplay.core.data.repository.AuthRepository
 import com.raulshma.jellyplay.core.data.repository.DownloadRepository
 import com.raulshma.jellyplay.core.data.repository.MediaRepository
@@ -50,6 +51,7 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
+import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.json.Json
 import java.io.File
@@ -111,6 +113,45 @@ class SettingsViewModel @Inject constructor(
         private set
 
     private var sessionRefreshJob: Job? = null
+
+    // Each is derived from the existing composeState fields via [snapshotFlow]
+    // so any mutation that fires inside a single Compose snapshot batch emits
+    // exactly one consolidated update. Existing per-field property accessors
+    // are preserved for backward compatibility.
+
+    val serverState: kotlinx.coroutines.flow.StateFlow<ServerState> = snapshotFlow {
+        ServerState(
+            currentUser = currentUser,
+            currentUserName = currentUserName,
+            currentServerUsers = currentServerUsers,
+            isLoadingUsers = isLoadingUsers,
+            activeSessions = activeSessions,
+            isLoadingSessions = isLoadingSessions,
+            messageSentEvent = messageSentEvent,
+        )
+    }.distinctUntilChanged().stateIn(scope, SharingStarted.WhileSubscribed(5_000), ServerState())
+
+    val libraryState: kotlinx.coroutines.flow.StateFlow<LibraryState> = snapshotFlow {
+        LibraryState(
+            libraryFolders = libraryFolders,
+            isLoadingLibraries = isLoadingLibraries,
+        )
+    }.distinctUntilChanged().stateIn(scope, SharingStarted.WhileSubscribed(5_000), LibraryState())
+
+    val pinnedBrowseState: kotlinx.coroutines.flow.StateFlow<PinnedBrowseState> = snapshotFlow {
+        PinnedBrowseState(
+            options = pinnedBrowseOptions,
+            isLoading = pinnedBrowseLoading,
+            error = pinnedBrowseError,
+        )
+    }.distinctUntilChanged().stateIn(scope, SharingStarted.WhileSubscribed(5_000), PinnedBrowseState())
+
+    val backupRestoreState: kotlinx.coroutines.flow.StateFlow<BackupRestoreState> = snapshotFlow {
+        BackupRestoreState(
+            presetImportError = presetImportError,
+            backupRestoreStatus = backupRestoreStatus,
+        )
+    }.distinctUntilChanged().stateIn(scope, SharingStarted.WhileSubscribed(5_000), BackupRestoreState())
 
     init {
         launch {
@@ -554,10 +595,8 @@ class SettingsViewModel @Inject constructor(
         setHiddenLibrarySectionIds(current)
     }
 
-    // ------------------------------------------------------------------
     // Pinned home sections (collections / playlists / favorites / genres /
     // studios pinned to the home screen).
-    // ------------------------------------------------------------------
 
     /** A browseable, pinnable option surfaced in the "Add pinned section" picker. */
     data class PinnableOption(
@@ -659,9 +698,7 @@ class SettingsViewModel @Inject constructor(
         pinnedBrowseError = null
     }
 
-    // ------------------------------------------------------------------
     // Home layout presets (save / load / import / export / reset).
-    // ------------------------------------------------------------------
 
     private val presetJson = Json { prettyPrint = true; encodeDefaults = true; ignoreUnknownKeys = true }
 

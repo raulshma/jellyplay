@@ -24,8 +24,8 @@ class AudioEffectsProcessor @Inject constructor() {
     var playerProvider: (() -> ExoPlayer?)? = null
 
     private var loudnessEnhancer: LoudnessEnhancer? = null
-    private val dialogueBoost = DialogueBoostHelper()
     private val equalizerHelper = EqualizerHelper()
+    private val dialogueBoost = DialogueBoostHelper(equalizerHelper)
     private val bassBoostHelper = BassBoostHelper()
     private val virtualizerHelper = VirtualizerHelper()
     private val reverbHelper = ReverbHelper()
@@ -170,6 +170,19 @@ class AudioEffectsProcessor @Inject constructor() {
         val player = playerProvider?.invoke() ?: return
         val audioSessionId = player.audioSessionId
         if (audioSessionId == C.AUDIO_SESSION_ID_UNSET) return
+        // Ensure the shared Equalizer exists; the boost overlay is
+        // applied on top of the user's base levels via setBandOffsets.
+        // The Equalizer must stay enabled while EITHER effect is on;
+        // when both are off, drop down to the user-facing EQ toggle so
+        // we don't hold the system effect open needlessly.
+        val eitherOn = _dialogueBoostEnabled.value || _equalizerEnabled.value
+        if (eitherOn) {
+            equalizerHelper.attach(audioSessionId)
+            equalizerHelper.setEnabled(true)
+            equalizerHelper.setSettings(_equalizerSettings.value)
+        } else {
+            equalizerHelper.setEnabled(false)
+        }
         dialogueBoost.attach(audioSessionId)
         dialogueBoost.setStrength(_dialogueBoostStrength)
         dialogueBoost.setEnabled(_dialogueBoostEnabled.value)
@@ -179,8 +192,12 @@ class AudioEffectsProcessor @Inject constructor() {
         val player = playerProvider?.invoke() ?: return
         val audioSessionId = player.audioSessionId
         if (audioSessionId == C.AUDIO_SESSION_ID_UNSET) return
+        // If DialogueBoost is also on, the Equalizer must stay enabled
+        // even when the user's EQ is off; otherwise re-derive the
+        // enabled flag from the user-facing toggle.
+        val mustStayOnForBoost = _dialogueBoostEnabled.value
         equalizerHelper.attach(audioSessionId)
-        equalizerHelper.setEnabled(_equalizerEnabled.value)
+        equalizerHelper.setEnabled(_equalizerEnabled.value || mustStayOnForBoost)
         equalizerHelper.setSettings(_equalizerSettings.value)
     }
 
@@ -252,7 +269,13 @@ class AudioEffectsProcessor @Inject constructor() {
 
     fun attachAudioEffects(audioSessionId: Int) {
         if (audioSessionId == C.AUDIO_SESSION_ID_UNSET) return
-        if (_equalizerEnabled.value) {
+        // The user-facing EQ and DialogueBoost both ride on the single
+        // underlying priority-0 `Equalizer` owned by `equalizerHelper`
+        // (see EqualizerHelper/DialogueBoostHelper kdoc). Attach and
+        // enable the helper whenever EITHER is on; DialogueBoostHelper
+        // overlays its vocal-band offsets on top of the user's base
+        // levels via setBandOffsets.
+        if (_equalizerEnabled.value || _dialogueBoostEnabled.value) {
             equalizerHelper.attach(audioSessionId)
             equalizerHelper.setEnabled(true)
             equalizerHelper.setSettings(_equalizerSettings.value)

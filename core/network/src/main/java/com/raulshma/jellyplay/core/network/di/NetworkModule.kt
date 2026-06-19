@@ -4,6 +4,7 @@ import android.content.Context
 import android.net.ConnectivityManager
 import com.raulshma.jellyplay.core.network.JellyfinApiClient
 import com.raulshma.jellyplay.core.network.JellyfinApiClientImpl
+import com.raulshma.jellyplay.core.network.config.OkHttpConfigProvider
 import com.raulshma.jellyplay.core.network.api.AdminApiClient
 import com.raulshma.jellyplay.core.network.api.AdminApiClientImpl
 import com.raulshma.jellyplay.core.network.api.AuthApiClient
@@ -132,15 +133,15 @@ abstract class NetworkModule {
         @Singleton
         fun provideOkHttpClient(
             @ApplicationContext context: Context,
-            userPreferencesStore: com.raulshma.jellyplay.core.datastore.UserPreferencesStore,
+            okHttpConfigProvider: OkHttpConfigProvider,
             bandwidthInterceptor: BandwidthInterceptor,
         ): OkHttpClient {
-            val initialPrefs = userPreferencesStore.preferences.value
+            val initialConfig = okHttpConfigProvider.config.value
             val cacheDir = File(context.cacheDir, "http_cache")
             cacheDir.mkdirs()
-            val cacheMb = initialPrefs.maxCacheSizeMb
+            val cacheMb = initialConfig.maxCacheSizeMb
             val cacheSize = if (cacheMb > 0) cacheMb * 1024L * 1024L else 50L * 1024 * 1024
-            val initialTimeout = initialPrefs.networkTimeoutPreset
+            val initialTimeout = initialConfig.networkTimeoutPreset
             
             // Custom logger that strips Jellyfin access tokens from log lines.
             // OkHttp's HttpLoggingInterceptor has redactHeader(...) but no
@@ -183,15 +184,15 @@ abstract class NetworkModule {
                 .protocols(listOf(Protocol.HTTP_2, Protocol.HTTP_1_1))
                 .retryOnConnectionFailure(true)
                 .addInterceptor { chain ->
-                    val prefs = userPreferencesStore.preferences.value
-                    val timeoutPreset = prefs.networkTimeoutPreset
+                    val currentConfig = okHttpConfigProvider.config.value
+                    val timeoutPreset = currentConfig.networkTimeoutPreset
                     
                     val newChain = chain
                         .withConnectTimeout(timeoutPreset.connectSec.toInt(), TimeUnit.SECONDS)
                         .withReadTimeout(timeoutPreset.readSec.toInt(), TimeUnit.SECONDS)
                         .withWriteTimeout(timeoutPreset.writeSec.toInt(), TimeUnit.SECONDS)
                     
-                    if (prefs.verboseNetworkLogging) {
+                    if (currentConfig.verboseNetworkLogging) {
                         loggingInterceptor.intercept(newChain)
                     } else {
                         newChain.proceed(newChain.request())

@@ -173,6 +173,10 @@ class PhotoViewerViewModel @Inject constructor(
         _showAdjustments.value = !_showAdjustments.value
     }
 
+    fun hideAdjustments() {
+        _showAdjustments.value = false
+    }
+
     fun setBrightness(value: Float) {
         _brightness.value = value.coerceIn(0f, 2f)
     }

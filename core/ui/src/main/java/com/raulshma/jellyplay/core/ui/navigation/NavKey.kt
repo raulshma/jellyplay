@@ -157,3 +157,67 @@ val TOP_LEVEL_ROUTES = VIDEO_TOP_LEVEL_ROUTES
 
 val ALL_TOP_LEVEL_ROUTE_KEYS: Set<Route> =
     VIDEO_TOP_LEVEL_ROUTES.keys.union(MUSIC_TOP_LEVEL_ROUTES.keys)
+
+/**
+ * Routes that present as a modal/bottom-sheet-style overlay rather than a
+ * push-on-the-stack navigation. Centralised here so the transition
+ * `transitionSpec` and `popTransitionSpec` lambdas do not duplicate the set;
+ * adding a new modal route is a single-line change.
+ */
+val Route.isModal: Boolean
+    get() = when (this) {
+        Route.Settings,
+        Route.Downloads,
+        Route.SyncPlay,
+        Route.SeerrSettings,
+        Route.AdminDashboard,
+        Route.ScheduledTasks,
+        Route.Devices,
+        Route.Logs,
+        Route.Requests -> true
+        else -> false
+    }
+
+/**
+ * Detail routes (MediaDetail, PersonDetail, AlbumDetail, etc.) — "drill into"
+ * navigations rather than modal or top-level tab switches.
+ */
+val Route.isDetail: Boolean
+    get() = when (this) {
+        is Route.MediaDetail,
+        is Route.MetadataEditor,
+        is Route.SeerrDetail,
+        is Route.PersonDetail,
+        is Route.MediaInfo,
+        is Route.CollectionDetail,
+        is Route.OfflineSeries,
+        is Route.ArtistDetail,
+        is Route.AlbumDetail,
+        is Route.SmartPlaylistDetail,
+        is Route.MoodPlaylistDetail,
+        is Route.PlaylistDetail,
+        is Route.GenreDetail,
+        is Route.NewsletterSectionList,
+        is Route.UserStatisticsDetail -> true
+        else -> false
+    }
+
+/** Detail-route class simple names — used by scene-key inspection where the
+ *  typed [Route] is not available (NavKey.toString() substring match). */
+val DETAIL_ROUTE_CLASS_NAMES: Set<String> = setOf(
+    "MediaDetail",
+    "MetadataEditor",
+    "SeerrDetail",
+    "PersonDetail",
+    "MediaInfo",
+    "CollectionDetail",
+    "OfflineSeries",
+    "ArtistDetail",
+    "AlbumDetail",
+    "SmartPlaylistDetail",
+    "MoodPlaylistDetail",
+    "PlaylistDetail",
+    "GenreDetail",
+    "NewsletterSectionList",
+    "UserStatisticsDetail",
+)

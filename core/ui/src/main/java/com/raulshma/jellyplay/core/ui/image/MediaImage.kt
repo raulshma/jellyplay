@@ -51,11 +51,6 @@ fun MediaImage(
             .build()
     }
 
-    val fallbackKey = remember(fallbackUrls) { fallbackUrls.joinToString("|") }
-    val allUrls = remember(url, fallbackKey) { listOf(url) + fallbackUrls }
-    var currentIndex by remember(url, fallbackKey) { mutableIntStateOf(0) }
-    var isError by remember(url, fallbackKey) { mutableStateOf(false) }
-
     Box(modifier = modifier) {
         if (!effectiveBlurHash.isNullOrEmpty()) {
             BlurHashImage(
@@ -65,48 +60,81 @@ fun MediaImage(
             )
         }
 
-        if (!isError && currentIndex < allUrls.size) {
-            val currentRequest = if (currentIndex == 0) {
-                imageRequest
-            } else {
-                remember(allUrls[currentIndex], effectiveSize, effectiveCrossfade) {
-                    ImageRequest.Builder(context)
-                        .data(allUrls[currentIndex])
-                        .crossfade(effectiveCrossfade)
-                        .size(effectiveSize)
-                        .build()
-                }
+        // The fallback chain lives in a dedicated child composable so a state
+        // change (advance to the next URL after an Error) only recomposes this
+        // subtree instead of the whole Box (including the BlurHash layer). The
+        // parent [MediaImage] is now stateless wrt the fallback index.
+        FallbackAsyncImage(
+            primaryRequest = imageRequest,
+            fallbackUrls = fallbackUrls,
+            effectiveSize = effectiveSize,
+            effectiveCrossfade = effectiveCrossfade,
+            contentDescription = contentDescription,
+            contentScale = contentScale,
+            colorFilter = colorFilter,
+            showPlaceholder = effectiveBlurHash.isNullOrEmpty(),
+        )
+    }
+}
+
+@Composable
+private fun FallbackAsyncImage(
+    primaryRequest: ImageRequest,
+    fallbackUrls: List<String>,
+    effectiveSize: CoilSize,
+    effectiveCrossfade: Boolean,
+    contentDescription: String?,
+    contentScale: ContentScale,
+    colorFilter: ColorFilter?,
+    showPlaceholder: Boolean,
+) {
+    val context = LocalContext.current
+    val fallbackKey = remember(fallbackUrls) { fallbackUrls.joinToString("|") }
+    val allUrls = remember(primaryRequest.data, fallbackKey) { listOf(primaryRequest.data.toString()) + fallbackUrls }
+    var currentIndex by remember(primaryRequest.data, fallbackKey) { mutableIntStateOf(0) }
+    var isError by remember(primaryRequest.data, fallbackKey) { mutableStateOf(false) }
+
+    if (!isError && currentIndex < allUrls.size) {
+        val currentRequest = if (currentIndex == 0) {
+            primaryRequest
+        } else {
+            remember(allUrls[currentIndex], effectiveSize, effectiveCrossfade) {
+                ImageRequest.Builder(context)
+                    .data(allUrls[currentIndex])
+                    .crossfade(effectiveCrossfade)
+                    .size(effectiveSize)
+                    .build()
             }
-            AsyncImage(
-                model = currentRequest,
-                contentDescription = contentDescription,
-                modifier = Modifier.fillMaxSize(),
-                contentScale = contentScale,
-                colorFilter = colorFilter,
-                onState = { state ->
-                    if (state is AsyncImagePainter.State.Error) {
-                        if (currentIndex < allUrls.size - 1) {
-                            currentIndex++
-                        } else {
-                            isError = true
-                        }
+        }
+        AsyncImage(
+            model = currentRequest,
+            contentDescription = contentDescription,
+            modifier = Modifier.fillMaxSize(),
+            contentScale = contentScale,
+            colorFilter = colorFilter,
+            onState = { state ->
+                if (state is AsyncImagePainter.State.Error) {
+                    if (currentIndex < allUrls.size - 1) {
+                        currentIndex++
+                    } else {
+                        isError = true
                     }
                 }
-            )
-        } else if (effectiveBlurHash.isNullOrEmpty()) {
-            Box(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .background(MaterialTheme.colorScheme.surfaceVariant),
-                contentAlignment = Alignment.Center
-            ) {
-                Icon(
-                    imageVector = Tabler.Outline.User,
-                    contentDescription = "Avatar Placeholder",
-                    modifier = Modifier.size(48.dp),
-                    tint = MaterialTheme.colorScheme.onSurfaceVariant
-                )
             }
+        )
+    } else if (showPlaceholder) {
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .background(MaterialTheme.colorScheme.surfaceVariant),
+            contentAlignment = Alignment.Center
+        ) {
+            Icon(
+                imageVector = Tabler.Outline.User,
+                contentDescription = "Avatar Placeholder",
+                modifier = Modifier.size(48.dp),
+                tint = MaterialTheme.colorScheme.onSurfaceVariant
+            )
         }
     }
 }
