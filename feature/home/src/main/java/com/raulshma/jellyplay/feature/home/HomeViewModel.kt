@@ -106,7 +106,9 @@ class HomeViewModel @Inject constructor(
     val searchHistory: StateFlow<List<SearchHistoryItem>> = _searchHistory
 
     init {
-        ProcessLifecycleOwner.get().lifecycle.addObserver(this)
+        // Guard against environments where the process LifecycleOwner isn't initialised
+        // (e.g. JVM unit tests). addObserver is best-effort and must not crash construction.
+        runCatching { ProcessLifecycleOwner.get().lifecycle.addObserver(this) }
 
         launch {
             authRepository.currentUser.collect { user ->
