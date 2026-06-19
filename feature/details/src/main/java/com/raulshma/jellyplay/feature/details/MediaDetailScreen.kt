@@ -173,6 +173,8 @@ fun MediaDetailScreen(
 
     var showSeriesDownloadSheet by remember { mutableStateOf(false) }
     var activeTrailerKey by remember { mutableStateOf<String?>(null) }
+    // Dismiss any open trailer dialog when navigating to a different item.
+    LaunchedEffect(itemId) { activeTrailerKey = null }
     val snackbarHostState = remember { SnackbarHostState() }
 
     LaunchedEffect(seriesDownloadResult) {
@@ -292,7 +294,7 @@ fun MediaDetailScreen(
                     viewModel.loadEpisodesForSeason(seriesId, seasonId)
                 }
             },
-            onLoadSeerrData = remember(viewModel) {
+            onLoadSeerrData = remember(viewModel, detail) {
                 { detail?.let { viewModel.loadSeerrDataIfNeeded(it) } }
             },
             onBack = onBack,
@@ -491,7 +493,7 @@ private fun DetailContent(
             (it.type?.lowercase() == "trailer" || it.type?.lowercase() == "teaser")
         } ?: relatedVideos.firstOrNull { it.site?.lowercase() == "youtube" }
     }
-    var autoplayEmbedFailed by remember { mutableStateOf(false) }
+    var autoplayEmbedFailed by remember(itemId) { mutableStateOf(false) }
 
     val adaptiveInfo = LocalAdaptiveInfo.current
     val isExpanded = adaptiveInfo.windowSizeClass != WindowSizeClass.Compact
