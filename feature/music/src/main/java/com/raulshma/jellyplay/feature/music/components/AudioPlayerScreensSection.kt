@@ -38,10 +38,16 @@ import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
 import com.composables.icons.tabler.Tabler
 import com.composables.icons.tabler.outline.*
 import com.raulshma.jellyplay.core.designsystem.theme.ShapeCache
 import com.raulshma.jellyplay.core.ui.tv.tvFocusRestorer
+import com.raulshma.jellyplay.core.ui.tv.rememberTvFocusState
+import com.raulshma.jellyplay.core.ui.tv.tvFocusIndicator
+import androidx.compose.foundation.focusGroup
+import androidx.compose.ui.focus.focusProperties
 
 @OptIn(ExperimentalMaterial3ExpressiveApi::class)
 @Composable
@@ -54,6 +60,9 @@ fun AudioPlayerScreensSection(
     onGenresClick: () -> Unit = {},
     onPlaylistsClick: () -> Unit = {},
     modifier: Modifier = Modifier,
+    firstFocusRequester: FocusRequester? = null,
+    rowFocusRequester: FocusRequester? = null,
+    rowModifier: Modifier = Modifier,
 ) {
     Column(modifier = modifier.fillMaxWidth()) {
         Row(
@@ -86,11 +95,16 @@ fun AudioPlayerScreensSection(
         LazyRow(
             contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 24.dp),
             horizontalArrangement = Arrangement.spacedBy(16.dp),
-            modifier = Modifier.tvFocusRestorer(),
+            modifier = Modifier
+                .then(rowFocusRequester?.let { Modifier.focusRequester(it) } ?: Modifier)
+                .then(rowModifier)
+                .focusGroup()
+                .tvFocusRestorer(),
         ) {
             item {
                 NowPlayingExpressiveCard(
                     onClick = onNowPlayingClick,
+                    focusRequester = firstFocusRequester,
                 )
             }
             item {
@@ -161,7 +175,9 @@ fun AudioPlayerScreensSection(
 private fun NowPlayingExpressiveCard(
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
+    focusRequester: FocusRequester? = null,
 ) {
+    val focusState = rememberTvFocusState()
     val interactionSource = remember { MutableInteractionSource() }
     val isPressed by interactionSource.collectIsPressedAsState()
     val scale by animateFloatAsState(
@@ -180,6 +196,9 @@ private fun NowPlayingExpressiveCard(
                 scaleX = scale
                 scaleY = scale
             }
+            .then(if (focusRequester != null) Modifier.focusRequester(focusRequester) else Modifier)
+            .then(focusState.focusModifier)
+            .tvFocusIndicator(focusState, ShapeCache.smooth24)
             .clip(ShapeCache.smooth24)
             .background(MaterialTheme.colorScheme.surfaceContainerHigh)
             .clickable(
@@ -264,6 +283,7 @@ private fun PlayerScreenCard(
     contentColor: Color,
     modifier: Modifier = Modifier,
 ) {
+    val focusState = rememberTvFocusState()
     val interactionSource = remember { MutableInteractionSource() }
     val isPressed by interactionSource.collectIsPressedAsState()
     val scale by animateFloatAsState(
@@ -282,6 +302,8 @@ private fun PlayerScreenCard(
                 scaleX = scale
                 scaleY = scale
             }
+            .then(focusState.focusModifier)
+            .tvFocusIndicator(focusState, ShapeCache.smooth24)
             .clip(ShapeCache.smooth24)
             .background(MaterialTheme.colorScheme.surfaceContainerHigh)
             .clickable(
@@ -348,6 +370,7 @@ private fun AmbientExpressiveCard(
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
+    val focusState = rememberTvFocusState()
     val interactionSource = remember { MutableInteractionSource() }
     val isPressed by interactionSource.collectIsPressedAsState()
     val scale by animateFloatAsState(
@@ -366,6 +389,8 @@ private fun AmbientExpressiveCard(
                 scaleX = scale
                 scaleY = scale
             }
+            .then(focusState.focusModifier)
+            .tvFocusIndicator(focusState, ShapeCache.smooth24)
             .clip(ShapeCache.smooth24)
             .background(MaterialTheme.colorScheme.surfaceContainerHigh)
             .clickable(

@@ -38,7 +38,14 @@ import com.raulshma.jellyplay.core.ui.tv.TvFocusableItemRow
 import com.raulshma.jellyplay.core.designsystem.theme.ShapeCache
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
+import com.raulshma.jellyplay.core.ui.tv.rememberTvFocusState
+import com.raulshma.jellyplay.core.ui.tv.tvFocusIndicator
+import androidx.compose.ui.focus.FocusDirection
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusProperties
+import androidx.compose.ui.focus.focusRequester
 
+@OptIn(androidx.compose.ui.ExperimentalComposeUiApi::class)
 @Composable
 fun RecentlyPlayedSection(
     tracks: List<MediaItem>,
@@ -50,6 +57,10 @@ fun RecentlyPlayedSection(
     modifier: Modifier = Modifier,
     title: String = "Recently Played",
     subtitle: String = "Continue your musical journey",
+    headerFocusRequester: FocusRequester? = null,
+    rowFocusRequester: FocusRequester? = null,
+    upFocusRequester: FocusRequester? = null,
+    downFocusRequester: FocusRequester? = null,
 ) {
     Column(modifier = modifier.fillMaxWidth()) {
         Row(
@@ -79,6 +90,9 @@ fun RecentlyPlayedSection(
             PlayShuffleSplitButton(
                 onPlayClick = onPlayAllClick,
                 onShuffleClick = onShuffleClick,
+                playFocusRequester = headerFocusRequester,
+                upFocusRequester = upFocusRequester,
+                downFocusRequester = rowFocusRequester,
             )
         }
 
@@ -89,6 +103,17 @@ fun RecentlyPlayedSection(
             key = { it.id },
             contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 24.dp),
             horizontalArrangement = Arrangement.spacedBy(12.dp),
+            focusRequester = rowFocusRequester,
+            modifier = Modifier.focusProperties {
+                @Suppress("DEPRECATION")
+                exit = { direction ->
+                    when (direction) {
+                        FocusDirection.Up -> headerFocusRequester ?: FocusRequester.Default
+                        FocusDirection.Down -> downFocusRequester ?: FocusRequester.Default
+                        else -> FocusRequester.Default
+                    }
+                }
+            }
         ) { index, track, itemModifier ->
             RecentTrackCard(
                 track = track,
@@ -109,6 +134,7 @@ private fun RecentTrackCard(
     imageUrl: String,
     modifier: Modifier = Modifier,
 ) {
+    val focusState = rememberTvFocusState()
     val interactionSource = remember { MutableInteractionSource() }
     val isPressed by interactionSource.collectIsPressedAsState()
     val scale by animateFloatAsState(
@@ -124,6 +150,8 @@ private fun RecentTrackCard(
                 scaleX = scale
                 scaleY = scale
             }
+            .then(focusState.focusModifier)
+            .tvFocusIndicator(focusState, ShapeCache.smooth16)
             .clip(ShapeCache.smooth16)
             .background(MaterialTheme.colorScheme.surfaceContainerHigh)
             .clickable(

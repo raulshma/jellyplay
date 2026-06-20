@@ -17,7 +17,12 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.raulshma.jellyplay.core.model.MediaItem
 import com.raulshma.jellyplay.core.ui.tv.TvFocusableItemRow
+import androidx.compose.ui.focus.FocusDirection
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusProperties
+import androidx.compose.ui.focus.focusRequester
 
+@OptIn(androidx.compose.ui.ExperimentalComposeUiApi::class)
 @Composable
 fun NewReleasesSection(
     albums: List<MediaItem>,
@@ -29,6 +34,10 @@ fun NewReleasesSection(
     modifier: Modifier = Modifier,
     title: String = "New Releases",
     subtitle: String = "Fresh music just for you",
+    headerFocusRequester: FocusRequester? = null,
+    rowFocusRequester: FocusRequester? = null,
+    upFocusRequester: FocusRequester? = null,
+    downFocusRequester: FocusRequester? = null,
 ) {
     Column(modifier = modifier.fillMaxWidth()) {
         Row(
@@ -58,6 +67,9 @@ fun NewReleasesSection(
             PlayShuffleSplitButton(
                 onPlayClick = onPlayAllClick,
                 onShuffleClick = onShuffleClick,
+                playFocusRequester = headerFocusRequester,
+                upFocusRequester = upFocusRequester,
+                downFocusRequester = rowFocusRequester,
             )
         }
 
@@ -68,6 +80,17 @@ fun NewReleasesSection(
             key = { it.id },
             contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 24.dp),
             horizontalArrangement = Arrangement.spacedBy(16.dp),
+            focusRequester = rowFocusRequester,
+            modifier = Modifier.focusProperties {
+                @Suppress("DEPRECATION")
+                exit = { direction ->
+                    when (direction) {
+                        FocusDirection.Up -> headerFocusRequester ?: FocusRequester.Default
+                        FocusDirection.Down -> downFocusRequester ?: FocusRequester.Default
+                        else -> FocusRequester.Default
+                    }
+                }
+            }
         ) { _, album, itemModifier ->
             CloverShapeAlbumCard(
                 album = album,

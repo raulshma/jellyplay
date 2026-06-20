@@ -29,7 +29,16 @@ import com.raulshma.jellyplay.core.model.MediaItem
 import com.raulshma.jellyplay.core.ui.tv.TvFocusableItemRow
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
+import com.raulshma.jellyplay.core.designsystem.theme.ShapeCache
+import com.raulshma.jellyplay.core.ui.tv.rememberTvFocusState
+import com.raulshma.jellyplay.core.ui.tv.tvFocusIndicator
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.focus.FocusDirection
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusProperties
+import androidx.compose.ui.focus.focusRequester
 
+@OptIn(androidx.compose.ui.ExperimentalComposeUiApi::class)
 @Composable
 fun ArtistsSection(
     artists: List<MediaItem>,
@@ -38,6 +47,10 @@ fun ArtistsSection(
     onViewAllClick: () -> Unit,
     imageUrlBuilder: (String) -> String,
     modifier: Modifier = Modifier,
+    headerFocusRequester: FocusRequester? = null,
+    rowFocusRequester: FocusRequester? = null,
+    upFocusRequester: FocusRequester? = null,
+    downFocusRequester: FocusRequester? = null,
 ) {
     Column(modifier = modifier.fillMaxWidth()) {
         Row(
@@ -66,6 +79,9 @@ fun ArtistsSection(
 
             ViewAllButton(
                 onClick = onViewAllClick,
+                focusRequester = headerFocusRequester,
+                upFocusRequester = upFocusRequester,
+                downFocusRequester = rowFocusRequester,
             )
         }
 
@@ -76,6 +92,17 @@ fun ArtistsSection(
             key = { it.id },
             contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 24.dp),
             horizontalArrangement = Arrangement.spacedBy(16.dp),
+            focusRequester = rowFocusRequester,
+            modifier = Modifier.focusProperties {
+                @Suppress("DEPRECATION")
+                exit = { direction ->
+                    when (direction) {
+                        FocusDirection.Up -> headerFocusRequester ?: FocusRequester.Default
+                        FocusDirection.Down -> downFocusRequester ?: FocusRequester.Default
+                        else -> FocusRequester.Default
+                    }
+                }
+            }
         ) { _, artist, itemModifier ->
             HeartShapeArtistCard(
                 artist = artist,
@@ -92,7 +119,11 @@ fun ArtistsSection(
 private fun ViewAllButton(
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
+    focusRequester: FocusRequester? = null,
+    upFocusRequester: FocusRequester? = null,
+    downFocusRequester: FocusRequester? = null,
 ) {
+    val focusState = rememberTvFocusState()
     val interactionSource = remember { MutableInteractionSource() }
     val isPressed by interactionSource.collectIsPressedAsState()
     val scale by animateFloatAsState(
@@ -107,6 +138,14 @@ private fun ViewAllButton(
                 scaleX = scale
                 scaleY = scale
             }
+            .then(if (focusRequester != null) Modifier.focusRequester(focusRequester) else Modifier)
+            .focusProperties {
+                up = upFocusRequester ?: FocusRequester.Default
+                down = downFocusRequester ?: FocusRequester.Default
+            }
+            .then(focusState.focusModifier)
+            .tvFocusIndicator(focusState, ShapeCache.smoothPill)
+            .clip(ShapeCache.smoothPill)
             .clickable(
                 interactionSource = interactionSource,
                 indication = null,
