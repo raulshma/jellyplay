@@ -63,6 +63,8 @@ class LibVlcPlayerEngine(
         supportsAudioNormalization = true,
         supportsChannelMixing = true,
         supportsVideoFilters = true,
+        supportsLiveQualitySwitch = false,
+        supportsBandwidthEstimate = false,
     )
 
     private val _playbackState = MutableStateFlow(EnginePlaybackState.IDLE)

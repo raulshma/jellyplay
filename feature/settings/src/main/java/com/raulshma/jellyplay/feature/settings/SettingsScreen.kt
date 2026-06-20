@@ -1,6 +1,5 @@
 package com.raulshma.jellyplay.feature.settings
 
-import android.widget.Toast
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.expandVertically
 import androidx.compose.animation.fadeIn
@@ -44,7 +43,6 @@ import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import com.raulshma.jellyplay.core.ui.tv.input.onDpadKey
 import com.raulshma.jellyplay.core.ui.tv.input.onDpadKeyEvent
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -59,6 +57,7 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.SearchBarDefaults
 import androidx.compose.ui.focus.onFocusEvent
 import com.raulshma.jellyplay.core.ui.components.TopBarStyle
+import com.raulshma.jellyplay.core.ui.feedback.LocalUserMessageBus
 import androidx.compose.material3.ListItem
 import androidx.compose.material3.ListItemDefaults
 import com.raulshma.jellyplay.core.ui.navigation.Route
@@ -83,6 +82,8 @@ import com.raulshma.jellyplay.core.ui.tv.tvFocusIndicator
 import com.raulshma.jellyplay.core.ui.tv.TvFocusDefaults
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.graphics.Color
+import com.raulshma.jellyplay.core.ui.feedback.uiTextOf
+import com.raulshma.jellyplay.feature.settings.R
 import com.composables.icons.tabler.Tabler
 import com.composables.icons.tabler.outline.*
 
@@ -184,11 +185,11 @@ fun SettingsScreen(
         backgroundColor = backgroundColor,
         topBarStyle = TopBarStyle.None,
     ) { paddingValues ->
-        val context = LocalContext.current
+        val userMessageBus = LocalUserMessageBus.current
 
         LaunchedEffect(viewModel.messageSentEvent) {
             viewModel.messageSentEvent?.let { msg ->
-                Toast.makeText(context, msg, Toast.LENGTH_SHORT).show()
+                userMessageBus.info(msg)
                 viewModel.clearMessageEvent()
             }
         }
@@ -499,7 +500,7 @@ fun SettingsScreen(
                                             .clickable {
                                                 if (item.isAdvanced && !preferences.showAdvancedSettings) {
                                                     viewModel.setShowAdvancedSettings(true)
-                                                    Toast.makeText(context, "Advanced settings enabled", Toast.LENGTH_SHORT).show()
+                                                    userMessageBus.info(uiTextOf(R.string.settings_advanced_enabled))
                                                 }
                                                 isSearchActive = false
                                                 searchQuery = ""

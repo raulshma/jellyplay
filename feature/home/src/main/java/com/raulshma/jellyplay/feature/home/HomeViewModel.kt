@@ -16,6 +16,7 @@ import com.raulshma.jellyplay.core.data.seerr.SeerrRequestDelegate
 import com.raulshma.jellyplay.core.datastore.SeerrPreferencesStore
 import com.raulshma.jellyplay.core.datastore.UserPreferencesStore
 import com.raulshma.jellyplay.core.data.repository.AuthRepository
+import com.raulshma.jellyplay.core.data.worker.TvWatchNextScheduler
 import com.raulshma.jellyplay.core.model.UserInfo
 import com.raulshma.jellyplay.core.model.seerr.DiscoverSectionType
 import com.raulshma.jellyplay.core.model.seerr.SeerrSearchResponse
@@ -63,6 +64,7 @@ class HomeViewModel @Inject constructor(
     private val seerrRequestDelegate: SeerrRequestDelegate,
     private val seerrPreferencesStore: SeerrPreferencesStore,
     private val authRepository: AuthRepository,
+    private val tvWatchNextScheduler: TvWatchNextScheduler,
     @param:dagger.hilt.android.qualifiers.ApplicationContext private val context: android.content.Context,
 ) : JellyPlayViewModel(), DefaultLifecycleObserver {
 
@@ -104,7 +106,9 @@ class HomeViewModel @Inject constructor(
     val searchHistory: StateFlow<List<SearchHistoryItem>> = _searchHistory
 
     init {
-        ProcessLifecycleOwner.get().lifecycle.addObserver(this)
+        // Guard against environments where the process LifecycleOwner isn't initialised
+        // (e.g. JVM unit tests). addObserver is best-effort and must not crash construction.
+        runCatching { ProcessLifecycleOwner.get().lifecycle.addObserver(this) }
 
         launch {
             authRepository.currentUser.collect { user ->
@@ -478,31 +482,25 @@ class HomeViewModel @Inject constructor(
                     if (currentIds != lastContinueWatchingIds) {
                         lastContinueWatchingIds = currentIds
                         preferencesStore.setContinueWatching(continueWatching)
+                        // Explicit-component broadcast: implicit broadcasts to
+                        // manifest-registered receivers are blocked on
+                        // Android O+, and the widget's intent-filter only
+                        // carries APPWIDGET_UPDATE, so we target the receiver
+                        // class directly to guarantee delivery in-process.
                         val intent = android.content.Intent(
                             "com.raulshma.jellyplay.widget.ACTION_REFRESH_CONTINUE_WATCHING",
-                        )
-                        intent.setPackage(context.packageName)
+                        ).apply {
+                            setClassName(
+                                context.packageName,
+                                "com.raulshma.jellyplay.widget.ContinueWatchingWidget",
+                            )
+                        }
                         context.sendBroadcast(intent)
                         // Refresh the Android TV "Watch Next" OS row so the
                         // system home stays in sync with the user's progress.
                         // Worker is a no-op on phones and respects its preference.
                         if (androidTvWatchNextEnabled) {
-                            try {
-                                val request = androidx.work.OneTimeWorkRequestBuilder<com.raulshma.jellyplay.core.data.worker.TvWatchNextWorker>()
-                                    .setConstraints(
-                                        androidx.work.Constraints.Builder()
-                                            .setRequiredNetworkType(androidx.work.NetworkType.CONNECTED)
-                                            .build(),
-                                    )
-                                    .build()
-                                androidx.work.WorkManager.getInstance(context).enqueueUniqueWork(
-                                    com.raulshma.jellyplay.core.data.worker.TvWatchNextWorker.UNIQUE_WORK_NAME,
-                                    androidx.work.ExistingWorkPolicy.REPLACE,
-                                    request,
-                                )
-                            } catch (_: Exception) {
-                                // WorkManager not initialised / unavailable — ignore.
-                            }
+                            tvWatchNextScheduler.scheduleRefresh()
                         }
                     }
 

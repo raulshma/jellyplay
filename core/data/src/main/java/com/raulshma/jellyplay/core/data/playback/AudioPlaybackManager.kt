@@ -2,6 +2,7 @@ package com.raulshma.jellyplay.core.data.playback
 
 import android.content.Context
 import android.net.Uri
+import android.os.Looper
 import androidx.media3.common.AudioAttributes
 import androidx.media3.common.C
 import androidx.media3.common.MediaItem
@@ -12,14 +13,7 @@ import androidx.media3.exoplayer.DefaultRenderersFactory
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.exoplayer.audio.DefaultAudioSink
 import androidx.media3.session.MediaSession
-import androidx.media3.session.MediaLibraryService
 import androidx.media3.session.MediaLibraryService.MediaLibrarySession
-import androidx.media3.session.LibraryResult
-import com.google.common.util.concurrent.SettableFuture
-import com.google.common.util.concurrent.ListenableFuture
-import com.google.common.util.concurrent.Futures
-import com.google.common.collect.ImmutableList
-import kotlinx.coroutines.flow.first
 import com.raulshma.jellyplay.core.data.repository.DownloadRepository
 import com.raulshma.jellyplay.core.data.repository.MediaRepository
 import com.raulshma.jellyplay.core.data.repository.OfflineRepository
@@ -30,7 +24,6 @@ import com.raulshma.jellyplay.core.model.EqualizerPreset
 import com.raulshma.jellyplay.core.model.LrcLibTrack
 import com.raulshma.jellyplay.core.model.LyricsLine
 import com.raulshma.jellyplay.core.model.LyricsSource
-import com.raulshma.jellyplay.core.model.PlaybackProgress
 import com.raulshma.jellyplay.core.model.PlaybackStartInfo
 import com.raulshma.jellyplay.core.model.ReverbPreset
 import dagger.hilt.android.qualifiers.ApplicationContext
@@ -43,7 +36,10 @@ import kotlinx.coroutines.coroutineScope
 import androidx.compose.runtime.Immutable
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.MutableSharedFlow
+import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
@@ -84,8 +80,26 @@ class AudioPlaybackManager @Inject constructor(
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
 
     private var exoPlayer: ExoPlayer? = null
-    private var crossfadePlayer: ExoPlayer? = null
     private var currentPreferences = com.raulshma.jellyplay.core.model.UserPreferences()
+
+    private val libraryBrowser = AudioLibraryBrowser(
+        scope = scope,
+        mediaRepository = mediaRepository,
+        downloadRepository = downloadRepository,
+        playbackRepository = playbackRepository,
+        streamingQualityProvider = { currentPreferences.streamingQuality },
+        adaptiveBitrateSelector = adaptiveBitrateSelector,
+    )
+
+    private val progressReporter = AudioProgressReporter(
+        scope = scope,
+        playbackRepository = playbackRepository,
+        remoteSessionActive = { remoteSessionActive },
+        exoPlayerProvider = { exoPlayer },
+        itemIdProvider = { currentItemId },
+        playSessionIdProvider = { playSessionId },
+        playSessionIdSetter = { playSessionId = it },
+    )
 
 
 
@@ -102,7 +116,6 @@ class AudioPlaybackManager @Inject constructor(
     private var playSessionId: String = UUID.randomUUID().toString()
     private var currentItemId: String? = null
     private var _isLoadingItemFlag = false
-    private var progressJob: Job? = null
     private var positionJob: Job? = null
     private var queueLoadingJob: Job? = null
     private val mediaItemCache = android.util.LruCache<String, MediaItem>(25)
@@ -119,6 +132,29 @@ class AudioPlaybackManager @Inject constructor(
     private val _playbackError = MutableStateFlow<String?>(null)
     val playbackError: StateFlow<String?> = _playbackError.asStateFlow()
 
+    /**
+     * Bounded history of pre-mutation queue snapshots enabling undo of
+     * destructive operations (enhancements §5.2). Accessed only on the main
+     * thread per the [AudioQueueManager] contract.
+     */
+    private val queueUndoStack = QueueUndoStack()
+
+    private val _undoEvents = MutableSharedFlow<QueueUndoEvent>(extraBufferCapacity = 4)
+    /** One-shot stream of destructive queue ops the UI can offer to undo. */
+    val undoEvents: SharedFlow<QueueUndoEvent> = _undoEvents.asSharedFlow()
+
+    /**
+     * A→B loop markers (enhancements §5.4). When both are non-null, playback
+     * seeks back to [abLoopStartMs] whenever the position reaches
+     * [abLoopEndMs]. Independent of [repeatMode] (off/all/one) so the two can
+     * compose. Cleared on track change / fresh queue so a loop never bleeds
+     * into the next song.
+     */
+    private val _abLoopStartMs = MutableStateFlow<Long?>(null)
+    val abLoopStartMs: StateFlow<Long?> = _abLoopStartMs.asStateFlow()
+    private val _abLoopEndMs = MutableStateFlow<Long?>(null)
+    val abLoopEndMs: StateFlow<Long?> = _abLoopEndMs.asStateFlow()
+
     val estimatedBandwidthKbps: StateFlow<Double> = bandwidthInterceptor.estimatedBandwidthKbps
 
     private val _currentAudioBitrateTier = MutableStateFlow(com.raulshma.jellyplay.core.model.AudioBitrateTier.DEFAULT)
@@ -126,7 +162,29 @@ class AudioPlaybackManager @Inject constructor(
     private val _isLoadingItem = MutableStateFlow(false)
     val isLoadingItem: StateFlow<Boolean> = _isLoadingItem.asStateFlow()
 
-    private var crossfadeJob: Job? = null
+    private val crossfader = AudioCrossfader(
+        scope = scope,
+        context = context,
+        effectsProcessor = effectsProcessor,
+        mediaRepository = mediaRepository,
+        downloadRepository = downloadRepository,
+        playbackRepository = playbackRepository,
+        repeatModeProvider = { _repeatMode.value },
+        crossfadeDurationMsProvider = { _crossfadeDurationMs.value },
+        isCrossfadingProvider = { _isCrossfading.value },
+        isCrossfadingSetter = { _isCrossfading.value = it },
+        exoPlayerProvider = { exoPlayer },
+        queueSizeProvider = { _queue.value.size },
+        onGetNextItem = { idx -> _queue.value.getOrNull(idx) },
+        speedProvider = { _speed.value },
+        audioBufferProvider = {
+            val buf = currentPreferences.audioPreloadBufferSize
+            buf.minBufferMs to buf.maxBufferMs
+        },
+        onCrossfadeTransition = { secondary, nextIndex, nextItem ->
+            onCrossfadeTransition(secondary, nextIndex, nextItem)
+        },
+    )
 
     @Volatile
     var remoteSessionActive: Boolean = false
@@ -137,6 +195,9 @@ class AudioPlaybackManager @Inject constructor(
 
     private val _artist = MutableStateFlow("")
     val artist: StateFlow<String> = _artist.asStateFlow()
+
+    private val _artistId = MutableStateFlow<String?>(null)
+    val artistId: StateFlow<String?> = _artistId.asStateFlow()
 
     private val _album = MutableStateFlow("")
     val album: StateFlow<String> = _album.asStateFlow()
@@ -178,6 +239,9 @@ class AudioPlaybackManager @Inject constructor(
     val currentLyricIndex: StateFlow<Int> get() = lyricsManager.currentLyricIndex
     val lyricsSource: StateFlow<LyricsSource> get() = lyricsManager.lyricsSource
     val isFetchingLyrics: StateFlow<Boolean> get() = lyricsManager.isFetchingLyrics
+    val lyricsOffsetMs: StateFlow<Long> get() = lyricsManager.lyricsOffsetMs
+
+    fun setLyricsOffset(offsetMs: Long) = lyricsManager.setLyricsOffset(offsetMs)
 
     override val nightModeEnabled: StateFlow<Boolean> get() = effectsProcessor.nightModeEnabled
     override val dialogueBoostEnabled: StateFlow<Boolean> get() = effectsProcessor.dialogueBoostEnabled
@@ -202,6 +266,18 @@ class AudioPlaybackManager @Inject constructor(
     private val playerListener = object : Player.Listener {
         override fun onIsPlayingChanged(isPlaying: Boolean) {
             _isPlaying.value = isPlaying
+        }
+
+        override fun onAudioSessionIdChanged(audioSessionId: Int) {
+            // ExoPlayer allocates its AudioTrack (and the real audio session id)
+            // lazily after prepare(). At createPlayer() time the id is still
+            // AUDIO_SESSION_ID_UNSET, so effects attached there bind to nothing.
+            // Re-attach every effect to the now-valid session id whenever it
+            // changes, mirroring the video ExoPlayerEngine pattern.
+            effectsProcessor.attachAudioEffects(audioSessionId)
+            if (effectsProcessor.nightModeEnabled.value) {
+                effectsProcessor.applyNightMode()
+            }
         }
 
         override fun onPlaybackStateChanged(playbackState: Int) {
@@ -236,6 +312,16 @@ class AudioPlaybackManager @Inject constructor(
                 val prevPreset = currentPreferences.equalizerPreset
                 val prevBalance = currentPreferences.lrBalance
                 val prevPitch = currentPreferences.pitchSemitones
+                val prevEqEnabled = currentPreferences.equalizerEnabled
+                val prevBassEnabled = currentPreferences.bassBoostEnabled
+                val prevBassStrength = currentPreferences.bassBoostStrength
+                val prevVirtEnabled = currentPreferences.virtualizerEnabled
+                val prevVirtStrength = currentPreferences.virtualizerStrength
+                val prevDialogueEnabled = currentPreferences.dialogueBoostEnabled
+                val prevDialogueStrength = currentPreferences.dialogueBoostStrength
+                val prevNightEnabled = currentPreferences.nightModeEnabled
+                val prevNightStrength = currentPreferences.nightModeStrength
+                val prevReverb = currentPreferences.reverbPreset
 
                 currentPreferences = prefs
 
@@ -251,6 +337,42 @@ class AudioPlaybackManager @Inject constructor(
                 if (prefs.pitchSemitones != prevPitch) {
                     setPitchSemitones(prefs.pitchSemitones)
                 }
+                // Strengths must be applied before their enabled flag so the
+                // effect uses the correct value when it attaches.
+                if (prefs.bassBoostStrength != prevBassStrength) {
+                    effectsProcessor.setBassBoostStrength(prefs.bassBoostStrength)
+                }
+                if (prefs.virtualizerStrength != prevVirtStrength) {
+                    effectsProcessor.setVirtualizerStrength(prefs.virtualizerStrength)
+                }
+                if (prefs.dialogueBoostStrength != prevDialogueStrength) {
+                    effectsProcessor.setDialogueBoostStrength(prefs.dialogueBoostStrength)
+                }
+                if (prefs.nightModeStrength != prevNightStrength) {
+                    effectsProcessor.setNightModeStrength(prefs.nightModeStrength)
+                }
+                // Restore effect-enabled state from persisted preferences so
+                // effects survive process restart. Each setter updates the flag
+                // and re-applies (a no-op when no player exists yet; the flags
+                // are honored when onAudioSessionIdChanged attaches effects).
+                if (prefs.equalizerEnabled != prevEqEnabled) {
+                    effectsProcessor.setEqualizerEnabled(prefs.equalizerEnabled)
+                }
+                if (prefs.bassBoostEnabled != prevBassEnabled) {
+                    effectsProcessor.setBassBoostEnabled(prefs.bassBoostEnabled)
+                }
+                if (prefs.virtualizerEnabled != prevVirtEnabled) {
+                    effectsProcessor.setVirtualizerEnabled(prefs.virtualizerEnabled)
+                }
+                if (prefs.dialogueBoostEnabled != prevDialogueEnabled) {
+                    effectsProcessor.setDialogueBoostEnabled(prefs.dialogueBoostEnabled)
+                }
+                if (prefs.nightModeEnabled != prevNightEnabled) {
+                    effectsProcessor.setNightModeEnabled(prefs.nightModeEnabled)
+                }
+                if (prefs.reverbPreset != prevReverb) {
+                    effectsProcessor.setReverbPreset(prefs.reverbPreset)
+                }
             }
         }
         scope.launch {
@@ -264,7 +386,7 @@ class AudioPlaybackManager @Inject constructor(
         _gaplessEnabled.value = enabled
         if (enabled) {
             _crossfadeDurationMs.value = 0L
-            cancelCrossfade()
+            crossfader.cancel()
         }
     }
 
@@ -274,7 +396,7 @@ class AudioPlaybackManager @Inject constructor(
             _gaplessEnabled.value = false
         } else {
             _gaplessEnabled.value = true
-            cancelCrossfade()
+            crossfader.cancel()
         }
     }
 
@@ -324,7 +446,7 @@ class AudioPlaybackManager @Inject constructor(
         player.repeatMode = getExoPlayerRepeatMode(_repeatMode.value)
 
         exoPlayer = player
-        val session = MediaLibrarySession.Builder(context, player, mediaLibraryCallback)
+        val session = MediaLibrarySession.Builder(context, player, libraryBrowser.callback)
             .setId(playSessionId)
             .build()
         mediaSession = session
@@ -333,45 +455,6 @@ class AudioPlaybackManager @Inject constructor(
         effectsProcessor.attachAudioEffects(player.audioSessionId)
 
         return player
-    }
-
-    private fun createCrossfadePlayer(): ExoPlayer {
-        val audioAttributes = AudioAttributes.Builder()
-            .setContentType(C.AUDIO_CONTENT_TYPE_MUSIC)
-            .setUsage(C.USAGE_MEDIA)
-            .build()
-
-        val renderersFactory = object : DefaultRenderersFactory(context) {
-            override fun buildAudioSink(
-                context: android.content.Context,
-                enableFloatOutput: Boolean,
-                enableAudioTrackPlaybackParams: Boolean,
-            ): androidx.media3.exoplayer.audio.AudioSink {
-                return DefaultAudioSink.Builder(context)
-                    .setAudioProcessors(arrayOf(effectsProcessor.crossfadeReplayGainProcessor))
-                    .setEnableFloatOutput(enableFloatOutput)
-                    .setEnableAudioTrackPlaybackParams(enableAudioTrackPlaybackParams)
-                    .build()
-            }
-        }
-
-        val loadControl = DefaultLoadControl.Builder()
-            .setBufferDurationsMs(
-                currentPreferences.audioPreloadBufferSize.minBufferMs,
-                currentPreferences.audioPreloadBufferSize.maxBufferMs,
-                1_000,
-                3_000
-            )
-            .setTargetBufferBytes(-1)
-            .build()
-
-        return ExoPlayer.Builder(context)
-            .setRenderersFactory(renderersFactory)
-            .setLoadControl(loadControl)
-            .setAudioAttributes(audioAttributes, true)
-            .setHandleAudioBecomingNoisy(true)
-            .setWakeMode(C.WAKE_MODE_LOCAL)
-            .build()
     }
 
     private fun restorePersistedQueue() {
@@ -405,7 +488,7 @@ class AudioPlaybackManager @Inject constructor(
     }
 
     private suspend fun buildMediaItemForQueueItem(queueItem: AudioQueueItem, startPositionMs: Long = 0L): MediaItem? {
-        return buildPlayableMediaItem(queueItem.id, startPositionMs)
+        return libraryBrowser.buildPlayableMediaItem(queueItem.id, startPositionMs)
     }
 
     fun play(itemId: String) {
@@ -417,8 +500,11 @@ class AudioPlaybackManager @Inject constructor(
             }
         }
 
-        cancelCrossfade()
-        reportCurrentItemStopped()
+        crossfader.cancel()
+        progressReporter.reportStopped()
+        // A→B loop is track-specific; clear it when loading a new item so a
+        // marker pair never applies to a different song (enhancements §5.4).
+        clearAbLoop()
         currentItemId = itemId
         _isLoadingItemFlag = true
         _isLoadingItem.value = true
@@ -436,6 +522,7 @@ class AudioPlaybackManager @Inject constructor(
                 _artist.value = detail.item.albumArtist
                     ?: detail.item.artistItems.firstOrNull()?.name
                     ?: ""
+                _artistId.value = detail.item.artistItems.firstOrNull()?.id
                 _album.value = detail.item.album ?: ""
                 _albumArtUrl.value = playbackRepository.getImageUrl(itemId, maxWidth = 600)
 
@@ -533,7 +620,7 @@ class AudioPlaybackManager @Inject constructor(
                 )
                 effectsProcessor.applyReplayGain(detail.item.normalizationGain, _shuffleMode.value)
                 startPositionTracking()
-                startProgressReporting()
+                progressReporter.start()
             } else {
                 _playbackError.value = detailResult.exceptionOrNull()?.message ?: "Failed to load track"
                 val localDownload = downloadRepository.getDownloadByMediaItemId(itemId)
@@ -586,7 +673,28 @@ class AudioPlaybackManager @Inject constructor(
         }
     }
 
+    /**
+     * Enforces the [AudioQueueManager] main-thread contract. ExoPlayer
+     * throws a generic `IllegalStateException` when mutated off the
+     * application `Looper`; this helper fails fast with a descriptive
+     * message instead so background-thread callers (SyncPlay queue
+     * mutations, WorkManager callbacks, etc.) are obvious in dev.
+     *
+     * Always-on: the cost is a single `ThreadLocal` lookup, negligible
+     * compared to the queue mutation that follows.
+     */
+    private fun assertMainThread(method: String) {
+        check(Looper.myLooper() == Looper.getMainLooper()) {
+            "AudioQueueManager.$method must be called on the main thread " +
+                "(found: ${Looper.myLooper()?.thread?.name ?: "null"}). " +
+                "Wrap the call site in `withContext(Dispatchers.Main) { ... }`."
+        }
+    }
+
     override fun playQueue(items: List<AudioQueueItem>, startIndex: Int) {
+        assertMainThread("playQueue")
+        // A fresh queue invalidates any undo history from the previous queue.
+        queueUndoStack.clear()
         _queue.value = items
         _currentIndex.value = startIndex
         val item = items.getOrNull(startIndex) ?: return
@@ -594,6 +702,7 @@ class AudioPlaybackManager @Inject constructor(
     }
 
     override fun addToQueue(item: AudioQueueItem) {
+        assertMainThread("addToQueue")
         _queue.value = _queue.value + item
         val player = exoPlayer ?: return
         scope.launch {
@@ -604,9 +713,12 @@ class AudioPlaybackManager @Inject constructor(
     }
 
     override fun removeFromQueue(index: Int) {
+        assertMainThread("removeFromQueue")
         val q = _queue.value
         if (index < 0 || index >= q.size) return
         if (queueLoadingJob != null) return
+        val removed = q[index]
+        pushUndoSnapshot(QueueUndoEvent.ItemRemoved(removed))
         val wasPlaying = index == _currentIndex.value
         _queue.value = q.toMutableList().apply { removeAt(index) }.toList()
         if (wasPlaying) {
@@ -622,16 +734,21 @@ class AudioPlaybackManager @Inject constructor(
     }
 
     override fun clearQueue() {
+        assertMainThread("clearQueue")
+        if (_queue.value.isEmpty()) return
+        pushUndoSnapshot(QueueUndoEvent.QueueCleared)
         _queue.value = emptyList()
         _currentIndex.value = -1
         exoPlayer?.clearMediaItems()
     }
 
     override fun moveQueueItem(fromIndex: Int, toIndex: Int) {
+        assertMainThread("moveQueueItem")
         val q = _queue.value
         if (fromIndex < 0 || fromIndex >= q.size) return
         if (toIndex < 0 || toIndex >= q.size) return
         if (fromIndex == toIndex) return
+        pushUndoSnapshot(QueueUndoEvent.ItemMoved(q[fromIndex]))
         val mutable = q.toMutableList()
         val item = mutable.removeAt(fromIndex)
         mutable.add(toIndex, item)
@@ -648,25 +765,28 @@ class AudioPlaybackManager @Inject constructor(
     }
 
     override fun skipToNext() {
+        assertMainThread("skipToNext")
         if (queueLoadingJob != null) return
         val q = _queue.value
         if (q.isEmpty()) return
-        cancelCrossfade()
+        crossfader.cancel()
         val next = when {
             _currentIndex.value < q.lastIndex -> _currentIndex.value + 1
             _repeatMode.value >= 1 -> 0
             else -> return
         }
+        pushUndoSnapshot(QueueUndoEvent.SkippedToNext)
         _currentIndex.value = next
         exoPlayer?.seekTo(next, 0L)
     }
 
     override fun skipToPrevious() {
+        assertMainThread("skipToPrevious")
         if (queueLoadingJob != null) return
         val q = _queue.value
         if (q.isEmpty()) return
         val player = exoPlayer ?: return
-        cancelCrossfade()
+        crossfader.cancel()
         if (player.currentPosition > skipPreviousThresholdMs) {
             player.seekTo(0)
             return
@@ -676,12 +796,107 @@ class AudioPlaybackManager @Inject constructor(
             _repeatMode.value >= 1 -> q.lastIndex
             else -> return
         }
+        pushUndoSnapshot(QueueUndoEvent.SkippedToPrevious)
         _currentIndex.value = prev
         player.seekTo(prev, 0L)
     }
 
     fun seekTo(positionMs: Long) {
         exoPlayer?.seekTo(positionMs)
+    }
+
+    /**
+     * Marks point A of an A→B loop at the current playback position. Clears B
+     * if it would now be at or before A (enhancements §5.4).
+     */
+    fun setAbLoopStart() {
+        assertMainThread("setAbLoopStart")
+        val pos = exoPlayer?.currentPosition ?: _currentPosition.value
+        _abLoopStartMs.value = pos
+        val end = _abLoopEndMs.value
+        if (end != null && end <= pos) _abLoopEndMs.value = null
+    }
+
+    /**
+     * Marks point B at the current position. Requires A to be set first and
+     * the current position to be strictly after A; otherwise this is a no-op
+     * (prevents an empty / inverted loop).
+     */
+    fun setAbLoopEnd() {
+        assertMainThread("setAbLoopEnd")
+        val start = _abLoopStartMs.value ?: return
+        val pos = exoPlayer?.currentPosition ?: _currentPosition.value
+        if (pos <= start) return
+        _abLoopEndMs.value = pos
+    }
+
+    /** Clears the A→B loop markers. */
+    fun clearAbLoop() {
+        assertMainThread("clearAbLoop")
+        _abLoopStartMs.value = null
+        _abLoopEndMs.value = null
+    }
+
+    /**
+     * Cycles the A→B loop UI state: nothing → set A → set B (looping) → clear.
+     * Encapsulates the state machine so callers don't read-then-act.
+     */
+    fun cycleAbLoop() {
+        assertMainThread("cycleAbLoop")
+        when {
+            _abLoopStartMs.value == null -> setAbLoopStart()
+            _abLoopEndMs.value == null -> setAbLoopEnd()
+            else -> clearAbLoop()
+        }
+    }
+
+    /**
+     * Captures the current queue/index/position into the undo stack and emits
+     * [event] so the UI can offer an Undo affordance. Must be called on the
+     * main thread immediately BEFORE the destructive mutation it guards.
+     */
+    private fun pushUndoSnapshot(event: QueueUndoEvent) {
+        queueUndoStack.push(
+            QueueSnapshot(
+                queue = _queue.value,
+                currentIndex = _currentIndex.value,
+                positionMs = exoPlayer?.currentPosition ?: _currentPosition.value,
+            ),
+        )
+        _undoEvents.tryEmit(event)
+    }
+
+    /**
+     * Restores the queue to its state before the most recent destructive
+     * operation, if any. Returns true when an undo was applied. The restore
+     * re-syncs the ExoPlayer media items to the snapshot and seeks to the
+     * captured position; it is a no-op while a queue load is in flight to
+     * avoid racing with [playQueue].
+     */
+    fun undoLastQueueOperation(): Boolean {
+        assertMainThread("undoLastQueueOperation")
+        val snapshot = queueUndoStack.pop() ?: return false
+        applyQueueSnapshot(snapshot)
+        return true
+    }
+
+    private fun applyQueueSnapshot(snapshot: QueueSnapshot) {
+        if (queueLoadingJob != null) return
+        _queue.value = snapshot.queue
+        _currentIndex.value = snapshot.currentIndex
+        val player = exoPlayer
+        if (player == null || snapshot.queue.isEmpty()) return
+        scope.launch {
+            val mediaItems = snapshot.queue.mapNotNull { qi ->
+                mediaItemCache.get(qi.id) ?: buildMediaItemForQueueItem(qi)?.also { mediaItemCache.put(qi.id, it) }
+            }
+            if (mediaItems.isEmpty()) return@launch
+            // Bail if the player was swapped/released during the async build.
+            if (exoPlayer != player) return@launch
+            val index = snapshot.currentIndex.coerceIn(0, mediaItems.lastIndex)
+            player.setMediaItems(mediaItems, index, snapshot.positionMs)
+            player.prepare()
+        }
     }
 
     fun seekByDelta(deltaMs: Long) {
@@ -701,10 +916,11 @@ class AudioPlaybackManager @Inject constructor(
             2.0f.pow(effectsProcessor.pitchSemitones.value / 12.0f)
         }
         exoPlayer?.playbackParameters = androidx.media3.common.PlaybackParameters(value, pitchMultiplier)
-        crossfadePlayer?.setPlaybackSpeed(value)
+        crossfader.setPlaybackSpeed(value)
     }
 
     override fun toggleShuffle() {
+        assertMainThread("toggleShuffle")
         val wasShuffled = _shuffleMode.value
         _shuffleMode.value = !wasShuffled
         val player = exoPlayer ?: return
@@ -759,6 +975,7 @@ class AudioPlaybackManager @Inject constructor(
     }
 
     override fun cycleRepeatMode() {
+        assertMainThread("cycleRepeatMode")
         val nextMode = (_repeatMode.value + 1) % 3
         setRepeatMode(nextMode)
     }
@@ -768,6 +985,7 @@ class AudioPlaybackManager @Inject constructor(
      * @param mode 0 = RepeatNone, 1 = RepeatAll, 2 = RepeatOne.
      */
     override fun setRepeatMode(mode: Int) {
+        assertMainThread("setRepeatMode")
         val coerced = mode.coerceIn(0, 2)
         _repeatMode.value = coerced
         exoPlayer?.repeatMode = getExoPlayerRepeatMode(coerced)
@@ -787,6 +1005,7 @@ class AudioPlaybackManager @Inject constructor(
      * general command).
      */
     override fun setShuffleMode(enabled: Boolean) {
+        assertMainThread("setShuffleMode")
         if (_shuffleMode.value == enabled) return
         toggleShuffle()
     }
@@ -814,7 +1033,7 @@ class AudioPlaybackManager @Inject constructor(
     fun setVolume(volume: Float) {
         val pct = volume.coerceIn(0f, 1f)
         exoPlayer?.volume = pct
-        crossfadePlayer?.volume = pct
+        crossfader.setVolume(pct)
         MediaStreamVolume.setNormalized(context, pct)
     }
 
@@ -856,10 +1075,11 @@ class AudioPlaybackManager @Inject constructor(
     }
 
     override fun playFromQueue(index: Int) {
+        assertMainThread("playFromQueue")
         if (queueLoadingJob != null) return
         val q = _queue.value
         if (index < 0 || index >= q.size) return
-        cancelCrossfade()
+        crossfader.cancel()
         _currentIndex.value = index
         val player = exoPlayer ?: return
         player.seekTo(index, 0L)
@@ -1014,7 +1234,7 @@ class AudioPlaybackManager @Inject constructor(
             effectsProcessor.applyReplayGain(nextItem.normalizationGain, _shuffleMode.value)
 
             scope.launch {
-                reportCurrentItemStopped()
+                progressReporter.reportStopped()
 
                 val detail = mediaRepository.getMediaDetail(nextItem.id)
                 detail.onSuccess { d ->
@@ -1037,128 +1257,8 @@ class AudioPlaybackManager @Inject constructor(
         }
     }
 
-    private fun cancelCrossfade() {
-        crossfadeJob?.cancel()
-        crossfadeJob = null
-        _isCrossfading.value = false
-        crossfadePlayer?.let { player ->
-            player.stop()
-            player.release()
-        }
-        crossfadePlayer = null
-        exoPlayer?.volume = 1.0f
-    }
-
-    private fun startCrossfadeIfNeeded() {
-        val crossfadeMs = _crossfadeDurationMs.value
-        if (crossfadeMs <= 0L || _repeatMode.value == 2) return
-
-        val player = exoPlayer ?: return
-        val duration = player.duration
-        val position = player.currentPosition
-        val timeRemaining = duration - position
-
-        if (timeRemaining <= crossfadeMs && timeRemaining > 0) {
-            val nextIndex = player.currentMediaItemIndex + 1
-            if (nextIndex >= _queue.value.size && _repeatMode.value < 1) return
-            prepareAndCrossfade(nextIndex, crossfadeMs)
-        }
-    }
-
-    private fun prepareAndCrossfade(targetIndex: Int, crossfadeMs: Long) {
-        if (_isCrossfading.value) return
-
-        val actualIndex = if (targetIndex >= _queue.value.size) {
-            if (_repeatMode.value >= 1) 0 else return
-        } else {
-            targetIndex
-        }
-
-        val nextItem = _queue.value.getOrNull(actualIndex) ?: return
-        _isCrossfading.value = true
-
-        scope.launch {
-            val detail = mediaRepository.getMediaDetail(nextItem.id)
-            detail.onSuccess { d ->
-                val source = d.mediaSources.firstOrNull()
-                val localDownload = downloadRepository.getDownloadByMediaItemId(nextItem.id)
-                val file = localDownload?.let { dl ->
-                    java.io.File(dl.downloadPath).takeIf { f -> f.exists() }
-                }
-                val url = if (localDownload != null && file != null &&
-                    localDownload.status == com.raulshma.jellyplay.core.model.DownloadStatus.COMPLETED
-                ) {
-                    Uri.fromFile(file).toString()
-                } else {
-                    playbackRepository.getStreamUrl(nextItem.id, source?.id ?: "", 0L)
-                }
-
-                val cfPlayer = createCrossfadePlayer()
-                crossfadePlayer = cfPlayer
-
-                val artUri = Uri.parse(playbackRepository.getImageUrl(nextItem.id, maxWidth = 600))
-                val mediaItem = MediaItem.Builder()
-                    .setMediaId(nextItem.id)
-                    .setUri(url)
-                    .setMediaMetadata(
-                        MediaMetadata.Builder()
-                            .setTitle(d.item.name)
-                            .setArtist(d.item.albumArtist ?: d.item.artistItems.firstOrNull()?.name ?: "")
-                            .setAlbumTitle(d.item.album ?: "")
-                            .setArtworkUri(artUri)
-                            .build()
-                    )
-                    .build()
-
-                cfPlayer.setMediaItem(mediaItem)
-                cfPlayer.prepare()
-
-                val speed = _speed.value
-                cfPlayer.setPlaybackSpeed(speed)
-
-                cfPlayer.playWhenReady = true
-                cfPlayer.play()
-
-                performVolumeCrossfade(crossfadeMs, actualIndex, nextItem)
-            }
-        }
-    }
-
-    private suspend fun performVolumeCrossfade(
-        crossfadeMs: Long,
-        nextIndex: Int,
-        nextItem: AudioQueueItem,
-    ) {
-        val primary = exoPlayer ?: return
-        val secondary = crossfadePlayer ?: return
-
-        val targetVolume = if (effectsProcessor.nightModeEnabled.value) effectsProcessor.nightModeVolumeForStrength else 1.0f
-
-        val steps = 30
-        val stepDelay = crossfadeMs / steps
-
-        for (i in 1..steps) {
-            if (!scope.isActive || !_isCrossfading.value) {
-                primary.volume = targetVolume
-                secondary.volume = 0.0f
-                return
-            }
-
-            val progress = i.toFloat() / steps
-            primary.volume = targetVolume * (1.0f - progress)
-            secondary.volume = targetVolume * progress
-
-            delay(stepDelay)
-        }
-
-        primary.volume = 0.0f
-        secondary.volume = 1.0f
-
-        primary.stop()
-        primary.release()
-
+    private suspend fun onCrossfadeTransition(secondary: ExoPlayer, nextIndex: Int, nextItem: AudioQueueItem) {
         exoPlayer = secondary
-        crossfadePlayer = null
 
         _currentIndex.value = nextIndex
         currentItemId = nextItem.id
@@ -1258,6 +1358,13 @@ class AudioPlaybackManager @Inject constructor(
                 exoPlayer?.let { player ->
                     val pos = player.currentPosition
                     val dur = player.duration.coerceAtLeast(0L)
+                    // A→B loop: when both markers are set and we reach B while
+                    // playing, jump back to A (enhancements §5.4).
+                    val abEnd = _abLoopEndMs.value
+                    val abStart = _abLoopStartMs.value
+                    if (abEnd != null && abStart != null && player.isPlaying && pos >= abEnd) {
+                        player.seekTo(abStart)
+                    }
                     if (pos != lastPosition) {
                         _currentPosition.value = pos
                         lastPosition = pos
@@ -1271,7 +1378,7 @@ class AudioPlaybackManager @Inject constructor(
                     }
 
                 if (_crossfadeDurationMs.value > 0 && player.isPlaying && _repeatMode.value != 2) {
-                    startCrossfadeIfNeeded()
+                    crossfader.maybeStart()
                 }
 
                 bandwidthSampleTick++
@@ -1294,41 +1401,8 @@ class AudioPlaybackManager @Inject constructor(
         }
     }
 
-    private fun startProgressReporting() {
-        progressJob?.cancel()
-        if (remoteSessionActive) return
-        progressJob = scope.launch {
-            while (true) {
-                delay(10_000)
-                val player = exoPlayer ?: continue
-                val itemId = currentItemId ?: continue
-                playbackRepository.reportPlaybackProgress(
-                    PlaybackProgress(
-                        itemId = itemId,
-                        sessionId = playSessionId,
-                        positionTicks = player.currentPosition * 10_000,
-                        isPaused = !player.isPlaying,
-                    )
-                )
-            }
-        }
-    }
-
-    private fun reportCurrentItemStopped() {
-        val player = exoPlayer ?: return
-        val itemId = currentItemId ?: return
-        val sid = playSessionId
-        val pos = player.currentPosition * 10_000
-        if (pos > 0) {
-            scope.launch {
-                playbackRepository.reportPlaybackStopped(itemId, sid, pos)
-            }
-        }
-        playSessionId = UUID.randomUUID().toString()
-    }
-
     fun stopAndRelease() {
-        cancelCrossfade()
+        crossfader.cancel()
 
         val player = exoPlayer
         val itemId = currentItemId
@@ -1336,10 +1410,13 @@ class AudioPlaybackManager @Inject constructor(
         val pos = player?.currentPosition?.let { it * 10_000 } ?: 0L
 
         positionJob?.cancel()
-        progressJob?.cancel()
+        progressReporter.cancel()
         exoPlayer?.removeListener(playerListener)
         mediaSession?.let { sessionManager.clearSession(it) }
-        mediaSession?.release()
+        // JellyPlayPlaybackService.onDestroy() may already have released this
+        // session. Guard the release so a double-release cannot skip the
+        // exoPlayer/effects cleanup that follows.
+        try { mediaSession?.release() } catch (_: Exception) { }
         mediaSession = null
         exoPlayer?.release()
         exoPlayer = null
@@ -1366,426 +1443,5 @@ class AudioPlaybackManager @Inject constructor(
                 )
             }
         }
-    }
-
-    private fun <T> resolveFuture(block: suspend () -> T): ListenableFuture<T> {
-        val future = SettableFuture.create<T>()
-        scope.launch {
-            try {
-                future.set(block())
-            } catch (e: Exception) {
-                future.setException(e)
-            }
-        }
-        return future
-    }
-
-    private val mediaLibraryCallback = object : MediaLibrarySession.Callback {
-        override fun onGetLibraryRoot(
-            session: MediaLibrarySession,
-            browser: MediaSession.ControllerInfo,
-            params: MediaLibraryService.LibraryParams?
-        ): ListenableFuture<LibraryResult<MediaItem>> {
-            val rootMetadata = MediaMetadata.Builder()
-                .setTitle("JellyPlay")
-                .setIsBrowsable(true)
-                .setIsPlayable(false)
-                .setMediaType(MediaMetadata.MEDIA_TYPE_FOLDER_MIXED)
-                .build()
-            val rootItem = MediaItem.Builder()
-                .setMediaId("ROOT")
-                .setMediaMetadata(rootMetadata)
-                .build()
-            return Futures.immediateFuture(LibraryResult.ofItem(rootItem, params))
-        }
-
-        override fun onGetChildren(
-            session: MediaLibrarySession,
-            browser: MediaSession.ControllerInfo,
-            parentId: String,
-            page: Int,
-            pageSize: Int,
-            params: MediaLibraryService.LibraryParams?
-        ): ListenableFuture<LibraryResult<ImmutableList<MediaItem>>> {
-            return resolveFuture {
-                val list = mutableListOf<MediaItem>()
-                when {
-                    parentId == "ROOT" -> {
-                        list.add(buildBrowsableFolder("ARTISTS", "Artists", MediaMetadata.MEDIA_TYPE_FOLDER_MIXED))
-                        list.add(buildBrowsableFolder("ALBUMS", "Albums", MediaMetadata.MEDIA_TYPE_FOLDER_MIXED))
-                        list.add(buildBrowsableFolder("PLAYLISTS", "Playlists", MediaMetadata.MEDIA_TYPE_FOLDER_MIXED))
-                        list.add(buildBrowsableFolder("FAVORITES", "Favorites", MediaMetadata.MEDIA_TYPE_FOLDER_MIXED))
-                        list.add(buildBrowsableFolder("DOWNLOADS", "Downloads", MediaMetadata.MEDIA_TYPE_FOLDER_MIXED))
-                    }
-                    parentId == "ARTISTS" -> {
-                        val result = mediaRepository.getMediaItems(
-                            mediaTypes = listOf(com.raulshma.jellyplay.core.model.MediaType.ARTIST),
-                            startIndex = page * pageSize,
-                            limit = pageSize
-                        ).getOrNull()
-                        result?.items?.forEach { artist ->
-                            list.add(mapArtistToMediaItem(artist))
-                        }
-                    }
-                    parentId == "ALBUMS" -> {
-                        val result = mediaRepository.getMediaItems(
-                            mediaTypes = listOf(com.raulshma.jellyplay.core.model.MediaType.ALBUM),
-                            startIndex = page * pageSize,
-                            limit = pageSize
-                        ).getOrNull()
-                        result?.items?.forEach { album ->
-                            list.add(mapAlbumToMediaItem(album))
-                        }
-                    }
-                    parentId == "PLAYLISTS" -> {
-                        val result = mediaRepository.getPlaylists(limit = pageSize).getOrNull()
-                        result?.forEach { playlist ->
-                            list.add(mapPlaylistToMediaItem(playlist))
-                        }
-                    }
-                    parentId == "FAVORITES" -> {
-                        val result = mediaRepository.getFavorites(
-                            mediaTypes = listOf(com.raulshma.jellyplay.core.model.MediaType.MUSIC, com.raulshma.jellyplay.core.model.MediaType.AUDIO),
-                            startIndex = page * pageSize,
-                            limit = pageSize
-                        ).getOrNull()
-                        result?.items?.forEach { track ->
-                            list.add(mapTrackToPlayableMediaItem(track))
-                        }
-                    }
-                    parentId == "DOWNLOADS" -> {
-                        val downloads = try {
-                            downloadRepository.getAllDownloads().first()
-                        } catch (_: Exception) {
-                            emptyList()
-                        }
-                        val completedAudioDownloads = downloads.filter {
-                            it.status == com.raulshma.jellyplay.core.model.DownloadStatus.COMPLETED &&
-                                    (it.mediaType == com.raulshma.jellyplay.core.model.MediaType.MUSIC ||
-                                     it.mediaType == com.raulshma.jellyplay.core.model.MediaType.AUDIO)
-                        }
-                        val start = (page * pageSize).coerceAtMost(completedAudioDownloads.size)
-                        val end = ((page + 1) * pageSize).coerceAtMost(completedAudioDownloads.size)
-                        if (start < end) {
-                            completedAudioDownloads.subList(start, end).forEach { dl ->
-                                list.add(mapDownloadToPlayableMediaItem(dl))
-                            }
-                        }
-                    }
-                    parentId.startsWith("ARTIST_|") -> {
-                        val artistId = parentId.removePrefix("ARTIST_|")
-                        val albums = mediaRepository.getArtistAlbums(artistId, limit = pageSize).getOrNull() ?: emptyList()
-                        albums.forEach { album ->
-                            list.add(mapAlbumToMediaItem(album))
-                        }
-                    }
-                    parentId.startsWith("ALBUM_|") -> {
-                        val albumId = parentId.removePrefix("ALBUM_|")
-                        val tracks = mediaRepository.getAlbumTracks(albumId).getOrNull() ?: emptyList()
-                        tracks.forEach { track ->
-                            list.add(mapTrackToPlayableMediaItem(track))
-                        }
-                    }
-                    parentId.startsWith("PLAYLIST_|") -> {
-                        val playlistId = parentId.removePrefix("PLAYLIST_|")
-                        val playlistItems = mediaRepository.getPlaylistItems(playlistId, startIndex = page * pageSize, limit = pageSize).getOrNull() ?: emptyList()
-                        playlistItems.forEach { pi ->
-                            list.add(mapPlaylistItemToPlayableMediaItem(pi))
-                        }
-                    }
-                }
-                LibraryResult.ofItemList(ImmutableList.copyOf(list), params)
-            }
-        }
-
-        override fun onGetItem(
-            session: MediaLibrarySession,
-            browser: MediaSession.ControllerInfo,
-            mediaId: String
-        ): ListenableFuture<LibraryResult<MediaItem>> {
-            return resolveFuture {
-                val playable = buildPlayableMediaItem(mediaId)
-                if (playable != null) {
-                    LibraryResult.ofItem(playable, null)
-                } else {
-                    val item = when {
-                        mediaId.startsWith("ARTIST_|") -> {
-                            val id = mediaId.removePrefix("ARTIST_|")
-                            mediaRepository.getMediaDetail(id).getOrNull()?.let { mapArtistToMediaItem(it.item) }
-                        }
-                        mediaId.startsWith("ALBUM_|") -> {
-                            val id = mediaId.removePrefix("ALBUM_|")
-                            mediaRepository.getMediaDetail(id).getOrNull()?.let { mapAlbumToMediaItem(it.item) }
-                        }
-                        mediaId.startsWith("PLAYLIST_|") -> {
-                            val id = mediaId.removePrefix("PLAYLIST_|")
-                            val playlists = mediaRepository.getPlaylists().getOrNull() ?: emptyList()
-                            playlists.find { it.id == id }?.let { mapPlaylistToMediaItem(it) }
-                        }
-                        else -> null
-                    }
-                    if (item != null) {
-                        LibraryResult.ofItem(item, null)
-                    } else {
-                        LibraryResult.ofError(LibraryResult.RESULT_ERROR_BAD_VALUE)
-                    }
-                }
-            }
-        }
-
-        override fun onAddMediaItems(
-            mediaSession: MediaSession,
-            controller: MediaSession.ControllerInfo,
-            mediaItems: List<MediaItem>
-        ): ListenableFuture<List<MediaItem>> {
-            return resolveFuture {
-                val resolvedList = mutableListOf<MediaItem>()
-                for (item in mediaItems) {
-                    val mediaId = item.mediaId
-                    when {
-                        mediaId.startsWith("ARTIST_|") -> {
-                            val artistId = mediaId.removePrefix("ARTIST_|")
-                            val albums = mediaRepository.getArtistAlbums(artistId).getOrNull() ?: emptyList()
-                            for (album in albums) {
-                                val tracks = mediaRepository.getAlbumTracks(album.id).getOrNull() ?: emptyList()
-                                for (track in tracks) {
-                                    buildPlayableMediaItem(track.id)?.let { resolvedList.add(it) }
-                                }
-                            }
-                        }
-                        mediaId.startsWith("ALBUM_|") -> {
-                            val albumId = mediaId.removePrefix("ALBUM_|")
-                            val tracks = mediaRepository.getAlbumTracks(albumId).getOrNull() ?: emptyList()
-                            for (track in tracks) {
-                                buildPlayableMediaItem(track.id)?.let { resolvedList.add(it) }
-                            }
-                        }
-                        mediaId.startsWith("PLAYLIST_|") -> {
-                            val playlistId = mediaId.removePrefix("PLAYLIST_|")
-                            val playlistItems = mediaRepository.getPlaylistItems(playlistId).getOrNull() ?: emptyList()
-                            for (pi in playlistItems) {
-                                buildPlayableMediaItem(pi.id)?.let { resolvedList.add(it) }
-                            }
-                        }
-                        mediaId.startsWith("TRACK_|") -> {
-                            val trackId = mediaId.removePrefix("TRACK_|")
-                            buildPlayableMediaItem(trackId)?.let { resolvedList.add(it) }
-                        }
-                        mediaId.startsWith("DOWNLOAD_|") -> {
-                            val downloadId = mediaId.removePrefix("DOWNLOAD_|")
-                            buildPlayableMediaItem(downloadId)?.let { resolvedList.add(it) }
-                        }
-                        else -> {
-                            buildPlayableMediaItem(mediaId)?.let { resolvedList.add(it) }
-                        }
-                    }
-                }
-                resolvedList
-            }
-        }
-    }
-
-    private fun buildBrowsableFolder(id: String, title: String, mediaType: Int): MediaItem {
-        return MediaItem.Builder()
-            .setMediaId(id)
-            .setMediaMetadata(
-                MediaMetadata.Builder()
-                    .setTitle(title)
-                    .setIsBrowsable(true)
-                    .setIsPlayable(false)
-                    .setMediaType(mediaType)
-                    .build()
-            )
-            .build()
-    }
-
-    private fun mapArtistToMediaItem(artist: com.raulshma.jellyplay.core.model.MediaItem): MediaItem {
-        val artUri = try {
-            Uri.parse(playbackRepository.getImageUrl(artist.id, maxWidth = 600))
-        } catch (_: Exception) {
-            null
-        }
-        return MediaItem.Builder()
-            .setMediaId("ARTIST_|${artist.id}")
-            .setMediaMetadata(
-                MediaMetadata.Builder()
-                    .setTitle(artist.name)
-                    .setIsBrowsable(true)
-                    .setIsPlayable(false)
-                    .setMediaType(MediaMetadata.MEDIA_TYPE_ARTIST)
-                    .setArtworkUri(artUri)
-                    .build()
-            )
-            .build()
-    }
-
-    private fun mapAlbumToMediaItem(album: com.raulshma.jellyplay.core.model.MediaItem): MediaItem {
-        val artUri = try {
-            Uri.parse(playbackRepository.getImageUrl(album.id, maxWidth = 600))
-        } catch (_: Exception) {
-            null
-        }
-        return MediaItem.Builder()
-            .setMediaId("ALBUM_|${album.id}")
-            .setMediaMetadata(
-                MediaMetadata.Builder()
-                    .setTitle(album.name)
-                    .setArtist(album.albumArtist ?: album.artistItems.firstOrNull()?.name ?: "")
-                    .setIsBrowsable(true)
-                    .setIsPlayable(false)
-                    .setMediaType(MediaMetadata.MEDIA_TYPE_ALBUM)
-                    .setArtworkUri(artUri)
-                    .build()
-            )
-            .build()
-    }
-
-    private fun mapPlaylistToMediaItem(playlist: com.raulshma.jellyplay.core.model.Playlist): MediaItem {
-        val artUri = try {
-            Uri.parse(playbackRepository.getImageUrl(playlist.id, maxWidth = 600))
-        } catch (_: Exception) {
-            null
-        }
-        return MediaItem.Builder()
-            .setMediaId("PLAYLIST_|${playlist.id}")
-            .setMediaMetadata(
-                MediaMetadata.Builder()
-                    .setTitle(playlist.name)
-                    .setIsBrowsable(true)
-                    .setIsPlayable(false)
-                    .setMediaType(MediaMetadata.MEDIA_TYPE_PLAYLIST)
-                    .setArtworkUri(artUri)
-                    .build()
-            )
-            .build()
-    }
-
-    private fun mapTrackToPlayableMediaItem(track: com.raulshma.jellyplay.core.model.MediaItem): MediaItem {
-        val artUri = try {
-            Uri.parse(playbackRepository.getImageUrl(track.id, maxWidth = 600))
-        } catch (_: Exception) {
-            null
-        }
-        return MediaItem.Builder()
-            .setMediaId("TRACK_|${track.id}")
-            .setMediaMetadata(
-                MediaMetadata.Builder()
-                    .setTitle(track.name)
-                    .setArtist(track.albumArtist ?: track.artistItems.firstOrNull()?.name ?: "")
-                    .setAlbumTitle(track.album ?: "")
-                    .setIsBrowsable(false)
-                    .setIsPlayable(true)
-                    .setMediaType(MediaMetadata.MEDIA_TYPE_MUSIC)
-                    .setArtworkUri(artUri)
-                    .build()
-            )
-            .build()
-    }
-
-    private fun mapPlaylistItemToPlayableMediaItem(pi: com.raulshma.jellyplay.core.model.PlaylistItem): MediaItem {
-        val artUri = try {
-            Uri.parse(playbackRepository.getImageUrl(pi.id, maxWidth = 600))
-        } catch (_: Exception) {
-            null
-        }
-        return MediaItem.Builder()
-            .setMediaId("TRACK_|${pi.id}")
-            .setMediaMetadata(
-                MediaMetadata.Builder()
-                    .setTitle(pi.name)
-                    .setArtist(pi.artist ?: "")
-                    .setAlbumTitle(pi.album ?: "")
-                    .setIsBrowsable(false)
-                    .setIsPlayable(true)
-                    .setMediaType(MediaMetadata.MEDIA_TYPE_MUSIC)
-                    .setArtworkUri(artUri)
-                    .build()
-            )
-            .build()
-    }
-
-    private fun mapDownloadToPlayableMediaItem(dl: com.raulshma.jellyplay.core.model.DownloadItem): MediaItem {
-        val artUri = try {
-            Uri.parse(playbackRepository.getImageUrl(dl.mediaItemId, maxWidth = 600))
-        } catch (_: Exception) {
-            null
-        }
-        return MediaItem.Builder()
-            .setMediaId("DOWNLOAD_|${dl.mediaItemId}")
-            .setMediaMetadata(
-                MediaMetadata.Builder()
-                    .setTitle(dl.name)
-                    .setArtist(dl.seriesName ?: "")
-                    .setIsBrowsable(false)
-                    .setIsPlayable(true)
-                    .setMediaType(MediaMetadata.MEDIA_TYPE_MUSIC)
-                    .setArtworkUri(artUri)
-                    .build()
-            )
-            .build()
-    }
-
-    private suspend fun buildPlayableMediaItem(itemId: String, startPositionMs: Long = 0L): MediaItem? {
-        val detail = mediaRepository.getMediaDetail(itemId).getOrNull()
-        val localDownload = downloadRepository.getDownloadByMediaItemId(itemId)
-        val file = localDownload?.let { dl ->
-            java.io.File(dl.downloadPath).takeIf { f -> f.exists() }
-        }
-
-        if (localDownload != null && file != null &&
-            localDownload.status == com.raulshma.jellyplay.core.model.DownloadStatus.COMPLETED
-        ) {
-            val name = detail?.item?.name ?: localDownload.name
-            val artist = detail?.item?.albumArtist ?: detail?.item?.artistItems?.firstOrNull()?.name ?: ""
-            val album = detail?.item?.album ?: ""
-            val artUri = try {
-                Uri.parse(playbackRepository.getImageUrl(itemId, maxWidth = 600))
-            } catch (_: Exception) {
-                null
-            }
-            return MediaItem.Builder()
-                .setMediaId(itemId)
-                .setUri(Uri.fromFile(file).toString())
-                .setMediaMetadata(
-                    MediaMetadata.Builder()
-                        .setTitle(name)
-                        .setArtist(artist)
-                        .setAlbumTitle(album)
-                        .setArtworkUri(artUri)
-                        .setIsBrowsable(false)
-                        .setIsPlayable(true)
-                        .setMediaType(MediaMetadata.MEDIA_TYPE_MUSIC)
-                        .build()
-                )
-                .build()
-        }
-
-        if (detail == null) return null
-        val source = detail.mediaSources.firstOrNull()
-        val tier = adaptiveBitrateSelector.resolveBitrate(currentPreferences.streamingQuality)
-        val maxBitrate = tier.targetKbps * 1000
-        val url = playbackRepository.getStreamUrl(
-            itemId = itemId,
-            mediaSourceId = source?.id ?: "",
-            startTimeTicks = if (startPositionMs > 0) startPositionMs * 10_000 else 0L,
-            maxBitrate = maxBitrate,
-            useAudioEndpoint = false,
-        )
-        val artUri = Uri.parse(playbackRepository.getImageUrl(itemId, maxWidth = 600))
-        return MediaItem.Builder()
-            .setMediaId(itemId)
-            .setUri(url)
-            .setMediaMetadata(
-                MediaMetadata.Builder()
-                    .setTitle(detail.item.name)
-                    .setArtist(detail.item.albumArtist ?: detail.item.artistItems.firstOrNull()?.name ?: "")
-                    .setAlbumTitle(detail.item.album ?: "")
-                    .setArtworkUri(artUri)
-                    .setIsBrowsable(false)
-                    .setIsPlayable(true)
-                    .setMediaType(MediaMetadata.MEDIA_TYPE_MUSIC)
-                    .build()
-            )
-            .build()
     }
 }

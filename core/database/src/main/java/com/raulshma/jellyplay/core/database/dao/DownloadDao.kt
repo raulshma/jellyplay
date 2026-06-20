@@ -51,6 +51,9 @@ interface DownloadDao {
     @Query("UPDATE downloads SET downloadedBytes = :bytes, status = :status, speedBytesPerSec = :speedBytesPerSec WHERE id = :id")
     suspend fun updateProgressWithSpeed(id: String, bytes: Long, status: String, speedBytesPerSec: Long)
 
+    @Query("UPDATE downloads SET errorMessage = :message WHERE id = :id")
+    suspend fun updateErrorMessage(id: String, message: String?)
+
     @Query("UPDATE downloads SET totalSizeBytes = :totalSize WHERE id = :id")
     suspend fun updateTotalSize(id: String, totalSize: Long)
 

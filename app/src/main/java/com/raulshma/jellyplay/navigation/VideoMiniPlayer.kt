@@ -81,11 +81,11 @@ fun VideoMiniPlayer(
         val isSynthwave = LocalIsSynthwave.current
         val isSoothing = LocalIsSoothingTheme.current
 
-        val synthwaveTint = Color(0xFF160C2D).copy(alpha = 0.82f)
+        val synthwaveTint = com.raulshma.jellyplay.core.designsystem.theme.ThemeVariantColors.SYNTHWAVE_TINT
         val soothingTint = if (androidx.compose.foundation.isSystemInDarkTheme()) {
-            Color(0xFF161B22).copy(alpha = 0.88f)
+            com.raulshma.jellyplay.core.designsystem.theme.ThemeVariantColors.SOOTHING_DARK_TINT
         } else {
-            Color(0xFFFFFFFF).copy(alpha = 0.88f)
+            com.raulshma.jellyplay.core.designsystem.theme.ThemeVariantColors.SOOTHING_LIGHT_TINT
         }
         val targetTint = when {
             isSynthwave -> synthwaveTint

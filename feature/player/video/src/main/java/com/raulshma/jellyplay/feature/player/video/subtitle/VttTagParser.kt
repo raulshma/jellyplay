@@ -29,7 +29,7 @@ object VttTagParser {
             val tagName = match.groupValues[2]
             if (isClosing) {
                 if (stack.isNotEmpty()) {
-                    currentStyles = stack.removeLast()
+                    currentStyles = stack.removeAt(stack.lastIndex)
                 }
             } else {
                 stack.add(currentStyles)

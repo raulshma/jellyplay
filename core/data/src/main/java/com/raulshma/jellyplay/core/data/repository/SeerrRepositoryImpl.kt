@@ -403,8 +403,18 @@ class SeerrRepositoryImpl @Inject constructor(
 
     private var pollingJob: kotlinx.coroutines.Job? = null
 
-    fun startPolling() {
-        stopPolling()
+    /**
+     * Starts a 60s background poll that refreshes [pendingRequestCount] and
+     * [currentUser]. No-op if already running. Safe to call repeatedly.
+     *
+     * Polling is intentionally NOT auto-started from `init {}` — the
+     * repository is a Singleton instantiated at app start, so auto-starting
+     * would wake up every 60s for users who have never configured Seerr.
+     * Callers (currently [com.raulshma.jellyplay.feature.requests.RequestsViewModel])
+     * start polling when their UI is entered and stop it when cleared.
+     */
+    override fun startPolling() {
+        if (pollingJob?.isActive == true) return
         pollingJob = cacheScope.launch {
             seerrPreferencesStore.preferences.collect { prefs ->
                 if (!prefs.enabled) return@collect
@@ -419,12 +429,8 @@ class SeerrRepositoryImpl @Inject constructor(
         }
     }
 
-    fun stopPolling() {
+    override fun stopPolling() {
         pollingJob?.cancel()
         pollingJob = null
-    }
-
-    init {
-        startPolling()
     }
 }

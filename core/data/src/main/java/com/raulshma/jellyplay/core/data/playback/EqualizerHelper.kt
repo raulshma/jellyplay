@@ -9,6 +9,23 @@ import com.raulshma.jellyplay.core.model.EqualizerSettings
  * 10-band graphic equalizer that wraps [android.media.audiofx.Equalizer].
  *
  * Supports custom per-band level adjustments (-15 dB to +15 dB).
+ *
+ * Also supports **additive band offsets** via [setBandOffsets] — used to
+ * coordinate multiple effects that ride on the same underlying
+ * `android.media.audiofx.Equalizer` (notably [DialogueBoostHelper]).
+ *
+ * Background: Android's `Equalizer(priority=0, sessionId)` is a
+ * system-global effect per audio session — there is exactly ONE
+ * priority-0 equalizer per session regardless of how many `Equalizer`
+ * objects the app constructs. Two helpers that each open their own
+ * `Equalizer(0, sid)` therefore write through the same system effect
+ * and clobber each other. To avoid that, all such effects in JellyPlay
+ * route through this single helper: the user's [EqualizerSettings]
+ * provide the per-band base levels, and [setBandOffsets] overlays
+ * additional millibel deltas on top (e.g. dialogue-boost vocal-band
+ * gains). The applied level for band `i` is
+ * `coerceIn(userLevel_i + offset_i, minLevel, maxLevel)`.
+ *
  * Safe to call [attach] multiple times — previous instances are released automatically.
  */
 class EqualizerHelper {
@@ -20,6 +37,13 @@ class EqualizerHelper {
         private set
 
     private var currentSettings: EqualizerSettings = EqualizerSettings()
+
+    /**
+     * Per-band offsets in millibels, overlaid on top of [currentSettings]
+     * at apply time. See class kdoc for the rationale. Empty means no
+     * overlay — the user's EQ settings pass through unchanged.
+     */
+    private var bandOffsets: Map<Int, Int> = emptyMap()
 
     fun attach(audioSessionId: Int) {
         if (audioSessionId == C.AUDIO_SESSION_ID_UNSET) return
@@ -49,6 +73,36 @@ class EqualizerHelper {
         equalizer?.applySettings(settings)
     }
 
+    /**
+     * Overlay per-band offsets on top of the user's EQ settings and
+     * re-apply. Pass an empty map to clear the overlay. The user's base
+     * levels ([currentSettings]) are preserved; only the applied levels
+     * are recomputed.
+     *
+     * No-op if no `Equalizer` is currently attached.
+     */
+    fun setBandOffsets(offsets: Map<Int, Int>) {
+        bandOffsets = offsets
+        equalizer?.applySettings(currentSettings)
+    }
+
+    /**
+     * Returns the center frequencies (in Hz) of the bands on the
+     * currently-attached `Equalizer`, or an empty list if nothing is
+     * attached. Callers (e.g. [DialogueBoostHelper]) use this to map
+     * frequency-band semantics to band indices without opening their
+     * own `Equalizer`.
+     */
+    fun getBandCenterFrequencies(): List<Int> {
+        val eq = equalizer ?: return emptyList()
+        return try {
+            val count = eq.numberOfBands.toInt()
+            (0 until count).map { eq.getCenterFreq(it.toShort()) / 1000 }
+        } catch (_: Exception) {
+            emptyList()
+        }
+    }
+
     fun detach() {
         equalizer?.release()
         equalizer = null
@@ -64,7 +118,9 @@ class EqualizerHelper {
         settings.bandLevels.forEachIndexed { index, level ->
             if (index >= numBands) return@forEachIndexed
             // level is in dB, range [-15, 15]; convert to millibels (* 100)
-            val mB = (level * 100).coerceIn(minLevel.toInt(), maxLevel.toInt())
+            // then add any overlay offset (also in mB) and clamp.
+            val offset = bandOffsets[index] ?: 0
+            val mB = (level * 100 + offset).coerceIn(minLevel.toInt(), maxLevel.toInt())
             try {
                 setBandLevel(index.toShort(), mB.toShort())
             } catch (_: Exception) {

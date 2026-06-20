@@ -25,6 +25,7 @@ data class DownloadItem(
     val seasonName: String? = null,
     val episodeNumber: Int? = null,
     val seasonNumber: Int? = null,
+    val errorMessage: String? = null,
 )
 
 @Immutable

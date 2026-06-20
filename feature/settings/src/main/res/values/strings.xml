@@ -1,0 +1,14 @@
+<resources>
+    <!-- Settings feature user-facing strings (enhancements §2.2) -->
+    <string name="settings_advanced_enabled">Advanced settings enabled</string>
+    <string name="settings_home_layout_reset">Home layout reset</string>
+    <string name="settings_home_layout_reset_title">Reset Home Layout</string>
+    <string name="settings_home_layout_reset_message">Reset all home layout settings to their defaults? Saved presets are kept.</string>
+    <string name="settings_preset_applied">Preset applied</string>
+    <string name="settings_preset_saved">Saved \"%1$s\"</string>
+    <string name="settings_preset_applied_named">Applied \"%1$s\"</string>
+    <string name="settings_preset_deleted">Deleted \"%1$s\"</string>
+    <string name="settings_share_preset">Share \"%1$s\"</string>
+    <string name="settings_home_layout_subject">JellyPlay Home Layout: %1$s</string>
+    <string name="settings_share_with">Open with\u2026</string>
+</resources>

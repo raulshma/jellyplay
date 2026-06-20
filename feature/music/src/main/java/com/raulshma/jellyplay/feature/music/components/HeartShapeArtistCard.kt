@@ -34,6 +34,9 @@ import com.raulshma.jellyplay.core.model.MediaItem
 import com.raulshma.jellyplay.core.ui.image.MediaImage
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
+import com.raulshma.jellyplay.core.ui.tv.rememberTvFocusState
+import com.raulshma.jellyplay.core.ui.tv.tvFocusIndicator
+import com.raulshma.jellyplay.core.designsystem.theme.ShapeCache
 
 @Composable
 fun HeartShapeArtistCard(
@@ -43,6 +46,7 @@ fun HeartShapeArtistCard(
     imageUrl: String,
     modifier: Modifier = Modifier,
 ) {
+    val focusState = rememberTvFocusState()
     val interactionSource = remember { MutableInteractionSource() }
     val isPressed by interactionSource.collectIsPressedAsState()
     val scale by animateFloatAsState(
@@ -58,6 +62,9 @@ fun HeartShapeArtistCard(
                 scaleX = scale
                 scaleY = scale
             }
+            .then(focusState.focusModifier)
+            .tvFocusIndicator(focusState, ShapeCache.smooth20)
+            .clip(ShapeCache.smooth20)
             .clickable(
                 interactionSource = interactionSource,
                 indication = null,

@@ -119,4 +119,14 @@ interface SeerrRepository {
     val currentUser: StateFlow<SeerrCurrentUser?>
 
     val pendingRequestCount: StateFlow<Int>
+
+    /**
+     * Starts/stops the background polling that refreshes [pendingRequestCount]
+     * and [currentUser]. Consumers (e.g. RequestsViewModel) should call
+     * [startPolling] when their UI is active and [stopPolling] when cleared to
+     * avoid background battery drain for users who never enter the requests
+     * screen. Both methods are idempotent.
+     */
+    fun startPolling()
+    fun stopPolling()
 }

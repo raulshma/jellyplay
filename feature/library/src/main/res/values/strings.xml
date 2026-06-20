@@ -1,0 +1,6 @@
+<resources>
+    <!-- Library feature user-facing strings (enhancements §2.2) -->
+    <string name="photo_saved_to_gallery">Saved to gallery</string>
+    <string name="library_failed_to_load_items">Failed to load items</string>
+    <string name="library_failed_to_load_more_items">Failed to load more items</string>
+</resources>

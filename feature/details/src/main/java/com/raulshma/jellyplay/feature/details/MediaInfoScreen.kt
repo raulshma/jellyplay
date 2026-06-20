@@ -53,7 +53,7 @@ fun MediaInfoScreen(
         viewModel.loadItem(itemId)
     }
 
-    val detail by viewModel.detail
+    val detail by viewModel.detail.collectAsStateWithLifecycle()
     val backgroundColor = rememberScreenBackgroundColor()
     val isTv = LocalTvMode.current
     val adaptiveInfo = LocalAdaptiveInfo.current

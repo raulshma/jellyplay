@@ -179,4 +179,29 @@ class GoogleCastStrategy @Inject constructor(
             Log.w(TAG, "Failed to end session", e)
         }
     }
+
+    override fun release() {
+        // Remove the listeners we registered in ensureListenersRegistered()
+        // so they don't outlive the CastManager (and fire on a stale
+        // CastContext after logout). Idempotent: guarded by the *Registered
+        // flags so calling twice is a no-op.
+        try {
+            val castContext = CastContext.getSharedInstance(appContext)
+            if (sessionListenerRegistered) {
+                castContext.sessionManager.removeSessionManagerListener(sessionListener, CastSession::class.java)
+                sessionListenerRegistered = false
+            }
+            if (castStateListenerRegistered) {
+                castContext.removeCastStateListener(castStateListener)
+                castStateListenerRegistered = false
+            }
+        } catch (_: Exception) {
+            // Cast SDK may already be torn down during process shutdown.
+        }
+        if (discoveryActive) {
+            // Best-effort: stopDiscovery already removes the MediaRouter
+            // callback; call it so we don't leak an active scan.
+            stopDiscovery()
+        }
+    }
 }

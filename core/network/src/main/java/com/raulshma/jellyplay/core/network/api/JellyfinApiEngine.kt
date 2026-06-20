@@ -60,6 +60,7 @@ class JellyfinApiEngine @Inject constructor(
 
     suspend fun <T> apiResult(block: suspend () -> T): Result<T> =
         runCatching { withContext(Dispatchers.IO) { block() } }
+            .recoverCatching { throw RuntimeException(JellyfinErrorMapper.map(it), it) }
 
     suspend fun <T> apiResultWithRetry(
         maxRetries: Int = RetryPolicy.DEFAULT_MAX_RETRIES,

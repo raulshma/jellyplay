@@ -1,6 +1,7 @@
 package com.raulshma.jellyplay.core.data.work
 
 import android.content.Context
+import android.util.Log
 import androidx.hilt.work.HiltWorker
 import androidx.work.CoroutineWorker
 import androidx.work.WorkerParameters
@@ -9,6 +10,8 @@ import com.raulshma.jellyplay.core.model.MediaCleanupConfig
 import com.raulshma.jellyplay.core.network.JellyfinApiClient
 import dagger.assisted.Assisted
 import dagger.assisted.AssistedInject
+import kotlinx.coroutines.CancellationException
+import java.io.IOException
 
 @HiltWorker
 class StaleMediaScanWorker @AssistedInject constructor(
@@ -51,9 +54,24 @@ class StaleMediaScanWorker @AssistedInject constructor(
                 },
             )
             Result.success()
+        } catch (ce: CancellationException) {
+            // Honour structured concurrency — never swallow cancellation.
+            throw ce
+        } catch (e: IOException) {
+            // Transient network failure on page N of M: the helper persists
+            // progress per batch so a retry resumes cleanly rather than
+            // re-scanning from page 0.
+            Log.w(TAG, "Stale media scan hit transient IO failure (attempt ${runAttemptCount + 1})", e)
+            ScanWorkerHelper.markFailed(scanStateDao, entity)
+            Result.retry()
         } catch (e: Exception) {
+            Log.w(TAG, "Stale media scan failed permanently", e)
             ScanWorkerHelper.markFailed(scanStateDao, entity)
             Result.failure()
         }
+    }
+
+    companion object {
+        private const val TAG = "StaleMediaScanWorker"
     }
 }

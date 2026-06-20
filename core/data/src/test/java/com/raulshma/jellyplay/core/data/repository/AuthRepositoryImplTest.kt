@@ -104,11 +104,14 @@ class AuthRepositoryImplTest {
     }
 
     @Test
-    fun `logout disconnects apiClient and clears preferences`() = runTest {
+    fun `logout disconnects apiClient and clears only the session`() = runTest {
         repository.logout()
 
         coVerify { apiClient.disconnect() }
-        coVerify { preferencesStore.clearAll() }
+        // logout must clear the active server/user selection only — NOT wipe
+        // the whole DataStore (device id + all user prefs must be preserved).
+        coVerify { preferencesStore.clearSession() }
+        coVerify(exactly = 0) { preferencesStore.clearAll() }
     }
 
     @Test

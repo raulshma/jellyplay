@@ -3,8 +3,7 @@ package com.raulshma.jellyplay.core.notification.receiver
 import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
-import com.raulshma.jellyplay.core.database.dao.SeenMediaDao
-import com.raulshma.jellyplay.core.database.entity.SeenMediaEntity
+import com.raulshma.jellyplay.core.data.repository.SeenMediaRepository
 import dagger.hilt.android.AndroidEntryPoint
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -16,7 +15,7 @@ import javax.inject.Inject
 @AndroidEntryPoint
 class NotificationActionReceiver : BroadcastReceiver() {
 
-    @Inject lateinit var seenMediaDao: SeenMediaDao
+    @Inject lateinit var seenMediaRepository: SeenMediaRepository
 
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
 
@@ -37,15 +36,10 @@ class NotificationActionReceiver : BroadcastReceiver() {
                 val pendingResult = goAsync()
                 scope.launch {
                     try {
-                        seenMediaDao.insertAll(
-                            listOf(
-                                SeenMediaEntity(
-                                    itemId = itemId,
-                                    libraryId = libraryId,
-                                    mediaType = mediaType,
-                                    seenAt = System.currentTimeMillis(),
-                                )
-                            )
+                        seenMediaRepository.markAsSeen(
+                            itemId = itemId,
+                            libraryId = libraryId,
+                            mediaType = mediaType,
                         )
                     } finally {
                         pendingResult.finish()

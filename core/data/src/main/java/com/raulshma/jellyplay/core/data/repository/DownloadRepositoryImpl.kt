@@ -29,6 +29,7 @@ import com.raulshma.jellyplay.core.model.OfflineSubtitleManifest
 import com.raulshma.jellyplay.core.model.StreamType
 import com.raulshma.jellyplay.core.model.TrickplayInfo
 import dagger.hilt.android.qualifiers.ApplicationContext
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
@@ -152,12 +153,12 @@ class DownloadRepositoryImpl @Inject constructor(
             seasonId = seasonId,
             seriesName = seriesName,
             seasonName = seasonName,
-            episodeNumber = episodeNumber,
-            seasonNumber = seasonNumber,
-        )
-        downloadDao.insertDownload(entity)
-        entity.toDownloadItem()
-    }
+        episodeNumber = episodeNumber,
+        seasonNumber = seasonNumber,
+    )
+    downloadDao.insertDownload(entity)
+    entity.toDownloadItem()
+}
 
     override suspend fun cancelDownload(id: String): Result<Unit> = runCatching {
         val entity = downloadDao.getDownloadById(id) ?: return@runCatching
@@ -326,7 +327,18 @@ class DownloadRepositoryImpl @Inject constructor(
                                 } else {
                                     null
                                 }
-                            } catch (_: Exception) {
+                            } catch (ce: CancellationException) {
+                                // Preserve structured concurrency: if the parent
+                                // scope (e.g. user navigated away) is cancelled,
+                                // the cancellation must propagate instead of
+                                // being silently turned into a null result.
+                                throw ce
+                            } catch (e: Exception) {
+                                // Surface the per-episode failure so the user
+                                // has a clue why an episode is missing from the
+                                // queue. Future: aggregate a failure count and
+                                // expose it through the Result/uiState.
+                                Log.w(TAG, "Failed to queue episode ${episode.id} (${episode.name})", e)
                                 null
                             }
                             }
@@ -467,7 +479,9 @@ class DownloadRepositoryImpl @Inject constructor(
         val dir = File(downloadPath).parentFile ?: return@withContext null
         val file = File(dir, "${DownloadArtifacts.SUBTITLES_DIR}/${DownloadArtifacts.SUBTITLE_MANIFEST_FILE}")
         if (!file.exists()) return@withContext null
-        runCatching { json.decodeFromString<OfflineSubtitleManifest>(file.readText()) }.getOrNull()
+        runCatching { json.decodeFromString<OfflineSubtitleManifest>(file.readText()) }
+            .onFailure { Log.w("DownloadRepository", "Failed to decode local subtitle manifest", it) }
+            .getOrNull()
     }
 
     override suspend fun loadLocalSegments(itemId: String): List<MediaSegment>? = withContext(Dispatchers.IO) {
@@ -475,7 +489,9 @@ class DownloadRepositoryImpl @Inject constructor(
         val dir = File(download.downloadPath).parentFile ?: return@withContext null
         val file = File(dir, DownloadArtifacts.SEGMENTS_FILE)
         if (!file.exists()) return@withContext null
-        runCatching { json.decodeFromString<List<MediaSegment>>(file.readText()) }.getOrNull()
+        runCatching { json.decodeFromString<List<MediaSegment>>(file.readText()) }
+            .onFailure { Log.w("DownloadRepository", "Failed to decode local segments", it) }
+            .getOrNull()
     }
 
     private fun subtitleFileExtension(codec: String?): String = when (codec?.lowercase()) {
@@ -607,6 +623,7 @@ class DownloadRepositoryImpl @Inject constructor(
         seasonName = seasonName,
         episodeNumber = episodeNumber,
         seasonNumber = seasonNumber,
+        errorMessage = errorMessage,
     )
 
     companion object {

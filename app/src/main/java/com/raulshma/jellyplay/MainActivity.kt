@@ -215,6 +215,16 @@ class MainActivity : FragmentActivity() {
                 monochromeMode = preferences.monochromeMode,
             ) {
                 if (showLockScreen) {
+                    // Surface the rate-limit lockout to the user when present.
+                    // We don't disable the keypad visually here — the click-time
+                    // check inside onPinEntered enforces the lockout and surfaces
+                    // a "Too many attempts. Try again in X" message. Disabling
+                    // the keypad buttons is a future UX polish item.
+                    val lockoutState = remember(preferences.pinLockoutUntilEpochMs) {
+                        viewModel.preferencesStore.getPinLockoutState()
+                    }
+                    val now = remember { System.currentTimeMillis() }
+                    val lockoutActive = lockoutState.isLockedOut && lockoutState.lockoutUntilEpochMs > now
                     AuthChallengeScreen(
                         title = if (preferences.biometricLockEnabled && preferences.pinHash == null) "Authenticate" else "Enter PIN",
                         subtitle = "Unlock JellyPlay",
@@ -225,6 +235,16 @@ class MainActivity : FragmentActivity() {
                                 isPinUnlocked.value = true
                                 pinError = null
                             } else if (preferences.pinHash != null) {
+                                // Re-check the lockout at click time: the user
+                                // may have triggered it on a previous attempt
+                                // since the last composition.
+                                val currentLockout = viewModel.preferencesStore.getPinLockoutState()
+                                val currentNow = System.currentTimeMillis()
+                                if (currentLockout.isLockedOut && currentLockout.lockoutUntilEpochMs > currentNow) {
+                                    val remainingMs = currentLockout.lockoutUntilEpochMs - currentNow
+                                    pinError = formatLockoutMessage(remainingMs)
+                                    return@AuthChallengeScreen
+                                }
                                 val valid = viewModel.preferencesStore.verifyPin(
                                     pin,
                                     preferences.pinHash,
@@ -232,13 +252,35 @@ class MainActivity : FragmentActivity() {
                                 if (valid) {
                                     isPinUnlocked.value = true
                                     pinError = null
+                                    // Reset the failed-attempt counter and clear
+                                    // any active lockout, then silently upgrade
+                                    // a legacy unsalted-SHA-256 PIN hash to
+                                    // PBKDF2 (v2) now that the user has proven
+                                    // they know the PIN.
+                                    lifecycleScope.launch {
+                                        viewModel.preferencesStore.resetPinLockout()
+                                        if (viewModel.preferencesStore.pinHashNeedsMigration(preferences.pinHash)) {
+                                            viewModel.preferencesStore.upgradePinHashIfLegacy(pin)
+                                        }
+                                    }
                                 } else {
-                                    pinError = "Incorrect PIN"
+                                    lifecycleScope.launch {
+                                        val newState = viewModel.preferencesStore.recordFailedPinAttempt()
+                                        pinError = if (newState.isLockedOut) {
+                                            formatLockoutMessage(newState.lockoutUntilEpochMs - System.currentTimeMillis())
+                                        } else {
+                                            "Incorrect PIN"
+                                        }
+                                    }
                                 }
                             }
                         },
                         onErrorClear = { pinError = null },
-                        errorMessage = pinError,
+                        errorMessage = if (lockoutActive) {
+                            formatLockoutMessage(lockoutState.lockoutUntilEpochMs - now)
+                        } else {
+                            pinError
+                        },
                     )
                 } else {
                     JellyPlayApp(viewModel = viewModel)
@@ -357,5 +399,19 @@ class MainActivity : FragmentActivity() {
             ratio > max -> max
             else -> ratio
         }
+    }
+}
+
+/**
+ * Formats a PIN-rate-limit lockout duration as a human-readable message.
+ * Shows seconds when under a minute, otherwise minutes/hours.
+ */
+private fun formatLockoutMessage(remainingMs: Long): String {
+    if (remainingMs <= 0L) return "Too many attempts. Try again."
+    val seconds = (remainingMs + 999L) / 1000L // round up so we never show 0s
+    return when {
+        seconds < 60 -> "Too many attempts. Try again in ${seconds}s."
+        seconds < 3600 -> "Too many attempts. Try again in ${seconds / 60}m."
+        else -> "Too many attempts. Try again in ${seconds / 3600}h."
     }
 }

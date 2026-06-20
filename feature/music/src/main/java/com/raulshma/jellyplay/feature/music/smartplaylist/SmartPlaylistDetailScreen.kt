@@ -118,7 +118,7 @@ fun SmartPlaylistDetailScreen(
                         .align(Alignment.BottomEnd)
                         .padding(end = 16.dp, bottom = 64.dp + WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding())
                         .offset {
-                            val maxOffset = 64.dp.toPx()
+                            val maxOffset = com.raulshma.jellyplay.core.designsystem.theme.Dimensions.floatingNavHeight.toPx()
                             val yOffset = (-navOffsetPx).coerceAtMost(maxOffset)
                             androidx.compose.ui.unit.IntOffset(x = 0, y = yOffset.toInt())
                         },

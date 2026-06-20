@@ -29,6 +29,7 @@ dependencies {
     implementation(libs.androidx.junit)
     implementation(libs.androidx.espresso.core)
     implementation(libs.benchmark.macro.junit4)
+    implementation(libs.androidx.uiautomator)
     implementation(platform(libs.compose.bom))
     implementation(libs.compose.ui.test)
     implementation(libs.compose.ui.test.manifest)

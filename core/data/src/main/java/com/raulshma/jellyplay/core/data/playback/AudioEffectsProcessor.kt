@@ -24,8 +24,8 @@ class AudioEffectsProcessor @Inject constructor() {
     var playerProvider: (() -> ExoPlayer?)? = null
 
     private var loudnessEnhancer: LoudnessEnhancer? = null
-    private val dialogueBoost = DialogueBoostHelper()
     private val equalizerHelper = EqualizerHelper()
+    private val dialogueBoost = DialogueBoostHelper(equalizerHelper)
     private val bassBoostHelper = BassBoostHelper()
     private val virtualizerHelper = VirtualizerHelper()
     private val reverbHelper = ReverbHelper()
@@ -170,6 +170,19 @@ class AudioEffectsProcessor @Inject constructor() {
         val player = playerProvider?.invoke() ?: return
         val audioSessionId = player.audioSessionId
         if (audioSessionId == C.AUDIO_SESSION_ID_UNSET) return
+        // Ensure the shared Equalizer exists; the boost overlay is
+        // applied on top of the user's base levels via setBandOffsets.
+        // The Equalizer must stay enabled while EITHER effect is on;
+        // when both are off, drop down to the user-facing EQ toggle so
+        // we don't hold the system effect open needlessly.
+        val eitherOn = _dialogueBoostEnabled.value || _equalizerEnabled.value
+        if (eitherOn) {
+            equalizerHelper.attach(audioSessionId)
+            equalizerHelper.setEnabled(true)
+            equalizerHelper.setSettings(_equalizerSettings.value)
+        } else {
+            equalizerHelper.setEnabled(false)
+        }
         dialogueBoost.attach(audioSessionId)
         dialogueBoost.setStrength(_dialogueBoostStrength)
         dialogueBoost.setEnabled(_dialogueBoostEnabled.value)
@@ -179,8 +192,12 @@ class AudioEffectsProcessor @Inject constructor() {
         val player = playerProvider?.invoke() ?: return
         val audioSessionId = player.audioSessionId
         if (audioSessionId == C.AUDIO_SESSION_ID_UNSET) return
+        // If DialogueBoost is also on, the Equalizer must stay enabled
+        // even when the user's EQ is off; otherwise re-derive the
+        // enabled flag from the user-facing toggle.
+        val mustStayOnForBoost = _dialogueBoostEnabled.value
         equalizerHelper.attach(audioSessionId)
-        equalizerHelper.setEnabled(_equalizerEnabled.value)
+        equalizerHelper.setEnabled(_equalizerEnabled.value || mustStayOnForBoost)
         equalizerHelper.setSettings(_equalizerSettings.value)
     }
 
@@ -225,9 +242,40 @@ class AudioEffectsProcessor @Inject constructor() {
         }
     }
 
+    fun setEqualizerEnabled(enabled: Boolean) {
+        _equalizerEnabled.value = enabled
+        applyEqualizer()
+    }
+
+    fun setBassBoostEnabled(enabled: Boolean) {
+        _bassBoostEnabled.value = enabled
+        applyBassBoost()
+    }
+
+    fun setVirtualizerEnabled(enabled: Boolean) {
+        _virtualizerEnabled.value = enabled
+        applyVirtualizer()
+    }
+
+    fun setDialogueBoostEnabled(enabled: Boolean) {
+        _dialogueBoostEnabled.value = enabled
+        applyDialogueBoost()
+    }
+
+    fun setNightModeEnabled(enabled: Boolean) {
+        _nightModeEnabled.value = enabled
+        applyNightMode()
+    }
+
     fun attachAudioEffects(audioSessionId: Int) {
         if (audioSessionId == C.AUDIO_SESSION_ID_UNSET) return
-        if (_equalizerEnabled.value) {
+        // The user-facing EQ and DialogueBoost both ride on the single
+        // underlying priority-0 `Equalizer` owned by `equalizerHelper`
+        // (see EqualizerHelper/DialogueBoostHelper kdoc). Attach and
+        // enable the helper whenever EITHER is on; DialogueBoostHelper
+        // overlays its vocal-band offsets on top of the user's base
+        // levels via setBandOffsets.
+        if (_equalizerEnabled.value || _dialogueBoostEnabled.value) {
             equalizerHelper.attach(audioSessionId)
             equalizerHelper.setEnabled(true)
             equalizerHelper.setSettings(_equalizerSettings.value)
@@ -349,6 +397,16 @@ class AudioEffectsProcessor @Inject constructor() {
     }
 
     fun reattachForCrossfade(audioSessionId: Int) {
+        // Re-attach effects that hold their own audiofx session to the new
+        // ExoPlayer's session id. LoudnessEnhancer (NightMode) is included
+        // here for symmetry with attachAudioEffects + applyNightMode so the
+        // crossfade path is self-sufficient even if the player's
+        // onAudioSessionIdChanged callback doesn't fire (e.g. when the new
+        // session id happens to equal the previous one). No-op when the new
+        // session id is still AUDIO_SESSION_ID_UNSET — the listener path
+        // (AudioPlaybackManager.playerListener.onAudioSessionIdChanged) takes
+        // over once the AudioTrack actually opens.
+        if (audioSessionId == C.AUDIO_SESSION_ID_UNSET) return
         if (_reverbPreset.value != ReverbPreset.NONE) {
             reverbHelper.detach()
             reverbHelper.attach(audioSessionId)
@@ -357,6 +415,9 @@ class AudioEffectsProcessor @Inject constructor() {
         visualizerHelper.attach(audioSessionId)
         if (visualizerHelper.isEnabled) {
             visualizerHelper.setEnabled(true)
+        }
+        if (_nightModeEnabled.value) {
+            attachLoudnessEnhancer(audioSessionId, nightModeGainForStrength)
         }
     }
 

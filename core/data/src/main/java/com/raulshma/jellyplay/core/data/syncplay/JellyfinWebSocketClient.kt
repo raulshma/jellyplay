@@ -42,6 +42,7 @@ class JellyfinWebSocketClient @Inject constructor(
     private val reconnectAttempts = AtomicInteger(0)
     private val maxReconnectAttempts = 5
     private var backgroundRetryJob: kotlinx.coroutines.Job? = null
+    private var reconnectJob: kotlinx.coroutines.Job? = null
 
     private val _isConnected = kotlinx.coroutines.flow.MutableStateFlow(false)
     val isConnected: kotlinx.coroutines.flow.StateFlow<Boolean> = _isConnected
@@ -73,7 +74,9 @@ class JellyfinWebSocketClient @Inject constructor(
         val device = deviceId ?: return
 
         val wsUrl = buildWsUrl(serverAddress, accessToken, device)
-        Log.d(TAG, "Connecting WebSocket to $wsUrl")
+        // Log only the base endpoint — the full URL carries the access token
+        // and deviceId as query parameters.
+        Log.d(TAG, "Connecting WebSocket to ${serverAddress.trimEnd('/')}/socket")
         val request = Request.Builder().url(wsUrl).build()
         webSocket = okHttpClient.newWebSocket(request, object : WebSocketListener() {
             override fun onOpen(webSocket: WebSocket, response: Response) {
@@ -122,7 +125,12 @@ class JellyfinWebSocketClient @Inject constructor(
             return
         }
         val delayMs = (1000L * (1L shl (attempts - 1).coerceAtMost(4)) + (0..1000L).random()).coerceAtMost(30_000L)
-        scope.launch {
+        // Cancel any in-flight reconnect attempt before scheduling a new one.
+        // Without this, a rapid connect/disconnect cycle (e.g. user toggling
+        // SyncPlay on a flaky network) could leak the deferred connectInternal()
+        // call and end up with two WebSockets racing each other.
+        reconnectJob?.cancel()
+        reconnectJob = scope.launch {
             delay(delayMs)
             if (serverUrl != null && token != null) {
                 Log.d(TAG, "Reconnecting WebSocket (attempt $attempts)")
@@ -136,6 +144,7 @@ class JellyfinWebSocketClient @Inject constructor(
         token = null
         deviceId = null
         backgroundRetryJob?.cancel()
+        reconnectJob?.cancel()
         reconnectAttempts.set(maxReconnectAttempts + 1)
         _isConnected.value = false
         webSocket?.close(1000, "Client disconnecting")

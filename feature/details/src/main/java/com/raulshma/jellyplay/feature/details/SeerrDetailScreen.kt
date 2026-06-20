@@ -381,7 +381,7 @@ private fun SeerrDetailContent(
         ?: MaterialTheme.colorScheme.background
 
     val targetBackgroundColor = when {
-        isSynthwave -> Color(0xFF0C061A)
+        isSynthwave -> com.raulshma.jellyplay.core.designsystem.theme.ThemeVariantColors.SYNTHWAVE_DETAIL_BG
         isSoothing -> MaterialTheme.colorScheme.background
         isLightTheme -> MaterialTheme.colorScheme.background
         else -> lerp(baseOverlayColor, Color.Black, 0.65f)
@@ -422,9 +422,7 @@ private fun SeerrDetailContent(
 
     val backgroundModifier = if (isSynthwave) {
         Modifier.background(
-            Brush.verticalGradient(
-                colors = listOf(Color(0xFF0D061A), Color(0xFF1B0B3A))
-            )
+            com.raulshma.jellyplay.core.designsystem.theme.synthwaveBackgroundBrush()
         )
     } else {
         Modifier.background(backgroundColor)

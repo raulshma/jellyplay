@@ -1,12 +1,14 @@
 package com.raulshma.jellyplay.core.data.worker
 
 import android.Manifest
+import android.app.ForegroundServiceStartNotAllowedException
 import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.app.PendingIntent
 import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
+import android.util.Log
 import android.content.pm.ServiceInfo
 import android.os.Build
 import androidx.core.app.NotificationCompat
@@ -63,7 +65,20 @@ class DownloadWorker @AssistedInject constructor(
         val notificationId = downloadId.hashCode() and 0x7FFFFFFF
         try {
             setForeground(createForegroundInfo(notificationId, entity.name, 0, 0L, entity.totalSizeBytes, 0L))
-        } catch (_: Exception) {
+        } catch (e: Exception) {
+            // On Android 12+ a background-launched worker cannot promote itself
+            // to a foreground service. Continuing would let the OS kill the
+            // worker within seconds (leaving the download "started but never
+            // progressing"). Retry so WorkManager re-attempts when the app is
+            // in a state that allows foreground promotion.
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S &&
+                e is ForegroundServiceStartNotAllowedException
+            ) {
+                return Result.retry()
+            }
+            // Other failures (e.g. notification permission missing on some
+            // OEMs): fall through and attempt the download as a background
+            // worker — best-effort.
         }
 
         val existingBytes = entity.downloadedBytes
@@ -257,37 +272,60 @@ class DownloadWorker @AssistedInject constructor(
             }
 
             if (cancelled.get()) {
-                val finalBytes = totalDownloaded.get()
                 val currentEntity = dao.getDownloadById(downloadId)
                 val cancelStatus = if (currentEntity == null || currentEntity.status == DownloadStatus.CANCELLED.name) {
                     DownloadStatus.CANCELLED.name
                 } else {
                     DownloadStatus.PAUSED.name
                 }
-                dao.updateProgressWithSpeed(downloadId, finalBytes, cancelStatus, 0L)
+                // Multi-connection writes bytes at scattered offsets via
+                // RandomAccessFile.seek(); the cumulative byte count is NOT a
+                // valid resumable prefix. Delete the partial and reset bytes
+                // to 0 so the next attempt starts fresh (a single-connection
+                // resume would otherwise append to a gapped file and corrupt it).
+                runCatching { if (file.exists()) file.delete() }
+                    .onFailure { Log.w("DownloadWorker", "Failed to delete corrupt partial", it) }
+                dao.updateProgressWithSpeed(downloadId, 0L, cancelStatus, 0L)
                 return Result.success()
             }
 
             val finalBytes = totalDownloaded.get()
             if (totalSize > 0L && finalBytes < totalSize) {
-                dao.updateProgressWithSpeed(downloadId, finalBytes, DownloadStatus.FAILED.name, 0L)
+                runCatching { if (file.exists()) file.delete() }
+                    .onFailure { Log.w("DownloadWorker", "Failed to delete incomplete partial", it) }
+                dao.updateErrorMessage(downloadId, "Download incomplete")
+                dao.updateProgressWithSpeed(downloadId, 0L, DownloadStatus.FAILED.name, 0L)
                 return Result.retry()
             }
 
+            dao.updateErrorMessage(downloadId, null)
             dao.updateProgressWithSpeed(downloadId, finalBytes, DownloadStatus.COMPLETED.name, 0L)
             dismissNotification(notificationId)
             Result.success()
         } catch (e: java.io.IOException) {
             if (totalDownloaded.get() > 0) {
-                dao.updateProgressWithSpeed(downloadId, totalDownloaded.get(), DownloadStatus.PAUSED.name, 0L)
+                runCatching { if (file.exists()) file.delete() }
+                    .onFailure { Log.w("DownloadWorker", "Failed to delete partial after IO error", it) }
+                dao.updateProgressWithSpeed(downloadId, 0L, DownloadStatus.PAUSED.name, 0L)
             }
             Result.retry()
         } catch (e: Exception) {
             if (totalDownloaded.get() > 0) {
-                dao.updateProgressWithSpeed(downloadId, totalDownloaded.get(), DownloadStatus.FAILED.name, 0L)
+                runCatching { if (file.exists()) file.delete() }
+                    .onFailure { Log.w("DownloadWorker", "Failed to delete partial after error", it) }
+                dao.updateErrorMessage(downloadId, failureMessage(e))
+                dao.updateProgressWithSpeed(downloadId, 0L, DownloadStatus.FAILED.name, 0L)
             }
             Result.failure()
         }
+    }
+
+    private fun failureMessage(e: Throwable): String = when (e) {
+        is java.net.SocketTimeoutException -> "Network timed out"
+        is java.net.UnknownHostException -> "Cannot reach server"
+        is javax.net.ssl.SSLException -> "Network security error"
+        is java.io.IOException -> "Network error"
+        else -> "Download failed"
     }
 
     private fun downloadChunk(

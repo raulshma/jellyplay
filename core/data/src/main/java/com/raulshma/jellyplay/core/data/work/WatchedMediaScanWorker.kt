@@ -1,6 +1,7 @@
 package com.raulshma.jellyplay.core.data.work
 
 import android.content.Context
+import android.util.Log
 import androidx.hilt.work.HiltWorker
 import androidx.work.CoroutineWorker
 import androidx.work.WorkerParameters
@@ -9,7 +10,9 @@ import com.raulshma.jellyplay.core.model.MediaCleanupConfig
 import com.raulshma.jellyplay.core.network.JellyfinApiClient
 import dagger.assisted.Assisted
 import dagger.assisted.AssistedInject
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.flow.first
+import java.io.IOException
 
 @HiltWorker
 class WatchedMediaScanWorker @AssistedInject constructor(
@@ -54,9 +57,20 @@ class WatchedMediaScanWorker @AssistedInject constructor(
                 },
             )
             Result.success()
+        } catch (ce: CancellationException) {
+            throw ce
+        } catch (e: IOException) {
+            Log.w(TAG, "Watched media scan hit transient IO failure (attempt ${runAttemptCount + 1})", e)
+            ScanWorkerHelper.markFailed(scanStateDao, entity)
+            Result.retry()
         } catch (e: Exception) {
+            Log.w(TAG, "Watched media scan failed permanently", e)
             ScanWorkerHelper.markFailed(scanStateDao, entity)
             Result.failure()
         }
+    }
+
+    companion object {
+        private const val TAG = "WatchedMediaScanWorker"
     }
 }

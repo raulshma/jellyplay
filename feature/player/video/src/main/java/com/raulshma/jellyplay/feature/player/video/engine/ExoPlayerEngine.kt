@@ -106,6 +106,8 @@ class ExoPlayerEngine(
         supportsNightMode = true,
         supportsAudioNormalization = true,
         supportsChannelMixing = true,
+        supportsLiveQualitySwitch = true,
+        supportsBandwidthEstimate = true,
     )
 
     private val _playbackState = MutableStateFlow(EnginePlaybackState.IDLE)
@@ -140,9 +142,9 @@ class ExoPlayerEngine(
     
     private var currentConfig = EngineConfig()
 
-    private val dialogueBoost = DialogueBoostHelper()
-    private val nightMode = NightModeHelper()
     private val equalizerHelper = EqualizerHelper()
+    private val dialogueBoost = DialogueBoostHelper(equalizerHelper)
+    private val nightMode = NightModeHelper()
     private val audioNormalizationHelper = AudioNormalizationHelper()
     private val channelMixHelper = ChannelMixHelper()
     private val bassBoostHelper = BassBoostHelper()
@@ -706,8 +708,14 @@ class ExoPlayerEngine(
         nightMode.setStrength(config.nightModeStrength)
         nightMode.setEnabled(config.nightModeEnabled)
         
+        // equalizerHelper owns the single priority-0 Equalizer for this
+        // session and DialogueBoostHelper overlays its vocal-band gains
+        // on top via setBandOffsets (see EqualizerHelper kdoc). The
+        // underlying effect must stay enabled while EITHER is on; if
+        // only the user's EQ is off but boost is on, disabling here
+        // would silently kill the boost overlay.
         equalizerHelper.setSettings(config.equalizerSettings)
-        equalizerHelper.setEnabled(config.equalizerEnabled)
+        equalizerHelper.setEnabled(config.equalizerEnabled || config.dialogueBoostEnabled)
 
         audioNormalizationHelper.setMode(config.audioNormalizationMode)
         audioNormalizationHelper.setEnabled(config.audioNormalizationEnabled)

@@ -121,7 +121,7 @@ fun MoodPlaylistDetailScreen(
                         .align(Alignment.BottomEnd)
                         .padding(bottom = 64.dp + WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding(), end = 16.dp)
                         .offset {
-                            val maxOffset = 64.dp.toPx()
+                            val maxOffset = com.raulshma.jellyplay.core.designsystem.theme.Dimensions.floatingNavHeight.toPx()
                             val yOffset = (-navOffsetPx).coerceAtMost(maxOffset)
                             androidx.compose.ui.unit.IntOffset(x = 0, y = yOffset.toInt())
                         },

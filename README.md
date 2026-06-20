@@ -119,7 +119,7 @@ on every screen — phone, tablet, foldable, Android TV, and Amazon Fire TV.
   - **Static**: Continue Watching, Search, Play Music, Downloads
   - **Dynamic**: Continue Listening — auto-updates with the currently playing track and album art
 - BlurHash image placeholders for smooth loading
-- Localization in 9 languages (English, German, Spanish, French, Italian, Portuguese, Japanese, Korean, Chinese)
+- Localization ready (English; additional translations in progress)
 - Deep link support via `jellyplay://` and `https://raulshma.github.io/jellyplay/` URI schemes
 - **Settings search** — find any setting instantly by name
 - **New media notifications** — real-time per-library notifications when new content is added, with quiet hours, seen-media tracking, grouped notifications, and notification actions
@@ -456,7 +456,7 @@ feature/admin/           Admin dashboard for server status, active devices, logs
 feature/newsletter/      Weekly server digest with library activity, curated picks, and stats
 feature/insights/        Watch progress heatmap with streak tracking and share-as-image
 feature/requests/        Jellyseerr/Overseerr request management with filter/sort/admin actions
-feature/watchlist/       Watchlist feature (placeholder)
+feature/shortcuts/       App shortcuts (static + dynamic, e.g. Continue Listening)
 baselineprofile/         Baseline profile generator for startup optimization
 ```
 

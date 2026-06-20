@@ -35,7 +35,7 @@ fun ExpressiveToolbarIconButton(
         IconButton(
             onClick = onClick,
             shapes = IconButtonDefaults.shapes(),
-            modifier = Modifier.size(36.dp),
+            modifier = Modifier.size(48.dp),
             colors = IconButtonDefaults.iconButtonColors(
                 containerColor = MaterialTheme.colorScheme.onSurface.copy(
                     alpha = if (highlighted) 0.18f else 0.08f

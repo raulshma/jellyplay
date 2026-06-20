@@ -35,6 +35,7 @@ dependencies {
     implementation(project(":core:model"))
     implementation(project(":core:designsystem"))
 
+    implementation(libs.javax.inject)
     implementation(platform(libs.compose.bom))
     implementation(libs.compose.ui)
     implementation(libs.compose.material3)
@@ -55,7 +56,6 @@ dependencies {
     implementation(libs.compose.animation)
     implementation(libs.media3.session)
     implementation(libs.media3.exoplayer)
-    implementation(libs.smooth.corner.rect)
     implementation(libs.biometric.ktx)
 
     testImplementation(libs.junit)
