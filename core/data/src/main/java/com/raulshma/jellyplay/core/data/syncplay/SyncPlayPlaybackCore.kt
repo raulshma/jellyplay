@@ -36,7 +36,8 @@ class SyncPlayPlaybackCore @Inject constructor(
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
 
     @Volatile
-    private var lastCommand: SyncPlayPlaybackCommand? = null
+    var lastCommand: SyncPlayPlaybackCommand? = null
+        private set
 
     @Volatile
     private var currentPlaylistItemId: String? = null
