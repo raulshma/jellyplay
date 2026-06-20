@@ -100,6 +100,7 @@ import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.raulshma.jellyplay.core.designsystem.theme.ArtworkThemeWrapper
+import com.raulshma.jellyplay.core.designsystem.theme.LocalIsLightTheme
 import com.raulshma.jellyplay.core.data.playback.AudioQueueItem
 import com.raulshma.jellyplay.core.data.playback.QueueUndoEvent
 import com.raulshma.jellyplay.core.ui.image.MediaImage
@@ -120,6 +121,10 @@ import com.raulshma.jellyplay.feature.player.audio.sheets.QueueSheet
 import com.raulshma.jellyplay.feature.player.audio.sheets.SpeedPickerSheet
 import com.raulshma.jellyplay.core.ui.tv.rememberTvFocusState
 import com.raulshma.jellyplay.core.ui.tv.tvFocusIndicator
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
+import com.raulshma.jellyplay.core.ui.tv.LocalTvMode
+import com.raulshma.jellyplay.core.ui.tv.tryRequestFocus
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -186,6 +191,9 @@ fun AudioPlayerScreen(
     val artworkScale = remember { Animatable(0.8f) }
     val contentAlpha = remember { Animatable(0f) }
 
+    val isTv = LocalTvMode.current
+    val playFocusRequester = remember { FocusRequester() }
+
     LaunchedEffect(itemId) {
         viewModel.play(itemId)
         artworkScale.animateTo(1f, spring(dampingRatio = Spring.DampingRatioLowBouncy, stiffness = Spring.StiffnessLow))
@@ -193,6 +201,12 @@ fun AudioPlayerScreen(
 
     LaunchedEffect(Unit) {
         contentAlpha.animateTo(1f, tween(600, delayMillis = 200, easing = AlphaEasing))
+        if (isTv) {
+            for (attempt in 1..20) {
+                androidx.compose.runtime.withFrameNanos { }
+                if (playFocusRequester.tryRequestFocus("audio_play_button")) break
+            }
+        }
     }
 
     BackHandler {
@@ -233,14 +247,9 @@ fun AudioPlayerScreen(
         }
     }
 
-    val isSystemDark = androidx.compose.foundation.isSystemInDarkTheme()
-    val isDarkTheme = remember(preferences.themeMode, isSystemDark) {
-        when (preferences.themeMode) {
-            com.raulshma.jellyplay.core.model.ThemeMode.DARK -> true
-            com.raulshma.jellyplay.core.model.ThemeMode.LIGHT -> false
-            com.raulshma.jellyplay.core.model.ThemeMode.SYSTEM -> isSystemDark
-        }
-    }
+    val isDarkTheme = !LocalIsLightTheme.current
+
+
 
     // Animatables for swipe gestures
     val swipeDismissOffset = remember { androidx.compose.animation.core.Animatable(0f) }
@@ -477,6 +486,7 @@ fun AudioPlayerScreen(
                                 onSkipNext = { viewModel.skipToNext() },
                                 pillSurface = pillSurface,
                                 accentColor = accentColor,
+                                playFocusRequester = playFocusRequester,
                             )
                             Spacer(Modifier.height(12.dp))
                             PixelSecondaryControls(
@@ -557,6 +567,7 @@ fun AudioPlayerScreen(
                             onSkipNext = { viewModel.skipToNext() },
                             pillSurface = pillSurface,
                             accentColor = accentColor,
+                            playFocusRequester = playFocusRequester,
                         )
                         Spacer(Modifier.height(12.dp))
                         PixelSecondaryControls(
@@ -1492,6 +1503,7 @@ private fun PixelTransportControls(
     onSkipNext: () -> Unit,
     pillSurface: Color,
     accentColor: Color,
+    playFocusRequester: FocusRequester? = null,
 ) {
     Row(
         modifier = Modifier
@@ -1531,6 +1543,7 @@ private fun PixelTransportControls(
             isPlaying = isPlaying,
             onClick = onTogglePlayPause,
             accentColor = accentColor,
+            focusRequester = playFocusRequester,
         )
         IconButtonWithPressAnimation(
             onClick = onSkipNext,
@@ -1659,6 +1672,7 @@ private fun PixelPlayPauseButton(
     isPlaying: Boolean,
     onClick: () -> Unit,
     accentColor: Color,
+    focusRequester: FocusRequester? = null,
 ) {
     val focusState = rememberTvFocusState()
     val interactionSource = remember { MutableInteractionSource() }
@@ -1690,6 +1704,7 @@ private fun PixelPlayPauseButton(
             .then(sharedModifier)
             .size(64.dp)
             .graphicsLayer { scaleX = scale; scaleY = scale }
+            .then(if (focusRequester != null) Modifier.focusRequester(focusRequester) else Modifier)
             .then(focusState.focusModifier)
             .tvFocusIndicator(focusState, ShapeCache.smooth20)
             .clip(ShapeCache.smooth20)

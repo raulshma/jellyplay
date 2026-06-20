@@ -101,7 +101,7 @@ internal fun DetailActionButtons(
     val playInteractionSource = remember { MutableInteractionSource() }
     val isPlayPressed by playInteractionSource.collectIsPressedAsState()
     val playScale by animateFloatAsState(
-        targetValue = if (isPlayPressed) 0.95f else 1f,
+        targetValue = if (isPlayPressed && canPlayPrimary) 0.95f else 1f,
         animationSpec = MaterialTheme.motionScheme.fastEffectsSpec(),
         label = "playButtonScale",
     )
@@ -148,8 +148,9 @@ internal fun DetailActionButtons(
                 .clickable(
                     interactionSource = playInteractionSource,
                     indication = null,
-                    enabled = canPlayPrimary,
+                    enabled = true,
                 ) {
+                    if (!canPlayPrimary) return@clickable
                     if (isAlbum && albumTracks.isNotEmpty()) {
                         onPlayAlbumTrack(0)
                         albumTracks.firstOrNull()?.let { track ->
@@ -314,8 +315,9 @@ internal fun DetailActionButtons(
                         .clickable(
                             interactionSource = playInteractionSource,
                             indication = null,
-                            enabled = canPlayPrimary,
+                            enabled = true,
                         ) {
+                            if (!canPlayPrimary) return@clickable
                             if (isAudio) {
                                 onAudioClick()
                             } else if (target != null) {
