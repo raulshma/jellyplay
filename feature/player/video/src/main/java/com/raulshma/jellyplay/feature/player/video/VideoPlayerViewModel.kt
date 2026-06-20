@@ -15,6 +15,7 @@ import com.raulshma.jellyplay.core.data.playback.PlaybackSessionManager
 import com.raulshma.jellyplay.core.data.playback.PlayerLifecycleManager
 import com.raulshma.jellyplay.core.data.playback.SleepTimerManager
 import com.raulshma.jellyplay.core.data.cast.CastManager
+import com.raulshma.jellyplay.core.data.cast.CastMediaOptions
 import com.raulshma.jellyplay.core.data.cast.CastSessionEvent
 import com.raulshma.jellyplay.core.data.playback.AdaptiveBitrateManager
 import com.raulshma.jellyplay.core.data.repository.DownloadRepository
@@ -36,8 +37,10 @@ import com.raulshma.jellyplay.core.model.ReverbPreset
 import com.raulshma.jellyplay.core.model.StreamType
 import com.raulshma.jellyplay.core.model.StreamingQuality
 import com.raulshma.jellyplay.core.model.SubtitleStyle
+import com.raulshma.jellyplay.core.model.TrackType
 import com.raulshma.jellyplay.core.model.isAudioType
 import com.raulshma.jellyplay.core.model.isMusicTrack
+import com.raulshma.jellyplay.core.ui.feedback.UserMessageBus
 import com.raulshma.jellyplay.core.ui.viewmodel.JellyPlayViewModel
 import com.raulshma.jellyplay.feature.player.video.components.AspectRatio
 import com.raulshma.jellyplay.feature.player.video.engine.MpvPlayerEngine
@@ -49,6 +52,7 @@ import com.raulshma.jellyplay.core.data.remote.ActivePlayerController
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.delay
@@ -81,6 +85,7 @@ class VideoPlayerViewModel @Inject constructor(
     val playerLifecycleManager: PlayerLifecycleManager,
     val videoMiniPlayerState: VideoMiniPlayerState,
     private val sleepTimerManager: SleepTimerManager,
+    private val userMessageBus: UserMessageBus,
 ) : JellyPlayViewModel() {
 
     private val _uiState = stateFlow(VideoPlayerUiState())
@@ -356,6 +361,7 @@ class VideoPlayerViewModel @Inject constructor(
                         keepScreenOnDuringVideo = prefs.keepScreenOnDuringVideo,
                     )}
                     updateCastStrategyForEngine(engine)
+                    notifyUnsupportedAudioDelayIfNeeded(engine, prefs.audioDelayMs)
                     engineCollectionJob = launch {
                         kotlinx.coroutines.coroutineScope {
                             launch { engine.isPlaying.collect { isPlaying ->
@@ -371,6 +377,10 @@ class VideoPlayerViewModel @Inject constructor(
                                     com.raulshma.jellyplay.feature.player.video.engine.EnginePlaybackState.ERROR -> 1
                                 }
                                 syncPlayBridge.onPlaybackStateChanged(stateInt)
+                                val buffering = state == com.raulshma.jellyplay.feature.player.video.engine.EnginePlaybackState.BUFFERING
+                                _uiState.update { s ->
+                                    if (s.isBuffering == buffering) s else s.copy(isBuffering = buffering)
+                                }
                             } }
                             launch { engine.currentCues.collect { cues ->
                                 val filteredCues = cues.filter { it.isNotBlank() }
@@ -785,6 +795,33 @@ class VideoPlayerViewModel @Inject constructor(
         launch {
             preferencesStore.setAudioDelay(ms)
         }
+    }
+
+    /**
+     * Surfaces a one-time heads-up when the user has a non-zero audio-delay
+     * preference (set on mpv/LibVLC) but the active engine can't apply it
+     * (e.g. ExoPlayer, see `EngineCapabilities.supportsAudioDelay`). Without
+     * this the user gets out-of-sync audio with no explanation after switching
+     * engines (enhancements §4.4).
+     *
+     * Only fires when a delay is actually configured, so the common case
+     * (delay == 0) stays silent.
+     */
+    private fun notifyUnsupportedAudioDelayIfNeeded(
+        engine: com.raulshma.jellyplay.feature.player.video.engine.MediaEngine,
+        audioDelayMs: Long,
+    ) {
+        if (audioDelayMs == 0L) return
+        if (engine.capabilities.supportsAudioDelay) return
+        val engineName = when (engine) {
+            is com.raulshma.jellyplay.feature.player.video.engine.ExoPlayerEngine -> PlayerType.EXO_PLAYER.displayName
+            is com.raulshma.jellyplay.feature.player.video.engine.MpvPlayerEngine -> PlayerType.MPV.displayName
+            is com.raulshma.jellyplay.feature.player.video.engine.LibVlcPlayerEngine -> PlayerType.LIBVLC.displayName
+            else -> "this engine"
+        }
+        userMessageBus.info(
+            "Audio delay (${audioDelayMs}ms) isn't supported by $engineName — switching engines re-enables it",
+        )
     }
 
     fun setSubtitleDelay(ms: Long) {
@@ -1398,8 +1435,35 @@ class VideoPlayerViewModel @Inject constructor(
             )
             .setSubtitleConfigurations(subtitleConfigs)
             .build()
-        castManager.loadMedia(mediaItem, positionMs, object : Player.Listener {})
+        // Carry the active track + quality selections into the cast session so
+        // the handoff does not silently drop audio/subtitle/quality (§4.5).
+        castManager.loadMedia(mediaItem, positionMs, object : Player.Listener {}, buildCastOptions(sourceId))
         engine.pause()
+    }
+
+    /**
+     * Builds the cast playback intent from the engine's currently-selected
+     * tracks and the active streaming-quality preference. Track indices come
+     * straight from the engine's `availableTracks` (`isSelected`); the bitrate
+     * ceiling mirrors the local `setMaxVideoBitrate` computation so the cast
+     * session respects the same cap (no cap when forcing direct play or when
+     * the quality is `AUTO`).
+     */
+    private fun buildCastOptions(mediaSourceId: String): CastMediaOptions {
+        val tracks = playerSessionManager.engine?.availableTracks?.value.orEmpty()
+        val audioIndex = tracks.firstOrNull { it.isSelected && it.type == TrackType.AUDIO }?.index
+        val subtitleIndex = tracks.firstOrNull { it.isSelected && it.type == TrackType.SUBTITLE }?.index
+        val maxBitrate = if (_uiState.value.forceDirectPlay) {
+            null
+        } else {
+            adaptiveBitrateManager.resolveMaxBitrate(_uiState.value.streamingQuality)?.toInt()
+        }
+        return CastMediaOptions(
+            mediaSourceId = mediaSourceId.takeIf { it.isNotBlank() },
+            audioStreamIndex = audioIndex,
+            subtitleStreamIndex = subtitleIndex,
+            maxVideoBitrate = maxBitrate,
+        )
     }
 
     private fun buildCastSubtitleConfigurations(
@@ -1705,7 +1769,7 @@ class VideoPlayerViewModel @Inject constructor(
         castManager.release()
         activePlayerController.clearEngine()
         if (itemId != null && positionTicks > 0) {
-            releaseScope.launch {
+            releaseScope.launch(NonCancellable) {
                 runCatching {
                     kotlinx.coroutines.withTimeout(5_000) {
                         playbackRepository.reportPlaybackStopped(

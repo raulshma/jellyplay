@@ -17,12 +17,14 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.IconButtonDefaults
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
+import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
@@ -55,7 +57,10 @@ import com.raulshma.jellyplay.core.ui.tv.tvFocusRestorer
 import com.raulshma.jellyplay.core.ui.tv.TvGrabInitialFocus
 import com.raulshma.jellyplay.core.ui.tv.tryRequestFocus
 import com.composables.icons.tabler.outline.*
+import androidx.compose.ui.res.stringResource
+import com.raulshma.jellyplay.feature.livetv.R
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun ChannelsScreen(
     onChannelClick: (String, String) -> Unit,
@@ -120,32 +125,37 @@ fun ChannelsScreen(
         } else if (viewModel.channels.isEmpty() && !viewModel.isLoading) {
             ScreenEmptyState(
                 icon = Tabler.Outline.DeviceTv,
-                title = "No channels available",
+                title = stringResource(R.string.livetv_no_channels_available),
             )
         } else {
-            LazyColumn(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .tvFocusRestorer()
-                    .focusRequester(focusRequester),
-                contentPadding = PaddingValues(
-                    start = contentPad,
-                    end = contentPad,
-                    top = 8.dp,
-                    bottom = bottomPad,
-                ),
-                verticalArrangement = Arrangement.spacedBy(spacing),
+            PullToRefreshBox(
+                isRefreshing = viewModel.isLoading,
+                onRefresh = { viewModel.loadChannels() },
             ) {
-                items(
-                    items = viewModel.channels,
-                    key = { it.id },
-                    contentType = { "channel" },
-                ) { channel ->
-                    ChannelCard(
-                        channel = channel,
-                        imageUrl = viewModel.getImageUrl(channel.id, channel.imageTag),
-                        onClick = { onChannelClick(channel.id, channel.name) },
-                    )
+                LazyColumn(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .tvFocusRestorer()
+                        .focusRequester(focusRequester),
+                    contentPadding = PaddingValues(
+                        start = contentPad,
+                        end = contentPad,
+                        top = 8.dp,
+                        bottom = bottomPad,
+                    ),
+                    verticalArrangement = Arrangement.spacedBy(spacing),
+                ) {
+                    items(
+                        items = viewModel.channels,
+                        key = { it.id },
+                        contentType = { "channel" },
+                    ) { channel ->
+                        ChannelCard(
+                            channel = channel,
+                            imageUrl = viewModel.getImageUrl(channel.id, channel.imageTag),
+                            onClick = { onChannelClick(channel.id, channel.name) },
+                        )
+                    }
                 }
             }
         }

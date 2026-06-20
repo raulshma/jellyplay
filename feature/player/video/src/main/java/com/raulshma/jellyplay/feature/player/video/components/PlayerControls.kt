@@ -173,6 +173,7 @@ internal fun PlayerControls(
     channelMixEnabled: Boolean = false,
     supportsAudioNormalization: Boolean = false,
     supportsChannelMixing: Boolean = false,
+    supportsLiveQualitySwitch: Boolean = true,
     onAudioNormalizationClick: () -> Unit = {},
     onAudioNormalizationModeChange: (AudioNormalizationMode) -> Unit = {},
     onChannelMixClick: () -> Unit = {},
@@ -499,10 +500,12 @@ internal fun PlayerControls(
                         horizontalArrangement = if (isTv) Arrangement.spacedBy(2.dp) else Arrangement.Start,
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                        PlayerQualityButton(
-                            quality = streamingQuality,
-                            onClick = onQualityClick,
-                        )
+                        if (supportsLiveQualitySwitch) {
+                            PlayerQualityButton(
+                                quality = streamingQuality,
+                                onClick = onQualityClick,
+                            )
+                        }
                         PlayerSpeedButton(speed = playbackSpeed, onClick = onSpeedClick)
                         PlayerIconButton(
                             icon = Tabler.Outline.Music,

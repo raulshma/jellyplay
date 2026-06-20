@@ -126,6 +126,9 @@ import com.raulshma.jellyplay.core.ui.components.LocalNavigationBarColor
 import com.raulshma.jellyplay.core.ui.components.MiniPlayer
 import com.raulshma.jellyplay.core.ui.components.LocalPerformanceMode
 import com.raulshma.jellyplay.core.ui.components.LocalFloatingNavVisibility
+import com.raulshma.jellyplay.core.ui.feedback.LocalUserMessageBus
+import com.raulshma.jellyplay.core.ui.feedback.UserMessage
+import com.raulshma.jellyplay.core.ui.feedback.resolve
 import com.raulshma.jellyplay.core.ui.navigation.ALL_TOP_LEVEL_ROUTE_KEYS
 import com.raulshma.jellyplay.core.ui.navigation.DETAIL_ROUTE_CLASS_NAMES
 import com.raulshma.jellyplay.core.ui.navigation.isDetail
@@ -305,16 +308,40 @@ private fun MainContent(
         }
     }
     val navigator = Navigator(navigationState, navigateFilter = { route ->
-        if (route is Route.VideoPlayer && preferences.preferredPlayer == com.raulshma.jellyplay.core.model.PlayerType.EXTERNAL) {
+        // When the preferred player is EXTERNAL, intercept navigation to *any*
+        // video route and hand off to the app-level ActivityResultLauncher
+        // below. That launcher reads the external player's returned position
+        // and credits watched progress via reportExternalPlaybackStopped — so
+        // the Continue Watching row advances for both regular videos and Live
+        // TV channels (enhancements §4.3). Returning false prevents the
+        // in-app VideoPlayerScreen from composing for the external case.
+        val isExternalPreferred = preferences.preferredPlayer ==
+            com.raulshma.jellyplay.core.model.PlayerType.EXTERNAL
+        val externalTarget = when {
+            isExternalPreferred && route is Route.VideoPlayer ->
+                ExternalLaunchTarget(route.itemId, route.mediaSourceId, route.startPositionTicks)
+            isExternalPreferred && route is Route.LiveTvChannelPlayer ->
+                ExternalLaunchTarget(route.channelId, null, 0L)
+            else -> null
+        }
+        if (externalTarget != null) {
             scope.launch {
-                val launch = viewModel.buildExternalPlayerLaunch(route) ?: return@launch
+                val launch = viewModel.buildExternalPlayerLaunch(
+                    itemId = externalTarget.itemId,
+                    mediaSourceId = externalTarget.mediaSourceId,
+                    startPositionTicks = externalTarget.startPositionTicks,
+                ) ?: return@launch
                 viewModel.reportExternalPlaybackStart(launch)
                 pendingExternalLaunch = launch
                 val chooser = Intent.createChooser(launch.intent, "Open with…")
                 runCatching { externalPlayerLauncher.launch(chooser) }
                     .onFailure {
                         pendingExternalLaunch = null
-                        android.widget.Toast.makeText(context, "No video player found", android.widget.Toast.LENGTH_LONG).show()
+                        viewModel.userMessageBus.error(
+                            com.raulshma.jellyplay.core.ui.feedback.uiTextOf(
+                                com.raulshma.jellyplay.core.ui.R.string.msg_no_video_player_found,
+                            ),
+                        )
                     }
             }
             false
@@ -442,7 +469,7 @@ private fun MainContent(
         }
     }
 
-    val snackbarHostState = androidx.compose.material3.SnackbarHostState()
+    val snackbarHostState = remember { androidx.compose.material3.SnackbarHostState() }
     androidx.compose.runtime.LaunchedEffect(viewModel.remoteControlReceiver) {
         viewModel.remoteControlReceiver.playEvents.collect { event ->
             val title = event.title.ifBlank { event.itemId }
@@ -473,6 +500,36 @@ private fun MainContent(
     )
 
     val isTv = context.isTv()
+
+    // Single root collector for app-wide one-shot messages (enhancements §2.1).
+    // Phone renders a Snackbar (accessible, dismissible, localizable); TV keeps
+    // a system Toast since the TV layout has no root SnackbarHost. Either way,
+    // emission is now centralized through UserMessageBus instead of scattered
+    // Toast.makeText calls across modules.
+    val userMessageBus = viewModel.userMessageBus
+    androidx.compose.runtime.LaunchedEffect(userMessageBus, isTv) {
+        userMessageBus.messages.collect { message ->
+            val resolvedText = message.text.resolve(context)
+            if (isTv) {
+                android.widget.Toast.makeText(
+                    context,
+                    resolvedText,
+                    if (message is UserMessage.Error) android.widget.Toast.LENGTH_LONG
+                    else android.widget.Toast.LENGTH_SHORT,
+                ).show()
+            } else {
+                snackbarHostState.showSnackbar(
+                    message = resolvedText,
+                    withDismissAction = true,
+                    duration = if (message is UserMessage.Error) {
+                        androidx.compose.material3.SnackbarDuration.Long
+                    } else {
+                        androidx.compose.material3.SnackbarDuration.Short
+                    },
+                )
+            }
+        }
+    }
 
     val drawerState = rememberDrawerState(DrawerValue.Closed)
     val drawerScope = rememberCoroutineScope()
@@ -512,6 +569,7 @@ private fun MainContent(
         LocalTvTypography provides tvTypography,
         LocalPerformanceMode provides preferences.performanceMode,
         LocalFloatingNavVisibility provides isBottomNavVisibleState,
+        LocalUserMessageBus provides userMessageBus,
     ) {
         val isExpanded = adaptiveInfo.windowSizeClass != WindowSizeClass.Compact
 
@@ -1052,6 +1110,18 @@ private fun FullScreenContent(
         }
     }
 }
+
+/**
+ * Resolved fields needed to build an [com.raulshma.jellyplay.ExternalPlayerLaunch]
+ * from a navigable video route (regular video or Live TV channel). Used by the
+ * `navigateFilter` to uniformly hand off to the app-level external-player
+ * ActivityResultLauncher (enhancements §4.3).
+ */
+private data class ExternalLaunchTarget(
+    val itemId: String,
+    val mediaSourceId: String?,
+    val startPositionTicks: Long,
+)
 
 private fun routeToIcon(route: Route): ImageVector = when (route) {
     Route.Home -> Tabler.Outline.Home

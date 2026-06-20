@@ -1,0 +1,5 @@
+<resources>
+    <!-- Newsletter feature user-facing strings (enhancements §2.2) -->
+    <string name="newsletter_could_not_load">Could not load newsletter</string>
+    <string name="newsletter_preparing_digest">Preparing your digest\u2026</string>
+</resources>

@@ -8,6 +8,7 @@ import android.app.PendingIntent
 import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
+import android.util.Log
 import android.content.pm.ServiceInfo
 import android.os.Build
 import androidx.core.app.NotificationCompat
@@ -283,6 +284,7 @@ class DownloadWorker @AssistedInject constructor(
                 // to 0 so the next attempt starts fresh (a single-connection
                 // resume would otherwise append to a gapped file and corrupt it).
                 runCatching { if (file.exists()) file.delete() }
+                    .onFailure { Log.w("DownloadWorker", "Failed to delete corrupt partial", it) }
                 dao.updateProgressWithSpeed(downloadId, 0L, cancelStatus, 0L)
                 return Result.success()
             }
@@ -290,26 +292,40 @@ class DownloadWorker @AssistedInject constructor(
             val finalBytes = totalDownloaded.get()
             if (totalSize > 0L && finalBytes < totalSize) {
                 runCatching { if (file.exists()) file.delete() }
+                    .onFailure { Log.w("DownloadWorker", "Failed to delete incomplete partial", it) }
+                dao.updateErrorMessage(downloadId, "Download incomplete")
                 dao.updateProgressWithSpeed(downloadId, 0L, DownloadStatus.FAILED.name, 0L)
                 return Result.retry()
             }
 
+            dao.updateErrorMessage(downloadId, null)
             dao.updateProgressWithSpeed(downloadId, finalBytes, DownloadStatus.COMPLETED.name, 0L)
             dismissNotification(notificationId)
             Result.success()
         } catch (e: java.io.IOException) {
             if (totalDownloaded.get() > 0) {
                 runCatching { if (file.exists()) file.delete() }
+                    .onFailure { Log.w("DownloadWorker", "Failed to delete partial after IO error", it) }
                 dao.updateProgressWithSpeed(downloadId, 0L, DownloadStatus.PAUSED.name, 0L)
             }
             Result.retry()
         } catch (e: Exception) {
             if (totalDownloaded.get() > 0) {
                 runCatching { if (file.exists()) file.delete() }
+                    .onFailure { Log.w("DownloadWorker", "Failed to delete partial after error", it) }
+                dao.updateErrorMessage(downloadId, failureMessage(e))
                 dao.updateProgressWithSpeed(downloadId, 0L, DownloadStatus.FAILED.name, 0L)
             }
             Result.failure()
         }
+    }
+
+    private fun failureMessage(e: Throwable): String = when (e) {
+        is java.net.SocketTimeoutException -> "Network timed out"
+        is java.net.UnknownHostException -> "Cannot reach server"
+        is javax.net.ssl.SSLException -> "Network security error"
+        is java.io.IOException -> "Network error"
+        else -> "Download failed"
     }
 
     private fun downloadChunk(

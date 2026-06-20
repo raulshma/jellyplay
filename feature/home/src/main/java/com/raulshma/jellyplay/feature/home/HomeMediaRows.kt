@@ -52,6 +52,7 @@ import com.raulshma.jellyplay.core.ui.adaptive.rowCardWidth
 import com.raulshma.jellyplay.core.ui.components.PlayButtonWithProgress
 import com.raulshma.jellyplay.core.ui.components.PosterCard
 import com.raulshma.jellyplay.core.ui.components.formatDurationFromTicks
+import com.raulshma.jellyplay.core.ui.components.progressFraction
 import com.raulshma.jellyplay.core.ui.components.formatRemainingTimeFromTicks
 import com.raulshma.jellyplay.core.ui.components.rememberDominantColor
 import com.raulshma.jellyplay.core.ui.image.MediaImage
@@ -177,10 +178,7 @@ fun WideMediaCard(
     )
 
     val dominantColor = rememberDominantColor(backdropUrl.ifBlank { imageUrl }, itemId = item.id)
-    val hasProgress = item.playbackPositionTicks != null && item.runTimeTicks != null && item.runTimeTicks!! > 0
-    val progressPercent = if (hasProgress) {
-        (item.playbackPositionTicks!!.toFloat() / item.runTimeTicks!!.toFloat()).coerceIn(0f, 1f)
-    } else 0f
+    val progressPercent = item.progressFraction() ?: 0f
     val playButtonSize = if (isTv) 44.dp else 36.dp
 
     val imageModifier = Modifier
@@ -286,7 +284,7 @@ fun WideMediaCard(
                     )
                 }
 
-                if (hasProgress && progressPercent > 0f) {
+                if (progressPercent > 0f) {
                     Box(
                         modifier = Modifier
                             .align(Alignment.BottomCenter)

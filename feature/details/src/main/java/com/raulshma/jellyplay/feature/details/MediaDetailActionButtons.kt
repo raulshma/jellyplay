@@ -40,6 +40,7 @@ import com.raulshma.jellyplay.core.designsystem.theme.ShapeCache
 import com.raulshma.jellyplay.core.model.MediaDetail
 import com.raulshma.jellyplay.core.model.MediaItem
 import com.raulshma.jellyplay.core.model.MediaType
+import com.raulshma.jellyplay.core.ui.components.progressFraction
 import com.raulshma.jellyplay.core.ui.tv.LocalTvMode
 import com.raulshma.jellyplay.core.ui.tv.ifElse
 import com.raulshma.jellyplay.core.ui.tv.rememberTvFocusState
@@ -71,7 +72,8 @@ internal fun DetailActionButtons(
     val isSeriesOrEpisode = item.mediaType == MediaType.SERIES || item.mediaType == MediaType.EPISODE
     val isSeries = item.mediaType == MediaType.SERIES
     val target = if (isSeriesOrEpisode) smartPlayTarget else null
-    val hasProgress = item.playbackPositionTicks != null && item.playbackPositionTicks!! > 0
+    val itemProgressFraction = item.progressFraction()
+    val hasProgress = itemProgressFraction != null && itemProgressFraction > 0f
     val allSeasonsFetched = seasons.isNotEmpty() && fetchedSeasonIds.size >= seasons.size
     val allEpisodesEmpty = seasons.isNotEmpty() && episodes.values.all { it.isEmpty() }
     val isResolvingSeriesTarget = isSeries &&
@@ -83,8 +85,8 @@ internal fun DetailActionButtons(
         val t = target.startPositionTicks
         val rt = target.episode.runTimeTicks
         if (t > 0 && rt != null && rt > 0) (t.toFloat() / rt).coerceIn(0f, 1f) else 0f
-    } else if (hasProgress && item.runTimeTicks != null && item.runTimeTicks!! > 0) {
-        (item.playbackPositionTicks!!.toFloat() / item.runTimeTicks!!).coerceIn(0f, 1f)
+    } else if (hasProgress && itemProgressFraction != null) {
+        itemProgressFraction
     } else 0f
 
     val playLabel = when {

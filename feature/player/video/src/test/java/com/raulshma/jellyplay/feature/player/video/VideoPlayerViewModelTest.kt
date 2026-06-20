@@ -16,6 +16,7 @@ import com.raulshma.jellyplay.core.data.syncplay.SyncPlayPlaybackCore
 import com.raulshma.jellyplay.core.datastore.UserPreferencesStore
 import com.raulshma.jellyplay.core.model.EffectStrength
 import com.raulshma.jellyplay.core.model.UserPreferences
+import com.raulshma.jellyplay.core.ui.feedback.UserMessageBus
 import com.raulshma.jellyplay.feature.player.video.components.AspectRatio
 import io.mockk.every
 import io.mockk.mockk
@@ -82,6 +83,7 @@ class VideoPlayerViewModelTest {
             playerLifecycleManager = playerLifecycleManager,
             videoMiniPlayerState = videoMiniPlayerState,
             sleepTimerManager = sleepTimerManager,
+            userMessageBus = UserMessageBus(),
         )
     }
 

@@ -179,21 +179,26 @@ internal class SyncPlayBridge(
                                 uiState.update { it.copy(isSyncPlaySyncing = true, isSyncPlaySynced = false) }
                             }
                             else -> {
-                                val posTicks = syncPlayManager.estimateCurrentTicks(
-                                    event.data.startPositionTicks, event.data.whenMs
-                                )
-                                val posMs = posTicks / 10_000
-                                val engine = getMediaEngine()!!
-                                val durationMs = engine.durationMs
-                                val safePosMs = if (durationMs > 0) posMs.coerceIn(0, durationMs) else posMs.coerceAtLeast(0)
-                                val currentPosMs = engine.currentPositionMs
-                                if (Math.abs(safePosMs - currentPosMs) > 300) {
-                                    engine.seekTo(safePosMs)
-                                }
-                                if (event.data.isPlaying && !engine.isPlaying.value) {
-                                    engine.play()
-                                } else if (!event.data.isPlaying && engine.isPlaying.value) {
-                                    engine.pause()
+                                val engine = getMediaEngine()
+                                if (engine == null) {
+                                    syncPlayManager.playbackCore.setPendingItemLoad(true)
+                                    uiState.update { it.copy(isSyncPlaySyncing = true, isSyncPlaySynced = false) }
+                                } else {
+                                    val posTicks = syncPlayManager.estimateCurrentTicks(
+                                        event.data.startPositionTicks, event.data.whenMs
+                                    )
+                                    val posMs = posTicks / 10_000
+                                    val durationMs = engine.durationMs
+                                    val safePosMs = if (durationMs > 0) posMs.coerceIn(0, durationMs) else posMs.coerceAtLeast(0)
+                                    val currentPosMs = engine.currentPositionMs
+                                    if (Math.abs(safePosMs - currentPosMs) > 300) {
+                                        engine.seekTo(safePosMs)
+                                    }
+                                    if (event.data.isPlaying && !engine.isPlaying.value) {
+                                        engine.play()
+                                    } else if (!event.data.isPlaying && engine.isPlaying.value) {
+                                        engine.pause()
+                                    }
                                 }
                             }
                         }

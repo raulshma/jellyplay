@@ -1,7 +1,6 @@
 package com.raulshma.jellyplay.feature.settings
 
 import android.content.Intent
-import android.widget.Toast
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -57,12 +56,16 @@ import com.raulshma.jellyplay.core.ui.adaptive.bottomPadding
 import com.raulshma.jellyplay.core.ui.adaptive.contentPadding
 import com.raulshma.jellyplay.core.ui.components.JellyPlayScreenScaffold
 import com.raulshma.jellyplay.core.ui.components.rememberScreenBackgroundColor
+import com.raulshma.jellyplay.core.ui.feedback.LocalUserMessageBus
 import com.raulshma.jellyplay.core.ui.tv.LocalTvMode
 import com.raulshma.jellyplay.core.ui.tv.TvGrabInitialFocus
 import com.raulshma.jellyplay.core.ui.tv.enableMarqueeOnFocus
 import com.raulshma.jellyplay.core.ui.tv.rememberTvFocusState
 import com.raulshma.jellyplay.core.ui.tv.tvFocusIndicator
 import com.raulshma.jellyplay.core.ui.tv.tvFocusRestorer
+import com.raulshma.jellyplay.core.ui.feedback.uiTextOf
+import androidx.compose.ui.res.stringResource
+import com.raulshma.jellyplay.feature.settings.R
 import java.text.DateFormat
 import java.util.Date
 
@@ -79,6 +82,7 @@ fun HomeLayoutPresetsScreen(
     val adaptiveInfo = LocalAdaptiveInfo.current
     val context = LocalContext.current
     val clipboard = LocalClipboardManager.current
+    val userMessageBus = LocalUserMessageBus.current
 
     val focusRequester = remember { FocusRequester() }
     TvGrabInitialFocus(focusRequester = focusRequester, itemCount = 1, tag = "home_presets_init")
@@ -194,7 +198,7 @@ fun HomeLayoutPresetsScreen(
             onSave = { name ->
                 viewModel.saveCurrentLayoutAsPreset(name)
                 showSaveSheet = false
-                Toast.makeText(context, "Saved \"$name\"", Toast.LENGTH_SHORT).show()
+                userMessageBus.info(uiTextOf(R.string.settings_preset_saved, name))
             },
         )
     }
@@ -215,7 +219,7 @@ fun HomeLayoutPresetsScreen(
                         }
                         showImportSheet = false
                         viewModel.clearPresetImportError()
-                        Toast.makeText(context, "Preset applied", Toast.LENGTH_SHORT).show()
+                        userMessageBus.info(uiTextOf(R.string.settings_preset_applied))
                     }
                 }
             },
@@ -229,22 +233,22 @@ fun HomeLayoutPresetsScreen(
             onLoad = {
                 viewModel.applyPreset(preset.config)
                 actionTarget = null
-                Toast.makeText(context, "Applied \"${preset.name}\"", Toast.LENGTH_SHORT).show()
+                userMessageBus.info(uiTextOf(R.string.settings_preset_applied_named, preset.name))
             },
             onShare = {
                 val json = viewModel.exportPresetJson(preset)
                 clipboard.setText(AnnotatedString(json))
                 val share = Intent(Intent.ACTION_SEND).apply {
                     type = "application/json"
-                    putExtra(Intent.EXTRA_SUBJECT, "JellyPlay Home Layout: ${preset.name}")
+                    putExtra(Intent.EXTRA_SUBJECT, context.getString(R.string.settings_home_layout_subject, preset.name))
                     putExtra(Intent.EXTRA_TEXT, json)
                 }
-                context.startActivity(Intent.createChooser(share, "Share \"${preset.name}\""))
+                context.startActivity(Intent.createChooser(share, context.getString(R.string.settings_share_preset, preset.name)))
             },
             onDelete = {
                 viewModel.deleteHomeLayoutPreset(preset.id)
                 actionTarget = null
-                Toast.makeText(context, "Deleted \"${preset.name}\"", Toast.LENGTH_SHORT).show()
+                userMessageBus.info(uiTextOf(R.string.settings_preset_deleted, preset.name))
             },
         )
     }
@@ -252,16 +256,20 @@ fun HomeLayoutPresetsScreen(
     if (resetConfirm) {
         AlertDialog(
             onDismissRequest = { resetConfirm = false },
-            title = { Text("Reset Home Layout") },
-            text = { Text("Reset all home layout settings to their defaults? Saved presets are kept.") },
+            title = { Text(stringResource(R.string.settings_home_layout_reset_title)) },
+            text = { Text(stringResource(R.string.settings_home_layout_reset_message)) },
             confirmButton = {
                 TextButton(onClick = {
                     viewModel.resetHomeLayout()
                     resetConfirm = false
-                    Toast.makeText(context, "Home layout reset", Toast.LENGTH_SHORT).show()
-                }) { Text("Reset") }
+                    userMessageBus.info(uiTextOf(R.string.settings_home_layout_reset))
+                }) { Text(stringResource(com.raulshma.jellyplay.core.ui.R.string.core_reset)) }
             },
-            dismissButton = { TextButton(onClick = { resetConfirm = false }) { Text("Cancel") } },
+            dismissButton = {
+                TextButton(onClick = { resetConfirm = false }) {
+                    Text(stringResource(com.raulshma.jellyplay.core.ui.R.string.core_cancel))
+                }
+            },
         )
     }
 }

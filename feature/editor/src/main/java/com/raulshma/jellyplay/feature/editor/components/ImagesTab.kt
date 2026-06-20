@@ -57,12 +57,11 @@ import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
-import androidx.compose.ui.platform.LocalContext
-import coil3.compose.AsyncImage
-import coil3.request.ImageRequest
 import com.raulshma.jellyplay.core.model.ImageInfo
 import com.raulshma.jellyplay.core.model.RemoteImageInfo
+import com.raulshma.jellyplay.core.ui.image.MediaImage
 import com.raulshma.jellyplay.feature.editor.EditorUiState
+import coil3.size.Size as CoilSize
 import com.raulshma.jellyplay.feature.editor.EditorViewModel
 import com.composables.icons.tabler.Tabler
 import com.composables.icons.tabler.outline.*
@@ -204,7 +203,6 @@ private fun ImageCard(
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    val context = LocalContext.current
     Card(
         modifier = modifier.fillMaxWidth(),
         shape = ShapeCache.smooth16,
@@ -212,14 +210,11 @@ private fun ImageCard(
         onClick = onClick,
     ) {
         Box {
-            AsyncImage(
-                model = remember(imageUrl) {
-                    ImageRequest.Builder(context)
-                        .data(imageUrl)
-                        .size(512, 512)
-                        .build()
-                },
+            MediaImage(
+                url = imageUrl,
                 contentDescription = imageInfo.imageType,
+                size = CoilSize(512, 512),
+                placeholderIcon = Tabler.Outline.Photo,
                 modifier = Modifier
                     .fillMaxWidth()
                     .aspectRatio(
@@ -274,7 +269,6 @@ private fun ImageUploadSheet(
     onUploadFile: (ByteArray, String) -> Unit,
     onUploadUrl: (String, String) -> Unit,
 ) {
-    val context = LocalContext.current
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
     var selectedTab by remember { mutableStateOf(0) }
     var imageUrl by remember { mutableStateOf("") }
@@ -310,14 +304,11 @@ private fun ImageUploadSheet(
 
             if (selectedTab == 0) {
                 selectedUri?.let { uri ->
-                    AsyncImage(
-                        model = remember(uri) {
-                            ImageRequest.Builder(context)
-                                .data(uri)
-                                .size(512, 512)
-                                .build()
-                        },
+                    MediaImage(
+                        url = uri.toString(),
                         contentDescription = "Preview",
+                        size = CoilSize(512, 512),
+                        placeholderIcon = Tabler.Outline.Photo,
                         modifier = Modifier
                             .fillMaxWidth()
                             .height(200.dp)
@@ -349,14 +340,11 @@ private fun ImageUploadSheet(
                     singleLine = true,
                 )
                 if (imageUrl.isNotBlank()) {
-                    AsyncImage(
-                        model = remember(imageUrl) {
-                            ImageRequest.Builder(context)
-                                .data(imageUrl)
-                                .size(512, 512)
-                                .build()
-                        },
+                    MediaImage(
+                        url = imageUrl,
                         contentDescription = "Preview",
+                        size = CoilSize(512, 512),
+                        placeholderIcon = Tabler.Outline.Photo,
                         modifier = Modifier
                             .fillMaxWidth()
                             .height(200.dp)
@@ -523,21 +511,18 @@ private fun RemoteImageCard(
     remoteImage: RemoteImageInfo,
     onDownload: () -> Unit,
 ) {
-    val context = LocalContext.current
     Card(
         modifier = Modifier.fillMaxWidth(),
         shape = ShapeCache.smooth12,
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainer),
     ) {
         Box {
-            AsyncImage(
-                model = remember(remoteImage.thumbnailUrl, remoteImage.url) {
-                    ImageRequest.Builder(context)
-                        .data(remoteImage.thumbnailUrl.ifBlank { remoteImage.url })
-                        .size(512, 512)
-                        .build()
-                },
+            MediaImage(
+                url = remoteImage.thumbnailUrl.ifBlank { remoteImage.url },
                 contentDescription = null,
+                size = CoilSize(512, 512),
+                fallbackUrls = if (remoteImage.thumbnailUrl.isNotBlank()) listOf(remoteImage.url) else emptyList(),
+                placeholderIcon = Tabler.Outline.Photo,
                 modifier = Modifier
                     .fillMaxWidth()
                     .aspectRatio(2f / 3f)
@@ -603,15 +588,11 @@ private fun FullImageDialog(
                 },
             contentAlignment = Alignment.Center,
         ) {
-            val context = LocalContext.current
-            AsyncImage(
-                model = remember(imageUrl) {
-                    ImageRequest.Builder(context)
-                        .data(imageUrl)
-                        .size(1024, 1024)
-                        .build()
-                },
+            MediaImage(
+                url = imageUrl,
                 contentDescription = imageInfo.imageType,
+                size = CoilSize(1024, 1024),
+                placeholderIcon = Tabler.Outline.Photo,
                 modifier = Modifier
                     .fillMaxWidth()
                     .graphicsLayer(

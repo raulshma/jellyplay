@@ -78,10 +78,13 @@ import com.composables.icons.tabler.outline.Share
 import com.composables.icons.tabler.outline.X
 import com.raulshma.jellyplay.core.ui.components.DelayedLoadingScreen
 import com.raulshma.jellyplay.core.ui.components.LoadingScreen
+import com.raulshma.jellyplay.core.ui.feedback.LocalUserMessageBus
+import com.raulshma.jellyplay.core.ui.feedback.uiTextOf
 import com.raulshma.jellyplay.core.ui.image.MediaImage
 import com.raulshma.jellyplay.core.ui.tv.LocalTvMode
 import com.raulshma.jellyplay.core.ui.tv.tryRequestFocus
 import com.raulshma.jellyplay.core.ui.tv.input.onDpadKeyEvent
+import com.raulshma.jellyplay.feature.library.R
 
 @Composable
 fun PhotoViewerScreen(
@@ -92,6 +95,7 @@ fun PhotoViewerScreen(
 ) {
     val isTv = LocalTvMode.current
     val context = LocalContext.current
+    val userMessageBus = LocalUserMessageBus.current
     val photo by viewModel.photo
     val siblings by viewModel.siblings
     val currentIndex by viewModel.currentIndex
@@ -137,11 +141,11 @@ fun PhotoViewerScreen(
     LaunchedEffect(saveResult) {
         when (val result = saveResult) {
             is SaveResult.Success -> {
-                android.widget.Toast.makeText(context, "Saved to gallery", android.widget.Toast.LENGTH_SHORT).show()
+                userMessageBus.info(uiTextOf(R.string.photo_saved_to_gallery))
                 viewModel.clearSaveResult()
             }
             is SaveResult.Error -> {
-                android.widget.Toast.makeText(context, result.message, android.widget.Toast.LENGTH_LONG).show()
+                userMessageBus.error(result.message)
                 viewModel.clearSaveResult()
             }
             else -> {}
@@ -305,7 +309,7 @@ fun PhotoViewerScreen(
                                     OverlayActionButton(
                                         onClick = {
                                             viewModel.sharePhoto(context) { errorMsg ->
-                                                android.widget.Toast.makeText(context, errorMsg, android.widget.Toast.LENGTH_SHORT).show()
+                                                userMessageBus.error(errorMsg)
                                             }
                                         },
                                     ) {

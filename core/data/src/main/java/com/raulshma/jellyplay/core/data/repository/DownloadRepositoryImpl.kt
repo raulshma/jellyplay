@@ -153,12 +153,12 @@ class DownloadRepositoryImpl @Inject constructor(
             seasonId = seasonId,
             seriesName = seriesName,
             seasonName = seasonName,
-            episodeNumber = episodeNumber,
-            seasonNumber = seasonNumber,
-        )
-        downloadDao.insertDownload(entity)
-        entity.toDownloadItem()
-    }
+        episodeNumber = episodeNumber,
+        seasonNumber = seasonNumber,
+    )
+    downloadDao.insertDownload(entity)
+    entity.toDownloadItem()
+}
 
     override suspend fun cancelDownload(id: String): Result<Unit> = runCatching {
         val entity = downloadDao.getDownloadById(id) ?: return@runCatching
@@ -479,7 +479,9 @@ class DownloadRepositoryImpl @Inject constructor(
         val dir = File(downloadPath).parentFile ?: return@withContext null
         val file = File(dir, "${DownloadArtifacts.SUBTITLES_DIR}/${DownloadArtifacts.SUBTITLE_MANIFEST_FILE}")
         if (!file.exists()) return@withContext null
-        runCatching { json.decodeFromString<OfflineSubtitleManifest>(file.readText()) }.getOrNull()
+        runCatching { json.decodeFromString<OfflineSubtitleManifest>(file.readText()) }
+            .onFailure { Log.w("DownloadRepository", "Failed to decode local subtitle manifest", it) }
+            .getOrNull()
     }
 
     override suspend fun loadLocalSegments(itemId: String): List<MediaSegment>? = withContext(Dispatchers.IO) {
@@ -487,7 +489,9 @@ class DownloadRepositoryImpl @Inject constructor(
         val dir = File(download.downloadPath).parentFile ?: return@withContext null
         val file = File(dir, DownloadArtifacts.SEGMENTS_FILE)
         if (!file.exists()) return@withContext null
-        runCatching { json.decodeFromString<List<MediaSegment>>(file.readText()) }.getOrNull()
+        runCatching { json.decodeFromString<List<MediaSegment>>(file.readText()) }
+            .onFailure { Log.w("DownloadRepository", "Failed to decode local segments", it) }
+            .getOrNull()
     }
 
     private fun subtitleFileExtension(codec: String?): String = when (codec?.lowercase()) {
@@ -619,6 +623,7 @@ class DownloadRepositoryImpl @Inject constructor(
         seasonName = seasonName,
         episodeNumber = episodeNumber,
         seasonNumber = seasonNumber,
+        errorMessage = errorMessage,
     )
 
     companion object {

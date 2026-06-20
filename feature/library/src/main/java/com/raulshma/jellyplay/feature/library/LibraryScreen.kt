@@ -50,8 +50,10 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.IconButtonDefaults
 import com.raulshma.jellyplay.core.ui.components.JellyPlayLinearProgressIndicator
+import com.raulshma.jellyplay.core.ui.components.progressFraction
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.PlainTooltip
+import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TooltipBox
@@ -88,6 +90,7 @@ import androidx.paging.compose.collectAsLazyPagingItems
 import androidx.paging.compose.itemKey
 import com.raulshma.jellyplay.core.designsystem.theme.LocalIsLightTheme
 import com.raulshma.jellyplay.core.designsystem.theme.ShapeCache
+import com.raulshma.jellyplay.core.ui.components.AppendErrorFooter
 import com.raulshma.jellyplay.core.ui.components.ErrorScreen
 import com.raulshma.jellyplay.core.ui.components.ExpressiveToolbarIconButton
 import com.raulshma.jellyplay.core.ui.components.GlassDismissTag
@@ -109,6 +112,8 @@ import com.raulshma.jellyplay.feature.library.components.LibraryListItem
 import com.raulshma.jellyplay.core.ui.animation.animateContentSizeNoClip
 import com.composables.icons.tabler.Tabler
 import com.composables.icons.tabler.outline.*
+import androidx.compose.ui.res.stringResource
+import com.raulshma.jellyplay.feature.library.R
 import kotlinx.coroutines.launch
 
 @OptIn(
@@ -392,7 +397,11 @@ fun LibraryScreen(
                     }
                 }
 
-                Box(modifier = Modifier.fillMaxSize()) {
+                PullToRefreshBox(
+                    isRefreshing = pagedItems.loadState.refresh is LoadState.Loading,
+                    onRefresh = { pagedItems.refresh() },
+                    modifier = Modifier.fillMaxSize(),
+                ) {
                     when (pagedItems.loadState.refresh) {
                         is LoadState.Loading -> {
                             DelayedLoadingScreen()
@@ -402,7 +411,7 @@ fun LibraryScreen(
                             val refreshError = pagedItems.loadState.refresh as LoadState.Error
                             ErrorScreen(
                                 message = refreshError.error.localizedMessage
-                                    ?: "Failed to load items",
+                                    ?: stringResource(R.string.library_failed_to_load_items),
                                 onRetry = { pagedItems.refresh() },
                                 modifier = Modifier.fillMaxSize(),
                             )
@@ -501,15 +510,13 @@ fun LibraryScreen(
                                             val memoizedClick = remember(item.id, item.mediaType, item.parentId, item.name) {
                                                 { onItemClick(item.id, item.mediaType, item.parentId, item.name) }
                                             }
+                                            val itemProgress = item.progressFraction()
                                             PosterCard(
                                                 item = item,
                                                 imageUrl = remember(item.id) { viewModel.getImageUrl(item.id) },
                                                 onClick = memoizedClick,
-                                                showProgress = item.playbackPositionTicks != null && item.playbackPositionTicks!! > 0,
-                                                progressPercent = if (item.runTimeTicks != null && item.runTimeTicks!! > 0) {
-                                                    (item.playbackPositionTicks?.toFloat()
-                                                        ?: 0f) / item.runTimeTicks!!.toFloat()
-                                                } else 0f,
+                                                showProgress = itemProgress != null && itemProgress > 0f,
+                                                progressPercent = itemProgress ?: 0f,
                                                 blurHash = item.blurHashes.primary,
                                                 sharedElementKey = "poster_${item.id}",
                                                 photoFolderChildImageUrls = photoFolderChildUrls[item.id].orEmpty(),
@@ -639,11 +646,10 @@ fun LibraryScreen(
 
                     if (pagedItems.loadState.append is LoadState.Error) {
                         val appendError = pagedItems.loadState.append as LoadState.Error
-                        Text(
-                            text = appendError.error.localizedMessage
-                                ?: "Failed to load more items",
-                            color = MaterialTheme.colorScheme.error,
-                            style = MaterialTheme.typography.bodySmall,
+                        AppendErrorFooter(
+                            message = appendError.error.localizedMessage
+                                ?: stringResource(R.string.library_failed_to_load_more_items),
+                            onRetry = { pagedItems.retry() },
                             modifier = Modifier
                                 .align(Alignment.BottomCenter)
                                 .padding(16.dp)

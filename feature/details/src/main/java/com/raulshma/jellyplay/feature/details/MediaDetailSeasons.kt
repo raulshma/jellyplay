@@ -57,6 +57,7 @@ import com.raulshma.jellyplay.core.model.MediaItem
 import com.raulshma.jellyplay.core.ui.components.JellyPlayLoadingIndicator
 import com.raulshma.jellyplay.core.ui.components.formatDurationFromTicks
 import com.raulshma.jellyplay.core.ui.components.formatRemainingTimeFromTicks
+import com.raulshma.jellyplay.core.ui.components.progressFraction
 import com.raulshma.jellyplay.core.ui.image.MediaImage
 import com.raulshma.jellyplay.core.ui.tv.TvFocusableItemRow
 import com.raulshma.jellyplay.core.ui.tv.rememberTvFocusState
@@ -331,10 +332,9 @@ internal fun EpisodeCard(
                     .padding(8.dp)
             )
 
-            if (episode.playbackPositionTicks != null && episode.playbackPositionTicks!! > 0) {
-                val progress = if (episode.runTimeTicks != null && episode.runTimeTicks!! > 0) {
-                    (episode.playbackPositionTicks!!.toFloat() / episode.runTimeTicks!!).coerceIn(0f, 1f)
-                } else 0f
+            val positionTicks = episode.playbackPositionTicks
+            if (positionTicks != null && positionTicks > 0) {
+                val progress = episode.progressFraction() ?: 0f
                 Box(
                     modifier = Modifier
                         .align(Alignment.BottomStart)
@@ -343,7 +343,7 @@ internal fun EpisodeCard(
                         .background(MaterialTheme.colorScheme.primary)
                 )
             }
-            if (episode.isPlayed && (episode.playbackPositionTicks == null || episode.playbackPositionTicks!! <= 0)) {
+            if (episode.isPlayed && (positionTicks == null || positionTicks <= 0)) {
                 Box(
                     modifier = Modifier
                         .align(Alignment.BottomEnd)
@@ -373,12 +373,14 @@ internal fun EpisodeCard(
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
             )
-            val hasWatchProgress = episode.playbackPositionTicks != null && episode.playbackPositionTicks!! > 0 && !episode.isPlayed
-            val remainingTime = if (hasWatchProgress && episode.runTimeTicks != null) {
-                formatRemainingTimeFromTicks(episode.runTimeTicks!!, episode.playbackPositionTicks!!)
+            val runtimeTicks = episode.runTimeTicks
+            val positionTicks = episode.playbackPositionTicks
+            val hasWatchProgress = positionTicks != null && positionTicks > 0 && !episode.isPlayed
+            val remainingTime = if (hasWatchProgress && runtimeTicks != null && positionTicks != null) {
+                formatRemainingTimeFromTicks(runtimeTicks, positionTicks)
             } else null
-            val totalTime = if (episode.runTimeTicks != null) {
-                formatDurationFromTicks(episode.runTimeTicks!!)
+            val totalTime = if (runtimeTicks != null) {
+                formatDurationFromTicks(runtimeTicks)
             } else null
             
             if (remainingTime != null && totalTime != null) {

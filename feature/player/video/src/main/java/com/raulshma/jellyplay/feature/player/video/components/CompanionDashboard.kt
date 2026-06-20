@@ -30,7 +30,8 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import coil3.compose.AsyncImage
+import coil3.request.ImageRequest
+import com.raulshma.jellyplay.core.ui.image.MediaImage
 import com.composables.icons.tabler.Tabler
 import com.composables.icons.tabler.outline.*
 import com.raulshma.jellyplay.core.designsystem.theme.LocalArtworkColors
@@ -215,8 +216,8 @@ fun CompanionDashboard(
                             .padding(horizontal = 20.dp, vertical = 10.dp),
                         horizontalAlignment = Alignment.CenterHorizontally
                     ) {
-                        AsyncImage(
-                            model = artworkUrl,
+                        MediaImage(
+                            url = artworkUrl.orEmpty(),
                             contentDescription = "Poster",
                             contentScale = ContentScale.Crop,
                             modifier = Modifier
@@ -409,8 +410,8 @@ fun CompanionDashboard(
                     horizontalArrangement = Arrangement.spacedBy(20.dp)
                 ) {
                     // Media Poster Card
-                    AsyncImage(
-                        model = artworkUrl,
+                    MediaImage(
+                        url = artworkUrl.orEmpty(),
                         contentDescription = "Poster",
                         contentScale = ContentScale.Crop,
                         modifier = Modifier
@@ -555,20 +556,19 @@ fun OverviewTabContent(
                     LazyRow(
                         horizontalArrangement = Arrangement.spacedBy(12.dp)
                     ) {
-                        items(people) { person ->
+                        items(people, key = { it.id }, contentType = { "person" }) { person ->
                             Column(
                                 horizontalAlignment = Alignment.CenterHorizontally,
                                 modifier = Modifier.width(72.dp)
                             ) {
                                 val avatarUrl = remember(person.id) { getImageUrl(person.id) }
-                                AsyncImage(
-                                    model = avatarUrl,
+                                MediaImage(
+                                    url = avatarUrl,
                                     contentDescription = person.name,
                                     contentScale = ContentScale.Crop,
                                     modifier = Modifier
                                         .size(60.dp)
-                                        .clip(CircleShape)
-                                        .background(MaterialTheme.colorScheme.surfaceVariant)
+                                        .clip(CircleShape),
                                 )
                                 Spacer(Modifier.height(6.dp))
                                 Text(
@@ -783,7 +783,7 @@ fun EpisodesTabContent(
             contentPadding = PaddingValues(8.dp),
             verticalArrangement = Arrangement.spacedBy(8.dp)
         ) {
-            items(episodes) { episode ->
+            items(episodes, key = { it.id }, contentType = { "episode" }) { episode ->
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
@@ -794,8 +794,8 @@ fun EpisodesTabContent(
                     horizontalArrangement = Arrangement.spacedBy(12.dp)
                 ) {
                     val thumbUrl = remember(episode.id) { getImageUrl(episode.id) }
-                    AsyncImage(
-                        model = thumbUrl,
+                    MediaImage(
+                        url = thumbUrl,
                         contentDescription = episode.name,
                         contentScale = ContentScale.Crop,
                         modifier = Modifier
