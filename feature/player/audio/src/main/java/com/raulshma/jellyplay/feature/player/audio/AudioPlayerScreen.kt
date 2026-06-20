@@ -118,6 +118,8 @@ import com.raulshma.jellyplay.feature.player.audio.sheets.EqualizerSheet
 import com.raulshma.jellyplay.feature.player.audio.sheets.LyricsSearchSheet
 import com.raulshma.jellyplay.feature.player.audio.sheets.QueueSheet
 import com.raulshma.jellyplay.feature.player.audio.sheets.SpeedPickerSheet
+import com.raulshma.jellyplay.core.ui.tv.rememberTvFocusState
+import com.raulshma.jellyplay.core.ui.tv.tvFocusIndicator
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -1049,10 +1051,13 @@ private fun LyricsOverlay(
                         }
                     }
                     if (lyrics.any { it.words.isNotEmpty() }) {
+                        val karaokeFocus = rememberTvFocusState()
                         IconButton(
                             onClick = { onKaraokeToggle(!karaokeMode) },
                             modifier = Modifier
                                 .size(28.dp)
+                                .then(karaokeFocus.focusModifier)
+                                .tvFocusIndicator(karaokeFocus, ShapeCache.smooth8)
                                 .background(
                                     if (karaokeMode) MaterialTheme.colorScheme.primary.copy(alpha = 0.6f)
                                     else Color.Black.copy(alpha = 0.4f),
@@ -1069,10 +1074,13 @@ private fun LyricsOverlay(
                         Spacer(Modifier.width(4.dp))
                     }
                     if (hasSyncedLyrics) {
+                        val offsetFocus = rememberTvFocusState()
                         IconButton(
                             onClick = { showOffsetSlider = !showOffsetSlider },
                             modifier = Modifier
                                 .size(28.dp)
+                                .then(offsetFocus.focusModifier)
+                                .tvFocusIndicator(offsetFocus, ShapeCache.smooth8)
                                 .background(
                                     if (lyricsOffsetMs != com.raulshma.jellyplay.core.data.playback.AudioLyricsManager.DEFAULT_OFFSET_MS)
                                         MaterialTheme.colorScheme.primary.copy(alpha = 0.6f)
@@ -1089,10 +1097,13 @@ private fun LyricsOverlay(
                         }
                         Spacer(Modifier.width(4.dp))
                     }
+                    val searchFocus = rememberTvFocusState()
                     IconButton(
                         onClick = onSearchClick,
                         modifier = Modifier
                             .size(28.dp)
+                            .then(searchFocus.focusModifier)
+                            .tvFocusIndicator(searchFocus, ShapeCache.smooth8)
                             .background(
                                 Color.Black.copy(alpha = 0.4f),
                                 ShapeCache.smooth8,
@@ -1154,6 +1165,11 @@ private fun PixelPlayerTopBar(
     onKaraokeToggle: (Boolean) -> Unit = {},
     hasKaraokeLyrics: Boolean = false,
 ) {
+    val minimizeFocusState = rememberTvFocusState()
+    val lyricsFocusState = rememberTvFocusState()
+    val queueFocusState = rememberTvFocusState()
+    val moreFocusState = rememberTvFocusState()
+
     Row(
         modifier = Modifier
             .fillMaxWidth()
@@ -1161,7 +1177,12 @@ private fun PixelPlayerTopBar(
         horizontalArrangement = Arrangement.SpaceBetween,
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        IconButton(onClick = onBack, modifier = Modifier) {
+        IconButton(
+            onClick = onBack,
+            modifier = Modifier
+                .then(minimizeFocusState.focusModifier)
+                .tvFocusIndicator(minimizeFocusState, CircleShape)
+        ) {
             Icon(
                 Tabler.Outline.ChevronDown, "Minimize",
                 tint = MaterialTheme.colorScheme.onBackground,
@@ -1176,7 +1197,12 @@ private fun PixelPlayerTopBar(
         )
         Row {
             if (hasLyrics) {
-                IconButton(onClick = onLyricsClick, modifier = Modifier) {
+                IconButton(
+                    onClick = onLyricsClick,
+                    modifier = Modifier
+                        .then(lyricsFocusState.focusModifier)
+                        .tvFocusIndicator(lyricsFocusState, CircleShape)
+                ) {
                     Icon(
                         if (lyricsVisible) Tabler.Outline.Microphone2 else Tabler.Outline.Microphone,
                         "Lyrics",
@@ -1185,11 +1211,21 @@ private fun PixelPlayerTopBar(
                     )
                 }
             }
-            IconButton(onClick = onQueueClick, modifier = Modifier) {
+            IconButton(
+                onClick = onQueueClick,
+                modifier = Modifier
+                    .then(queueFocusState.focusModifier)
+                    .tvFocusIndicator(queueFocusState, CircleShape)
+            ) {
                 Icon(Tabler.Outline.Playlist, "Queue", tint = MaterialTheme.colorScheme.onBackground, modifier = Modifier.size(22.dp))
             }
             Box {
-                IconButton(onClick = { onMenuToggle(true) }, modifier = Modifier) {
+                IconButton(
+                    onClick = { onMenuToggle(true) },
+                    modifier = Modifier
+                        .then(moreFocusState.focusModifier)
+                        .tvFocusIndicator(moreFocusState, CircleShape)
+                ) {
                     Icon(Tabler.Outline.DotsVertical, "More", tint = MaterialTheme.colorScheme.onBackground, modifier = Modifier.size(22.dp))
                 }
                 val itemColors = androidx.compose.material3.MenuDefaults.itemColors(
@@ -1374,6 +1410,7 @@ private fun TrackInfoSection(
     artistId: String? = null,
     onArtistClick: (String) -> Unit = {},
 ) {
+    val artistFocusState = rememberTvFocusState()
     Text(
         title,
         style = MaterialTheme.typography.headlineMedium,
@@ -1396,8 +1433,13 @@ private fun TrackInfoSection(
         modifier = Modifier
             .fillMaxWidth()
             .then(
-                if (artistClickable) Modifier.clickable { onArtistClick(artistId!!) }
-                else Modifier
+                if (artistClickable) {
+                    Modifier
+                        .then(artistFocusState.focusModifier)
+                        .tvFocusIndicator(artistFocusState, ShapeCache.smooth8)
+                        .clip(ShapeCache.smooth8)
+                        .clickable { onArtistClick(artistId!!) }
+                } else Modifier
             ),
         textAlign = TextAlign.Center,
     )
@@ -1618,6 +1660,7 @@ private fun PixelPlayPauseButton(
     onClick: () -> Unit,
     accentColor: Color,
 ) {
+    val focusState = rememberTvFocusState()
     val interactionSource = remember { MutableInteractionSource() }
     val isPressed by interactionSource.collectIsPressedAsState()
     val scale by animateFloatAsState(
@@ -1647,6 +1690,8 @@ private fun PixelPlayPauseButton(
             .then(sharedModifier)
             .size(64.dp)
             .graphicsLayer { scaleX = scale; scaleY = scale }
+            .then(focusState.focusModifier)
+            .tvFocusIndicator(focusState, ShapeCache.smooth20)
             .clip(ShapeCache.smooth20)
             .background(buttonBg)
             
@@ -1675,6 +1720,7 @@ private fun IconButtonWithPressAnimation(
     size: androidx.compose.ui.unit.Dp = 40.dp,
     modifier: Modifier = Modifier,
 ) {
+    val focusState = rememberTvFocusState()
     val interactionSource = remember { MutableInteractionSource() }
     val isPressed by interactionSource.collectIsPressedAsState()
     val scale by animateFloatAsState(
@@ -1688,6 +1734,8 @@ private fun IconButtonWithPressAnimation(
         modifier = modifier
             .size(size)
             .graphicsLayer { scaleX = scale; scaleY = scale }
+            .then(focusState.focusModifier)
+            .tvFocusIndicator(focusState, CircleShape)
             ,
         shapes = androidx.compose.material3.IconButtonDefaults.shapes(),
         interactionSource = interactionSource,

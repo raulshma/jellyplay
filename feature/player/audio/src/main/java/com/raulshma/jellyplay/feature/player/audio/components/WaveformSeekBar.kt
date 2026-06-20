@@ -38,6 +38,11 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import kotlin.math.PI
 import kotlin.math.sin
+import com.raulshma.jellyplay.core.designsystem.theme.ShapeCache
+import com.raulshma.jellyplay.core.ui.tv.rememberTvFocusState
+import com.raulshma.jellyplay.core.ui.tv.tvFocusIndicator
+import com.raulshma.jellyplay.core.ui.tv.input.onDpadKey
+import androidx.compose.foundation.focusable
 
 private const val WAVE_FREQUENCY = 6.0f
 
@@ -90,7 +95,24 @@ fun WaveformSeekBar(
         )
     }
 
-    Box(modifier = modifier) {
+    val focusState = rememberTvFocusState()
+
+    Box(
+        modifier = modifier
+            .then(focusState.focusModifier)
+            .tvFocusIndicator(focusState, ShapeCache.smooth12)
+            .focusable()
+            .onDpadKey(
+                onLeft = {
+                    onSeek((progress - 0.05f).coerceIn(0f, 1f))
+                    true
+                },
+                onRight = {
+                    onSeek((progress + 0.05f).coerceIn(0f, 1f))
+                    true
+                }
+            )
+    ) {
         Box(
             modifier = Modifier
                 .fillMaxWidth()
