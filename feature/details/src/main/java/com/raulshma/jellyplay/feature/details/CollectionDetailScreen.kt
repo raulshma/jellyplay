@@ -45,6 +45,7 @@ import com.raulshma.jellyplay.core.ui.adaptive.itemSpacing
 import com.raulshma.jellyplay.core.ui.components.CircleBgBackButton
 import com.raulshma.jellyplay.core.ui.components.ErrorScreen
 import com.raulshma.jellyplay.core.ui.components.DelayedLoadingScreen
+import com.raulshma.jellyplay.core.ui.components.progressFraction
 import com.raulshma.jellyplay.core.ui.components.LoadingScreen
 import com.raulshma.jellyplay.core.ui.components.PosterCard
 import com.raulshma.jellyplay.core.ui.image.MediaImage
@@ -179,15 +180,14 @@ fun CollectionDetailScreen(
                                     ),
                                 ),
                             ) {
+                                val itemProgress = item.progressFraction()
                                 PosterCard(
                                     item = item,
                                     imageUrl = viewModel.getImageUrl(item.id),
                                     onClick = { onItemClick(item.id) },
                                     modifier = focusModifier,
-                                    showProgress = item.playbackPositionTicks != null && item.playbackPositionTicks!! > 0,
-                                    progressPercent = if (item.runTimeTicks != null && item.runTimeTicks!! > 0) {
-                                        (item.playbackPositionTicks?.toFloat() ?: 0f) / item.runTimeTicks!!.toFloat()
-                                    } else 0f,
+                                    showProgress = itemProgress != null && itemProgress > 0f,
+                                    progressPercent = itemProgress ?: 0f,
                                     sharedElementKey = "poster_${item.id}",
                                 )
                             }

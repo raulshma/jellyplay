@@ -65,7 +65,12 @@ internal object ScanWorkerHelper {
     }
 
     suspend fun markFailed(scanStateDao: ScanStateDao, entity: ScanStateEntity) {
-        scanStateDao.update(entity.copy(status = ScanPhase.FAILED.name))
+        // Re-read the current row so the in-flight progress/total/itemsFound/
+        // resultJson that executePaginatedScan persisted during the scan are
+        // preserved. The `entity` passed in was captured before scanning began
+        // and would overwrite that progress with zeros if copied directly.
+        val current = scanStateDao.getById(entity.scanId) ?: entity
+        scanStateDao.update(current.copy(status = ScanPhase.FAILED.name))
     }
 }
 

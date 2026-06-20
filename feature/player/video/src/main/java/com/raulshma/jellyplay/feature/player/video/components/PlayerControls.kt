@@ -148,7 +148,7 @@ internal fun PlayerControls(
     onDialogueBoostStrengthChange: (EffectStrength) -> Unit,
     onNightModeClick: () -> Unit,
     onNightModeStrengthChange: (EffectStrength) -> Unit,
-    onAudioDelayClick: () -> Unit,
+    onAVSyncClick: () -> Unit,
     onDecoderClick: () -> Unit,
     onPassthroughClick: () -> Unit,
     onSubtitleDownloadClick: () -> Unit,
@@ -164,13 +164,16 @@ internal fun PlayerControls(
     onVideoStatsClick: () -> Unit = {},
     bufferedPosition: Long = 0L,
     streamingQuality: StreamingQuality = StreamingQuality.AUTO,
+    forceDirectPlay: Boolean = true,
     onQualityClick: () -> Unit = {},
+    onForceDirectPlayToggle: () -> Unit = {},
     audioNormalizationMode: AudioNormalizationMode = AudioNormalizationMode.NONE,
     audioNormalizationEnabled: Boolean = false,
     channelMixMode: ChannelMixMode = ChannelMixMode.AUTO,
     channelMixEnabled: Boolean = false,
     supportsAudioNormalization: Boolean = false,
     supportsChannelMixing: Boolean = false,
+    supportsLiveQualitySwitch: Boolean = true,
     onAudioNormalizationClick: () -> Unit = {},
     onAudioNormalizationModeChange: (AudioNormalizationMode) -> Unit = {},
     onChannelMixClick: () -> Unit = {},
@@ -186,6 +189,7 @@ internal fun PlayerControls(
     onOverflowMenuChange: (Boolean) -> Unit = {},
     castManager: CastManager? = null,
     playMethod: String = "Direct Play",
+    isDirectPlayForced: Boolean = false,
     hdrType: String? = null,
     mediaStreams: List<MediaStream> = emptyList(),
     videoStats: EngineVideoStats = EngineVideoStats(),
@@ -441,6 +445,7 @@ internal fun PlayerControls(
                 if (showPlaybackMetadata) {
                     PlaybackMetadataRow(
                         playMethod = playMethod,
+                        isDirectPlayForced = isDirectPlayForced,
                         hdrType = hdrType,
                         mediaStreams = mediaStreams,
                         videoStats = videoStats,
@@ -495,10 +500,12 @@ internal fun PlayerControls(
                         horizontalArrangement = if (isTv) Arrangement.spacedBy(2.dp) else Arrangement.Start,
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                        PlayerQualityButton(
-                            quality = streamingQuality,
-                            onClick = onQualityClick,
-                        )
+                        if (supportsLiveQualitySwitch) {
+                            PlayerQualityButton(
+                                quality = streamingQuality,
+                                onClick = onQualityClick,
+                            )
+                        }
                         PlayerSpeedButton(speed = playbackSpeed, onClick = onSpeedClick)
                         PlayerIconButton(
                             icon = Tabler.Outline.Music,
@@ -618,9 +625,14 @@ internal fun PlayerControls(
                                     onNightModeClick()
                                 },
                                 onNightModeStrengthChange = onNightModeStrengthChange,
-                                onAudioDelayClick = {
+                                onAVSyncClick = {
                                     showOverflow = false
-                                    onAudioDelayClick()
+                                    onAVSyncClick()
+                                },
+                                forceDirectPlay = forceDirectPlay,
+                                onForceDirectPlayToggle = {
+                                    showOverflow = false
+                                    onForceDirectPlayToggle()
                                 },
                                 onDecoderClick = {
                                     showOverflow = false
@@ -1068,7 +1080,9 @@ private fun PlayerOverflowMenu(
     onDialogueBoostStrengthChange: (EffectStrength) -> Unit,
     onNightModeClick: () -> Unit,
     onNightModeStrengthChange: (EffectStrength) -> Unit,
-    onAudioDelayClick: () -> Unit,
+    onAVSyncClick: () -> Unit,
+    forceDirectPlay: Boolean = true,
+    onForceDirectPlayToggle: () -> Unit = {},
     onDecoderClick: () -> Unit,
     onPassthroughClick: () -> Unit,
     onSubtitleDownloadClick: () -> Unit,
@@ -1330,11 +1344,17 @@ private fun PlayerOverflowMenu(
         }
         if (supportsAudioDelay) {
             OverflowMenuItem(
-                icon = Tabler.Outline.DotsVertical,
-                label = "Audio Delay",
-                onClick = onAudioDelayClick,
+                icon = Tabler.Outline.Adjustments,
+                label = "A/V Sync",
+                onClick = onAVSyncClick,
             )
         }
+        OverflowMenuItem(
+            icon = Tabler.Outline.Bolt,
+            label = if (forceDirectPlay) "Force Direct Play \u00B7 On" else "Force Direct Play",
+            onClick = onForceDirectPlayToggle,
+            tint = if (forceDirectPlay) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface,
+        )
         OverflowMenuItem(
             icon = Tabler.Outline.InfoCircle,
             label = "Decoder",
@@ -1411,6 +1431,7 @@ private fun OverflowMenuItem(
 @Composable
 private fun PlaybackMetadataRow(
     playMethod: String,
+    isDirectPlayForced: Boolean,
     hdrType: String?,
     mediaStreams: List<MediaStream>,
     videoStats: EngineVideoStats,
@@ -1478,17 +1499,19 @@ private fun PlaybackMetadataRow(
     val dolbyVisionGold = HdrColors.dolbyVisionGold
 
     val playMethodColor = when {
+        isDirectPlayForced -> transcodeOrange
         playMethod.equals("Direct Play", ignoreCase = true) -> directPlayGreen
         playMethod.lowercase().contains("transcod") -> transcodeOrange
         else -> Color.White
     }
+    val playMethodLabel = if (isDirectPlayForced) "Direct Play \u26A0" else playMethod
 
     val hdrColor = if (isDolbyVision) dolbyVisionGold else hdrGold
     val audioColor = if (isAtmos || isDtsX) dolbyVisionGold else Color.White
 
-    val items = remember(playMethod, videoCodec, hdrLabel, audioLabel, channelsLabel, playMethodColor, hdrColor, audioColor) {
+    val items = remember(playMethodLabel, videoCodec, hdrLabel, audioLabel, channelsLabel, playMethodColor, hdrColor, audioColor) {
         listOfNotNull(
-            MetadataItem(playMethod, playMethodColor),
+            MetadataItem(playMethodLabel, playMethodColor),
             videoCodec?.let { MetadataItem(it, Color.White) },
             hdrLabel?.let { MetadataItem(it, hdrColor) },
             if (audioLabel.isNotBlank()) MetadataItem(audioLabel, audioColor) else null,

@@ -57,6 +57,11 @@ class MediaRepositoryImpl @Inject constructor(
         ttlMs = DETAIL_CACHE_TTL_MS,
     )
 
+    private val libraryFoldersCache = TtlCache<List<LibraryFolder>>(ttlMs = FOLDERS_CACHE_TTL_MS)
+    private val genresCache = TtlCache<List<Genre>>(maxSize = 64, ttlMs = FOLDERS_CACHE_TTL_MS)
+    private val studiosCache = TtlCache<List<Studio>>(maxSize = 64, ttlMs = FOLDERS_CACHE_TTL_MS)
+    private val latestMediaCache = TtlCache<List<MediaItem>>(maxSize = 64, ttlMs = LATEST_CACHE_TTL_MS)
+
     fun invalidateDetailCache(itemId: String? = null) {
         if (itemId != null) {
             detailCache.remove(itemId)
@@ -107,14 +112,23 @@ class MediaRepositoryImpl @Inject constructor(
         }
     }
 
-    override suspend fun getLibraryFolders(): Result<List<LibraryFolder>> =
-        apiClient.getLibraryFolders()
+    override suspend fun getLibraryFolders(): Result<List<LibraryFolder>> {
+        libraryFoldersCache.get("folders")?.let { return Result.success(it) }
+        return apiClient.getLibraryFolders().also { result ->
+            result.getOrNull()?.let { libraryFoldersCache.put("folders", it) }
+        }
+    }
 
     override suspend fun getLatestMedia(
         parentId: String,
         limit: Int,
-    ): Result<List<MediaItem>> =
-        apiClient.getLatestMedia(parentId = parentId, limit = limit)
+    ): Result<List<MediaItem>> {
+        val cacheKey = "latest_${parentId}_$limit"
+        latestMediaCache.get(cacheKey)?.let { return Result.success(it) }
+        return apiClient.getLatestMedia(parentId = parentId, limit = limit).also { result ->
+            result.getOrNull()?.let { latestMediaCache.put(cacheKey, it) }
+        }
+    }
 
     override suspend fun getMediaItems(
         parentId: String?,
@@ -202,11 +216,21 @@ class MediaRepositoryImpl @Inject constructor(
         },
     ).flow
 
-    override suspend fun getGenres(parentId: String?): Result<List<Genre>> =
-        apiClient.getGenres(parentId)
+    override suspend fun getGenres(parentId: String?): Result<List<Genre>> {
+        val cacheKey = "genres_${parentId ?: "root"}"
+        genresCache.get(cacheKey)?.let { return Result.success(it) }
+        return apiClient.getGenres(parentId).also { result ->
+            result.getOrNull()?.let { genresCache.put(cacheKey, it) }
+        }
+    }
 
-    override suspend fun getStudios(parentId: String?): Result<List<Studio>> =
-        apiClient.getStudios(parentId)
+    override suspend fun getStudios(parentId: String?): Result<List<Studio>> {
+        val cacheKey = "studios_${parentId ?: "root"}"
+        studiosCache.get(cacheKey)?.let { return Result.success(it) }
+        return apiClient.getStudios(parentId).also { result ->
+            result.getOrNull()?.let { studiosCache.put(cacheKey, it) }
+        }
+    }
 
     override suspend fun getItemsByStudio(
         studioId: String,
@@ -617,6 +641,10 @@ class MediaRepositoryImpl @Inject constructor(
         private const val DETAIL_CACHE_TTL_MS = 2 * 60 * 1000L
         /** 60 seconds — prevents burst API calls on repeated home screen loads. */
         private const val HOME_SECTIONS_CACHE_TTL_MS = 60 * 1000L
+        /** 10 minutes — library folders change rarely during a session. */
+        private const val FOLDERS_CACHE_TTL_MS = 10 * 60 * 1000L
+        /** 2 minutes — "latest" content should feel fresh on re-entry. */
+        private const val LATEST_CACHE_TTL_MS = 2 * 60 * 1000L
         private val TIME_REGEX = Regex("""\[(\d{1,2}):(\d{2}\.\d{2,3})]""")
 
         private fun parseLrc(lrcContent: String): List<LyricsLine> {

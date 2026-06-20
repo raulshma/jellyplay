@@ -13,8 +13,10 @@ import com.raulshma.jellyplay.core.ui.animation.AnimationTokens
 import androidx.compose.animation.animateContentSize
 import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
+import androidx.compose.animation.expandVertically
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
+import androidx.compose.animation.shrinkVertically
 import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutVertically
 import androidx.compose.foundation.background
@@ -71,6 +73,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.material3.SnackbarDuration
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
+import androidx.compose.material3.SnackbarResult
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -86,17 +89,23 @@ import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.raulshma.jellyplay.core.designsystem.theme.ArtworkThemeWrapper
+import com.raulshma.jellyplay.core.designsystem.theme.LocalIsLightTheme
 import com.raulshma.jellyplay.core.data.playback.AudioQueueItem
+import com.raulshma.jellyplay.core.data.playback.QueueUndoEvent
 import com.raulshma.jellyplay.core.ui.image.MediaImage
 import com.raulshma.jellyplay.feature.player.audio.components.WaveformSeekBar
+import com.raulshma.jellyplay.feature.player.audio.R
 import com.raulshma.jellyplay.core.designsystem.theme.rememberArtworkColors
 import kotlinx.coroutines.launch
 import androidx.compose.ui.input.pointer.pointerInput
@@ -110,6 +119,12 @@ import com.raulshma.jellyplay.feature.player.audio.sheets.EqualizerSheet
 import com.raulshma.jellyplay.feature.player.audio.sheets.LyricsSearchSheet
 import com.raulshma.jellyplay.feature.player.audio.sheets.QueueSheet
 import com.raulshma.jellyplay.feature.player.audio.sheets.SpeedPickerSheet
+import com.raulshma.jellyplay.core.ui.tv.rememberTvFocusState
+import com.raulshma.jellyplay.core.ui.tv.tvFocusIndicator
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
+import com.raulshma.jellyplay.core.ui.tv.LocalTvMode
+import com.raulshma.jellyplay.core.ui.tv.tryRequestFocus
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -117,6 +132,7 @@ fun AudioPlayerScreen(
     itemId: String,
     onBack: () -> Unit,
     onAmbientClick: (String?, String, String) -> Unit = { _, _, _ -> },
+    onArtistClick: (String) -> Unit = {},
     viewModel: AudioPlayerViewModel = hiltViewModel(),
 ) {
     val sharedTransitionScope = com.raulshma.jellyplay.core.ui.components.LocalSharedTransitionScope.current
@@ -143,8 +159,40 @@ fun AudioPlayerScreen(
         }
     }
 
+    // Surface an "Undo" affordance after destructive queue operations
+    // (clear / remove / skip / move) so an accidental action is recoverable
+    // (enhancements §5.2).
+    val undoClearedMessage = stringResource(R.string.audio_undo_queue_cleared)
+    val undoRemovedMessage = stringResource(R.string.audio_undo_track_removed)
+    val undoMovedMessage = stringResource(R.string.audio_undo_track_moved)
+    val undoSkippedNextMessage = stringResource(R.string.audio_undo_skipped_next)
+    val undoSkippedPrevMessage = stringResource(R.string.audio_undo_skipped_previous)
+    val undoActionLabel = stringResource(R.string.audio_undo_action)
+    LaunchedEffect(Unit) {
+        viewModel.undoEvents.collect { event ->
+            val message = when (event) {
+                is QueueUndoEvent.QueueCleared -> undoClearedMessage
+                is QueueUndoEvent.ItemRemoved -> undoRemovedMessage
+                is QueueUndoEvent.ItemMoved -> undoMovedMessage
+                is QueueUndoEvent.SkippedToNext -> undoSkippedNextMessage
+                is QueueUndoEvent.SkippedToPrevious -> undoSkippedPrevMessage
+            }
+            val result = snackbarHostState.showSnackbar(
+                message = message,
+                actionLabel = undoActionLabel,
+                duration = SnackbarDuration.Short,
+            )
+            if (result == SnackbarResult.ActionPerformed) {
+                viewModel.undoLastQueueOperation()
+            }
+        }
+    }
+
     val artworkScale = remember { Animatable(0.8f) }
     val contentAlpha = remember { Animatable(0f) }
+
+    val isTv = LocalTvMode.current
+    val playFocusRequester = remember { FocusRequester() }
 
     LaunchedEffect(itemId) {
         viewModel.play(itemId)
@@ -153,6 +201,12 @@ fun AudioPlayerScreen(
 
     LaunchedEffect(Unit) {
         contentAlpha.animateTo(1f, tween(600, delayMillis = 200, easing = AlphaEasing))
+        if (isTv) {
+            for (attempt in 1..20) {
+                androidx.compose.runtime.withFrameNanos { }
+                if (playFocusRequester.tryRequestFocus("audio_play_button")) break
+            }
+        }
     }
 
     BackHandler {
@@ -171,6 +225,8 @@ fun AudioPlayerScreen(
 
     val preferences by viewModel.preferences.collectAsStateWithLifecycle()
     val currentDownloadItem by viewModel.currentDownloadItem.collectAsStateWithLifecycle()
+    val abLoopStart by viewModel.abLoopStartMs.collectAsStateWithLifecycle(initialValue = null)
+    val abLoopEnd by viewModel.abLoopEndMs.collectAsStateWithLifecycle(initialValue = null)
 
     val adaptiveInfo = com.raulshma.jellyplay.core.ui.adaptive.LocalAdaptiveInfo.current
     val isExpanded = adaptiveInfo.windowSizeClass == com.raulshma.jellyplay.core.ui.adaptive.WindowSizeClass.Expanded
@@ -191,14 +247,9 @@ fun AudioPlayerScreen(
         }
     }
 
-    val isSystemDark = androidx.compose.foundation.isSystemInDarkTheme()
-    val isDarkTheme = remember(preferences.themeMode, isSystemDark) {
-        when (preferences.themeMode) {
-            com.raulshma.jellyplay.core.model.ThemeMode.DARK -> true
-            com.raulshma.jellyplay.core.model.ThemeMode.LIGHT -> false
-            com.raulshma.jellyplay.core.model.ThemeMode.SYSTEM -> isSystemDark
-        }
-    }
+    val isDarkTheme = !LocalIsLightTheme.current
+
+
 
     // Animatables for swipe gestures
     val swipeDismissOffset = remember { androidx.compose.animation.core.Animatable(0f) }
@@ -399,6 +450,8 @@ fun AudioPlayerScreen(
                                 onSearchClick = { showLyricsSearch = true },
                                 karaokeMode = viewModel.karaokeMode,
                                 currentPositionMs = viewModel.currentPosition,
+                                lyricsOffsetMs = viewModel.lyricsOffsetMs,
+                                onLyricsOffsetChange = { viewModel.setLyricsOffset(it) },
                             )
                         }
                         Spacer(Modifier.width(32.dp))
@@ -409,7 +462,12 @@ fun AudioPlayerScreen(
                             horizontalAlignment = Alignment.CenterHorizontally,
                             verticalArrangement = Arrangement.Center
                         ) {
-                            TrackInfoSection(title = viewModel.title, artist = viewModel.artist)
+                            TrackInfoSection(
+                                title = viewModel.title,
+                                artist = viewModel.artist,
+                                artistId = viewModel.artistId,
+                                onArtistClick = onArtistClick,
+                            )
                             Spacer(Modifier.height(28.dp))
                             PixelProgressSection(
                                 currentPosition = viewModel.currentPosition,
@@ -428,6 +486,7 @@ fun AudioPlayerScreen(
                                 onSkipNext = { viewModel.skipToNext() },
                                 pillSurface = pillSurface,
                                 accentColor = accentColor,
+                                playFocusRequester = playFocusRequester,
                             )
                             Spacer(Modifier.height(12.dp))
                             PixelSecondaryControls(
@@ -435,6 +494,8 @@ fun AudioPlayerScreen(
                                 repeatMode = viewModel.repeatMode,
                                 isFavorite = viewModel.isFavorite,
                                 downloadItem = currentDownloadItem,
+                                abLoopStartMs = abLoopStart,
+                                abLoopEndMs = abLoopEnd,
                                 onToggleShuffle = { viewModel.toggleShuffle() },
                                 onCycleRepeatMode = { viewModel.cycleRepeatMode() },
                                 onToggleFavorite = { viewModel.toggleFavorite() },
@@ -445,6 +506,7 @@ fun AudioPlayerScreen(
                                         viewModel.downloadCurrentTrack()
                                     }
                                 },
+                                onAbLoopClick = { viewModel.cycleAbLoop() },
                                 pillSurfaceDark = pillSurfaceDark,
                                 accentColor = accentColor,
                             )
@@ -468,6 +530,8 @@ fun AudioPlayerScreen(
                         onSearchClick = { showLyricsSearch = true },
                         karaokeMode = viewModel.karaokeMode,
                         currentPositionMs = viewModel.currentPosition,
+                        lyricsOffsetMs = viewModel.lyricsOffsetMs,
+                        onLyricsOffsetChange = { viewModel.setLyricsOffset(it) },
                     )
 
                     Spacer(Modifier.weight(0.4f))
@@ -479,7 +543,12 @@ fun AudioPlayerScreen(
                             .padding(horizontal = 32.dp),
                         horizontalAlignment = Alignment.CenterHorizontally,
                     ) {
-                        TrackInfoSection(title = viewModel.title, artist = viewModel.artist)
+                        TrackInfoSection(
+                            title = viewModel.title,
+                            artist = viewModel.artist,
+                            artistId = viewModel.artistId,
+                            onArtistClick = onArtistClick,
+                        )
                         Spacer(Modifier.height(24.dp))
                         PixelProgressSection(
                             currentPosition = viewModel.currentPosition,
@@ -498,6 +567,7 @@ fun AudioPlayerScreen(
                             onSkipNext = { viewModel.skipToNext() },
                             pillSurface = pillSurface,
                             accentColor = accentColor,
+                            playFocusRequester = playFocusRequester,
                         )
                         Spacer(Modifier.height(12.dp))
                         PixelSecondaryControls(
@@ -505,6 +575,8 @@ fun AudioPlayerScreen(
                             repeatMode = viewModel.repeatMode,
                             isFavorite = viewModel.isFavorite,
                             downloadItem = currentDownloadItem,
+                            abLoopStartMs = abLoopStart,
+                            abLoopEndMs = abLoopEnd,
                             onToggleShuffle = { viewModel.toggleShuffle() },
                             onCycleRepeatMode = { viewModel.cycleRepeatMode() },
                             onToggleFavorite = { viewModel.toggleFavorite() },
@@ -515,6 +587,7 @@ fun AudioPlayerScreen(
                                     viewModel.downloadCurrentTrack()
                                 }
                             },
+                            onAbLoopClick = { viewModel.cycleAbLoop() },
                             pillSurfaceDark = pillSurfaceDark,
                             accentColor = accentColor,
                         )
@@ -728,6 +801,8 @@ private fun LyricsOverlay(
     onSearchClick: () -> Unit,
     karaokeMode: Boolean = false,
     onKaraokeToggle: (Boolean) -> Unit = {},
+    lyricsOffsetMs: Long = com.raulshma.jellyplay.core.data.playback.AudioLyricsManager.DEFAULT_OFFSET_MS,
+    onLyricsOffsetChange: (Long) -> Unit = {},
 ) {
     val overlayAlpha by animateFloatAsState(
         targetValue = 1f,
@@ -887,12 +962,81 @@ private fun LyricsOverlay(
                         ),
                 )
 
-                Row(
+                var showOffsetSlider by remember { mutableStateOf(false) }
+                Column(
                     modifier = Modifier
                         .align(Alignment.BottomEnd)
                         .padding(8.dp),
-                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalAlignment = Alignment.End,
                 ) {
+                    // Lyrics timing offset adjustment (enhancements §5.1). Only
+                    // meaningful for time-synced lyrics.
+                    if (hasSyncedLyrics) {
+                        AnimatedVisibility(
+                            visible = showOffsetSlider,
+                            enter = fadeIn(tween(200)) + expandVertically(),
+                            exit = fadeOut(tween(150)) + shrinkVertically(),
+                        ) {
+                            Surface(
+                                shape = ShapeCache.smooth8,
+                                color = Color.Black.copy(alpha = 0.6f),
+                                tonalElevation = 0.dp,
+                                modifier = Modifier
+                                    .padding(bottom = 6.dp)
+                                    .width(220.dp),
+                            ) {
+                                Column(modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp)) {
+                                    Row(
+                                        verticalAlignment = Alignment.CenterVertically,
+                                        horizontalArrangement = Arrangement.SpaceBetween,
+                                        modifier = Modifier.fillMaxWidth(),
+                                    ) {
+                                        Text(
+                                            "Lyrics offset",
+                                            style = MaterialTheme.typography.labelSmall,
+                                            color = Color.White.copy(alpha = 0.8f),
+                                        )
+                                        Text(
+                                            "${lyricsOffsetMs}ms",
+                                            style = MaterialTheme.typography.labelSmall,
+                                            color = if (lyricsOffsetMs == 0L)
+                                                Color.White.copy(alpha = 0.6f)
+                                            else MaterialTheme.colorScheme.primary,
+                                        )
+                                    }
+                                    Slider(
+                                        value = lyricsOffsetMs.toFloat(),
+                                        onValueChange = { onLyricsOffsetChange(it.toLong()) },
+                                        valueRange =
+                                            com.raulshma.jellyplay.core.data.playback.AudioLyricsManager.MIN_OFFSET_MS.toFloat()..
+                                                com.raulshma.jellyplay.core.data.playback.AudioLyricsManager.MAX_OFFSET_MS.toFloat(),
+                                        colors = SliderDefaults.colors(
+                                            thumbColor = MaterialTheme.colorScheme.primary,
+                                            activeTrackColor = MaterialTheme.colorScheme.primary,
+                                        ),
+                                    )
+                                    Row(
+                                        modifier = Modifier.fillMaxWidth(),
+                                        horizontalArrangement = Arrangement.End,
+                                    ) {
+                                        Text(
+                                            "Reset",
+                                            style = MaterialTheme.typography.labelSmall,
+                                            color = Color.White.copy(alpha = 0.7f),
+                                            modifier = Modifier.clickable {
+                                                onLyricsOffsetChange(
+                                                    com.raulshma.jellyplay.core.data.playback.AudioLyricsManager.DEFAULT_OFFSET_MS
+                                                )
+                                            },
+                                        )
+                                    }
+                                }
+                            }
+                        }
+                    }
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
                     if (lyricsSource != com.raulshma.jellyplay.core.model.LyricsSource.UNKNOWN) {
                         val sourceLabel = when (lyricsSource) {
                             com.raulshma.jellyplay.core.model.LyricsSource.LRCLIB -> "lrclib"
@@ -918,10 +1062,13 @@ private fun LyricsOverlay(
                         }
                     }
                     if (lyrics.any { it.words.isNotEmpty() }) {
+                        val karaokeFocus = rememberTvFocusState()
                         IconButton(
                             onClick = { onKaraokeToggle(!karaokeMode) },
                             modifier = Modifier
                                 .size(28.dp)
+                                .then(karaokeFocus.focusModifier)
+                                .tvFocusIndicator(karaokeFocus, ShapeCache.smooth8)
                                 .background(
                                     if (karaokeMode) MaterialTheme.colorScheme.primary.copy(alpha = 0.6f)
                                     else Color.Black.copy(alpha = 0.4f),
@@ -937,10 +1084,37 @@ private fun LyricsOverlay(
                         }
                         Spacer(Modifier.width(4.dp))
                     }
+                    if (hasSyncedLyrics) {
+                        val offsetFocus = rememberTvFocusState()
+                        IconButton(
+                            onClick = { showOffsetSlider = !showOffsetSlider },
+                            modifier = Modifier
+                                .size(28.dp)
+                                .then(offsetFocus.focusModifier)
+                                .tvFocusIndicator(offsetFocus, ShapeCache.smooth8)
+                                .background(
+                                    if (lyricsOffsetMs != com.raulshma.jellyplay.core.data.playback.AudioLyricsManager.DEFAULT_OFFSET_MS)
+                                        MaterialTheme.colorScheme.primary.copy(alpha = 0.6f)
+                                    else Color.Black.copy(alpha = 0.4f),
+                                    ShapeCache.smooth8,
+                                ),
+                        ) {
+                            Icon(
+                                Tabler.Outline.Adjustments,
+                                "Adjust lyrics timing",
+                                tint = Color.White,
+                                modifier = Modifier.size(15.dp),
+                            )
+                        }
+                        Spacer(Modifier.width(4.dp))
+                    }
+                    val searchFocus = rememberTvFocusState()
                     IconButton(
                         onClick = onSearchClick,
                         modifier = Modifier
                             .size(28.dp)
+                            .then(searchFocus.focusModifier)
+                            .tvFocusIndicator(searchFocus, ShapeCache.smooth8)
                             .background(
                                 Color.Black.copy(alpha = 0.4f),
                                 ShapeCache.smooth8,
@@ -952,6 +1126,7 @@ private fun LyricsOverlay(
                             modifier = Modifier.size(14.dp),
                             tint = Color.White.copy(alpha = 0.8f),
                         )
+                    }
                     }
                 }
             }
@@ -1001,6 +1176,11 @@ private fun PixelPlayerTopBar(
     onKaraokeToggle: (Boolean) -> Unit = {},
     hasKaraokeLyrics: Boolean = false,
 ) {
+    val minimizeFocusState = rememberTvFocusState()
+    val lyricsFocusState = rememberTvFocusState()
+    val queueFocusState = rememberTvFocusState()
+    val moreFocusState = rememberTvFocusState()
+
     Row(
         modifier = Modifier
             .fillMaxWidth()
@@ -1008,7 +1188,12 @@ private fun PixelPlayerTopBar(
         horizontalArrangement = Arrangement.SpaceBetween,
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        IconButton(onClick = onBack, modifier = Modifier) {
+        IconButton(
+            onClick = onBack,
+            modifier = Modifier
+                .then(minimizeFocusState.focusModifier)
+                .tvFocusIndicator(minimizeFocusState, CircleShape)
+        ) {
             Icon(
                 Tabler.Outline.ChevronDown, "Minimize",
                 tint = MaterialTheme.colorScheme.onBackground,
@@ -1023,7 +1208,12 @@ private fun PixelPlayerTopBar(
         )
         Row {
             if (hasLyrics) {
-                IconButton(onClick = onLyricsClick, modifier = Modifier) {
+                IconButton(
+                    onClick = onLyricsClick,
+                    modifier = Modifier
+                        .then(lyricsFocusState.focusModifier)
+                        .tvFocusIndicator(lyricsFocusState, CircleShape)
+                ) {
                     Icon(
                         if (lyricsVisible) Tabler.Outline.Microphone2 else Tabler.Outline.Microphone,
                         "Lyrics",
@@ -1032,11 +1222,21 @@ private fun PixelPlayerTopBar(
                     )
                 }
             }
-            IconButton(onClick = onQueueClick, modifier = Modifier) {
+            IconButton(
+                onClick = onQueueClick,
+                modifier = Modifier
+                    .then(queueFocusState.focusModifier)
+                    .tvFocusIndicator(queueFocusState, CircleShape)
+            ) {
                 Icon(Tabler.Outline.Playlist, "Queue", tint = MaterialTheme.colorScheme.onBackground, modifier = Modifier.size(22.dp))
             }
             Box {
-                IconButton(onClick = { onMenuToggle(true) }, modifier = Modifier) {
+                IconButton(
+                    onClick = { onMenuToggle(true) },
+                    modifier = Modifier
+                        .then(moreFocusState.focusModifier)
+                        .tvFocusIndicator(moreFocusState, CircleShape)
+                ) {
                     Icon(Tabler.Outline.DotsVertical, "More", tint = MaterialTheme.colorScheme.onBackground, modifier = Modifier.size(22.dp))
                 }
                 val itemColors = androidx.compose.material3.MenuDefaults.itemColors(
@@ -1115,6 +1315,8 @@ private fun AlbumArtwork(
     onSearchClick: () -> Unit = {},
     karaokeMode: Boolean = false,
     currentPositionMs: Long = 0L,
+    lyricsOffsetMs: Long = com.raulshma.jellyplay.core.data.playback.AudioLyricsManager.DEFAULT_OFFSET_MS,
+    onLyricsOffsetChange: (Long) -> Unit = {},
 ) {
     val sharedTransitionScope = com.raulshma.jellyplay.core.ui.components.LocalSharedTransitionScope.current
     val animatedVisibilityScope = com.raulshma.jellyplay.core.ui.components.LocalAnimatedVisibilityScope.current
@@ -1193,6 +1395,8 @@ private fun AlbumArtwork(
                     isFetching = isFetchingLyrics,
                     lyricsSource = lyricsSource,
                     onSearchClick = onSearchClick,
+                    lyricsOffsetMs = lyricsOffsetMs,
+                    onLyricsOffsetChange = onLyricsOffsetChange,
                 )
             }
         }
@@ -1214,7 +1418,10 @@ private fun AlbumArtwork(
 private fun TrackInfoSection(
     title: String,
     artist: String,
+    artistId: String? = null,
+    onArtistClick: (String) -> Unit = {},
 ) {
+    val artistFocusState = rememberTvFocusState()
     Text(
         title,
         style = MaterialTheme.typography.headlineMedium,
@@ -1226,13 +1433,25 @@ private fun TrackInfoSection(
         textAlign = TextAlign.Center,
     )
     Spacer(Modifier.height(4.dp))
+    val artistClickable = !artistId.isNullOrBlank() && artist.isNotBlank()
     Text(
         artist,
         style = MaterialTheme.typography.bodyLarge,
-        color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.7f),
+        color = if (artistClickable) MaterialTheme.colorScheme.primary
+                else MaterialTheme.colorScheme.onBackground.copy(alpha = 0.7f),
         maxLines = 1,
         overflow = TextOverflow.Ellipsis,
-        modifier = Modifier.fillMaxWidth(),
+        modifier = Modifier
+            .fillMaxWidth()
+            .then(
+                if (artistClickable) {
+                    Modifier
+                        .then(artistFocusState.focusModifier)
+                        .tvFocusIndicator(artistFocusState, ShapeCache.smooth8)
+                        .clip(ShapeCache.smooth8)
+                        .clickable { onArtistClick(artistId!!) }
+                } else Modifier
+            ),
         textAlign = TextAlign.Center,
     )
 }
@@ -1284,6 +1503,7 @@ private fun PixelTransportControls(
     onSkipNext: () -> Unit,
     pillSurface: Color,
     accentColor: Color,
+    playFocusRequester: FocusRequester? = null,
 ) {
     Row(
         modifier = Modifier
@@ -1323,6 +1543,7 @@ private fun PixelTransportControls(
             isPlaying = isPlaying,
             onClick = onTogglePlayPause,
             accentColor = accentColor,
+            focusRequester = playFocusRequester,
         )
         IconButtonWithPressAnimation(
             onClick = onSkipNext,
@@ -1346,13 +1567,19 @@ private fun PixelSecondaryControls(
     repeatMode: Int,
     isFavorite: Boolean,
     downloadItem: com.raulshma.jellyplay.core.model.DownloadItem?,
+    abLoopStartMs: Long?,
+    abLoopEndMs: Long?,
     onToggleShuffle: () -> Unit,
     onCycleRepeatMode: () -> Unit,
     onToggleFavorite: () -> Unit,
     onDownloadClick: () -> Unit,
+    onAbLoopClick: () -> Unit,
     pillSurfaceDark: Color,
     accentColor: Color,
 ) {
+    val abLabelSetA = stringResource(R.string.audio_ab_set_point_a)
+    val abLabelSetB = stringResource(R.string.audio_ab_set_point_b)
+    val abLabelClear = stringResource(R.string.audio_ab_clear)
     Row(
         modifier = Modifier
             .fillMaxWidth(0.8f)
@@ -1380,6 +1607,30 @@ private fun PixelSecondaryControls(
                     },
                     modifier = Modifier.size(22.dp),
                 )
+            },
+        )
+        // A→B repeat (enhancements §5.4): cycles set-A → set-B → clear.
+        IconButtonWithPressAnimation(
+            onClick = onAbLoopClick,
+            tint = if (abLoopStartMs != null) accentColor else MaterialTheme.colorScheme.onSurfaceVariant,
+            icon = {
+                val label = when {
+                    abLoopStartMs != null && abLoopEndMs != null -> abLabelClear
+                    abLoopStartMs != null -> abLabelSetB
+                    else -> abLabelSetA
+                }
+                Box(
+                    contentAlignment = Alignment.Center,
+                    modifier = Modifier
+                        .size(22.dp)
+                        .semantics { this.contentDescription = label },
+                ) {
+                    Text(
+                        text = if (abLoopEndMs != null) "A-B" else "A",
+                        style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold),
+                        color = if (abLoopStartMs != null) accentColor else MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
             },
         )
         IconButtonWithPressAnimation(
@@ -1421,7 +1672,9 @@ private fun PixelPlayPauseButton(
     isPlaying: Boolean,
     onClick: () -> Unit,
     accentColor: Color,
+    focusRequester: FocusRequester? = null,
 ) {
+    val focusState = rememberTvFocusState()
     val interactionSource = remember { MutableInteractionSource() }
     val isPressed by interactionSource.collectIsPressedAsState()
     val scale by animateFloatAsState(
@@ -1451,6 +1704,9 @@ private fun PixelPlayPauseButton(
             .then(sharedModifier)
             .size(64.dp)
             .graphicsLayer { scaleX = scale; scaleY = scale }
+            .then(if (focusRequester != null) Modifier.focusRequester(focusRequester) else Modifier)
+            .then(focusState.focusModifier)
+            .tvFocusIndicator(focusState, ShapeCache.smooth20)
             .clip(ShapeCache.smooth20)
             .background(buttonBg)
             
@@ -1479,6 +1735,7 @@ private fun IconButtonWithPressAnimation(
     size: androidx.compose.ui.unit.Dp = 40.dp,
     modifier: Modifier = Modifier,
 ) {
+    val focusState = rememberTvFocusState()
     val interactionSource = remember { MutableInteractionSource() }
     val isPressed by interactionSource.collectIsPressedAsState()
     val scale by animateFloatAsState(
@@ -1492,6 +1749,8 @@ private fun IconButtonWithPressAnimation(
         modifier = modifier
             .size(size)
             .graphicsLayer { scaleX = scale; scaleY = scale }
+            .then(focusState.focusModifier)
+            .tvFocusIndicator(focusState, CircleShape)
             ,
         shapes = androidx.compose.material3.IconButtonDefaults.shapes(),
         interactionSource = interactionSource,

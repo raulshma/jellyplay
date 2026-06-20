@@ -121,30 +121,47 @@ import kotlinx.coroutines.flow.collectLatest
 private val COMPACT_DISCOVER_PATTERN = listOf(3, 2, 3)
 private val EXPANDED_DISCOVER_PATTERN = listOf(5, 4, 6, 5)
 
+/**
+ * Aggregates every navigation callback the Home screen needs so that
+ * (a) the public [HomeScreen] signature stays readable,
+ * (b) [MainHomeContent] receives a single stable parameter (treated as skip-worthy
+ *     by the Compose compiler thanks to `@Immutable`) instead of ~20 individual
+ *     unstable lambda parameters, and
+ * (c) the navigation call site can `remember` one instance, eliminating
+ *     cascading recompositions of children on every parent state change.
+ *
+ * Callers should construct via `remember(navigator) { HomeCallbacks(...) }` so
+ * the same instance is reused across recompositions.
+ */
+@androidx.compose.runtime.Immutable
+data class HomeCallbacks(
+    val onItemClick: (itemId: String, mediaType: com.raulshma.jellyplay.core.model.MediaType, parentId: String?, itemName: String) -> Unit,
+    val onPlayClick: (itemId: String, mediaSourceId: String?, startPosition: Long, mediaType: com.raulshma.jellyplay.core.model.MediaType, parentId: String?) -> Unit = { _, _, _, _, _ -> },
+    val onSettingsClick: () -> Unit = {},
+    val onSyncPlayClick: () -> Unit = {},
+    val onDownloadsClick: () -> Unit = {},
+    val onOfflineLibraryClick: () -> Unit = {},
+    val onSeerrItemClick: (tmdbId: Int, mediaType: String) -> Unit = { _, _ -> },
+    val onModeChange: (HomeMode) -> Unit = {},
+    val onSearchItemClick: (String) -> Unit = {},
+    val onSearchSeerrClick: (Int, String) -> Unit = { _, _ -> },
+    val onNewsletterClick: () -> Unit = {},
+    val onServerManagementClick: () -> Unit = {},
+    val onUserManagementClick: () -> Unit = {},
+    val onSeerrSettingsClick: () -> Unit = {},
+    val onAdminDashboardClick: () -> Unit = {},
+    val onSetupWizardClick: () -> Unit = {},
+    val onFavoritesClick: () -> Unit = {},
+    val onAboutClick: () -> Unit = {},
+    val onWatchProgressHeatmapClick: () -> Unit = {},
+    val onRequestsClick: () -> Unit = {},
+)
+
 @Composable
 fun HomeScreen(
-    onItemClick: (itemId: String, mediaType: com.raulshma.jellyplay.core.model.MediaType, parentId: String?, itemName: String) -> Unit,
-    onPlayClick: (itemId: String, mediaSourceId: String?, startPosition: Long, mediaType: com.raulshma.jellyplay.core.model.MediaType, parentId: String?) -> Unit = { _, _, _, _, _ -> },
-    onSettingsClick: () -> Unit = {},
-    onSyncPlayClick: () -> Unit = {},
-    onDownloadsClick: () -> Unit = {},
-    onOfflineLibraryClick: () -> Unit = {},
-    onSeerrItemClick: (tmdbId: Int, mediaType: String) -> Unit = { _, _ -> },
+    callbacks: HomeCallbacks,
     homeMode: HomeMode = HomeMode.VIDEO,
-    onModeChange: (HomeMode) -> Unit = {},
     musicContent: @Composable () -> Unit = {},
-    onSearchItemClick: (String) -> Unit = {},
-    onSearchSeerrClick: (Int, String) -> Unit = { _, _ -> },
-    onNewsletterClick: () -> Unit = {},
-    onServerManagementClick: () -> Unit = {},
-    onUserManagementClick: () -> Unit = {},
-    onSeerrSettingsClick: () -> Unit = {},
-    onAdminDashboardClick: () -> Unit = {},
-    onSetupWizardClick: () -> Unit = {},
-    onFavoritesClick: () -> Unit = {},
-    onAboutClick: () -> Unit = {},
-    onWatchProgressHeatmapClick: () -> Unit = {},
-    onRequestsClick: () -> Unit = {},
     viewModel: HomeViewModel = hiltViewModel(),
 ) {
     val state by viewModel.uiState.collectAsStateWithLifecycle()
@@ -152,26 +169,7 @@ fun HomeScreen(
     MainHomeContent(
         state = state,
         viewModel = viewModel,
-        onItemClick = onItemClick,
-        onPlayClick = onPlayClick,
-        onSettingsClick = onSettingsClick,
-        onSyncPlayClick = onSyncPlayClick,
-        onDownloadsClick = onDownloadsClick,
-        onOfflineLibraryClick = onOfflineLibraryClick,
-        onSeerrItemClick = onSeerrItemClick,
-        onModeChange = onModeChange,
-        onSearchItemClick = onSearchItemClick,
-        onSearchSeerrClick = onSearchSeerrClick,
-        onNewsletterClick = onNewsletterClick,
-        onServerManagementClick = onServerManagementClick,
-        onUserManagementClick = onUserManagementClick,
-        onSeerrSettingsClick = onSeerrSettingsClick,
-        onAdminDashboardClick = onAdminDashboardClick,
-        onSetupWizardClick = onSetupWizardClick,
-        onFavoritesClick = onFavoritesClick,
-        onAboutClick = onAboutClick,
-        onWatchProgressHeatmapClick = onWatchProgressHeatmapClick,
-        onRequestsClick = onRequestsClick,
+        callbacks = callbacks,
         musicContent = musicContent,
     )
 }
@@ -180,26 +178,7 @@ fun HomeScreen(
 private fun MainHomeContent(
     state: HomeUiState,
     viewModel: HomeViewModel,
-    onItemClick: (itemId: String, mediaType: com.raulshma.jellyplay.core.model.MediaType, parentId: String?, itemName: String) -> Unit,
-    onPlayClick: (String, String?, Long, com.raulshma.jellyplay.core.model.MediaType, String?) -> Unit,
-    onSettingsClick: () -> Unit,
-    onSyncPlayClick: () -> Unit,
-    onDownloadsClick: () -> Unit,
-    onOfflineLibraryClick: () -> Unit,
-    onSeerrItemClick: (Int, String) -> Unit,
-    onModeChange: (HomeMode) -> Unit,
-    onSearchItemClick: (String) -> Unit,
-    onSearchSeerrClick: (Int, String) -> Unit,
-    onNewsletterClick: () -> Unit = {},
-    onServerManagementClick: () -> Unit,
-    onUserManagementClick: () -> Unit,
-    onSeerrSettingsClick: () -> Unit,
-    onAdminDashboardClick: () -> Unit,
-    onSetupWizardClick: () -> Unit,
-    onFavoritesClick: () -> Unit,
-    onAboutClick: () -> Unit,
-    onWatchProgressHeatmapClick: () -> Unit,
-    onRequestsClick: () -> Unit,
+    callbacks: HomeCallbacks,
     musicContent: @Composable () -> Unit,
 ) {
     val density = LocalDensity.current
@@ -344,9 +323,9 @@ private fun MainHomeContent(
 
     val mediaImageUrlBuilder = remember { { item: com.raulshma.jellyplay.core.model.MediaItem -> viewModel.getImageUrl(item.id) } }
     val mediaBackdropUrlBuilder = remember { { item: com.raulshma.jellyplay.core.model.MediaItem -> viewModel.getBackdropUrl(item.id) } }
-    val currentOnItemClick by rememberUpdatedState(onItemClick)
+    val currentOnItemClick by rememberUpdatedState(callbacks.onItemClick)
     val mediaOnItemClick = remember { { item: com.raulshma.jellyplay.core.model.MediaItem -> currentOnItemClick(item.id, item.mediaType, item.parentId, item.name) } }
-    val currentOnPlayClick by rememberUpdatedState(onPlayClick)
+    val currentOnPlayClick by rememberUpdatedState(callbacks.onPlayClick)
     val mediaOnPlayClick = remember { { item: com.raulshma.jellyplay.core.model.MediaItem ->
         currentOnPlayClick(item.id, null, item.playbackPositionTicks ?: 0L, item.mediaType, item.parentId)
     } }
@@ -484,7 +463,7 @@ private fun MainHomeContent(
                         selected = false,
                         onClick = {
                             scope.launch { drawerState.close() }
-                            onServerManagementClick()
+                            callbacks.onServerManagementClick()
                         },
                         colors = NavigationDrawerItemDefaults.colors(
                             unselectedContainerColor = Color.Transparent
@@ -496,7 +475,7 @@ private fun MainHomeContent(
                         selected = false,
                         onClick = {
                             scope.launch { drawerState.close() }
-                            onUserManagementClick()
+                            callbacks.onUserManagementClick()
                         },
                         colors = NavigationDrawerItemDefaults.colors(
                             unselectedContainerColor = Color.Transparent
@@ -517,7 +496,7 @@ private fun MainHomeContent(
                         selected = false,
                         onClick = {
                             scope.launch { drawerState.close() }
-                            onFavoritesClick()
+                            callbacks.onFavoritesClick()
                         },
                         colors = NavigationDrawerItemDefaults.colors(
                             unselectedContainerColor = Color.Transparent
@@ -529,7 +508,7 @@ private fun MainHomeContent(
                         selected = false,
                         onClick = {
                             scope.launch { drawerState.close() }
-                            onWatchProgressHeatmapClick()
+                            callbacks.onWatchProgressHeatmapClick()
                         },
                         colors = NavigationDrawerItemDefaults.colors(
                             unselectedContainerColor = Color.Transparent
@@ -542,7 +521,7 @@ private fun MainHomeContent(
                         selected = false,
                         onClick = {
                             scope.launch { drawerState.close() }
-                            onRequestsClick()
+                            callbacks.onRequestsClick()
                         },
                         colors = NavigationDrawerItemDefaults.colors(
                             unselectedContainerColor = Color.Transparent
@@ -564,7 +543,7 @@ private fun MainHomeContent(
                             selected = false,
                             onClick = {
                                 scope.launch { drawerState.close() }
-                                onAdminDashboardClick()
+                                callbacks.onAdminDashboardClick()
                             },
                             colors = NavigationDrawerItemDefaults.colors(
                                 unselectedContainerColor = Color.Transparent
@@ -577,7 +556,7 @@ private fun MainHomeContent(
                         selected = false,
                         onClick = {
                             scope.launch { drawerState.close() }
-                            onSeerrSettingsClick()
+                            callbacks.onSeerrSettingsClick()
                         },
                         colors = NavigationDrawerItemDefaults.colors(
                             unselectedContainerColor = Color.Transparent
@@ -589,7 +568,7 @@ private fun MainHomeContent(
                         selected = false,
                         onClick = {
                             scope.launch { drawerState.close() }
-                            onSetupWizardClick()
+                            callbacks.onSetupWizardClick()
                         },
                         colors = NavigationDrawerItemDefaults.colors(
                             unselectedContainerColor = Color.Transparent
@@ -601,7 +580,7 @@ private fun MainHomeContent(
                         selected = false,
                         onClick = {
                             scope.launch { drawerState.close() }
-                            onAboutClick()
+                            callbacks.onAboutClick()
                         },
                         colors = NavigationDrawerItemDefaults.colors(
                             unselectedContainerColor = Color.Transparent
@@ -662,7 +641,7 @@ private fun MainHomeContent(
                         }
                         OfflineHomeContent(
                             offlineLibrary = filteredOfflineLibrary,
-                            onItemClick = onOfflineLibraryClick,
+                            onItemClick = callbacks.onOfflineLibraryClick,
                             contentPadding = contentPad,
                             backgroundColor = backgroundColor,
                             onGoOnline = { viewModel.onEvent(HomeUiEvent.ToggleOfflineMode) },
@@ -697,12 +676,12 @@ private fun MainHomeContent(
                             allDiscoverItems = allDiscoverItems,
                             seerrCardLoadingState = seerrCardLoadingState,
                             seerrPrefetch = seerrPrefetch,
-                            onSeerrItemClick = onSeerrItemClick,
-                            onOfflineLibraryClick = onOfflineLibraryClick,
-                            onItemClick = { id -> onItemClick(id, MediaType.UNKNOWN, null, "") },
+                            onSeerrItemClick = callbacks.onSeerrItemClick,
+                            onOfflineLibraryClick = callbacks.onOfflineLibraryClick,
+                            onItemClick = { id -> callbacks.onItemClick(id, MediaType.UNKNOWN, null, "") },
                             onFocusChange = { focusInHero = it },
                             onSeerrRequest = { viewModel.onEvent(HomeUiEvent.SelectSeerrRequestItem(it)) },
-                            onNewsletterClick = onNewsletterClick,
+                            onNewsletterClick = callbacks.onNewsletterClick,
                             photoFolderChildUrls = photoFolderChildUrls,
                             heroFocusRequester = heroFocusRequester,
                         )
@@ -721,7 +700,7 @@ private fun MainHomeContent(
                     headerStatus = headerStatus,
                     activeDownloadCount = activeDownloadCount,
                     showClock = state.showClock,
-                    onModeChange = onModeChange,
+                    onModeChange = callbacks.onModeChange,
                     onSearchExpanded = { isSearchExpanded = it },
                     onSearchQueryChange = { viewModel.onEvent(HomeUiEvent.UpdateSearchQuery(it)) },
                     onClearSearch = {
@@ -740,13 +719,13 @@ private fun MainHomeContent(
                                     isSearchExpanded = false
                                     viewModel.onEvent(HomeUiEvent.ClearSearch)
                                     focusManager.clearFocus()
-                                    onItemClick(item.id, item.mediaType, item.parentId, item.name)
+                                    callbacks.onItemClick(item.id, item.mediaType, item.parentId, item.name)
                                 },
                                 onSeerrClick = { item ->
                                     isSearchExpanded = false
                                     viewModel.onEvent(HomeUiEvent.ClearSearch)
                                     focusManager.clearFocus()
-                                    onSearchSeerrClick(item.id, item.mediaType)
+                                    callbacks.onSearchSeerrClick(item.id, item.mediaType)
                                 },
                                 searchHistory = searchHistory,
                                 onHistoryClick = { query ->
@@ -781,15 +760,15 @@ private fun MainHomeContent(
                             showSurprise = !showSurprise
                             if (!showSurprise) autoRotateEnabled = true
                         },
-                        onSyncPlayClick = onSyncPlayClick,
-                        onDownloadsClick = onDownloadsClick,
+                        onSyncPlayClick = callbacks.onSyncPlayClick,
+                        onDownloadsClick = callbacks.onDownloadsClick,
                         onToggleOffline = { viewModel.onEvent(HomeUiEvent.ToggleOfflineMode) },
-                        onSettingsClick = onSettingsClick,
+                        onSettingsClick = callbacks.onSettingsClick,
                         modifier = Modifier
                             .align(Alignment.BottomEnd)
                             .padding(bottom = 64.dp + WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding())
                             .offset {
-                                val maxOffset = 64.dp.toPx()
+                                val maxOffset = com.raulshma.jellyplay.core.designsystem.theme.Dimensions.floatingNavHeight.toPx()
                                 val yOffset = (-navOffsetPx).coerceAtMost(maxOffset)
                                 androidx.compose.ui.unit.IntOffset(x = 0, y = yOffset.toInt())
                             },

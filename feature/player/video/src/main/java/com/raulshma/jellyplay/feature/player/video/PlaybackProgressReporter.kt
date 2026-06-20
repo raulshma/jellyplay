@@ -12,6 +12,7 @@ import com.raulshma.jellyplay.feature.player.video.engine.MediaEngine
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
@@ -98,7 +99,7 @@ internal class PlaybackProgressReporter(
             while (true) {
                 delay(10_000)
                 if (getIncognitoModeEnabled()) continue
-                val engine = getMediaEngine() ?: break
+                val engine = getMediaEngine() ?: continue
                 val itemId = getCurrentItemId() ?: break
                 val positionTicks = engine.currentPositionMs * 10_000
                 val isPaused = !engine.isPlaying.value
@@ -136,12 +137,14 @@ internal class PlaybackProgressReporter(
         cancelJobs()
         if (getIncognitoModeEnabled()) return
         if (itemId != null && positionTicks > 0) {
-            viewModel.viewModelScope.launch {
-                playbackRepository.reportPlaybackStopped(
-                    itemId = itemId,
-                    sessionId = sessionId,
-                    positionTicks = positionTicks,
-                )
+            viewModel.viewModelScope.launch(NonCancellable) {
+                runCatching {
+                    playbackRepository.reportPlaybackStopped(
+                        itemId = itemId,
+                        sessionId = sessionId,
+                        positionTicks = positionTicks,
+                    )
+                }
             }
         }
     }

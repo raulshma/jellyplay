@@ -32,7 +32,8 @@ class SeerrRecommendationsWidgetWorker @AssistedInject constructor(
     override suspend fun doWork(): Result = runCatching {
         val seerrPrefs = seerrPreferencesStore.preferences.first()
         if (seerrPrefs.serverUrl.isBlank()) {
-            WidgetPersistHelper.persistSeerrItems(applicationContext, userPreferencesStore, emptyList(), versionBumpOnly = true)
+            // No Seerr server configured: leave existing cached items intact
+            // so the widget keeps showing the last good snapshot.
             return@runCatching
         }
 
@@ -41,7 +42,7 @@ class SeerrRecommendationsWidgetWorker @AssistedInject constructor(
         val response = fetch(config.seerrSource, region).getOrNull()
         val items = response?.results.orEmpty().take(MAX_ITEMS)
         if (items.isEmpty()) {
-            WidgetPersistHelper.persistSeerrItems(applicationContext, userPreferencesStore, emptyList(), versionBumpOnly = true)
+            // Keep existing data instead of clearing the widget.
             return@runCatching
         }
         val mapped = items.map { it.toWidgetItem() }

@@ -1,6 +1,5 @@
 package com.raulshma.jellyplay.feature.settings
 
-import android.widget.Toast
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
@@ -10,13 +9,13 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.raulshma.jellyplay.core.ui.adaptive.LocalAdaptiveInfo
 import com.raulshma.jellyplay.core.ui.adaptive.bottomPadding
 import com.raulshma.jellyplay.core.ui.adaptive.contentPadding
 import com.raulshma.jellyplay.core.ui.components.JellyPlayScreenScaffold
+import com.raulshma.jellyplay.core.ui.feedback.LocalUserMessageBus
 import com.raulshma.jellyplay.core.ui.tv.LocalTvMode
 import com.raulshma.jellyplay.core.ui.tv.tvFocusRestorer
 import androidx.compose.ui.focus.FocusRequester
@@ -36,7 +35,7 @@ fun BackupSettingsScreen(
     val preferences = viewModel.preferences
     val adaptiveInfo = LocalAdaptiveInfo.current
     val isTv = LocalTvMode.current
-    val context = LocalContext.current
+    val userMessageBus = LocalUserMessageBus.current
 
     val settingsLauncher = androidx.activity.compose.rememberLauncherForActivityResult(
         contract = androidx.activity.result.contract.ActivityResultContracts.CreateDocument("application/json"),
@@ -106,7 +105,7 @@ fun BackupSettingsScreen(
 
                 LaunchedEffect(viewModel.backupRestoreStatus) {
                     viewModel.backupRestoreStatus?.let { msg ->
-                        Toast.makeText(context, msg, Toast.LENGTH_SHORT).show()
+                        userMessageBus.info(msg)
                         viewModel.clearBackupRestoreStatus()
                     }
                 }

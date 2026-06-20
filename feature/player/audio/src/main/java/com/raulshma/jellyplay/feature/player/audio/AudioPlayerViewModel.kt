@@ -42,6 +42,8 @@ class AudioPlayerViewModel @Inject constructor(
         private set
     var artist by composeState("")
         private set
+    var artistId by composeState<String?>(null)
+        private set
     var album by composeState("")
         private set
     var albumArtUrl by composeState("")
@@ -151,6 +153,9 @@ class AudioPlayerViewModel @Inject constructor(
     var isFetchingLyrics by composeState(false)
         private set
 
+    var lyricsOffsetMs by composeLongState(com.raulshma.jellyplay.core.data.playback.AudioLyricsManager.DEFAULT_OFFSET_MS)
+        private set
+
     var lyricsSearchResults by composeState<List<LrcLibTrack>>(emptyList())
         private set
 
@@ -214,6 +219,9 @@ class AudioPlayerViewModel @Inject constructor(
             audioPlaybackManager.artist.collect { artist = it }
         }
         launch {
+            audioPlaybackManager.artistId.collect { artistId = it }
+        }
+        launch {
             audioPlaybackManager.album.collect { album = it }
         }
         launch {
@@ -267,6 +275,9 @@ class AudioPlayerViewModel @Inject constructor(
                 lyricsSource = src
                 isFetchingLyrics = fetching
             }.collect {}
+        }
+        launch {
+            audioPlaybackManager.lyricsOffsetMs.collect { lyricsOffsetMs = it }
         }
         launch {
             combine(
@@ -402,6 +413,21 @@ class AudioPlayerViewModel @Inject constructor(
     fun removeFromQueue(index: Int) {
         audioPlaybackManager.removeFromQueue(index)
     }
+
+    /** One-shot stream of destructive queue ops the UI can offer to undo. */
+    val undoEvents: kotlinx.coroutines.flow.SharedFlow<com.raulshma.jellyplay.core.data.playback.QueueUndoEvent>
+        get() = audioPlaybackManager.undoEvents
+
+    /** Restores the queue to before the most recent destructive op, if any. */
+    fun undoLastQueueOperation(): Boolean =
+        audioPlaybackManager.undoLastQueueOperation()
+
+    /** A→B loop markers (null = unset). */
+    val abLoopStartMs: StateFlow<Long?> get() = audioPlaybackManager.abLoopStartMs
+    val abLoopEndMs: StateFlow<Long?> get() = audioPlaybackManager.abLoopEndMs
+
+    /** Cycles A→B loop: set A → set B → clear (enhancements §5.4). */
+    fun cycleAbLoop() = audioPlaybackManager.cycleAbLoop()
 
     fun skipToNext() {
         audioPlaybackManager.skipToNext()
@@ -584,6 +610,10 @@ class AudioPlayerViewModel @Inject constructor(
 
     fun clearLyricsSearch() {
         lyricsSearchResults = emptyList()
+    }
+
+    fun setLyricsOffset(offsetMs: Long) {
+        audioPlaybackManager.setLyricsOffset(offsetMs)
     }
 
     fun updateCrossfadeDuration(ms: Long) {

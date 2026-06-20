@@ -73,7 +73,7 @@ import com.raulshma.jellyplay.core.ui.tv.tvHeroFocusExitHandler
 import com.composables.icons.tabler.Tabler
 import com.composables.icons.tabler.outline.Heart
 import com.composables.icons.tabler.outline.PlayerPlay
-import racra.compose.smooth_corner_rect_library.AbsoluteSmoothCornerShape
+import com.raulshma.jellyplay.core.designsystem.theme.smoothCornerShape
 
 @Composable
 fun AnimatedHeroHeader(
@@ -250,15 +250,11 @@ fun HeroHeader(
 
     val heroShape = remember(isTv, adaptiveInfo.windowSizeClass) {
         if (!isTv && adaptiveInfo.windowSizeClass == WindowSizeClass.Compact) {
-            AbsoluteSmoothCornerShape(
+            smoothCornerShape(
                 cornerRadiusTL = 0.dp,
                 cornerRadiusTR = 0.dp,
                 cornerRadiusBL = 36.dp,
                 cornerRadiusBR = 14.dp,
-                smoothnessAsPercentTL = 60,
-                smoothnessAsPercentTR = 60,
-                smoothnessAsPercentBL = 60,
-                smoothnessAsPercentBR = 60,
             )
         } else {
             RoundedCornerShape(0.dp)

@@ -50,6 +50,7 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.IconButtonDefaults
 import com.raulshma.jellyplay.core.ui.components.JellyPlayLinearProgressIndicator
+import com.raulshma.jellyplay.core.ui.components.progressFraction
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.SearchBarDefaults
 import androidx.compose.material3.Text
@@ -78,6 +79,7 @@ import androidx.paging.LoadState
 import androidx.paging.compose.collectAsLazyPagingItems
 import androidx.paging.compose.itemKey
 import com.raulshma.jellyplay.core.data.repository.SearchHistoryItem
+import com.raulshma.jellyplay.core.ui.components.AppendErrorFooter
 import com.raulshma.jellyplay.core.ui.components.ErrorScreen
 import com.raulshma.jellyplay.core.ui.components.ExpressiveToolbarIconButton
 import com.raulshma.jellyplay.core.ui.components.GlassDismissTag
@@ -101,6 +103,8 @@ import com.raulshma.jellyplay.core.designsystem.theme.ShapeCache
 import java.util.Locale
 import com.composables.icons.tabler.Tabler
 import com.composables.icons.tabler.outline.*
+import androidx.compose.ui.res.stringResource
+import com.raulshma.jellyplay.feature.search.R
 
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class, ExperimentalMaterial3ExpressiveApi::class)
 @Composable
@@ -311,7 +315,7 @@ fun SearchScreen(
                                     if (query.isNotBlank()) {
                                         Box(
                                             modifier = Modifier
-                                                .size(32.dp)
+                                                .size(48.dp)
                                                 .clip(ShapeCache.smooth8)
                                                 .background(MaterialTheme.colorScheme.onSurface.copy(alpha = 0.12f))
                                                 .clickable { viewModel.search("") },
@@ -540,8 +544,8 @@ fun SearchScreen(
                         pagedResults.itemCount == 0 && query.isNotBlank() && !isRefreshing && !showSeerr && !showSeerrError -> {
                             ScreenEmptyState(
                                 icon = Tabler.Outline.Search,
-                                title = "No results found",
-                                description = if (hasActiveFilters) "Try adjusting your filters" else null,
+                                title = stringResource(R.string.search_no_results_found),
+                                description = if (hasActiveFilters) stringResource(R.string.search_try_adjusting_filters) else null,
                             )
                         }
                         pagedResults.itemCount == 0 && query.isBlank() && !showSeerr -> {
@@ -610,16 +614,20 @@ fun SearchScreen(
                                                         overflow = TextOverflow.Ellipsis,
                                                     )
                                                 }
-                                                Icon(
-                                                    Tabler.Outline.X,
-                                                    contentDescription = "Remove",
+                                                Box(
+                                                    contentAlignment = Alignment.Center,
                                                     modifier = Modifier
-                                                        .size(16.dp)
+                                                        .size(48.dp)
                                                         .clip(CircleShape)
-                                                        .clickable { viewModel.deleteHistoryItem(item.id) }
-                                                        .padding(2.dp),
-                                                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                                                )
+                                                        .clickable { viewModel.deleteHistoryItem(item.id) },
+                                                ) {
+                                                    Icon(
+                                                        Tabler.Outline.X,
+                                                        contentDescription = "Remove",
+                                                        modifier = Modifier.size(16.dp),
+                                                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                                                    )
+                                                }
                                             }
                                         }
                                     }
@@ -647,14 +655,13 @@ fun SearchScreen(
                                 val item = pagedResults[index]
                                 if (item != null) {
                                     AnimatedSearchItem(index = index) {
+                                        val itemProgress = item.progressFraction()
                                         PosterCard(
                                             item = item,
                                             imageUrl = viewModel.getImageUrl(item.id),
                                             onClick = { onItemClick(item.id, item.mediaType, item.parentId, item.name) },
-                                            showProgress = item.playbackPositionTicks != null && item.playbackPositionTicks!! > 0,
-                                            progressPercent = if (item.runTimeTicks != null && item.runTimeTicks!! > 0) {
-                                                (item.playbackPositionTicks?.toFloat() ?: 0f) / item.runTimeTicks!!.toFloat()
-                                            } else 0f,
+                                            showProgress = itemProgress != null && itemProgress > 0f,
+                                            progressPercent = itemProgress ?: 0f,
                                             blurHash = item.blurHashes.primary,
                                             sharedElementKey = "poster_${item.id}",
                                             modifier = itemModifier,
@@ -692,10 +699,10 @@ fun SearchScreen(
                             // ── Append error ──
                             if (pagedResults.loadState.append is LoadState.Error) {
                                 val appendError = pagedResults.loadState.append as LoadState.Error
-                                Text(
-                                    text = appendError.error.localizedMessage ?: "Failed to load more",
-                                    color = MaterialTheme.colorScheme.error,
-                                    style = MaterialTheme.typography.bodySmall,
+                                AppendErrorFooter(
+                                    message = appendError.error.localizedMessage
+                                        ?: stringResource(R.string.search_failed_to_load_more),
+                                    onRetry = { pagedResults.retry() },
                                     modifier = Modifier
                                         .align(Alignment.BottomCenter)
                                         .padding(16.dp)
@@ -720,7 +727,8 @@ fun SearchScreen(
                                 }
                                 is LoadState.Error -> {
                                     ErrorScreen(
-                                        message = refreshState.error.localizedMessage ?: "Search failed",
+                                        message = refreshState.error.localizedMessage
+                                            ?: stringResource(R.string.search_failed),
                                         onRetry = { pagedResults.refresh() },
                                         modifier = Modifier.fillMaxSize(),
                                     )

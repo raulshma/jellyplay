@@ -65,13 +65,14 @@ import androidx.core.view.drawToBitmap
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.ui.layout.ContentScale
-import coil3.compose.AsyncImage
-import coil3.request.ImageRequest
+import coil3.size.Size as CoilSize
 import com.composables.icons.tabler.Tabler
+import com.raulshma.jellyplay.core.ui.image.MediaImage
 import com.composables.icons.tabler.outline.Check
 import com.composables.icons.tabler.outline.ChevronLeft
 import com.composables.icons.tabler.outline.ChevronRight
 import com.composables.icons.tabler.outline.Filter
+import com.composables.icons.tabler.outline.Photo
 import com.composables.icons.tabler.outline.PlayerPlay
 import com.composables.icons.tabler.outline.Share
 import com.raulshma.jellyplay.core.data.repository.DailyWatchActivity
@@ -525,21 +526,9 @@ private fun HeatmapGrid(
     val isDark = !isLightColor(MaterialTheme.colorScheme.background)
     val levelColors = remember(isDark) {
         if (isDark) {
-            arrayOf(
-                Color(0xFF161B22),
-                Color(0xFF0E4429),
-                Color(0xFF006D32),
-                Color(0xFF26A641),
-                Color(0xFF39D353),
-            )
+            com.raulshma.jellyplay.core.designsystem.theme.HeatmapPalette.dark
         } else {
-            arrayOf(
-                Color(0xFFEBEDF0),
-                Color(0xFF9BE9A8),
-                Color(0xFF40C463),
-                Color(0xFF30A14E),
-                Color(0xFF216E39),
-            )
+            com.raulshma.jellyplay.core.designsystem.theme.HeatmapPalette.light
         }
     }
 
@@ -790,13 +779,12 @@ private fun DayDetailSheet(
                         .padding(vertical = 6.dp),
                 ) {
                     if (imageUrl != null) {
-                        AsyncImage(
-                            model = ImageRequest.Builder(LocalContext.current)
-                                .data(imageUrl)
-                                .size(128, 128)
-                                .build(),
+                        MediaImage(
+                            url = imageUrl,
                             contentDescription = name,
                             contentScale = ContentScale.Crop,
+                            size = CoilSize(128, 128),
+                            placeholderIcon = Tabler.Outline.Photo,
                             modifier = Modifier
                                 .size(40.dp)
                                 .clip(RoundedCornerShape(4.dp)),

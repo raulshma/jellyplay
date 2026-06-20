@@ -84,6 +84,7 @@ internal class SyncPlayBridge(
 
     fun reattachSession() {
         if (!syncPlayManager.isInSyncPlaySession) return
+        syncPlayManager.playbackCore.setCallbacks(this)
         val group = syncPlayManager.currentGroup
         uiState.update { it.copy(
             isInSyncPlaySession = true,
@@ -124,6 +125,11 @@ internal class SyncPlayBridge(
 
     fun reset() {
         syncPlayManager.playbackCore.reset()
+        // Clear the callbacks held by the @Singleton playback core so it does
+        // not retain this bridge (and through it the destroyed ViewModel) after
+        // the player screen leaves composition. reset() is the teardown path
+        // invoked from VideoPlayerViewModel.onCleared() -> releaseInternals().
+        syncPlayManager.playbackCore.clearCallbacks()
         currentPlaylistItemId = null
         eventJob?.cancel()
         eventJob = null
@@ -165,7 +171,7 @@ internal class SyncPlayBridge(
                                 syncPlayManager.playbackCore.setPendingItemLoad(true)
                                 uiState.update { it.copy(isSyncPlaySyncing = true, isSyncPlaySynced = false) }
                                 val posTicks = syncPlayManager.queueCore.getStartPositionTicks(
-                                    syncPlayManager.playbackCore.let { null }
+                                    syncPlayManager.playbackCore.lastCommand
                                 )
                                 onLoadItem(event.data.playingItemId, posTicks)
                             }
@@ -174,21 +180,26 @@ internal class SyncPlayBridge(
                                 uiState.update { it.copy(isSyncPlaySyncing = true, isSyncPlaySynced = false) }
                             }
                             else -> {
-                                val posTicks = syncPlayManager.estimateCurrentTicks(
-                                    event.data.startPositionTicks, event.data.whenMs
-                                )
-                                val posMs = posTicks / 10_000
-                                val engine = getMediaEngine()!!
-                                val durationMs = engine.durationMs
-                                val safePosMs = if (durationMs > 0) posMs.coerceIn(0, durationMs) else posMs.coerceAtLeast(0)
-                                val currentPosMs = engine.currentPositionMs
-                                if (Math.abs(safePosMs - currentPosMs) > 300) {
-                                    engine.seekTo(safePosMs)
-                                }
-                                if (event.data.isPlaying && !engine.isPlaying.value) {
-                                    engine.play()
-                                } else if (!event.data.isPlaying && engine.isPlaying.value) {
-                                    engine.pause()
+                                val engine = getMediaEngine()
+                                if (engine == null) {
+                                    syncPlayManager.playbackCore.setPendingItemLoad(true)
+                                    uiState.update { it.copy(isSyncPlaySyncing = true, isSyncPlaySynced = false) }
+                                } else {
+                                    val posTicks = syncPlayManager.estimateCurrentTicks(
+                                        event.data.startPositionTicks, event.data.whenMs
+                                    )
+                                    val posMs = posTicks / 10_000
+                                    val durationMs = engine.durationMs
+                                    val safePosMs = if (durationMs > 0) posMs.coerceIn(0, durationMs) else posMs.coerceAtLeast(0)
+                                    val currentPosMs = engine.currentPositionMs
+                                    if (Math.abs(safePosMs - currentPosMs) > 300) {
+                                        engine.seekTo(safePosMs)
+                                    }
+                                    if (event.data.isPlaying && !engine.isPlaying.value) {
+                                        engine.play()
+                                    } else if (!event.data.isPlaying && engine.isPlaying.value) {
+                                        engine.pause()
+                                    }
                                 }
                             }
                         }

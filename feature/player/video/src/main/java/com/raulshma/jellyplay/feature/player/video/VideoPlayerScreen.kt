@@ -53,6 +53,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.rememberUpdatedState
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
 import kotlinx.coroutines.flow.conflate
@@ -90,7 +91,6 @@ import com.raulshma.jellyplay.core.designsystem.theme.ShapeCache
 import com.raulshma.jellyplay.core.data.playback.FrameRateMatcher
 import com.raulshma.jellyplay.core.data.cast.CastSessionEvent
 import com.raulshma.jellyplay.core.model.OrientationMode
-import com.raulshma.jellyplay.core.model.PlayerType
 import com.raulshma.jellyplay.core.model.SubtitleEdgeType
 import com.raulshma.jellyplay.core.model.SubtitleStyle
 import com.raulshma.jellyplay.core.ui.tv.LocalTvMode
@@ -99,7 +99,7 @@ import com.raulshma.jellyplay.core.ui.tv.input.onDpadKeyEvent
 import com.raulshma.jellyplay.core.ui.tv.tryRequestFocus
 import com.raulshma.jellyplay.feature.player.video.components.AspectRatio
 import com.raulshma.jellyplay.feature.player.video.components.AspectRatioSheet
-import com.raulshma.jellyplay.feature.player.video.components.AudioDelaySheet
+import com.raulshma.jellyplay.feature.player.video.components.AVSyncSheet
 import com.raulshma.jellyplay.core.model.MediaSegmentType
 import com.raulshma.jellyplay.feature.player.video.components.DecoderPickerSheet
 import com.raulshma.jellyplay.feature.player.video.components.EpisodePickerSheet
@@ -168,15 +168,22 @@ fun VideoPlayerScreen(
 
     val isInPipMode by viewModel.playerLifecycleManager.isInPipMode.collectAsStateWithLifecycle()
 
-    var showControls by remember { mutableStateOf(true) }
-    var controlsHasFocus by remember { mutableStateOf(false) }
-    var currentSheet by remember { mutableStateOf<PlayerSheet>(PlayerSheet.None) }
-    var isSeeking by remember { mutableStateOf(false) }
-    var isOverflowMenuOpen by remember { mutableStateOf(false) }
-    var seekPositionMs by remember { mutableLongStateOf(0L) }
+    // Ephemeral UI state. Migrated to `rememberSaveable` so a configuration
+    // change (locale switch, rotation outside the player's locked orientation)
+    // doesn't reset seek progress, the open sheet, or gesture state mid-stream.
+    // References to non-saveable types (View, Bitmap, Job, SubtitleStyle cache)
+    // remain on `remember` below — they're either re-derived or non-restorable.
+    var showControls by rememberSaveable { mutableStateOf(true) }
+    var controlsHasFocus by rememberSaveable { mutableStateOf(false) }
+    var currentSheet by rememberSaveable(stateSaver = PlayerSheetSaver) {
+        mutableStateOf(PlayerSheet.None)
+    }
+    var isSeeking by rememberSaveable { mutableStateOf(false) }
+    var isOverflowMenuOpen by rememberSaveable { mutableStateOf(false) }
+    var seekPositionMs by rememberSaveable { mutableLongStateOf(0L) }
     var playerViewRef by remember { mutableStateOf<android.view.View?>(null) }
     var lastAppliedSubtitleStyle by remember { mutableStateOf<SubtitleStyle?>(null) }
-    var videoZoom by remember { mutableFloatStateOf(1f) }
+    var videoZoom by rememberSaveable { mutableFloatStateOf(1f) }
 
     val isTv = LocalTvMode.current
 
@@ -184,22 +191,21 @@ fun VideoPlayerScreen(
     val tvSkipSegmentFocusRequester = remember { FocusRequester() }
     val tvCinemaIntroFocusRequester = remember { FocusRequester() }
     val tvNextEpisodeFocusRequester = remember { FocusRequester() }
-    var userInteractionCount by remember { mutableIntStateOf(0) }
+    var userInteractionCount by rememberSaveable { mutableIntStateOf(0) }
 
-    var brightnessOverlay by remember { mutableFloatStateOf(-1f) }
-    var volumeOverlay by remember { mutableFloatStateOf(-1f) }
-    var externalLaunched by remember { mutableStateOf(false) }
-    var gestureSeekPositionMs by remember { mutableLongStateOf(0L) }
-    var gestureStartPositionMs by remember { mutableLongStateOf(0L) }
-    var gestureDeltaMs by remember { mutableLongStateOf(0L) }
-    var isGestureSeeking by remember { mutableStateOf(false) }
-    var gestureTrickplayVisible by remember { mutableStateOf(false) }
+    var brightnessOverlay by rememberSaveable { mutableFloatStateOf(-1f) }
+    var volumeOverlay by rememberSaveable { mutableFloatStateOf(-1f) }
+    var gestureSeekPositionMs by rememberSaveable { mutableLongStateOf(0L) }
+    var gestureStartPositionMs by rememberSaveable { mutableLongStateOf(0L) }
+    var gestureDeltaMs by rememberSaveable { mutableLongStateOf(0L) }
+    var isGestureSeeking by rememberSaveable { mutableStateOf(false) }
+    var gestureTrickplayVisible by rememberSaveable { mutableStateOf(false) }
 
     LaunchedEffect(showControls) {
         viewModel.setControlsVisible(showControls)
     }
 
-    var volumeGestureAccumulator by remember { mutableFloatStateOf(0f) }
+    var volumeGestureAccumulator by rememberSaveable { mutableFloatStateOf(0f) }
     var overlayDismissJob by remember { mutableStateOf<kotlinx.coroutines.Job?>(null) }
 
     val isScreenLocked = uiState.isScreenLocked
@@ -280,24 +286,11 @@ fun VideoPlayerScreen(
         }
     }
 
-    val preferredPlayer = uiState.preferredPlayerType
-    val streamUrl = uiState.streamUrl
-
-    LaunchedEffect(preferredPlayer, streamUrl) {
-        if (preferredPlayer == PlayerType.EXTERNAL && streamUrl != null && !externalLaunched) {
-            externalLaunched = true
-            val launched = ExternalPlayerLauncher.tryLaunch(
-                context = context,
-                playerType = preferredPlayer,
-                streamUrl = streamUrl,
-                title = uiState.title,
-                startPositionMs = startPositionTicks / 10_000,
-            )
-            if (launched) {
-                onBack()
-            }
-        }
-    }
+    // External-player handoff is handled centrally by the app-level
+    // ActivityResultLauncher in JellyPlayApp's navigateFilter, which reads the
+    // external player's returned position and credits watched progress. This
+    // screen is never composed for the EXTERNAL case (navigation is intercepted
+    // before reaching it), so no local launch logic is needed here.
 
     // Guard against releasing the engine when the composable is torn down
     // during a PiP transition. The engine must survive until PiP is dismissed.
@@ -762,11 +755,11 @@ fun VideoPlayerScreen(
                 key(engine) {
                     AndroidView(
                         factory = { ctx ->
-                            playerViewRef = engine.createSurfaceView(ctx).also { view ->
-                                lastAppliedSubtitleStyle = uiState.subtitleStyle
-                                viewModel.applySubtitleStyleToView(view)
-                            }
-                            playerViewRef!!
+                            val view = engine.createSurfaceView(ctx)
+                            lastAppliedSubtitleStyle = uiState.subtitleStyle
+                            viewModel.applySubtitleStyleToView(view)
+                            playerViewRef = view
+                            view
                         },
                         update = { view ->
                             val currentStyle = uiState.subtitleStyle
@@ -992,6 +985,15 @@ fun VideoPlayerScreen(
                     .padding(top = 60.dp, end = 16.dp),
             )
 
+            if (uiState.isBuffering && uiState.playerError == null && !isPlaying) {
+                Box(
+                    modifier = Modifier.align(Alignment.Center),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    JellyPlayLoadingIndicator(color = Color.White)
+                }
+            }
+
             if (isScreenLocked && !isInPipMode) {
                 SlideToUnlockOverlay(
                     visible = true,
@@ -1118,7 +1120,7 @@ fun VideoPlayerScreen(
                 onDialogueBoostStrengthChange = { viewModel.setDialogueBoostStrength(it) },
                 onNightModeClick = { viewModel.toggleNightMode() },
                 onNightModeStrengthChange = { viewModel.setNightModeStrength(it) },
-                onAudioDelayClick = { currentSheet = PlayerSheet.AudioDelay },
+                onAVSyncClick = { currentSheet = PlayerSheet.AVSync },
                 onDecoderClick = { currentSheet = PlayerSheet.Decoder },
                 onPassthroughClick = { viewModel.setAudioPassthrough(!uiState.audioPassthrough) },
                 onSubtitleDownloadClick = {
@@ -1139,13 +1141,16 @@ fun VideoPlayerScreen(
                 onVideoStatsClick = { viewModel.toggleVideoStats() },
                 bufferedPosition = uiState.bufferedPosition,
                 streamingQuality = uiState.streamingQuality,
+                forceDirectPlay = uiState.forceDirectPlay,
                 onQualityClick = { currentSheet = PlayerSheet.Quality },
+                onForceDirectPlayToggle = { viewModel.toggleForceDirectPlay() },
                 audioNormalizationMode = uiState.audioNormalizationMode,
                 audioNormalizationEnabled = uiState.audioNormalizationEnabled,
                 channelMixMode = uiState.channelMixMode,
                 channelMixEnabled = uiState.channelMixEnabled,
                 supportsAudioNormalization = uiState.engineCapabilities.supportsAudioNormalization,
                 supportsChannelMixing = uiState.engineCapabilities.supportsChannelMixing,
+                supportsLiveQualitySwitch = uiState.engineCapabilities.supportsLiveQualitySwitch,
                 onAudioNormalizationClick = { viewModel.toggleAudioNormalization() },
                 onAudioNormalizationModeChange = { viewModel.setAudioNormalizationMode(it) },
                 onChannelMixClick = { viewModel.toggleChannelMix() },
@@ -1295,9 +1300,10 @@ fun VideoPlayerScreen(
         },
     )
 
-    if (uiState.showPlaybackErrorDialog && uiState.playerError != null) {
+    val playerError = uiState.playerError
+    if (uiState.showPlaybackErrorDialog && playerError != null) {
         PlaybackErrorDialog(
-            errorMessage = uiState.playerError!!,
+            errorMessage = playerError,
             currentPlayerType = uiState.preferredPlayerType,
             onRetryWithEngine = { viewModel.retryWithEngine(it) },
             onDismiss = { viewModel.dismissPlaybackError() },
@@ -1581,10 +1587,12 @@ private fun PlayerSheetRouter(
                 capabilities = uiState.engineCapabilities,
             )
         }
-        is PlayerSheet.AudioDelay -> {
-            AudioDelaySheet(
-                currentDelayMs = uiState.audioDelayMs,
-                onDelayChange = { viewModel.setAudioDelay(it) },
+        is PlayerSheet.AVSync -> {
+            AVSyncSheet(
+                currentAudioDelayMs = uiState.audioDelayMs,
+                currentSubtitleDelayMs = uiState.subtitleStyle.offsetMs,
+                onAudioDelayChange = { viewModel.setAudioDelay(it) },
+                onSubtitleDelayChange = { viewModel.setSubtitleDelay(it) },
                 onDismiss = dismissSheet,
             )
         }

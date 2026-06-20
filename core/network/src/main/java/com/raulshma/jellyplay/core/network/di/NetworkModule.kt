@@ -4,6 +4,7 @@ import android.content.Context
 import android.net.ConnectivityManager
 import com.raulshma.jellyplay.core.network.JellyfinApiClient
 import com.raulshma.jellyplay.core.network.JellyfinApiClientImpl
+import com.raulshma.jellyplay.core.network.config.OkHttpConfigProvider
 import com.raulshma.jellyplay.core.network.api.AdminApiClient
 import com.raulshma.jellyplay.core.network.api.AdminApiClientImpl
 import com.raulshma.jellyplay.core.network.api.AuthApiClient
@@ -132,18 +133,46 @@ abstract class NetworkModule {
         @Singleton
         fun provideOkHttpClient(
             @ApplicationContext context: Context,
-            userPreferencesStore: com.raulshma.jellyplay.core.datastore.UserPreferencesStore,
+            okHttpConfigProvider: OkHttpConfigProvider,
             bandwidthInterceptor: BandwidthInterceptor,
         ): OkHttpClient {
-            val initialPrefs = userPreferencesStore.preferences.value
+            val initialConfig = okHttpConfigProvider.config.value
             val cacheDir = File(context.cacheDir, "http_cache")
             cacheDir.mkdirs()
-            val cacheMb = initialPrefs.maxCacheSizeMb
+            val cacheMb = initialConfig.maxCacheSizeMb
             val cacheSize = if (cacheMb > 0) cacheMb * 1024L * 1024L else 50L * 1024 * 1024
-            val initialTimeout = initialPrefs.networkTimeoutPreset
+            val initialTimeout = initialConfig.networkTimeoutPreset
             
-            val loggingInterceptor = HttpLoggingInterceptor().apply {
+            // Custom logger that strips Jellyfin access tokens from log lines.
+            // OkHttp's HttpLoggingInterceptor has redactHeader(...) but no
+            // equivalent for query params in 5.x, and the SDK embeds the access
+            // token as ?api_key=... on stream/image/subtitle/WebSocket URLs.
+            // The logger replaces the query string of any URL line containing a
+            // token-bearing param with "[redacted]" so verbose network logging
+            // can never leak credentials to logcat.
+            val tokenParamPattern = Regex(
+                "(?i)(\\?|&)(api_key|apikey|token|x-emby-token|accesstoken)=[^&\\s]+",
+            )
+            val loggingInterceptor = HttpLoggingInterceptor { message ->
+                val safe = if (tokenParamPattern.containsMatchIn(message)) {
+                    tokenParamPattern.replace(message) { mr ->
+                        val sep = mr.value.first()
+                        val key = mr.value.drop(1).substringBefore("=")
+                        "$sep$key=[redacted]"
+                    }
+                } else {
+                    message
+                }
+                HttpLoggingInterceptor.Logger.DEFAULT.log(safe)
+            }.apply {
                 level = HttpLoggingInterceptor.Level.HEADERS
+                // Never expose credentials in logcat, even when verbose network
+                // logging is enabled.
+                redactHeader("X-Emby-Token")
+                redactHeader("X-Api-Key")
+                redactHeader("Authorization")
+                redactHeader("Cookie")
+                redactHeader("Set-Cookie")
             }
             
             val builder = OkHttpClient.Builder()
@@ -155,15 +184,15 @@ abstract class NetworkModule {
                 .protocols(listOf(Protocol.HTTP_2, Protocol.HTTP_1_1))
                 .retryOnConnectionFailure(true)
                 .addInterceptor { chain ->
-                    val prefs = userPreferencesStore.preferences.value
-                    val timeoutPreset = prefs.networkTimeoutPreset
+                    val currentConfig = okHttpConfigProvider.config.value
+                    val timeoutPreset = currentConfig.networkTimeoutPreset
                     
                     val newChain = chain
                         .withConnectTimeout(timeoutPreset.connectSec.toInt(), TimeUnit.SECONDS)
                         .withReadTimeout(timeoutPreset.readSec.toInt(), TimeUnit.SECONDS)
                         .withWriteTimeout(timeoutPreset.writeSec.toInt(), TimeUnit.SECONDS)
                     
-                    if (prefs.verboseNetworkLogging) {
+                    if (currentConfig.verboseNetworkLogging) {
                         loggingInterceptor.intercept(newChain)
                     } else {
                         newChain.proceed(newChain.request())

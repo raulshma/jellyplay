@@ -10,6 +10,7 @@ import `is`.xyz.mpv.BaseMPVView
 import `is`.xyz.mpv.MPV
 import `is`.xyz.mpv.MPVNode
 import com.raulshma.jellyplay.core.data.playback.DialogueBoostHelper
+import com.raulshma.jellyplay.core.data.playback.EqualizerHelper
 import com.raulshma.jellyplay.core.data.playback.MediaStreamVolume
 import com.raulshma.jellyplay.core.data.playback.NightModeHelper
 import com.raulshma.jellyplay.core.model.AudioNormalizationMode
@@ -79,6 +80,8 @@ class MpvPlayerEngine(
         supportsAudioNormalization = true,
         supportsChannelMixing = true,
         supportsVideoFilters = true,
+        supportsLiveQualitySwitch = false,
+        supportsBandwidthEstimate = false,
     )
 
     private val _playbackState = MutableStateFlow(EnginePlaybackState.IDLE)
@@ -114,7 +117,13 @@ class MpvPlayerEngine(
     @Volatile private var lastLoggedSubtitleText: String? = null
     
     private var currentConfig = EngineConfig()
-    private val dialogueBoost = DialogueBoostHelper()
+    // mpv handles its own internal EQ via af filters; this helper exists
+    // solely to host the dialogue-boost overlay (see DialogueBoostHelper
+    // kdoc) on the engine's audio session. User EQ settings never flow
+    // through it — the helper stays at FLAT base levels with only the
+    // boost offsets overlaid.
+    private val equalizerHelper = EqualizerHelper()
+    private val dialogueBoost = DialogueBoostHelper(equalizerHelper)
     private val nightMode = NightModeHelper()
 
     private var wasPlayingBeforeActivityPause = false
@@ -347,6 +356,7 @@ class MpvPlayerEngine(
         _currentCues.value = emptyList()
         mainHandler.removeCallbacksAndMessages(null)
         dialogueBoost.detach()
+        equalizerHelper.detach()
         nightMode.detach()
         engineScope.cancel()
         val view = mpvView
@@ -499,6 +509,11 @@ class MpvPlayerEngine(
                 if (oldAudioFx.dialogueBoostStrength != newAudioFx.dialogueBoostStrength ||
                     oldAudioFx.dialogueBoostEnabled != newAudioFx.dialogueBoostEnabled
                 ) {
+                    // The boost overlay rides on the EqualizerHelper's
+                    // priority-0 Equalizer; attach + enable it whenever
+                    // boost is on so the overlay has somewhere to land.
+                    equalizerHelper.attach(sid)
+                    equalizerHelper.setEnabled(newAudioFx.dialogueBoostEnabled)
                     dialogueBoost.attach(sid)
                     dialogueBoost.setStrength(newAudioFx.dialogueBoostStrength)
                     dialogueBoost.setEnabled(newAudioFx.dialogueBoostEnabled)
@@ -790,6 +805,16 @@ class MpvPlayerEngine(
     private fun updateVideoStatsOnly() {
         val m = mpvView?.mpv ?: return
         try {
+            val videoBitrateBps = try {
+                m.getPropertyDouble("video-bitrate")?.let { br ->
+                    if (br > 0) br.toInt() else null
+                }
+            } catch (_: Exception) { null }
+            val audioBitrateBps = try {
+                m.getPropertyDouble("audio-bitrate")?.let { br ->
+                    if (br > 0) br.toInt() else null
+                }
+            } catch (_: Exception) { null }
             val newStats = EngineVideoStats(
                 videoCodec = try { m.getPropertyString("video-format") } catch (_: Exception) { null },
                 videoDecoder = try { m.getPropertyString("hwdec-current") } catch (_: Exception) { null },
@@ -803,11 +828,7 @@ class MpvPlayerEngine(
                         if (fps > 0f) fps.toFloat() else null
                     }
                 } catch (_: Exception) { null },
-                videoBitrate = try {
-                    m.getPropertyDouble("video-bitrate")?.let { br ->
-                        if (br > 0) br.toInt() else null
-                    }
-                } catch (_: Exception) { null },
+                videoBitrate = videoBitrateBps,
                 audioCodec = try { m.getPropertyString("audio-codec") } catch (_: Exception) { null },
                 audioSampleRate = try {
                     m.getPropertyInt("audio-params/samplerate")?.let { sr ->
@@ -819,12 +840,8 @@ class MpvPlayerEngine(
                         if (ch > 0) ch else null
                     }
                 } catch (_: Exception) { null },
-                audioBitrate = try {
-                    m.getPropertyDouble("audio-bitrate")?.let { br ->
-                        if (br > 0) br.toInt() else null
-                    }
-                } catch (_: Exception) { null },
-                estimatedBandwidthBps = 0L,
+                audioBitrate = audioBitrateBps,
+                estimatedBandwidthBps = ((videoBitrateBps ?: 0) + (audioBitrateBps ?: 0)).toLong(),
                 droppedFrames = try {
                     m.getPropertyInt("decoder-frame-drop-count")?.toLong() ?: 0L
                 } catch (_: Exception) { 0L },

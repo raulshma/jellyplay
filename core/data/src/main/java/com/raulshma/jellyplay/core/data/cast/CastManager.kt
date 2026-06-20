@@ -383,13 +383,14 @@ class CastManager @Inject constructor(
         mediaItem: MediaItem,
         startPositionMs: Long = 0,
         listener: Player.Listener,
+        options: CastMediaOptions = CastMediaOptions(),
     ) {
         if (activeStrategyName == STRATEGY_DLNA) {
-            loadDlnaMedia(mediaItem, startPositionMs)
+            loadDlnaMedia(mediaItem, startPositionMs, options)
             return
         }
         if (activeStrategyName == STRATEGY_JELLYFIN) {
-            loadJellyfinMedia(mediaItem, startPositionMs)
+            loadJellyfinMedia(mediaItem, startPositionMs, options)
             return
         }
         ensureGoogleSessionListener()
@@ -397,26 +398,50 @@ class CastManager @Inject constructor(
         externalListener = listener
         val player = ensureCastPlayer() ?: return
         player.addListener(listener)
-        player.setMediaItem(mediaItem, startPositionMs)
+        // Apply the user's track / quality selections to the stream URL so the
+        // receiving Chromecast requests the right variants from the server
+        // (enhancements §4.5). Subtitle sidecars configured on the MediaItem
+        // are preserved as text tracks by CastPlayer.
+        player.setMediaItem(mediaItem.withCastOptions(options), startPositionMs)
         player.prepare()
         player.play()
         coroutineScope.launch { updateCastState() }
         toggleTicker()
     }
 
-    private fun loadDlnaMedia(mediaItem: MediaItem, startPositionMs: Long) {
+    private fun loadDlnaMedia(
+        mediaItem: MediaItem,
+        startPositionMs: Long,
+        options: CastMediaOptions,
+    ) {
         val url = mediaItem.localConfiguration?.uri?.toString() ?: return
         val title = mediaItem.mediaMetadata.title?.toString() ?: ""
-        dlnaCastStrategy.loadMedia(url, title, startPositionMs)
+        // Track / quality selections are folded into the URL as Jellyfin query
+        // params — DLNA exposes no separate track-control channel.
+        dlnaCastStrategy.loadMedia(
+            url = url.withCastQueryParams(options),
+            title = title,
+            positionMs = startPositionMs,
+        )
         externalListener?.let { castPlayer?.removeListener(it) }
         externalListener = null
         coroutineScope.launch { updateCastState() }
         toggleTicker()
     }
 
-    private fun loadJellyfinMedia(mediaItem: MediaItem, startPositionMs: Long) {
+    private fun loadJellyfinMedia(
+        mediaItem: MediaItem,
+        startPositionMs: Long,
+        options: CastMediaOptions,
+    ) {
         val itemId = mediaItem.mediaId
-        jellyfinRemotePlayCastStrategy.loadMedia(itemId, startPositionMs)
+        jellyfinRemotePlayCastStrategy.loadMedia(
+            itemId = itemId,
+            startPositionMs = startPositionMs,
+            mediaSourceId = options.mediaSourceId,
+            audioStreamIndex = options.audioStreamIndex,
+            subtitleStreamIndex = options.subtitleStreamIndex,
+        )
         externalListener?.let { castPlayer?.removeListener(it) }
         externalListener = null
         coroutineScope.launch { updateCastState() }
@@ -445,6 +470,27 @@ class CastManager @Inject constructor(
         externalListener = null
         resetCastState()
         strategies.values.forEach { it.stopDiscovery() }
+        // Remove the CastContext.SessionManagerListener so it doesn't keep
+        // firing on a stale CastContext after logout/re-login. Without this
+        // the listener can fire on the wrong user's sessions, and the
+        // Singleton retains a reference to a dead CastContext.
+        if (googleSessionListenerRegistered) {
+            try {
+                val castContext = CastContext.getSharedInstance(context)
+                castContext.sessionManager.removeSessionManagerListener(
+                    googleSessionListener, CastSession::class.java,
+                )
+            } catch (_: Exception) {
+                // Cast SDK may already be torn down.
+            }
+            googleSessionListenerRegistered = false
+        }
+        // Delegate to per-strategy release hooks (GoogleCastStrategy owns its
+        // own session/state listeners; DLNA owns its own discovery sockets).
+        strategies.values.forEach {
+            runCatching { it.release() }
+                .onFailure { Log.w("CastManager", "Cast strategy release failed", it) }
+        }
         coroutineScope.cancel()
     }
 
@@ -475,3 +521,41 @@ private data class CastPlayerSnapshot(
     val isPlaying: Boolean,
     val volume: Float,
 )
+
+/**
+ * Appends the active track / quality selections onto a Jellyfin stream URL as
+ * standard query params (`AudioStreamIndex`, `SubtitleStreamIndex`,
+ * `MaxVideoBitrate`), used by the DLNA and Google Cast transports which both
+ * consume a server URL. Existing params are preserved; only non-null options
+ * are added. Used for the §4.5 cast-handoff fix.
+ */
+internal fun String.withCastQueryParams(options: CastMediaOptions): String {
+    if (options.audioStreamIndex == null &&
+        options.subtitleStreamIndex == null &&
+        options.maxVideoBitrate == null
+    ) {
+        return this
+    }
+    val separator = if ('?' in this) "&" else "?"
+    val params = buildList {
+        options.audioStreamIndex?.let { add("AudioStreamIndex=${it}") }
+        options.subtitleStreamIndex?.let { add("SubtitleStreamIndex=${it}") }
+        options.maxVideoBitrate?.let { add("MaxVideoBitrate=${it}") }
+    }
+    return this + separator + params.joinToString("&")
+}
+
+/**
+ * Returns a copy of [this] [MediaItem] whose stream URI carries the cast
+ * options as query params, so Google Cast requests the correct audio/subtitle
+ * variant and respects the user's quality ceiling. Subtitle configurations and
+ * metadata are preserved.
+ */
+internal fun MediaItem.withCastOptions(options: CastMediaOptions): MediaItem {
+    val currentUri = localConfiguration?.uri ?: return this
+    val enrichedUri = currentUri.toString().withCastQueryParams(options)
+    if (enrichedUri == currentUri.toString()) return this
+    return buildUpon()
+        .setUri(enrichedUri)
+        .build()
+}

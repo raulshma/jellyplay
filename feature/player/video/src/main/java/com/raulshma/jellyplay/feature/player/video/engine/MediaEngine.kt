@@ -89,6 +89,8 @@ data class EngineCapabilities(
     val supportsAudioNormalization: Boolean = false,
     val supportsChannelMixing: Boolean = false,
     val supportsVideoFilters: Boolean = false,
+    val supportsLiveQualitySwitch: Boolean = false,
+    val supportsBandwidthEstimate: Boolean = false,
 )
 
 enum class EnginePlaybackState {

@@ -14,6 +14,7 @@ import com.raulshma.jellyplay.core.data.repository.OfflineRepository
 import com.raulshma.jellyplay.core.datastore.UserPreferencesStore
 import com.raulshma.jellyplay.core.data.syncplay.SyncPlayManager
 import com.raulshma.jellyplay.core.data.syncplay.SyncPlayPlaybackCore
+import com.raulshma.jellyplay.core.ui.feedback.UserMessageBus
 import com.raulshma.jellyplay.core.ui.viewmodel.StateFlowHandle
 import io.mockk.every
 import io.mockk.mockk
@@ -98,7 +99,7 @@ class VideoPlayerCleanupTest {
     }
 
     @Test
-    fun syncPlayBridge_reset_clearsStateAndResetsCore() {
+    fun `syncPlayBridge_reset_clearsStateAndResetsCore`() {
         val syncPlayManager = mockk<SyncPlayManager>(relaxed = true)
         val playbackCore = mockk<SyncPlayPlaybackCore>(relaxed = true)
         every { syncPlayManager.playbackCore } returns playbackCore
@@ -116,6 +117,9 @@ class VideoPlayerCleanupTest {
         bridge.reset()
 
         verify { playbackCore.reset() }
+        // reset() must also release the callbacks held by the @Singleton core
+        // so it cannot retain the destroyed ViewModel/bridge after teardown.
+        verify { playbackCore.clearCallbacks() }
         assertFalse(uiState.value.isSyncPlaySyncing)
     }
 
@@ -158,7 +162,8 @@ class VideoPlayerCleanupTest {
             activePlayerController = activePlayerController,
             playerLifecycleManager = playerLifecycleManager,
             videoMiniPlayerState = videoMiniPlayerState,
-            sleepTimerManager = sleepTimerManager
+            sleepTimerManager = sleepTimerManager,
+            userMessageBus = UserMessageBus(),
         )
 
         // Set some media-specific states to verify they are cleared on release

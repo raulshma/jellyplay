@@ -251,7 +251,9 @@ class AuthRepositoryImpl @Inject constructor(
         if (serverId != null && userId != null) {
             val serverEntity = serverDao.getServerById(serverId)
             if (serverEntity == null) {
-                Log.w("AuthRepository", "restoreSession: server not found in DB, id=$serverId")
+                // Don't log the raw server/user GUIDs — they survive into
+                // release builds and can be used for cross-session correlation.
+                Log.w("AuthRepository", "restoreSession: server not found in DB")
                 preferencesStore.setActiveServer("")
                 preferencesStore.setActiveUser("")
                 return@runCatching
@@ -261,7 +263,7 @@ class AuthRepositoryImpl @Inject constructor(
 
             val userEntity = userDao.getUserById(userId)
             if (userEntity == null) {
-                Log.w("AuthRepository", "restoreSession: user not found in DB, id=$userId")
+                Log.w("AuthRepository", "restoreSession: user not found in DB")
                 preferencesStore.setActiveUser("")
                 return@runCatching
             }
@@ -285,7 +287,7 @@ class AuthRepositoryImpl @Inject constructor(
                     )
                 )
             } else {
-                Log.w("AuthRepository", "restoreSession: no access token for user id=$userId")
+                Log.w("AuthRepository", "restoreSession: no access token for active user")
             }
         }
     }.onFailure { e ->
@@ -294,7 +296,10 @@ class AuthRepositoryImpl @Inject constructor(
 
     override suspend fun logout() {
         apiClient.disconnect()
-        preferencesStore.clearAll()
+        // Clear only the active session selection — preserve the stable
+        // device id and all user preferences (theme/player/EQ/onboarding/…)
+        // so re-login does not orphan server-side sessions or reset settings.
+        preferencesStore.clearSession()
     }
 
     override suspend fun switchUser(userId: String): Result<Unit> = runCatching {

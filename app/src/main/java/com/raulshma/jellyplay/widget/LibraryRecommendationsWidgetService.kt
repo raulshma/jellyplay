@@ -1,7 +1,9 @@
 package com.raulshma.jellyplay.widget
 
+import android.appwidget.AppWidgetManager
 import android.content.Context
 import android.content.Intent
+import android.graphics.Bitmap
 import android.view.View
 import android.widget.RemoteViews
 import android.widget.RemoteViewsService
@@ -40,31 +42,53 @@ class LibraryRecommendationsWidgetService : RemoteViewsService() {
             applicationContext,
             WidgetEntryPoint::class.java,
         )
-        return LibraryRecommendationsFactory(applicationContext, entryPoint.userPreferencesStore())
+        val appWidgetId = intent.getIntExtra(
+            AppWidgetManager.EXTRA_APPWIDGET_ID,
+            AppWidgetManager.INVALID_APPWIDGET_ID
+        )
+        return LibraryRecommendationsFactory(applicationContext, entryPoint.userPreferencesStore(), appWidgetId)
     }
 
     private class LibraryRecommendationsFactory(
         private val context: Context,
         private val store: UserPreferencesStore,
+        private val appWidgetId: Int,
     ) : RemoteViewsFactory {
 
         private var items: List<LibraryWidgetItem> = emptyList()
         private var loadedVersion: Long = -1L
+        // Poster cache populated in [onDataSetChanged] so [getViewAt] never
+        // performs network I/O on the binder thread.
+        private var posterCache: Map<String, Bitmap?> = emptyMap()
 
         override fun onCreate() = Unit
 
         override fun onDataSetChanged() {
-            val flow = store.libraryWidgetItems
+            // Always re-read the latest snapshot. The previous early-return
+            // (`if (version == loadedVersion) return`) skipped loads whenever
+            // the persisted version matched the factory's cached value, but
+            // that left the widget blank if the factory was recreated (new
+            // binder, process restart) and the worker happened to short-circuit
+            // the version bump in [WidgetPersistHelper] because the content
+            // was unchanged. Always reading is cheap (single DataStore read)
+            // and makes the widget resilient to those edge cases.
+            val fresh = runBlocking { store.libraryWidgetItems.first() }
             val version = runBlocking { store.libraryWidgetVersion.first() }
-            val fresh = runBlocking { flow.first() }
-            if (version != loadedVersion) {
-                items = fresh
-                loadedVersion = version
+            items = fresh
+            loadedVersion = version
+            // Pre-fetch posters concurrently so each `getViewAt` is a map lookup.
+            // `posterUrl` is nullable; blank/null entries fall through to the placeholder.
+            posterCache = if (items.isEmpty()) {
+                emptyMap()
+            } else {
+                val nonNullUrls = items.map { it.posterUrl }.filterNotNull()
+                runBlocking { WidgetImageLoader.preloadPosters(context, nonNullUrls) }
             }
         }
 
         override fun onDestroy() {
             items = emptyList()
+            posterCache = emptyMap()
         }
 
         override fun getCount(): Int = items.size
@@ -77,9 +101,39 @@ class LibraryRecommendationsWidgetService : RemoteViewsService() {
             view.setViewVisibility(R.id.lr_item_title, View.VISIBLE)
             view.setTextViewText(R.id.lr_item_subtitle, buildSubtitle(item))
             view.setViewVisibility(R.id.lr_item_subtitle, View.VISIBLE)
-            val bitmap = runBlocking {
-                WidgetImageLoader.loadPoster(context, item.posterUrl)
+
+            // Apply responsive rules based on widget options
+            var hideText = false
+
+            if (appWidgetId != AppWidgetManager.INVALID_APPWIDGET_ID) {
+                val appWidgetManager = AppWidgetManager.getInstance(context)
+                val options = appWidgetManager.getAppWidgetOptions(appWidgetId)
+                if (options != null) {
+                    val config = context.resources.configuration
+                    val isLandscape = config.orientation == android.content.res.Configuration.ORIENTATION_LANDSCAPE
+                    val minWidth = options.getInt(AppWidgetManager.OPTION_APPWIDGET_MIN_WIDTH)
+                    val minHeight = options.getInt(AppWidgetManager.OPTION_APPWIDGET_MIN_HEIGHT)
+                    val maxWidth = options.getInt(AppWidgetManager.OPTION_APPWIDGET_MAX_WIDTH)
+                    val maxHeight = options.getInt(AppWidgetManager.OPTION_APPWIDGET_MAX_HEIGHT)
+                    var width = if (isLandscape) maxWidth else minWidth
+                    var height = if (isLandscape) minHeight else maxHeight
+
+                    if (width <= 0) width = 280
+                    if (height <= 0) height = 250
+
+                    if (height < 200 || width < 180) {
+                        hideText = true
+                    }
+                }
             }
+
+            if (hideText) {
+                view.setViewVisibility(R.id.lr_item_text_container, View.GONE)
+            } else {
+                view.setViewVisibility(R.id.lr_item_text_container, View.VISIBLE)
+            }
+
+            val bitmap = posterCache[item.posterUrl]
             if (bitmap != null) {
                 view.setImageViewBitmap(R.id.lr_item_poster, bitmap)
             } else {
@@ -110,6 +164,35 @@ class LibraryRecommendationsWidgetService : RemoteViewsService() {
             view.setTextViewText(R.id.lr_item_subtitle, "")
             view.setViewVisibility(R.id.lr_item_title, View.INVISIBLE)
             view.setViewVisibility(R.id.lr_item_subtitle, View.INVISIBLE)
+
+            var hideText = false
+            if (appWidgetId != AppWidgetManager.INVALID_APPWIDGET_ID) {
+                val appWidgetManager = AppWidgetManager.getInstance(context)
+                val options = appWidgetManager.getAppWidgetOptions(appWidgetId)
+                if (options != null) {
+                    val config = context.resources.configuration
+                    val isLandscape = config.orientation == android.content.res.Configuration.ORIENTATION_LANDSCAPE
+                    val minWidth = options.getInt(AppWidgetManager.OPTION_APPWIDGET_MIN_WIDTH)
+                    val minHeight = options.getInt(AppWidgetManager.OPTION_APPWIDGET_MIN_HEIGHT)
+                    val maxWidth = options.getInt(AppWidgetManager.OPTION_APPWIDGET_MAX_WIDTH)
+                    val maxHeight = options.getInt(AppWidgetManager.OPTION_APPWIDGET_MAX_HEIGHT)
+                    var width = if (isLandscape) maxWidth else minWidth
+                    var height = if (isLandscape) minHeight else maxHeight
+
+                    if (width <= 0) width = 280
+                    if (height <= 0) height = 250
+
+                    if (height < 200 || width < 180) {
+                        hideText = true
+                    }
+                }
+            }
+
+            if (hideText) {
+                view.setViewVisibility(R.id.lr_item_text_container, View.GONE)
+            } else {
+                view.setViewVisibility(R.id.lr_item_text_container, View.VISIBLE)
+            }
             return view
         }
 

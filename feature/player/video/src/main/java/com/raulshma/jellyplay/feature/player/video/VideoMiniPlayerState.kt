@@ -17,7 +17,11 @@ import javax.inject.Singleton
 @Singleton
 class VideoMiniPlayerState @Inject constructor() {
     companion object {
-        private const val AUTO_RELEASE_TIMEOUT_MS = 30 * 60 * 1000L
+        // How long the video engine (MPV/LibVLC holding native memory) is
+        // retained after the user dismisses the mini player, in case they
+        // return to the same item. Kept short to avoid holding native
+        // resources for half an hour; reclaim still works within the window.
+        private const val AUTO_RELEASE_TIMEOUT_MS = 5 * 60 * 1000L
     }
 
     private val _isMiniMode = MutableStateFlow(false)

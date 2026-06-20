@@ -14,9 +14,11 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
+import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.foundation.clickable
@@ -52,6 +54,7 @@ import com.raulshma.jellyplay.core.ui.tv.TvGrabInitialFocus
 import com.raulshma.jellyplay.core.ui.tv.tryRequestFocus
 import com.composables.icons.tabler.outline.*
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun DvrScreen(
     onBack: () -> Unit,
@@ -103,61 +106,66 @@ fun DvrScreen(
                 title = "No scheduled recordings",
             )
         } else {
-            LazyColumn(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .tvFocusRestorer()
-                    .focusRequester(focusRequester),
-                contentPadding = PaddingValues(
-                    start = contentPad,
-                    end = contentPad,
-                    top = 8.dp,
-                    bottom = bottomPad,
-                ),
-                verticalArrangement = Arrangement.spacedBy(spacing),
+            PullToRefreshBox(
+                isRefreshing = viewModel.isLoading,
+                onRefresh = { viewModel.load() },
             ) {
-                if (viewModel.seriesTimers.isNotEmpty()) {
-                    item {
-                        Text(
-                            text = "Series Recordings",
-                            style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.SemiBold),
-                            color = MaterialTheme.colorScheme.onSurface,
-                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 8.dp),
-                        )
+                LazyColumn(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .tvFocusRestorer()
+                        .focusRequester(focusRequester),
+                    contentPadding = PaddingValues(
+                        start = contentPad,
+                        end = contentPad,
+                        top = 8.dp,
+                        bottom = bottomPad,
+                    ),
+                    verticalArrangement = Arrangement.spacedBy(spacing),
+                ) {
+                    if (viewModel.seriesTimers.isNotEmpty()) {
+                        item {
+                            Text(
+                                text = "Series Recordings",
+                                style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.SemiBold),
+                                color = MaterialTheme.colorScheme.onSurface,
+                                modifier = Modifier.padding(horizontal = 8.dp, vertical = 8.dp),
+                            )
+                        }
+                        items(viewModel.seriesTimers.size, key = { viewModel.seriesTimers[it].id }, contentType = { "seriesTimer" }) { index ->
+                            val timer = viewModel.seriesTimers[index]
+                            SeriesTimerCard(
+                                timer = timer,
+                                onCancel = { viewModel.cancelSeriesTimer(it) },
+                            )
+                        }
+                        item {
+                            Box(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(vertical = 8.dp)
+                                    .height(1.dp)
+                                    .background(MaterialTheme.colorScheme.onSurface.copy(alpha = 0.08f))
+                            )
+                        }
                     }
-                    items(viewModel.seriesTimers.size, key = { viewModel.seriesTimers[it].id }, contentType = { "seriesTimer" }) { index ->
-                        val timer = viewModel.seriesTimers[index]
-                        SeriesTimerCard(
-                            timer = timer,
-                            onCancel = { viewModel.cancelSeriesTimer(it) },
-                        )
-                    }
-                    item {
-                        Box(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(vertical = 8.dp)
-                                .height(1.dp)
-                                .background(MaterialTheme.colorScheme.onSurface.copy(alpha = 0.08f))
-                        )
-                    }
-                }
 
-                if (viewModel.timers.isNotEmpty()) {
-                    item {
-                        Text(
-                            text = "Scheduled Recordings",
-                            style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.SemiBold),
-                            color = MaterialTheme.colorScheme.onSurface,
-                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 8.dp),
-                        )
-                    }
-                    items(viewModel.timers.size, key = { viewModel.timers[it].id }, contentType = { "timer" }) { index ->
-                        val timer = viewModel.timers[index]
-                        TimerCard(
-                            timer = timer,
-                            onCancel = { viewModel.cancelTimer(it) },
-                        )
+                    if (viewModel.timers.isNotEmpty()) {
+                        item {
+                            Text(
+                                text = "Scheduled Recordings",
+                                style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.SemiBold),
+                                color = MaterialTheme.colorScheme.onSurface,
+                                modifier = Modifier.padding(horizontal = 8.dp, vertical = 8.dp),
+                            )
+                        }
+                        items(viewModel.timers.size, key = { viewModel.timers[it].id }, contentType = { "timer" }) { index ->
+                            val timer = viewModel.timers[index]
+                            TimerCard(
+                                timer = timer,
+                                onCancel = { viewModel.cancelTimer(it) },
+                            )
+                        }
                     }
                 }
             }

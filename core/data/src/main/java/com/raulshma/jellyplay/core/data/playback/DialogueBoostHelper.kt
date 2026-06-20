@@ -1,15 +1,40 @@
 package com.raulshma.jellyplay.core.data.playback
 
-import android.media.audiofx.Equalizer
 import android.util.Log
-import androidx.media3.common.C
 import com.raulshma.jellyplay.core.model.EffectStrength
 
-class DialogueBoostHelper {
-
-    private var equalizer: Equalizer? = null
-    private var currentAudioSessionId: Int = C.AUDIO_SESSION_ID_UNSET
-    private var savedBandLevels: Map<Int, Short> = emptyMap()
+/**
+ * Boosts vocal-range frequencies (1–8 kHz) by overlaying additive
+ * millibel offsets on top of the user's EQ settings.
+ *
+ * **Threading note:** all audio-effect mutations in JellyPlay happen
+ * on the playback thread; this helper is not thread-safe.
+ *
+ * ## Why this delegates to [EqualizerHelper]
+ *
+ * Android's `android.media.audiofx.Equalizer(priority=0, sessionId)` is
+ * a system-global effect per audio session: there is exactly ONE
+ * priority-0 equalizer per session, regardless of how many `Equalizer`
+ * objects the app constructs. Previously this helper owned its own
+ * `Equalizer(0, sid)` alongside [EqualizerHelper]'s, and the two
+ * clobbered each other's band writes — whichever applied last won, and
+ * the snapshot this helper took on attach was already EQ-modified. The
+ * resulting frequency response was non-deterministic and disabling one
+ * effect could clobber the other.
+ *
+ * This helper now holds no `Equalizer` of its own. It computes the
+ * vocal-band boost as a `bandIndex → millibel-offset` map and hands
+ * the overlay to its paired [EqualizerHelper] via
+ * [EqualizerHelper.setBandOffsets]. The host is responsible for
+ * attaching/enabling the shared [EqualizerHelper] before invoking
+ * [setEnabled]. See [AudioEffectsProcessor.applyDialogueBoost] /
+ * `ExoPlayerEngine.applyAudioEffects` / `MpvPlayerEngine` for the
+ * canonical wiring.
+ *
+ * The legacy `attach(audioSessionId)` / `detach()` methods are kept as
+ * no-ops so existing call sites compile unchanged.
+ */
+class DialogueBoostHelper(private val equalizerHelper: EqualizerHelper) {
 
     var isEnabled: Boolean = false
         private set
@@ -19,71 +44,55 @@ class DialogueBoostHelper {
 
     fun setStrength(strength: EffectStrength) {
         this.strength = strength
-        if (isEnabled) {
-            equalizer?.apply {
-                val bandLevels = boostVocalBands()
-                bandLevels.forEach { (band, level) ->
-                    try { setBandLevel(band.toShort(), level.toShort()) } catch (_: Exception) {}
-                }
-            }
-        }
+        if (isEnabled) applyOffsets()
     }
 
-    fun attach(audioSessionId: Int) {
-        if (audioSessionId == C.AUDIO_SESSION_ID_UNSET) return
-        if (audioSessionId == currentAudioSessionId && equalizer != null) return
-
-        detach()
-        currentAudioSessionId = audioSessionId
-
-        equalizer = try {
-            Equalizer(0, audioSessionId).apply {
-                savedBandLevels = (0 until numberOfBands.toInt()).associateWith { band ->
-                    getBandLevel(band.toShort())
-                }
-                val bandLevels = boostVocalBands()
-                bandLevels.forEach { (band, level) ->
-                    try {
-                        setBandLevel(band.toShort(), level.toShort())
-                    } catch (_: Exception) {}
-                }
-                enabled = isEnabled
-            }
-        } catch (e: Exception) {
-            Log.w(TAG, "Failed to create Equalizer for dialogue boost", e)
-            null
-        }
+    /**
+     * Kept for source compatibility with hosts that previously
+     * attached this helper to an audio session directly. The
+     * underlying `Equalizer` is owned by the paired
+     * [equalizerHelper]; the host is responsible for calling
+     * [EqualizerHelper.attach].
+     */
+    fun attach(@Suppress("UNUSED_PARAMETER") audioSessionId: Int) {
+        // No-op — delegates to equalizerHelper.
     }
 
     fun setEnabled(enabled: Boolean) {
         isEnabled = enabled
-        if (enabled) {
-            equalizer?.apply {
-                val bandLevels = boostVocalBands()
-                bandLevels.forEach { (band, level) ->
-                    try { setBandLevel(band.toShort(), level.toShort()) } catch (_: Exception) {}
-                }
-                this.enabled = true
-            }
-        } else {
-            equalizer?.apply {
-                savedBandLevels.forEach { (band, level) ->
-                    try { setBandLevel(band.toShort(), level) } catch (_: Exception) {}
-                }
-                this.enabled = false
-            }
-        }
+        if (enabled) applyOffsets() else clearOffsets()
     }
 
+    /**
+     * Kept for source compatibility. Does not release the underlying
+     * `Equalizer`; the host owns that lifecycle via [equalizerHelper].
+     * Clears any overlay this helper applied so a subsequent attach
+     * starts from a clean state.
+     */
     fun detach() {
-        equalizer?.release()
-        equalizer = null
-        currentAudioSessionId = C.AUDIO_SESSION_ID_UNSET
-        savedBandLevels = emptyMap()
+        if (isEnabled) clearOffsets()
+        isEnabled = false
     }
 
-    private fun Equalizer.boostVocalBands(): Map<Int, Int> {
-        val numBands = numberOfBands.toInt()
+    private fun applyOffsets() {
+        val freqs = equalizerHelper.getBandCenterFrequencies()
+        if (freqs.isEmpty()) {
+            Log.w(TAG, "EqualizerHelper has no attached bands; skipping dialogue-boost overlay")
+            return
+        }
+        val offsets = computeOffsets(freqs)
+        equalizerHelper.setBandOffsets(offsets)
+    }
+
+    private fun clearOffsets() {
+        equalizerHelper.setBandOffsets(emptyMap())
+    }
+
+    /**
+     * Pure function: maps a list of band center frequencies (in Hz) to
+     * millibel offsets that boost the vocal range. Exposed for testing.
+     */
+    internal fun computeOffsets(centerFreqsHz: List<Int>): Map<Int, Int> {
         val result = mutableMapOf<Int, Int>()
         val (coreVocal, upperHarmonics, lowMidWarmth) = when (strength) {
             EffectStrength.LOW -> Triple(300, 150, 100)
@@ -91,17 +100,19 @@ class DialogueBoostHelper {
             EffectStrength.HIGH -> Triple(900, 450, 300)
         }
 
-        for (i in 0 until numBands) {
-            val centerFreq = getCenterFreq(i.toShort())
-            val level = when {
-                centerFreq in 1_000_000..4_000_000 -> coreVocal
-                centerFreq in 4_000_000..8_000_000 -> upperHarmonics
-                centerFreq in 500_000..1_000_000 -> lowMidWarmth
+        centerFreqsHz.forEachIndexed { band, freqHz ->
+            // Equalizer.getCenterFreq returns millihertz; the helper
+            // converts to Hz before exposing, so we work in Hz here.
+            // Vocal range maps to 1–4 kHz core, 4–8 kHz presence; the
+            // 500 Hz–1 kHz band gets a small warmth lift to keep
+            // male voices from thinning.
+            val level = when (freqHz) {
+                in 1_000..4_000 -> coreVocal
+                in 4_000..8_000 -> upperHarmonics
+                in 500..1_000 -> lowMidWarmth
                 else -> 0
             }
-            if (level != 0) {
-                result[i] = level
-            }
+            if (level != 0) result[band] = level
         }
         return result
     }

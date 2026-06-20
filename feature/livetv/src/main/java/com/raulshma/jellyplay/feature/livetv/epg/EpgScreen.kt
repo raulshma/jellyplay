@@ -15,9 +15,11 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
+import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
@@ -51,6 +53,7 @@ import com.raulshma.jellyplay.core.ui.tv.TvGrabInitialFocus
 import com.raulshma.jellyplay.core.ui.tv.tryRequestFocus
 import com.composables.icons.tabler.outline.*
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun EpgScreen(
     onProgramClick: (LiveTvProgram) -> Unit,
@@ -104,29 +107,34 @@ fun EpgScreen(
                 title = "No program guide available",
             )
         } else {
-            LazyColumn(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .tvFocusRestorer()
-                    .focusRequester(focusRequester),
-                contentPadding = PaddingValues(
-                    start = contentPad,
-                    end = contentPad,
-                    top = 8.dp,
-                    bottom = bottomPad,
-                ),
-                verticalArrangement = Arrangement.spacedBy(spacing),
+            PullToRefreshBox(
+                isRefreshing = viewModel.isLoading,
+                onRefresh = { viewModel.loadGuide() },
             ) {
-                items(
-                    items = viewModel.programs,
-                    key = { "${it.channelId}_${it.id}" },
-                    contentType = { "program" },
-                ) { program ->
-                    ProgramCard(
-                        program = program,
-                        onClick = { onProgramClick(program) },
-                        onRecordClick = onRecordClick?.let { { it(program) } },
-                    )
+                LazyColumn(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .tvFocusRestorer()
+                        .focusRequester(focusRequester),
+                    contentPadding = PaddingValues(
+                        start = contentPad,
+                        end = contentPad,
+                        top = 8.dp,
+                        bottom = bottomPad,
+                    ),
+                    verticalArrangement = Arrangement.spacedBy(spacing),
+                ) {
+                    items(
+                        items = viewModel.programs,
+                        key = { "${it.channelId}_${it.id}" },
+                        contentType = { "program" },
+                    ) { program ->
+                        ProgramCard(
+                            program = program,
+                            onClick = { onProgramClick(program) },
+                            onRecordClick = onRecordClick?.let { { it(program) } },
+                        )
+                    }
                 }
             }
         }

@@ -12,6 +12,8 @@ import com.raulshma.jellyplay.core.data.repository.PlaybackRepository
 import com.raulshma.jellyplay.core.model.HomeSectionType
 import com.raulshma.jellyplay.core.model.MediaItem
 import com.raulshma.jellyplay.core.model.MediaType
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 
 /**
  * Publishes Continue Watching and Next Up items to the Android TV home screen's
@@ -69,7 +71,7 @@ class TvWatchNextPublisher(
             }
         }
         if (prefsChanged) {
-            prefs.edit(true) {
+            prefs.edit(false) {
                 putStringSet(KEY_USER_REMOVED, savedRemovedIds)
             }
         }
@@ -126,13 +128,13 @@ class TvWatchNextPublisher(
                 null,
             )
         }
-        prefs.edit(true) {
+        prefs.edit(false) {
             remove(KEY_USER_REMOVED)
         }
     }
 
-    private fun queryExistingPrograms(): List<WatchNextProgram> {
-        return context.contentResolver
+    private suspend fun queryExistingPrograms(): List<WatchNextProgram> = withContext(Dispatchers.IO) {
+        context.contentResolver
             .query(
                 TvContractCompat.WatchNextPrograms.CONTENT_URI,
                 WatchNextProgram.PROJECTION,

@@ -16,9 +16,18 @@ class JellyPlayPlaybackService : MediaLibraryService(), PlaybackSessionManager.L
     @Inject lateinit var sessionManager: PlaybackSessionManager
     @Inject lateinit var audioPlaybackManager: AudioPlaybackManager
 
+    private var notificationProvider: JellyPlayNotificationProvider? = null
+
     override fun onCreate() {
         super.onCreate()
-        setMediaNotificationProvider(JellyPlayNotificationProvider(this))
+        // Hold our own reference so onDestroy can release the provider's
+        // coroutine scope + cached bitmap. Without this the provider (held
+        // only weakly by the parent MediaLibraryService) leaks a
+        // SupervisorJob + Dispatchers.IO scope and a Bitmap on every service
+        // destroy/recreate cycle.
+        val provider = JellyPlayNotificationProvider(this)
+        notificationProvider = provider
+        setMediaNotificationProvider(provider)
         sessionManager.addListener(this)
     }
 
@@ -66,6 +75,10 @@ class JellyPlayPlaybackService : MediaLibraryService(), PlaybackSessionManager.L
         // Release ExoPlayer, audio effects, and the audio MediaSession held by
         // AudioPlaybackManager so they don't linger after the service is destroyed.
         audioPlaybackManager.stopAndRelease()
+        // Release our notification provider so its coroutine scope and cached
+        // artwork bitmap are torn down cleanly.
+        notificationProvider?.release()
+        notificationProvider = null
         super.onDestroy()
     }
 }
