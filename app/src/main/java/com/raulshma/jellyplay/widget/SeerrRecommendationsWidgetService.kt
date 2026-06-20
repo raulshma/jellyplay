@@ -60,8 +60,12 @@ class SeerrRecommendationsWidgetService : RemoteViewsService() {
         override fun onCreate() = Unit
 
         override fun onDataSetChanged() {
+            // Always re-read the latest snapshot. See
+            // [LibraryRecommendationsWidgetService.onDataSetChanged] for the
+            // rationale: skipping loads on unchanged versions left the widget
+            // blank when the factory was recreated after a worker run that
+            // short-circuited the version bump.
             val version = runBlocking { store.seerrWidgetVersion.first() }
-            if (version == loadedVersion) return
             items = runBlocking { store.seerrWidgetItems.first() }
             loadedVersion = version
             // Pre-fetch posters concurrently so each `getViewAt` is a map lookup.

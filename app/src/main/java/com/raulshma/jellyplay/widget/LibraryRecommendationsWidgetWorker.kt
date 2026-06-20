@@ -29,10 +29,17 @@ class LibraryRecommendationsWidgetWorker @AssistedInject constructor(
 ) : CoroutineWorker(appContext, params) {
 
     override suspend fun doWork(): Result = runCatching {
-        authRepository.restoreSession().getOrThrow()
+        // Best-effort session restore. We must NOT fail the whole worker if
+        // this returns a failure (e.g. transient DB or api-client error): the
+        // `currentServer` check below decides whether we have enough state to
+        // fetch. Failing here leaves the widget stuck on the empty state
+        // because no persist (and therefore no notify) ever happens.
+        authRepository.restoreSession()
         val server = authRepository.currentServer.first()
         if (server == null) {
-            WidgetPersistHelper.persistLibraryItems(applicationContext, userPreferencesStore, emptyList(), versionBumpOnly = true)
+            // No server: leave existing cached items intact so the widget
+            // keeps showing the last good snapshot instead of going blank
+            // during the window before the app restores the session.
             return@runCatching
         }
 
@@ -49,7 +56,7 @@ class LibraryRecommendationsWidgetWorker @AssistedInject constructor(
         }
 
         if (items.isEmpty()) {
-            WidgetPersistHelper.persistLibraryItems(applicationContext, userPreferencesStore, emptyList(), versionBumpOnly = true)
+            // Keep existing data instead of clearing the widget.
             return@runCatching
         }
 
