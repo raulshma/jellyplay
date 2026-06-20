@@ -60,6 +60,7 @@ import com.raulshma.jellyplay.core.ui.adaptive.WindowSizeClass
 import com.raulshma.jellyplay.core.ui.adaptive.detailBodyMaxWidth
 import com.raulshma.jellyplay.core.ui.components.PosterCard
 import com.raulshma.jellyplay.core.ui.components.SeerrMediaCard
+import com.raulshma.jellyplay.core.ui.components.progressFraction
 import com.raulshma.jellyplay.core.ui.image.MediaImage
 import com.raulshma.jellyplay.core.ui.tv.LocalTvMode
 import com.raulshma.jellyplay.core.ui.tv.TvFocusableItemRow
@@ -172,7 +173,7 @@ internal fun DetailContentBody(
                                 .clip(ShapeCache.smooth8)
                                 .then(seriesNavFocusState.focusModifier)
                                 .then(Modifier.tvFocusIndicator(seriesNavFocusState, ShapeCache.smooth8))
-                                .clickable { onNavigateToSeries(item.seriesId!!) }
+                                .clickable { item.seriesId?.let(onNavigateToSeries) }
                                 .padding(vertical = 4.dp),
                             verticalAlignment = Alignment.CenterVertically,
                         ) {
@@ -473,14 +474,13 @@ internal fun DetailContentBody(
                     ) { _, collectionItem, focusModifier ->
                             val collectionClick = remember(collectionItem.id) { { onItemClick(collectionItem.id) } }
                             FadingItem {
+                                val collectionProgress = collectionItem.progressFraction()
                                 PosterCard(
                                     item = collectionItem,
                                     imageUrl = getImageUrl(collectionItem.id),
                                     onClick = collectionClick,
-                                    showProgress = collectionItem.playbackPositionTicks != null && collectionItem.playbackPositionTicks!! > 0,
-                                    progressPercent = if (collectionItem.runTimeTicks != null && collectionItem.runTimeTicks!! > 0) {
-                                        (collectionItem.playbackPositionTicks?.toFloat() ?: 0f) / collectionItem.runTimeTicks!!.toFloat()
-                                    } else 0f,
+                                    showProgress = collectionProgress != null && collectionProgress > 0f,
+                                    progressPercent = collectionProgress ?: 0f,
                                     modifier = focusModifier.width(160.dp),
                                 )
                             }

@@ -1,0 +1,4 @@
+<resources>
+    <!-- Live TV feature user-facing strings (enhancements §2.2) -->
+    <string name="livetv_no_channels_available">No channels available</string>
+</resources>

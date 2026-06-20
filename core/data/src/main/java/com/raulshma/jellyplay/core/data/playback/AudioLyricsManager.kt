@@ -30,6 +30,24 @@ class AudioLyricsManager @Inject constructor(
     private val _isFetchingLyrics = MutableStateFlow(false)
     val isFetchingLyrics: StateFlow<Boolean> = _isFetchingLyrics.asStateFlow()
 
+    /**
+     * Lead/lag applied to the playback position when computing the active
+     * lyric line. A positive value makes lyrics advance earlier (useful when
+     * an LRCLIB match lags behind the audio). Defaults to [DEFAULT_OFFSET_MS]
+     * to preserve the historic fixed lead; adjustable per-item via
+     * [setLyricsOffset] (enhancements §5.1).
+     */
+    private val _lyricsOffsetMs = MutableStateFlow(DEFAULT_OFFSET_MS)
+    val lyricsOffsetMs: StateFlow<Long> = _lyricsOffsetMs.asStateFlow()
+
+    /**
+     * Per-item offset memory (session-scoped). The current item id is
+     * captured in [fetchLyrics]/[applyLyrics] so the offset is restored when
+     * the user returns to a previously-adjusted track.
+     */
+    private val perItemOffsets = mutableMapOf<String, Long>()
+    private var currentItemId: String? = null
+
     fun initialize(scope: CoroutineScope) {
         this.scope = scope
     }
@@ -40,6 +58,8 @@ class AudioLyricsManager @Inject constructor(
         trackName: String?,
         durationSec: Double?,
     ) {
+        currentItemId = itemId
+        restoreOffsetForItem(itemId)
         scope.launch {
             _isFetchingLyrics.value = true
             mediaRepository.getLyricsWithFallback(itemId, artistName, trackName, durationSec)
@@ -64,6 +84,8 @@ class AudioLyricsManager @Inject constructor(
 
     fun applyLyrics(lrcLibId: Long, currentItemId: String?) {
         val itemId = currentItemId ?: return
+        this.currentItemId = itemId
+        restoreOffsetForItem(itemId)
         scope.launch {
             mediaRepository.getLyricsById(lrcLibId, itemId)
                 .onSuccess {
@@ -73,10 +95,25 @@ class AudioLyricsManager @Inject constructor(
         }
     }
 
+    /**
+     * Sets the lyrics offset for the current item, clamped to
+     * [MIN_OFFSET_MS]..[MAX_OFFSET_MS]. The value is remembered per-item for
+     * the session so switching tracks and back restores the adjustment.
+     */
+    fun setLyricsOffset(offsetMs: Long) {
+        val clamped = offsetMs.coerceIn(MIN_OFFSET_MS, MAX_OFFSET_MS)
+        _lyricsOffsetMs.value = clamped
+        currentItemId?.let { perItemOffsets[it] = clamped }
+    }
+
+    private fun restoreOffsetForItem(itemId: String) {
+        _lyricsOffsetMs.value = perItemOffsets[itemId] ?: DEFAULT_OFFSET_MS
+    }
+
     fun updateCurrentLyricIndex(positionMs: Long) {
         if (_lyrics.value.isNotEmpty()) {
             _currentLyricIndex.value = findCurrentLyricLine(
-                _lyrics.value, positionMs + 300L
+                _lyrics.value, positionMs + _lyricsOffsetMs.value
             )
         }
     }
@@ -86,6 +123,8 @@ class AudioLyricsManager @Inject constructor(
         _currentLyricIndex.value = -1
         _lyricsSource.value = LyricsSource.UNKNOWN
         _isFetchingLyrics.value = false
+        _lyricsOffsetMs.value = DEFAULT_OFFSET_MS
+        currentItemId = null
     }
 
     private fun findCurrentLyricLine(lines: List<LyricsLine>, positionMs: Long): Int {
@@ -100,5 +139,12 @@ class AudioLyricsManager @Inject constructor(
             }
         }
         return high.coerceAtLeast(-1)
+    }
+
+    companion object {
+        /** Historic fixed lead baked into `updateCurrentLyricIndex`. */
+        const val DEFAULT_OFFSET_MS = 300L
+        const val MIN_OFFSET_MS = -500L
+        const val MAX_OFFSET_MS = 500L
     }
 }

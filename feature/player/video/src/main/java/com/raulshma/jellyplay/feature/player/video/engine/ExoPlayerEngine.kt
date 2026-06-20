@@ -106,6 +106,8 @@ class ExoPlayerEngine(
         supportsNightMode = true,
         supportsAudioNormalization = true,
         supportsChannelMixing = true,
+        supportsLiveQualitySwitch = true,
+        supportsBandwidthEstimate = true,
     )
 
     private val _playbackState = MutableStateFlow(EnginePlaybackState.IDLE)

@@ -91,7 +91,6 @@ import com.raulshma.jellyplay.core.designsystem.theme.ShapeCache
 import com.raulshma.jellyplay.core.data.playback.FrameRateMatcher
 import com.raulshma.jellyplay.core.data.cast.CastSessionEvent
 import com.raulshma.jellyplay.core.model.OrientationMode
-import com.raulshma.jellyplay.core.model.PlayerType
 import com.raulshma.jellyplay.core.model.SubtitleEdgeType
 import com.raulshma.jellyplay.core.model.SubtitleStyle
 import com.raulshma.jellyplay.core.ui.tv.LocalTvMode
@@ -196,7 +195,6 @@ fun VideoPlayerScreen(
 
     var brightnessOverlay by rememberSaveable { mutableFloatStateOf(-1f) }
     var volumeOverlay by rememberSaveable { mutableFloatStateOf(-1f) }
-    var externalLaunched by rememberSaveable { mutableStateOf(false) }
     var gestureSeekPositionMs by rememberSaveable { mutableLongStateOf(0L) }
     var gestureStartPositionMs by rememberSaveable { mutableLongStateOf(0L) }
     var gestureDeltaMs by rememberSaveable { mutableLongStateOf(0L) }
@@ -288,24 +286,11 @@ fun VideoPlayerScreen(
         }
     }
 
-    val preferredPlayer = uiState.preferredPlayerType
-    val streamUrl = uiState.streamUrl
-
-    LaunchedEffect(preferredPlayer, streamUrl) {
-        if (preferredPlayer == PlayerType.EXTERNAL && streamUrl != null && !externalLaunched) {
-            externalLaunched = true
-            val launched = ExternalPlayerLauncher.tryLaunch(
-                context = context,
-                playerType = preferredPlayer,
-                streamUrl = streamUrl,
-                title = uiState.title,
-                startPositionMs = startPositionTicks / 10_000,
-            )
-            if (launched) {
-                onBack()
-            }
-        }
-    }
+    // External-player handoff is handled centrally by the app-level
+    // ActivityResultLauncher in JellyPlayApp's navigateFilter, which reads the
+    // external player's returned position and credits watched progress. This
+    // screen is never composed for the EXTERNAL case (navigation is intercepted
+    // before reaching it), so no local launch logic is needed here.
 
     // Guard against releasing the engine when the composable is torn down
     // during a PiP transition. The engine must survive until PiP is dismissed.
@@ -770,11 +755,11 @@ fun VideoPlayerScreen(
                 key(engine) {
                     AndroidView(
                         factory = { ctx ->
-                            playerViewRef = engine.createSurfaceView(ctx).also { view ->
-                                lastAppliedSubtitleStyle = uiState.subtitleStyle
-                                viewModel.applySubtitleStyleToView(view)
-                            }
-                            playerViewRef!!
+                            val view = engine.createSurfaceView(ctx)
+                            lastAppliedSubtitleStyle = uiState.subtitleStyle
+                            viewModel.applySubtitleStyleToView(view)
+                            playerViewRef = view
+                            view
                         },
                         update = { view ->
                             val currentStyle = uiState.subtitleStyle
@@ -1000,6 +985,15 @@ fun VideoPlayerScreen(
                     .padding(top = 60.dp, end = 16.dp),
             )
 
+            if (uiState.isBuffering && uiState.playerError == null && !isPlaying) {
+                Box(
+                    modifier = Modifier.align(Alignment.Center),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    JellyPlayLoadingIndicator(color = Color.White)
+                }
+            }
+
             if (isScreenLocked && !isInPipMode) {
                 SlideToUnlockOverlay(
                     visible = true,
@@ -1156,6 +1150,7 @@ fun VideoPlayerScreen(
                 channelMixEnabled = uiState.channelMixEnabled,
                 supportsAudioNormalization = uiState.engineCapabilities.supportsAudioNormalization,
                 supportsChannelMixing = uiState.engineCapabilities.supportsChannelMixing,
+                supportsLiveQualitySwitch = uiState.engineCapabilities.supportsLiveQualitySwitch,
                 onAudioNormalizationClick = { viewModel.toggleAudioNormalization() },
                 onAudioNormalizationModeChange = { viewModel.setAudioNormalizationMode(it) },
                 onChannelMixClick = { viewModel.toggleChannelMix() },
@@ -1305,9 +1300,10 @@ fun VideoPlayerScreen(
         },
     )
 
-    if (uiState.showPlaybackErrorDialog && uiState.playerError != null) {
+    val playerError = uiState.playerError
+    if (uiState.showPlaybackErrorDialog && playerError != null) {
         PlaybackErrorDialog(
-            errorMessage = uiState.playerError!!,
+            errorMessage = playerError,
             currentPlayerType = uiState.preferredPlayerType,
             onRetryWithEngine = { viewModel.retryWithEngine(it) },
             onDismiss = { viewModel.dismissPlaybackError() },

@@ -1,6 +1,7 @@
 package com.raulshma.jellyplay.feature.search
 
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.Immutable
 import androidx.lifecycle.viewModelScope
 import androidx.paging.PagingData
 import androidx.paging.cachedIn
@@ -37,6 +38,7 @@ import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import javax.inject.Inject
 
+@Immutable
 data class SearchFilters(
     val mediaTypes: List<MediaType> = emptyList(),
     val genres: List<String> = emptyList(),
@@ -77,8 +79,8 @@ class SearchViewModel @Inject constructor(
     private val _searchHistory = stateFlow<List<SearchHistoryItem>>(emptyList())
     val searchHistory: StateFlow<List<SearchHistoryItem>> = _searchHistory.flow
 
-    private val seerrPrefs: StateFlow<com.raulshma.jellyplay.core.model.seerr.SeerrPreferences> =
-        seerrRepository.getPreferences() as StateFlow
+    private val seerrPrefs: Flow<com.raulshma.jellyplay.core.model.seerr.SeerrPreferences> =
+        seerrRepository.getPreferences()
 
     val isSeerrConnected: StateFlow<Boolean> = seerrPrefs.map {
         it.serverUrl.isNotBlank()
@@ -189,7 +191,7 @@ class SearchViewModel @Inject constructor(
 
     private suspend fun searchSeerr(query: String) {
         try {
-            val prefs = seerrPrefs.value
+            val prefs = seerrPrefs.first()
             val connected = prefs.serverUrl.isNotBlank()
             val enabled = prefs.searchEnabled
             if (!connected || !enabled) {

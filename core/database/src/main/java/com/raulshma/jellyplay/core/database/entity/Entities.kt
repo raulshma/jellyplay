@@ -76,6 +76,7 @@ data class DownloadEntity(
     val seasonNumber: Int? = null,
     @ColumnInfo(defaultValue = "0")
     val createdAt: Long = System.currentTimeMillis(),
+    val errorMessage: String? = null,
 )
 
 @Entity(

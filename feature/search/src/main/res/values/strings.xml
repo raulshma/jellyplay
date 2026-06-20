@@ -1,0 +1,7 @@
+<resources>
+    <!-- Search feature user-facing strings (enhancements §2.2) -->
+    <string name="search_no_results_found">No results found</string>
+    <string name="search_try_adjusting_filters">Try adjusting your filters</string>
+    <string name="search_failed">Search failed</string>
+    <string name="search_failed_to_load_more">Failed to load more</string>
+</resources>

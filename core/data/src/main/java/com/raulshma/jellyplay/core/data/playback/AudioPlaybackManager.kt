@@ -36,7 +36,10 @@ import kotlinx.coroutines.coroutineScope
 import androidx.compose.runtime.Immutable
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.MutableSharedFlow
+import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
@@ -129,6 +132,29 @@ class AudioPlaybackManager @Inject constructor(
     private val _playbackError = MutableStateFlow<String?>(null)
     val playbackError: StateFlow<String?> = _playbackError.asStateFlow()
 
+    /**
+     * Bounded history of pre-mutation queue snapshots enabling undo of
+     * destructive operations (enhancements §5.2). Accessed only on the main
+     * thread per the [AudioQueueManager] contract.
+     */
+    private val queueUndoStack = QueueUndoStack()
+
+    private val _undoEvents = MutableSharedFlow<QueueUndoEvent>(extraBufferCapacity = 4)
+    /** One-shot stream of destructive queue ops the UI can offer to undo. */
+    val undoEvents: SharedFlow<QueueUndoEvent> = _undoEvents.asSharedFlow()
+
+    /**
+     * A→B loop markers (enhancements §5.4). When both are non-null, playback
+     * seeks back to [abLoopStartMs] whenever the position reaches
+     * [abLoopEndMs]. Independent of [repeatMode] (off/all/one) so the two can
+     * compose. Cleared on track change / fresh queue so a loop never bleeds
+     * into the next song.
+     */
+    private val _abLoopStartMs = MutableStateFlow<Long?>(null)
+    val abLoopStartMs: StateFlow<Long?> = _abLoopStartMs.asStateFlow()
+    private val _abLoopEndMs = MutableStateFlow<Long?>(null)
+    val abLoopEndMs: StateFlow<Long?> = _abLoopEndMs.asStateFlow()
+
     val estimatedBandwidthKbps: StateFlow<Double> = bandwidthInterceptor.estimatedBandwidthKbps
 
     private val _currentAudioBitrateTier = MutableStateFlow(com.raulshma.jellyplay.core.model.AudioBitrateTier.DEFAULT)
@@ -170,6 +196,9 @@ class AudioPlaybackManager @Inject constructor(
     private val _artist = MutableStateFlow("")
     val artist: StateFlow<String> = _artist.asStateFlow()
 
+    private val _artistId = MutableStateFlow<String?>(null)
+    val artistId: StateFlow<String?> = _artistId.asStateFlow()
+
     private val _album = MutableStateFlow("")
     val album: StateFlow<String> = _album.asStateFlow()
 
@@ -210,6 +239,9 @@ class AudioPlaybackManager @Inject constructor(
     val currentLyricIndex: StateFlow<Int> get() = lyricsManager.currentLyricIndex
     val lyricsSource: StateFlow<LyricsSource> get() = lyricsManager.lyricsSource
     val isFetchingLyrics: StateFlow<Boolean> get() = lyricsManager.isFetchingLyrics
+    val lyricsOffsetMs: StateFlow<Long> get() = lyricsManager.lyricsOffsetMs
+
+    fun setLyricsOffset(offsetMs: Long) = lyricsManager.setLyricsOffset(offsetMs)
 
     override val nightModeEnabled: StateFlow<Boolean> get() = effectsProcessor.nightModeEnabled
     override val dialogueBoostEnabled: StateFlow<Boolean> get() = effectsProcessor.dialogueBoostEnabled
@@ -470,6 +502,9 @@ class AudioPlaybackManager @Inject constructor(
 
         crossfader.cancel()
         progressReporter.reportStopped()
+        // A→B loop is track-specific; clear it when loading a new item so a
+        // marker pair never applies to a different song (enhancements §5.4).
+        clearAbLoop()
         currentItemId = itemId
         _isLoadingItemFlag = true
         _isLoadingItem.value = true
@@ -487,6 +522,7 @@ class AudioPlaybackManager @Inject constructor(
                 _artist.value = detail.item.albumArtist
                     ?: detail.item.artistItems.firstOrNull()?.name
                     ?: ""
+                _artistId.value = detail.item.artistItems.firstOrNull()?.id
                 _album.value = detail.item.album ?: ""
                 _albumArtUrl.value = playbackRepository.getImageUrl(itemId, maxWidth = 600)
 
@@ -657,6 +693,8 @@ class AudioPlaybackManager @Inject constructor(
 
     override fun playQueue(items: List<AudioQueueItem>, startIndex: Int) {
         assertMainThread("playQueue")
+        // A fresh queue invalidates any undo history from the previous queue.
+        queueUndoStack.clear()
         _queue.value = items
         _currentIndex.value = startIndex
         val item = items.getOrNull(startIndex) ?: return
@@ -679,6 +717,8 @@ class AudioPlaybackManager @Inject constructor(
         val q = _queue.value
         if (index < 0 || index >= q.size) return
         if (queueLoadingJob != null) return
+        val removed = q[index]
+        pushUndoSnapshot(QueueUndoEvent.ItemRemoved(removed))
         val wasPlaying = index == _currentIndex.value
         _queue.value = q.toMutableList().apply { removeAt(index) }.toList()
         if (wasPlaying) {
@@ -695,6 +735,8 @@ class AudioPlaybackManager @Inject constructor(
 
     override fun clearQueue() {
         assertMainThread("clearQueue")
+        if (_queue.value.isEmpty()) return
+        pushUndoSnapshot(QueueUndoEvent.QueueCleared)
         _queue.value = emptyList()
         _currentIndex.value = -1
         exoPlayer?.clearMediaItems()
@@ -706,6 +748,7 @@ class AudioPlaybackManager @Inject constructor(
         if (fromIndex < 0 || fromIndex >= q.size) return
         if (toIndex < 0 || toIndex >= q.size) return
         if (fromIndex == toIndex) return
+        pushUndoSnapshot(QueueUndoEvent.ItemMoved(q[fromIndex]))
         val mutable = q.toMutableList()
         val item = mutable.removeAt(fromIndex)
         mutable.add(toIndex, item)
@@ -732,6 +775,7 @@ class AudioPlaybackManager @Inject constructor(
             _repeatMode.value >= 1 -> 0
             else -> return
         }
+        pushUndoSnapshot(QueueUndoEvent.SkippedToNext)
         _currentIndex.value = next
         exoPlayer?.seekTo(next, 0L)
     }
@@ -752,12 +796,107 @@ class AudioPlaybackManager @Inject constructor(
             _repeatMode.value >= 1 -> q.lastIndex
             else -> return
         }
+        pushUndoSnapshot(QueueUndoEvent.SkippedToPrevious)
         _currentIndex.value = prev
         player.seekTo(prev, 0L)
     }
 
     fun seekTo(positionMs: Long) {
         exoPlayer?.seekTo(positionMs)
+    }
+
+    /**
+     * Marks point A of an A→B loop at the current playback position. Clears B
+     * if it would now be at or before A (enhancements §5.4).
+     */
+    fun setAbLoopStart() {
+        assertMainThread("setAbLoopStart")
+        val pos = exoPlayer?.currentPosition ?: _currentPosition.value
+        _abLoopStartMs.value = pos
+        val end = _abLoopEndMs.value
+        if (end != null && end <= pos) _abLoopEndMs.value = null
+    }
+
+    /**
+     * Marks point B at the current position. Requires A to be set first and
+     * the current position to be strictly after A; otherwise this is a no-op
+     * (prevents an empty / inverted loop).
+     */
+    fun setAbLoopEnd() {
+        assertMainThread("setAbLoopEnd")
+        val start = _abLoopStartMs.value ?: return
+        val pos = exoPlayer?.currentPosition ?: _currentPosition.value
+        if (pos <= start) return
+        _abLoopEndMs.value = pos
+    }
+
+    /** Clears the A→B loop markers. */
+    fun clearAbLoop() {
+        assertMainThread("clearAbLoop")
+        _abLoopStartMs.value = null
+        _abLoopEndMs.value = null
+    }
+
+    /**
+     * Cycles the A→B loop UI state: nothing → set A → set B (looping) → clear.
+     * Encapsulates the state machine so callers don't read-then-act.
+     */
+    fun cycleAbLoop() {
+        assertMainThread("cycleAbLoop")
+        when {
+            _abLoopStartMs.value == null -> setAbLoopStart()
+            _abLoopEndMs.value == null -> setAbLoopEnd()
+            else -> clearAbLoop()
+        }
+    }
+
+    /**
+     * Captures the current queue/index/position into the undo stack and emits
+     * [event] so the UI can offer an Undo affordance. Must be called on the
+     * main thread immediately BEFORE the destructive mutation it guards.
+     */
+    private fun pushUndoSnapshot(event: QueueUndoEvent) {
+        queueUndoStack.push(
+            QueueSnapshot(
+                queue = _queue.value,
+                currentIndex = _currentIndex.value,
+                positionMs = exoPlayer?.currentPosition ?: _currentPosition.value,
+            ),
+        )
+        _undoEvents.tryEmit(event)
+    }
+
+    /**
+     * Restores the queue to its state before the most recent destructive
+     * operation, if any. Returns true when an undo was applied. The restore
+     * re-syncs the ExoPlayer media items to the snapshot and seeks to the
+     * captured position; it is a no-op while a queue load is in flight to
+     * avoid racing with [playQueue].
+     */
+    fun undoLastQueueOperation(): Boolean {
+        assertMainThread("undoLastQueueOperation")
+        val snapshot = queueUndoStack.pop() ?: return false
+        applyQueueSnapshot(snapshot)
+        return true
+    }
+
+    private fun applyQueueSnapshot(snapshot: QueueSnapshot) {
+        if (queueLoadingJob != null) return
+        _queue.value = snapshot.queue
+        _currentIndex.value = snapshot.currentIndex
+        val player = exoPlayer
+        if (player == null || snapshot.queue.isEmpty()) return
+        scope.launch {
+            val mediaItems = snapshot.queue.mapNotNull { qi ->
+                mediaItemCache.get(qi.id) ?: buildMediaItemForQueueItem(qi)?.also { mediaItemCache.put(qi.id, it) }
+            }
+            if (mediaItems.isEmpty()) return@launch
+            // Bail if the player was swapped/released during the async build.
+            if (exoPlayer != player) return@launch
+            val index = snapshot.currentIndex.coerceIn(0, mediaItems.lastIndex)
+            player.setMediaItems(mediaItems, index, snapshot.positionMs)
+            player.prepare()
+        }
     }
 
     fun seekByDelta(deltaMs: Long) {
@@ -1219,6 +1358,13 @@ class AudioPlaybackManager @Inject constructor(
                 exoPlayer?.let { player ->
                     val pos = player.currentPosition
                     val dur = player.duration.coerceAtLeast(0L)
+                    // A→B loop: when both markers are set and we reach B while
+                    // playing, jump back to A (enhancements §5.4).
+                    val abEnd = _abLoopEndMs.value
+                    val abStart = _abLoopStartMs.value
+                    if (abEnd != null && abStart != null && player.isPlaying && pos >= abEnd) {
+                        player.seekTo(abStart)
+                    }
                     if (pos != lastPosition) {
                         _currentPosition.value = pos
                         lastPosition = pos

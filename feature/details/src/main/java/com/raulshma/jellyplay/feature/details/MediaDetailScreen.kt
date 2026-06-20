@@ -162,11 +162,10 @@ fun MediaDetailScreen(
     val uriHandler = LocalUriHandler.current
 
     val currentItem = detail?.item
-    val targetBackdropId = if (currentItem?.mediaType == MediaType.EPISODE && currentItem.seriesId != null) {
-        currentItem.seriesId!!
-    } else {
-        currentItem?.id ?: itemId
-    }
+    val targetBackdropId = currentItem
+        ?.takeIf { it.mediaType == MediaType.EPISODE }?.seriesId
+        ?: currentItem?.id
+        ?: itemId
     val backdropUrl = viewModel.getBackdropUrl(targetBackdropId)
 
     val outerIsLightTheme = rememberIsLightTheme()
@@ -568,11 +567,9 @@ private fun DetailContent(
 
     val animatedTitleAlpha = scrollCollapsed
 
-    val targetBackdropId = if (item?.mediaType == MediaType.EPISODE && item.seriesId != null) {
-        item.seriesId!!
-    } else {
-        itemId
-    }
+    val targetBackdropId = item
+        ?.takeIf { it.mediaType == MediaType.EPISODE }?.seriesId
+        ?: itemId
 
     val contentFocusRequester = remember { FocusRequester() }
     val scrollBehavior = TopAppBarDefaults.exitUntilCollapsedScrollBehavior(rememberTopAppBarState())

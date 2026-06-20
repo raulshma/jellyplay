@@ -57,11 +57,10 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.compose.ui.platform.LocalContext
-import coil3.compose.AsyncImage
-import coil3.request.ImageRequest
 import com.composables.icons.tabler.Tabler
 import com.composables.icons.tabler.outline.*
+import com.raulshma.jellyplay.core.ui.image.MediaImage
+import coil3.size.Size as CoilSize
 
 @OptIn(ExperimentalMaterial3ExpressiveApi::class)
 @Composable
@@ -130,13 +129,12 @@ fun NextEpisodeOverlay(
                             .aspectRatio(16f / 9f),
                         contentAlignment = Alignment.Center,
                     ) {
-                        AsyncImage(
-                            model = ImageRequest.Builder(LocalContext.current)
-                                .data(thumbnailUrl)
-                                .size(480, 270)
-                                .build(),
+                        MediaImage(
+                            url = thumbnailUrl,
                             contentDescription = null,
                             contentScale = ContentScale.Crop,
+                            size = CoilSize(480, 270),
+                            placeholderIcon = Tabler.Outline.Photo,
                             modifier = Modifier
                                 .fillMaxSize()
                                 .clip(ShapeCache.smooth24),

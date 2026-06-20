@@ -1,0 +1,14 @@
+<resources>
+    <!-- Shared action / component literals (enhancements §2.2).
+         Prefixed `core_` so they never collide with module-local strings
+         once resources are merged at the app level. -->
+    <string name="core_retry">Retry</string>
+    <string name="core_cancel">Cancel</string>
+    <string name="core_reset">Reset</string>
+    <string name="core_close">Close</string>
+    <string name="core_done">Done</string>
+
+    <!-- Truly cross-module feedback (posted from the app/navigation layer
+         and referenced by multiple feature modules). -->
+    <string name="msg_no_video_player_found">No video player found</string>
+</resources>

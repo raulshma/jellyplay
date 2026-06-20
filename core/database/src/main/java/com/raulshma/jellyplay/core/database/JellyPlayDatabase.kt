@@ -47,7 +47,7 @@ import com.raulshma.jellyplay.core.database.entity.UserEntity
         SearchHistoryEntity::class,
         SeenMediaEntity::class,
     ],
-    version = 22,
+    version = 23,
     exportSchema = true,
 )
 @TypeConverters(Converters::class)

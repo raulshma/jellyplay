@@ -80,6 +80,8 @@ class MpvPlayerEngine(
         supportsAudioNormalization = true,
         supportsChannelMixing = true,
         supportsVideoFilters = true,
+        supportsLiveQualitySwitch = false,
+        supportsBandwidthEstimate = false,
     )
 
     private val _playbackState = MutableStateFlow(EnginePlaybackState.IDLE)
@@ -803,6 +805,16 @@ class MpvPlayerEngine(
     private fun updateVideoStatsOnly() {
         val m = mpvView?.mpv ?: return
         try {
+            val videoBitrateBps = try {
+                m.getPropertyDouble("video-bitrate")?.let { br ->
+                    if (br > 0) br.toInt() else null
+                }
+            } catch (_: Exception) { null }
+            val audioBitrateBps = try {
+                m.getPropertyDouble("audio-bitrate")?.let { br ->
+                    if (br > 0) br.toInt() else null
+                }
+            } catch (_: Exception) { null }
             val newStats = EngineVideoStats(
                 videoCodec = try { m.getPropertyString("video-format") } catch (_: Exception) { null },
                 videoDecoder = try { m.getPropertyString("hwdec-current") } catch (_: Exception) { null },
@@ -816,11 +828,7 @@ class MpvPlayerEngine(
                         if (fps > 0f) fps.toFloat() else null
                     }
                 } catch (_: Exception) { null },
-                videoBitrate = try {
-                    m.getPropertyDouble("video-bitrate")?.let { br ->
-                        if (br > 0) br.toInt() else null
-                    }
-                } catch (_: Exception) { null },
+                videoBitrate = videoBitrateBps,
                 audioCodec = try { m.getPropertyString("audio-codec") } catch (_: Exception) { null },
                 audioSampleRate = try {
                     m.getPropertyInt("audio-params/samplerate")?.let { sr ->
@@ -832,12 +840,8 @@ class MpvPlayerEngine(
                         if (ch > 0) ch else null
                     }
                 } catch (_: Exception) { null },
-                audioBitrate = try {
-                    m.getPropertyDouble("audio-bitrate")?.let { br ->
-                        if (br > 0) br.toInt() else null
-                    }
-                } catch (_: Exception) { null },
-                estimatedBandwidthBps = 0L,
+                audioBitrate = audioBitrateBps,
+                estimatedBandwidthBps = ((videoBitrateBps ?: 0) + (audioBitrateBps ?: 0)).toLong(),
                 droppedFrames = try {
                     m.getPropertyInt("decoder-frame-drop-count")?.toLong() ?: 0L
                 } catch (_: Exception) { 0L },

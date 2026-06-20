@@ -188,7 +188,8 @@ fun NewsletterMediaCard(
                     )
                 }
 
-                if (item.runTimeTicks != null && item.runTimeTicks!! > 0 && item.mediaType != MediaType.SERIES) {
+                val runTimeTicks = item.runTimeTicks
+                if (runTimeTicks != null && runTimeTicks > 0 && item.mediaType != MediaType.SERIES) {
                     item.year?.let {
                         Text(
                             text = "\u00B7",
@@ -197,8 +198,8 @@ fun NewsletterMediaCard(
                         )
                     }
                     Text(
-                        text = remember(item.runTimeTicks) {
-                            formatDurationFromTicks(item.runTimeTicks!!)
+                        text = remember(runTimeTicks) {
+                            formatDurationFromTicks(runTimeTicks)
                         },
                         style = MaterialTheme.typography.labelSmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,

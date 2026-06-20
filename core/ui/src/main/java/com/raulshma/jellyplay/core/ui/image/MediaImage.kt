@@ -15,6 +15,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.ColorFilter
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
@@ -37,6 +38,7 @@ fun MediaImage(
     crossfade: Boolean = true,
     size: CoilSize = CoilSize(512, 512),
     colorFilter: ColorFilter? = null,
+    placeholderIcon: ImageVector = Tabler.Outline.User,
 ) {
     val performanceMode = com.raulshma.jellyplay.core.ui.components.LocalPerformanceMode.current
     val effectiveSize = if (performanceMode) CoilSize(256, 256) else size
@@ -73,6 +75,7 @@ fun MediaImage(
             contentScale = contentScale,
             colorFilter = colorFilter,
             showPlaceholder = effectiveBlurHash.isNullOrEmpty(),
+            placeholderIcon = placeholderIcon,
         )
     }
 }
@@ -87,6 +90,7 @@ private fun FallbackAsyncImage(
     contentScale: ContentScale,
     colorFilter: ColorFilter?,
     showPlaceholder: Boolean,
+    placeholderIcon: ImageVector = Tabler.Outline.User,
 ) {
     val context = LocalContext.current
     val fallbackKey = remember(fallbackUrls) { fallbackUrls.joinToString("|") }
@@ -130,8 +134,8 @@ private fun FallbackAsyncImage(
             contentAlignment = Alignment.Center
         ) {
             Icon(
-                imageVector = Tabler.Outline.User,
-                contentDescription = "Avatar Placeholder",
+                imageVector = placeholderIcon,
+                contentDescription = "Image Placeholder",
                 modifier = Modifier.size(48.dp),
                 tint = MaterialTheme.colorScheme.onSurfaceVariant
             )

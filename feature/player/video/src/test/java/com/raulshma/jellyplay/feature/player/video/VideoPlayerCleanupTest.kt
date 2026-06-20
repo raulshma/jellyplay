@@ -14,6 +14,7 @@ import com.raulshma.jellyplay.core.data.repository.OfflineRepository
 import com.raulshma.jellyplay.core.datastore.UserPreferencesStore
 import com.raulshma.jellyplay.core.data.syncplay.SyncPlayManager
 import com.raulshma.jellyplay.core.data.syncplay.SyncPlayPlaybackCore
+import com.raulshma.jellyplay.core.ui.feedback.UserMessageBus
 import com.raulshma.jellyplay.core.ui.viewmodel.StateFlowHandle
 import io.mockk.every
 import io.mockk.mockk
@@ -161,7 +162,8 @@ class VideoPlayerCleanupTest {
             activePlayerController = activePlayerController,
             playerLifecycleManager = playerLifecycleManager,
             videoMiniPlayerState = videoMiniPlayerState,
-            sleepTimerManager = sleepTimerManager
+            sleepTimerManager = sleepTimerManager,
+            userMessageBus = UserMessageBus(),
         )
 
         // Set some media-specific states to verify they are cleared on release

@@ -5,7 +5,6 @@ import android.content.Intent
 import android.net.Uri
 import android.os.Build
 import dagger.hilt.android.qualifiers.ApplicationContext
-import android.widget.Toast
 import com.raulshma.jellyplay.core.data.network.NetworkMonitor
 import com.raulshma.jellyplay.core.data.playback.AudioPlaybackManager
 import com.raulshma.jellyplay.core.data.remote.RemoteControlReceiver
@@ -21,6 +20,7 @@ import com.raulshma.jellyplay.core.model.DownloadStatus
 import com.raulshma.jellyplay.core.model.PlayerType
 import com.raulshma.jellyplay.core.model.UserPreferences
 import com.raulshma.jellyplay.core.ui.navigation.Route
+import com.raulshma.jellyplay.core.ui.feedback.UserMessageBus
 import com.raulshma.jellyplay.core.ui.viewmodel.JellyPlayViewModel
 import com.raulshma.jellyplay.deeplink.DeepLinkHandler
 import com.raulshma.jellyplay.feature.player.video.VideoMiniPlayerState
@@ -54,6 +54,7 @@ class MainViewModel @Inject constructor(
     private val mediaRepository: MediaRepository,
     private val playbackRepository: PlaybackRepository,
     private val offlineRepository: OfflineRepository,
+    val userMessageBus: UserMessageBus,
 ) : JellyPlayViewModel() {
 
     private val _isRestoring = stateFlow(true)
@@ -188,22 +189,25 @@ class MainViewModel @Inject constructor(
         return if (full.length > 60) full.take(60) else full
     }
 
-    suspend fun launchExternalPlayer(
-        route: Route.VideoPlayer,
-        context: android.content.Context,
+    /**
+     * Builds an [ExternalPlayerLaunch] for the given item, resolving either a
+     * completed local download or the server stream URL. Works for both regular
+     * videos ([Route.VideoPlayer]) and Live TV channels
+     * ([Route.LiveTvChannelPlayer]) since [mediaRepository.getMediaDetail] /
+     * [playbackRepository.getStreamUrl] handle channel ids identically to the
+     * internal-engine path.
+     *
+     * The returned intent advertises `return_result`, so the app-level
+     * `ActivityResultLauncher` in [com.raulshma.jellyplay.navigation.JellyPlayApp]
+     * can read the external player's final position and credit watched progress
+     * via [reportExternalPlaybackStopped] (see enhancements §4.3).
+     */
+    suspend fun buildExternalPlayerLaunch(
+        itemId: String,
+        mediaSourceId: String?,
+        startPositionTicks: Long,
     ): ExternalPlayerLaunch? {
-        val launch = buildExternalPlayerLaunch(route) ?: return null
-        try {
-            context.startActivity(Intent.createChooser(launch.intent, "Open with…"))
-        } catch (_: Exception) {
-            Toast.makeText(context, "No video player found", Toast.LENGTH_LONG).show()
-            return null
-        }
-        return launch
-    }
-
-    suspend fun buildExternalPlayerLaunch(route: Route.VideoPlayer): ExternalPlayerLaunch? {
-        val download = downloadRepository.getDownloadByMediaItemId(route.itemId)
+        val download = downloadRepository.getDownloadByMediaItemId(itemId)
         val localFile = download?.let {
             java.io.File(it.downloadPath).takeIf { f -> f.exists() }
         }
@@ -213,19 +217,19 @@ class MainViewModel @Inject constructor(
 
         if (download != null && localFile != null && download.status == DownloadStatus.COMPLETED) {
             url = Uri.fromFile(localFile).toString()
-            val offlineItem = offlineRepository.getOfflineItem(route.itemId)
+            val offlineItem = offlineRepository.getOfflineItem(itemId)
             title = offlineItem?.name ?: download.name
         } else {
-            val detail = mediaRepository.getMediaDetail(route.itemId).getOrNull() ?: return null
-            val source = if (route.mediaSourceId != null) {
-                detail.mediaSources.find { it.id == route.mediaSourceId }
+            val detail = mediaRepository.getMediaDetail(itemId).getOrNull() ?: return null
+            val source = if (mediaSourceId != null) {
+                detail.mediaSources.find { it.id == mediaSourceId }
             } else {
                 detail.mediaSources.firstOrNull()
             }
             url = playbackRepository.getStreamUrl(
-                route.itemId,
+                itemId,
                 source?.id ?: "",
-                route.startPositionTicks,
+                startPositionTicks,
             )
             title = detail.item.name
         }
@@ -234,14 +238,14 @@ class MainViewModel @Inject constructor(
             setDataAndType(Uri.parse(url), "video/*")
             putExtra("title", title)
             putExtra("return_result", true)
-            val startMs = route.startPositionTicks / 10_000
+            val startMs = startPositionTicks / 10_000
             if (startMs > 0) putExtra("position", startMs)
         }
 
         return ExternalPlayerLaunch(
             intent = intent,
-            itemId = route.itemId,
-            startPositionTicks = route.startPositionTicks,
+            itemId = itemId,
+            startPositionTicks = startPositionTicks,
             playSessionId = java.util.UUID.randomUUID().toString(),
         )
     }

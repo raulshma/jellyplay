@@ -9,6 +9,7 @@ import com.raulshma.jellyplay.core.model.formatSpeed
 import com.raulshma.jellyplay.core.ui.viewmodel.JellyPlayViewModel
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
+import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.distinctUntilChanged
 import javax.inject.Inject
@@ -30,6 +31,9 @@ class DownloadsViewModel @Inject constructor(
     private val _isLoading = composeState(true)
     val isLoading: Boolean get() = _isLoading.value
 
+    private val _error = composeState<String?>(null)
+    val error: String? get() = _error.value
+
     init {
         launch {
             downloadRepository.getAllDownloads()
@@ -37,7 +41,12 @@ class DownloadsViewModel @Inject constructor(
                     if (old.size != new.size) return@distinctUntilChanged false
                     old.zip(new).all { (o, n) -> o.downloadedBytes == n.downloadedBytes && o.id == n.id && o.status == n.status }
                 }
+                .catch { e ->
+                    _error.value = e.localizedMessage ?: "Failed to load downloads"
+                    _isLoading.value = false
+                }
                 .collectLatest { items ->
+                    _error.value = null
                     _downloads.value = items
                     _isLoading.value = false
                     val total = _totalStorageBytes.value

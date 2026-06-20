@@ -1,0 +1,16 @@
+<resources>
+    <!-- Audio player queue undo (enhancements §5.2) -->
+    <string name="audio_undo_action">Undo</string>
+    <string name="audio_undo_queue_cleared">Queue cleared</string>
+    <string name="audio_undo_track_removed">Track removed</string>
+    <string name="audio_undo_track_moved">Track moved</string>
+    <string name="audio_undo_skipped_next">Skipped to next</string>
+    <string name="audio_undo_skipped_previous">Skipped to previous</string>
+
+    <!-- A→B repeat (enhancements §5.4) -->
+    <string name="audio_ab_set_point_a">Set point A</string>
+    <string name="audio_ab_set_point_b">Set point B</string>
+    <string name="audio_ab_clear">Clear A–B</string>
+    <string name="audio_ab_point_a_label">A</string>
+    <string name="audio_ab_point_b_label">B</string>
+</resources>

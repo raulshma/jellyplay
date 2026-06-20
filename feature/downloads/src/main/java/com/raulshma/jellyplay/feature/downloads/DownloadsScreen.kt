@@ -67,7 +67,7 @@ fun DownloadsScreen(
     val networkStatus by com.raulshma.jellyplay.core.ui.components.LocalNetworkStatus.current.collectAsStateWithLifecycle()
     val headerStatus = com.raulshma.jellyplay.core.ui.components.resolveHeaderStatus(
         isLoading = viewModel.isLoading,
-        hasError = false,
+        hasError = viewModel.error != null,
         networkStatus = networkStatus,
     )
 
@@ -255,11 +255,22 @@ private fun DownloadItemRow(
                         )
                     }
                     DownloadStatus.FAILED -> {
-                        Text(
-                            "Failed",
-                            style = MaterialTheme.typography.labelSmall,
-                            color = MaterialTheme.colorScheme.error,
-                        )
+                        Column {
+                            Text(
+                                text = "Failed",
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.error,
+                            )
+                            item.errorMessage?.takeIf { it.isNotBlank() }?.let { msg ->
+                                Text(
+                                    text = msg,
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = MaterialTheme.colorScheme.error.copy(alpha = 0.8f),
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis,
+                                )
+                            }
+                        }
                     }
                     DownloadStatus.PAUSED -> {
                         Text(

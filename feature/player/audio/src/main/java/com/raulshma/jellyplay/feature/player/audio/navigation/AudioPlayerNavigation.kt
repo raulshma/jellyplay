@@ -30,6 +30,9 @@ fun EntryProviderScope<NavKey>.audioPlayerSection(
                         )
                     )
                 },
+                onArtistClick = { artistId ->
+                    navigator.navigate(Route.ArtistDetail(artistId = artistId))
+                },
             )
         }
     }

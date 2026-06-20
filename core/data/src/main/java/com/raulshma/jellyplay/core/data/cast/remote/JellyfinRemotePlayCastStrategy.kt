@@ -223,7 +223,13 @@ class JellyfinRemotePlayCastStrategy @Inject constructor(
         }
     }
 
-    fun loadMedia(itemId: String, startPositionMs: Long = 0) {
+    fun loadMedia(
+        itemId: String,
+        startPositionMs: Long = 0,
+        mediaSourceId: String? = null,
+        audioStreamIndex: Int? = null,
+        subtitleStreamIndex: Int? = null,
+    ) {
         val sessionId = connectedSessionId ?: return
         scope.launch {
             val startTicks = startPositionMs * 10000L
@@ -231,7 +237,13 @@ class JellyfinRemotePlayCastStrategy @Inject constructor(
                 sessionId = sessionId,
                 playCommand = "PlayNow",
                 itemIds = listOf(itemId),
-                startPositionTicks = startTicks
+                startPositionTicks = startTicks,
+                // Carry the user's active audio/subtitle selection and the
+                // targeted media source into the remote session so casting
+                // does not reset tracks to the server default (§4.5).
+                mediaSourceId = mediaSourceId,
+                audioStreamIndex = audioStreamIndex,
+                subtitleStreamIndex = subtitleStreamIndex,
             )
             _isPlaying.value = true
         }
