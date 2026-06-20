@@ -84,6 +84,7 @@ internal class SyncPlayBridge(
 
     fun reattachSession() {
         if (!syncPlayManager.isInSyncPlaySession) return
+        syncPlayManager.playbackCore.setCallbacks(this)
         val group = syncPlayManager.currentGroup
         uiState.update { it.copy(
             isInSyncPlaySession = true,
@@ -170,7 +171,7 @@ internal class SyncPlayBridge(
                                 syncPlayManager.playbackCore.setPendingItemLoad(true)
                                 uiState.update { it.copy(isSyncPlaySyncing = true, isSyncPlaySynced = false) }
                                 val posTicks = syncPlayManager.queueCore.getStartPositionTicks(
-                                    syncPlayManager.playbackCore.let { null }
+                                    syncPlayManager.playbackCore.lastCommand
                                 )
                                 onLoadItem(event.data.playingItemId, posTicks)
                             }
