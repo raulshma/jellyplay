@@ -103,7 +103,8 @@
 
         <receiver
             android:name=".widget.NowPlayingWidget"
-            android:exported="true">
+            android:exported="true"
+            android:label="@string/widget_now_playing_label">
             <intent-filter>
                 <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
             </intent-filter>
@@ -114,7 +115,8 @@
 
         <receiver
             android:name=".widget.ContinueWatchingWidget"
-            android:exported="true">
+            android:exported="true"
+            android:label="@string/widget_continue_watching_label">
             <intent-filter>
                 <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
                 <action android:name="com.raulshma.jellyplay.widget.ACTION_REFRESH_CONTINUE_WATCHING" />
@@ -126,9 +128,11 @@
 
         <receiver
             android:name=".widget.LibraryRecommendationsWidget"
-            android:exported="true">
+            android:exported="true"
+            android:label="@string/widget_library_recommendations_label">
             <intent-filter>
                 <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+                <action android:name="com.raulshma.jellyplay.widget.ACTION_REFRESH_LIBRARY" />
             </intent-filter>
             <meta-data
                 android:name="android.appwidget.provider"
@@ -137,9 +141,11 @@
 
         <receiver
             android:name=".widget.SeerrRecommendationsWidget"
-            android:exported="true">
+            android:exported="true"
+            android:label="@string/widget_seerr_recommendations_label">
             <intent-filter>
                 <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+                <action android:name="com.raulshma.jellyplay.widget.ACTION_REFRESH_SEERR" />
             </intent-filter>
             <meta-data
                 android:name="android.appwidget.provider"

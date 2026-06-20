@@ -64,10 +64,16 @@ class LibraryRecommendationsWidgetService : RemoteViewsService() {
         override fun onCreate() = Unit
 
         override fun onDataSetChanged() {
-            val flow = store.libraryWidgetItems
+            // Always re-read the latest snapshot. The previous early-return
+            // (`if (version == loadedVersion) return`) skipped loads whenever
+            // the persisted version matched the factory's cached value, but
+            // that left the widget blank if the factory was recreated (new
+            // binder, process restart) and the worker happened to short-circuit
+            // the version bump in [WidgetPersistHelper] because the content
+            // was unchanged. Always reading is cheap (single DataStore read)
+            // and makes the widget resilient to those edge cases.
+            val fresh = runBlocking { store.libraryWidgetItems.first() }
             val version = runBlocking { store.libraryWidgetVersion.first() }
-            if (version == loadedVersion) return
-            val fresh = runBlocking { flow.first() }
             items = fresh
             loadedVersion = version
             // Pre-fetch posters concurrently so each `getViewAt` is a map lookup.

@@ -11,7 +11,9 @@
     <string name="shortcut_downloads_short">Downloads</string>
     <string name="shortcut_downloads_long">Open Downloads</string>
 
+    <string name="widget_now_playing_label">Now Playing</string>
     <string name="widget_now_playing_description">See and control the music you\'re listening to right from your home screen.</string>
+    <string name="widget_continue_watching_label">Continue Watching</string>
     <string name="widget_continue_watching_description">Jump back into the shows and movies you started but haven\'t finished.</string>
     <string name="widget_nothing_playing">Nothing playing</string>
     <string name="widget_open_to_play">Tap to open JellyPlay</string>
