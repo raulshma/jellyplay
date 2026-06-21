@@ -23,7 +23,7 @@ import com.raulshma.jellyplay.feature.settings.UserManagementScreen
 
 fun EntryProviderScope<NavKey>.settingsSection(
     navigator: Navigator,
-    onLogout: () -> Unit,
+    onLogout: (Boolean) -> Unit,
     onSetupWizard: () -> Unit = {},
 ) {
     entry<Route.Settings> {

@@ -17,6 +17,8 @@ import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.flatMapLatest
+import kotlinx.serialization.Serializable
+import kotlinx.serialization.json.Json
 import javax.inject.Inject
 
 @Immutable
@@ -28,12 +30,24 @@ data class LibraryFilters(
     val playedStatus: PlayedStatus = PlayedStatus.ALL,
 )
 
+@Serializable
+internal data class SavedLibraryFilters(
+    val mediaTypes: List<String> = emptyList(),
+    val genres: List<String> = emptyList(),
+    val years: List<Int> = emptyList(),
+    val sortBy: String = "SORT_NAME",
+    val playedStatus: String = "ALL",
+)
+
 enum class SortOption(val displayName: String, val apiValue: String) {
     SORT_NAME("Name", "SortName"),
     YEAR_DESC("Newest", "ProductionYear,SortName"),
     YEAR_ASC("Oldest", "ProductionYear,SortName"),
     RATING("Rating", "CommunityRating,SortName"),
     DATE_ADDED("Recently Added", "DateCreated,SortName"),
+    RANDOM("Random", "Random"),
+    DATE_PLAYED("Recently Played", "DatePlayed,SortName"),
+    PREMIERE_DATE("Release Date", "PremiereDate,SortName"),
 }
 
 enum class PlayedStatus(val displayName: String) {
@@ -143,12 +157,30 @@ class LibraryViewModel @Inject constructor(
         if (folder != null) {
             val prefs = preferencesStore.preferences.value
             val savedOrder = prefs.defaultLibrarySortOrders[folder.id]
-            if (savedOrder != null) {
+            val savedFiltersJson = prefs.libraryFilters[folder.id]
+
+            var newFilters = LibraryFilters()
+
+            if (savedFiltersJson != null) {
+                try {
+                    val saved = Json.decodeFromString<SavedLibraryFilters>(savedFiltersJson)
+                    newFilters = LibraryFilters(
+                        mediaTypes = saved.mediaTypes.mapNotNull { runCatching { MediaType.valueOf(it) }.getOrNull() },
+                        genres = saved.genres,
+                        years = saved.years,
+                        sortBy = SortOption.entries.find { it.name == saved.sortBy || it.apiValue == saved.sortBy } ?: SortOption.SORT_NAME,
+                        playedStatus = PlayedStatus.entries.find { it.name == saved.playedStatus } ?: PlayedStatus.ALL,
+                    )
+                } catch (_: Exception) {
+                    newFilters = LibraryFilters()
+                }
+            } else if (savedOrder != null) {
                 val option = SortOption.entries.find { it.name == savedOrder || it.apiValue == savedOrder } ?: SortOption.SORT_NAME
-                _filters.set(_filters.value.copy(sortBy = option))
-            } else {
-                _filters.set(_filters.value.copy(sortBy = SortOption.SORT_NAME))
+                newFilters = LibraryFilters(sortBy = option)
             }
+
+            _filters.set(newFilters)
+
             val savedViewMode = prefs.libraryViewModes[folder.id]?.let { modeName ->
                 runCatching { LibraryViewMode.valueOf(modeName) }.getOrNull()
             }
@@ -161,20 +193,29 @@ class LibraryViewModel @Inject constructor(
     }
 
     fun updateFilters(newFilters: LibraryFilters) {
-        val currentFilters = _filters.value
         _filters.set(newFilters)
-        if (newFilters.sortBy != currentFilters.sortBy) {
-            val folder = _selectedFolder.value
-            if (folder != null) {
-                launch {
-                    preferencesStore.setDefaultLibrarySortOrder(folder.id, newFilters.sortBy.name)
-                }
+        val folder = _selectedFolder.value
+        if (folder != null) {
+            launch {
+                preferencesStore.setDefaultLibrarySortOrder(folder.id, newFilters.sortBy.name)
+                val saved = SavedLibraryFilters(
+                    mediaTypes = newFilters.mediaTypes.map { it.name },
+                    genres = newFilters.genres,
+                    years = newFilters.years,
+                    sortBy = newFilters.sortBy.name,
+                    playedStatus = newFilters.playedStatus.name,
+                )
+                preferencesStore.setLibraryFilters(folder.id, Json.encodeToString(saved))
             }
         }
     }
 
     fun toggleShowFilters() {
         _showFilters.set(!_showFilters.value)
+    }
+
+    fun shuffleLibrary() {
+        updateFilters(_filters.value.copy(sortBy = SortOption.RANDOM))
     }
 
     fun clearFilters() {

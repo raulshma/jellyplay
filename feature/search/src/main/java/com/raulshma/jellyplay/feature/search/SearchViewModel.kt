@@ -95,7 +95,7 @@ class SearchViewModel @Inject constructor(
     private var seerrSearchJob: Job? = null
 
     val pagedResults: Flow<PagingData<MediaItem>> = combine(
-        queryFlow.flow.debounce(400).distinctUntilChanged(),
+        queryFlow.flow.debounce(800).distinctUntilChanged(),
         _filters.flow,
     ) { q, f -> q to f }
         .flatMapLatest { (currentQuery, filters) ->
@@ -110,6 +110,8 @@ class SearchViewModel @Inject constructor(
                 mediaRepository.searchPaged(
                     query = currentQuery,
                     mediaTypes = filters.mediaTypes.ifEmpty { null },
+                    genres = filters.genres.ifEmpty { null },
+                    years = filters.years.ifEmpty { null },
                 )
             }
         }
@@ -145,6 +147,10 @@ class SearchViewModel @Inject constructor(
     fun search(newQuery: String) {
         _query.value = newQuery
         queryFlow.set(newQuery)
+        if (newQuery.isBlank()) {
+            _seerrResults.set(emptyList())
+            _seerrSearchError.set(false)
+        }
     }
 
     fun updateFilters(newFilters: SearchFilters) {

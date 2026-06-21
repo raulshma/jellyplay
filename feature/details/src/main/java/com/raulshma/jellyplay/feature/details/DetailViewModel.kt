@@ -539,6 +539,13 @@ class DetailViewModel @Inject constructor(
         }
     }
 
+    fun hideFromContinueWatching() {
+        val item = _uiState.value.detail?.item ?: return
+        launch {
+            preferencesStore.hideCwItem(item.id)
+        }
+    }
+
     fun startDownload() {
         val detail = _uiState.value.detail ?: run {
             _uiState.update { it.copy(downloadError = "Media details not loaded") }

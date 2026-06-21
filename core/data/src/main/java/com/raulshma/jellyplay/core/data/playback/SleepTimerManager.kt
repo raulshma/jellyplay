@@ -27,6 +27,8 @@ class SleepTimerManager @Inject constructor() : AudioSleepTimerManager {
 
     private companion object {
         const val SLEEP_TIMER_TICK_MS = 5_000L
+        const val FADE_OUT_TICK_MS = 100L
+        const val DEFAULT_FADE_OUT_DURATION_MS = 10_000L
     }
 
     private val _isEndOfEpisodeMode = MutableStateFlow(false)
@@ -37,28 +39,51 @@ class SleepTimerManager @Inject constructor() : AudioSleepTimerManager {
     private var timerJob: Job? = null
 
     private var onTimerExpired: (() -> Unit)? = null
+    private var onFadeProgress: ((Float) -> Unit)? = null
 
     override fun setOnTimerExpired(callback: (() -> Unit)?) {
         onTimerExpired = callback
     }
 
-    fun start(durationMs: Long) {
+    fun setOnFadeProgress(callback: ((Float) -> Unit)?) {
+        onFadeProgress = callback
+    }
+
+    fun start(durationMs: Long, fadeOutDurationMs: Long = DEFAULT_FADE_OUT_DURATION_MS) {
         cancel()
         _isActive.value = true
         _isEndOfEpisodeMode.value = false
         _remainingMs.value = durationMs
 
         val targetElapsedMs = SystemClock.elapsedRealtime() + durationMs
+        val fadeOutStartMs = fadeOutDurationMs.coerceAtMost(durationMs / 2)
 
         timerJob = scope.launch {
+            var inFadeOutPhase = false
+
             while (isActive && SystemClock.elapsedRealtime() < targetElapsedMs) {
-                delay(SLEEP_TIMER_TICK_MS)
-                _remainingMs.value = (targetElapsedMs - SystemClock.elapsedRealtime()).coerceAtLeast(0)
+                val remaining = (targetElapsedMs - SystemClock.elapsedRealtime()).coerceAtLeast(0)
+                _remainingMs.value = remaining
+
+                if (!inFadeOutPhase && remaining <= fadeOutStartMs && fadeOutStartMs > 0) {
+                    inFadeOutPhase = true
+                }
+
+                if (inFadeOutPhase && remaining > 0) {
+                    val progress = (remaining.toFloat() / fadeOutStartMs).coerceIn(0f, 1f)
+                    try {
+                        onFadeProgress?.invoke(progress)
+                    } catch (_: Exception) {}
+                    delay(FADE_OUT_TICK_MS)
+                } else {
+                    delay(SLEEP_TIMER_TICK_MS)
+                }
             }
             if (isActive) {
                 _isActive.value = false
                 _remainingMs.value = 0
                 try {
+                    onFadeProgress?.invoke(0f)
                     onTimerExpired?.invoke()
                 } catch (_: Exception) {}
             }
@@ -82,6 +107,9 @@ class SleepTimerManager @Inject constructor() : AudioSleepTimerManager {
         _isActive.value = false
         _remainingMs.value = 0
         _isEndOfEpisodeMode.value = false
+        try {
+            onFadeProgress?.invoke(1f)
+        } catch (_: Exception) {}
     }
 
     override fun cancelSleepTimer() = cancel()

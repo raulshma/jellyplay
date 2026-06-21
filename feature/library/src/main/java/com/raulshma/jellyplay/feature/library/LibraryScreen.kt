@@ -615,6 +615,16 @@ fun LibraryScreen(
                                         modifier = Modifier.size(20.dp),
                                     )
                                 }
+                                IconButton(
+                                    onClick = { viewModel.shuffleLibrary() },
+                                    shapes = IconButtonDefaults.shapes(),
+                                ) {
+                                    Icon(
+                                        Tabler.Outline.ArrowsShuffle,
+                                        contentDescription = "Shuffle",
+                                        modifier = Modifier.size(20.dp),
+                                    )
+                                }
                             }
                         }
                     }

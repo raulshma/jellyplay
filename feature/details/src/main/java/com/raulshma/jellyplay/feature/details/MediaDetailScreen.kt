@@ -322,6 +322,7 @@ fun MediaDetailScreen(
             },
             preferences = preferences,
             onHideFromNextUp = remember(viewModel) { { viewModel.hideFromNextUp() } },
+            onHideFromContinueWatching = remember(viewModel) { { viewModel.hideFromContinueWatching() } },
         )
 
         // Seerr request dialog
@@ -477,6 +478,7 @@ private fun DetailContent(
     onVideoClick: (SeerrRelatedVideo) -> Unit = {},
     preferences: UserPreferences,
     onHideFromNextUp: () -> Unit = {},
+    onHideFromContinueWatching: () -> Unit = {},
 ) {
     val item = detail?.item
     val listState = rememberLazyListState()
@@ -1096,6 +1098,16 @@ private fun DetailContent(
                                         }
                                     )
                                 }
+                                DropdownMenuItem(
+                                    text = { Text("Hide from Continue Watching") },
+                                    onClick = {
+                                        menuExpanded = false
+                                        onHideFromContinueWatching()
+                                    },
+                                    leadingIcon = {
+                                        Icon(Tabler.Outline.EyeOff, contentDescription = null)
+                                    }
+                                )
                             }
                         }
                     }

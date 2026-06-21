@@ -187,7 +187,7 @@ fun StorageSettingsScreen(
                     modifier = Modifier.padding(vertical = 8.dp),
                     initiallyExpanded = highlightSettingId in listOf("offline_mode", "adaptive_bitrate", "bandwidth_cap", "data_saver"),
                 ) {
-                    val networkTotal = 10
+                    val networkTotal = 11
                     var networkIdx = 0
 
                     SettingToggleItem(
@@ -261,6 +261,22 @@ fun StorageSettingsScreen(
                             val currentIndex = options.indexOf(preferences.cellularStreamingQuality)
                             val nextIndex = (currentIndex + 1) % options.size
                             viewModel.setCellularStreamingQuality(options[nextIndex])
+                        },
+                    )
+
+                    val downloadWarningOptions = listOf(0, 100, 250, 500, 1000, 2000)
+                    val downloadWarningLabel = if (preferences.cellularDownloadSizeWarningMb == 0) "Disabled" else "${preferences.cellularDownloadSizeWarningMb} MB"
+                    SettingListItem(
+                        icon = Tabler.Outline.AlertTriangle,
+                        title = "Cellular Download Size Warning",
+                        subtitle = "Warn before downloading large files on cellular",
+                        trailingText = downloadWarningLabel,
+                        highlighted = highlightSettingId == "cellular_download_warning",
+                        index = networkIdx++, count = networkTotal,
+                        onClick = {
+                            val currentIndex = downloadWarningOptions.indexOf(preferences.cellularDownloadSizeWarningMb)
+                            val nextIndex = if (currentIndex == -1) 0 else (currentIndex + 1) % downloadWarningOptions.size
+                            viewModel.setCellularDownloadSizeWarningMb(downloadWarningOptions[nextIndex])
                         },
                     )
 

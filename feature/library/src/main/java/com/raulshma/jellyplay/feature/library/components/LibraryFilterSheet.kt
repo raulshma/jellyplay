@@ -71,7 +71,7 @@ fun LibraryFilterSheet(
 ) {
     var selectedMediaTypes by remember { mutableStateOf(currentFilters.mediaTypes) }
     var selectedGenres by remember { mutableStateOf(currentFilters.genres) }
-    var selectedYears by remember { mutableStateOf(currentFilters.years) }
+    var selectedYears by remember { mutableStateOf(currentFilters.years.toSet()) }
     var selectedSort by remember { mutableStateOf(currentFilters.sortBy) }
     var selectedPlayedStatus by remember { mutableStateOf(currentFilters.playedStatus) }
 
@@ -137,7 +137,7 @@ fun LibraryFilterSheet(
                             onClick = {
                                 selectedMediaTypes = emptyList()
                                 selectedGenres = emptyList()
-                                selectedYears = emptyList()
+                                selectedYears = emptySet()
                                 selectedSort = SortOption.SORT_NAME
                                 selectedPlayedStatus = PlayedStatus.ALL
                             }
@@ -259,6 +259,37 @@ fun LibraryFilterSheet(
                 }
             }
 
+            // ── Year Range ──
+            Spacer(modifier = Modifier.height(20.dp))
+            SectionLabel("Year Range")
+            val presets = remember { com.raulshma.jellyplay.core.ui.components.yearRangePresets() }
+            FlowRow(
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                GlassFilterChip(
+                    label = "Any",
+                    selected = selectedYears.isEmpty(),
+                    onClick = { selectedYears = emptySet() },
+                )
+                presets.forEach { preset ->
+                    val selection = com.raulshma.jellyplay.core.ui.components.yearPresetSelection(
+                        preset,
+                        selectedYears,
+                    )
+                    GlassFilterChip(
+                        label = preset.label,
+                        selected = selection == com.raulshma.jellyplay.core.ui.components.YearPresetSelection.Full,
+                        onClick = {
+                            selectedYears = com.raulshma.jellyplay.core.ui.components.toggleYearPreset(
+                                preset,
+                                selectedYears,
+                            )
+                        },
+                    )
+                }
+            }
+
             Spacer(modifier = Modifier.height(32.dp))
 
             // ── Apply button ──
@@ -294,7 +325,7 @@ fun LibraryFilterSheet(
                                 LibraryFilters(
                                     mediaTypes = selectedMediaTypes,
                                     genres = selectedGenres,
-                                    years = selectedYears,
+                                    years = selectedYears.toList(),
                                     sortBy = selectedSort,
                                     playedStatus = selectedPlayedStatus,
                                 )
@@ -423,3 +454,4 @@ private fun MediaType.displayName(): String = when (this) {
     MediaType.CHANNEL -> "Channels"
     MediaType.UNKNOWN -> "Unknown"
 }
+

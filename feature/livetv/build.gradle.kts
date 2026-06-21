@@ -27,6 +27,7 @@ dependencies {
     implementation(project(":core:designsystem"))
     implementation(project(":core:data"))
     implementation(project(":core:ui"))
+    implementation(project(":feature:player:video"))
 
     implementation(platform(libs.compose.bom))
     implementation(libs.compose.ui)

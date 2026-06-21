@@ -165,6 +165,17 @@ fun SecuritySettingsScreen(
                             },
                         )
                     }
+                    if (preferences.pinLockEnabled) {
+                        SettingToggleItem(
+                            icon = Tabler.Outline.Key,
+                            title = "PIN for Player Lock",
+                            subtitle = if (preferences.usePinForPlayerLock) "Require PIN to unlock player" else "Slide to unlock",
+                            checked = preferences.usePinForPlayerLock,
+                            highlighted = highlightSettingId == "pin_for_player_lock",
+                            index = secIdx++, count = secTotal,
+                            onCheckedChange = { viewModel.setUsePinForPlayerLock(it) },
+                        )
+                    }
                     if (showAdvanced) {
                         val lockTimerOptions = listOf(0L, 30_000L, 60_000L, 300_000L, 600_000L)
                         val lockTimerLabels = listOf("Immediately", "30 seconds", "1 minute", "5 minutes", "10 minutes")

@@ -14,6 +14,7 @@ import com.raulshma.jellyplay.core.model.PinnedSectionType
 import com.raulshma.jellyplay.core.model.PersonInfo
 import com.raulshma.jellyplay.core.model.Playlist
 import com.raulshma.jellyplay.core.model.PlaylistItem
+import com.raulshma.jellyplay.core.model.RecommendationResult
 import com.raulshma.jellyplay.core.model.SearchResult
 import com.raulshma.jellyplay.core.model.Studio
 import com.raulshma.jellyplay.core.network.LyricsApi
@@ -49,6 +50,7 @@ class LibraryApiClientImpl @Inject constructor(
         nextUpRewatching: Boolean,
         nextUpMaxDays: Int,
         nextUpExcludedSeriesIds: Set<String>,
+        hiddenCwItemIds: Set<String>,
         pinnedSections: List<PinnedHomeSection>,
     ): Result<List<HomeSection>> = engine.apiResultWithRetry {
         coroutineScope {
@@ -86,9 +88,10 @@ class LibraryApiClientImpl @Inject constructor(
             if (HomeSectionType.CONTINUE_WATCHING in enabledSections) {
                 continueWatchingResult
                     .onSuccess { list ->
-                        if (list.isNotEmpty()) {
-                            continueWatchingIds = list.map { it.id }.toSet()
-                            sections.add(HomeSection("continue_watching", "Continue Watching", HomeSectionType.CONTINUE_WATCHING, list))
+                        val filtered = list.filter { it.id !in hiddenCwItemIds }
+                        if (filtered.isNotEmpty()) {
+                            continueWatchingIds = filtered.map { it.id }.toSet()
+                            sections.add(HomeSection("continue_watching", "Continue Watching", HomeSectionType.CONTINUE_WATCHING, filtered))
                         }
                     }
                     .onFailure { if (firstError == null) firstError = it }
@@ -157,13 +160,14 @@ class LibraryApiClientImpl @Inject constructor(
 
             if (HomeSectionType.RECOMMENDATIONS in enabledSections) {
                 getRecommendations(limit = 20)
-                    .onSuccess { recommendations ->
-                        if (recommendations.isNotEmpty()) {
+                    .onSuccess { result ->
+                        if (result.items.isNotEmpty()) {
                             sections.add(HomeSection(
                                 "recommendations",
                                 "Recommended For You",
                                 HomeSectionType.RECOMMENDATIONS,
-                                recommendations,
+                                result.items,
+                                seedItem = result.seedItem,
                             ))
                         }
                     }
@@ -315,10 +319,12 @@ class LibraryApiClientImpl @Inject constructor(
         mediaTypes: List<MediaType>?,
         genres: List<String>?,
         years: List<Int>?,
+        studioIds: List<String>?,
         sortBy: String,
         sortOrder: String,
         startIndex: Int,
         limit: Int,
+        searchTerm: String?,
     ): Result<SearchResult> = engine.apiResultWithRetry {
         val sortByEnum = ItemSortBy.entries
             .find { it.serialName.equals(sortBy, ignoreCase = true) }
@@ -334,11 +340,13 @@ class LibraryApiClientImpl @Inject constructor(
             ),
             genres = genres,
             years = years,
+            studioIds = studioIds?.mapNotNull { it.toUUID() },
             sortBy = listOfNotNull(sortByEnum),
             sortOrder = listOf(sortOrderEnum),
             startIndex = startIndex,
             limit = limit,
             recursive = true,
+            searchTerm = searchTerm?.takeIf { it.isNotBlank() },
             fields = listOf(
                 ItemFields.OVERVIEW,
                 ItemFields.PRIMARY_IMAGE_ASPECT_RATIO,
@@ -635,7 +643,7 @@ class LibraryApiClientImpl @Inject constructor(
             }
         }
 
-    override suspend fun getRecommendations(limit: Int): Result<List<MediaItem>> = runCatching {
+    override suspend fun getRecommendations(limit: Int): Result<RecommendationResult> = runCatching {
         val continueWatching = getContinueWatching(limit = 5).getOrDefault(emptyList())
         val nextUp = getNextUp(limit = 5).getOrDefault(emptyList())
 
@@ -643,7 +651,7 @@ class LibraryApiClientImpl @Inject constructor(
             .distinctBy { it.id }
             .take(5)
 
-        if (seedItems.isEmpty()) return@runCatching emptyList<MediaItem>()
+        if (seedItems.isEmpty()) return@runCatching RecommendationResult(emptyList(), null)
 
         val seedIds = seedItems.map { it.id }.toSet()
         val semaphore = Semaphore(3)
@@ -657,10 +665,12 @@ class LibraryApiClientImpl @Inject constructor(
             }.flatMap { it.await() }
         }
 
-        allSimilar
+        val recommendations = allSimilar
             .filter { it.id !in seedIds }
             .distinctBy { it.id }
             .take(limit)
+        
+        RecommendationResult(recommendations, seedItems.firstOrNull())
     }
 
     override suspend fun getItemsByPerson(personId: String, limit: Int): Result<List<MediaItem>> =

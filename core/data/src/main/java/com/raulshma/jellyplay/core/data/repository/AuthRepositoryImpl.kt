@@ -302,6 +302,20 @@ class AuthRepositoryImpl @Inject constructor(
         preferencesStore.clearSession()
     }
 
+    override suspend fun revokeServerSession() {
+        val currentUserId = apiClient.currentUser.first()?.id
+        try {
+            apiClient.revokeServerSession()
+        } catch (_: Exception) {
+            // Even if the server call fails, we should still clear local state
+        }
+        if (currentUserId != null) {
+            removeUser(currentUserId)
+        }
+        apiClient.disconnect()
+        preferencesStore.clearSession()
+    }
+
     override suspend fun switchUser(userId: String): Result<Unit> = runCatching {
         val userEntity = userDao.getUserById(userId) ?: return Result.success(Unit)
         val server = serverDao.getServerById(userEntity.serverId) ?: return Result.success(Unit)
@@ -323,7 +337,20 @@ class AuthRepositoryImpl @Inject constructor(
     }
 
     override suspend fun removeUser(userId: String) {
-        userDao.deleteUserById(userId)
+        database.withTransaction {
+            userDao.deleteUserById(userId)
+            val servers = serverDao.getAllServers().first()
+            servers.forEach { server ->
+                if (server.userId == userId) {
+                    serverDao.updateServer(
+                        server.copy(
+                            userId = null,
+                            accessToken = null
+                        )
+                    )
+                }
+            }
+        }
         val currentUserId = apiClient.currentUser.first()?.id
         if (currentUserId == userId) {
             apiClient.disconnect()

@@ -39,7 +39,7 @@ fun SearchFilterSheet(
 ) {
     var selectedMediaTypes by remember { mutableStateOf(currentFilters.mediaTypes) }
     var selectedGenres by remember { mutableStateOf(currentFilters.genres) }
-    var selectedYears by remember { mutableStateOf(currentFilters.years) }
+    var selectedYears by remember { mutableStateOf(currentFilters.years.toSet()) }
 
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
 
@@ -108,6 +108,39 @@ fun SearchFilterSheet(
                 }
             }
 
+            Spacer(modifier = Modifier.height(16.dp))
+            Text(
+                text = "Year Range",
+                style = MaterialTheme.typography.titleSmall,
+                modifier = Modifier.padding(bottom = 8.dp),
+            )
+            val presets = remember { com.raulshma.jellyplay.core.ui.components.yearRangePresets() }
+            FlowRow(
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                FilterChip(
+                    selected = selectedYears.isEmpty(),
+                    onClick = { selectedYears = emptySet() },
+                    label = { Text("Any") },
+                )
+                presets.forEach { preset ->
+                    val selection = com.raulshma.jellyplay.core.ui.components.yearPresetSelection(
+                        preset,
+                        selectedYears,
+                    )
+                    FilterChip(
+                        selected = selection == com.raulshma.jellyplay.core.ui.components.YearPresetSelection.Full,
+                        onClick = {
+                            selectedYears = com.raulshma.jellyplay.core.ui.components.toggleYearPreset(
+                                preset,
+                                selectedYears,
+                            )
+                        },
+                        label = { Text(preset.label) },
+                    )
+                }
+            }
+
             Spacer(modifier = Modifier.height(24.dp))
 
             Row(
@@ -117,7 +150,7 @@ fun SearchFilterSheet(
                 TextButton(onClick = {
                     selectedMediaTypes = emptyList()
                     selectedGenres = emptyList()
-                    selectedYears = emptyList()
+                    selectedYears = emptySet()
                 }) {
                     Text("Clear All")
                 }
@@ -126,7 +159,7 @@ fun SearchFilterSheet(
                         SearchFilters(
                             mediaTypes = selectedMediaTypes,
                             genres = selectedGenres,
-                            years = selectedYears,
+                            years = selectedYears.toList(),
                         )
                     )
                 }) {
@@ -152,3 +185,4 @@ private fun MediaType.displayName(): String = when (this) {
     MediaType.CHANNEL -> "Channels"
     MediaType.UNKNOWN -> "Unknown"
 }
+

@@ -12,6 +12,7 @@ class MediaPagingSource(
     private val mediaTypes: List<MediaType>? = null,
     private val genres: List<String>? = null,
     private val years: List<Int>? = null,
+    private val studioIds: List<String>? = null,
     private val sortBy: String = "SortName",
     private val sortOrder: String = "Ascending",
 ) : PagingSource<Int, MediaItem>() {
@@ -33,6 +34,7 @@ class MediaPagingSource(
                 mediaTypes = mediaTypes,
                 genres = genres,
                 years = years,
+                studioIds = studioIds,
                 sortBy = sortBy,
                 sortOrder = sortOrder,
                 startIndex = startIndex,

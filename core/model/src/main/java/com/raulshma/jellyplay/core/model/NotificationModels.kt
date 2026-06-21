@@ -16,6 +16,7 @@ data class NotificationPreferences(
     val lightsEnabled: Boolean = true,
     val maxPerCheck: Int = 10,
     val libraryConfigs: Map<String, LibraryNotificationConfig> = emptyMap(),
+    val respectSystemDnd: Boolean = true,
 )
 
 @Immutable

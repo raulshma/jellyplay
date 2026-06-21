@@ -23,6 +23,7 @@ interface MediaRepository : LiveTvRepository, SyncPlayRepository, NewsletterRepo
         nextUpRewatching: Boolean = false,
         nextUpMaxDays: Int = 0,
         nextUpExcludedSeriesIds: Set<String> = emptySet(),
+        hiddenCwItemIds: Set<String> = emptySet(),
         pinnedSections: List<PinnedHomeSection> = emptyList(),
     ): Result<List<HomeSection>>
 
@@ -38,6 +39,7 @@ interface MediaRepository : LiveTvRepository, SyncPlayRepository, NewsletterRepo
         mediaTypes: List<MediaType>? = null,
         genres: List<String>? = null,
         years: List<Int>? = null,
+        studioIds: List<String>? = null,
         sortBy: String = "SortName",
         sortOrder: String = "Ascending",
         startIndex: Int = 0,
@@ -56,6 +58,8 @@ interface MediaRepository : LiveTvRepository, SyncPlayRepository, NewsletterRepo
     suspend fun search(
         query: String,
         mediaTypes: List<MediaType>? = null,
+        genres: List<String>? = null,
+        years: List<Int>? = null,
         limit: Int = 50,
         startIndex: Int = 0,
     ): Result<SearchResult>
@@ -65,6 +69,7 @@ interface MediaRepository : LiveTvRepository, SyncPlayRepository, NewsletterRepo
         mediaTypes: List<MediaType>? = null,
         genres: List<String>? = null,
         years: List<Int>? = null,
+        studioIds: List<String>? = null,
         sortBy: String = "SortName",
         sortOrder: String = "Ascending",
     ): Flow<PagingData<MediaItem>>
@@ -72,6 +77,8 @@ interface MediaRepository : LiveTvRepository, SyncPlayRepository, NewsletterRepo
     fun searchPaged(
         query: String,
         mediaTypes: List<MediaType>? = null,
+        genres: List<String>? = null,
+        years: List<Int>? = null,
     ): Flow<PagingData<MediaItem>>
 
     suspend fun getGenres(parentId: String? = null): Result<List<Genre>>

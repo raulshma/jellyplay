@@ -32,6 +32,7 @@ import com.composables.icons.tabler.Tabler
 import com.composables.icons.tabler.outline.ChevronRight
 import com.composables.icons.tabler.outline.Download
 import com.composables.icons.tabler.outline.ExternalLink
+import com.composables.icons.tabler.outline.Help
 import com.composables.icons.tabler.outline.Heart
 import com.composables.icons.tabler.outline.InfoCircle
 import com.composables.icons.tabler.outline.License
@@ -126,6 +127,32 @@ fun AboutScreen(
             }
 
             SettingsGroupHeader("Links")
+            SettingsClickableRow(
+                icon = { Icon(Tabler.Outline.InfoCircle, contentDescription = null, modifier = Modifier.size(20.dp)) },
+                title = "Changelog",
+                onClick = {
+                    try {
+                        val intent = android.content.Intent(
+                            android.content.Intent.ACTION_VIEW,
+                            android.net.Uri.parse("https://github.com/raulshma/jellyplay/releases"),
+                        )
+                        context.startActivity(intent)
+                    } catch (_: Exception) {}
+                },
+            )
+            SettingsClickableRow(
+                icon = { Icon(Tabler.Outline.Help, contentDescription = null, modifier = Modifier.size(20.dp)) },
+                title = "Help & FAQ",
+                onClick = {
+                    try {
+                        val intent = android.content.Intent(
+                            android.content.Intent.ACTION_VIEW,
+                            android.net.Uri.parse("https://github.com/raulshma/jellyplay/wiki"),
+                        )
+                        context.startActivity(intent)
+                    } catch (_: Exception) {}
+                },
+            )
             SettingsClickableRow(
                 icon = { Icon(Tabler.Outline.InfoCircle, contentDescription = null, modifier = Modifier.size(20.dp)) },
                 title = "GitHub",

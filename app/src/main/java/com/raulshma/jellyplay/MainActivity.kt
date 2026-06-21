@@ -216,10 +216,6 @@ class MainActivity : FragmentActivity() {
             ) {
                 if (showLockScreen) {
                     // Surface the rate-limit lockout to the user when present.
-                    // We don't disable the keypad visually here — the click-time
-                    // check inside onPinEntered enforces the lockout and surfaces
-                    // a "Too many attempts. Try again in X" message. Disabling
-                    // the keypad buttons is a future UX polish item.
                     val lockoutState = remember(preferences.pinLockoutUntilEpochMs) {
                         viewModel.preferencesStore.getPinLockoutState()
                     }
@@ -230,6 +226,7 @@ class MainActivity : FragmentActivity() {
                         subtitle = "Unlock JellyPlay",
                         pinHash = preferences.pinHash,
                         biometricEnabled = preferences.biometricLockEnabled,
+                        enabled = !lockoutActive,
                         onPinEntered = { pin ->
                             if (pin.isEmpty()) {
                                 isPinUnlocked.value = true
@@ -305,6 +302,11 @@ class MainActivity : FragmentActivity() {
         }
         if (action == Intent.ACTION_VIEW && intent.data != null) {
             viewModel.handleDeepLink(intent)
+        } else if (action == Intent.ACTION_SEND && intent.type == "text/plain") {
+            val sharedText = intent.getStringExtra(Intent.EXTRA_TEXT)
+            if (sharedText != null) {
+                viewModel.handleSharedText(sharedText)
+            }
         }
     }
 

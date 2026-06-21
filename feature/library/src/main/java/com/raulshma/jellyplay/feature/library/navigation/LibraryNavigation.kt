@@ -10,6 +10,7 @@ import com.raulshma.jellyplay.feature.library.FavoritesScreen
 import com.raulshma.jellyplay.feature.library.LibraryScreen
 import com.raulshma.jellyplay.feature.library.PhotoAlbumScreen
 import com.raulshma.jellyplay.feature.library.PhotoViewerScreen
+import com.raulshma.jellyplay.feature.library.StudioDetailScreen
 
 private fun Navigator.navigatePhotoAware(
     itemId: String,
@@ -57,6 +58,16 @@ fun EntryProviderScope<NavKey>.librarySection(navigator: Navigator) {
         PhotoViewerScreen(
             itemId = key.itemId,
             parentId = key.parentId,
+            onBack = { navigator.goBack() },
+        )
+    }
+
+    entry<Route.StudioDetail> { key ->
+        StudioDetailScreen(
+            studioName = key.studioName,
+            onItemClick = { itemId ->
+                navigator.navigate(Route.MediaDetail(itemId))
+            },
             onBack = { navigator.goBack() },
         )
     }

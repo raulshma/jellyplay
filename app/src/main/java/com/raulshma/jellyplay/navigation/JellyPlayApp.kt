@@ -222,9 +222,16 @@ fun JellyPlayApp(
         isAuthenticated -> {
             CompositionLocalProvider(
                 com.raulshma.jellyplay.core.ui.components.LocalNetworkStatus provides viewModel.networkMonitor.networkStatus,
+                com.raulshma.jellyplay.core.ui.components.LocalServerHealth provides viewModel.serverHealth,
             ) {
                 MainContent(
-                    onLogout = { viewModel.logout() },
+                    onLogout = { revoke ->
+                        if (revoke) {
+                            viewModel.revokeServerSession()
+                        } else {
+                            viewModel.logout()
+                        }
+                    },
                     viewModel = viewModel,
                     preferences = preferences,
                 )
@@ -273,7 +280,7 @@ private fun OnboardingContent(
 
 @Composable
 private fun MainContent(
-    onLogout: () -> Unit,
+    onLogout: (Boolean) -> Unit,
     viewModel: MainViewModel,
     preferences: com.raulshma.jellyplay.core.model.UserPreferences,
 ) {
@@ -572,13 +579,16 @@ private fun MainContent(
         LocalUserMessageBus provides userMessageBus,
     ) {
         val isExpanded = adaptiveInfo.windowSizeClass != WindowSizeClass.Compact
+        val pendingSearchQuery by viewModel.pendingSearchQuery.collectAsStateWithLifecycle()
 
         @OptIn(androidx.compose.animation.ExperimentalSharedTransitionApi::class)
         androidx.compose.animation.SharedTransitionLayout {
             CompositionLocalProvider(
                 com.raulshma.jellyplay.core.ui.components.LocalSharedTransitionScope provides if (preferences.performanceMode) null else this,
                 LocalNavigationBarColor provides navBarColorState,
-                com.raulshma.jellyplay.core.ui.components.LocalFloatingNavOffset provides (if (!isExpanded && !isFullScreenRoute) bottomNavOffsetHeightPx.floatValue else 0f)
+                com.raulshma.jellyplay.core.ui.components.LocalFloatingNavOffset provides (if (!isExpanded && !isFullScreenRoute) bottomNavOffsetHeightPx.floatValue else 0f),
+                com.raulshma.jellyplay.feature.search.LocalPendingSearchQuery provides pendingSearchQuery,
+                com.raulshma.jellyplay.feature.search.LocalConsumeSearchQuery provides { viewModel.consumePendingSearchQuery() },
             ) {
             // Hoist the saveable-state holder above the isTv/isFullScreenRoute branches so that
             // navigation-entry saveable state (scroll position, form fields, etc.) survives
@@ -714,7 +724,7 @@ private fun TvContent(
     currentTopLevel: NavKey,
     activeTopLevelRoutes: LinkedHashMap<Route, String>,
     navigator: Navigator,
-    onLogout: () -> Unit,
+    onLogout: (Boolean) -> Unit,
     homeMode: HomeMode,
     onModeChange: (HomeMode) -> Unit,
     enterPip: () -> Unit,
@@ -790,7 +800,7 @@ private fun PhoneContent(
     currentTopLevel: NavKey,
     activeTopLevelRoutes: LinkedHashMap<Route, String>,
     navigator: Navigator,
-    onLogout: () -> Unit,
+    onLogout: (Boolean) -> Unit,
     homeMode: HomeMode,
     onModeChange: (HomeMode) -> Unit,
     enterPip: () -> Unit,
@@ -1051,7 +1061,7 @@ private fun PhoneContent(
 private fun FullScreenContent(
     navigationState: com.raulshma.jellyplay.core.ui.navigation.NavigationState,
     navigator: Navigator,
-    onLogout: () -> Unit,
+    onLogout: (Boolean) -> Unit,
     homeMode: HomeMode,
     onModeChange: (HomeMode) -> Unit,
     enterPip: () -> Unit,
@@ -1152,7 +1162,7 @@ private fun NavIcon(route: Route, label: String, selected: Boolean = false, tint
 private fun MainNavDisplay(
     navigationState: com.raulshma.jellyplay.core.ui.navigation.NavigationState,
     navigator: Navigator,
-    onLogout: () -> Unit,
+    onLogout: (Boolean) -> Unit,
     homeMode: HomeMode,
     onModeChange: (HomeMode) -> Unit,
     enterPip: () -> Unit,
