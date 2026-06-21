@@ -4,6 +4,8 @@ import android.app.Notification
 import android.app.PendingIntent
 import android.content.Context
 import android.content.Intent
+import android.os.Build
+import android.provider.Settings
 import androidx.core.app.NotificationCompat
 import androidx.core.app.NotificationManagerCompat
 import com.raulshma.jellyplay.core.model.LibraryFolder
@@ -28,6 +30,7 @@ class NotificationDispatcher @Inject constructor(
     ) {
         if (newItemsByLibrary.isEmpty()) return
         if (!notificationManager.areNotificationsEnabled()) return
+        if (prefs.respectSystemDnd && isSystemDndEnabled()) return
 
         channelManager.ensureSummaryChannel()
 
@@ -46,6 +49,19 @@ class NotificationDispatcher @Inject constructor(
         }
 
         channelManager.deleteStaleChannels(validLibraryIds)
+    }
+
+    private fun isSystemDndEnabled(): Boolean {
+        val notificationManager = context.getSystemService(Context.NOTIFICATION_SERVICE) as? android.app.NotificationManager
+            ?: return false
+        
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+            if (!notificationManager.isNotificationPolicyAccessGranted) {
+                return false
+            }
+            return notificationManager.currentInterruptionFilter != android.app.NotificationManager.INTERRUPTION_FILTER_ALL
+        }
+        return false
     }
 
     private fun dispatchLibrary(

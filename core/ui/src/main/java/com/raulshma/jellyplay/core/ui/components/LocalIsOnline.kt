@@ -4,6 +4,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.ProvidableCompositionLocal
 import androidx.compose.runtime.staticCompositionLocalOf
 import com.raulshma.jellyplay.core.model.NetworkStatus
+import com.raulshma.jellyplay.core.model.ServerHealth
 import kotlinx.coroutines.flow.StateFlow
 
 /**
@@ -14,3 +15,12 @@ import kotlinx.coroutines.flow.StateFlow
  */
 val LocalNetworkStatus: ProvidableCompositionLocal<StateFlow<NetworkStatus>> =
     staticCompositionLocalOf { error("LocalNetworkStatus not provided") }
+
+/**
+ * CompositionLocal that provides a [StateFlow] of [ServerHealth]
+ * representing the health status of the connected Jellyfin server.
+ *
+ * Provided at the app level in [JellyPlayApp].
+ */
+val LocalServerHealth: ProvidableCompositionLocal<StateFlow<ServerHealth>> =
+    staticCompositionLocalOf { error("LocalServerHealth not provided") }

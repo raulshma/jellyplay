@@ -44,6 +44,26 @@ class PreferencesEditor(
     fun setPinLockEnabled(enabled: Boolean) = scope.launch { store.setPinLockEnabled(enabled) }
     fun setPinHash(hash: String?) = scope.launch { store.setPinHash(hash) }
     fun setBiometricLockEnabled(enabled: Boolean) = scope.launch { store.setBiometricLockEnabled(enabled) }
+    fun setUsePinForPlayerLock(enabled: Boolean) = scope.launch { store.setUsePinForPlayerLock(enabled) }
+    fun setDuckOnTransientFocusLoss(enabled: Boolean) = scope.launch { store.setDuckOnTransientFocusLoss(enabled) }
     fun setAutoLockTimerMs(ms: Long) = scope.launch { store.setAutoLockTimerMs(ms) }
     fun hashPin(pin: String): String = store.hashPin(pin)
+
+    /**
+     * Resets all preferences in a specific category to their default values.
+     * @param category The category to reset (e.g., "appearance", "playback", "audio", "security", "notifications")
+     */
+    fun resetCategory(category: String) = scope.launch {
+        store.resetCategory(category)
+    }
+
+    /**
+     * Clears all preferences and resets to factory defaults.
+     * This will log out the user and clear all app data.
+     */
+    fun clearAllPreferences() = scope.launch {
+        store.clearAllPreferences()
+    }
+
+    fun setHapticsEnabled(enabled: Boolean) = scope.launch { store.setHapticsEnabled(enabled) }
 }

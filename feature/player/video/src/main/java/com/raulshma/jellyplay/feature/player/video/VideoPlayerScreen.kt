@@ -116,6 +116,7 @@ import com.raulshma.jellyplay.feature.player.video.components.CastIndicatorOverl
 import com.raulshma.jellyplay.feature.player.video.components.CompanionDashboard
 import com.raulshma.jellyplay.feature.player.video.components.ChapterPickerSheet
 import com.raulshma.jellyplay.feature.player.video.components.GestureOverlay
+import com.raulshma.jellyplay.feature.player.video.components.PinLockOverlay
 import com.raulshma.jellyplay.feature.player.video.components.SlideToUnlockOverlay
 import com.raulshma.jellyplay.feature.player.video.components.PlayerControls
 import com.raulshma.jellyplay.feature.player.video.components.SpeedPickerSheet
@@ -873,15 +874,17 @@ fun VideoPlayerScreen(
                         }
                     }
                 },
-                onHapticPulse = remember(activity) {
+                onHapticPulse = remember(activity, viewModel) {
                     {
-                        activity?.let { act ->
-                            val view = act.window.decorView
-                            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O_MR1) {
-                                view.performHapticFeedback(HapticFeedbackConstants.CONFIRM)
-                            } else {
-                                @Suppress("DEPRECATION")
-                                view.performHapticFeedback(HapticFeedbackConstants.LONG_PRESS)
+                        if (viewModel.hapticsEnabled) {
+                            activity?.let { act ->
+                                val view = act.window.decorView
+                                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O_MR1) {
+                                    view.performHapticFeedback(HapticFeedbackConstants.CONFIRM)
+                                } else {
+                                    @Suppress("DEPRECATION")
+                                    view.performHapticFeedback(HapticFeedbackConstants.LONG_PRESS)
+                                }
                             }
                         }
                     }
@@ -995,15 +998,29 @@ fun VideoPlayerScreen(
             }
 
             if (isScreenLocked && !isInPipMode) {
-                SlideToUnlockOverlay(
-                    visible = true,
-                    onDismiss = { },
-                    onUnlock = {
-                        viewModel.setScreenLocked(false)
-                        showControls = true
-                    },
-                    modifier = Modifier.fillMaxSize(),
-                )
+                val usePin = uiState.usePinForPlayerLock && uiState.pinHash != null
+                if (usePin) {
+                    PinLockOverlay(
+                        visible = true,
+                        onDismiss = { },
+                        onUnlock = {
+                            viewModel.setScreenLocked(false)
+                            showControls = true
+                        },
+                        verifyPin = { pin -> viewModel.verifyPlayerLockPin(pin) },
+                        modifier = Modifier.fillMaxSize(),
+                    )
+                } else {
+                    SlideToUnlockOverlay(
+                        visible = true,
+                        onDismiss = { },
+                        onUnlock = {
+                            viewModel.setScreenLocked(false)
+                            showControls = true
+                        },
+                        modifier = Modifier.fillMaxSize(),
+                    )
+                }
             }
 
             if (uiState.showVideoStats) {
@@ -1132,6 +1149,8 @@ fun VideoPlayerScreen(
                 onPipClick = {
                     onEnterPip()
                 },
+                onMuteClick = { viewModel.toggleMute() },
+                isMuted = uiState.isMuted,
                 isInSyncPlaySession = isInSyncPlaySession,
                 syncPlayGroupName = uiState.syncPlayGroupName,
                 syncPlayParticipantCount = uiState.syncPlayParticipantCount,

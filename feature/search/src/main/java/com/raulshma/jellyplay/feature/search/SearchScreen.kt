@@ -91,6 +91,8 @@ import com.raulshma.jellyplay.core.ui.components.SeerrRequestDialog
 import com.raulshma.jellyplay.core.ui.components.rememberSeerrCardLoadingState
 import com.raulshma.jellyplay.core.ui.adaptive.LocalAdaptiveInfo
 import com.raulshma.jellyplay.core.ui.navigation.Route
+import androidx.compose.runtime.compositionLocalOf
+import androidx.compose.runtime.staticCompositionLocalOf
 import com.raulshma.jellyplay.core.ui.adaptive.WindowSizeClass
 import com.raulshma.jellyplay.core.ui.adaptive.*
 import com.raulshma.jellyplay.core.ui.tv.LocalTvMode
@@ -106,6 +108,9 @@ import com.composables.icons.tabler.outline.*
 import androidx.compose.ui.res.stringResource
 import com.raulshma.jellyplay.feature.search.R
 
+val LocalPendingSearchQuery = compositionLocalOf<String?> { null }
+val LocalConsumeSearchQuery = staticCompositionLocalOf<() -> Unit> { {} }
+
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class, ExperimentalMaterial3ExpressiveApi::class)
 @Composable
 fun SearchScreen(
@@ -113,6 +118,14 @@ fun SearchScreen(
     onNavigate: (Route) -> Unit = {},
     viewModel: SearchViewModel = hiltViewModel(),
 ) {
+    val pendingQuery = LocalPendingSearchQuery.current
+    val consumeQuery = LocalConsumeSearchQuery.current
+    androidx.compose.runtime.LaunchedEffect(pendingQuery) {
+        pendingQuery?.let { query ->
+            viewModel.search(query)
+            consumeQuery()
+        }
+    }
     var requestItem by remember { mutableStateOf<com.raulshma.jellyplay.core.model.seerr.SeerrSearchItem?>(null) }
     val requestResult by viewModel.requestResult.collectAsStateWithLifecycle()
     val radarrServers by viewModel.radarrServers.collectAsStateWithLifecycle()
@@ -548,7 +561,7 @@ fun SearchScreen(
                                 description = if (hasActiveFilters) stringResource(R.string.search_try_adjusting_filters) else null,
                             )
                         }
-                        pagedResults.itemCount == 0 && query.isBlank() && !showSeerr -> {
+                        query.isBlank() && !showSeerr -> {
                             if (searchHistory.isNotEmpty()) {
                                 Column(
                                     modifier = Modifier
@@ -644,7 +657,17 @@ fun SearchScreen(
                             // ── Library grid ──
                             TvFocusableGrid(
                                 itemCount = pagedResults.itemCount,
-                                key = pagedResults.itemKey { it.id },
+                                key = { index ->
+                                    if (index in 0 until pagedResults.itemCount) {
+                                        try {
+                                            pagedResults.peek(index)?.id ?: "search_item_placeholder_$index"
+                                        } catch (_: IndexOutOfBoundsException) {
+                                            "search_item_placeholder_$index"
+                                        }
+                                    } else {
+                                        "search_item_placeholder_$index"
+                                    }
+                                },
                                 columns = GridCells.Adaptive(gridCellSize),
                                 contentPadding = gridPadding,
                                 horizontalArrangement = Arrangement.spacedBy(spacing),
@@ -652,7 +675,15 @@ fun SearchScreen(
                                 modifier = Modifier.fillMaxSize(),
                                 contentType = { "mediaItem" },
                             ) { index, itemModifier ->
-                                val item = pagedResults[index]
+                                val item = if (index in 0 until pagedResults.itemCount) {
+                                    try {
+                                        pagedResults[index]
+                                    } catch (_: IndexOutOfBoundsException) {
+                                        null
+                                    }
+                                } else {
+                                    null
+                                }
                                 if (item != null) {
                                     AnimatedSearchItem(index = index) {
                                         val itemProgress = item.progressFraction()

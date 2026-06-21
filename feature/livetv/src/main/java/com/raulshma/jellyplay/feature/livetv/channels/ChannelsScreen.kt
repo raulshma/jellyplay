@@ -86,6 +86,7 @@ fun ChannelsScreen(
 
     val focusRequester = remember { FocusRequester() }
     val channelsNotEmpty = viewModel.channels.isNotEmpty()
+    val nowPlayingChannelId by viewModel.nowPlayingChannelId.collectAsStateWithLifecycle()
     TvGrabInitialFocus(
         focusRequester = focusRequester,
         itemCount = viewModel.channels.size,
@@ -153,6 +154,7 @@ fun ChannelsScreen(
                         ChannelCard(
                             channel = channel,
                             imageUrl = viewModel.getImageUrl(channel.id, channel.imageTag),
+                            isNowPlaying = channel.id == nowPlayingChannelId,
                             onClick = { onChannelClick(channel.id, channel.name) },
                         )
                     }
@@ -166,13 +168,20 @@ fun ChannelsScreen(
 private fun ChannelCard(
     channel: LiveTvChannel,
     imageUrl: String,
+    isNowPlaying: Boolean = false,
     onClick: () -> Unit,
 ) {
     Row(
         modifier = Modifier
             .fillMaxWidth()
             .clip(ShapeCache.smooth16)
-            .background(MaterialTheme.colorScheme.onSurface.copy(alpha = 0.05f))
+            .background(
+                if (isNowPlaying) {
+                    MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.3f)
+                } else {
+                    MaterialTheme.colorScheme.onSurface.copy(alpha = 0.05f)
+                }
+            )
             .clickable(onClick = onClick)
             .padding(horizontal = 16.dp, vertical = 14.dp),
         verticalAlignment = Alignment.CenterVertically,
@@ -206,13 +215,24 @@ private fun ChannelCard(
 
         // ── Channel info ──
         Column(modifier = Modifier.weight(1f)) {
-            Text(
-                text = channel.name,
-                style = MaterialTheme.typography.bodyLarge.copy(fontWeight = FontWeight.SemiBold),
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-                color = MaterialTheme.colorScheme.onSurface,
-            )
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text(
+                    text = channel.name,
+                    style = MaterialTheme.typography.bodyLarge.copy(fontWeight = FontWeight.SemiBold),
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    color = MaterialTheme.colorScheme.onSurface,
+                )
+                if (isNowPlaying) {
+                    Spacer(Modifier.width(8.dp))
+                    Box(
+                        modifier = Modifier
+                            .size(8.dp)
+                            .clip(CircleShape)
+                            .background(MaterialTheme.colorScheme.primary)
+                    )
+                }
+            }
             val currentProgram = channel.currentProgram
             if (currentProgram != null) {
                 Spacer(Modifier.height(2.dp))

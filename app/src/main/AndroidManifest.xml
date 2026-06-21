@@ -26,8 +26,9 @@
 
     <application
         android:name=".JellyPlayApplication"
-        android:allowBackup="false"
-        tools:replace="android:allowBackup"
+        android:allowBackup="true"
+        android:fullBackupContent="@xml/backup_rules"
+        android:dataExtractionRules="@xml/data_extraction_rules"
         android:icon="@mipmap/ic_launcher"
         android:label="@string/app_name"
         android:roundIcon="@mipmap/ic_launcher_round"
@@ -62,6 +63,11 @@
                     android:scheme="https"
                     android:host="raulshma.github.io"
                     android:pathPrefix="/jellyplay" />
+            </intent-filter>
+            <intent-filter>
+                <action android:name="android.intent.action.SEND" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <data android:mimeType="text/plain" />
             </intent-filter>
             <meta-data
                 android:name="android.app.shortcuts"

@@ -84,9 +84,10 @@ class MediaRepositoryImpl @Inject constructor(
         nextUpRewatching: Boolean,
         nextUpMaxDays: Int,
         nextUpExcludedSeriesIds: Set<String>,
+        hiddenCwItemIds: Set<String>,
         pinnedSections: List<PinnedHomeSection>,
     ): Result<List<HomeSection>> {
-        val cacheKey = "${enabledSections.sortedBy { it.name }}|$hiddenLibraryIds|$nextUpRewatching|$nextUpMaxDays|$nextUpExcludedSeriesIds|$pinnedSections"
+        val cacheKey = "${enabledSections.sortedBy { it.name }}|$hiddenLibraryIds|$nextUpRewatching|$nextUpMaxDays|$nextUpExcludedSeriesIds|$hiddenCwItemIds|$pinnedSections"
         val cached = cachedHomeSections
         val timestamp = cachedHomeSectionsTimestamp
         if (cached != null && cacheKey == cachedHomeSectionsKey &&
@@ -100,6 +101,7 @@ class MediaRepositoryImpl @Inject constructor(
             nextUpRewatching,
             nextUpMaxDays,
             nextUpExcludedSeriesIds,
+            hiddenCwItemIds,
             pinnedSections,
         ).also { result ->
             result.getOrNull()?.let { sections ->
@@ -135,6 +137,7 @@ class MediaRepositoryImpl @Inject constructor(
         mediaTypes: List<MediaType>?,
         genres: List<String>?,
         years: List<Int>?,
+        studioIds: List<String>?,
         sortBy: String,
         sortOrder: String,
         startIndex: Int,
@@ -144,6 +147,7 @@ class MediaRepositoryImpl @Inject constructor(
         mediaTypes = mediaTypes,
         genres = genres,
         years = years,
+        studioIds = studioIds,
         sortBy = sortBy,
         sortOrder = sortOrder,
         startIndex = startIndex,
@@ -168,15 +172,37 @@ class MediaRepositoryImpl @Inject constructor(
     override suspend fun search(
         query: String,
         mediaTypes: List<MediaType>?,
+        genres: List<String>?,
+        years: List<Int>?,
         limit: Int,
         startIndex: Int,
-    ): Result<SearchResult> = apiClient.getSearchHints(query, mediaTypes, limit, startIndex)
+    ): Result<SearchResult> {
+        // The Jellyfin /Search/Hints endpoint doesn't accept genre/year filters,
+        // so when they're present fall through to the filtered items query.
+        return if (genres.isNullOrEmpty() && years.isNullOrEmpty()) {
+            apiClient.getSearchHints(query, mediaTypes, limit, startIndex)
+        } else {
+            apiClient.getMediaItems(
+                parentId = null,
+                mediaTypes = mediaTypes,
+                genres = genres,
+                years = years,
+                studioIds = null,
+                sortBy = "SortName",
+                sortOrder = "Ascending",
+                startIndex = startIndex,
+                limit = limit,
+                searchTerm = query,
+            )
+        }
+    }
 
     override fun getMediaItemsPaged(
         parentId: String?,
         mediaTypes: List<MediaType>?,
         genres: List<String>?,
         years: List<Int>?,
+        studioIds: List<String>?,
         sortBy: String,
         sortOrder: String,
     ): Flow<PagingData<MediaItem>> = Pager(
@@ -192,6 +218,7 @@ class MediaRepositoryImpl @Inject constructor(
                 mediaTypes = mediaTypes,
                 genres = genres,
                 years = years,
+                studioIds = studioIds,
                 sortBy = sortBy,
                 sortOrder = sortOrder,
             )
@@ -201,6 +228,8 @@ class MediaRepositoryImpl @Inject constructor(
     override fun searchPaged(
         query: String,
         mediaTypes: List<MediaType>?,
+        genres: List<String>?,
+        years: List<Int>?,
     ): Flow<PagingData<MediaItem>> = Pager(
         config = PagingConfig(
             pageSize = PAGE_SIZE,
@@ -212,6 +241,8 @@ class MediaRepositoryImpl @Inject constructor(
                 mediaRepository = this,
                 query = query,
                 mediaTypes = mediaTypes,
+                genres = genres,
+                years = years,
             )
         },
     ).flow

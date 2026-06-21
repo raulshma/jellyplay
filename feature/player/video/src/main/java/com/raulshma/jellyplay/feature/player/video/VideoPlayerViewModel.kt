@@ -139,6 +139,11 @@ class VideoPlayerViewModel @Inject constructor(
         },
     )
     private var videoMediaSession: MediaSession? = null
+    private var becomingNoisyReceiver: android.content.BroadcastReceiver? = null
+    private var transientAudioFocusRequest: android.media.AudioFocusRequest? = null
+    private var preDuckVolume: Float? = null
+    private var wasPlayingBeforeTransientLoss = false
+    private var duckingEnabledJob: Job? = null
 
     private val _passOutEvents = Channel<String>(Channel.BUFFERED)
     val passOutEvents: kotlinx.coroutines.flow.Flow<String> = _passOutEvents.receiveAsFlow()
@@ -170,6 +175,74 @@ class VideoPlayerViewModel @Inject constructor(
             seekTo(target)
         }
         engine.play()
+    }
+
+    private fun registerTransientFocusLossListener() {
+        if (transientAudioFocusRequest != null) return
+        val audioManager = context.getSystemService(Context.AUDIO_SERVICE) as? android.media.AudioManager
+            ?: return
+        val listener = android.media.AudioManager.OnAudioFocusChangeListener { focusChange ->
+            val engine = playerSessionManager.engine ?: return@OnAudioFocusChangeListener
+            when (focusChange) {
+                android.media.AudioManager.AUDIOFOCUS_LOSS -> {
+                    // Permanent loss — abandon; system will not hand focus back automatically.
+                    engine.pause()
+                    preDuckVolume = null
+                    wasPlayingBeforeTransientLoss = false
+                    unregisterTransientFocusLossListener()
+                }
+                android.media.AudioManager.AUDIOFOCUS_LOSS_TRANSIENT,
+                android.media.AudioManager.AUDIOFOCUS_LOSS_TRANSIENT_CAN_DUCK -> {
+                    if (preDuckVolume == null) preDuckVolume = engine.volume.coerceIn(0f, 1f)
+                    wasPlayingBeforeTransientLoss = engine.isPlaying.value
+                    engine.setVolume(0.2f)
+                }
+                android.media.AudioManager.AUDIOFOCUS_GAIN -> {
+                    // Restore pre-duck volume only if user hasn't muted in the meantime.
+                    if (_uiState.value.isMuted) {
+                        engine.setMuted(true)
+                    } else {
+                        preDuckVolume?.let { engine.setVolume(it) }
+                    }
+                    val skipMs = preferencesStore.preferences.value.videoSkipBackOnResumeMs
+                    if (skipMs > 0L && wasPlayingBeforeTransientLoss) {
+                        val target = (engine.currentPositionMs - skipMs).coerceAtLeast(0L)
+                        seekTo(target)
+                    }
+                    if (wasPlayingBeforeTransientLoss) {
+                        engine.play()
+                    }
+                    preDuckVolume = null
+                    wasPlayingBeforeTransientLoss = false
+                }
+            }
+        }
+        val audioAttributes = android.media.AudioAttributes.Builder()
+            .setUsage(android.media.AudioAttributes.USAGE_MEDIA)
+            .setContentType(android.media.AudioAttributes.CONTENT_TYPE_MOVIE)
+            .build()
+        val request = android.media.AudioFocusRequest.Builder(android.media.AudioManager.AUDIOFOCUS_GAIN)
+            .setAudioAttributes(audioAttributes)
+            .setAcceptsDelayedFocusGain(true)
+            .setOnAudioFocusChangeListener(listener)
+            .build()
+        this.transientAudioFocusRequest = request
+        try {
+            audioManager.requestAudioFocus(request)
+        } catch (_: Exception) {
+            this.transientAudioFocusRequest = null
+        }
+    }
+
+    private fun unregisterTransientFocusLossListener() {
+        val request = transientAudioFocusRequest ?: return
+        val audioManager = context.getSystemService(Context.AUDIO_SERVICE) as? android.media.AudioManager
+        try {
+            audioManager?.abandonAudioFocusRequest(request)
+        } catch (_: Exception) {}
+        transientAudioFocusRequest = null
+        preDuckVolume = null
+        wasPlayingBeforeTransientLoss = false
     }
 
     private fun getReportPositionMs(): Long {
@@ -230,6 +303,8 @@ class VideoPlayerViewModel @Inject constructor(
 
     private var engineCollectionJob: Job? = null
 
+    val hapticsEnabled: Boolean get() = cachedPreferences.hapticsEnabled
+
     init {
         launch {
             preferencesStore.preferences.collect { prefs ->
@@ -260,6 +335,13 @@ class VideoPlayerViewModel @Inject constructor(
                 }
                  if (_uiState.value.keepScreenOnDuringVideo != prefs.keepScreenOnDuringVideo) {
                     _uiState.update { it.copy(keepScreenOnDuringVideo = prefs.keepScreenOnDuringVideo) }
+                }
+                if (_uiState.value.usePinForPlayerLock != prefs.usePinForPlayerLock ||
+                    _uiState.value.pinHash != prefs.pinHash) {
+                    _uiState.update { it.copy(
+                        usePinForPlayerLock = prefs.usePinForPlayerLock,
+                        pinHash = prefs.pinHash,
+                    ) }
                 }
                 if (_uiState.value.passOutProtectionHours != prefs.videoPassOutProtectionHours) {
                     _uiState.update { it.copy(passOutProtectionHours = prefs.videoPassOutProtectionHours) }
@@ -315,6 +397,40 @@ class VideoPlayerViewModel @Inject constructor(
             }
         }
         syncPlayBridge.start()
+
+        // Headphone unplug auto-pause
+        val becomingNoisyReceiver = object : android.content.BroadcastReceiver() {
+            override fun onReceive(context: Context?, intent: android.content.Intent?) {
+                if (intent?.action == android.media.AudioManager.ACTION_AUDIO_BECOMING_NOISY) {
+                    playerSessionManager.engine?.pause()
+                }
+            }
+        }
+        this.becomingNoisyReceiver = becomingNoisyReceiver
+        val filter = android.content.IntentFilter(android.media.AudioManager.ACTION_AUDIO_BECOMING_NOISY)
+        try {
+            context.registerReceiver(
+                becomingNoisyReceiver,
+                filter,
+                // Private receiver for a system broadcast — explicit flag required on API 34+.
+                if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.TIRAMISU) {
+                    Context.RECEIVER_NOT_EXPORTED
+                } else 0,
+            )
+        } catch (_: Exception) {}
+
+        // Duck on transient audio focus loss (phone calls). Observed dynamically so
+        // toggling the preference at runtime re-registers without requiring screen re-entry.
+        duckingEnabledJob?.cancel()
+        duckingEnabledJob = launch {
+            preferencesStore.preferences.collect { prefs ->
+                if (prefs.duckOnTransientFocusLoss && transientAudioFocusRequest == null) {
+                    registerTransientFocusLossListener()
+                } else if (!prefs.duckOnTransientFocusLoss && transientAudioFocusRequest != null) {
+                    unregisterTransientFocusLossListener()
+                }
+            }
+        }
 
         launch {
             playerSessionManager.sessionState.collect { session ->
@@ -678,6 +794,10 @@ class VideoPlayerViewModel @Inject constructor(
 
     fun setScreenLocked(locked: Boolean) {
         _uiState.update { it.copy(isScreenLocked = locked) }
+    }
+
+    fun verifyPlayerLockPin(pin: String): Boolean {
+        return preferencesStore.verifyPin(pin)
     }
 
     fun setPlaybackSpeed(speed: Float) {
@@ -1574,6 +1694,13 @@ class VideoPlayerViewModel @Inject constructor(
         playerSessionManager.engine?.setVideoStatsEnabled(newValue)
     }
 
+    fun toggleMute() {
+        val engine = playerSessionManager.engine ?: return
+        val currentlyMuted = _uiState.value.isMuted
+        engine.setMuted(!currentlyMuted)
+        _uiState.update { it.copy(isMuted = !currentlyMuted) }
+    }
+
     fun setControlsVisible(visible: Boolean) {
         playerSessionManager.engine?.setPollingIntervalMs(if (visible) 250L else 1000L)
     }
@@ -1686,6 +1813,12 @@ class VideoPlayerViewModel @Inject constructor(
         sleepTimerManager.setOnTimerExpired {
             playerSessionManager.engine?.pause()
         }
+        sleepTimerManager.setOnFadeProgress { progress ->
+            // Skip volume writes while user-muted; let mute state win.
+            if (!_uiState.value.isMuted) {
+                playerSessionManager.engine?.setVolume(progress)
+            }
+        }
         sleepTimerManager.start(durationMs)
         _uiState.update { it.copy(
             sleepTimerActive = true,
@@ -1702,6 +1835,7 @@ class VideoPlayerViewModel @Inject constructor(
         sleepTimerManager.setOnTimerExpired {
             playerSessionManager.engine?.pause()
         }
+        sleepTimerManager.setOnFadeProgress(null)
         sleepTimerManager.startEndOfEpisode()
         _uiState.update { it.copy(
             sleepTimerActive = true,
@@ -1712,6 +1846,11 @@ class VideoPlayerViewModel @Inject constructor(
 
     fun cancelSleepTimer() {
         sleepTimerManager.cancel()
+        // Restore pre-fade volume — but never override an active user mute.
+        val engine = playerSessionManager.engine
+        if (engine != null && !_uiState.value.isMuted) {
+            engine.setVolume(1f)
+        }
         _uiState.update { it.copy(
             sleepTimerActive = false,
             sleepTimerEndOfEpisode = false,
@@ -1765,6 +1904,15 @@ class VideoPlayerViewModel @Inject constructor(
         val sessionId = playSessionId
         val positionTicks = getReportPositionMs() * 10_000
         playerLifecycleManager.requestAutoEnterPip(false)
+        // Unregister headphone unplug receiver
+        becomingNoisyReceiver?.let {
+            try { context.unregisterReceiver(it) } catch (_: Exception) {}
+        }
+        becomingNoisyReceiver = null
+        duckingEnabledJob?.cancel()
+        duckingEnabledJob = null
+        unregisterTransientFocusLossListener()
+        sleepTimerManager.setOnFadeProgress(null)
         releaseInternals()
         castManager.release()
         activePlayerController.clearEngine()

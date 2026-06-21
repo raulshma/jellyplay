@@ -9,8 +9,13 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
@@ -69,7 +74,7 @@ fun AppearanceSettingsScreen(
     val scrollIndex = remember(highlightSettingId) {
         when (highlightSettingId) {
             in listOf("theme_mode", "synthwave_mode", "soothing_mode", "dynamic_theming", "oled_mode", "contrast", "library_view_mode", "home_mode", "hero_section", "clock_home", "continue_watching_click", "merge_continue_next_up", "next_up_max_days", "next_up_rewatching", "theme_music", "nav_labels") -> 0
-            in listOf("show_unwatched_badge", "show_watched_checkmark", "hide_watched_items", "show_share_media", "show_external_ratings") -> 1
+            in listOf("show_unwatched_badge", "show_watched_checkmark", "hide_watched_items", "hide_episode_thumbnails", "skip_specials", "show_share_media", "show_external_ratings") -> 1
             in listOf("performance_mode", "reduce_motion") -> 2
             else -> -1
         }
@@ -83,6 +88,8 @@ fun AppearanceSettingsScreen(
         }
     }
 
+    var showResetDialog by remember { mutableStateOf(false) }
+
     JellyPlayScreenScaffold(
         title = "Appearance",
         onBack = onBack,
@@ -92,6 +99,15 @@ fun AppearanceSettingsScreen(
                 showAdvanced = showAdvanced,
                 onToggle = { viewModel.setShowAdvancedSettings(!showAdvanced) },
             )
+            IconButton(
+                onClick = { showResetDialog = true },
+            ) {
+                Icon(
+                    Tabler.Outline.Refresh,
+                    contentDescription = "Reset to defaults",
+                    tint = MaterialTheme.colorScheme.onSurface,
+                )
+            }
         },
     ) { innerPadding ->
         LazyColumn(
@@ -164,6 +180,9 @@ fun AppearanceSettingsScreen(
                             add("hero_section")
                             add("clock_home")
                             add("continue_watching_click")
+                            if (preferences.hiddenCwItemIds.isNotEmpty()) {
+                                add("unhide_cw")
+                            }
                             add("merge_continue_next_up")
                             add("next_up_max_days")
                             add("next_up_rewatching")
@@ -385,6 +404,15 @@ fun AppearanceSettingsScreen(
                                     },
                                 )
                             }
+                            "unhide_cw" -> {
+                                SettingListItem(
+                                    icon = Tabler.Outline.Eye,
+                                    title = "Unhide All from Continue Watching",
+                                    subtitle = "${preferences.hiddenCwItemIds.size} hidden item(s)",
+                                    index = currentIdx++, count = totalCount,
+                                    onClick = { viewModel.unhideAllCwItems() },
+                                )
+                            }
                             "merge_continue_next_up" -> {
                                 SettingToggleItem(
                                     icon = Tabler.Outline.LayersLinked,
@@ -460,14 +488,16 @@ fun AppearanceSettingsScreen(
                         val unwatched = if (preferences.showUnwatchedBadge) "Unwatched badges" else null
                         val checkmarks = if (preferences.showWatchedCheckmark) "Watched checkmarks" else null
                         val hideWatched = if (preferences.hideWatchedItems) "Hide watched" else null
+                        val hideThumbnails = if (preferences.hideEpisodeThumbnails) "Hide thumbnails" else null
+                        val skipSpecials = if (preferences.skipSpecials) "Skip specials" else null
                         val shareOpt = if (preferences.showShareMediaOption) "Share button" else null
                         val ratingsOpt = if (preferences.showExternalRatings) "External ratings" else null
-                        listOfNotNull(unwatched, checkmarks, hideWatched, shareOpt, ratingsOpt).joinToString(", ").ifEmpty { "All badges/checkmarks hidden" }
+                        listOfNotNull(unwatched, checkmarks, hideWatched, hideThumbnails, skipSpecials, shareOpt, ratingsOpt).joinToString(", ").ifEmpty { "All badges/checkmarks hidden" }
                     },
                     modifier = Modifier.padding(vertical = 8.dp),
-                    initiallyExpanded = highlightSettingId in listOf("show_unwatched_badge", "show_watched_checkmark", "hide_watched_items", "show_share_media", "show_external_ratings"),
+                    initiallyExpanded = highlightSettingId in listOf("show_unwatched_badge", "show_watched_checkmark", "hide_watched_items", "hide_episode_thumbnails", "skip_specials", "show_share_media", "show_external_ratings"),
                 ) {
-                    val cardTotal = 5
+                    val cardTotal = 7
                     var cardIdx = 0
 
                     SettingToggleItem(
@@ -498,6 +528,36 @@ fun AppearanceSettingsScreen(
                         highlighted = highlightSettingId == "hide_watched_items",
                         index = cardIdx++, count = cardTotal,
                         onCheckedChange = { viewModel.setHideWatchedItems(it) },
+                    )
+
+                    SettingToggleItem(
+                        icon = Tabler.Outline.PhotoOff,
+                        title = "Hide Episode Thumbnails",
+                        subtitle = "Hide episode preview images to avoid spoilers",
+                        checked = preferences.hideEpisodeThumbnails,
+                        highlighted = highlightSettingId == "hide_episode_thumbnails",
+                        index = cardIdx++, count = cardTotal,
+                        onCheckedChange = { viewModel.setHideEpisodeThumbnails(it) },
+                    )
+
+                    SettingToggleItem(
+                        icon = Tabler.Outline.PlayerSkipForward,
+                        title = "Skip Special Episodes",
+                        subtitle = "Exclude specials/bonus episodes from episode lists",
+                        checked = preferences.skipSpecials,
+                        highlighted = highlightSettingId == "skip_specials",
+                        index = cardIdx++, count = cardTotal,
+                        onCheckedChange = { viewModel.setSkipSpecials(it) },
+                    )
+
+                    SettingToggleItem(
+                        icon = Tabler.Outline.DeviceMobileVibration,
+                        title = "Haptic Feedback",
+                        subtitle = "Enable vibration feedback for UI interactions",
+                        checked = preferences.hapticsEnabled,
+                        highlighted = highlightSettingId == "haptics_enabled",
+                        index = cardIdx++, count = cardTotal,
+                        onCheckedChange = { viewModel.setHapticsEnabled(it) },
                     )
 
                     SettingToggleItem(
@@ -838,5 +898,26 @@ fun AppearanceSettingsScreen(
                 }
             }
         }
+    }
+
+    if (showResetDialog) {
+        AlertDialog(
+            onDismissRequest = { showResetDialog = false },
+            title = { Text("Reset Appearance Settings") },
+            text = { Text("This will reset all appearance settings to their default values. This action cannot be undone.") },
+            confirmButton = {
+                TextButton(onClick = {
+                    viewModel.resetCategory("appearance")
+                    showResetDialog = false
+                }) {
+                    Text("Reset", color = MaterialTheme.colorScheme.error)
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showResetDialog = false }) {
+                    Text("Cancel")
+                }
+            },
+        )
     }
 }

@@ -55,7 +55,10 @@ class MainViewModel @Inject constructor(
     private val playbackRepository: PlaybackRepository,
     private val offlineRepository: OfflineRepository,
     val userMessageBus: UserMessageBus,
+    private val serverHealthMonitor: com.raulshma.jellyplay.core.data.network.ServerHealthMonitor,
 ) : JellyPlayViewModel() {
+
+    val serverHealth = serverHealthMonitor.serverHealth
 
     private val _isRestoring = stateFlow(true)
     val isRestoring = _isRestoring.flow
@@ -72,6 +75,9 @@ class MainViewModel @Inject constructor(
 
     private val _pendingRoute = stateFlow<Route?>(null)
     val pendingRoute = _pendingRoute.flow
+
+    private val _pendingSearchQuery = stateFlow<String?>(null)
+    val pendingSearchQuery = _pendingSearchQuery.flow
 
     private val _globalMessage = MutableSharedFlow<String>(extraBufferCapacity = 1)
     val globalMessage = _globalMessage.asSharedFlow()
@@ -100,6 +106,7 @@ class MainViewModel @Inject constructor(
                     val server = authRepository.currentServer.first()
                     val user = authRepository.currentUser.first()
                     if (server != null && user != null) {
+                        serverHealthMonitor.startMonitoring(server.address)
                         val deviceId = preferencesStore.ensureDeviceId()
                         val deviceName = buildDeviceName(user.name)
                         webSocketClient.connect(
@@ -130,6 +137,7 @@ class MainViewModel @Inject constructor(
                         com.raulshma.jellyplay.widget.ContinueWatchingWidget.triggerUpdate(context)
                     }
                 } else {
+                    serverHealthMonitor.stopMonitoring()
                     webSocketClient.disconnect()
                     remoteControlReceiver.stop()
                 }
@@ -171,14 +179,62 @@ class MainViewModel @Inject constructor(
         _pendingRoute.set(route)
     }
 
+    fun handleSharedText(sharedText: String) {
+        launch {
+            when (val target = parseSharedText(sharedText)) {
+                SharedTextTarget.Empty -> {
+                    _globalMessage.emit("No searchable content found in shared text")
+                }
+                is SharedTextTarget.Search -> {
+                    _pendingSearchQuery.set(target.query)
+                    _pendingRoute.set(Route.Search)
+                }
+                is SharedTextTarget.MediaDetail -> {
+                    _pendingRoute.set(Route.MediaDetail(target.mediaId))
+                }
+            }
+        }
+    }
+
+    private fun parseSharedText(text: String): SharedTextTarget {
+        val jellyfinUrlMatch = Regex("""jellyfin://media/([a-f0-9-]+)""").find(text)
+        if (jellyfinUrlMatch != null) {
+            return SharedTextTarget.MediaDetail(jellyfinUrlMatch.groupValues[1])
+        }
+        val urlMatch = Regex("""https?://[^\s]+""").find(text)
+        if (urlMatch != null) {
+            return SharedTextTarget.Search(urlMatch.value)
+        }
+        return text.takeIf { it.isNotBlank() }
+            ?.let(SharedTextTarget::Search)
+            ?: SharedTextTarget.Empty
+    }
+
+    private sealed class SharedTextTarget {
+        data object Empty : SharedTextTarget()
+        data class Search(val query: String) : SharedTextTarget()
+        data class MediaDetail(val mediaId: String) : SharedTextTarget()
+    }
+
     fun consumePendingRoute() {
         _pendingRoute.set(null)
+    }
+
+    fun consumePendingSearchQuery() {
+        _pendingSearchQuery.set(null)
     }
 
     fun logout() {
         launch {
             remoteControlReceiver.stop()
             authRepository.logout()
+        }
+    }
+
+    fun revokeServerSession() {
+        launch {
+            remoteControlReceiver.stop()
+            authRepository.revokeServerSession()
         }
     }
 

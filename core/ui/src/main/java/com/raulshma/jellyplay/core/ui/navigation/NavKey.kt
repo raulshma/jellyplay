@@ -78,6 +78,8 @@ sealed class Route : NavKey {
 
     @Serializable data class GenreDetail(val genreId: String, val genreName: String = "") : Route()
 
+    @Serializable data class StudioDetail(val studioId: String, val studioName: String = "") : Route()
+
     @Serializable data class OfflinePlayer(
         val filePath: String,
         val title: String,
@@ -197,6 +199,7 @@ val Route.isDetail: Boolean
         is Route.MoodPlaylistDetail,
         is Route.PlaylistDetail,
         is Route.GenreDetail,
+        is Route.StudioDetail,
         is Route.NewsletterSectionList,
         is Route.UserStatisticsDetail -> true
         else -> false
@@ -218,6 +221,7 @@ val DETAIL_ROUTE_CLASS_NAMES: Set<String> = setOf(
     "MoodPlaylistDetail",
     "PlaylistDetail",
     "GenreDetail",
+    "StudioDetail",
     "NewsletterSectionList",
     "UserStatisticsDetail",
 )

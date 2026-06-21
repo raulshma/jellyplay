@@ -10,6 +10,8 @@ class SearchPagingSource(
     private val mediaRepository: MediaRepository,
     private val query: String,
     private val mediaTypes: List<MediaType>? = null,
+    private val genres: List<String>? = null,
+    private val years: List<Int>? = null,
 ) : PagingSource<Int, MediaItem>() {
 
     override fun getRefreshKey(state: PagingState<Int, MediaItem>): Int? {
@@ -35,6 +37,8 @@ class SearchPagingSource(
             val result = mediaRepository.search(
                 query = query,
                 mediaTypes = mediaTypes,
+                genres = genres,
+                years = years,
                 limit = pageSize,
                 startIndex = startIndex,
             )

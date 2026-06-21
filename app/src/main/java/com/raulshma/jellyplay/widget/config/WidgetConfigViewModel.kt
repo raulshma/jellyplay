@@ -10,7 +10,6 @@ import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.first
-import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import javax.inject.Inject
@@ -20,11 +19,16 @@ import javax.inject.Inject
  * selection. The activity is parameterized by [WidgetKind] (passed via
  * the intent) so the same VM can drive both the library and Seerr
  * config screens.
+ *
+ * Supports per-widget configuration via [appWidgetId]. Each widget
+ * instance can have its own independent configuration.
  */
 @HiltViewModel
 class WidgetConfigViewModel @Inject constructor(
     private val userPreferencesStore: UserPreferencesStore,
 ) : ViewModel() {
+
+    private var appWidgetId: Int = -1
 
     val state: StateFlow<WidgetConfig> = userPreferencesStore.widgetConfig
         .stateIn(
@@ -33,17 +37,52 @@ class WidgetConfigViewModel @Inject constructor(
             WidgetConfig(),
         )
 
+    /**
+     * Initialize the ViewModel with the specific widget ID for per-widget config.
+     * Must be called before any state is collected.
+     */
+    fun initWidgetId(widgetId: Int) {
+        appWidgetId = widgetId
+    }
+
+    /**
+     * Returns a StateFlow for the specific widget's configuration.
+     * Falls back to the global config if no per-widget config exists.
+     */
+    fun getWidgetConfig(): StateFlow<WidgetConfig> {
+        return if (appWidgetId != -1) {
+            userPreferencesStore.getWidgetConfigForId(appWidgetId)
+                .stateIn(
+                    viewModelScope,
+                    SharingStarted.WhileSubscribed(STOP_TIMEOUT_MS),
+                    WidgetConfig(),
+                )
+        } else {
+            state
+        }
+    }
+
     fun selectLibrarySource(source: LibraryRecommendationsSource) {
         viewModelScope.launch {
-            val current = userPreferencesStore.widgetConfig.first()
-            userPreferencesStore.setWidgetConfig(current.copy(librarySource = source))
+            val current = getWidgetConfig().first()
+            val updated = current.copy(librarySource = source)
+            if (appWidgetId != -1) {
+                userPreferencesStore.setWidgetConfigForId(appWidgetId, updated)
+            } else {
+                userPreferencesStore.setWidgetConfig(updated)
+            }
         }
     }
 
     fun selectSeerrSource(source: SeerrWidgetSource) {
         viewModelScope.launch {
-            val current = userPreferencesStore.widgetConfig.first()
-            userPreferencesStore.setWidgetConfig(current.copy(seerrSource = source))
+            val current = getWidgetConfig().first()
+            val updated = current.copy(seerrSource = source)
+            if (appWidgetId != -1) {
+                userPreferencesStore.setWidgetConfigForId(appWidgetId, updated)
+            } else {
+                userPreferencesStore.setWidgetConfig(updated)
+            }
         }
     }
 

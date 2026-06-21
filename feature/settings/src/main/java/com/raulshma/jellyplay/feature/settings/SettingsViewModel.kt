@@ -329,9 +329,7 @@ class SettingsViewModel @Inject constructor(
         return size
     }
 
-    fun logout() {
-        launch { authRepository.logout() }
-    }
+
 
     fun setPinLockEnabled(enabled: Boolean) = editor.setPinLockEnabled(enabled)
 
@@ -366,6 +364,8 @@ class SettingsViewModel @Inject constructor(
     }
 
     fun setBiometricLockEnabled(enabled: Boolean) = editor.setBiometricLockEnabled(enabled)
+
+    fun setUsePinForPlayerLock(enabled: Boolean) = editor.setUsePinForPlayerLock(enabled)
 
     fun setShowAdvancedSettings(enabled: Boolean) {
         launch { preferencesStore.setShowAdvancedSettings(enabled) }
@@ -803,6 +803,16 @@ class SettingsViewModel @Inject constructor(
         applyPreset(com.raulshma.jellyplay.core.model.HomeLayoutConfig.DEFAULT)
     }
 
+    /** Resets all preferences in a specific category to their default values. */
+    fun resetCategory(category: String) {
+        editor.resetCategory(category)
+    }
+
+    /** Clears all preferences and resets to factory defaults. */
+    fun clearAllPreferences() {
+        editor.clearAllPreferences()
+    }
+
     fun setNavBarShowLabels(show: Boolean) = editor.setNavBarShowLabels(show)
 
     fun setHomeHeroEnabled(enabled: Boolean) = editor.setHomeHeroEnabled(enabled)
@@ -934,6 +944,22 @@ class SettingsViewModel @Inject constructor(
         launch { preferencesStore.setHideWatchedItems(enabled) }
     }
 
+    fun setHideEpisodeThumbnails(enabled: Boolean) {
+        launch { preferencesStore.setHideEpisodeThumbnails(enabled) }
+    }
+
+    fun setSkipSpecials(enabled: Boolean) {
+        launch { preferencesStore.setSkipSpecials(enabled) }
+    }
+
+    fun setCellularDownloadSizeWarningMb(sizeMb: Int) {
+        launch { preferencesStore.setCellularDownloadSizeWarningMb(sizeMb) }
+    }
+
+    fun setHapticsEnabled(enabled: Boolean) {
+        launch { preferencesStore.setHapticsEnabled(enabled) }
+    }
+
     fun setCellularStreamingQuality(quality: StreamingQuality) {
         launch { preferencesStore.setCellularStreamingQuality(quality) }
     }
@@ -982,6 +1008,10 @@ class SettingsViewModel @Inject constructor(
         launch { preferencesStore.setPauseOnAudioFocusLoss(enabled) }
     }
 
+    fun setDuckOnTransientFocusLoss(enabled: Boolean) {
+        launch { preferencesStore.setDuckOnTransientFocusLoss(enabled) }
+    }
+
     fun setVolumeBoostEnabled(enabled: Boolean) {
         launch { preferencesStore.setVolumeBoostEnabled(enabled) }
     }
@@ -1028,6 +1058,10 @@ class SettingsViewModel @Inject constructor(
 
     fun setMergeContinueWatchingAndNextUp(enabled: Boolean) {
         launch { preferencesStore.setMergeContinueWatchingAndNextUp(enabled) }
+    }
+
+    fun unhideAllCwItems() {
+        launch { preferencesStore.unhideAllCwItems() }
     }
 
     fun setNextUpMaxDays(days: Int) {
@@ -1138,14 +1172,6 @@ class SettingsViewModel @Inject constructor(
 
     fun setDownloadStorageLocation(location: String) {
         launch { preferencesStore.setDownloadStorageLocation(location) }
-    }
-
-    fun setKidsModeEnabled(enabled: Boolean) {
-        launch { preferencesStore.setKidsModeEnabled(enabled) }
-    }
-
-    fun setKidsModeMaxRating(rating: String) {
-        launch { preferencesStore.setKidsModeMaxRating(rating) }
     }
 
     fun setAndroidTvWatchNextEnabled(enabled: Boolean) {

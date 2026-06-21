@@ -155,6 +155,8 @@ internal fun PlayerControls(
     onEpisodesClick: () -> Unit = {},
     onSyncPlayClick: () -> Unit = {},
     onPipClick: () -> Unit = {},
+    onMuteClick: () -> Unit = {},
+    isMuted: Boolean = false,
     isInSyncPlaySession: Boolean = false,
     syncPlayGroupName: String? = null,
     syncPlayParticipantCount: Int = 0,
@@ -566,6 +568,9 @@ internal fun PlayerControls(
                                 contentDescription = "Lock screen",
                                 onClick = onLockClick,
                             )
+                        }
+                        if (!isTv) {
+                            MuteButton(isMuted = isMuted, onClick = onMuteClick)
                         }
                         if (!isTv) {
                             PipButton(onClick = onPipClick)

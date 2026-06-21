@@ -78,13 +78,16 @@ class PinHasherTest {
     }
 
     @Test
-    fun `needsMigration returns true for legacy and false for v2`() {
+    fun `needsMigration returns true for legacy and mismatched iterations`() {
         val legacy = MessageDigest.getInstance("SHA-256")
             .digest("9876".toByteArray())
             .joinToString("") { "%02x".format(it) }
         assertTrue(PinHasher.needsMigration(legacy))
         assertFalse(PinHasher.needsMigration(PinHasher.hash("9876")))
         assertFalse(PinHasher.needsMigration(null))
+        
+        // A v2 hash with a different iteration count (e.g., from an older version) should need migration
+        assertTrue(PinHasher.needsMigration("v2\$600000\$salt\$hash"))
     }
 
     @Test

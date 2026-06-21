@@ -133,10 +133,13 @@ data class VideoPlayerUiState(
     val sleepTimerLastUsedDurationMs: Long = 0L,
     val videoEffects: VideoEffectsConfig = VideoEffectsConfig(),
     val isScreenLocked: Boolean = false,
+    val usePinForPlayerLock: Boolean = false,
+    val pinHash: String? = null,
     val showPlaybackMetadata: Boolean = true,
     val showClock: Boolean = false,
     val keepScreenOnDuringVideo: Boolean = true,
     val cinemaIntroState: CinemaIntroUiState? = null,
+    val isMuted: Boolean = false,
 ) {
 
     @Transient

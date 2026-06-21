@@ -68,6 +68,10 @@ class AuthRepositoryImplTest {
 
     @Before
     fun setup() {
+        mockkStatic("androidx.room.RoomDatabaseKt")
+        coEvery { database.withTransaction(any<suspend () -> Any?>()) } coAnswers {
+            secondArg<suspend () -> Any?>().invoke()
+        }
         every { apiClient.currentServer } returns flowOf(null)
         every { apiClient.currentUser } returns flowOf(null)
         every { serverDao.getAllServers() } returns flowOf(emptyList())
@@ -79,6 +83,11 @@ class AuthRepositoryImplTest {
             userDao = userDao,
             preferencesStore = preferencesStore,
         )
+    }
+
+    @org.junit.After
+    fun tearDown() {
+        unmockkStatic("androidx.room.RoomDatabaseKt")
     }
 
     @Test
@@ -213,6 +222,37 @@ class AuthRepositoryImplTest {
 
         coVerify { userDao.deleteUserById("user-1") }
         coVerify(exactly = 0) { apiClient.disconnect() }
+    }
+
+    @Test
+    fun `removeUser clears user and token from matching servers`() = runTest {
+        val serverWithUser = testServerEntity.copy(userId = "user-1", accessToken = "token-123")
+        every { serverDao.getAllServers() } returns flowOf(listOf(serverWithUser))
+        every { apiClient.currentUser } returns flowOf(null)
+
+        repository.removeUser("user-1")
+
+        coVerify { userDao.deleteUserById("user-1") }
+        coVerify {
+            serverDao.updateServer(match {
+                it.id == serverWithUser.id && it.userId == null && it.accessToken == null
+            })
+        }
+    }
+
+    @Test
+    fun `revokeServerSession revokes on server, deletes user, and clears session`() = runTest {
+        every { apiClient.currentUser } returns flowOf(testUser)
+        coEvery { apiClient.revokeServerSession() } returns Result.success(Unit)
+        val serverWithUser = testServerEntity.copy(userId = "user-1", accessToken = "token-123")
+        every { serverDao.getAllServers() } returns flowOf(listOf(serverWithUser))
+
+        repository.revokeServerSession()
+
+        coVerify { apiClient.revokeServerSession() }
+        coVerify { userDao.deleteUserById("user-1") }
+        coVerify { apiClient.disconnect() }
+        coVerify { preferencesStore.clearSession() }
     }
 
     @Test
@@ -410,21 +450,12 @@ class AuthRepositoryImplTest {
         } returns Result.success(testUser)
         every { apiClient.currentServer } returns flowOf(testServer)
 
-        mockkStatic("androidx.room.RoomDatabaseKt")
-        coEvery { database.withTransaction(any<suspend () -> Unit>()) } coAnswers {
-            secondArg<suspend () -> Unit>().invoke()
-        }
+        val result = repository.login(testServerEntity.address, "testuser", "pass")
 
-        try {
-            val result = repository.login(testServerEntity.address, "testuser", "pass")
-
-            assertTrue(result.isSuccess)
-            val updatedSlot = slot<ServerEntity>()
-            coVerify { serverDao.updateServer(capture(updatedSlot)) }
-            assertEquals(altAddressJson, updatedSlot.captured.alternateAddresses)
-        } finally {
-            unmockkStatic("androidx.room.RoomDatabaseKt")
-        }
+        assertTrue(result.isSuccess)
+        val updatedSlot = slot<ServerEntity>()
+        coVerify { serverDao.updateServer(capture(updatedSlot)) }
+        assertEquals(altAddressJson, updatedSlot.captured.alternateAddresses)
     }
 
     @Test
@@ -436,20 +467,11 @@ class AuthRepositoryImplTest {
         } returns Result.success(testUser)
         every { apiClient.currentServer } returns flowOf(testServer)
 
-        mockkStatic("androidx.room.RoomDatabaseKt")
-        coEvery { database.withTransaction(any<suspend () -> Unit>()) } coAnswers {
-            secondArg<suspend () -> Unit>().invoke()
-        }
+        repository.login(testServerEntity.address, "testuser", "pass")
 
-        try {
-            repository.login(testServerEntity.address, "testuser", "pass")
-
-            val updatedSlot = slot<ServerEntity>()
-            coVerify { serverDao.updateServer(capture(updatedSlot)) }
-            assertNull(updatedSlot.captured.alternateAddresses)
-        } finally {
-            unmockkStatic("androidx.room.RoomDatabaseKt")
-        }
+        val updatedSlot = slot<ServerEntity>()
+        coVerify { serverDao.updateServer(capture(updatedSlot)) }
+        assertNull(updatedSlot.captured.alternateAddresses)
     }
 
     private suspend fun <T> kotlinx.coroutines.flow.Flow<T>.first(): T? =

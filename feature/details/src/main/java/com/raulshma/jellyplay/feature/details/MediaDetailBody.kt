@@ -46,6 +46,7 @@ import androidx.compose.ui.unit.dp
 import com.composables.icons.tabler.Tabler
 import com.composables.icons.tabler.outline.Heart
 import com.composables.icons.tabler.outline.PlayerPlay
+import com.composables.icons.tabler.outline.Star
 import com.raulshma.jellyplay.core.designsystem.theme.LocalIsSoothingTheme
 import com.raulshma.jellyplay.core.designsystem.theme.LocalIsSynthwave
 import com.raulshma.jellyplay.core.designsystem.theme.ShapeCache
@@ -311,6 +312,25 @@ internal fun DetailContentBody(
                                 )
                             }
                         }
+                        if (preferences.showExternalRatings) {
+                            detail.criticRating?.let { criticRating ->
+                                val criticText = remember(criticRating) { String.format("%.0f", criticRating) }
+                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                    Icon(
+                                        Tabler.Outline.Star,
+                                        contentDescription = null,
+                                        tint = MaterialTheme.colorScheme.tertiary,
+                                        modifier = Modifier.size(16.dp)
+                                    )
+                                    Spacer(Modifier.width(4.dp))
+                                    Text(
+                                        text = "$criticText%",
+                                        style = MaterialTheme.typography.titleMedium,
+                                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f),
+                                    )
+                                }
+                            }
+                        }
                     }
                 }
 
@@ -333,6 +353,36 @@ internal fun DetailContentBody(
                                         text = genre,
                                         style = MaterialTheme.typography.titleSmall,
                                         color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.95f),
+                                    )
+                                }
+                            }
+                        }
+                    }
+                }
+
+                detail.studios.takeIf { it.isNotEmpty() }?.let { studios ->
+                    Spacer(Modifier.height(10.dp))
+                    LazyRow(
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        modifier = Modifier
+                            .tvFocusRestorer(),
+                    ) {
+                        items(studios, key = { it.id }, contentType = { "studio" }) { studio ->
+                            FadingItem {
+                                val studioFocusState = rememberTvFocusState(focusedScale = 1.05f)
+                                Box(
+                                    modifier = Modifier
+                                        .clip(ShapeCache.smooth16)
+                                        .background(MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.5f))
+                                        .then(studioFocusState.focusModifier)
+                                        .then(Modifier.tvFocusIndicator(studioFocusState, ShapeCache.smooth16))
+                                        .clickable { onNavigate(com.raulshma.jellyplay.core.ui.navigation.Route.StudioDetail(studio.id, studio.name)) }
+                                        .padding(horizontal = 14.dp, vertical = 7.dp)
+                                ) {
+                                    Text(
+                                        text = studio.name,
+                                        style = MaterialTheme.typography.titleSmall,
+                                        color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.95f),
                                     )
                                 }
                             }
@@ -431,10 +481,15 @@ internal fun DetailContentBody(
             val showSeasons = (item.mediaType == MediaType.SERIES || item.mediaType == MediaType.EPISODE) && seasons.isNotEmpty()
             if (showSeasons) {
                 CompositionLocalProvider(LocalContentColor provides MaterialTheme.colorScheme.onSurface) {
+                    val filteredEpisodes = if (preferences.skipSpecials) {
+                        episodes.mapValues { (_, eps) -> eps.filter { it.seasonNumber != 0 } }
+                    } else {
+                        episodes
+                    }
                     SeasonsSection(
                         seriesItem = item,
                         seasons = seasons,
-                        episodes = episodes,
+                        episodes = filteredEpisodes,
                         fetchedSeasonIds = fetchedSeasonIds,
                         smartPlayTarget = smartPlayTarget,
                         getImageUrl = getImageUrl,
@@ -449,6 +504,7 @@ internal fun DetailContentBody(
                             onItemClick(episode.id)
                         },
                         onSeasonSelected = onSeasonSelected,
+                        hideEpisodeThumbnails = preferences.hideEpisodeThumbnails,
                     )
                 }
             }

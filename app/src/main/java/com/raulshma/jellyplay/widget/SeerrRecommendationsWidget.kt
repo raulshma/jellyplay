@@ -124,7 +124,7 @@ class SeerrRecommendationsWidget : AppWidgetProvider() {
             appWidgetId: Int,
         ) {
             val views = RemoteViews(context.packageName, R.layout.seerr_recommendations_widget)
-            views.setTextViewText(R.id.sr_widget_subtitle, readSourceLabel(context))
+            views.setTextViewText(R.id.sr_widget_subtitle, readSourceLabel(context, appWidgetId))
 
             // Apply responsive rules
             val options = appWidgetManager.getAppWidgetOptions(appWidgetId)
@@ -231,13 +231,13 @@ class SeerrRecommendationsWidget : AppWidgetProvider() {
             appWidgetManager.updateAppWidget(appWidgetId, views)
         }
 
-        private fun readSourceLabel(context: Context): String = runCatching {
+        private fun readSourceLabel(context: Context, appWidgetId: Int): String = runCatching {
             val entryPoint = EntryPointAccessors.fromApplication(
                 context.applicationContext,
                 WidgetEntryPoint::class.java,
             )
             runBlocking {
-                entryPoint.userPreferencesStore().widgetConfig.first()
+                entryPoint.userPreferencesStore().getWidgetConfigForId(appWidgetId).first()
             }.seerrSource.displayName
         }.getOrDefault(SeerrWidgetSource.TRENDING.displayName)
     }

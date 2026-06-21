@@ -188,11 +188,13 @@ private fun MainHomeContent(
     val focusManager = LocalFocusManager.current
 
     val networkStatus by LocalNetworkStatus.current.collectAsStateWithLifecycle()
-    val headerStatus = remember(state.isLoading, state.error != null, networkStatus) {
+    val serverHealth by com.raulshma.jellyplay.core.ui.components.LocalServerHealth.current.collectAsStateWithLifecycle()
+    val headerStatus = remember(state.isLoading, state.error != null, networkStatus, serverHealth) {
         resolveHeaderStatus(
             isLoading = state.isLoading,
             hasError = state.error != null,
             networkStatus = networkStatus,
+            serverHealth = serverHealth,
         )
     }
 
@@ -987,6 +989,13 @@ private fun HomeContentList(
                         translationY = (1f - sectionAnimation) * 16.dp.toPx()
                     }
 
+                val seedItem = section.seedItem
+                val sectionTitle = if (section.type == HomeSectionType.RECOMMENDATIONS && seedItem != null) {
+                    "Because you watched ${seedItem.name}"
+                } else {
+                    section.title
+                }
+
                 if (section.type == HomeSectionType.CONTINUE_WATCHING || section.type == HomeSectionType.NEXT_UP) {
                     val rowItemClick: (com.raulshma.jellyplay.core.model.MediaItem) -> Unit = remember(
                         section.type, continueWatchingClickBehavior, mediaOnItemClick, mediaOnPlayClick,
@@ -1004,7 +1013,7 @@ private fun HomeContentList(
                         }
                     }
                     ContinueWatchingRow(
-                        title = section.title,
+                        title = sectionTitle,
                         items = section.items,
                         imageUrlBuilder = mediaImageUrlBuilder,
                         backdropUrlBuilder = mediaBackdropUrlBuilder,
@@ -1016,7 +1025,7 @@ private fun HomeContentList(
                     )
                 } else {
                     HomeMediaRow(
-                        title = section.title,
+                        title = sectionTitle,
                         items = section.items,
                         imageUrlBuilder = mediaImageUrlBuilder,
                         fallbackImageUrlBuilder = fallbackImageUrlBuilder,

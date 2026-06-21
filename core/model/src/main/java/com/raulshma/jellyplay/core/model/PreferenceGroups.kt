@@ -97,8 +97,6 @@ data class SecurityPreferences(
     val biometricLockEnabled: Boolean = false,
     val autoLockTimerMs: Long = 30_000L,
     val incognitoModeEnabled: Boolean = false,
-    val kidsModeEnabled: Boolean = false,
-    val kidsModeMaxRating: String = "G",
     val remoteControlEnabled: Boolean = true,
 )
 
@@ -234,8 +232,6 @@ val UserPreferences.security: SecurityPreferences
         biometricLockEnabled = biometricLockEnabled,
         autoLockTimerMs = autoLockTimerMs,
         incognitoModeEnabled = incognitoModeEnabled,
-        kidsModeEnabled = kidsModeEnabled,
-        kidsModeMaxRating = kidsModeMaxRating,
         remoteControlEnabled = remoteControlEnabled,
     )
 
