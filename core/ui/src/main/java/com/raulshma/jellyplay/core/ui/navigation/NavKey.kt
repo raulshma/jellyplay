@@ -80,11 +80,6 @@ sealed class Route : NavKey {
 
     @Serializable data class StudioDetail(val studioId: String, val studioName: String = "") : Route()
 
-    @Serializable data class OfflinePlayer(
-        val filePath: String,
-        val title: String,
-    ) : Route()
-
     @Serializable data class LiveTvChannelPlayer(
         val channelId: String,
         val channelName: String,

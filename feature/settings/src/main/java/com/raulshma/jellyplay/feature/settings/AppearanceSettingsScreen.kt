@@ -30,6 +30,8 @@ import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.raulshma.jellyplay.core.model.ContrastLevel
+import com.raulshma.jellyplay.core.model.DateFormatPreference
+import com.raulshma.jellyplay.core.model.AppFontScale
 import com.raulshma.jellyplay.core.model.HomeMode
 import com.raulshma.jellyplay.core.model.HomeSectionType
 import com.raulshma.jellyplay.core.model.ThemeMode
@@ -73,7 +75,7 @@ fun AppearanceSettingsScreen(
     val scrollState = rememberLazyListState()
     val scrollIndex = remember(highlightSettingId) {
         when (highlightSettingId) {
-            in listOf("theme_mode", "synthwave_mode", "soothing_mode", "dynamic_theming", "oled_mode", "contrast", "library_view_mode", "home_mode", "hero_section", "clock_home", "continue_watching_click", "merge_continue_next_up", "next_up_max_days", "next_up_rewatching", "theme_music", "nav_labels") -> 0
+            in listOf("theme_mode", "theme_scheduler", "synthwave_mode", "soothing_mode", "dynamic_theming", "oled_mode", "contrast", "library_view_mode", "home_mode", "hero_section", "clock_home", "continue_watching_click", "merge_continue_next_up", "next_up_max_days", "next_up_rewatching", "theme_music", "nav_labels", "date_format", "font_scale", "color_blind_mode", "hand_mode", "scheduled_start", "scheduled_end") -> 0
             in listOf("show_unwatched_badge", "show_watched_checkmark", "hide_watched_items", "hide_episode_thumbnails", "skip_specials", "show_share_media", "show_external_ratings") -> 1
             in listOf("performance_mode", "reduce_motion") -> 2
             else -> -1
@@ -154,6 +156,12 @@ fun AppearanceSettingsScreen(
                         ThemeMode.DARK -> true
                         ThemeMode.LIGHT -> false
                         ThemeMode.SYSTEM -> androidx.compose.foundation.isSystemInDarkTheme()
+                        ThemeMode.SCHEDULED -> {
+                            val hour = java.util.Calendar.getInstance().get(java.util.Calendar.HOUR_OF_DAY)
+                            val start = preferences.scheduledThemeStartHour
+                            val end = preferences.scheduledThemeEndHour
+                            if (start <= end) hour in start until end else hour >= start || hour < end
+                        }
                     }
 
                     val appearanceItems = buildList {
@@ -188,6 +196,14 @@ fun AppearanceSettingsScreen(
                             add("next_up_rewatching")
                             add("theme_music")
                             add("nav_labels")
+                            add("date_format")
+                            add("font_scale")
+                            add("color_blind_mode")
+                            add("hand_mode")
+                            if (preferences.themeMode == ThemeMode.SCHEDULED) {
+                                add("scheduled_start")
+                                add("scheduled_end")
+                            }
                         }
                     }
                     val totalCount = appearanceItems.size
@@ -210,17 +226,19 @@ fun AppearanceSettingsScreen(
                                             ThemeMode.SYSTEM -> "Follow system setting"
                                             ThemeMode.LIGHT -> "Always light"
                                             ThemeMode.DARK -> "Always dark"
+                                            ThemeMode.SCHEDULED -> "Auto day/night (${preferences.scheduledThemeStartHour}:00–${preferences.scheduledThemeEndHour}:00)"
                                         }
                                     },
                                     trailingText = if (preferences.synthwaveMode) "-" else if (preferences.soothingMode) "-" else if (preferences.monochromeMode) "-" else preferences.themeMode.name,
-                                    highlighted = highlightSettingId == "theme_mode",
+                                    highlighted = highlightSettingId in listOf("theme_mode", "theme_scheduler"),
                                     index = currentIdx++, count = totalCount,
                                     onClick = {
                                         if (!preferences.synthwaveMode && !preferences.soothingMode && !preferences.monochromeMode) {
                                             val next = when (preferences.themeMode) {
                                                 ThemeMode.SYSTEM -> ThemeMode.LIGHT
                                                 ThemeMode.LIGHT -> ThemeMode.DARK
-                                                ThemeMode.DARK -> ThemeMode.SYSTEM
+                                                ThemeMode.DARK -> ThemeMode.SCHEDULED
+                                                ThemeMode.SCHEDULED -> ThemeMode.SYSTEM
                                             }
                                             viewModel.setThemeMode(next)
                                         }
@@ -472,6 +490,108 @@ fun AppearanceSettingsScreen(
                                     highlighted = highlightSettingId == "nav_labels",
                                     index = currentIdx++, count = totalCount,
                                     onCheckedChange = { viewModel.setNavBarShowLabels(it) },
+                                )
+                            }
+                            "date_format" -> {
+                                SettingListItem(
+                                    icon = Tabler.Outline.Calendar,
+                                    title = "Date Format",
+                                    subtitle = "Choose how dates are displayed throughout the app",
+                                    trailingText = preferences.dateFormatPreference.displayName,
+                                    highlighted = highlightSettingId == "date_format",
+                                    index = currentIdx++, count = totalCount,
+                                    onClick = {
+                                        val next = when (preferences.dateFormatPreference) {
+                                            DateFormatPreference.SYSTEM -> DateFormatPreference.US
+                                            DateFormatPreference.US -> DateFormatPreference.ISO
+                                            DateFormatPreference.ISO -> DateFormatPreference.EU
+                                            DateFormatPreference.EU -> DateFormatPreference.LONG
+                                            DateFormatPreference.LONG -> DateFormatPreference.SHORT
+                                            DateFormatPreference.SHORT -> DateFormatPreference.SYSTEM
+                                        }
+                                        viewModel.setDateFormatPreference(next)
+                                    },
+                                )
+                            }
+                            "font_scale" -> {
+                                SettingListItem(
+                                    icon = Tabler.Outline.TextSize,
+                                    title = "Font Size",
+                                    subtitle = "Adjust the text size across the entire app",
+                                    trailingText = preferences.appFontScale.displayName,
+                                    highlighted = highlightSettingId == "font_scale",
+                                    index = currentIdx++, count = totalCount,
+                                    onClick = {
+                                        val next = when (preferences.appFontScale) {
+                                            AppFontScale.SMALL -> AppFontScale.DEFAULT
+                                            AppFontScale.DEFAULT -> AppFontScale.MEDIUM
+                                            AppFontScale.MEDIUM -> AppFontScale.LARGE
+                                            AppFontScale.LARGE -> AppFontScale.EXTRA_LARGE
+                                            AppFontScale.EXTRA_LARGE -> AppFontScale.SMALL
+                                        }
+                                        viewModel.setAppFontScale(next)
+                                    },
+                                )
+                            }
+                            "scheduled_start" -> {
+                                SettingListItem(
+                                    icon = Tabler.Outline.Sun,
+                                    title = "Night Starts At",
+                                    subtitle = "Hour when dark theme activates (24h format)",
+                                    trailingText = "${preferences.scheduledThemeStartHour}:00",
+                                    highlighted = highlightSettingId == "scheduled_start",
+                                    index = currentIdx++, count = totalCount,
+                                    onClick = {
+                                        val next = (preferences.scheduledThemeStartHour + 1) % 24
+                                        viewModel.setScheduledThemeStartHour(next)
+                                    },
+                                )
+                            }
+                            "scheduled_end" -> {
+                                SettingListItem(
+                                    icon = Tabler.Outline.Moon,
+                                    title = "Morning Starts At",
+                                    subtitle = "Hour when light theme activates (24h format)",
+                                    trailingText = "${preferences.scheduledThemeEndHour}:00",
+                                    highlighted = highlightSettingId == "scheduled_end",
+                                    index = currentIdx++, count = totalCount,
+                                    onClick = {
+                                        val next = (preferences.scheduledThemeEndHour + 1) % 24
+                                        viewModel.setScheduledThemeEndHour(next)
+                                    },
+                                )
+                            }
+                            "color_blind_mode" -> {
+                                SettingListItem(
+                                    icon = Tabler.Outline.Eye,
+                                    title = "Color Blind Mode",
+                                    subtitle = "Adjust colors for color vision deficiency",
+                                    trailingText = preferences.colorBlindMode.displayName,
+                                    highlighted = highlightSettingId == "color_blind_mode",
+                                    index = currentIdx++, count = totalCount,
+                                    onClick = {
+                                        val modes = com.raulshma.jellyplay.core.model.ColorBlindMode.entries
+                                        val nextIndex = (modes.indexOf(preferences.colorBlindMode) + 1) % modes.size
+                                        viewModel.setColorBlindMode(modes[nextIndex])
+                                    },
+                                )
+                            }
+                            "hand_mode" -> {
+                                SettingListItem(
+                                    icon = Tabler.Outline.HandClick,
+                                    title = "Handedness",
+                                    subtitle = "Mirror navigation for left-handed use",
+                                    trailingText = preferences.handMode.displayName,
+                                    highlighted = highlightSettingId == "hand_mode",
+                                    index = currentIdx++, count = totalCount,
+                                    onClick = {
+                                        val next = if (preferences.handMode == com.raulshma.jellyplay.core.model.HandMode.RIGHT) {
+                                            com.raulshma.jellyplay.core.model.HandMode.LEFT
+                                        } else {
+                                            com.raulshma.jellyplay.core.model.HandMode.RIGHT
+                                        }
+                                        viewModel.setHandMode(next)
+                                    },
                                 )
                             }
                         }

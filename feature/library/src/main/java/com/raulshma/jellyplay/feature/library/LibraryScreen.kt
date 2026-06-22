@@ -135,6 +135,7 @@ fun LibraryScreen(
     val selectedFolder by viewModel.selectedFolder.collectAsStateWithLifecycle()
     val filters by viewModel.filters.collectAsStateWithLifecycle()
     val genres by viewModel.genres.collectAsStateWithLifecycle()
+    val tags by viewModel.tags.collectAsStateWithLifecycle()
     val showFilters by viewModel.showFilters.collectAsStateWithLifecycle()
     val viewMode by viewModel.viewMode.collectAsStateWithLifecycle()
 
@@ -675,6 +676,7 @@ fun LibraryScreen(
         LibraryFilterSheet(
             currentFilters = filters,
             genres = genres,
+            availableTags = tags,
             onApply = { newFilters ->
                 viewModel.updateFilters(newFilters)
                 viewModel.toggleShowFilters()

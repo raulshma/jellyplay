@@ -4,13 +4,9 @@ import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.spring
 import androidx.compose.foundation.background
-import com.raulshma.jellyplay.core.ui.tv.LocalTvMode
-import com.raulshma.jellyplay.core.ui.tv.rememberTvFocusState
-import com.raulshma.jellyplay.core.ui.tv.tvFocusIndicator
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsPressedAsState
-import androidx.compose.ui.graphics.graphicsLayer
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -21,7 +17,6 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
@@ -29,7 +24,6 @@ import androidx.compose.material3.ButtonGroup
 import androidx.compose.material3.ButtonGroupDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
-import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.Text
@@ -38,6 +32,7 @@ import androidx.compose.material3.ToggleButtonDefaults
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -45,17 +40,21 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
-import com.raulshma.jellyplay.core.model.Genre
-import com.raulshma.jellyplay.core.model.MediaType
+import com.composables.icons.tabler.Tabler
+import com.composables.icons.tabler.outline.*
 import com.raulshma.jellyplay.core.designsystem.theme.LocalIsLightTheme
 import com.raulshma.jellyplay.core.designsystem.theme.ShapeCache
+import com.raulshma.jellyplay.core.model.Genre
+import com.raulshma.jellyplay.core.model.MediaType
+import com.raulshma.jellyplay.core.ui.components.GlassFilterChip
+import com.raulshma.jellyplay.core.ui.tv.rememberTvFocusState
+import com.raulshma.jellyplay.core.ui.tv.tvFocusIndicator
 import com.raulshma.jellyplay.feature.library.LibraryFilters
 import com.raulshma.jellyplay.feature.library.PlayedStatus
 import com.raulshma.jellyplay.feature.library.SortOption
-import com.composables.icons.tabler.Tabler
-import com.composables.icons.tabler.outline.*
 
 @OptIn(
     ExperimentalMaterial3Api::class,
@@ -66,6 +65,7 @@ import com.composables.icons.tabler.outline.*
 fun LibraryFilterSheet(
     currentFilters: LibraryFilters,
     genres: List<Genre>,
+    availableTags: List<String> = emptyList(),
     onApply: (LibraryFilters) -> Unit,
     onDismiss: () -> Unit,
 ) {
@@ -74,6 +74,8 @@ fun LibraryFilterSheet(
     var selectedYears by remember { mutableStateOf(currentFilters.years.toSet()) }
     var selectedSort by remember { mutableStateOf(currentFilters.sortBy) }
     var selectedPlayedStatus by remember { mutableStateOf(currentFilters.playedStatus) }
+    var selectedTags by remember { mutableStateOf(currentFilters.tags.toSet()) }
+    var selectedMinRating by remember { mutableFloatStateOf(currentFilters.minRating) }
 
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
 
@@ -140,6 +142,8 @@ fun LibraryFilterSheet(
                                 selectedYears = emptySet()
                                 selectedSort = SortOption.SORT_NAME
                                 selectedPlayedStatus = PlayedStatus.ALL
+                                selectedTags = emptySet()
+                                selectedMinRating = 0f
                             }
                         )
                         .padding(horizontal = 14.dp, vertical = 8.dp),
@@ -290,6 +294,47 @@ fun LibraryFilterSheet(
                 }
             }
 
+            // ── Tags ──
+            if (availableTags.isNotEmpty()) {
+                Spacer(modifier = Modifier.height(20.dp))
+                SectionLabel("Tags")
+                FlowRow(
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
+                    availableTags.take(20).forEach { tag ->
+                        GlassFilterChip(
+                            label = tag,
+                            selected = tag in selectedTags,
+                            onClick = {
+                                selectedTags = if (tag in selectedTags) {
+                                    selectedTags - tag
+                                } else {
+                                    selectedTags + tag
+                                }
+                            },
+                        )
+                    }
+                }
+            }
+
+            // ── Minimum Rating ──
+            Spacer(modifier = Modifier.height(20.dp))
+            SectionLabel("Minimum Rating")
+            val ratingOptions = listOf(0f, 3f, 3.5f, 4f, 4.5f)
+            FlowRow(
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                ratingOptions.forEach { rating ->
+                    GlassFilterChip(
+                        label = if (rating == 0f) "Any" else "${rating}+",
+                        selected = selectedMinRating == rating,
+                        onClick = { selectedMinRating = rating },
+                    )
+                }
+            }
+
             Spacer(modifier = Modifier.height(32.dp))
 
             // ── Apply button ──
@@ -328,6 +373,8 @@ fun LibraryFilterSheet(
                                     years = selectedYears.toList(),
                                     sortBy = selectedSort,
                                     playedStatus = selectedPlayedStatus,
+                                    tags = selectedTags.toList(),
+                                    minRating = selectedMinRating,
                                 )
                             )
                         }
@@ -347,7 +394,6 @@ fun LibraryFilterSheet(
 
 @Composable
 private fun SectionLabel(text: String) {
-    val isLight = LocalIsLightTheme.current
     Text(
         text = text,
         style = MaterialTheme.typography.titleSmall,
@@ -355,88 +401,6 @@ private fun SectionLabel(text: String) {
         fontWeight = FontWeight.SemiBold,
         modifier = Modifier.padding(bottom = 10.dp),
     )
-}
-
-@OptIn(ExperimentalMaterial3ExpressiveApi::class)
-@Composable
-private fun GlassFilterChip(
-    label: String,
-    selected: Boolean,
-    onClick: () -> Unit,
-) {
-    val focusState = rememberTvFocusState(focusedScale = 1.05f)
-    val interactionSource = remember { MutableInteractionSource() }
-    val isPressed by interactionSource.collectIsPressedAsState()
-    val baseScale by animateFloatAsState(
-        targetValue = if (isPressed) 0.95f else 1f,
-        animationSpec = spring(
-            dampingRatio = Spring.DampingRatioMediumBouncy,
-            stiffness = Spring.StiffnessMedium,
-        ),
-        label = "chipPressedScale"
-    )
-    val scale = baseScale * focusState.scale
-
-    val shapeMorphProgress by animateFloatAsState(
-        targetValue = if (isPressed || selected) 1f else 0f,
-        animationSpec = spring(
-            dampingRatio = Spring.DampingRatioMediumBouncy,
-            stiffness = Spring.StiffnessMedium,
-        ),
-        label = "chipShapeMorph"
-    )
-    val chipShape = remember(shapeMorphProgress) {
-        if (shapeMorphProgress > 0.5f) ShapeCache.smooth20 else ShapeCache.smooth16
-    }
-
-    val isLight = LocalIsLightTheme.current
-    val bgColor = when {
-        selected -> MaterialTheme.colorScheme.primary
-        else -> if (isLight) Color.Black.copy(alpha = 0.06f) else Color.White.copy(alpha = 0.12f)
-    }
-    val textColor = when {
-        selected -> MaterialTheme.colorScheme.onPrimary
-        else -> MaterialTheme.colorScheme.onSurface
-    }
-    val checkTint = MaterialTheme.colorScheme.onPrimary
-
-    Box(
-        modifier = Modifier
-            .graphicsLayer {
-                scaleX = scale
-                scaleY = scale
-            }
-            .clip(chipShape)
-            .background(bgColor)
-            .then(focusState.focusModifier)
-            .tvFocusIndicator(focusState, chipShape)
-            .clickable(
-                interactionSource = interactionSource,
-                indication = null,
-                onClick = onClick
-            )
-            .padding(horizontal = 14.dp, vertical = 8.dp),
-    ) {
-        Row(
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(6.dp),
-        ) {
-            if (selected) {
-                Icon(
-                    Tabler.Outline.Check,
-                    contentDescription = null,
-                    modifier = Modifier.size(14.dp),
-                    tint = checkTint,
-                )
-            }
-            Text(
-                text = label,
-                style = MaterialTheme.typography.labelLarge,
-                color = textColor,
-                fontWeight = if (selected) FontWeight.Bold else FontWeight.Normal,
-            )
-        }
-    }
 }
 
 private fun MediaType.displayName(): String = when (this) {

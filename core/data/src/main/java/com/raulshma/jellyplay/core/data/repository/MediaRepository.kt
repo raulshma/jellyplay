@@ -44,6 +44,7 @@ interface MediaRepository : LiveTvRepository, SyncPlayRepository, NewsletterRepo
         sortOrder: String = "Ascending",
         startIndex: Int = 0,
         limit: Int = 50,
+        tags: List<String>? = null,
     ): Result<SearchResult>
 
     suspend fun getMediaDetail(itemId: String): Result<MediaDetail>
@@ -60,6 +61,7 @@ interface MediaRepository : LiveTvRepository, SyncPlayRepository, NewsletterRepo
         mediaTypes: List<MediaType>? = null,
         genres: List<String>? = null,
         years: List<Int>? = null,
+        tags: List<String>? = null,
         limit: Int = 50,
         startIndex: Int = 0,
     ): Result<SearchResult>
@@ -72,6 +74,7 @@ interface MediaRepository : LiveTvRepository, SyncPlayRepository, NewsletterRepo
         studioIds: List<String>? = null,
         sortBy: String = "SortName",
         sortOrder: String = "Ascending",
+        tags: List<String>? = null,
     ): Flow<PagingData<MediaItem>>
 
     fun searchPaged(
@@ -79,6 +82,7 @@ interface MediaRepository : LiveTvRepository, SyncPlayRepository, NewsletterRepo
         mediaTypes: List<MediaType>? = null,
         genres: List<String>? = null,
         years: List<Int>? = null,
+        tags: List<String>? = null,
     ): Flow<PagingData<MediaItem>>
 
     suspend fun getGenres(parentId: String? = null): Result<List<Genre>>

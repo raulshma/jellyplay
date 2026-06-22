@@ -142,6 +142,7 @@ class MediaRepositoryImpl @Inject constructor(
         sortOrder: String,
         startIndex: Int,
         limit: Int,
+        tags: List<String>?,
     ): Result<SearchResult> = apiClient.getMediaItems(
         parentId = parentId,
         mediaTypes = mediaTypes,
@@ -152,6 +153,7 @@ class MediaRepositoryImpl @Inject constructor(
         sortOrder = sortOrder,
         startIndex = startIndex,
         limit = limit,
+        tags = tags,
     )
 
     override suspend fun getMediaDetail(itemId: String): Result<MediaDetail> {
@@ -174,12 +176,13 @@ class MediaRepositoryImpl @Inject constructor(
         mediaTypes: List<MediaType>?,
         genres: List<String>?,
         years: List<Int>?,
+        tags: List<String>?,
         limit: Int,
         startIndex: Int,
     ): Result<SearchResult> {
-        // The Jellyfin /Search/Hints endpoint doesn't accept genre/year filters,
+        // The Jellyfin /Search/Hints endpoint doesn't accept genre/year/tags filters,
         // so when they're present fall through to the filtered items query.
-        return if (genres.isNullOrEmpty() && years.isNullOrEmpty()) {
+        return if (genres.isNullOrEmpty() && years.isNullOrEmpty() && tags.isNullOrEmpty()) {
             apiClient.getSearchHints(query, mediaTypes, limit, startIndex)
         } else {
             apiClient.getMediaItems(
@@ -193,6 +196,7 @@ class MediaRepositoryImpl @Inject constructor(
                 startIndex = startIndex,
                 limit = limit,
                 searchTerm = query,
+                tags = tags,
             )
         }
     }
@@ -205,6 +209,7 @@ class MediaRepositoryImpl @Inject constructor(
         studioIds: List<String>?,
         sortBy: String,
         sortOrder: String,
+        tags: List<String>?,
     ): Flow<PagingData<MediaItem>> = Pager(
         config = PagingConfig(
             pageSize = PAGE_SIZE,
@@ -221,6 +226,7 @@ class MediaRepositoryImpl @Inject constructor(
                 studioIds = studioIds,
                 sortBy = sortBy,
                 sortOrder = sortOrder,
+                tags = tags,
             )
         },
     ).flow
@@ -230,6 +236,7 @@ class MediaRepositoryImpl @Inject constructor(
         mediaTypes: List<MediaType>?,
         genres: List<String>?,
         years: List<Int>?,
+        tags: List<String>?,
     ): Flow<PagingData<MediaItem>> = Pager(
         config = PagingConfig(
             pageSize = PAGE_SIZE,
@@ -243,6 +250,7 @@ class MediaRepositoryImpl @Inject constructor(
                 mediaTypes = mediaTypes,
                 genres = genres,
                 years = years,
+                tags = tags,
             )
         },
     ).flow

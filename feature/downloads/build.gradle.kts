@@ -42,8 +42,6 @@ dependencies {
     implementation(libs.lifecycle.runtime.compose)
 
     implementation(libs.work.runtime.ktx)
-    implementation(libs.media3.exoplayer)
-    implementation(libs.media3.ui)
 
     implementation(libs.hilt.android)
     ksp(libs.hilt.android.compiler)

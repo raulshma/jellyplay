@@ -1,19 +1,28 @@
 package com.raulshma.jellyplay.feature.livetv.epg
 
+import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
@@ -22,36 +31,38 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.composables.icons.tabler.Tabler
+import com.composables.icons.tabler.outline.*
+import com.raulshma.jellyplay.core.designsystem.theme.ShapeCache
 import com.raulshma.jellyplay.core.model.LiveTvProgram
 import com.raulshma.jellyplay.core.ui.adaptive.LocalAdaptiveInfo
 import com.raulshma.jellyplay.core.ui.adaptive.bottomPadding
 import com.raulshma.jellyplay.core.ui.adaptive.contentPadding
 import com.raulshma.jellyplay.core.ui.adaptive.itemSpacing
 import com.raulshma.jellyplay.core.ui.components.ErrorScreen
+import com.raulshma.jellyplay.core.ui.components.HeaderStatusIndicator
 import com.raulshma.jellyplay.core.ui.components.JellyPlayScreenScaffold
+import com.raulshma.jellyplay.core.ui.components.LocalNetworkStatus
 import com.raulshma.jellyplay.core.ui.components.ScreenEmptyState
 import com.raulshma.jellyplay.core.ui.components.rememberScreenBackgroundColor
+import com.raulshma.jellyplay.core.ui.components.resolveHeaderStatus
 import com.raulshma.jellyplay.core.ui.tv.LocalTvMode
-import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
-import com.raulshma.jellyplay.core.designsystem.theme.ShapeCache
-import com.composables.icons.tabler.Tabler
+import com.raulshma.jellyplay.core.ui.tv.TvGrabInitialFocus
+import com.raulshma.jellyplay.core.ui.tv.rememberTvFocusState
+import com.raulshma.jellyplay.core.ui.tv.tvFocusIndicator
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.LaunchedEffect
-import com.raulshma.jellyplay.core.ui.tv.tvFocusRestorer
-import com.raulshma.jellyplay.core.ui.tv.TvGrabInitialFocus
-import com.raulshma.jellyplay.core.ui.tv.tryRequestFocus
-import com.composables.icons.tabler.outline.*
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -61,9 +72,8 @@ fun EpgScreen(
     onRecordClick: ((LiveTvProgram) -> Unit)? = null,
     viewModel: EpgViewModel = hiltViewModel(),
 ) {
-    val networkStatus by com.raulshma.jellyplay.core.ui.components.LocalNetworkStatus.current
-        .collectAsStateWithLifecycle()
-    val headerStatus = com.raulshma.jellyplay.core.ui.components.resolveHeaderStatus(
+    val networkStatus by LocalNetworkStatus.current.collectAsStateWithLifecycle()
+    val headerStatus = resolveHeaderStatus(
         isLoading = viewModel.isLoading,
         hasError = false,
         networkStatus = networkStatus,
@@ -72,69 +82,49 @@ fun EpgScreen(
     val adaptiveInfo = LocalAdaptiveInfo.current
     val isTv = LocalTvMode.current
     val contentPad = adaptiveInfo.contentPadding(isTv)
-    val spacing = adaptiveInfo.itemSpacing(isTv)
     val bottomPad = adaptiveInfo.bottomPadding(isTv)
 
     val backgroundColor = rememberScreenBackgroundColor()
-
     val focusRequester = remember { FocusRequester() }
-    val programsNotEmpty = viewModel.programs.isNotEmpty()
-    TvGrabInitialFocus(
-        focusRequester = focusRequester,
-        itemCount = viewModel.programs.size,
-        tag = "epg_init",
-    )
 
     JellyPlayScreenScaffold(
         title = "Program Guide",
         onBack = onBack,
         backgroundColor = backgroundColor,
         actions = {
-            com.raulshma.jellyplay.core.ui.components.HeaderStatusIndicator(
+            HeaderStatusIndicator(
                 status = headerStatus,
                 modifier = Modifier.padding(start = 12.dp),
             )
         },
     ) {
-        if (viewModel.error != null && viewModel.programs.isEmpty()) {
-            ErrorScreen(
-                message = viewModel.error!!,
-                onRetry = { viewModel.loadGuide() },
-            )
-        } else if (viewModel.programs.isEmpty() && !viewModel.isLoading) {
-            ScreenEmptyState(
-                icon = Tabler.Outline.Calendar,
-                title = "No program guide available",
-            )
-        } else {
-            PullToRefreshBox(
-                isRefreshing = viewModel.isLoading,
-                onRefresh = { viewModel.loadGuide() },
-            ) {
-                LazyColumn(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .tvFocusRestorer()
-                        .focusRequester(focusRequester),
-                    contentPadding = PaddingValues(
-                        start = contentPad,
-                        end = contentPad,
-                        top = 8.dp,
-                        bottom = bottomPad,
-                    ),
-                    verticalArrangement = Arrangement.spacedBy(spacing),
+        when {
+            viewModel.error != null && viewModel.channels.isEmpty() -> {
+                ErrorScreen(
+                    message = viewModel.error!!,
+                    onRetry = { viewModel.loadGuide() },
+                )
+            }
+            viewModel.channels.isEmpty() && !viewModel.isLoading -> {
+                ScreenEmptyState(
+                    icon = Tabler.Outline.Calendar,
+                    title = "No program guide available",
+                )
+            }
+            else -> {
+                PullToRefreshBox(
+                    isRefreshing = viewModel.isLoading,
+                    onRefresh = { viewModel.loadGuide() },
                 ) {
-                    items(
-                        items = viewModel.programs,
-                        key = { "${it.channelId}_${it.id}" },
-                        contentType = { "program" },
-                    ) { program ->
-                        ProgramCard(
-                            program = program,
-                            onClick = { onProgramClick(program) },
-                            onRecordClick = onRecordClick?.let { { it(program) } },
-                        )
-                    }
+                    EpgGrid(
+                        gridData = viewModel.gridData,
+                        now = viewModel.now,
+                        contentPadding = contentPad,
+                        bottomPadding = bottomPad,
+                        onProgramClick = onProgramClick,
+                        onRecordClick = onRecordClick,
+                        focusRequester = focusRequester,
+                    )
                 }
             }
         }
@@ -142,81 +132,299 @@ fun EpgScreen(
 }
 
 @Composable
-private fun ProgramCard(
-    program: LiveTvProgram,
-    onClick: () -> Unit,
-    onRecordClick: (() -> Unit)? = null,
+private fun EpgGrid(
+    gridData: EpgGridData,
+    now: java.time.Instant,
+    contentPadding: androidx.compose.ui.unit.Dp,
+    bottomPadding: androidx.compose.ui.unit.Dp,
+    onProgramClick: (LiveTvProgram) -> Unit,
+    onRecordClick: ((LiveTvProgram) -> Unit)?,
+    focusRequester: FocusRequester,
 ) {
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .clip(ShapeCache.smooth16)
-            .background(MaterialTheme.colorScheme.onSurface.copy(alpha = 0.05f))
-            .clickable(onClick = onClick)
-            .padding(horizontal = 16.dp, vertical = 14.dp),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        Column(modifier = Modifier.weight(1f)) {
-            Text(
-                text = program.name,
-                style = MaterialTheme.typography.bodyLarge.copy(fontWeight = FontWeight.SemiBold),
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-                color = MaterialTheme.colorScheme.onSurface,
-            )
-            if (program.startDate != null && program.endDate != null) {
-                Spacer(Modifier.height(2.dp))
-                Text(
-                    text = "${program.startDate} - ${program.endDate}",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f),
+    val density = LocalDensity.current
+    val horizontalScrollState = rememberScrollState()
+    val lazyListState = rememberLazyListState()
+    val nowOffsetDp = remember(now, gridData.windowStart) {
+        if (now < gridData.windowStart) 0f
+        else if (now > gridData.windowEnd) gridData.totalWidthDp
+        else now.offsetDp(gridData.windowStart)
+    }
+    val channelColumnWidth = EpgGridLayout.CHANNEL_COLUMN_WIDTH
+
+    TvGrabInitialFocus(
+        focusRequester = focusRequester,
+        itemCount = gridData.rows.size,
+        tag = "epg_init",
+    )
+
+    Box(modifier = Modifier.fillMaxSize()) {
+        LazyColumn(
+            state = lazyListState,
+            modifier = Modifier.fillMaxSize(),
+            contentPadding = PaddingValues(bottom = bottomPadding),
+        ) {
+            // ── Sticky time-header row ──
+            item(key = "epg_time_header", contentType = "time_header") {
+                TimeHeaderRow(
+                    windowStart = gridData.windowStart,
+                    windowEnd = gridData.windowEnd,
+                    totalWidthDp = gridData.totalWidthDp,
+                    channelColumnWidth = channelColumnWidth,
+                    horizontalScrollState = horizontalScrollState,
+                    nowOffsetDp = nowOffsetDp,
                 )
             }
-            val overview = program.overview
-            if (overview != null) {
-                Spacer(Modifier.height(4.dp))
-                Text(
-                    text = overview,
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.45f),
-                    maxLines = 2,
-                    overflow = TextOverflow.Ellipsis,
+
+            // ── Channel rows ──
+            itemsIndexed(
+                items = gridData.rows,
+                key = { _, row -> "channel_${row.channel.id}" },
+                contentType = { _, _ -> "channel_row" },
+            ) { index, row ->
+                val rowLayout = remember(row, gridData, now) {
+                    layoutChannelRow(row, gridData, now)
+                }
+                ChannelProgramsRow(
+                    rowLayout = rowLayout,
+                    channelColumnWidth = channelColumnWidth,
+                    totalWidthDp = gridData.totalWidthDp,
+                    horizontalScrollState = horizontalScrollState,
+                    onProgramClick = onProgramClick,
+                    onRecordClick = onRecordClick,
+                    modifier = if (index == 0) Modifier.focusRequester(focusRequester) else Modifier,
                 )
             }
-            val officialRating = program.officialRating
-            if (officialRating != null) {
-                Spacer(Modifier.height(4.dp))
+        }
+
+        // ── "Now" vertical indicator line ──
+        // Rendered as an overlay across the full grid height, offset by the
+        // current horizontal scroll so it tracks the current time accurately.
+        if (now >= gridData.windowStart && now <= gridData.windowEnd) {
+            val scrollPx = with(density) { horizontalScrollState.value.toFloat() }
+            val channelColPx = with(density) { channelColumnWidth.toPx() }
+            val nowOffsetPx = with(density) { nowOffsetDp.dp.toPx() }
+            val xPx = channelColPx + nowOffsetPx - scrollPx
+            if (xPx >= channelColPx && xPx <= channelColPx + with(density) { gridData.totalWidthDp.dp.toPx() }) {
                 Box(
                     modifier = Modifier
-                        .clip(ShapeCache.smooth4)
-                        .background(MaterialTheme.colorScheme.onSurface.copy(alpha = 0.15f))
-                        .padding(horizontal = 6.dp, vertical = 2.dp),
-                ) {
+                        .offset(x = with(density) { xPx.toDp() })
+                        .fillMaxHeight()
+                        .width(2.dp)
+                        .background(MaterialTheme.colorScheme.error.copy(alpha = 0.7f)),
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun TimeHeaderRow(
+    windowStart: java.time.Instant,
+    windowEnd: java.time.Instant,
+    totalWidthDp: Float,
+    channelColumnWidth: androidx.compose.ui.unit.Dp,
+    horizontalScrollState: androidx.compose.foundation.ScrollState,
+    nowOffsetDp: Float,
+) {
+    val markers = remember(windowStart, windowEnd) { buildTimeMarkers(windowStart, windowEnd) }
+    Row(modifier = Modifier.fillMaxWidth()) {
+        // Sticky channel-column header
+        Box(
+            modifier = Modifier
+                .width(channelColumnWidth)
+                .height(EpgGridLayout.TIME_HEADER_HEIGHT)
+                .background(MaterialTheme.colorScheme.surface.copy(alpha = 0.95f))
+                .padding(horizontal = 12.dp),
+            contentAlignment = Alignment.CenterStart,
+        ) {
+            Text(
+                text = "Channel",
+                style = MaterialTheme.typography.labelMedium,
+                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f),
+                fontWeight = FontWeight.SemiBold,
+            )
+        }
+        // Horizontally-scrolling time ruler
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(EpgGridLayout.TIME_HEADER_HEIGHT)
+                .horizontalScroll(horizontalScrollState),
+        ) {
+            Box(modifier = Modifier.width(totalWidthDp.dp)) {
+                markers.forEach { marker ->
+                    val x = marker.offsetDp(windowStart)
                     Text(
-                        text = officialRating,
-                        style = MaterialTheme.typography.labelMedium,
-                        color = MaterialTheme.colorScheme.onSurface,
+                        text = marker.formatTimeHeader(),
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f),
+                        modifier = Modifier
+                            .offset(x = x.dp)
+                            .padding(start = 4.dp, top = 8.dp),
                     )
                 }
             }
         }
+    }
+}
 
-        if (onRecordClick != null) {
-            Spacer(Modifier.width(8.dp))
-            Box(
-                modifier = Modifier
-                    .size(36.dp)
-                    .clip(CircleShape)
-                    .background(MaterialTheme.colorScheme.onSurface.copy(alpha = 0.08f))
-                    .clickable(onClick = onRecordClick),
-                contentAlignment = Alignment.Center,
-            ) {
-                Icon(
-                    Tabler.Outline.Circle,
-                    contentDescription = "Record",
-                    tint = MaterialTheme.colorScheme.error,
-                    modifier = Modifier.size(18.dp),
+@Composable
+private fun ChannelProgramsRow(
+    rowLayout: ChannelRowLayout,
+    channelColumnWidth: androidx.compose.ui.unit.Dp,
+    totalWidthDp: Float,
+    horizontalScrollState: androidx.compose.foundation.ScrollState,
+    onProgramClick: (LiveTvProgram) -> Unit,
+    onRecordClick: ((LiveTvProgram) -> Unit)?,
+    modifier: Modifier = Modifier,
+) {
+    Row(modifier = modifier.fillMaxWidth().height(EpgGridLayout.CHANNEL_ROW_HEIGHT)) {
+        // Sticky channel-name cell
+        ChannelNameCell(
+            name = rowLayout.channel.name,
+            number = rowLayout.channel.number,
+            width = channelColumnWidth,
+        )
+        // Programs strip — horizontal scroll shared with header row
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .horizontalScroll(horizontalScrollState),
+        ) {
+            Box(modifier = Modifier.width(totalWidthDp.dp)) {
+                rowLayout.programLayouts.forEach { layout ->
+                    ProgramCell(
+                        layout = layout,
+                        onClick = { onProgramClick(layout.program) },
+                        onRecordClick = onRecordClick?.let { { it(layout.program) } },
+                        modifier = Modifier.offset(x = layout.startOffsetDp.dp),
+                    )
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun ChannelNameCell(
+    name: String,
+    number: String?,
+    width: androidx.compose.ui.unit.Dp,
+) {
+    Column(
+        modifier = Modifier
+            .width(width)
+            .fillMaxHeight()
+            .background(MaterialTheme.colorScheme.surface.copy(alpha = 0.95f))
+            .padding(horizontal = 12.dp, vertical = 8.dp),
+        verticalArrangement = Arrangement.Center,
+    ) {
+        if (!number.isNullOrBlank()) {
+            Text(
+                text = number,
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.primary,
+                fontWeight = FontWeight.SemiBold,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
+            Spacer(Modifier.height(2.dp))
+        }
+        Text(
+            text = name,
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurface,
+            fontWeight = FontWeight.SemiBold,
+            maxLines = 2,
+            overflow = TextOverflow.Ellipsis,
+        )
+    }
+}
+
+@Composable
+private fun ProgramCell(
+    layout: ProgramLayout,
+    onClick: () -> Unit,
+    onRecordClick: (() -> Unit)?,
+    modifier: Modifier = Modifier,
+) {
+    val focusState = rememberTvFocusState()
+    val isCurrent = layout.isCurrent
+    val containerColor = if (isCurrent) {
+        MaterialTheme.colorScheme.primary.copy(alpha = 0.18f)
+    } else {
+        MaterialTheme.colorScheme.onSurface.copy(alpha = 0.06f)
+    }
+    val borderColor = if (isCurrent) {
+        MaterialTheme.colorScheme.primary.copy(alpha = 0.5f)
+    } else {
+        Color.Transparent
+    }
+    Box(
+        modifier = modifier
+            .width(layout.widthDp.dp)
+            .fillMaxHeight()
+            .padding(end = 2.dp),
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .then(focusState.focusModifier)
+                .tvFocusIndicator(focusState, ShapeCache.smooth8)
+                .clip(ShapeCache.smooth8)
+                .background(containerColor)
+                .border(width = 1.dp, color = borderColor, shape = ShapeCache.smooth8)
+                .clickable(
+                    interactionSource = remember { MutableInteractionSource() },
+                    indication = null,
+                    onClick = onClick,
                 )
+                .padding(horizontal = 8.dp, vertical = 6.dp),
+        ) {
+            Text(
+                text = layout.program.name,
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurface,
+                fontWeight = if (isCurrent) FontWeight.Bold else FontWeight.SemiBold,
+                maxLines = 2,
+                overflow = TextOverflow.Ellipsis,
+            )
+            if (isCurrent) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(2.dp),
+                    modifier = Modifier.padding(top = 2.dp),
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .size(6.dp)
+                            .clip(CircleShape)
+                            .background(MaterialTheme.colorScheme.primary),
+                    )
+                    Text(
+                        text = "LIVE",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.primary,
+                        fontWeight = FontWeight.Bold,
+                    )
+                }
+            }
+            if (onRecordClick != null) {
+                Spacer(Modifier.height(2.dp))
+                Row(
+                    modifier = Modifier
+                        .clip(CircleShape)
+                        .clickable(onClick = onRecordClick)
+                        .padding(horizontal = 4.dp, vertical = 2.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Icon(
+                        imageVector = Tabler.Outline.Circle,
+                        contentDescription = "Record",
+                        tint = MaterialTheme.colorScheme.error,
+                        modifier = Modifier.size(12.dp),
+                    )
+                }
             }
         }
     }

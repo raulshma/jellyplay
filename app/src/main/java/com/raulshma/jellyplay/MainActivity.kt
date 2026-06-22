@@ -42,6 +42,8 @@ import com.raulshma.jellyplay.core.data.playback.PlayerLifecycleManager
 import com.raulshma.jellyplay.core.designsystem.theme.JellyPlayTheme
 import com.raulshma.jellyplay.core.model.ThemeMode
 import com.raulshma.jellyplay.core.ui.components.AuthChallengeScreen
+import com.raulshma.jellyplay.core.ui.components.HandModeProvider
+import com.raulshma.jellyplay.core.ui.components.colorBlindFilter
 import com.raulshma.jellyplay.core.ui.tv.isTv
 import com.raulshma.jellyplay.navigation.JellyPlayApp
 import dagger.hilt.android.AndroidEntryPoint
@@ -179,6 +181,16 @@ class MainActivity : FragmentActivity() {
                         ThemeMode.DARK -> true
                         ThemeMode.LIGHT -> false
                         ThemeMode.SYSTEM -> isSystemDark
+                        ThemeMode.SCHEDULED -> {
+                            val hour = java.util.Calendar.getInstance().get(java.util.Calendar.HOUR_OF_DAY)
+                            val start = preferences.scheduledThemeStartHour
+                            val end = preferences.scheduledThemeEndHour
+                            if (start > end) {
+                                hour >= start || hour < end
+                            } else {
+                                hour >= start && hour < end
+                            }
+                        }
                     }
                 }
             }
@@ -213,74 +225,81 @@ class MainActivity : FragmentActivity() {
                 soothingMode = preferences.soothingMode,
                 soothingAccent = preferences.soothingAccent,
                 monochromeMode = preferences.monochromeMode,
+                appFontScale = preferences.appFontScale,
             ) {
-                if (showLockScreen) {
-                    // Surface the rate-limit lockout to the user when present.
-                    val lockoutState = remember(preferences.pinLockoutUntilEpochMs) {
-                        viewModel.preferencesStore.getPinLockoutState()
-                    }
-                    val now = remember { System.currentTimeMillis() }
-                    val lockoutActive = lockoutState.isLockedOut && lockoutState.lockoutUntilEpochMs > now
-                    AuthChallengeScreen(
-                        title = if (preferences.biometricLockEnabled && preferences.pinHash == null) "Authenticate" else "Enter PIN",
-                        subtitle = "Unlock JellyPlay",
-                        pinHash = preferences.pinHash,
-                        biometricEnabled = preferences.biometricLockEnabled,
-                        enabled = !lockoutActive,
-                        onPinEntered = { pin ->
-                            if (pin.isEmpty()) {
-                                isPinUnlocked.value = true
-                                pinError = null
-                            } else if (preferences.pinHash != null) {
-                                // Re-check the lockout at click time: the user
-                                // may have triggered it on a previous attempt
-                                // since the last composition.
-                                val currentLockout = viewModel.preferencesStore.getPinLockoutState()
-                                val currentNow = System.currentTimeMillis()
-                                if (currentLockout.isLockedOut && currentLockout.lockoutUntilEpochMs > currentNow) {
-                                    val remainingMs = currentLockout.lockoutUntilEpochMs - currentNow
-                                    pinError = formatLockoutMessage(remainingMs)
-                                    return@AuthChallengeScreen
-                                }
-                                val valid = viewModel.preferencesStore.verifyPin(
-                                    pin,
-                                    preferences.pinHash,
-                                )
-                                if (valid) {
-                                    isPinUnlocked.value = true
-                                    pinError = null
-                                    // Reset the failed-attempt counter and clear
-                                    // any active lockout, then silently upgrade
-                                    // a legacy unsalted-SHA-256 PIN hash to
-                                    // PBKDF2 (v2) now that the user has proven
-                                    // they know the PIN.
-                                    lifecycleScope.launch {
-                                        viewModel.preferencesStore.resetPinLockout()
-                                        if (viewModel.preferencesStore.pinHashNeedsMigration(preferences.pinHash)) {
-                                            viewModel.preferencesStore.upgradePinHashIfLegacy(pin)
-                                        }
-                                    }
-                                } else {
-                                    lifecycleScope.launch {
-                                        val newState = viewModel.preferencesStore.recordFailedPinAttempt()
-                                        pinError = if (newState.isLockedOut) {
-                                            formatLockoutMessage(newState.lockoutUntilEpochMs - System.currentTimeMillis())
-                                        } else {
-                                            "Incorrect PIN"
-                                        }
-                                    }
-                                }
+                HandModeProvider(mode = preferences.handMode) {
+                    Box(
+                        modifier = Modifier.colorBlindFilter(preferences.colorBlindMode),
+                    ) {
+                        if (showLockScreen) {
+                            // Surface the rate-limit lockout to the user when present.
+                            val lockoutState = remember(preferences.pinLockoutUntilEpochMs) {
+                                viewModel.preferencesStore.getPinLockoutState()
                             }
-                        },
-                        onErrorClear = { pinError = null },
-                        errorMessage = if (lockoutActive) {
-                            formatLockoutMessage(lockoutState.lockoutUntilEpochMs - now)
+                            val now = remember { System.currentTimeMillis() }
+                            val lockoutActive = lockoutState.isLockedOut && lockoutState.lockoutUntilEpochMs > now
+                            AuthChallengeScreen(
+                                title = if (preferences.biometricLockEnabled && preferences.pinHash == null) "Authenticate" else "Enter PIN",
+                                subtitle = "Unlock JellyPlay",
+                                pinHash = preferences.pinHash,
+                                biometricEnabled = preferences.biometricLockEnabled,
+                                enabled = !lockoutActive,
+                                onPinEntered = { pin ->
+                                    if (pin.isEmpty()) {
+                                        isPinUnlocked.value = true
+                                        pinError = null
+                                    } else if (preferences.pinHash != null) {
+                                        // Re-check the lockout at click time: the user
+                                        // may have triggered it on a previous attempt
+                                        // since the last composition.
+                                        val currentLockout = viewModel.preferencesStore.getPinLockoutState()
+                                        val currentNow = System.currentTimeMillis()
+                                        if (currentLockout.isLockedOut && currentLockout.lockoutUntilEpochMs > currentNow) {
+                                            val remainingMs = currentLockout.lockoutUntilEpochMs - currentNow
+                                            pinError = formatLockoutMessage(remainingMs)
+                                            return@AuthChallengeScreen
+                                        }
+                                        val valid = viewModel.preferencesStore.verifyPin(
+                                            pin,
+                                            preferences.pinHash,
+                                        )
+                                        if (valid) {
+                                            isPinUnlocked.value = true
+                                            pinError = null
+                                            // Reset the failed-attempt counter and clear
+                                            // any active lockout, then silently upgrade
+                                            // a legacy unsalted-SHA-256 PIN hash to
+                                            // PBKDF2 (v2) now that the user has proven
+                                            // they know the PIN.
+                                            lifecycleScope.launch {
+                                                viewModel.preferencesStore.resetPinLockout()
+                                                if (viewModel.preferencesStore.pinHashNeedsMigration(preferences.pinHash)) {
+                                                    viewModel.preferencesStore.upgradePinHashIfLegacy(pin)
+                                                }
+                                            }
+                                        } else {
+                                            lifecycleScope.launch {
+                                                val newState = viewModel.preferencesStore.recordFailedPinAttempt()
+                                                pinError = if (newState.isLockedOut) {
+                                                    formatLockoutMessage(newState.lockoutUntilEpochMs - System.currentTimeMillis())
+                                                } else {
+                                                    "Incorrect PIN"
+                                                }
+                                            }
+                                        }
+                                    }
+                                },
+                                onErrorClear = { pinError = null },
+                                errorMessage = if (lockoutActive) {
+                                    formatLockoutMessage(lockoutState.lockoutUntilEpochMs - now)
+                                } else {
+                                    pinError
+                                },
+                            )
                         } else {
-                            pinError
-                        },
-                    )
-                } else {
-                    JellyPlayApp(viewModel = viewModel)
+                            JellyPlayApp(viewModel = viewModel)
+                        }
+                    }
                 }
             }
         }
@@ -306,6 +325,19 @@ class MainActivity : FragmentActivity() {
             val sharedText = intent.getStringExtra(Intent.EXTRA_TEXT)
             if (sharedText != null) {
                 viewModel.handleSharedText(sharedText)
+            }
+        } else if (action == Intent.ACTION_SEARCH || action == "android.search.action.GLOBAL_SEARCH") {
+            val query = intent.getStringExtra(android.app.SearchManager.QUERY)
+            if (!query.isNullOrBlank()) {
+                viewModel.handleSearchQuery(query)
+            }
+        } else if (action == Intent.ACTION_ASSIST) {
+            // ACTION_ASSIST uses hidden extras (android.intent.extra.ASSIST_INPUT); fall back to
+            // SearchManager.QUERY for some launchers.
+            val query = intent.getStringExtra("android.intent.extra.ASSIST_INPUT")
+                ?: intent.getStringExtra(android.app.SearchManager.QUERY)
+            if (!query.isNullOrBlank()) {
+                viewModel.handleSearchQuery(query)
             }
         }
     }

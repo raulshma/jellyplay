@@ -80,6 +80,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.navigation3.runtime.NavKey
 import androidx.navigation3.runtime.entryProvider
+import androidx.navigation3.runtime.rememberNavBackStack
 import androidx.navigation3.runtime.rememberSaveableStateHolderNavEntryDecorator
 import androidx.navigation3.runtime.NavEntryDecorator
 import androidx.navigation3.runtime.NavEntry
@@ -110,9 +111,11 @@ import com.raulshma.jellyplay.core.data.playback.AudioPlaybackManager
 import com.raulshma.jellyplay.core.model.HomeMode
 import com.raulshma.jellyplay.core.ui.adaptive.LocalAdaptiveInfo
 import com.raulshma.jellyplay.core.ui.adaptive.LocalJellyPlayUi
+import com.raulshma.jellyplay.core.ui.adaptive.MasterDetailLayout
 import com.raulshma.jellyplay.core.ui.adaptive.WindowSizeClass
 import com.raulshma.jellyplay.core.ui.adaptive.rememberJellyPlayUiEnvironment
 import com.raulshma.jellyplay.core.ui.adaptive.rememberAdaptiveInfo
+import com.raulshma.jellyplay.core.ui.adaptive.resolveMasterDetailLayout
 import com.raulshma.jellyplay.core.designsystem.theme.TvTypography
 import com.raulshma.jellyplay.core.designsystem.theme.LocalIsSynthwave
 import com.raulshma.jellyplay.core.designsystem.theme.LocalIsSoothingTheme
@@ -448,8 +451,7 @@ private fun MainContent(
                             val last = stack.last()
                             if (last is Route.VideoPlayer ||
                                 last is Route.AudioPlayer ||
-                                last is Route.LiveTvChannelPlayer ||
-                                last is Route.OfflinePlayer
+                                last is Route.LiveTvChannelPlayer
                             ) {
                                 stack.removeLastOrNull()
                             } else {
@@ -1206,188 +1208,227 @@ private fun MainNavDisplay(
     val defaultSpatial = motionScheme.defaultSpatialSpec<Float>()
     val defaultSpatialOffset = motionScheme.defaultSpatialSpec<androidx.compose.ui.unit.IntOffset>()
 
-    NavDisplay(
-        backStack = currentBackStack,
-        onBack = { navigator.goBack() },
-                entryDecorators = listOf(entryDecorator, paddingDecorator),
-                transitionSpec = {
-                    val targetLast = targetState
-                    val initialLast = initialState
-                    val targetRoute = targetLast.entries.lastOrNull()?.contentKey as? Route
-                    val initialRoute = initialLast.entries.lastOrNull()?.contentKey as? Route
-                    val isModalRoute = targetRoute?.isModal == true
-                    val isModalPop = initialRoute?.isModal == true
-                    val isTabSwitch = targetRoute != null && initialRoute != null &&
-                            ALL_TOP_LEVEL_ROUTE_KEYS.contains(targetRoute) &&
-                            ALL_TOP_LEVEL_ROUTE_KEYS.contains(initialRoute)
-                    val isAmbient = targetRoute is Route.Ambient || initialRoute is Route.Ambient
+    val sharedEntryProvider = entryProvider {
+        homeSection(
+            navigator = navigator,
+            homeMode = homeMode,
+            onModeChange = onModeChange,
+            musicContent = {
+                MusicHomeScreen(
+                    onItemClick = { itemId -> navigator.navigate(Route.MediaDetail(itemId)) },
+                    onAlbumClick = { albumId -> navigator.navigate(Route.AlbumDetail(albumId)) },
+                    onArtistsClick = { navigator.navigate(Route.Artists) },
+                    onAlbumsClick = { navigator.navigate(Route.Albums) },
+                    onTracksClick = { navigator.navigate(Route.Tracks) },
+                    onGenresClick = { navigator.navigate(Route.Genres) },
+                    onPlaylistsClick = { navigator.navigate(Route.Playlists) },
+                    onNowPlayingClick = onNowPlayingClick,
+                    onAmbientClick = onAmbientClick,
+                )
+            },
+        )
+        librarySection(navigator)
+        searchSection(navigator)
+        liveTvSection(navigator)
+        detailsSection(navigator)
+        editorSection(navigator)
+        videoPlayerSection(navigator, onEnterPip = enterPip, onEnterMiniMode = enterVideoMiniMode)
+        audioPlayerSection(navigator)
+        downloadsSection(navigator)
+        authSection(navigator) { navigator.goBack() }
+        settingsSection(navigator, onLogout) { navigator.navigate(Route.Onboarding) }
+        adminSection(navigator)
+        musicSection(navigator)
+        syncPlaySection(navigator)
+        onboardingSection { navigator.goBack() }
+        newsletterSection(navigator)
+        insightsSection(navigator)
+        requestsSection(navigator)
+        shortcutsSection(navigator)
+    }
 
-                    when {
-                        isAmbient -> {
-                            fadeIn(defaultEffects) togetherWith fadeOut(fastEffects)
-                        }
-                        isModalRoute -> {
-                            fadeIn(
-                                defaultEffects
-                            ) + slideInVertically(
-                                initialOffsetY = { it / 4 },
-                                animationSpec = defaultSpatialOffset,
-                            ) togetherWith fadeOut(
-                                fastEffects
-                            )
-                        }
-                        isModalPop -> {
-                            fadeIn(fastEffects) togetherWith fadeOut(
-                                fastEffects
-                            ) + slideOutVertically(
-                                targetOffsetY = { it / 4 },
-                                animationSpec = defaultSpatialOffset,
-                            )
-                        }
-                        isTabSwitch -> {
-                            fadeIn(fastEffects) togetherWith fadeOut(
-                                fastEffects
-                            )
-                        }
-                        isDetailScene(targetLast) || isDetailScene(initialLast) -> {
-                            fadeIn(
-                                animationSpec = defaultEffects,
-                            ) togetherWith fadeOut(
-                                animationSpec = fastEffects,
-                            )
-                        }
-                        else -> {
-                            fadeIn(
-                                animationSpec = defaultEffects,
-                            ) + slideInHorizontally(
-                                initialOffsetX = { it / 8 },
-                                animationSpec = defaultSpatialOffset,
-                            ) + scaleIn(
-                                initialScale = 0.985f,
-                                animationSpec = defaultSpatial,
-                            ) togetherWith fadeOut(
-                                animationSpec = fastEffects,
-                            ) + slideOutHorizontally(
-                                targetOffsetX = { -it / 18 },
-                                animationSpec = defaultSpatialOffset,
-                            ) + scaleOut(
-                                targetScale = 1.015f,
-                                animationSpec = defaultEffects,
-                            )
-                        }
+    val adaptiveInfo = LocalAdaptiveInfo.current
+    val isExpanded = adaptiveInfo.windowSizeClass != WindowSizeClass.Compact
+    val topRoute = currentBackStack.lastOrNull() as? Route
+    val decision = resolveMasterDetailLayout(
+        isExpanded = isExpanded,
+        backStackSize = currentBackStack.size,
+        topRouteIsDetail = topRoute?.isDetail == true,
+    )
+
+    val renderDetailPane: @Composable (Modifier) -> Unit = { mod ->
+        NavDisplay(
+            backStack = currentBackStack,
+            onBack = { navigator.goBack() },
+            entryDecorators = listOf(entryDecorator, paddingDecorator),
+            transitionSpec = {
+                val targetLast = targetState
+                val initialLast = initialState
+                val targetRoute = targetLast.entries.lastOrNull()?.contentKey as? Route
+                val initialRoute = initialLast.entries.lastOrNull()?.contentKey as? Route
+                val isModalRoute = targetRoute?.isModal == true
+                val isModalPop = initialRoute?.isModal == true
+                val isTabSwitch = targetRoute != null && initialRoute != null &&
+                        ALL_TOP_LEVEL_ROUTE_KEYS.contains(targetRoute) &&
+                        ALL_TOP_LEVEL_ROUTE_KEYS.contains(initialRoute)
+                val isAmbient = targetRoute is Route.Ambient || initialRoute is Route.Ambient
+
+                when {
+                    isAmbient -> {
+                        fadeIn(defaultEffects) togetherWith fadeOut(fastEffects)
                     }
-                },
-                popTransitionSpec = {
-                    val targetLast = targetState
-                    val initialLast = initialState
-                    val initialRoute = initialLast.entries.lastOrNull()?.contentKey as? Route
-                    val isModalPop = initialRoute?.isModal == true
-                    when {
-                        isModalPop -> {
-                            fadeIn(fastEffects) togetherWith fadeOut(
-                                fastEffects
-                            ) + slideOutVertically(
-                                    targetOffsetY = { it / 4 },
-                                    animationSpec = defaultSpatialOffset,
-                                )
-                        }
-                        isDetailScene(initialLast) || isDetailScene(targetLast) -> {
-                            fadeIn(
-                                animationSpec = defaultEffects,
-                            ) togetherWith fadeOut(
-                                animationSpec = defaultEffects,
-                            )
-                        }
-                        else -> {
-                            fadeIn(
-                                    animationSpec = defaultEffects,
-                                ) + slideInHorizontally(
-                                    initialOffsetX = { -it / 12 },
-                                    animationSpec = defaultSpatialOffset,
-                                ) + scaleIn(
-                                    initialScale = 1.015f,
-                                    animationSpec = defaultSpatial,
-                                ) togetherWith fadeOut(
-                                    animationSpec = fastEffects,
-                                ) + slideOutHorizontally(
-                                    targetOffsetX = { it / 10 },
-                                    animationSpec = defaultSpatialOffset,
-                                ) + scaleOut(
-                                    targetScale = 0.985f,
-                                    animationSpec = defaultEffects,
-                                )
-                        }
+                    isModalRoute -> {
+                        fadeIn(
+                            defaultEffects
+                        ) + slideInVertically(
+                            initialOffsetY = { it / 4 },
+                            animationSpec = defaultSpatialOffset,
+                        ) togetherWith fadeOut(
+                            fastEffects
+                        )
                     }
-                },
-                predictivePopTransitionSpec = { _ ->
-                    val targetLast = targetState
-                    val initialLast = initialState
-                    if (isDetailScene(initialLast) || isDetailScene(targetLast)) {
+                    isModalPop -> {
+                        fadeIn(fastEffects) togetherWith fadeOut(
+                            fastEffects
+                        ) + slideOutVertically(
+                            targetOffsetY = { it / 4 },
+                            animationSpec = defaultSpatialOffset,
+                        )
+                    }
+                    isTabSwitch -> {
+                        fadeIn(fastEffects) togetherWith fadeOut(
+                            fastEffects
+                        )
+                    }
+                    isDetailScene(targetLast) || isDetailScene(initialLast) -> {
                         fadeIn(
                             animationSpec = defaultEffects,
                         ) togetherWith fadeOut(
-                            animationSpec = defaultEffects,
+                            animationSpec = fastEffects,
                         )
-                    } else {
+                    }
+                    else -> {
                         fadeIn(
                             animationSpec = defaultEffects,
                         ) + slideInHorizontally(
-                            initialOffsetX = { -it / 12 },
+                            initialOffsetX = { it / 8 },
                             animationSpec = defaultSpatialOffset,
                         ) + scaleIn(
-                            initialScale = 1.015f,
+                            initialScale = 0.985f,
                             animationSpec = defaultSpatial,
                         ) togetherWith fadeOut(
                             animationSpec = fastEffects,
                         ) + slideOutHorizontally(
-                            targetOffsetX = { it / 10 },
+                            targetOffsetX = { -it / 18 },
                             animationSpec = defaultSpatialOffset,
                         ) + scaleOut(
-                            targetScale = 0.985f,
+                            targetScale = 1.015f,
                             animationSpec = defaultEffects,
                         )
                     }
-                },
-        entryProvider = entryProvider {
-            homeSection(
-                navigator = navigator,
-                homeMode = homeMode,
-                onModeChange = onModeChange,
-                musicContent = {
-                    MusicHomeScreen(
-                        onItemClick = { itemId -> navigator.navigate(Route.MediaDetail(itemId)) },
-                        onAlbumClick = { albumId -> navigator.navigate(Route.AlbumDetail(albumId)) },
-                        onArtistsClick = { navigator.navigate(Route.Artists) },
-                        onAlbumsClick = { navigator.navigate(Route.Albums) },
-                        onTracksClick = { navigator.navigate(Route.Tracks) },
-                        onGenresClick = { navigator.navigate(Route.Genres) },
-                        onPlaylistsClick = { navigator.navigate(Route.Playlists) },
-                        onNowPlayingClick = onNowPlayingClick,
-                        onAmbientClick = onAmbientClick,
+                }
+            },
+            popTransitionSpec = {
+                val targetLast = targetState
+                val initialLast = initialState
+                val initialRoute = initialLast.entries.lastOrNull()?.contentKey as? Route
+                val isModalPop = initialRoute?.isModal == true
+                when {
+                    isModalPop -> {
+                        fadeIn(fastEffects) togetherWith fadeOut(
+                            fastEffects
+                        ) + slideOutVertically(
+                                targetOffsetY = { it / 4 },
+                                animationSpec = defaultSpatialOffset,
+                            )
+                    }
+                    isDetailScene(initialLast) || isDetailScene(targetLast) -> {
+                        fadeIn(
+                            animationSpec = defaultEffects,
+                        ) togetherWith fadeOut(
+                            animationSpec = defaultEffects,
+                        )
+                    }
+                    else -> {
+                        fadeIn(
+                                animationSpec = defaultEffects,
+                            ) + slideInHorizontally(
+                                initialOffsetX = { -it / 12 },
+                                animationSpec = defaultSpatialOffset,
+                            ) + scaleIn(
+                                initialScale = 1.015f,
+                                animationSpec = defaultSpatial,
+                            ) togetherWith fadeOut(
+                                animationSpec = fastEffects,
+                            ) + slideOutHorizontally(
+                                targetOffsetX = { it / 10 },
+                                animationSpec = defaultSpatialOffset,
+                            ) + scaleOut(
+                                targetScale = 0.985f,
+                                animationSpec = defaultEffects,
+                            )
+                    }
+                }
+            },
+            predictivePopTransitionSpec = { _ ->
+                val targetLast = targetState
+                val initialLast = initialState
+                if (isDetailScene(initialLast) || isDetailScene(targetLast)) {
+                    fadeIn(
+                        animationSpec = defaultEffects,
+                    ) togetherWith fadeOut(
+                        animationSpec = defaultEffects,
                     )
-                },
-            )
-            librarySection(navigator)
-            searchSection(navigator)
-            liveTvSection(navigator)
-            detailsSection(navigator)
-            editorSection(navigator)
-            videoPlayerSection(navigator, onEnterPip = enterPip, onEnterMiniMode = enterVideoMiniMode)
-            audioPlayerSection(navigator)
-            downloadsSection(navigator)
-            authSection(navigator) { navigator.goBack() }
-            settingsSection(navigator, onLogout) { navigator.navigate(Route.Onboarding) }
-            adminSection(navigator)
-            musicSection(navigator)
-            syncPlaySection(navigator)
-            onboardingSection { navigator.goBack() }
-            newsletterSection(navigator)
-            insightsSection(navigator)
-            requestsSection(navigator)
-            shortcutsSection(navigator)
-        },
-        modifier = modifier,
-    )
+                } else {
+                    fadeIn(
+                        animationSpec = defaultEffects,
+                    ) + slideInHorizontally(
+                        initialOffsetX = { -it / 12 },
+                        animationSpec = defaultSpatialOffset,
+                    ) + scaleIn(
+                        initialScale = 1.015f,
+                        animationSpec = defaultSpatial,
+                    ) togetherWith fadeOut(
+                        animationSpec = fastEffects,
+                    ) + slideOutHorizontally(
+                        targetOffsetX = { it / 10 },
+                        animationSpec = defaultSpatialOffset,
+                    ) + scaleOut(
+                        targetScale = 0.985f,
+                        animationSpec = defaultEffects,
+                    )
+                }
+            },
+            entryProvider = sharedEntryProvider,
+            modifier = mod,
+        )
+    }
+
+    if (decision.isTwoPane) {
+        val currentTopLevel = navigationState.topLevelRoute.value
+        val listBackStack = rememberNavBackStack()
+        LaunchedEffect(currentTopLevel) {
+            if (listBackStack.isEmpty() || listBackStack.first() != currentTopLevel) {
+                listBackStack.clear()
+                listBackStack.add(currentTopLevel)
+            }
+        }
+        MasterDetailLayout(
+            decision = decision,
+            masterPane = {
+                NavDisplay(
+                    backStack = listBackStack,
+                    onBack = { },
+                    entryDecorators = listOf(entryDecorator),
+                    entryProvider = sharedEntryProvider,
+                    modifier = Modifier.fillMaxSize(),
+                )
+            },
+            detailPane = { renderDetailPane(Modifier.fillMaxSize()) },
+        )
+    } else {
+        renderDetailPane(modifier)
+    }
 }
 
 @Composable

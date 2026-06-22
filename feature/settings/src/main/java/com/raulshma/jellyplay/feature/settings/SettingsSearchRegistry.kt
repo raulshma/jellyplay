@@ -78,6 +78,56 @@ object SettingsSearchRegistry {
             isAdvanced = true
         ),
         SettingsSearchItem(
+            id = "date_format",
+            title = "Date Format",
+            subtitle = "Choose how dates are displayed throughout the app",
+            category = "Appearance",
+            keywords = listOf("date", "format", "time", "calendar", "day", "month", "year", "display"),
+            route = Route.AppearanceSettings(),
+            icon = Tabler.Outline.Calendar,
+            isAdvanced = true
+        ),
+        SettingsSearchItem(
+            id = "font_scale",
+            title = "Font Size",
+            subtitle = "Adjust the text size across the entire app",
+            category = "Appearance",
+            keywords = listOf("font", "size", "text", "scale", "accessibility", "readability", "large", "small"),
+            route = Route.AppearanceSettings(),
+            icon = Tabler.Outline.TextSize,
+            isAdvanced = true
+        ),
+        SettingsSearchItem(
+            id = "color_blind_mode",
+            title = "Color Blind Mode",
+            subtitle = "Adjust colors for color vision deficiency",
+            category = "Appearance",
+            keywords = listOf("color", "blind", "daltonize", "accessibility", "protanopia", "deuteranopia", "tritanopia", "vision"),
+            route = Route.AppearanceSettings(),
+            icon = Tabler.Outline.Eye,
+            isAdvanced = true
+        ),
+        SettingsSearchItem(
+            id = "hand_mode",
+            title = "Handedness",
+            subtitle = "Mirror navigation for left-handed use",
+            category = "Appearance",
+            keywords = listOf("hand", "left", "right", "handed", "accessibility", "mirror", "one-handed"),
+            route = Route.AppearanceSettings(),
+            icon = Tabler.Outline.HandClick,
+            isAdvanced = true
+        ),
+        SettingsSearchItem(
+            id = "theme_scheduler",
+            title = "Theme Scheduler",
+            subtitle = "Automatically switch between light and dark theme by time of day",
+            category = "Appearance",
+            keywords = listOf("theme", "scheduler", "day", "night", "auto", "time", "scheduled", "dark", "light"),
+            route = Route.AppearanceSettings(),
+            icon = Tabler.Outline.Clock,
+            isAdvanced = true
+        ),
+        SettingsSearchItem(
             id = "theme_mode",
             title = "Theme Mode",
             subtitle = "Follow system setting, light mode, or dark mode",
