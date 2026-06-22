@@ -23,7 +23,12 @@ import com.raulshma.jellyplay.core.model.DecoderMode
 import com.raulshma.jellyplay.core.model.DlnaDeviceRef
 import com.raulshma.jellyplay.core.model.DreamImageCategory
 import com.raulshma.jellyplay.core.model.DreamTransitionStyle
+import com.raulshma.jellyplay.core.model.DateFormatPreference
+import com.raulshma.jellyplay.core.model.AppFontScale
+import com.raulshma.jellyplay.core.model.ColorBlindMode
+import com.raulshma.jellyplay.core.model.DownloadScheduleWindow
 import com.raulshma.jellyplay.core.model.EffectStrength
+import com.raulshma.jellyplay.core.model.HandMode
 import com.raulshma.jellyplay.core.model.EqualizerPreset
 import com.raulshma.jellyplay.core.model.EqualizerSettings
 import com.raulshma.jellyplay.core.model.ExoPlayerEngineConfig
@@ -313,6 +318,16 @@ class UserPreferencesStore @Inject constructor(
         val SKIP_SPECIALS = booleanPreferencesKey("skip_specials")
         val CELLULAR_DOWNLOAD_SIZE_WARNING_MB = intPreferencesKey("cellular_download_size_warning_mb")
         val HAPTICS_ENABLED = booleanPreferencesKey("haptics_enabled")
+        val DATE_FORMAT_PREFERENCE = stringPreferencesKey("date_format_preference")
+        val APP_FONT_SCALE = stringPreferencesKey("app_font_scale")
+        val SCHEDULED_THEME_START_HOUR = intPreferencesKey("scheduled_theme_start_hour")
+        val SCHEDULED_THEME_END_HOUR = intPreferencesKey("scheduled_theme_end_hour")
+        val COLOR_BLIND_MODE = stringPreferencesKey("color_blind_mode")
+        val HAND_MODE = stringPreferencesKey("hand_mode")
+        val DOWNLOAD_SCHEDULE_ENABLED = booleanPreferencesKey("download_schedule_enabled")
+        val DOWNLOAD_SCHEDULE_START = intPreferencesKey("download_schedule_start")
+        val DOWNLOAD_SCHEDULE_END = intPreferencesKey("download_schedule_end")
+        val DOWNLOAD_SCHEDULE_WIFI_ONLY = booleanPreferencesKey("download_schedule_wifi_only")
     }
 
     private companion object {
@@ -955,6 +970,26 @@ class UserPreferencesStore @Inject constructor(
             skipSpecials = readBool(prefs, Keys.SKIP_SPECIALS, "skip_specials", false),
             cellularDownloadSizeWarningMb = readInt(prefs, Keys.CELLULAR_DOWNLOAD_SIZE_WARNING_MB, "cellular_download_size_warning_mb", 0),
             hapticsEnabled = readBool(prefs, Keys.HAPTICS_ENABLED, "haptics_enabled", true),
+            dateFormatPreference = try {
+                DateFormatPreference.valueOf(prefs[Keys.DATE_FORMAT_PREFERENCE] ?: DateFormatPreference.SYSTEM.name)
+            } catch (_: Exception) { DateFormatPreference.SYSTEM },
+            appFontScale = try {
+                AppFontScale.valueOf(prefs[Keys.APP_FONT_SCALE] ?: AppFontScale.DEFAULT.name)
+            } catch (_: Exception) { AppFontScale.DEFAULT },
+            scheduledThemeStartHour = readInt(prefs, Keys.SCHEDULED_THEME_START_HOUR, "scheduled_theme_start_hour", 22),
+            scheduledThemeEndHour = readInt(prefs, Keys.SCHEDULED_THEME_END_HOUR, "scheduled_theme_end_hour", 7),
+            colorBlindMode = try {
+                ColorBlindMode.valueOf(prefs[Keys.COLOR_BLIND_MODE] ?: ColorBlindMode.NONE.name)
+            } catch (_: Exception) { ColorBlindMode.NONE },
+            handMode = try {
+                HandMode.valueOf(prefs[Keys.HAND_MODE] ?: HandMode.RIGHT.name)
+            } catch (_: Exception) { HandMode.RIGHT },
+            downloadScheduleEnabled = prefs[Keys.DOWNLOAD_SCHEDULE_ENABLED] ?: false,
+            downloadScheduleWindow = DownloadScheduleWindow(
+                startHour = prefs[Keys.DOWNLOAD_SCHEDULE_START] ?: 0,
+                endHour = prefs[Keys.DOWNLOAD_SCHEDULE_END] ?: 6,
+                wifiOnly = prefs[Keys.DOWNLOAD_SCHEDULE_WIFI_ONLY] ?: true,
+            ),
         )
     }.distinctUntilChanged().stateIn(scope, SharingStarted.Eagerly, UserPreferences())
 
@@ -1030,6 +1065,42 @@ class UserPreferencesStore @Inject constructor(
 
     suspend fun setHapticsEnabled(enabled: Boolean) {
         context.dataStore.edit { it[Keys.HAPTICS_ENABLED] = enabled }
+    }
+
+    suspend fun setDateFormatPreference(preference: DateFormatPreference) {
+        context.dataStore.edit { it[Keys.DATE_FORMAT_PREFERENCE] = preference.name }
+    }
+
+    suspend fun setAppFontScale(scale: AppFontScale) {
+        context.dataStore.edit { it[Keys.APP_FONT_SCALE] = scale.name }
+    }
+
+    suspend fun setScheduledThemeStartHour(hour: Int) {
+        context.dataStore.edit { it[Keys.SCHEDULED_THEME_START_HOUR] = hour }
+    }
+
+    suspend fun setScheduledThemeEndHour(hour: Int) {
+        context.dataStore.edit { it[Keys.SCHEDULED_THEME_END_HOUR] = hour }
+    }
+
+    suspend fun setColorBlindMode(mode: ColorBlindMode) {
+        context.dataStore.edit { it[Keys.COLOR_BLIND_MODE] = mode.name }
+    }
+
+    suspend fun setHandMode(mode: HandMode) {
+        context.dataStore.edit { it[Keys.HAND_MODE] = mode.name }
+    }
+
+    suspend fun setDownloadScheduleEnabled(enabled: Boolean) {
+        context.dataStore.edit { it[Keys.DOWNLOAD_SCHEDULE_ENABLED] = enabled }
+    }
+
+    suspend fun setDownloadScheduleWindow(window: DownloadScheduleWindow) {
+        context.dataStore.edit {
+            it[Keys.DOWNLOAD_SCHEDULE_START] = window.startHour
+            it[Keys.DOWNLOAD_SCHEDULE_END] = window.endHour
+            it[Keys.DOWNLOAD_SCHEDULE_WIFI_ONLY] = window.wifiOnly
+        }
     }
 
     suspend fun setSubtitlesForcedOnly(enabled: Boolean) {
@@ -2446,6 +2517,12 @@ class UserPreferencesStore @Inject constructor(
                 Keys.SOOTHING_MODE, Keys.SOOTHING_ACCENT, Keys.MONOCHROME_MODE,
                 Keys.BACKDROP_THEME_MUSIC_ENABLED, Keys.NAV_ITEM_ORDER,
                 Keys.HIDDEN_NAV_ITEMS, Keys.HIDDEN_CW_ITEM_IDS,
+                Keys.DATE_FORMAT_PREFERENCE,
+                Keys.APP_FONT_SCALE,
+                Keys.SCHEDULED_THEME_START_HOUR,
+                Keys.SCHEDULED_THEME_END_HOUR,
+                Keys.COLOR_BLIND_MODE,
+                Keys.HAND_MODE,
             )
             "playback" -> listOf(
                 Keys.PREFERRED_PLAYER, Keys.STREAMING_QUALITY, Keys.VIDEO_SEEK_DURATION_MS,

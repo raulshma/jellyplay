@@ -96,11 +96,13 @@ fun AppearanceStep(
                             ThemeMode.SYSTEM -> "System"
                             ThemeMode.LIGHT -> "Light"
                             ThemeMode.DARK -> "Dark"
+                            ThemeMode.SCHEDULED -> "Scheduled"
                         },
                         icon = when (mode) {
                             ThemeMode.SYSTEM -> Tabler.Outline.BrightnessHalf
                             ThemeMode.LIGHT -> Tabler.Outline.BrightnessUp
                             ThemeMode.DARK -> Tabler.Outline.Moon
+                            ThemeMode.SCHEDULED -> Tabler.Outline.Clock
                         },
                         selected = selected,
                         onClick = { onThemeModeChange(mode) },

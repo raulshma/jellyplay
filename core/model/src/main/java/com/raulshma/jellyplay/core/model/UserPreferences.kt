@@ -203,4 +203,12 @@ data class UserPreferences(
     val skipSpecials: Boolean = false,
     val cellularDownloadSizeWarningMb: Int = 0,
     val hapticsEnabled: Boolean = true,
+    val dateFormatPreference: DateFormatPreference = DateFormatPreference.SYSTEM,
+    val appFontScale: AppFontScale = AppFontScale.DEFAULT,
+    val scheduledThemeStartHour: Int = 22,
+    val scheduledThemeEndHour: Int = 7,
+    val colorBlindMode: ColorBlindMode = ColorBlindMode.NONE,
+    val handMode: HandMode = HandMode.RIGHT,
+    val downloadScheduleEnabled: Boolean = false,
+    val downloadScheduleWindow: DownloadScheduleWindow = DownloadScheduleWindow(),
 )

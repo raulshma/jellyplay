@@ -13,4 +13,13 @@ interface OfflineRepository {
     suspend fun deleteOfflineSeries(seriesId: String)
     suspend fun deleteOfflineSeason(seasonId: String)
     suspend fun cleanupOrphans()
+
+    /**
+     * Search the on-device downloaded library by free-text query. Matches
+     * against [OfflineMediaItem.name], [OfflineMediaItem.seriesName] and
+     * [OfflineMediaItem.seasonName] (case-insensitive substring). Returns
+     * up to [limit] results ordered with prefix matches first then
+     * alphabetically. Returns an empty list for blank or too-short queries.
+     */
+    suspend fun searchOffline(query: String, limit: Int = 20): List<OfflineMediaItem>
 }

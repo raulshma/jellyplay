@@ -105,8 +105,10 @@ When downloading a movie, JellyPlay also caches:
 - Trickplay sprite sheets for thumbnail seeking
 - Chapter markers
 
-External subtitle files (SRT, ASS, VTT) are **not** auto-downloaded —
-use the in-app subtitle search if you need one for offline playback.
+External subtitle files (SRT, ASS, VTT) are auto-downloaded alongside
+the media. All external subtitle streams are saved to a `subtitles/`
+directory next to the video file, with a `manifest.json` describing
+each track.
 
 ## Background restrictions
 

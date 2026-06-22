@@ -325,6 +325,7 @@ class LibraryApiClientImpl @Inject constructor(
         startIndex: Int,
         limit: Int,
         searchTerm: String?,
+        tags: List<String>?,
     ): Result<SearchResult> = engine.apiResultWithRetry {
         val sortByEnum = ItemSortBy.entries
             .find { it.serialName.equals(sortBy, ignoreCase = true) }
@@ -341,6 +342,7 @@ class LibraryApiClientImpl @Inject constructor(
             genres = genres,
             years = years,
             studioIds = studioIds?.mapNotNull { it.toUUID() },
+            tags = tags,
             sortBy = listOfNotNull(sortByEnum),
             sortOrder = listOf(sortOrderEnum),
             startIndex = startIndex,

@@ -91,6 +91,20 @@ class DownloadsViewModel @Inject constructor(
         }
     }
 
+    fun moveToFront(item: DownloadItem) {
+        launch {
+            val maxPriority = downloads.maxOfOrNull { it.priority } ?: 0
+            downloadRepository.setDownloadPriority(item.id, maxPriority + 1)
+        }
+    }
+
+    fun lowerPriority(item: DownloadItem) {
+        launch {
+            val minPriority = downloads.minOfOrNull { it.priority } ?: 0
+            downloadRepository.setDownloadPriority(item.id, minPriority - 1)
+        }
+    }
+
     fun formatBytes(bytes: Long): String = bytes.formatBytes()
 
     fun formatSpeed(speedBytesPerSec: Long): String = speedBytesPerSec.formatSpeed()

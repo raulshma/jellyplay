@@ -6,6 +6,7 @@ import androidx.lifecycle.viewModelScope
 import androidx.paging.PagingData
 import androidx.paging.cachedIn
 import com.raulshma.jellyplay.core.data.repository.MediaRepository
+import com.raulshma.jellyplay.core.data.repository.OfflineRepository
 import com.raulshma.jellyplay.core.data.repository.PlaybackRepository
 import com.raulshma.jellyplay.core.data.repository.SearchHistoryItem
 import com.raulshma.jellyplay.core.data.repository.SearchHistoryRepository
@@ -14,6 +15,8 @@ import com.raulshma.jellyplay.core.data.seerr.SeerrRequestDelegate
 import com.raulshma.jellyplay.core.model.Genre
 import com.raulshma.jellyplay.core.model.MediaItem
 import com.raulshma.jellyplay.core.model.MediaType
+import com.raulshma.jellyplay.core.model.OfflineMediaItem
+import com.raulshma.jellyplay.core.model.SearchResult
 import com.raulshma.jellyplay.core.model.seerr.SeerrRadarrServiceDetail
 import com.raulshma.jellyplay.core.model.seerr.SeerrRequestResult
 import com.raulshma.jellyplay.core.model.seerr.SeerrSearchItem
@@ -33,6 +36,7 @@ import kotlinx.coroutines.flow.debounce
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flatMapLatest
+import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
@@ -43,7 +47,15 @@ data class SearchFilters(
     val mediaTypes: List<MediaType> = emptyList(),
     val genres: List<String> = emptyList(),
     val years: List<Int> = emptyList(),
+    val tags: List<String> = emptyList(),
+    val minRating: Float = 0f,
 )
+
+/**
+ * Maximum number of offline items to surface in the "On-device" search row.
+ * Kept small because the row is supplementary to the paginated library grid.
+ */
+private const val OFFLINE_SEARCH_RESULT_LIMIT: Int = 10
 
 @OptIn(FlowPreview::class, ExperimentalCoroutinesApi::class)
 @HiltViewModel
@@ -53,6 +65,7 @@ class SearchViewModel @Inject constructor(
     private val seerrRepository: SeerrRepository,
     private val seerrRequestDelegate: SeerrRequestDelegate,
     private val searchHistoryRepository: SearchHistoryRepository,
+    private val offlineRepository: OfflineRepository,
     private val preferencesStore: com.raulshma.jellyplay.core.datastore.UserPreferencesStore,
 ) : JellyPlayViewModel() {
 
@@ -66,6 +79,9 @@ class SearchViewModel @Inject constructor(
 
     private val _genres = stateFlow<List<Genre>>(emptyList())
     val genres: StateFlow<List<Genre>> = _genres.flow
+
+    private val _tags = stateFlow<List<String>>(emptyList())
+    val tags: StateFlow<List<String>> = _tags.flow
 
     private val _showFilters = stateFlow(false)
     val showFilters: StateFlow<Boolean> = _showFilters.flow
@@ -92,6 +108,12 @@ class SearchViewModel @Inject constructor(
 
     private val queryFlow = stateFlow("")
 
+    private val _suggestions = stateFlow<List<MediaItem>>(emptyList())
+    val suggestions: StateFlow<List<MediaItem>> = _suggestions.flow
+
+    private val _offlineResults = stateFlow<List<OfflineMediaItem>>(emptyList())
+    val offlineResults: StateFlow<List<OfflineMediaItem>> = _offlineResults.flow
+
     private var seerrSearchJob: Job? = null
 
     val pagedResults: Flow<PagingData<MediaItem>> = combine(
@@ -103,15 +125,18 @@ class SearchViewModel @Inject constructor(
             _seerrResults.set(emptyList())
             _seerrSearchError.set(false)
             if (currentQuery.isBlank()) {
+                _offlineResults.set(emptyList())
                 flowOf(PagingData.empty())
             } else {
                 seerrSearchJob = launch { searchSeerr(currentQuery) }
+                launch { searchOffline(currentQuery) }
                 launch { saveQueryIfNeeded(currentQuery, true) }
                 mediaRepository.searchPaged(
                     query = currentQuery,
                     mediaTypes = filters.mediaTypes.ifEmpty { null },
                     genres = filters.genres.ifEmpty { null },
                     years = filters.years.ifEmpty { null },
+                    tags = filters.tags.ifEmpty { null },
                 )
             }
         }
@@ -119,7 +144,41 @@ class SearchViewModel @Inject constructor(
 
     init {
         loadGenres()
+        loadTags()
         loadSearchHistory()
+        loadSuggestions()
+    }
+
+    private fun loadSuggestions() {
+        launch {
+            queryFlow.flow
+                .debounce(300)
+                .distinctUntilChanged()
+                .flatMapLatest { q ->
+                    if (q.isBlank() || q.length < 2) {
+                        flowOf(emptyList())
+                    } else {
+                        flow {
+                            val result = mediaRepository.search(query = q, limit = 8)
+                            emit(result.getOrElse { SearchResult(emptyList(), 0, 0) }.items)
+                        }
+                    }
+                }
+                .collect { items -> _suggestions.set(items) }
+        }
+    }
+
+    private suspend fun searchOffline(query: String) {
+        try {
+            val results = offlineRepository.searchOffline(query, limit = OFFLINE_SEARCH_RESULT_LIMIT)
+            _offlineResults.set(results)
+        } catch (e: kotlinx.coroutines.CancellationException) {
+            throw e
+        } catch (_: Exception) {
+            // Offline search is best-effort; never surface errors to the user
+            // since the library/Seerr results may still be relevant.
+            _offlineResults.set(emptyList())
+        }
     }
 
     private fun loadSearchHistory() {
@@ -147,9 +206,11 @@ class SearchViewModel @Inject constructor(
     fun search(newQuery: String) {
         _query.value = newQuery
         queryFlow.set(newQuery)
+        _suggestions.set(emptyList())
         if (newQuery.isBlank()) {
             _seerrResults.set(emptyList())
             _seerrSearchError.set(false)
+            _offlineResults.set(emptyList())
         }
     }
 
@@ -178,6 +239,13 @@ class SearchViewModel @Inject constructor(
         launch {
             mediaRepository.getGenres()
                 .onSuccess { _genres.set(it) }
+        }
+    }
+
+    private fun loadTags() {
+        launch {
+            mediaRepository.getTags()
+                .onSuccess { _tags.set(it) }
         }
     }
 

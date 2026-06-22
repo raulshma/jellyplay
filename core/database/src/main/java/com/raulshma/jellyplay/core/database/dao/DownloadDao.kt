@@ -83,4 +83,10 @@ interface DownloadDao {
 
     @Query("SELECT * FROM downloads WHERE status = 'FAILED' LIMIT 100")
     suspend fun getFailedDownloads(): List<DownloadEntity>
+
+    @Query("UPDATE downloads SET priority = :priority WHERE id = :id")
+    suspend fun updatePriority(id: String, priority: Int)
+
+    @Query("SELECT * FROM downloads WHERE status IN ('PENDING', 'PAUSED') ORDER BY priority DESC, createdAt ASC")
+    fun getPendingDownloads(): Flow<List<DownloadEntity>>
 }

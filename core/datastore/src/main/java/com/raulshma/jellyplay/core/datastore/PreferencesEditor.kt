@@ -2,6 +2,11 @@ package com.raulshma.jellyplay.core.datastore
 
 import com.raulshma.jellyplay.core.model.ColorStyle
 import com.raulshma.jellyplay.core.model.ContrastLevel
+import com.raulshma.jellyplay.core.model.DateFormatPreference
+import com.raulshma.jellyplay.core.model.AppFontScale
+import com.raulshma.jellyplay.core.model.ColorBlindMode
+import com.raulshma.jellyplay.core.model.DownloadScheduleWindow
+import com.raulshma.jellyplay.core.model.HandMode
 import com.raulshma.jellyplay.core.model.HomeMode
 import com.raulshma.jellyplay.core.model.HomeSectionType
 import com.raulshma.jellyplay.core.model.OrientationMode
@@ -66,4 +71,12 @@ class PreferencesEditor(
     }
 
     fun setHapticsEnabled(enabled: Boolean) = scope.launch { store.setHapticsEnabled(enabled) }
+    fun setDateFormatPreference(preference: DateFormatPreference) = scope.launch { store.setDateFormatPreference(preference) }
+    fun setAppFontScale(scale: AppFontScale) = scope.launch { store.setAppFontScale(scale) }
+    fun setScheduledThemeStartHour(hour: Int) = scope.launch { store.setScheduledThemeStartHour(hour) }
+    fun setScheduledThemeEndHour(hour: Int) = scope.launch { store.setScheduledThemeEndHour(hour) }
+    fun setColorBlindMode(mode: ColorBlindMode) = scope.launch { store.setColorBlindMode(mode) }
+    fun setHandMode(mode: HandMode) = scope.launch { store.setHandMode(mode) }
+    fun setDownloadScheduleEnabled(enabled: Boolean) = scope.launch { store.setDownloadScheduleEnabled(enabled) }
+    fun setDownloadScheduleWindow(window: DownloadScheduleWindow) = scope.launch { store.setDownloadScheduleWindow(window) }
 }

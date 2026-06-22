@@ -42,6 +42,7 @@ interface LibraryApiClient {
         startIndex: Int = 0,
         limit: Int = 50,
         searchTerm: String? = null,
+        tags: List<String>? = null,
     ): Result<SearchResult>
 
     suspend fun getMediaDetail(itemId: String): Result<MediaDetail>

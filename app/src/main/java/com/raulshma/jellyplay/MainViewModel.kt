@@ -224,6 +224,10 @@ class MainViewModel @Inject constructor(
         _pendingSearchQuery.set(null)
     }
 
+    fun handleSearchQuery(query: String) {
+        _pendingSearchQuery.set(query)
+    }
+
     fun logout() {
         launch {
             remoteControlReceiver.stop()
