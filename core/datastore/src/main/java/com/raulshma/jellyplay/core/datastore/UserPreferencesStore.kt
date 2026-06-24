@@ -23,6 +23,7 @@ import com.raulshma.jellyplay.core.model.DecoderMode
 import com.raulshma.jellyplay.core.model.DlnaDeviceRef
 import com.raulshma.jellyplay.core.model.DreamImageCategory
 import com.raulshma.jellyplay.core.model.DreamTransitionStyle
+import com.raulshma.jellyplay.core.model.PreferenceResetCategory
 import com.raulshma.jellyplay.core.model.DateFormatPreference
 import com.raulshma.jellyplay.core.model.AppFontScale
 import com.raulshma.jellyplay.core.model.ColorBlindMode
@@ -2501,11 +2502,11 @@ class UserPreferencesStore @Inject constructor(
 
     /**
      * Resets all preferences in a specific category to their default values.
-     * @param category The category to reset (e.g., "appearance", "playback", "audio", "security", "notifications")
+     * @param category The [PreferenceResetCategory] to reset.
      */
-    suspend fun resetCategory(category: String) {
-        val keysToReset = when (category.lowercase()) {
-            "appearance" -> listOf(
+    suspend fun resetCategory(category: PreferenceResetCategory) {
+        val keysToReset = when (category) {
+            PreferenceResetCategory.APPEARANCE -> listOf(
                 Keys.THEME_MODE, Keys.CONTRAST_LEVEL, Keys.DYNAMIC_THEMING, Keys.OLED_MODE,
                 Keys.ACCENT_COLOR_SWATCH, Keys.COLOR_STYLE, Keys.HOME_MODE,
                 Keys.HOME_ENABLED_SECTION_TYPES, Keys.HOME_SECTION_ORDER,
@@ -2524,7 +2525,7 @@ class UserPreferencesStore @Inject constructor(
                 Keys.COLOR_BLIND_MODE,
                 Keys.HAND_MODE,
             )
-            "playback" -> listOf(
+            PreferenceResetCategory.PLAYBACK -> listOf(
                 Keys.PREFERRED_PLAYER, Keys.STREAMING_QUALITY, Keys.VIDEO_SEEK_DURATION_MS,
                 Keys.VIDEO_GESTURES_ENABLED, Keys.VIDEO_DEFAULT_ORIENTATION,
                 Keys.VIDEO_DEFAULT_ASPECT_RATIO, Keys.VIDEO_AUTOPLAY_NEXT,
@@ -2545,7 +2546,7 @@ class UserPreferencesStore @Inject constructor(
                 Keys.AUTO_SKIP_INTRO, Keys.AUTO_SKIP_OUTRO,
                 Keys.PAUSE_ON_AUDIO_FOCUS_LOSS, Keys.DUCK_ON_TRANSIENT_FOCUS_LOSS,
             )
-            "audio" -> listOf(
+            PreferenceResetCategory.AUDIO -> listOf(
                 Keys.AUDIO_DEFAULT_SPEED, Keys.AUDIO_VISUALIZER_ENABLED,
                 Keys.AUDIO_GAPLESS_ENABLED, Keys.AUDIO_CROSSFADE_DURATION_MS,
                 Keys.AUDIO_NORMALIZATION_ENABLED, Keys.AUDIO_NORMALIZATION_MODE,
@@ -2557,15 +2558,18 @@ class UserPreferencesStore @Inject constructor(
                 Keys.VOLUME_BOOST_GAIN, Keys.LR_BALANCE,
                 Keys.AUDIO_AUTOPLAY_NEXT, Keys.AUDIO_PRELOAD_BUFFER_SIZE,
             )
-            "security" -> listOf(
+            PreferenceResetCategory.SECURITY -> listOf(
                 Keys.PIN_LOCK_ENABLED, Keys.PIN_HASH, Keys.BIOMETRIC_LOCK_ENABLED,
                 Keys.USE_PIN_FOR_PLAYER_LOCK, Keys.AUTO_LOCK_TIMER_MS,
             )
-            "notifications" -> listOf(
-                Keys.NOTIFICATIONS_ENABLED, Keys.NOTIFICATIONS_QUIET_HOURS_ENABLED,
+            PreferenceResetCategory.NOTIFICATIONS -> listOf(
+                Keys.NOTIFICATIONS_ENABLED, Keys.NOTIFICATIONS_CHECK_FREQUENCY,
+                Keys.NOTIFICATIONS_QUIET_HOURS_ENABLED,
                 Keys.NOTIFICATIONS_QUIET_HOURS_START, Keys.NOTIFICATIONS_QUIET_HOURS_END,
+                Keys.NOTIFICATIONS_SOUND_ENABLED, Keys.NOTIFICATIONS_VIBRATE_ENABLED,
+                Keys.NOTIFICATIONS_LIGHTS_ENABLED, Keys.NOTIFICATIONS_MAX_PER_CHECK,
+                Keys.NOTIFICATIONS_LIBRARY_CONFIGS,
             )
-            else -> emptyList()
         }
 
         context.dataStore.edit { prefs ->

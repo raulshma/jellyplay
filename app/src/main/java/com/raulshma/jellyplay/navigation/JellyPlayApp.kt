@@ -827,7 +827,7 @@ private fun PhoneContent(
     audioArtworkUrl: String,
     onDismissMiniPlayer: () -> Unit,
     isVideoMiniMode: Boolean,
-    videoMiniPlayerState: com.raulshma.jellyplay.feature.player.video.VideoMiniPlayerState,
+    videoMiniPlayerState: com.raulshma.jellyplay.core.data.playback.VideoMiniPlayerState,
     videoMiniTitle: String,
     videoMiniSubtitle: String,
     videoMiniIsPlaying: Boolean,
@@ -1006,7 +1006,11 @@ private fun PhoneContent(
                 if (isVideoMiniMode) {
                     VideoMiniPlayer(
                         isVisible = true,
-                        engine = videoMiniPlayerState.engine,
+                        // The host app knows the engine is a video `MediaEngine` even though
+                        // the cross-feature holder types it as the more general
+                        // `RemotePlayableEngine` (§4.6). Cast is safe because only the video
+                        // engine ever enters mini mode.
+                        engine = videoMiniPlayerState.engine as? com.raulshma.jellyplay.feature.player.video.engine.MediaEngine,
                         title = videoMiniTitle,
                         subtitle = videoMiniSubtitle,
                         isPlaying = videoMiniIsPlaying,
@@ -1073,7 +1077,7 @@ private fun FullScreenContent(
     onNowPlayingClick: () -> Unit,
     onAmbientClick: () -> Unit,
     isVideoMiniMode: Boolean,
-    videoMiniPlayerState: com.raulshma.jellyplay.feature.player.video.VideoMiniPlayerState,
+    videoMiniPlayerState: com.raulshma.jellyplay.core.data.playback.VideoMiniPlayerState,
     videoMiniTitle: String,
     videoMiniSubtitle: String,
     videoMiniIsPlaying: Boolean,
@@ -1100,7 +1104,7 @@ private fun FullScreenContent(
         if (isVideoMiniMode) {
             VideoMiniPlayer(
                 isVisible = true,
-                engine = videoMiniPlayerState.engine,
+                engine = videoMiniPlayerState.engine as? com.raulshma.jellyplay.feature.player.video.engine.MediaEngine,
                 title = videoMiniTitle,
                 subtitle = videoMiniSubtitle,
                 isPlaying = videoMiniIsPlaying,

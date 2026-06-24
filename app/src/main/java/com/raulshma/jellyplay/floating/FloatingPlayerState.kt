@@ -1,7 +1,7 @@
 package com.raulshma.jellyplay.floating
 
 import com.raulshma.jellyplay.core.data.remote.ActivePlayerController
-import com.raulshma.jellyplay.feature.player.video.VideoMiniPlayerState
+import com.raulshma.jellyplay.core.data.playback.VideoMiniPlayerState
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob

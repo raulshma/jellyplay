@@ -2,6 +2,7 @@ package com.raulshma.jellyplay.core.datastore
 
 import com.raulshma.jellyplay.core.model.ColorStyle
 import com.raulshma.jellyplay.core.model.ContrastLevel
+import com.raulshma.jellyplay.core.model.PreferenceResetCategory
 import com.raulshma.jellyplay.core.model.DateFormatPreference
 import com.raulshma.jellyplay.core.model.AppFontScale
 import com.raulshma.jellyplay.core.model.ColorBlindMode
@@ -56,9 +57,9 @@ class PreferencesEditor(
 
     /**
      * Resets all preferences in a specific category to their default values.
-     * @param category The category to reset (e.g., "appearance", "playback", "audio", "security", "notifications")
+     * @param category The [PreferenceResetCategory] to reset.
      */
-    fun resetCategory(category: String) = scope.launch {
+    fun resetCategory(category: PreferenceResetCategory) = scope.launch {
         store.resetCategory(category)
     }
 

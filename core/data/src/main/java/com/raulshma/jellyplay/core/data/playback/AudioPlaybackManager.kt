@@ -492,6 +492,7 @@ class AudioPlaybackManager @Inject constructor(
     }
 
     fun play(itemId: String) {
+        assertMainThread("play")
         if (currentItemId == itemId) {
             if (_isLoadingItemFlag) return
             val state = exoPlayer?.playbackState
@@ -802,6 +803,7 @@ class AudioPlaybackManager @Inject constructor(
     }
 
     fun seekTo(positionMs: Long) {
+        assertMainThread("seekTo")
         exoPlayer?.seekTo(positionMs)
     }
 
@@ -900,17 +902,20 @@ class AudioPlaybackManager @Inject constructor(
     }
 
     fun seekByDelta(deltaMs: Long) {
+        assertMainThread("seekByDelta")
         val player = exoPlayer ?: return
         val target = (player.currentPosition + deltaMs).coerceIn(0L, player.duration.coerceAtLeast(0L))
         player.seekTo(target)
     }
 
     fun togglePlayPause() {
+        assertMainThread("togglePlayPause")
         val player = exoPlayer ?: return
         if (player.isPlaying) player.pause() else player.play()
     }
 
     fun changePlaybackSpeed(value: Float) {
+        assertMainThread("changePlaybackSpeed")
         _speed.value = value
         val pitchMultiplier = if (effectsProcessor.pitchSemitones.value == 0f) 1.0f else {
             2.0f.pow(effectsProcessor.pitchSemitones.value / 12.0f)
@@ -1014,6 +1019,7 @@ class AudioPlaybackManager @Inject constructor(
      * Pause the audio player if a session is active.
      */
     fun pause() {
+        assertMainThread("pause")
         exoPlayer?.takeIf { it.isPlaying }?.pause()
     }
 
@@ -1021,6 +1027,7 @@ class AudioPlaybackManager @Inject constructor(
      * Resume the audio player if a session is active.
      */
     fun resume() {
+        assertMainThread("resume")
         exoPlayer?.takeIf { !it.isPlaying }?.play()
     }
 
@@ -1031,6 +1038,7 @@ class AudioPlaybackManager @Inject constructor(
      * silent when the system stream is muted or at zero).
      */
     fun setVolume(volume: Float) {
+        assertMainThread("setVolume")
         val pct = volume.coerceIn(0f, 1f)
         exoPlayer?.volume = pct
         crossfader.setVolume(pct)
@@ -1041,6 +1049,7 @@ class AudioPlaybackManager @Inject constructor(
      * Convenience: 5% increment.
      */
     fun increaseVolume() {
+        assertMainThread("increaseVolume")
         val current = exoPlayer?.volume ?: 1f
         setVolume(current + 0.05f)
     }
@@ -1049,6 +1058,7 @@ class AudioPlaybackManager @Inject constructor(
      * Convenience: 5% decrement.
      */
     fun decreaseVolume() {
+        assertMainThread("decreaseVolume")
         val current = exoPlayer?.volume ?: 1f
         setVolume(current - 0.05f)
     }
@@ -1060,6 +1070,7 @@ class AudioPlaybackManager @Inject constructor(
     private var preMuteVolume: Float = 1f
 
     fun setMuted(muted: Boolean) {
+        assertMainThread("setMuted")
         val current = exoPlayer?.volume ?: 1f
         if (muted) {
             preMuteVolume = if (current > 0f) current else 1f
@@ -1070,6 +1081,7 @@ class AudioPlaybackManager @Inject constructor(
     }
 
     fun toggleMute() {
+        assertMainThread("toggleMute")
         val current = exoPlayer?.volume ?: 1f
         setMuted(current > 0f)
     }
@@ -1185,27 +1197,22 @@ class AudioPlaybackManager @Inject constructor(
         effectsProcessor.enableVisualizer(enabled)
     }
 
+    /**
+     * Called by [androidx.media3.common.Player.Listener.onPlaybackStateChanged] when the
+     * engine reaches `STATE_ENDED`.
+     *
+     * ExoPlayer owns repeat behaviour directly via its `repeatMode` property (mirrored from
+     * [_repeatMode] in the collector at line 378). Under REPEAT_MODE_ALL or REPEAT_MODE_ONE
+     * the player never reaches `STATE_ENDED`, so this callback only fires under mode 0
+     * (RepeatNone). The branches that previously handled modes 1 and 2 here were therefore
+     * dead code (§4.13 of the architecture analysis) and have been removed.
+     *
+     * Auto-advance under mode 0 is handled separately by `onMediaItemTransitioned` (see
+     * [onTrackTransitioned]); this method just clears the local `_isPlaying` flag so the UI
+     * reflects that nothing is currently playing.
+     */
     private fun onTrackEnded() {
-        when {
-            _repeatMode.value == 2 -> {
-                exoPlayer?.seekTo(0)
-                exoPlayer?.play()
-            }
-            _repeatMode.value == 1 -> {
-                val q = _queue.value
-                if (q.size > 1) {
-                    _currentIndex.value = 0
-                    exoPlayer?.seekTo(0, 0L)
-                    exoPlayer?.play()
-                } else {
-                    exoPlayer?.seekTo(0)
-                    exoPlayer?.play()
-                }
-            }
-            else -> {
-                _isPlaying.value = false
-            }
-        }
+        _isPlaying.value = false
     }
 
     private fun onTrackTransitioned() {

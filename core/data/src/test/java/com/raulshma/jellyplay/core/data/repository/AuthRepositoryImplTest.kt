@@ -5,6 +5,7 @@ import com.raulshma.jellyplay.core.database.dao.ServerDao
 import com.raulshma.jellyplay.core.database.dao.UserDao
 import com.raulshma.jellyplay.core.database.entity.ServerEntity
 import com.raulshma.jellyplay.core.database.entity.UserEntity
+import com.raulshma.jellyplay.core.database.crypto.TokenCipher
 import com.raulshma.jellyplay.core.datastore.UserPreferencesStore
 import com.raulshma.jellyplay.core.model.ServerInfo
 import com.raulshma.jellyplay.core.model.UserInfo
@@ -36,6 +37,14 @@ class AuthRepositoryImplTest {
     private val serverDao: ServerDao = mockk(relaxed = true)
     private val userDao: UserDao = mockk(relaxed = true)
     private val preferencesStore: UserPreferencesStore = mockk(relaxed = true)
+    private val tokenCipher: TokenCipher = mockk(relaxed = true) {
+        // Tests store plaintext tokens — make the cipher a no-op pass-through so existing
+        // assertions about token values still hold. The cipher's real behaviour is covered
+        // by TokenCipherTest (Robolectric) and Migration24To25Test.
+        every { encrypt(any()) } answers { firstArg() }
+        every { decrypt(any()) } answers { firstArg() }
+        every { isEncrypted(any()) } returns false
+    }
 
     private lateinit var repository: AuthRepositoryImpl
 
@@ -82,6 +91,7 @@ class AuthRepositoryImplTest {
             serverDao = serverDao,
             userDao = userDao,
             preferencesStore = preferencesStore,
+            tokenCipher = tokenCipher,
         )
     }
 

@@ -125,20 +125,42 @@ class NewMediaCheckWorker @AssistedInject constructor(
         }
     }
 
-    private fun isInQuietHours(prefs: NotificationPreferences): Boolean {
-        if (!prefs.quietHoursEnabled) return false
+    private fun isInQuietHours(prefs: NotificationPreferences): Boolean =
+        isInQuietHours(
+            currentMinutes = currentMinutesOfDay(),
+            quietHoursEnabled = prefs.quietHoursEnabled,
+            start = prefs.quietHoursStart,
+            end = prefs.quietHoursEnd,
+        )
+
+    private fun currentMinutesOfDay(): Int {
         val now = Calendar.getInstance()
-        val currentMinutes = now.get(Calendar.HOUR_OF_DAY) * 60 + now.get(Calendar.MINUTE)
-        val start = prefs.quietHoursStart
-        val end = prefs.quietHoursEnd
-        return if (start > end) {
-            currentMinutes >= start || currentMinutes < end
-        } else {
-            currentMinutes in start until end
-        }
+        return now.get(Calendar.HOUR_OF_DAY) * 60 + now.get(Calendar.MINUTE)
     }
 
     companion object {
         private const val THIRTY_DAYS_MS = 30L * 24 * 60 * 60 * 1000
+
+        /**
+         * Pure helper that decides whether [currentMinutes] falls inside a quiet-hours window
+         * defined by [start], [end] (both in minutes-of-day, 0..1439). Handles overnight
+         * wraparound (e.g. 22:00 → 07:00). Extracted from `isInQuietHours(NotificationPreferences)`
+         * so it can be unit tested without `Calendar`.
+         */
+        internal fun isInQuietHours(
+            currentMinutes: Int,
+            quietHoursEnabled: Boolean,
+            start: Int,
+            end: Int,
+        ): Boolean {
+            if (!quietHoursEnabled) return false
+            return if (start > end) {
+                // Overnight window wraps past midnight: e.g. 22:00 → 07:00.
+                currentMinutes >= start || currentMinutes < end
+            } else {
+                // Same-day window: e.g. 13:00 → 14:00.
+                currentMinutes in start until end
+            }
+        }
     }
 }

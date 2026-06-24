@@ -1,6 +1,6 @@
-package com.raulshma.jellyplay.feature.player.video
+package com.raulshma.jellyplay.core.data.playback
 
-import com.raulshma.jellyplay.feature.player.video.engine.MediaEngine
+import com.raulshma.jellyplay.core.data.remote.RemotePlayableEngine
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -14,6 +14,17 @@ import kotlinx.coroutines.launch
 import javax.inject.Inject
 import javax.inject.Singleton
 
+/**
+ * Holds the active mini-player engine + display metadata so the mini-player can be shown
+ * outside the video feature (e.g. while browsing Live TV channels or libraries) without those
+ * modules depending on `feature:player:video`.
+ *
+ * Originally declared inside `feature:player:video`, moved to `core:data` (§4.6 of the
+ * architecture analysis) to break the only feature→feature dependency in the codebase:
+ * `feature:livetv → feature:player:video`. The engine reference is typed as
+ * [RemotePlayableEngine] (a `core.data.remote` interface) so no `feature:player:video` import
+ * leaks in here. The video `MediaEngine` implements [RemotePlayableEngine] directly.
+ */
 @Singleton
 class VideoMiniPlayerState @Inject constructor() {
     companion object {
@@ -36,8 +47,8 @@ class VideoMiniPlayerState @Inject constructor() {
     private val _isPlaying = MutableStateFlow(false)
     val isPlaying: StateFlow<Boolean> = _isPlaying.asStateFlow()
 
-    private var _engine: MediaEngine? = null
-    val engine: MediaEngine? get() = _engine
+    private var _engine: RemotePlayableEngine? = null
+    val engine: RemotePlayableEngine? get() = _engine
 
     private var job: Job? = null
     private var timeoutJob: Job? = null
@@ -50,7 +61,7 @@ class VideoMiniPlayerState @Inject constructor() {
     val mediaSourceId: String? get() = _mediaSourceId
 
     fun enterMiniMode(
-        engine: MediaEngine,
+        engine: RemotePlayableEngine,
         itemId: String,
         mediaSourceId: String?,
         title: String,
@@ -62,7 +73,7 @@ class VideoMiniPlayerState @Inject constructor() {
         _title.value = title
         _subtitle.value = subtitle
         _isPlaying.value = engine.isPlaying.value
-        
+
         job?.cancel()
         timeoutJob?.cancel()
         job = miniScope.launch {
@@ -75,7 +86,7 @@ class VideoMiniPlayerState @Inject constructor() {
         _isMiniMode.value = true
     }
 
-    fun tryReclaimEngine(itemId: String): MediaEngine? {
+    fun tryReclaimEngine(itemId: String): RemotePlayableEngine? {
         if (!_isMiniMode.value) return null
         if (_itemId.value != itemId) return null
         val engine = _engine

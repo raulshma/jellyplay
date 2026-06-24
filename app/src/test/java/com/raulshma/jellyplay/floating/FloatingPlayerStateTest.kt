@@ -2,7 +2,7 @@ package com.raulshma.jellyplay.floating
 
 import com.raulshma.jellyplay.core.data.remote.ActivePlayerController
 import com.raulshma.jellyplay.core.data.remote.RemotePlayableEngine
-import com.raulshma.jellyplay.feature.player.video.VideoMiniPlayerState
+import com.raulshma.jellyplay.core.data.playback.VideoMiniPlayerState
 import io.mockk.every
 import io.mockk.mockk
 import io.mockk.verify

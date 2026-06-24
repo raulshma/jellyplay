@@ -40,7 +40,13 @@ import com.raulshma.jellyplay.core.model.SyncPlayShuffleMode
 import com.raulshma.jellyplay.core.model.NewsletterData
 import com.raulshma.jellyplay.core.network.JellyfinApiClient
 import com.raulshma.jellyplay.core.network.LrcLibApi
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.launch
+import java.util.concurrent.atomic.AtomicReference
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -77,6 +83,51 @@ class MediaRepositoryImpl @Inject constructor(
     @Volatile
     private var cachedHomeSectionsKey: String = ""
     private val homeSectionsLock = Any()
+
+    /**
+     * Long-lived scope for the cache-invalidation observer. Never cancelled —
+     * [MediaRepositoryImpl] is a `@Singleton` and lives for the process lifetime.
+     */
+    private val cacheScope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
+
+    /**
+     * Tracks the last observed stable identity. `null` means we're in an "empty" state
+     * (logged out / restoring session). Non-null means we have a stable (serverId|userId)
+     * identity whose replacement by a different value should trigger cache invalidation.
+     */
+    private val lastStableIdentityKey = AtomicReference<String?>(null)
+
+    init {
+        // §4.7: observe active server/user changes and self-invalidate caches. This closes a
+        // privacy + correctness gap where the previous user's home sections / detail data was
+        // served for up to 10 minutes (the longest TTL) after `switchUser` or
+        // `switchServerAddress`. Implemented as a self-collection so we don't introduce a
+        // `data → auth` dependency edge; the flows are exposed by `JellyfinApiClient` which
+        // `MediaRepositoryImpl` already depends on.
+        //
+        // Invalidation rules:
+        //  - Empty  → Stable : no invalidation (session restore from a fresh process).
+        //  - Stable → Empty  : invalidate (user logged out — clear their data for privacy).
+        //  - Stable → Stable : invalidate only if the identity actually changed.
+        //  - Empty  → Empty  : never invalidates.
+        cacheScope.launch {
+            combine(apiClient.currentServer, apiClient.currentUser) { server, user ->
+                if (server != null && user != null) "${server.id}|${user.id}" else null
+            }.collect { identityKey ->
+                val previous = lastStableIdentityKey.getAndSet(identityKey)
+                val shouldInvalidate = when {
+                    previous == null && identityKey == null -> false
+                    previous == null && identityKey != null -> false // session restore, no prior data
+                    previous != null && identityKey == null -> true  // logout: clear for privacy
+                    previous != identityKey -> true                  // user or server switch
+                    else -> false
+                }
+                if (shouldInvalidate) {
+                    invalidateCaches()
+                }
+            }
+        }
+    }
 
     override suspend fun getHomeSections(
         enabledSections: Set<HomeSectionType>,
@@ -667,6 +718,13 @@ class MediaRepositoryImpl @Inject constructor(
             cachedHomeSectionsTimestamp = 0L
             cachedHomeSectionsKey = ""
         }
+        // Also clear the secondary caches — they hold user-scoped data (library folders,
+        // latest media, genres, studios) that would otherwise leak across user/server
+        // switches until their TTL expires (§4.7).
+        libraryFoldersCache.clear()
+        latestMediaCache.clear()
+        genresCache.clear()
+        studiosCache.clear()
     }
 
     override suspend fun getNewsletterData(sinceDate: String, limit: Int): Result<NewsletterData> =
