@@ -4,7 +4,9 @@ import android.content.Context
 import androidx.room.Room
 import androidx.room.RoomDatabase
 import com.raulshma.jellyplay.core.database.JellyPlayDatabase
+import com.raulshma.jellyplay.core.database.crypto.TokenCipher
 import com.raulshma.jellyplay.core.database.migration.ALL_MIGRATIONS
+import com.raulshma.jellyplay.core.database.migration.Migration24To25
 import dagger.Module
 import dagger.Provides
 import dagger.hilt.InstallIn
@@ -20,12 +22,13 @@ object DatabaseModule {
     @Singleton
     fun provideDatabase(
         @ApplicationContext context: Context,
+        tokenCipher: TokenCipher,
     ): JellyPlayDatabase = Room.databaseBuilder(
         context,
         JellyPlayDatabase::class.java,
         "jellyplay.db",
     )
-        .addMigrations(*ALL_MIGRATIONS.toTypedArray())
+        .addMigrations(*ALL_MIGRATIONS.toTypedArray(), Migration24To25(tokenCipher))
         .fallbackToDestructiveMigrationOnDowngrade()
         .setJournalMode(RoomDatabase.JournalMode.WRITE_AHEAD_LOGGING)
         .build()

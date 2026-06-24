@@ -4,7 +4,7 @@ import com.raulshma.jellyplay.core.data.repository.MediaRepository
 import com.raulshma.jellyplay.core.data.repository.PlaybackRepository
 import com.raulshma.jellyplay.core.model.LiveTvChannel
 import com.raulshma.jellyplay.core.ui.viewmodel.JellyPlayViewModel
-import com.raulshma.jellyplay.feature.player.video.VideoMiniPlayerState
+import com.raulshma.jellyplay.core.data.playback.VideoMiniPlayerState
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow

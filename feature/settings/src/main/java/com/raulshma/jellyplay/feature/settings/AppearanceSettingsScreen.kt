@@ -28,6 +28,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.unit.dp
+import com.raulshma.jellyplay.core.model.PreferenceResetCategory
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.raulshma.jellyplay.core.model.ContrastLevel
 import com.raulshma.jellyplay.core.model.DateFormatPreference
@@ -1027,7 +1028,7 @@ fun AppearanceSettingsScreen(
             text = { Text("This will reset all appearance settings to their default values. This action cannot be undone.") },
             confirmButton = {
                 TextButton(onClick = {
-                    viewModel.resetCategory("appearance")
+                    viewModel.resetCategory(PreferenceResetCategory.APPEARANCE)
                     showResetDialog = false
                 }) {
                     Text("Reset", color = MaterialTheme.colorScheme.error)

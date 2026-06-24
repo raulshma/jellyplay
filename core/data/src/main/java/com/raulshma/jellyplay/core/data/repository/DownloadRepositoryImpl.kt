@@ -162,6 +162,10 @@ class DownloadRepositoryImpl @Inject constructor(
 
     override suspend fun cancelDownload(id: String): Result<Unit> = runCatching {
         val entity = downloadDao.getDownloadById(id) ?: return@runCatching
+        // Cancel any in-flight WorkManager job first so the foreground service stops promptly
+        // and the worker stops polling DB status. Without this, the worker keeps running until
+        // its next 2-second poll tick discovers the row is gone.
+        cancelWorkForDownload(id)
         cleanupDownloadFiles(entity)
     }
 
@@ -181,7 +185,24 @@ class DownloadRepositoryImpl @Inject constructor(
 
     override suspend fun deleteDownload(id: String): Result<Unit> = runCatching {
         val entity = downloadDao.getDownloadById(id) ?: return@runCatching
+        cancelWorkForDownload(id)
         cleanupDownloadFiles(entity)
+    }
+
+    /**
+     * Cancels the unique WorkManager work associated with [downloadId], if any. Safe to call
+     * even when no work is registered — WorkManager no-ops in that case.
+     */
+    private fun cancelWorkForDownload(downloadId: String) {
+        try {
+            WorkManager.getInstance(context).cancelUniqueWork(
+                "${DownloadWorker.UNIQUE_WORK_PREFIX}$downloadId"
+            )
+        } catch (e: Exception) {
+            // WorkManager may not be initialised in some instrumented-test or fresh-install
+            // edge cases. Log and continue — file cleanup is still valuable on its own.
+            Log.w(TAG, "Failed to cancel WorkManager work for download $downloadId", e)
+        }
     }
 
     override suspend fun retryDownload(id: String): Result<Unit> = runCatching {

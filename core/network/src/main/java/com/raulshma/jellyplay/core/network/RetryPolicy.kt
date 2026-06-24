@@ -1,5 +1,6 @@
 package com.raulshma.jellyplay.core.network
 
+import com.raulshma.jellyplay.core.network.api.ApiException
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.delay
 import java.io.IOException
@@ -20,6 +21,9 @@ object RetryPolicy {
 
     fun isRetryable(exception: Throwable): Boolean {
         if (exception is CancellationException) return false
+        // Prefer the typed marker: ApiException carries a pre-classified retryable flag set
+        // at the source (Jellyfin SDK or Seerr) before friendly-message mapping.
+        if (exception is ApiException) return exception.isRetryable
         when (exception) {
             is SocketTimeoutException -> return true
             is ConnectException -> return true

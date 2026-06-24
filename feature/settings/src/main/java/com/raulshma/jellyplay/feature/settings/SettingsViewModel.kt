@@ -23,6 +23,7 @@ import com.raulshma.jellyplay.core.model.LibraryFolder
 import com.raulshma.jellyplay.core.model.LibVlcEngineConfig
 import com.raulshma.jellyplay.core.model.MpvEngineConfig
 import com.raulshma.jellyplay.core.model.ContrastLevel
+import com.raulshma.jellyplay.core.model.PreferenceResetCategory
 import com.raulshma.jellyplay.core.model.DateFormatPreference
 import com.raulshma.jellyplay.core.model.AppFontScale
 import com.raulshma.jellyplay.core.model.ColorBlindMode
@@ -843,7 +844,7 @@ class SettingsViewModel @Inject constructor(
     }
 
     /** Resets all preferences in a specific category to their default values. */
-    fun resetCategory(category: String) {
+    fun resetCategory(category: PreferenceResetCategory) {
         editor.resetCategory(category)
     }
 

@@ -15,7 +15,7 @@ import com.raulshma.jellyplay.core.model.MediaItem
 import com.raulshma.jellyplay.core.model.MediaType
 import com.raulshma.jellyplay.core.model.UserPreferences
 import com.raulshma.jellyplay.core.network.api.TmdbApiClient
-import com.raulshma.jellyplay.feature.details.util.MainDispatcherRule
+import com.raulshma.jellyplay.core.testing.MainDispatcherRule
 import io.mockk.coEvery
 import io.mockk.every
 import io.mockk.mockk

@@ -6,11 +6,13 @@ import androidx.sqlite.db.SupportSQLiteDatabase
 import androidx.sqlite.db.framework.FrameworkSQLiteOpenHelperFactory
 import androidx.test.core.app.ApplicationProvider
 import com.raulshma.jellyplay.core.database.JellyPlayDatabase
+import com.raulshma.jellyplay.core.database.crypto.TokenCipher
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.test.runTest
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotNull
+import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -186,6 +188,163 @@ class MigrationTest {
         db.close()
     }
 
+    /**
+     * §4.10: verifies the v24→v25 migration encrypts plaintext access tokens stored in the
+     * `users` and `servers` tables. After the migration, the DB columns hold ciphertext that
+     * round-trips through [TokenCipher.decrypt].
+     *
+     * Invokes [Migration24To25.migrate] directly against a fresh SQLite database rather than
+     * going through Room's full schema-validation path, so we don't have to recreate every
+     * v24 index/column just to test the token-encryption logic.
+     */
+    @Test
+    fun migrateV24_encryptsExistingPlaintextTokens() {
+        val factory = FrameworkSQLiteOpenHelperFactory()
+        val config = androidx.sqlite.db.SupportSQLiteOpenHelper.Configuration
+            .builder(context)
+            .name(dbFile.absolutePath)
+            .callback(object : androidx.sqlite.db.SupportSQLiteOpenHelper.Callback(24) {
+                override fun onCreate(db: SupportSQLiteDatabase) {
+                    db.execSQL(
+                        """
+                        CREATE TABLE servers (
+                            id TEXT PRIMARY KEY NOT NULL,
+                            name TEXT NOT NULL,
+                            address TEXT NOT NULL,
+                            userId TEXT,
+                            accessToken TEXT,
+                            lastConnected INTEGER NOT NULL,
+                            alternateAddresses TEXT
+                        )
+                        """.trimIndent()
+                    )
+                    db.execSQL(
+                        """
+                        CREATE TABLE users (
+                            userId TEXT PRIMARY KEY NOT NULL,
+                            serverId TEXT NOT NULL,
+                            name TEXT NOT NULL,
+                            accessToken TEXT NOT NULL,
+                            primaryImageTag TEXT,
+                            maxParentalAgeRating INTEGER,
+                            enabledFolderIds TEXT,
+                            isAdmin INTEGER NOT NULL DEFAULT 0,
+                            lastConnected INTEGER NOT NULL DEFAULT 0
+                        )
+                        """.trimIndent()
+                    )
+                    db.execSQL(
+                        "INSERT INTO servers (id, name, address, userId, accessToken, lastConnected, alternateAddresses) " +
+                            "VALUES (?, ?, ?, ?, ?, ?, ?)",
+                        arrayOf<Any?>("srv-1", "Server One", "https://s1.example", "u1", "plaintext-server-token", 0L, null)
+                    )
+                    db.execSQL(
+                        "INSERT INTO users (userId, serverId, name, accessToken, isAdmin, lastConnected) " +
+                            "VALUES (?, ?, ?, ?, ?, ?)",
+                        arrayOf<Any>("u1", "srv-1", "alice", "plaintext-user-token", 0, 0L)
+                    )
+                }
+                override fun onUpgrade(db: SupportSQLiteDatabase, oldVersion: Int, newVersion: Int) {}
+            })
+            .build()
+        val helper = factory.create(config)
+        val db = helper.writableDatabase
+
+        val tokenCipher = TokenCipher.forTestingWithPersistentKey()
+        Migration24To25(tokenCipher).migrate(db)
+
+        db.query("SELECT accessToken FROM servers WHERE id = 'srv-1'").use { c ->
+            assertTrue(c.moveToFirst())
+            val stored = c.getString(0)
+            assertNotEqualsWithMessage("Server token must be encrypted", "plaintext-server-token", stored)
+            assertEquals("plaintext-server-token", tokenCipher.decrypt(stored))
+        }
+        db.query("SELECT accessToken FROM users WHERE userId = 'u1'").use { c ->
+            assertTrue(c.moveToFirst())
+            val stored = c.getString(0)
+            assertNotEqualsWithMessage("User token must be encrypted", "plaintext-user-token", stored)
+            assertEquals("plaintext-user-token", tokenCipher.decrypt(stored))
+        }
+
+        db.close()
+        helper.close()
+    }
+
+    /**
+     * §4.10 regression: re-running the migration on already-encrypted rows must NOT change
+     * them (cipher is idempotent) and must NOT corrupt the data.
+     */
+    @Test
+    fun migrateV24_isIdempotentWhenRunTwice() {
+        val factory = FrameworkSQLiteOpenHelperFactory()
+        val config = androidx.sqlite.db.SupportSQLiteOpenHelper.Configuration
+            .builder(context)
+            .name(dbFile.absolutePath)
+            .callback(object : androidx.sqlite.db.SupportSQLiteOpenHelper.Callback(24) {
+                override fun onCreate(db: SupportSQLiteDatabase) {
+                    db.execSQL(
+                        """
+                        CREATE TABLE servers (
+                            id TEXT PRIMARY KEY NOT NULL,
+                            name TEXT NOT NULL,
+                            address TEXT NOT NULL,
+                            userId TEXT,
+                            accessToken TEXT,
+                            lastConnected INTEGER NOT NULL,
+                            alternateAddresses TEXT
+                        )
+                        """.trimIndent()
+                    )
+                    db.execSQL(
+                        """
+                        CREATE TABLE users (
+                            userId TEXT PRIMARY KEY NOT NULL,
+                            serverId TEXT NOT NULL,
+                            name TEXT NOT NULL,
+                            accessToken TEXT NOT NULL,
+                            primaryImageTag TEXT,
+                            maxParentalAgeRating INTEGER,
+                            enabledFolderIds TEXT,
+                            isAdmin INTEGER NOT NULL DEFAULT 0,
+                            lastConnected INTEGER NOT NULL DEFAULT 0
+                        )
+                        """.trimIndent()
+                    )
+                    db.execSQL(
+                        "INSERT INTO users (userId, serverId, name, accessToken, isAdmin, lastConnected) " +
+                            "VALUES (?, ?, ?, ?, ?, ?)",
+                        arrayOf<Any>("u1", "srv-1", "alice", "plaintext-user-token", 0, 0L)
+                    )
+                }
+                override fun onUpgrade(db: SupportSQLiteDatabase, oldVersion: Int, newVersion: Int) {}
+            })
+            .build()
+        val helper = factory.create(config)
+        val db = helper.writableDatabase
+
+        val tokenCipher = TokenCipher.forTestingWithPersistentKey()
+        val migration = Migration24To25(tokenCipher)
+        migration.migrate(db)
+        // Capture the post-first-migration value.
+        val afterFirst = db.query("SELECT accessToken FROM users WHERE userId = 'u1'").use { c ->
+            c.moveToFirst(); c.getString(0)
+        }
+        // Run again — value must not change.
+        migration.migrate(db)
+        val afterSecond = db.query("SELECT accessToken FROM users WHERE userId = 'u1'").use { c ->
+            c.moveToFirst(); c.getString(0)
+        }
+        assertEquals(afterFirst, afterSecond)
+        assertEquals("plaintext-user-token", tokenCipher.decrypt(afterSecond))
+
+        db.close()
+        helper.close()
+    }
+
+    private fun assertNotEqualsWithMessage(message: String, unexpected: Any?, actual: Any?) {
+        org.junit.Assert.assertNotEquals(message, unexpected, actual)
+    }
+
     private fun createDatabase(version: Int, block: (SupportSQLiteDatabase) -> Unit) {
         val factory = FrameworkSQLiteOpenHelperFactory()
         val config = androidx.sqlite.db.SupportSQLiteOpenHelper.Configuration
@@ -204,12 +363,13 @@ class MigrationTest {
     }
 
     private fun openWithMigrations(): JellyPlayDatabase {
+        val tokenCipher = TokenCipher.forTestingWithPersistentKey()
         val db = Room.databaseBuilder(
             context,
             JellyPlayDatabase::class.java,
             dbFile.absolutePath,
         )
-            .addMigrations(*ALL_MIGRATIONS.toTypedArray())
+            .addMigrations(*ALL_MIGRATIONS.toTypedArray(), Migration24To25(tokenCipher))
             .allowMainThreadQueries()
             .build()
         database = db

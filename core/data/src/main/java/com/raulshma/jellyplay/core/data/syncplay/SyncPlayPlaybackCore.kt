@@ -327,11 +327,8 @@ class SyncPlayPlaybackCore @Inject constructor(
             }
             Log.d(TAG, "SkipToSync: diff=${diffMs}ms")
         } else if (absDiffMs < MAX_DELAY_SPEED_TO_SYNC) {
-            var speedToSyncTime = SPEED_TO_SYNC_DURATION
-            if (diffMs <= -speedToSyncTime * MIN_SPEED) {
-                speedToSyncTime = Math.abs(diffMs) / (1.0 - MIN_SPEED)
-            }
-            val speed = (1.0 + diffMs / speedToSyncTime).toFloat().coerceAtLeast(MIN_SPEED.toFloat())
+            val speedToSyncTime = calculateSpeedToSyncTime(diffMs)
+            val speed = calculateSpeedCorrection(diffMs, speedToSyncTime)
             cb.setPlaybackRate(speed)
             cb.onSyncStateChanged(synced = false, syncing = true)
             speedToSyncJob?.cancel()
@@ -440,5 +437,32 @@ class SyncPlayPlaybackCore @Inject constructor(
         private const val SYNC_CORRECTION_INTERVAL = 2000L
         private const val SYNC_CORRECTION_THRESHOLD_MS = 100L
         private const val MIN_SPEED = 0.2
+        private const val MAX_SPEED = 2.0
+
+        /**
+         * Computes the duration (ms) over which a speed correction should be applied so that
+         * the player covers [diffMs] of drift. Extended when the drift is so negative that the
+         * minimum speed wouldn't otherwise cover it within the default window.
+         *
+         * Extracted as `internal` so the unit-of-speed-to-sync math can be unit tested without
+         * standing up the full [SyncPlayPlaybackCore] / callbacks harness.
+         */
+        internal fun calculateSpeedToSyncTime(diffMs: Double): Double {
+            var speedToSyncTime = SPEED_TO_SYNC_DURATION
+            if (diffMs <= -speedToSyncTime * MIN_SPEED) {
+                speedToSyncTime = Math.abs(diffMs) / (1.0 - MIN_SPEED)
+            }
+            return speedToSyncTime
+        }
+
+        /**
+         * Maps a drift (in ms) to a playback-rate correction clamped to
+         * [MIN_SPEED]..[MAX_SPEED]. See §4.15 of the architecture analysis for the rationale
+         * behind adding the upper clamp (without it, a 1500ms drift would yield speed=2.5).
+         */
+        internal fun calculateSpeedCorrection(diffMs: Double, speedToSyncTime: Double): Float {
+            return (1.0 + diffMs / speedToSyncTime).toFloat()
+                .coerceIn(MIN_SPEED.toFloat(), MAX_SPEED.toFloat())
+        }
     }
 }

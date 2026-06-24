@@ -4,7 +4,7 @@ import androidx.lifecycle.SavedStateHandle
 import com.raulshma.jellyplay.core.data.repository.MediaRepository
 import com.raulshma.jellyplay.core.data.repository.PlaybackRepository
 import com.raulshma.jellyplay.core.ui.navigation.Route
-import com.raulshma.jellyplay.feature.library.util.MainDispatcherRule
+import com.raulshma.jellyplay.core.testing.MainDispatcherRule
 import io.mockk.every
 import io.mockk.mockk
 import io.mockk.verify

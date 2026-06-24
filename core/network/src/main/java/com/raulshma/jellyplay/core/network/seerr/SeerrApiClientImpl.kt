@@ -1,6 +1,7 @@
 package com.raulshma.jellyplay.core.network.seerr
 
 import com.raulshma.jellyplay.core.model.seerr.*
+import com.raulshma.jellyplay.core.network.api.ApiException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import okhttp3.MediaType.Companion.toMediaType
@@ -41,17 +42,20 @@ class SeerrApiClientImpl @Inject constructor(
             withContext(Dispatchers.IO) {
                 okHttpClient.newCall(request).execute().use { response ->
                     val body = response.body?.string() ?: return@withContext Result.failure<String>(
-                        Exception("Empty response body (HTTP ${response.code})")
+                        ApiException.fromSeerrHttp(response.code, "Empty response body (HTTP ${response.code})")
                     )
                     if (!response.isSuccessful) {
                         val errorMsg = parseErrorMessage(response.code, body)
-                        return@withContext Result.failure(Exception(errorMsg))
+                        return@withContext Result.failure(ApiException.fromSeerrHttp(response.code, errorMsg))
                     }
                     Result.success(body)
                 }
             }
         } catch (e: Exception) {
-            Result.failure(Exception(formatNetworkError(e)))
+            // CancellationException is captured by runCatching upstream; preserve it for
+            // structured-concurrency correctness by rethrowing here.
+            if (e is kotlinx.coroutines.CancellationException) throw e
+            Result.failure(ApiException.fromSeerrNetwork(e, formatNetworkError(e)))
         }
     }
 
@@ -61,11 +65,11 @@ class SeerrApiClientImpl @Inject constructor(
                 okHttpClient.newCall(request).execute().use { response ->
                     val body = response.body?.string()
                         ?: return@withContext Result.failure<Pair<String, String?>>(
-                            Exception("Empty response body (HTTP ${response.code})")
+                            ApiException.fromSeerrHttp(response.code, "Empty response body (HTTP ${response.code})")
                         )
                     if (!response.isSuccessful) {
                         val errorMsg = parseErrorMessage(response.code, body)
-                        return@withContext Result.failure<Pair<String, String?>>(Exception(errorMsg))
+                        return@withContext Result.failure<Pair<String, String?>>(ApiException.fromSeerrHttp(response.code, errorMsg))
                     }
                     val cookieHeader = response.headers("Set-Cookie").joinToString("; ") {
                         it.substringBefore(";")
@@ -74,7 +78,8 @@ class SeerrApiClientImpl @Inject constructor(
                 }
             }
         } catch (e: Exception) {
-            Result.failure(Exception(formatNetworkError(e)))
+            if (e is kotlinx.coroutines.CancellationException) throw e
+            Result.failure(ApiException.fromSeerrNetwork(e, formatNetworkError(e)))
         }
     }
 

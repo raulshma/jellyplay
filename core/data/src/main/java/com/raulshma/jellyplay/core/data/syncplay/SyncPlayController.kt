@@ -4,6 +4,7 @@ import android.util.Log
 import com.raulshma.jellyplay.core.model.SyncPlayRepeatMode
 import com.raulshma.jellyplay.core.model.SyncPlayShuffleMode
 import com.raulshma.jellyplay.core.network.JellyfinApiClient
+import kotlinx.coroutines.CancellationException
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -11,134 +12,54 @@ import javax.inject.Singleton
 class SyncPlayController @Inject constructor(
     private val apiClient: JellyfinApiClient,
 ) {
-    suspend fun unpause() {
-        try {
-            apiClient.syncPlayUnpause()
-        } catch (e: Exception) {
-            Log.w(TAG, "unpause failed", e)
-        }
-    }
-
-    suspend fun pause() {
-        try {
-            apiClient.syncPlayPause()
-        } catch (e: Exception) {
-            Log.w(TAG, "pause failed", e)
-        }
-    }
-
-    suspend fun seek(positionTicks: Long) {
-        try {
-            apiClient.syncPlaySeek(positionTicks)
-        } catch (e: Exception) {
-            Log.w(TAG, "seek failed", e)
-        }
-    }
-
-    suspend fun stop() {
-        try {
-            apiClient.syncPlayStop()
-        } catch (e: Exception) {
-            Log.w(TAG, "stop failed", e)
-        }
-    }
+    suspend fun unpause() = safe("unpause") { apiClient.syncPlayUnpause() }
+    suspend fun pause() = safe("pause") { apiClient.syncPlayPause() }
+    suspend fun seek(positionTicks: Long) = safe("seek") { apiClient.syncPlaySeek(positionTicks) }
+    suspend fun stop() = safe("stop") { apiClient.syncPlayStop() }
 
     suspend fun setNewQueue(
         itemIds: List<String>,
         playingItemId: String,
         mediaSourceId: String? = null,
         startPositionTicks: Long = 0L,
-    ) {
-        try {
-            apiClient.syncPlaySetNewQueue(itemIds, playingItemId, mediaSourceId, startPositionTicks)
-        } catch (e: Exception) {
-            Log.w(TAG, "setNewQueue failed", e)
-        }
+    ) = safe("setNewQueue") {
+        apiClient.syncPlaySetNewQueue(itemIds, playingItemId, mediaSourceId, startPositionTicks)
     }
 
-    suspend fun queue(itemIds: List<String>, mode: String = "Queue") {
-        try {
-            apiClient.syncPlayQueue(itemIds, mode)
-        } catch (e: Exception) {
-            Log.w(TAG, "queue failed", e)
-        }
-    }
+    suspend fun queue(itemIds: List<String>, mode: String = "Queue") =
+        safe("queue") { apiClient.syncPlayQueue(itemIds, mode) }
 
-    suspend fun nextItem(playlistItemId: String) {
-        try {
-            apiClient.syncPlayNextItem(playlistItemId)
-        } catch (e: Exception) {
-            Log.w(TAG, "nextItem failed", e)
-        }
-    }
+    suspend fun nextItem(playlistItemId: String) =
+        safe("nextItem") { apiClient.syncPlayNextItem(playlistItemId) }
 
-    suspend fun previousItem(playlistItemId: String) {
-        try {
-            apiClient.syncPlayPreviousItem(playlistItemId)
-        } catch (e: Exception) {
-            Log.w(TAG, "previousItem failed", e)
-        }
-    }
+    suspend fun previousItem(playlistItemId: String) =
+        safe("previousItem") { apiClient.syncPlayPreviousItem(playlistItemId) }
 
-    suspend fun setPlaylistItem(playlistItemId: String) {
-        try {
-            apiClient.syncPlaySetPlaylistItem(playlistItemId)
-        } catch (e: Exception) {
-            Log.w(TAG, "setPlaylistItem failed", e)
-        }
-    }
+    suspend fun setPlaylistItem(playlistItemId: String) =
+        safe("setPlaylistItem") { apiClient.syncPlaySetPlaylistItem(playlistItemId) }
 
-    suspend fun removeFromPlaylist(playlistItemId: String) {
-        try {
-            apiClient.syncPlayRemoveFromPlaylist(playlistItemId)
-        } catch (e: Exception) {
-            Log.w(TAG, "removeFromPlaylist failed", e)
-        }
-    }
+    suspend fun removeFromPlaylist(playlistItemId: String) =
+        safe("removeFromPlaylist") { apiClient.syncPlayRemoveFromPlaylist(playlistItemId) }
 
-    suspend fun movePlaylistItem(playlistItemId: String, newIndex: Int) {
-        try {
-            apiClient.syncPlayMovePlaylistItem(playlistItemId, newIndex)
-        } catch (e: Exception) {
-            Log.w(TAG, "movePlaylistItem failed", e)
-        }
-    }
+    suspend fun movePlaylistItem(playlistItemId: String, newIndex: Int) =
+        safe("movePlaylistItem") { apiClient.syncPlayMovePlaylistItem(playlistItemId, newIndex) }
 
-    suspend fun setRepeatMode(mode: SyncPlayRepeatMode) {
-        try {
-            apiClient.syncPlaySetRepeatMode(mode)
-        } catch (e: Exception) {
-            Log.w(TAG, "setRepeatMode failed", e)
-        }
-    }
+    suspend fun setRepeatMode(mode: SyncPlayRepeatMode) =
+        safe("setRepeatMode") { apiClient.syncPlaySetRepeatMode(mode) }
 
-    suspend fun setShuffleMode(mode: SyncPlayShuffleMode) {
-        try {
-            apiClient.syncPlaySetShuffleMode(mode)
-        } catch (e: Exception) {
-            Log.w(TAG, "setShuffleMode failed", e)
-        }
-    }
+    suspend fun setShuffleMode(mode: SyncPlayShuffleMode) =
+        safe("setShuffleMode") { apiClient.syncPlaySetShuffleMode(mode) }
 
-    suspend fun setIgnoreWait(ignore: Boolean) {
-        try {
-            apiClient.syncPlaySetIgnoreWait(ignore)
-        } catch (e: Exception) {
-            Log.w(TAG, "setIgnoreWait failed", e)
-        }
-    }
+    suspend fun setIgnoreWait(ignore: Boolean) =
+        safe("setIgnoreWait") { apiClient.syncPlaySetIgnoreWait(ignore) }
 
     suspend fun reportReady(
         positionTicks: Long = 0L,
         isPlaying: Boolean = false,
         playlistItemId: String? = null,
         whenMs: Long,
-    ) {
-        try {
-            apiClient.syncPlayReady(positionTicks, isPlaying, playlistItemId, whenMs)
-        } catch (e: Exception) {
-            Log.w(TAG, "reportReady failed", e)
-        }
+    ) = safe("reportReady") {
+        apiClient.syncPlayReady(positionTicks, isPlaying, playlistItemId, whenMs)
     }
 
     suspend fun reportBuffering(
@@ -146,11 +67,22 @@ class SyncPlayController @Inject constructor(
         isPlaying: Boolean = false,
         playlistItemId: String? = null,
         whenMs: Long,
-    ) {
+    ) = safe("reportBuffering") {
+        apiClient.syncPlayBuffering(positionTicks, isPlaying, playlistItemId, whenMs)
+    }
+
+    /**
+     * Run [block] and log any non-fatal exception. [CancellationException] is always rethrown
+     * so structured concurrency (scope/job cancellation) propagates correctly when the user
+     * leaves SyncPlay or logs out.
+     */
+    private suspend fun safe(tag: String, block: suspend () -> Unit) {
         try {
-            apiClient.syncPlayBuffering(positionTicks, isPlaying, playlistItemId, whenMs)
+            block()
+        } catch (ce: CancellationException) {
+            throw ce
         } catch (e: Exception) {
-            Log.w(TAG, "reportBuffering failed", e)
+            Log.w(TAG, "$tag failed", e)
         }
     }
 

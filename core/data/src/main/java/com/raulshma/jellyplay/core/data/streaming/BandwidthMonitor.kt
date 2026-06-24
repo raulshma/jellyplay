@@ -43,10 +43,15 @@ class BandwidthMonitor @Inject constructor() {
     }
 
     fun reset() {
-        synchronized(samples) { samples.clear() }
-        _totalBytes.value = 0L
-        _totalElapsedMs.value = 0L
-        _estimatedBandwidthKbps.value = 0.0
+        // All shared-state mutations must happen inside the same monitor as `addSample`'s
+        // critical section, otherwise a concurrent `addSample` can leave `_totalBytes` /
+        // `_totalElapsedMs` inconsistent with the freshly-cleared `samples` deque.
+        synchronized(samples) {
+            samples.clear()
+            _totalBytes.value = 0L
+            _totalElapsedMs.value = 0L
+            _estimatedBandwidthKbps.value = 0.0
+        }
     }
 
     private fun computeAverageKbpsInternal(): Double {

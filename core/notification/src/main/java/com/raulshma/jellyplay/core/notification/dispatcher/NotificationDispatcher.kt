@@ -164,7 +164,13 @@ class NotificationDispatcher @Inject constructor(
         private const val NOTIFICATION_ID_GLOBAL = 5000
         private const val NOTIFICATION_ID_BASE = 5001
 
-        private fun notificationIdFor(libraryId: String, itemIndex: Int): Int {
+        /**
+         * Computes a per-(library, item) notification ID. The ID must be stable across
+         * re-dispatches so the system can coalesce updates instead of stacking duplicates.
+         *
+         * `internal` so unit tests can assert the deterministic mapping (§4.11).
+         */
+        internal fun notificationIdFor(libraryId: String, itemIndex: Int): Int {
             val base = NOTIFICATION_ID_BASE + (libraryId.hashCode() and 0x0000FFFF)
             return if (itemIndex == -1) base + 100 else base + itemIndex
         }

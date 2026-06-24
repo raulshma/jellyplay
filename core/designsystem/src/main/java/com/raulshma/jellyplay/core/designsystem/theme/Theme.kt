@@ -300,7 +300,14 @@ fun JellyPlayTheme(
     val effectiveDarkTheme = darkTheme || isTv || synthwaveMode
     val effectiveOledMode = (oledMode || monochromeMode) && effectiveDarkTheme && !synthwaveMode && !soothingMode
 
-    _isSynthwaveActive.value = synthwaveMode
+    // §4.12: bridge the Compose-visible synthwave flag to the global state that
+    // `SynthwaveDynamicShape` reads from `Shape.createOutline` (which runs outside of
+    // composition and therefore can't consult `LocalIsSynthwave` directly). Using
+    // `SideEffect` ensures the write only happens after a *successful* composition, so
+    // intermediate recompositions from previews or parallel compositions don't flicker the
+    // global state. The CompositionLocal itself remains the source of truth for any
+    // composable consumer; this SideEffect only mirrors it for the non-composable Shape path.
+    androidx.compose.runtime.SideEffect { _isSynthwaveActive.value = synthwaveMode }
 
     val colorScheme = when {
         synthwaveMode -> {
