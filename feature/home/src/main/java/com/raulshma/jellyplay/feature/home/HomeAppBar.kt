@@ -254,7 +254,7 @@ private fun RowScope.SearchExpandedContent(
         placeholder = {
             Text(
                 "Search movies, shows, music...",
-                color = appBarIconColor.copy(alpha = 0.5f),
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
                 style = MaterialTheme.typography.bodyMedium,
             )
         },

@@ -104,7 +104,7 @@ fun AlphabetScroller(
                     fontWeight = if (isActive) FontWeight.Bold else FontWeight.Normal,
                     fontFamily = FontFamily.Monospace,
                     color = if (isActive) MaterialTheme.colorScheme.primary
-                    else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.4f),
+                    else MaterialTheme.colorScheme.onSurfaceVariant,
                     textAlign = TextAlign.Center,
                 )
             }

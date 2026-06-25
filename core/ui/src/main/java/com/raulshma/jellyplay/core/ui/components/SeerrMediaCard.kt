@@ -46,6 +46,7 @@ import com.raulshma.jellyplay.core.designsystem.theme.AlphaEasing
 import com.raulshma.jellyplay.core.designsystem.theme.FancyTransitionEasing
 import com.raulshma.jellyplay.core.designsystem.theme.RatingColors
 import com.raulshma.jellyplay.core.designsystem.theme.StatusColors
+import com.raulshma.jellyplay.core.designsystem.theme.isLightColor
 import com.raulshma.jellyplay.core.model.seerr.SeerrMediaStatus
 import com.raulshma.jellyplay.core.model.seerr.SeerrSearchItem
 import com.raulshma.jellyplay.core.ui.animation.defaultSpatialSpec
@@ -333,7 +334,7 @@ fun SeerrMediaCard(
                             Text(
                                 text = "%.1f".format(item.voteAverage),
                                 style = MaterialTheme.typography.labelSmall,
-                                color = Color.White,
+                                color = MaterialTheme.colorScheme.onSurface,
                             )
                         }
                     }
@@ -343,6 +344,7 @@ fun SeerrMediaCard(
                     val tertiaryContainer = MaterialTheme.colorScheme.tertiaryContainer
                     val surface = MaterialTheme.colorScheme.surface
                     val onTertiaryContainer = MaterialTheme.colorScheme.onTertiaryContainer
+                    val onSurface = MaterialTheme.colorScheme.onSurface
                     val mediaLabel = remember(isUpcoming, item.mediaType) {
                         when {
                             isUpcoming -> "UPCOMING"
@@ -360,11 +362,11 @@ fun SeerrMediaCard(
                         }
                     }
 
-                    val textColor = remember(isUpcoming, onTertiaryContainer) {
+                    val textColor = remember(isUpcoming, onTertiaryContainer, onSurface) {
                         if (isUpcoming) {
                             onTertiaryContainer
                         } else {
-                            Color.White.copy(alpha = 0.9f)
+                            onSurface
                         }
                     }
 
@@ -401,6 +403,9 @@ fun SeerrMediaCard(
                     }
 
                     if (badgeColor != Color.Transparent) {
+                        val badgeTextColor = remember(badgeColor) {
+                            if (isLightColor(badgeColor)) Color.Black else Color.White
+                        }
                         Box(
                             modifier = Modifier
                                 .align(Alignment.TopEnd)
@@ -419,7 +424,7 @@ fun SeerrMediaCard(
                                     else -> ""
                                 },
                                 style = MaterialTheme.typography.labelSmall,
-                                color = Color.White,
+                                color = badgeTextColor,
                             )
                         }
                     }
@@ -439,7 +444,7 @@ fun SeerrMediaCard(
                             Icon(
                                 Tabler.Outline.Plus,
                                 contentDescription = "Request",
-                                tint = Color.White,
+                                tint = MaterialTheme.colorScheme.onSurface,
                                 modifier = Modifier.padding(2.dp),
                             )
                         }
@@ -456,14 +461,14 @@ fun SeerrMediaCard(
                 style = if (isTv) MaterialTheme.typography.bodyMedium else MaterialTheme.typography.bodySmall,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
-                color = MaterialTheme.colorScheme.onSurface.copy(alpha = if (isLoading) 0.5f else 0.9f),
+                color = if (isLoading) MaterialTheme.colorScheme.onSurfaceVariant else MaterialTheme.colorScheme.onSurface,
                 modifier = Modifier.enableMarqueeOnFocus(focused = tvFocusState.isFocused),
             )
             if (item.year != null) {
                 Text(
                     text = item.year.toString(),
                     style = if (isTv) MaterialTheme.typography.labelMedium else MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = if (isLoading) 0.3f else 0.55f),
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
             }
         }

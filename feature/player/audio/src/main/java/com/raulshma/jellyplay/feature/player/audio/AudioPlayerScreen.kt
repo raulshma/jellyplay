@@ -855,7 +855,7 @@ private fun LyricsOverlay(
                     Tabler.Outline.Music,
                     null,
                     modifier = Modifier.size(36.dp),
-                    tint = Color.White.copy(alpha = 0.5f),
+                    tint = Color.White.copy(alpha = 0.7f),
                 )
                 Spacer(Modifier.height(8.dp))
                 Text(
@@ -1372,7 +1372,7 @@ private fun AlbumArtwork(
                     Tabler.Outline.Music,
                     contentDescription = null,
                     modifier = Modifier.size(72.dp),
-                    tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f),
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
             }
         }
@@ -1489,7 +1489,7 @@ private fun PixelProgressSection(
         Text(
             if (duration > 0) com.raulshma.jellyplay.core.ui.components.formatDurationMs(duration) else "--:--",
             style = MaterialTheme.typography.labelSmall,
-            color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.6f),
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
     }
 }
@@ -1824,7 +1824,7 @@ private fun SwipeTrackCard(
                     Icon(
                         Tabler.Outline.Music,
                         contentDescription = null,
-                        tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f),
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
                 }
             }

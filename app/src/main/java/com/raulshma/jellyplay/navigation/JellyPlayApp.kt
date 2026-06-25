@@ -1473,7 +1473,7 @@ private fun FloatingNavigationBar(
         ) {
             routes.forEach { (route, label) ->
                 val selected = route == currentTopLevel
-                val tint = if (selected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f)
+                val tint = if (selected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
                 Row(
                     modifier = Modifier
                         .animateContentSize(animationSpec = MaterialTheme.motionScheme.defaultSpatialSpec())

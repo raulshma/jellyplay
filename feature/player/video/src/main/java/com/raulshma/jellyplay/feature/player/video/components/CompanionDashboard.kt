@@ -104,7 +104,8 @@ fun CompanionDashboard(
             .background(
                 Brush.verticalGradient(
                     colors = listOf(
-                        animatedBgStart.copy(alpha = 0.5f),
+                        animatedBgEnd,
+                        animatedBgStart.copy(alpha = 0.35f),
                         animatedBgEnd
                     )
                 )
@@ -648,7 +649,7 @@ fun SubtitlesTabContent(
                     itemsIndexed(lyricsLines) { index, line ->
                         val isActive = index == activeLineIndex
                         val textColor by animateColorAsState(
-                            targetValue = if (isActive) MaterialTheme.colorScheme.primary else Color.White.copy(alpha = 0.5f),
+                            targetValue = if (isActive) MaterialTheme.colorScheme.primary else Color.White.copy(alpha = 0.7f),
                             label = "lyricColor"
                         )
                         val scale by animateFloatAsState(

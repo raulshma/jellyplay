@@ -228,7 +228,7 @@ private fun TimerCard(
             Text(
                 text = timer.channelName,
                 style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f),
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
             val timeText = buildString {
                 timer.startDate?.let { append(it.substringBefore('T')) }
@@ -242,7 +242,7 @@ private fun TimerCard(
                 Text(
                     text = timeText,
                     style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.45f),
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
             }
             Spacer(Modifier.height(2.dp))
@@ -264,7 +264,7 @@ private fun TimerCard(
             Icon(
                 Tabler.Outline.Trash,
                 contentDescription = "Cancel recording",
-                tint = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f),
+                tint = MaterialTheme.colorScheme.onSurfaceVariant,
                 modifier = Modifier.size(18.dp),
             )
         }
@@ -316,14 +316,14 @@ private fun SeriesTimerCard(
                 Text(
                     text = channelName,
                     style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f),
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
             }
             Spacer(Modifier.height(2.dp))
             Text(
                 text = if (timer.recordAnyChannel) "Any channel" else channelName ?: "",
                 style = MaterialTheme.typography.labelSmall,
-                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.45f),
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
         }
 
@@ -338,7 +338,7 @@ private fun SeriesTimerCard(
             Icon(
                 Tabler.Outline.Trash,
                 contentDescription = "Cancel series recording",
-                tint = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f),
+                tint = MaterialTheme.colorScheme.onSurfaceVariant,
                 modifier = Modifier.size(18.dp),
             )
         }

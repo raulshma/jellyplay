@@ -908,7 +908,7 @@ private fun HomeContentList(
             Text(
                 if (isLoading) "" else "No content available. Check your Jellyfin libraries.",
                 style = MaterialTheme.typography.bodyLarge,
-                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f),
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
         }
     } else {

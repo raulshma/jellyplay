@@ -293,7 +293,7 @@ internal fun MediaInfoSection(
                                     Text(
                                         text = "DEFAULT",
                                         style = MaterialTheme.typography.labelSmall,
-                                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.65f),
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
                                         modifier = Modifier.padding(end = 8.dp),
                                     )
                                 }

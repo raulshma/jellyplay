@@ -321,7 +321,7 @@ private fun ActionRow(
             Icon(
                 Tabler.Outline.ChevronRight,
                 contentDescription = null,
-                tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.4f),
+                tint = MaterialTheme.colorScheme.onSurfaceVariant,
                 modifier = Modifier.size(18.dp),
             )
         },
@@ -391,7 +391,7 @@ private fun PresetRow(
             Icon(
                 Tabler.Outline.DotsVertical,
                 contentDescription = "Preset actions",
-                tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f),
+                tint = MaterialTheme.colorScheme.onSurfaceVariant,
                 modifier = Modifier.size(18.dp),
             )
         },

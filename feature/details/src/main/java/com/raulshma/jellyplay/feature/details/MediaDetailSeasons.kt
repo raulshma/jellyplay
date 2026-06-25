@@ -216,7 +216,7 @@ internal fun SeasonsSection(
                         contentAlignment = Alignment.Center,
                     ) {
                         FadingItem {
-                            Text("No episodes available", color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f))
+                            Text("No episodes available", color = MaterialTheme.colorScheme.onSurfaceVariant)
                         }
                     }
                 }
@@ -415,19 +415,19 @@ internal fun EpisodeCard(
                     Text(
                         text = "•",
                         style = MaterialTheme.typography.labelMedium,
-                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.4f),
+                        color = MaterialTheme.colorScheme.outlineVariant,
                     )
                     Text(
                         text = totalTime,
                         style = MaterialTheme.typography.labelMedium,
-                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f),
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
                 }
             } else if (totalTime != null) {
                 Text(
                     text = totalTime,
                     style = MaterialTheme.typography.labelMedium,
-                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f),
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
                     modifier = Modifier.padding(top = 4.dp)
                 )
             }
@@ -436,7 +436,7 @@ internal fun EpisodeCard(
                 Text(
                     text = overview,
                     style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f),
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
                     maxLines = 3,
                     overflow = TextOverflow.Ellipsis,
                     lineHeight = androidx.compose.ui.unit.TextUnit(16f, androidx.compose.ui.unit.TextUnitType.Sp)

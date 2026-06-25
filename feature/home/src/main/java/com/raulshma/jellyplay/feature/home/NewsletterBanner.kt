@@ -111,7 +111,7 @@ fun NewsletterBanner(
                 Icon(
                     imageVector = Tabler.Outline.X,
                     contentDescription = "Dismiss",
-                    tint = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.6f),
+                    tint = MaterialTheme.colorScheme.onPrimaryContainer,
                     modifier = Modifier.size(16.dp),
                 )
             }

@@ -93,7 +93,7 @@ fun SyncPlayOverlay(
                 Spacer(Modifier.width(2.dp))
                 Text(
                     text = "$participantCount",
-                    color = Color.White.copy(alpha = 0.6f),
+                    color = Color.White.copy(alpha = 0.85f),
                     style = MaterialTheme.typography.labelMedium,
                 )
             }

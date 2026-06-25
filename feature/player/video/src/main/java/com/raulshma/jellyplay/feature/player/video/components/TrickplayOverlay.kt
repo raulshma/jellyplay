@@ -116,7 +116,7 @@ fun TrickplayOverlay(
                     ) {
                         Text(
                             text = formatTime(positionMs),
-                            color = Color.White.copy(alpha = 0.4f),
+                            color = Color.White.copy(alpha = 0.7f),
                             style = MaterialTheme.typography.bodyMedium,
                             fontWeight = FontWeight.Medium,
                             letterSpacing = 2.sp,

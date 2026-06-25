@@ -240,7 +240,7 @@ private fun TimeHeaderRow(
             Text(
                 text = "Channel",
                 style = MaterialTheme.typography.labelMedium,
-                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f),
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
                 fontWeight = FontWeight.SemiBold,
             )
         }
@@ -257,7 +257,7 @@ private fun TimeHeaderRow(
                     Text(
                         text = marker.formatTimeHeader(),
                         style = MaterialTheme.typography.labelSmall,
-                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f),
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
                         modifier = Modifier
                             .offset(x = x.dp)
                             .padding(start = 4.dp, top = 8.dp),

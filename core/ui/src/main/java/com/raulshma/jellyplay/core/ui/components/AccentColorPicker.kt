@@ -229,12 +229,20 @@ fun DynamicSwatchCircle(
             ),
         contentAlignment = Alignment.Center
     ) {
-        Icon(
-            imageVector = Tabler.Outline.Wand,
-            contentDescription = "Dynamic wallpaper colors",
-            tint = Color.White,
-            modifier = Modifier.size(18.dp)
-        )
+        Box(
+            modifier = Modifier
+                .size(22.dp)
+                .clip(CircleShape)
+                .background(Color.Black.copy(alpha = 0.35f)),
+            contentAlignment = Alignment.Center,
+        ) {
+            Icon(
+                imageVector = Tabler.Outline.Wand,
+                contentDescription = "Dynamic wallpaper colors",
+                tint = Color.White,
+                modifier = Modifier.size(16.dp)
+            )
+        }
     }
 }
 

@@ -318,17 +318,17 @@ fun SearchScreen(
                                     .focusRequester(focusRequester)
                                     .onFocusEvent { isSearchFocused = it.isFocused }
                                     ,
-                                placeholder = {
+                                    placeholder = {
                                     Text(
                                         "Search movies, shows, music...",
-                                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.4f),
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
                                     )
                                 },
                                 leadingIcon = {
                                     Icon(
                                         Tabler.Outline.Search,
                                         contentDescription = null,
-                                        tint = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f),
+                                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
                                         modifier = Modifier.size(20.dp),
                                     )
                                 },
@@ -345,7 +345,7 @@ fun SearchScreen(
                                             Icon(
                                                 imageVector = Tabler.Outline.X,
                                                 contentDescription = "Clear search",
-                                                tint = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f),
+                                                tint = MaterialTheme.colorScheme.onSurfaceVariant,
                                                 modifier = Modifier.size(16.dp),
                                             )
                                         }
@@ -371,7 +371,7 @@ fun SearchScreen(
                                             Icon(
                                                 imageVector = Tabler.Outline.Microphone,
                                                 contentDescription = "Voice search",
-                                                tint = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f),
+                                                tint = MaterialTheme.colorScheme.onSurfaceVariant,
                                                 modifier = Modifier.size(16.dp),
                                             )
                                         }
@@ -430,7 +430,7 @@ fun SearchScreen(
                                     },
                                     contentDescription = null,
                                     modifier = Modifier.size(18.dp),
-                                    tint = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f),
+                                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
                                 )
                                 Column(modifier = Modifier.weight(1f)) {
                                     Text(
@@ -443,7 +443,7 @@ fun SearchScreen(
                                     Text(
                                         subtitle,
                                         style = MaterialTheme.typography.labelSmall,
-                                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f),
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
                                     )
                                 }
                             }
@@ -508,7 +508,7 @@ fun SearchScreen(
                     Text(
                         text = "${pagedResults.itemCount} results",
                         style = MaterialTheme.typography.labelMedium,
-                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f),
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
                         modifier = Modifier.padding(
                             horizontal = 24.dp,
                             vertical = 8.dp,
@@ -559,7 +559,7 @@ fun SearchScreen(
                         Text(
                             text = "Request via Seerr",
                             style = MaterialTheme.typography.titleSmall,
-                            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f),
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
                             fontWeight = FontWeight.SemiBold,
                             modifier = Modifier.padding(bottom = 8.dp),
                         )
@@ -612,7 +612,7 @@ fun SearchScreen(
                             Text(
                                 text = "Seerr search failed",
                                 style = MaterialTheme.typography.labelMedium,
-                                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f),
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
                             )
                         }
                         Row(
@@ -976,12 +976,12 @@ private fun OfflineSearchSection(
                 Tabler.Outline.DeviceTv,
                 contentDescription = null,
                 modifier = Modifier.size(16.dp),
-                tint = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f),
+                tint = MaterialTheme.colorScheme.onSurfaceVariant,
             )
             Text(
                 text = "On-device",
                 style = MaterialTheme.typography.titleSmall,
-                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f),
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
                 fontWeight = FontWeight.SemiBold,
             )
         }
@@ -1066,7 +1066,7 @@ private fun OfflineSearchCard(
             Text(
                 text = item.mediaType.displayName(),
                 style = MaterialTheme.typography.labelSmall,
-                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f),
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
         }
     }

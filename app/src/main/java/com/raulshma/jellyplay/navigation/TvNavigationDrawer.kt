@@ -398,7 +398,7 @@ private fun TvDrawerRow(
 
     val contentColor = when {
         selected -> MaterialTheme.colorScheme.onSecondaryContainer
-        isFocused -> MaterialTheme.colorScheme.primary
+        isFocused -> MaterialTheme.colorScheme.onPrimaryContainer
         else -> MaterialTheme.colorScheme.onSurfaceVariant
     }
 
@@ -443,7 +443,7 @@ private fun TvDrawerRow(
                     TvText(
                         text = subtext,
                         style = MaterialTheme.typography.labelSmall,
-                        color = contentColor.copy(alpha = 0.6f),
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
                         maxLines = 1,
                     )
                 }

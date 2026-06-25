@@ -173,7 +173,7 @@ private fun AmbientScreenContent(
             Text(
                 text = "Tap anywhere to exit",
                 style = MaterialTheme.typography.labelSmall,
-                color = Color.White.copy(alpha = 0.4f),
+                color = Color.White.copy(alpha = 0.7f),
                 modifier = Modifier.padding(top = 12.dp),
             )
         }
