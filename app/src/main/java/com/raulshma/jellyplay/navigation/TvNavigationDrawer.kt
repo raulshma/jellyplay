@@ -30,6 +30,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -44,6 +45,7 @@ import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.unit.dp
 import androidx.navigation3.runtime.NavKey
@@ -54,6 +56,7 @@ import androidx.tv.material3.Text as TvText
 import androidx.tv.material3.rememberDrawerState
 import com.composables.icons.tabler.Tabler
 import com.composables.icons.tabler.outline.*
+import com.raulshma.jellyplay.R
 import com.raulshma.jellyplay.core.model.LibraryFolder
 import com.raulshma.jellyplay.core.ui.navigation.Route
 import com.raulshma.jellyplay.core.ui.tv.ifElse
@@ -69,6 +72,7 @@ private val ExpandedDrawerWidth = 240.dp
 private val DrawerAnimationStiffness = Spring.StiffnessMedium
 private val DrawerIconSize = 24.dp
 private val DrawerItemSpacing = 4.dp
+private const val ExitConfirmationTimeoutMs = 2000L
 
 // ──────────────────────────────────────────────────────────────────────────────
 // Data + icon mapping
@@ -121,6 +125,7 @@ fun TvNavigationDrawer(
     content: @Composable () -> Unit,
 ) {
     val focusManager = LocalFocusManager.current
+    val context = LocalContext.current
 
     // Filter out standard library types — those are already reachable via the Library tab.
     val drawerFolders = remember(libraryFolders) {
@@ -134,6 +139,7 @@ fun TvNavigationDrawer(
     var initializationComplete by remember { mutableStateOf(false) }
     var sheetHasFocus by remember { mutableStateOf(false) }
     var contentHasFocus by remember { mutableStateOf(false) }
+    var lastBackPressTime by remember { mutableLongStateOf(0L) }
 
     // ── Item layout: [primaryItems...] [drawerFolders...] [Settings] ───────────
     val primaryCount = primaryItems.size
@@ -166,11 +172,6 @@ fun TvNavigationDrawer(
         selectedItemFocusRequester.tryRequestFocus("tv_drawer_selected")
     }
 
-    fun openDrawer() {
-        drawerState.setValue(DrawerValue.Open)
-        requestSelectedRailFocus()
-    }
-
     fun closeDrawerAndMoveToContent() {
         drawerState.setValue(DrawerValue.Closed)
         if (!focusManager.moveFocus(FocusDirection.Right)) {
@@ -184,6 +185,7 @@ fun TvNavigationDrawer(
     }
 
     BackHandler(enabled = drawerState.currentValue == DrawerValue.Open) {
+        lastBackPressTime = 0L
         closeDrawerAndMoveToContent()
     }
 
@@ -191,7 +193,18 @@ fun TvNavigationDrawer(
         if (isSubPage) {
             onBack()
         } else {
-            openDrawer()
+            val now = System.currentTimeMillis()
+            if (now - lastBackPressTime < ExitConfirmationTimeoutMs) {
+                lastBackPressTime = 0L
+                (context as? android.app.Activity)?.moveTaskToBack(true)
+            } else {
+                lastBackPressTime = now
+                android.widget.Toast.makeText(
+                    context,
+                    context.getString(R.string.press_back_again_to_exit),
+                    android.widget.Toast.LENGTH_SHORT,
+                ).show()
+            }
         }
     }
 
