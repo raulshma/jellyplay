@@ -407,6 +407,7 @@ private fun MainContent(
     val audioTitle by audioPlaybackManager.title.collectAsStateWithLifecycle()
     val audioArtist by audioPlaybackManager.artist.collectAsStateWithLifecycle()
     val audioArtworkUrl by audioPlaybackManager.albumArtUrl.collectAsStateWithLifecycle()
+    val libraryFolders by viewModel.libraryFolders.collectAsStateWithLifecycle()
     var isMiniPlayerDismissed by remember { mutableStateOf(false) }
     val showMiniPlayer by remember {
         derivedStateOf { audioItemId != null && !isFullScreenRoute && !isMiniPlayerDismissed }
@@ -640,6 +641,9 @@ private fun MainContent(
                     onAmbientClick = onAmbientClick,
                     tvDrawerState = tvDrawerState,
                     tvDrawerListState = tvDrawerListState,
+                    libraryFolders = libraryFolders,
+                    nowPlayingTitle = audioTitle.takeIf { audioItemId != null },
+                    nowPlayingEnabled = audioItemId != null,
                 )
             } else {
                 if (!isFullScreenRoute) {
@@ -737,6 +741,9 @@ private fun TvContent(
     onAmbientClick: () -> Unit,
     tvDrawerState: androidx.tv.material3.DrawerState,
     tvDrawerListState: androidx.compose.foundation.lazy.LazyListState,
+    libraryFolders: List<com.raulshma.jellyplay.core.model.LibraryFolder>,
+    nowPlayingTitle: String?,
+    nowPlayingEnabled: Boolean,
 ) {
     TvMaterial3Theme(
         colorScheme = tvDarkColorScheme(
@@ -765,6 +772,7 @@ private fun TvContent(
             }
             TvNavigationDrawer(
                 primaryItems = primaryNavItems,
+                libraryFolders = libraryFolders,
                 currentTopLevel = currentTopLevel,
                 isSubPage = tvIsSubPage,
                 onNavigate = { navigator.navigate(it) },
@@ -772,6 +780,9 @@ private fun TvContent(
                 drawerState = tvDrawerState,
                 drawerListState = tvDrawerListState,
                 currentRoute = tvCurrentRoute,
+                nowPlayingTitle = nowPlayingTitle,
+                nowPlayingEnabled = nowPlayingEnabled,
+                onNowPlayingClick = onNowPlayingClick,
             ) {
                 MainNavDisplay(
                     navigationState = navigationState,
@@ -1252,7 +1263,9 @@ private fun MainNavDisplay(
     }
 
     val adaptiveInfo = LocalAdaptiveInfo.current
-    val isExpanded = adaptiveInfo.windowSizeClass != WindowSizeClass.Compact
+    // TV always uses single-pane push navigation — D-pad doesn't work with side-by-side panes.
+    // MasterDetailLayout.kt documents this intent but resolveMasterDetailLayout doesn't enforce it.
+    val isExpanded = !LocalTvMode.current && adaptiveInfo.windowSizeClass != WindowSizeClass.Compact
     val topRoute = currentBackStack.lastOrNull() as? Route
     val decision = resolveMasterDetailLayout(
         isExpanded = isExpanded,
@@ -1410,7 +1423,7 @@ private fun MainNavDisplay(
 
     if (decision.isTwoPane) {
         val currentTopLevel = navigationState.topLevelRoute.value
-        val listBackStack = rememberNavBackStack()
+        val listBackStack = rememberNavBackStack(currentTopLevel)
         LaunchedEffect(currentTopLevel) {
             if (listBackStack.isEmpty() || listBackStack.first() != currentTopLevel) {
                 listBackStack.clear()

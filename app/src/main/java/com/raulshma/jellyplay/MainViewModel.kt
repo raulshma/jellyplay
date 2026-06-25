@@ -17,6 +17,7 @@ import com.raulshma.jellyplay.core.data.repository.PlaybackRepository
 import com.raulshma.jellyplay.core.data.shortcuts.AppShortcutManager
 import com.raulshma.jellyplay.core.datastore.UserPreferencesStore
 import com.raulshma.jellyplay.core.model.DownloadStatus
+import com.raulshma.jellyplay.core.model.LibraryFolder
 import com.raulshma.jellyplay.core.model.PlayerType
 import com.raulshma.jellyplay.core.model.UserPreferences
 import com.raulshma.jellyplay.core.ui.navigation.Route
@@ -72,6 +73,9 @@ class MainViewModel @Inject constructor(
 
     val preferences = preferencesStore.preferences
         .stateIn(scope, SharingStarted.WhileSubscribed(5_000), UserPreferences())
+
+    private val _libraryFolders = stateFlow<List<LibraryFolder>>(emptyList())
+    val libraryFolders = _libraryFolders.flow
 
     private val _pendingRoute = stateFlow<Route?>(null)
     val pendingRoute = _pendingRoute.flow
@@ -135,11 +139,14 @@ class MainViewModel @Inject constructor(
                         // state on cold start; for Library/Seerr it surfaces
                         // any cached items while the worker run completes.
                         com.raulshma.jellyplay.widget.ContinueWatchingWidget.triggerUpdate(context)
+                        // Fetch library folders for the TV navigation drawer
+                        launch { refreshLibraryFolders() }
                     }
                 } else {
                     serverHealthMonitor.stopMonitoring()
                     webSocketClient.disconnect()
                     remoteControlReceiver.stop()
+                    _libraryFolders.set(emptyList())
                 }
             }
         }
@@ -154,6 +161,13 @@ class MainViewModel @Inject constructor(
         }
 
         appShortcutManager.observePlaybackForDynamicShortcuts()
+    }
+
+    fun refreshLibraryFolders() {
+        launch {
+            mediaRepository.getLibraryFolders()
+                .onSuccess { _libraryFolders.set(it) }
+        }
     }
 
     fun handleShortcutIntent(intent: Intent) {
