@@ -245,8 +245,8 @@ private fun MainHomeContent(
     val savedScrollPos = viewModel.getHomeScrollPosition()
     val listState = rememberSaveable(saver = LazyListState.Saver) {
         LazyListState(
-            firstVisibleItemIndex = savedScrollPos.firstVisibleItemIndex,
-            firstVisibleItemScrollOffset = savedScrollPos.firstVisibleItemScrollOffset,
+            firstVisibleItemIndex = if (isTv) 0 else savedScrollPos.firstVisibleItemIndex,
+            firstVisibleItemScrollOffset = if (isTv) 0 else savedScrollPos.firstVisibleItemScrollOffset,
         )
     }
 
@@ -880,24 +880,18 @@ private fun HomeContentList(
 
     var askContinueItem by remember { mutableStateOf<com.raulshma.jellyplay.core.model.MediaItem?>(null) }
 
-    // TV focus orchestration: remember which content row last held focus so back-navigation from a
-    // detail screen restores that row instead of always snapping back to the hero. -1 means "no row
-    // focused yet" (fresh entry) -> the hero grabs focus exactly as before, so the fresh-entry path is
-    // unchanged.
+    // Per-row focus requesters so D-pad navigation can target each content row. (TV no longer
+    // restores focus to the last-visited row on re-entry — the hero now anchors the top; see the
+    // scroll-to-top effect below.)
     var homeFocusRow by com.raulshma.jellyplay.core.ui.tv.rememberInt(-1)
     val savedRowIsValid = homeFocusRow in 0..sections.lastIndex
     val rowFocusRequesters = remember(sections.size) { List(sections.size) { FocusRequester() } }
-    if (isTv && savedRowIsValid) {
-        LaunchedEffect(sections.isNotEmpty()) {
-            if (sections.isNotEmpty()) {
-                // Wait a frame (retry a few times) so the LazyColumn has restored scroll and composed
-                // the saved row before we request focus on it.
-                for (attempt in 1..3) {
-                    androidx.compose.runtime.withFrameNanos { }
-                    if (rowFocusRequesters[homeFocusRow].tryRequestFocus("home_restore")) break
-                }
-            }
-        }
+    // On TV the hero must always anchor the top of the home screen on (re-)entry. Restoring focus to
+    // a previously-visited content row scrolled the LazyColumn just enough to reveal that row, which
+    // left the 420dp hero half-clipped at the top (only the title/buttons visible). Instead we scroll
+    // back to the very top; RequestOrRestoreFocus inside the hero re-grabs focus on back-stack pops.
+    LaunchedEffect(Unit) {
+        if (isTv) listState.scrollToItem(0, 0)
     }
 
     if (sections.isEmpty()) {
@@ -936,7 +930,7 @@ private fun HomeContentList(
                         listState = listState,
                         onItemClick = onItemClick,
                         onDetailsClick = onItemClick,
-                        requestInitialFocus = !savedRowIsValid,
+                        requestInitialFocus = isTv || !savedRowIsValid,
                         onFocusChange = onFocusChange,
                         focusRequester = heroFocusRequester,
                     )

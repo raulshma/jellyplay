@@ -109,10 +109,11 @@ fun HomeTopDock(
     val appBarIconColorFaded = appBarIconColor.copy(alpha = 0.9f)
     val focusManager = LocalFocusManager.current
 
+    val isTv = LocalTvMode.current
     Box(
         modifier = modifier
             .fillMaxWidth()
-            .statusBarsPadding()
+            .then(if (!isTv) Modifier.statusBarsPadding() else Modifier)
             .padding(
                 horizontal = 16.dp,
                 vertical = 4.dp
