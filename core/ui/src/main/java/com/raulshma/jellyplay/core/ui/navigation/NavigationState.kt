@@ -38,7 +38,17 @@ class Navigator(val state: NavigationState, private val navigateFilter: ((NavKey
     fun navigate(route: NavKey) {
         if (navigateFilter != null && !navigateFilter(route)) return
         if (route in state.backStacks.keys) {
-            state.topLevelRoute.value = route
+            if (state.topLevelRoute.value == route) {
+                // Already on this tab – pop back to the root screen
+                val stack = state.backStacks[route]
+                if (stack != null) {
+                    while (stack.size > 1) {
+                        stack.removeLastOrNull()
+                    }
+                }
+            } else {
+                state.topLevelRoute.value = route
+            }
         } else {
             state.backStacks[state.topLevelRoute.value]?.add(route)
         }
