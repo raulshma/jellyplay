@@ -1,5 +1,6 @@
 package com.raulshma.jellyplay.feature.editor
 
+import androidx.compose.foundation.focusGroup
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -22,10 +23,15 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.unit.dp
 import com.raulshma.jellyplay.core.ui.components.JellyPlayScreenScaffold
+import com.raulshma.jellyplay.core.ui.tv.TvGrabInitialFocus
+import com.raulshma.jellyplay.core.ui.tv.tvFocusRestorer
 import com.raulshma.jellyplay.feature.editor.components.ImagesTab
 import com.raulshma.jellyplay.feature.editor.components.MetadataTab
 import com.raulshma.jellyplay.feature.editor.components.SubtitlesTab
@@ -45,6 +51,15 @@ fun EditorScreen(
     LaunchedEffect(itemId) {
         viewModel.loadEditorData(itemId)
     }
+
+    // TV focus-on-launch: focus the tab row once data arrives so D-pad input lands on content,
+    // not the navigation drawer.
+    val contentFocusRequester = remember { FocusRequester() }
+    TvGrabInitialFocus(
+        focusRequester = contentFocusRequester,
+        itemCount = if (uiState.mediaDetail == null) 0 else 1,
+        tag = "editor_init",
+    )
 
     JellyPlayScreenScaffold(
         title = uiState.mediaDetail?.item?.name ?: "Edit Metadata",
@@ -77,7 +92,11 @@ fun EditorScreen(
         val scope = rememberCoroutineScope()
 
         Column(
-            modifier = Modifier.fillMaxSize(),
+            modifier = Modifier
+                .fillMaxSize()
+                .tvFocusRestorer()
+                .focusGroup()
+                .focusRequester(contentFocusRequester),
         ) {
             PrimaryTabRow(
                 selectedTabIndex = pagerState.currentPage,

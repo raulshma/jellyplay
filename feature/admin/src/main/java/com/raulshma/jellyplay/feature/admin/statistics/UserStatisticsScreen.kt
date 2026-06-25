@@ -34,6 +34,8 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
 
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.text.font.FontWeight
@@ -50,6 +52,8 @@ import com.raulshma.jellyplay.core.ui.components.ErrorScreen
 import com.raulshma.jellyplay.core.ui.components.JellyPlayScreenScaffold
 import com.raulshma.jellyplay.core.ui.components.ScreenLoadingState
 import com.raulshma.jellyplay.core.ui.components.StaggeredSection
+import com.raulshma.jellyplay.core.ui.tv.TvGrabInitialFocus
+import com.raulshma.jellyplay.core.ui.tv.tvFocusRestorer
 import com.raulshma.jellyplay.feature.admin.statistics.components.SummaryStatCard
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -61,6 +65,15 @@ fun UserStatisticsScreen(
 ) {
     val state by viewModel.state.collectAsState()
     val adaptiveInfo = LocalAdaptiveInfo.current
+
+    // TV focus-on-launch: focus the first user card once data arrives so D-pad input lands on
+    // content, not the navigation drawer.
+    val listFocusRequester = remember { FocusRequester() }
+    TvGrabInitialFocus(
+        focusRequester = listFocusRequester,
+        itemCount = if (state.isLoading || state.error != null) 0 else state.users.size.coerceAtLeast(1),
+        tag = "user_stats_init",
+    )
 
     JellyPlayScreenScaffold(
         title = "User Statistics",
@@ -80,7 +93,10 @@ fun UserStatisticsScreen(
                     .padding(paddingValues),
             ) {
                 LazyColumn(
-                    modifier = Modifier.fillMaxSize(),
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .tvFocusRestorer()
+                        .focusRequester(listFocusRequester),
                     contentPadding = androidx.compose.foundation.layout.PaddingValues(
                         start = 8.dp,
                         end = 8.dp,
