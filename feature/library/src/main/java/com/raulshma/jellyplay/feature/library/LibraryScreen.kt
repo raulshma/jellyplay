@@ -401,6 +401,7 @@ fun LibraryScreen(
                 PullToRefreshBox(
                     isRefreshing = pagedItems.loadState.refresh is LoadState.Loading,
                     onRefresh = { pagedItems.refresh() },
+                    enabled = !isTv,
                     modifier = Modifier.fillMaxSize(),
                 ) {
                     when (pagedItems.loadState.refresh) {
