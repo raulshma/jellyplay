@@ -20,6 +20,11 @@ sealed class Route : NavKey {
 
     @Serializable data object Home : Route()
     @Serializable data object Library : Route()
+    @Serializable data class LibraryBrowse(
+        val folderId: String,
+        val folderName: String,
+        val collectionType: String? = null,
+    ) : Route()
     @Serializable data object Search : Route()
     @Serializable data object LiveTv : Route()
 

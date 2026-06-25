@@ -34,6 +34,14 @@ fun EntryProviderScope<NavKey>.librarySection(navigator: Navigator) {
         )
     }
 
+    entry<Route.LibraryBrowse> {
+        LibraryScreen(
+            onItemClick = { itemId, mediaType, parentId, itemName ->
+                navigator.navigatePhotoAware(itemId, mediaType, parentId, itemName)
+            },
+        )
+    }
+
     entry<Route.Favorites> {
         FavoritesScreen(
             onItemClick = { itemId, mediaType, parentId, itemName ->
