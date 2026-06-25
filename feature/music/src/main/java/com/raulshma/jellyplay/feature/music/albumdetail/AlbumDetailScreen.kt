@@ -35,6 +35,8 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
@@ -50,6 +52,7 @@ import com.raulshma.jellyplay.core.model.MediaItem
 import com.raulshma.jellyplay.core.ui.adaptive.LocalAdaptiveInfo
 import com.raulshma.jellyplay.core.ui.adaptive.contentPadding
 import com.raulshma.jellyplay.core.ui.tv.LocalTvMode
+import com.raulshma.jellyplay.core.ui.tv.TvGrabInitialFocus
 import com.raulshma.jellyplay.core.ui.tv.enableMarqueeOnFocus
 import com.raulshma.jellyplay.core.ui.tv.rememberTvFocusState
 import com.raulshma.jellyplay.core.ui.tv.tvFocusIndicator
@@ -87,6 +90,15 @@ fun AlbumDetailScreen(
 
     val trackDownloads by viewModel.trackDownloads.collectAsStateWithLifecycle()
     var isRefreshing by remember { mutableStateOf(false) }
+
+    // TV focus-on-launch: focus the first track once content arrives so D-pad input lands on
+    // content, not the navigation drawer.
+    val listFocusRequester = remember { FocusRequester() }
+    TvGrabInitialFocus(
+        focusRequester = listFocusRequester,
+        itemCount = if (viewModel.isLoading || viewModel.error != null || viewModel.detail == null) 0 else viewModel.tracks.size.coerceAtLeast(1),
+        tag = "album_detail_init",
+    )
 
     PullToRefreshBox(
         isRefreshing = isRefreshing,
@@ -129,6 +141,7 @@ fun AlbumDetailScreen(
                     onDeleteAlbum = { viewModel.deleteAlbumDownloads() },
                     onArtistClick = onArtistClick,
                     onBack = onBack,
+                    listFocusRequester = listFocusRequester,
                 )
             }
         }
@@ -153,6 +166,7 @@ private fun AlbumDetailContent(
     onDeleteAlbum: () -> Unit,
     onArtistClick: (String) -> Unit,
     onBack: () -> Unit,
+    listFocusRequester: FocusRequester,
 ) {
     val item = detail.item
 
@@ -202,7 +216,8 @@ private fun AlbumDetailContent(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(top = 250.dp)
-                .tvFocusRestorer(),
+                .tvFocusRestorer()
+                .focusRequester(listFocusRequester),
             contentPadding = WindowInsets.navigationBars.asPaddingValues(),
         ) {
             item {

@@ -36,6 +36,8 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
@@ -53,6 +55,8 @@ import com.raulshma.jellyplay.core.ui.adaptive.contentPadding
 import com.raulshma.jellyplay.core.ui.components.JellyPlayScreenScaffold
 import com.raulshma.jellyplay.core.ui.components.ScreenEmptyState
 import com.raulshma.jellyplay.core.ui.image.MediaImage
+import com.raulshma.jellyplay.core.ui.tv.TvGrabInitialFocus
+import com.raulshma.jellyplay.core.ui.tv.tvFocusRestorer
 import com.composables.icons.tabler.Tabler
 import com.composables.icons.tabler.outline.*
 
@@ -76,6 +80,15 @@ fun OfflineSeriesScreen(
     var selectedSeasonIndex by remember { mutableIntStateOf(0) }
     val selectedSeason = seasons.getOrNull(selectedSeasonIndex)
     val seasonEpisodes = selectedSeason?.let { episodes[it.id] } ?: emptyList()
+
+    // TV focus-on-launch: focus the first episode once data arrives so D-pad input lands on
+    // content, not the navigation drawer.
+    val listFocusRequester = remember { FocusRequester() }
+    TvGrabInitialFocus(
+        focusRequester = listFocusRequester,
+        itemCount = seasonEpisodes.size,
+        tag = "offline_series_init",
+    )
 
     JellyPlayScreenScaffold(
         title = seriesItem?.name ?: "Loading...",
@@ -182,6 +195,10 @@ fun OfflineSeriesScreen(
                 )
             } else {
                 LazyColumn(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .tvFocusRestorer()
+                        .focusRequester(listFocusRequester),
                     contentPadding = PaddingValues(
                         start = contentPad,
                         end = contentPad,

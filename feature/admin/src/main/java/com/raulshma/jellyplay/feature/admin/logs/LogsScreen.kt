@@ -46,6 +46,8 @@ import kotlinx.coroutines.delay
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.text.font.FontFamily
@@ -75,6 +77,8 @@ import com.raulshma.jellyplay.core.ui.components.JellyPlayScreenScaffold
 import com.raulshma.jellyplay.core.ui.components.ScreenEmptyState
 import com.raulshma.jellyplay.core.ui.components.rememberScreenBackgroundColor
 import com.raulshma.jellyplay.core.ui.tv.LocalTvMode
+import com.raulshma.jellyplay.core.ui.tv.TvGrabInitialFocus
+import com.raulshma.jellyplay.core.ui.tv.tvFocusRestorer
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -87,6 +91,19 @@ fun LogsScreen(
     val isTv = LocalTvMode.current
     val backgroundColor = rememberScreenBackgroundColor()
     val tabs = listOf("Log Files", "Activity Log")
+
+    // TV focus-on-launch: focus the active tab's list once data arrives so D-pad input lands on
+    // content, not the navigation drawer. Resets when the user switches tabs.
+    val listFocusRequester = remember { FocusRequester() }
+    val activeItemCount = when (state.selectedTabIndex) {
+        0 -> if (state.selectedLogFileName == null) state.logFiles.size else state.selectedLogFileLines.size
+        else -> state.activityEntries.size
+    }
+    TvGrabInitialFocus(
+        focusRequester = listFocusRequester,
+        itemCount = activeItemCount,
+        tag = "logs_init",
+    )
 
     JellyPlayScreenScaffold(
         title = "Logs",
@@ -139,6 +156,7 @@ fun LogsScreen(
                     onFileClick = { viewModel.loadLogFile(it) },
                     onBackToList = { viewModel.clearSelectedLogFile() },
                     bottomPadding = adaptiveInfo.bottomPadding(isTv),
+                    listFocusRequester = listFocusRequester,
                 )
                 1 -> ActivityLogTab(
                     entries = state.activityEntries,
@@ -147,6 +165,7 @@ fun LogsScreen(
                     isLoadingMore = false,
                     onLoadMore = { viewModel.loadMoreActivity() },
                     bottomPadding = adaptiveInfo.bottomPadding(isTv),
+                    listFocusRequester = listFocusRequester,
                 )
             }
         }
@@ -164,6 +183,7 @@ private fun LogFilesTab(
     onFileClick: (String) -> Unit,
     onBackToList: () -> Unit,
     bottomPadding: androidx.compose.ui.unit.Dp,
+    listFocusRequester: FocusRequester,
 ) {
     if (selectedLogFileName != null || isLoadingContent) {
         Column(modifier = Modifier.fillMaxSize()) {
@@ -240,6 +260,8 @@ private fun LogFilesTab(
                     state = listState,
                     modifier = Modifier
                         .fillMaxSize()
+                        .tvFocusRestorer()
+                        .focusRequester(listFocusRequester)
                         .padding(horizontal = 8.dp),
                 ) {
                     items(
@@ -294,7 +316,10 @@ private fun LogFilesTab(
             )
         } else {
             LazyColumn(
-                modifier = Modifier.fillMaxSize(),
+                modifier = Modifier
+                    .fillMaxSize()
+                    .tvFocusRestorer()
+                    .focusRequester(listFocusRequester),
                 contentPadding = PaddingValues(
                     start = 16.dp,
                     end = 16.dp,
@@ -378,6 +403,7 @@ private fun ActivityLogTab(
     isLoadingMore: Boolean,
     onLoadMore: () -> Unit,
     bottomPadding: androidx.compose.ui.unit.Dp,
+    listFocusRequester: FocusRequester,
 ) {
     val listState = rememberLazyListState()
     val shouldLoadMore by remember {
@@ -424,7 +450,10 @@ private fun ActivityLogTab(
     } else {
         LazyColumn(
             state = listState,
-            modifier = Modifier.fillMaxSize(),
+            modifier = Modifier
+                .fillMaxSize()
+                .tvFocusRestorer()
+                .focusRequester(listFocusRequester),
             contentPadding = PaddingValues(
                 start = 16.dp,
                 end = 16.dp,

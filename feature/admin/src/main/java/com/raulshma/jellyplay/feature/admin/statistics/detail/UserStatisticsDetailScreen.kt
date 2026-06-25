@@ -46,6 +46,8 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawWithContent
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.layer.GraphicsLayer
 import androidx.compose.ui.graphics.rememberGraphicsLayer
 import androidx.compose.ui.platform.LocalContext
@@ -63,6 +65,8 @@ import com.raulshma.jellyplay.core.ui.components.ErrorScreen
 import com.raulshma.jellyplay.core.ui.components.JellyPlayScreenScaffold
 import com.raulshma.jellyplay.core.ui.components.ScreenLoadingState
 import com.raulshma.jellyplay.core.ui.components.StaggeredSection
+import com.raulshma.jellyplay.core.ui.tv.TvGrabInitialFocus
+import com.raulshma.jellyplay.core.ui.tv.tvFocusRestorer
 import com.raulshma.jellyplay.feature.admin.statistics.components.ActivityBarChart
 import com.raulshma.jellyplay.feature.admin.statistics.components.ComparisonCard
 import com.raulshma.jellyplay.feature.admin.statistics.components.CompletionRing
@@ -91,6 +95,15 @@ fun UserStatisticsDetailScreen(
     val adaptiveInfo = LocalAdaptiveInfo.current
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
+
+    // TV focus-on-launch: focus the first card once content arrives so D-pad input lands on
+    // content, not the navigation drawer.
+    val listFocusRequester = remember { FocusRequester() }
+    TvGrabInitialFocus(
+        focusRequester = listFocusRequester,
+        itemCount = if (state.isLoading || state.error != null) 0 else 1,
+        tag = "user_stats_detail_init",
+    )
 
     JellyPlayScreenScaffold(
         title = state.detail.user.name.ifBlank { "User Statistics" },
@@ -125,6 +138,8 @@ fun UserStatisticsDetailScreen(
             else -> LazyColumn(
                 modifier = Modifier
                     .fillMaxSize()
+                    .tvFocusRestorer()
+                    .focusRequester(listFocusRequester)
                     .padding(paddingValues),
                 contentPadding = PaddingValues(
                     start = 8.dp,

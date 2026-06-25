@@ -6,6 +6,7 @@ import android.graphics.Bitmap
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.focusGroup
 import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.layout.Arrangement
@@ -48,6 +49,8 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
@@ -81,6 +84,8 @@ import com.raulshma.jellyplay.core.designsystem.theme.isLightColor
 import com.raulshma.jellyplay.core.ui.adaptive.LocalAdaptiveInfo
 import com.raulshma.jellyplay.core.ui.adaptive.WindowSizeClass
 import com.raulshma.jellyplay.core.ui.components.JellyPlayScreenScaffold
+import com.raulshma.jellyplay.core.ui.tv.TvGrabInitialFocus
+import com.raulshma.jellyplay.core.ui.tv.tvFocusRestorer
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -103,6 +108,15 @@ fun WatchProgressHeatmapScreen(
     val scope = rememberCoroutineScope()
     val view = LocalView.current
     val adaptiveInfo = LocalAdaptiveInfo.current
+
+    // TV focus-on-launch: focus the heatmap content once it arrives so D-pad input lands on
+    // content, not the navigation drawer.
+    val contentFocusRequester = remember { FocusRequester() }
+    TvGrabInitialFocus(
+        focusRequester = contentFocusRequester,
+        itemCount = if (state.isLoading) 0 else 1,
+        tag = "heatmap_init",
+    )
 
     if (state.shareRequested) {
         LaunchedEffect(state.shareRequested) {
@@ -198,6 +212,9 @@ fun WatchProgressHeatmapScreen(
                 Column(
                     modifier = Modifier
                         .fillMaxSize()
+                        .tvFocusRestorer()
+                        .focusGroup()
+                        .focusRequester(contentFocusRequester)
                         .padding(innerPadding)
                         .verticalScroll(rememberScrollState())
                         .padding(horizontal = 16.dp),
@@ -247,6 +264,9 @@ fun WatchProgressHeatmapScreen(
                 Row(
                     modifier = Modifier
                         .fillMaxSize()
+                        .tvFocusRestorer()
+                        .focusGroup()
+                        .focusRequester(contentFocusRequester)
                         .padding(innerPadding)
                         .padding(horizontal = 16.dp),
                     horizontalArrangement = Arrangement.spacedBy(24.dp),

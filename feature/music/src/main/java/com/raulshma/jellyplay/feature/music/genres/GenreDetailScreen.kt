@@ -12,6 +12,8 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -30,6 +32,8 @@ import com.raulshma.jellyplay.feature.music.components.TrackRow
 import com.raulshma.jellyplay.core.ui.adaptive.LocalAdaptiveInfo
 import com.raulshma.jellyplay.core.ui.adaptive.bottomPadding
 import com.raulshma.jellyplay.core.ui.tv.LocalTvMode
+import com.raulshma.jellyplay.core.ui.tv.TvGrabInitialFocus
+import com.raulshma.jellyplay.core.ui.tv.tvFocusRestorer
 import com.composables.icons.tabler.Tabler
 import com.composables.icons.tabler.outline.*
 
@@ -46,6 +50,15 @@ fun GenreDetailScreen(
         isLoading = tracks.loadState.refresh is LoadState.Loading,
         hasError = tracks.loadState.refresh is LoadState.Error,
         networkStatus = networkStatus,
+    )
+
+    // TV focus-on-launch: focus the first track once data arrives so D-pad input lands on content,
+    // not the navigation drawer.
+    val listFocusRequester = androidx.compose.runtime.remember { FocusRequester() }
+    TvGrabInitialFocus(
+        focusRequester = listFocusRequester,
+        itemCount = tracks.itemCount,
+        tag = "genre_detail_init",
     )
 
     JellyPlayScreenScaffold(
@@ -83,7 +96,10 @@ fun GenreDetailScreen(
                                 bottom = adaptiveInfo.bottomPadding(isTv),
                             ),
                             verticalArrangement = Arrangement.spacedBy(2.dp),
-                            modifier = Modifier.fillMaxSize(),
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .tvFocusRestorer()
+                                .focusRequester(listFocusRequester),
                         ) {
                             items(
                                 count = tracks.itemCount,

@@ -32,6 +32,8 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -46,6 +48,8 @@ import com.raulshma.jellyplay.core.designsystem.theme.ShapeCache
 import com.raulshma.jellyplay.core.model.seerr.SeerrRequestItem
 import com.raulshma.jellyplay.core.ui.components.JellyPlayCircularProgressIndicator
 import com.raulshma.jellyplay.core.ui.components.JellyPlayScreenScaffold
+import com.raulshma.jellyplay.core.ui.tv.TvGrabInitialFocus
+import com.raulshma.jellyplay.core.ui.tv.tvFocusRestorer
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -58,6 +62,15 @@ fun RequestsScreen(
     val isAdmin by viewModel.isAdmin.collectAsStateWithLifecycle()
 
     var selectedRequest by remember { mutableStateOf<SeerrRequestItem?>(null) }
+
+    // TV focus-on-launch: focus the first request row once data arrives so D-pad input lands on
+    // content, not the navigation drawer.
+    val listFocusRequester = remember { FocusRequester() }
+    TvGrabInitialFocus(
+        focusRequester = listFocusRequester,
+        itemCount = if (state.isLoading && state.requests.isEmpty()) 0 else state.requests.size,
+        tag = "requests_init",
+    )
 
     JellyPlayScreenScaffold(
         title = "Requests",
@@ -140,6 +153,10 @@ fun RequestsScreen(
                         }
                     } else {
                         LazyColumn(
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .tvFocusRestorer()
+                                .focusRequester(listFocusRequester),
                             contentPadding = PaddingValues(
                                 start = 16.dp,
                                 top = 8.dp,

@@ -53,6 +53,8 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.text.font.FontWeight
@@ -72,6 +74,8 @@ import com.raulshma.jellyplay.core.ui.adaptive.LocalAdaptiveInfo
 import com.raulshma.jellyplay.core.ui.adaptive.bottomPadding
 import com.raulshma.jellyplay.core.ui.components.JellyPlayScreenScaffold
 import com.raulshma.jellyplay.core.ui.components.ScreenEmptyState
+import com.raulshma.jellyplay.core.ui.tv.TvGrabInitialFocus
+import com.raulshma.jellyplay.core.ui.tv.tvFocusRestorer
 import com.raulshma.jellyplay.feature.admin.components.AuditHistoryTab
 import com.raulshma.jellyplay.feature.admin.stalemedia.MediaSortOption
 
@@ -84,6 +88,19 @@ fun WatchedMediaCleanupScreen(
     val state by viewModel.state.collectAsStateWithLifecycle()
     val adaptiveInfo = LocalAdaptiveInfo.current
     var selectedTab by remember { mutableIntStateOf(0) }
+
+    // TV focus-on-launch: focus the first result/scan-button once content arrives so D-pad input
+    // lands on content, not the navigation drawer.
+    val listFocusRequester = remember { FocusRequester() }
+    val focusableItemCount = when (selectedTab) {
+        0 -> if (state.isLoading) 0 else state.scanResults.size.coerceAtLeast(1)
+        else -> 1
+    }
+    TvGrabInitialFocus(
+        focusRequester = listFocusRequester,
+        itemCount = focusableItemCount,
+        tag = "watched_cleanup_init",
+    )
 
     JellyPlayScreenScaffold(
         title = "Watched Media Cleanup",
@@ -124,6 +141,7 @@ fun WatchedMediaCleanupScreen(
                     onDismissDelete = { viewModel.dismissDeleteConfirmation() },
                     onSortChange = { viewModel.updateSort(it) },
                     bottomPadding = adaptiveInfo.bottomPadding(),
+                    listFocusRequester = listFocusRequester,
                 )
                 1 -> WatchedConfigurationTab(
                     config = state.config,
@@ -191,6 +209,7 @@ private fun WatchedScanResultsTab(
     onDismissDelete: () -> Unit,
     onSortChange: (MediaSortOption) -> Unit,
     bottomPadding: androidx.compose.ui.unit.Dp,
+    listFocusRequester: FocusRequester,
 ) {
     Column(modifier = Modifier.fillMaxSize()) {
         if (state.error != null) {
@@ -327,7 +346,10 @@ private fun WatchedScanResultsTab(
             }
         } else if (state.scanResults.isNotEmpty()) {
             LazyColumn(
-                modifier = Modifier.fillMaxSize(),
+                modifier = Modifier
+                    .fillMaxSize()
+                    .tvFocusRestorer()
+                    .focusRequester(listFocusRequester),
                 contentPadding = PaddingValues(start = 16.dp, end = 16.dp, bottom = bottomPadding),
                 verticalArrangement = Arrangement.spacedBy(6.dp),
             ) {

@@ -61,6 +61,8 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
@@ -76,6 +78,8 @@ import com.raulshma.jellyplay.core.ui.components.ScreenEmptyState
 import com.raulshma.jellyplay.core.ui.components.TooltipIconButton
 import com.raulshma.jellyplay.core.ui.components.resolveHeaderStatus
 import com.raulshma.jellyplay.core.ui.tv.LocalTvMode
+import com.raulshma.jellyplay.core.ui.tv.TvGrabInitialFocus
+import com.raulshma.jellyplay.core.ui.tv.tvFocusRestorer
 import kotlinx.coroutines.delay
 import com.raulshma.jellyplay.core.model.SyncPlayRepeatMode
 import com.raulshma.jellyplay.core.model.SyncPlayShuffleMode
@@ -109,6 +113,15 @@ fun SyncPlayScreen(
         networkStatus = networkStatus,
     )
     val navOffsetPx = com.raulshma.jellyplay.core.ui.components.LocalFloatingNavOffset.current
+
+    // TV focus-on-launch: focus the first group card or the create-group FAB once data arrives so
+    // D-pad input lands on content, not the navigation drawer.
+    val listFocusRequester = remember { FocusRequester() }
+    TvGrabInitialFocus(
+        focusRequester = listFocusRequester,
+        itemCount = if (error != null) 0 else groups.size.coerceAtLeast(1),
+        tag = "syncplay_init",
+    )
 
     LaunchedEffect(Unit) {
         viewModel.loadGroups()
@@ -205,7 +218,10 @@ fun SyncPlayScreen(
                         )
                     } else {
                         LazyColumn(
-                            modifier = Modifier.fillMaxSize(),
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .tvFocusRestorer()
+                                .focusRequester(listFocusRequester),
                             contentPadding = PaddingValues(contentPad),
                             verticalArrangement = Arrangement.spacedBy(spacing),
                         ) {

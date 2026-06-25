@@ -14,10 +14,13 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.unit.dp
 import com.raulshma.jellyplay.core.model.MediaItem
 import com.raulshma.jellyplay.core.model.NewsletterSectionType
+import com.raulshma.jellyplay.core.ui.tv.tvFocusRestorer
 
 @Composable
 fun NewsletterContent(
@@ -26,6 +29,7 @@ fun NewsletterContent(
     onItemClick: (MediaItem) -> Unit,
     onPlayClick: (String, String?, Long) -> Unit,
     onViewAllFreshPicks: () -> Unit = {},
+    listFocusRequester: FocusRequester,
 ) {
     val hasAnyContent = state.recentlyAdded.isNotEmpty() ||
         state.activityDigest.isNotEmpty() ||
@@ -39,7 +43,10 @@ fun NewsletterContent(
     val contentPadding = PaddingValues(bottom = 24.dp)
 
     LazyColumn(
-        modifier = Modifier.fillMaxSize(),
+        modifier = Modifier
+            .fillMaxSize()
+            .tvFocusRestorer()
+            .focusRequester(listFocusRequester),
         contentPadding = contentPadding,
     ) {
         item {
