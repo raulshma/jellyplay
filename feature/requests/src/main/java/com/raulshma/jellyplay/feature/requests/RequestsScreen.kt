@@ -122,7 +122,7 @@ fun RequestsScreen(
                                     Tabler.Outline.Inbox,
                                     contentDescription = null,
                                     modifier = Modifier.size(64.dp),
-                                    tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.4f),
+                                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
                                 )
                                 Spacer(Modifier.height(16.dp))
                                 Text(
@@ -134,7 +134,7 @@ fun RequestsScreen(
                                 Text(
                                     "Try adjusting your filters",
                                     style = MaterialTheme.typography.bodySmall,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f),
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
                                 )
                             }
                         }

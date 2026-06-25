@@ -206,7 +206,7 @@ private fun ChannelCard(
                     Tabler.Outline.DeviceTv,
                     contentDescription = null,
                     modifier = Modifier.size(28.dp),
-                    tint = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f),
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
             }
         }
@@ -239,7 +239,7 @@ private fun ChannelCard(
                 Text(
                     text = currentProgram.name,
                     style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f),
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
                 )

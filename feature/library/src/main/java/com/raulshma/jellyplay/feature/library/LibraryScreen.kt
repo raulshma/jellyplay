@@ -432,7 +432,7 @@ fun LibraryScreen(
                                             Tabler.Outline.Search,
                                             contentDescription = null,
                                             modifier = Modifier.size(48.dp),
-                                            tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.4f),
+                                            tint = MaterialTheme.colorScheme.onSurfaceVariant,
                                         )
                                         Text(
                                             text = "No items found",
@@ -443,7 +443,7 @@ fun LibraryScreen(
                                             Text(
                                                 text = "Try adjusting your filters",
                                                 style = MaterialTheme.typography.bodySmall,
-                                                color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f),
+                                                color = MaterialTheme.colorScheme.onSurfaceVariant,
                                             )
                                         }
                                     }

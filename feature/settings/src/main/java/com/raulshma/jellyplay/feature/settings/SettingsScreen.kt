@@ -275,7 +275,7 @@ fun SettingsScreen(
                                 placeholder = {
                                     Text(
                                         "Search settings...",
-                                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.4f),
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
                                     )
                                 },
                                 leadingIcon = {
@@ -484,7 +484,7 @@ fun SettingsScreen(
                                                 Icon(
                                                     imageVector = Tabler.Outline.ChevronRight,
                                                     contentDescription = null,
-                                                    tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.4f),
+                                                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
                                                     modifier = Modifier.size(16.dp)
                                                 )
                                             }
@@ -1058,7 +1058,7 @@ private fun SettingsTvCollapsedSearchRow(
             Spacer(Modifier.width(12.dp))
             Text(
                 text = "Search settings...",
-                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.4f),
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
                 style = MaterialTheme.typography.bodyMedium,
             )
         }

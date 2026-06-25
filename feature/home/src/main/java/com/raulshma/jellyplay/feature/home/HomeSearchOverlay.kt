@@ -98,7 +98,7 @@ fun HomeSearchResultsOverlay(
                 Text(
                     "No results found",
                     style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f),
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
             }
         } else {
@@ -312,7 +312,7 @@ fun HomeSearchResultsOverlay(
                             @OptIn(androidx.compose.material3.ExperimentalMaterial3ExpressiveApi::class)
                             androidx.compose.material3.LoadingIndicator(
                                 modifier = Modifier.size(20.dp),
-                                color = MaterialTheme.colorScheme.primary.copy(alpha = 0.6f),
+                                color = MaterialTheme.colorScheme.primary,
                             )
                         }
                     }
@@ -398,7 +398,7 @@ private fun SearchItemRow(
                     Tabler.Outline.Search,
                     contentDescription = null,
                     modifier = Modifier.size(20.dp),
-                    tint = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.3f),
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
             }
         }
@@ -415,7 +415,7 @@ private fun SearchItemRow(
                 Text(
                     text = subtitle,
                     style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.55f),
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
                 )

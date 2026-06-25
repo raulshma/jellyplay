@@ -57,7 +57,6 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.raulshma.jellyplay.core.designsystem.theme.ShapeCache
-import com.raulshma.jellyplay.core.designsystem.theme.isLightColor
 import com.raulshma.jellyplay.core.designsystem.theme.ThemeVariantColors
 import com.raulshma.jellyplay.core.ui.adaptive.LocalJellyPlayUi
 import com.raulshma.jellyplay.core.ui.tv.LocalTvMode
@@ -68,7 +67,7 @@ import com.composables.icons.tabler.outline.*
 @Composable
 fun rememberScreenBackgroundColor(
     artworkColor: Color? = null,
-    isLightTheme: Boolean = isLightColor(MaterialTheme.colorScheme.background),
+    isLightTheme: Boolean = com.raulshma.jellyplay.core.designsystem.theme.LocalIsLightTheme.current,
 ): Color {
     val themeVariant = com.raulshma.jellyplay.core.designsystem.theme.LocalThemeVariant.current
     if (themeVariant == com.raulshma.jellyplay.core.designsystem.theme.ThemeVariant.SYNTHWAVE) return Color.Transparent
@@ -282,7 +281,7 @@ fun ScreenEmptyState(
                 icon,
                 contentDescription = null,
                 modifier = Modifier.size(64.dp),
-                tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f),
+                tint = MaterialTheme.colorScheme.onSurfaceVariant,
             )
             Text(
                 text = title,

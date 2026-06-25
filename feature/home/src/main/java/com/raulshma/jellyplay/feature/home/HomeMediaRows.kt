@@ -350,7 +350,7 @@ fun WideMediaCard(
                     Text(
                         text = subtitleText,
                         style = MaterialTheme.typography.labelSmall,
-                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f),
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis,
                         modifier = Modifier.weight(1f, fill = false),
@@ -359,7 +359,7 @@ fun WideMediaCard(
                     Text(
                         text = item.year.toString(),
                         style = MaterialTheme.typography.labelSmall,
-                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.55f),
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
                 }
 
@@ -368,15 +368,13 @@ fun WideMediaCard(
                         Text(
                             text = "•",
                             style = MaterialTheme.typography.labelSmall,
-                            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.4f),
+                            color = MaterialTheme.colorScheme.outlineVariant,
                         )
                     }
                     Text(
                         text = if (remainingTime != null) "$timeText left" else timeText,
                         style = MaterialTheme.typography.labelSmall,
-                        color = if (remainingTime != null) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface.copy(
-                            alpha = 0.55f
-                        ),
+                        color = if (remainingTime != null) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
                     )
                 }
             }

@@ -242,12 +242,12 @@ private fun DelayStepper(
         modifier = Modifier
             .size(40.dp)
             .clip(CircleShape)
-            .background(Color.White.copy(alpha = 0.08f))
+            .background(MaterialTheme.colorScheme.onSurface.copy(alpha = 0.08f))
             .then(focus.focusModifier)
             .tvFocusIndicator(focus, CircleShape)
             .clickable(onClick = onClick),
         contentAlignment = Alignment.Center,
     ) {
-        Icon(icon, contentDescription = description, tint = Color.White)
+        Icon(icon, contentDescription = description, tint = MaterialTheme.colorScheme.onSurface)
     }
 }

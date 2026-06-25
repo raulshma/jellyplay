@@ -413,7 +413,7 @@ private fun AddressRow(
                 if (isPrimary) Tabler.Outline.Star else Tabler.Outline.Link,
                 contentDescription = null,
                 modifier = Modifier.size(16.dp),
-                tint = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.6f),
+                tint = MaterialTheme.colorScheme.onPrimaryContainer,
             )
             Spacer(Modifier.width(8.dp))
             Text(
@@ -429,7 +429,7 @@ private fun AddressRow(
                 Text(
                     "Primary",
                     style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.5f),
+                    color = MaterialTheme.colorScheme.onPrimaryContainer,
                 )
             }
         }
@@ -462,7 +462,7 @@ private fun AddressRow(
                     Tabler.Outline.X,
                     contentDescription = "Remove address",
                     modifier = Modifier.size(16.dp),
-                    tint = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.6f),
+                    tint = MaterialTheme.colorScheme.onPrimaryContainer,
                 )
             }
         }

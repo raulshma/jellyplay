@@ -102,34 +102,34 @@ fun OfflineSeriesScreen(
                                 Text(
                                     text = " · ",
                                     style = MaterialTheme.typography.bodySmall,
-                                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.4f),
+                                    color = MaterialTheme.colorScheme.outlineVariant,
                                 )
                             }
                             Icon(
                                 Tabler.Outline.Star,
                                 contentDescription = null,
                                 modifier = Modifier.size(14.dp),
-                                tint = MaterialTheme.colorScheme.tertiary,
-                            )
-                            Spacer(Modifier.width(2.dp))
-                            Text(
-                                text = String.format("%.1f", series.communityRating),
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f),
-                            )
+                            tint = MaterialTheme.colorScheme.tertiary,
+                        )
+                        Spacer(Modifier.width(2.dp))
+                        Text(
+                            text = String.format("%.1f", series.communityRating),
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
                         }
                         if (series.officialRating != null) {
                             Text(
                                 text = " · ${series.officialRating}",
                                 style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f),
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
                             )
                         }
                         if (series.childCount > 0) {
                             Text(
                                 text = " · ${series.childCount} episodes",
                                 style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f),
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
                             )
                         }
                     }
@@ -137,7 +137,7 @@ fun OfflineSeriesScreen(
                         Text(
                             text = series.genres.joinToString(", "),
                             style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f),
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
                             maxLines = 1,
                             overflow = TextOverflow.Ellipsis,
                             modifier = Modifier.padding(top = 2.dp),
@@ -293,7 +293,7 @@ private fun OfflineEpisodeRow(
                         Text(
                             text = "${runtimeMinutes}m",
                             style = MaterialTheme.typography.labelSmall,
-                            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f),
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
                         )
                     }
                 }
@@ -302,7 +302,7 @@ private fun OfflineEpisodeRow(
                         Text(
                             text = " · ",
                             style = MaterialTheme.typography.labelSmall,
-                            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.3f),
+                            color = MaterialTheme.colorScheme.outlineVariant,
                         )
                     }
                     Icon(
@@ -315,7 +315,7 @@ private fun OfflineEpisodeRow(
                     Text(
                         text = String.format("%.1f", episode.communityRating),
                         style = MaterialTheme.typography.labelSmall,
-                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f),
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
                 }
             }
@@ -324,7 +324,7 @@ private fun OfflineEpisodeRow(
                 Text(
                     text = episode.overview!!,
                     style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f),
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
                     maxLines = 2,
                     overflow = TextOverflow.Ellipsis,
                     modifier = Modifier.padding(top = 4.dp),
@@ -384,7 +384,7 @@ private fun OfflineEpisodeRow(
             Icon(
                 Tabler.Outline.Trash,
                 contentDescription = "Delete",
-                tint = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f),
+                tint = MaterialTheme.colorScheme.onSurfaceVariant,
                 modifier = Modifier.size(20.dp),
             )
         }

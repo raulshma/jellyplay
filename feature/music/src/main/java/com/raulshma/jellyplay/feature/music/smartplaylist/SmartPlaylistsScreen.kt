@@ -129,7 +129,7 @@ private fun PlaylistCard(
                     Text(
                         text = playlist.criteria.joinToString { it.type.name.lowercase().replaceFirstChar { c -> c.uppercase() } },
                         style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.6f),
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
                 }
             }

@@ -173,7 +173,7 @@ private fun ContinueWatchingCard(
                         Text(
                             text = "\u00B7",
                             style = MaterialTheme.typography.labelSmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f),
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
                         )
                     }
                     Text(
@@ -189,7 +189,7 @@ private fun ContinueWatchingCard(
                     Text(
                         text = "\u00B7",
                         style = MaterialTheme.typography.labelSmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f),
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
                     Box(
                         modifier = Modifier
@@ -384,7 +384,7 @@ private fun NextUpCard(
                         Text(
                             text = "\u00B7",
                             style = MaterialTheme.typography.labelSmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f),
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
                         )
                     }
                     Text(
@@ -400,7 +400,7 @@ private fun NextUpCard(
                     Text(
                         text = "\u00B7",
                         style = MaterialTheme.typography.labelSmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f),
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
                     Box(
                         modifier = Modifier

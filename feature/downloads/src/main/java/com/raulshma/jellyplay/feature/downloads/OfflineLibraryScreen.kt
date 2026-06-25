@@ -210,7 +210,7 @@ private fun OfflineMediaCard(
                 Text(
                     text = album,
                     style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f),
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
                     modifier = Modifier.padding(top = 2.dp),
@@ -225,15 +225,15 @@ private fun OfflineMediaCard(
                     Text(
                         text = item.year.toString(),
                         style = MaterialTheme.typography.labelSmall,
-                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f),
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
                 }
                 if (item.communityRating != null && item.communityRating!! > 0) {
-                    if (item.year != null) {
+                if (item.year != null) {
                         Text(
                             text = " · ",
                             style = MaterialTheme.typography.labelSmall,
-                            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.4f),
+                            color = MaterialTheme.colorScheme.outlineVariant,
                         )
                     }
                     Icon(
@@ -246,14 +246,14 @@ private fun OfflineMediaCard(
                     Text(
                         text = String.format("%.1f", item.communityRating),
                         style = MaterialTheme.typography.labelSmall,
-                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f),
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
                 }
                 if (item.officialRating != null) {
                     Text(
                         text = " · ${item.officialRating}",
                         style = MaterialTheme.typography.labelSmall,
-                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.4f),
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
                 }
             }
@@ -262,7 +262,7 @@ private fun OfflineMediaCard(
                 Text(
                     text = "${item.childCount} episodes",
                     style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f),
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
             }
 
@@ -270,7 +270,7 @@ private fun OfflineMediaCard(
                 Text(
                     text = item.genres.take(3).joinToString(", "),
                     style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f),
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
                 )
