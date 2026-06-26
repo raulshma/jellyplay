@@ -42,6 +42,8 @@ import com.composables.icons.tabler.outline.Server
 import com.raulshma.jellyplay.core.designsystem.theme.AlphaEasing
 import com.raulshma.jellyplay.core.designsystem.theme.ShapeCache
 import com.raulshma.jellyplay.core.model.SystemInfo
+import com.raulshma.jellyplay.core.ui.tv.rememberTvFocusState
+import com.raulshma.jellyplay.core.ui.tv.tvFocusIndicator
 
 @Composable
 fun ServerHeroHeader(
@@ -54,6 +56,9 @@ fun ServerHeroHeader(
 ) {
     val primaryContainer = MaterialTheme.colorScheme.primaryContainer
     val surface = MaterialTheme.colorScheme.surface
+
+    val restartFocusState = rememberTvFocusState(focusedScale = 1.05f)
+    val shutdownFocusState = rememberTvFocusState(focusedScale = 1.04f)
 
     val infiniteTransition = rememberInfiniteTransition(label = "statusPulse")
     val pulseAlpha by infiniteTransition.animateFloat(
@@ -179,7 +184,10 @@ fun ServerHeroHeader(
                 FilledTonalButton(
                     onClick = onRestart,
                     enabled = !isRestarting && !isShuttingDown && systemInfo.canSelfRestart,
-                    modifier = Modifier.weight(1f),
+                    modifier = Modifier
+                        .weight(1f)
+                        .then(restartFocusState.focusModifier)
+                        .tvFocusIndicator(restartFocusState, ShapeCache.smooth12),
                 ) {
                     if (isRestarting) {
                         com.raulshma.jellyplay.core.ui.components.JellyPlayLoadingIndicator(
@@ -194,7 +202,10 @@ fun ServerHeroHeader(
                 OutlinedButton(
                     onClick = onShutdown,
                     enabled = !isRestarting && !isShuttingDown,
-                    modifier = Modifier.weight(1f),
+                    modifier = Modifier
+                        .weight(1f)
+                        .then(shutdownFocusState.focusModifier)
+                        .tvFocusIndicator(shutdownFocusState, ShapeCache.smooth12),
                     colors = androidx.compose.material3.ButtonDefaults.outlinedButtonColors(
                         contentColor = MaterialTheme.colorScheme.error,
                     ),

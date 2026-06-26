@@ -98,6 +98,7 @@ import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.foundation.layout.offset
 import androidx.compose.ui.draw.scale
+import androidx.compose.ui.draw.clip
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.NavigationBarItem
 import androidx.compose.material3.NavigationBarItemDefaults
@@ -111,11 +112,9 @@ import com.raulshma.jellyplay.core.data.playback.AudioPlaybackManager
 import com.raulshma.jellyplay.core.model.HomeMode
 import com.raulshma.jellyplay.core.ui.adaptive.LocalAdaptiveInfo
 import com.raulshma.jellyplay.core.ui.adaptive.LocalJellyPlayUi
-import com.raulshma.jellyplay.core.ui.adaptive.MasterDetailLayout
 import com.raulshma.jellyplay.core.ui.adaptive.WindowSizeClass
 import com.raulshma.jellyplay.core.ui.adaptive.rememberJellyPlayUiEnvironment
 import com.raulshma.jellyplay.core.ui.adaptive.rememberAdaptiveInfo
-import com.raulshma.jellyplay.core.ui.adaptive.resolveMasterDetailLayout
 import com.raulshma.jellyplay.core.designsystem.theme.TvTypography
 import com.raulshma.jellyplay.core.designsystem.theme.LocalIsSynthwave
 import com.raulshma.jellyplay.core.designsystem.theme.LocalIsSoothingTheme
@@ -127,6 +126,7 @@ import com.raulshma.jellyplay.core.designsystem.theme.shadowElevation
 import com.raulshma.jellyplay.core.designsystem.theme.tonalElevation
 import com.raulshma.jellyplay.core.ui.components.LocalNavigationBarColor
 import com.raulshma.jellyplay.core.ui.components.MiniPlayer
+import com.raulshma.jellyplay.core.ui.components.focusIndicator
 import com.raulshma.jellyplay.core.ui.components.LocalPerformanceMode
 import com.raulshma.jellyplay.core.ui.components.LocalFloatingNavVisibility
 import com.raulshma.jellyplay.core.ui.feedback.LocalUserMessageBus
@@ -600,7 +600,6 @@ private fun MainContent(
             // every layout-branch switch (e.g. entering the player and back).
             val saveableStateHolder = rememberSaveableStateHolder()
             val entryDecorator = rememberSaveableStateHolderNavEntryDecorator<NavKey>(saveableStateHolder)
-
             // Hoist the audio-mini-player navigation callbacks so all three layout branches
             // (TvContent / PhoneContent / FullScreenContent) can share identical instances
             // instead of allocating fresh lambdas per call site.
@@ -1262,190 +1261,151 @@ private fun MainNavDisplay(
         shortcutsSection(navigator)
     }
 
-    val adaptiveInfo = LocalAdaptiveInfo.current
-    // TV always uses single-pane push navigation — D-pad doesn't work with side-by-side panes.
-    // MasterDetailLayout.kt documents this intent but resolveMasterDetailLayout doesn't enforce it.
-    val isExpanded = !LocalTvMode.current && adaptiveInfo.windowSizeClass != WindowSizeClass.Compact
-    val topRoute = currentBackStack.lastOrNull() as? Route
-    val decision = resolveMasterDetailLayout(
-        isExpanded = isExpanded,
-        backStackSize = currentBackStack.size,
-        topRouteIsDetail = topRoute?.isDetail == true,
-    )
+    NavDisplay(
+        backStack = currentBackStack,
+        onBack = { navigator.goBack() },
+        entryDecorators = listOf(entryDecorator, paddingDecorator),
+        transitionSpec = {
+            val targetLast = targetState
+            val initialLast = initialState
+            val targetRoute = targetLast.entries.lastOrNull()?.contentKey as? Route
+            val initialRoute = initialLast.entries.lastOrNull()?.contentKey as? Route
+            val isModalRoute = targetRoute?.isModal == true
+            val isModalPop = initialRoute?.isModal == true
+            val isTabSwitch = targetRoute != null && initialRoute != null &&
+                    ALL_TOP_LEVEL_ROUTE_KEYS.contains(targetRoute) &&
+                    ALL_TOP_LEVEL_ROUTE_KEYS.contains(initialRoute)
+            val isAmbient = targetRoute is Route.Ambient || initialRoute is Route.Ambient
 
-    val renderDetailPane: @Composable (Modifier) -> Unit = { mod ->
-        NavDisplay(
-            backStack = currentBackStack,
-            onBack = { navigator.goBack() },
-            entryDecorators = listOf(entryDecorator, paddingDecorator),
-            transitionSpec = {
-                val targetLast = targetState
-                val initialLast = initialState
-                val targetRoute = targetLast.entries.lastOrNull()?.contentKey as? Route
-                val initialRoute = initialLast.entries.lastOrNull()?.contentKey as? Route
-                val isModalRoute = targetRoute?.isModal == true
-                val isModalPop = initialRoute?.isModal == true
-                val isTabSwitch = targetRoute != null && initialRoute != null &&
-                        ALL_TOP_LEVEL_ROUTE_KEYS.contains(targetRoute) &&
-                        ALL_TOP_LEVEL_ROUTE_KEYS.contains(initialRoute)
-                val isAmbient = targetRoute is Route.Ambient || initialRoute is Route.Ambient
-
-                when {
-                    isAmbient -> {
-                        fadeIn(defaultEffects) togetherWith fadeOut(fastEffects)
-                    }
-                    isModalRoute -> {
-                        fadeIn(
-                            defaultEffects
-                        ) + slideInVertically(
-                            initialOffsetY = { it / 4 },
-                            animationSpec = defaultSpatialOffset,
-                        ) togetherWith fadeOut(
-                            fastEffects
-                        )
-                    }
-                    isModalPop -> {
-                        fadeIn(fastEffects) togetherWith fadeOut(
-                            fastEffects
-                        ) + slideOutVertically(
-                            targetOffsetY = { it / 4 },
-                            animationSpec = defaultSpatialOffset,
-                        )
-                    }
-                    isTabSwitch -> {
-                        fadeIn(fastEffects) togetherWith fadeOut(
-                            fastEffects
-                        )
-                    }
-                    isDetailScene(targetLast) || isDetailScene(initialLast) -> {
-                        fadeIn(
-                            animationSpec = defaultEffects,
-                        ) togetherWith fadeOut(
-                            animationSpec = fastEffects,
-                        )
-                    }
-                    else -> {
-                        fadeIn(
-                            animationSpec = defaultEffects,
-                        ) + slideInHorizontally(
-                            initialOffsetX = { it / 8 },
-                            animationSpec = defaultSpatialOffset,
-                        ) + scaleIn(
-                            initialScale = 0.985f,
-                            animationSpec = defaultSpatial,
-                        ) togetherWith fadeOut(
-                            animationSpec = fastEffects,
-                        ) + slideOutHorizontally(
-                            targetOffsetX = { -it / 18 },
-                            animationSpec = defaultSpatialOffset,
-                        ) + scaleOut(
-                            targetScale = 1.015f,
-                            animationSpec = defaultEffects,
-                        )
-                    }
+            when {
+                isAmbient -> {
+                    fadeIn(defaultEffects) togetherWith fadeOut(fastEffects)
                 }
-            },
-            popTransitionSpec = {
-                val targetLast = targetState
-                val initialLast = initialState
-                val initialRoute = initialLast.entries.lastOrNull()?.contentKey as? Route
-                val isModalPop = initialRoute?.isModal == true
-                when {
-                    isModalPop -> {
-                        fadeIn(fastEffects) togetherWith fadeOut(
-                            fastEffects
-                        ) + slideOutVertically(
-                                targetOffsetY = { it / 4 },
-                                animationSpec = defaultSpatialOffset,
-                            )
-                    }
-                    isDetailScene(initialLast) || isDetailScene(targetLast) -> {
-                        fadeIn(
-                            animationSpec = defaultEffects,
-                        ) togetherWith fadeOut(
-                            animationSpec = defaultEffects,
-                        )
-                    }
-                    else -> {
-                        fadeIn(
-                                animationSpec = defaultEffects,
-                            ) + slideInHorizontally(
-                                initialOffsetX = { -it / 12 },
-                                animationSpec = defaultSpatialOffset,
-                            ) + scaleIn(
-                                initialScale = 1.015f,
-                                animationSpec = defaultSpatial,
-                            ) togetherWith fadeOut(
-                                animationSpec = fastEffects,
-                            ) + slideOutHorizontally(
-                                targetOffsetX = { it / 10 },
-                                animationSpec = defaultSpatialOffset,
-                            ) + scaleOut(
-                                targetScale = 0.985f,
-                                animationSpec = defaultEffects,
-                            )
-                    }
+                isModalRoute -> {
+                    fadeIn(
+                        defaultEffects
+                    ) + slideInVertically(
+                        initialOffsetY = { it / 4 },
+                        animationSpec = defaultSpatialOffset,
+                    ) togetherWith fadeOut(
+                        fastEffects
+                    )
                 }
-            },
-            predictivePopTransitionSpec = { _ ->
-                val targetLast = targetState
-                val initialLast = initialState
-                if (isDetailScene(initialLast) || isDetailScene(targetLast)) {
+                isModalPop -> {
+                    fadeIn(fastEffects) togetherWith fadeOut(
+                        fastEffects
+                    ) + slideOutVertically(
+                        targetOffsetY = { it / 4 },
+                        animationSpec = defaultSpatialOffset,
+                    )
+                }
+                isTabSwitch -> {
+                    fadeIn(fastEffects) togetherWith fadeOut(
+                        fastEffects
+                    )
+                }
+                isDetailScene(targetLast) || isDetailScene(initialLast) -> {
                     fadeIn(
                         animationSpec = defaultEffects,
                     ) togetherWith fadeOut(
-                        animationSpec = defaultEffects,
+                        animationSpec = fastEffects,
                     )
-                } else {
+                }
+                else -> {
                     fadeIn(
                         animationSpec = defaultEffects,
                     ) + slideInHorizontally(
-                        initialOffsetX = { -it / 12 },
+                        initialOffsetX = { it / 8 },
                         animationSpec = defaultSpatialOffset,
                     ) + scaleIn(
-                        initialScale = 1.015f,
+                        initialScale = 0.985f,
                         animationSpec = defaultSpatial,
                     ) togetherWith fadeOut(
                         animationSpec = fastEffects,
                     ) + slideOutHorizontally(
-                        targetOffsetX = { it / 10 },
+                        targetOffsetX = { -it / 18 },
                         animationSpec = defaultSpatialOffset,
                     ) + scaleOut(
-                        targetScale = 0.985f,
+                        targetScale = 1.015f,
                         animationSpec = defaultEffects,
                     )
                 }
-            },
-            entryProvider = sharedEntryProvider,
-            modifier = mod,
-        )
-    }
-
-    if (decision.isTwoPane) {
-        val currentTopLevel = navigationState.topLevelRoute.value
-        val listBackStack = rememberNavBackStack(currentTopLevel)
-        LaunchedEffect(currentTopLevel) {
-            if (listBackStack.isEmpty() || listBackStack.first() != currentTopLevel) {
-                listBackStack.clear()
-                listBackStack.add(currentTopLevel)
             }
-        }
-        MasterDetailLayout(
-            decision = decision,
-            masterPane = {
-                NavDisplay(
-                    backStack = listBackStack,
-                    onBack = { },
-                    entryDecorators = listOf(entryDecorator),
-                    entryProvider = sharedEntryProvider,
-                    modifier = Modifier.fillMaxSize(),
+        },
+        popTransitionSpec = {
+            val targetLast = targetState
+            val initialLast = initialState
+            val initialRoute = initialLast.entries.lastOrNull()?.contentKey as? Route
+            val isModalPop = initialRoute?.isModal == true
+            when {
+                isModalPop -> {
+                    fadeIn(fastEffects) togetherWith fadeOut(
+                        fastEffects
+                    ) + slideOutVertically(
+                            targetOffsetY = { it / 4 },
+                            animationSpec = defaultSpatialOffset,
+                        )
+                }
+                isDetailScene(initialLast) || isDetailScene(targetLast) -> {
+                    fadeIn(
+                        animationSpec = defaultEffects,
+                    ) togetherWith fadeOut(
+                        animationSpec = defaultEffects,
+                    )
+                }
+                else -> {
+                    fadeIn(
+                            animationSpec = defaultEffects,
+                        ) + slideInHorizontally(
+                            initialOffsetX = { -it / 12 },
+                            animationSpec = defaultSpatialOffset,
+                        ) + scaleIn(
+                            initialScale = 1.015f,
+                            animationSpec = defaultSpatial,
+                        ) togetherWith fadeOut(
+                            animationSpec = fastEffects,
+                        ) + slideOutHorizontally(
+                            targetOffsetX = { it / 10 },
+                            animationSpec = defaultSpatialOffset,
+                        ) + scaleOut(
+                            targetScale = 0.985f,
+                            animationSpec = defaultEffects,
+                        )
+                }
+            }
+        },
+        predictivePopTransitionSpec = { _ ->
+            val targetLast = targetState
+            val initialLast = initialState
+            if (isDetailScene(initialLast) || isDetailScene(targetLast)) {
+                fadeIn(
+                    animationSpec = defaultEffects,
+                ) togetherWith fadeOut(
+                    animationSpec = defaultEffects,
                 )
-            },
-            detailPane = { renderDetailPane(Modifier.fillMaxSize()) },
-        )
-    } else {
-        renderDetailPane(modifier)
-    }
+            } else {
+                fadeIn(
+                    animationSpec = defaultEffects,
+                ) + slideInHorizontally(
+                    initialOffsetX = { -it / 12 },
+                    animationSpec = defaultSpatialOffset,
+                ) + scaleIn(
+                    initialScale = 1.015f,
+                    animationSpec = defaultSpatial,
+                ) togetherWith fadeOut(
+                    animationSpec = fastEffects,
+                ) + slideOutHorizontally(
+                    targetOffsetX = { it / 10 },
+                    animationSpec = defaultSpatialOffset,
+                ) + scaleOut(
+                    targetScale = 0.985f,
+                    animationSpec = defaultEffects,
+                )
+            }
+        },
+        entryProvider = sharedEntryProvider,
+        modifier = modifier,
+    )
 }
 
 @Composable
@@ -1477,6 +1437,7 @@ private fun FloatingNavigationBar(
                 Row(
                     modifier = Modifier
                         .animateContentSize(animationSpec = MaterialTheme.motionScheme.defaultSpatialSpec())
+                        .focusIndicator(androidx.compose.foundation.shape.CircleShape)
                         .clickable(
                             interactionSource = remember { androidx.compose.foundation.interaction.MutableInteractionSource() },
                             indication = null,
@@ -1511,6 +1472,8 @@ private fun DrawerItem(
     Row(
         modifier = Modifier
             .fillMaxWidth()
+            .clip(ShapeCache.smooth12)
+            .focusIndicator()
             .clickable { onClick() }
             .padding(horizontal = 28.dp, vertical = 14.dp),
         verticalAlignment = Alignment.CenterVertically,

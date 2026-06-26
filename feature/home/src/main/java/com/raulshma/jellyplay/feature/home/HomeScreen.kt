@@ -108,6 +108,7 @@ import com.raulshma.jellyplay.core.ui.components.LocalSeerrCardLoadingState
 import com.raulshma.jellyplay.core.ui.components.LocalSeerrPrefetch
 import com.raulshma.jellyplay.core.ui.components.SeerrMediaCard
 import com.raulshma.jellyplay.core.ui.components.SeerrRequestDialog
+import com.raulshma.jellyplay.core.ui.components.focusIndicator
 import com.raulshma.jellyplay.core.ui.components.rememberSeerrCardLoadingState
 import com.raulshma.jellyplay.core.ui.components.resolveHeaderStatus
 import com.raulshma.jellyplay.core.ui.tv.LocalTvMode
@@ -791,6 +792,7 @@ private fun MainHomeContent(
                             modifier = Modifier
                                 .size(width = 40.dp, height = 64.dp)
                                 .clip(RoundedCornerShape(16.dp))
+                                .focusIndicator(androidx.compose.foundation.shape.CircleShape)
                                 .clickable(
                                     interactionSource = remember { androidx.compose.foundation.interaction.MutableInteractionSource() },
                                     indication = null,

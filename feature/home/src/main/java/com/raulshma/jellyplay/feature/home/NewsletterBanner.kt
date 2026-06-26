@@ -33,6 +33,7 @@ import com.composables.icons.tabler.Tabler
 import com.composables.icons.tabler.outline.Mail
 import com.composables.icons.tabler.outline.X
 import com.raulshma.jellyplay.core.designsystem.theme.ShapeCache
+import com.raulshma.jellyplay.core.ui.components.focusIndicator
 
 @Composable
 fun NewsletterBanner(
@@ -60,6 +61,7 @@ fun NewsletterBanner(
             .padding(horizontal = 16.dp, vertical = 8.dp)
             .clip(ShapeCache.smooth20)
             .background(bannerBrush)
+            .focusIndicator()
             .clickable(onClick = onClick)
             .graphicsLayer {
                 alpha = entranceAlpha
@@ -105,6 +107,7 @@ fun NewsletterBanner(
                     .size(32.dp)
                     .clip(ShapeCache.smooth8)
                     .background(MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.08f))
+                    .focusIndicator(androidx.compose.foundation.shape.CircleShape)
                     .clickable(onClick = onDismiss),
                 contentAlignment = Alignment.Center,
             ) {

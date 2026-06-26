@@ -7,7 +7,6 @@ import com.raulshma.jellyplay.core.ui.tv.rememberTvFocusState
 import com.raulshma.jellyplay.core.ui.tv.tryRequestFocus
 import com.raulshma.jellyplay.core.ui.tv.tvFocusIndicator
 import com.raulshma.jellyplay.core.ui.tv.LocalTvMode
-import com.raulshma.jellyplay.core.ui.tv.ifElse
 import com.raulshma.jellyplay.core.ui.tv.components.DpadSlider
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -327,8 +326,8 @@ fun SubtitleStyleSheet(
                             selected = isSelected,
                         ),
                         modifier = Modifier
-                            .ifElse(isTv, chipFocusState.focusModifier)
-                            .ifElse(isTv, Modifier.tvFocusIndicator(chipFocusState, ShapeCache.smoothPill)),
+                            .then(chipFocusState.focusModifier)
+                            .then(Modifier.tvFocusIndicator(chipFocusState, ShapeCache.smoothPill)),
                     )
                 }
             }
@@ -464,8 +463,8 @@ fun SubtitleStyleSheet(
                     label = { Text("Reset", style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Medium) },
                     shape = ShapeCache.smoothPill,
                     modifier = Modifier
-                        .ifElse(isTv, resetFocusState.focusModifier)
-                        .ifElse(isTv, Modifier.tvFocusIndicator(resetFocusState, ShapeCache.smoothPill)),
+                        .then(resetFocusState.focusModifier)
+                        .then(Modifier.tvFocusIndicator(resetFocusState, ShapeCache.smoothPill)),
                 )
             }
         }

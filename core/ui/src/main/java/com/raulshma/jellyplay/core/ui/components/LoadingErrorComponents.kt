@@ -29,8 +29,11 @@ import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import com.raulshma.jellyplay.core.ui.R
+import com.raulshma.jellyplay.core.designsystem.theme.ShapeCache
 import com.raulshma.jellyplay.core.ui.tv.LocalTvMode
+import com.raulshma.jellyplay.core.ui.tv.rememberTvFocusState
 import com.raulshma.jellyplay.core.ui.tv.tryRequestFocus
+import com.raulshma.jellyplay.core.ui.tv.tvFocusIndicator
 import kotlinx.coroutines.delay
 import kotlin.time.Duration
 import kotlin.time.Duration.Companion.milliseconds
@@ -122,9 +125,13 @@ fun ErrorScreen(
                 )
                 if (onRetry != null) {
                     Spacer(modifier = Modifier.height(16.dp))
+                    val retryFocusState = rememberTvFocusState(focusedScale = 1.05f)
                     androidx.compose.material3.TextButton(
                         onClick = onRetry,
-                        modifier = if (isTv) Modifier.focusRequester(retryFocusRequester) else Modifier,
+                        shape = ShapeCache.smooth12,
+                        modifier = (if (isTv) Modifier.focusRequester(retryFocusRequester) else Modifier)
+                            .then(retryFocusState.focusModifier)
+                            .tvFocusIndicator(retryFocusState, ShapeCache.smooth12),
                     ) {
                         Text(stringResource(R.string.core_retry))
                     }
@@ -140,6 +147,7 @@ fun AppendErrorFooter(
     onRetry: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
+    val retryFocusState = rememberTvFocusState(focusedScale = 1.05f)
     Row(
         modifier = modifier,
         horizontalArrangement = Arrangement.Center,
@@ -151,7 +159,13 @@ fun AppendErrorFooter(
             style = MaterialTheme.typography.bodySmall,
         )
         Spacer(modifier = Modifier.width(8.dp))
-        TextButton(onClick = onRetry) {
+        TextButton(
+            onClick = onRetry,
+            shape = ShapeCache.smooth12,
+            modifier = Modifier
+                .then(retryFocusState.focusModifier)
+                .tvFocusIndicator(retryFocusState, ShapeCache.smooth12),
+        ) {
             Text(stringResource(R.string.core_retry))
         }
     }

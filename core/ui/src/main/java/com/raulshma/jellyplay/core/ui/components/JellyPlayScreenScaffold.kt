@@ -60,7 +60,9 @@ import com.raulshma.jellyplay.core.designsystem.theme.ShapeCache
 import com.raulshma.jellyplay.core.designsystem.theme.ThemeVariantColors
 import com.raulshma.jellyplay.core.ui.adaptive.LocalJellyPlayUi
 import com.raulshma.jellyplay.core.ui.tv.LocalTvMode
+import com.raulshma.jellyplay.core.ui.tv.rememberTvFocusState
 import com.raulshma.jellyplay.core.ui.tv.tryRequestFocus
+import com.raulshma.jellyplay.core.ui.tv.tvFocusIndicator
 import com.composables.icons.tabler.Tabler
 import com.composables.icons.tabler.outline.*
 
@@ -297,7 +299,13 @@ fun ScreenEmptyState(
             }
             if (actionLabel != null && onAction != null) {
                 Spacer(Modifier.height(8.dp))
-                androidx.compose.material3.OutlinedButton(onClick = onAction) {
+                val actionFocusState = rememberTvFocusState(focusedScale = 1.05f)
+                androidx.compose.material3.OutlinedButton(
+                    onClick = onAction,
+                    modifier = Modifier
+                        .then(actionFocusState.focusModifier)
+                        .tvFocusIndicator(actionFocusState, ShapeCache.smooth12),
+                ) {
                     Text(actionLabel)
                 }
             }

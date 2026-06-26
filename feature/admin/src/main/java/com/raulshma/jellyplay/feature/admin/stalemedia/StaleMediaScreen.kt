@@ -21,6 +21,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
@@ -76,7 +77,10 @@ import com.raulshma.jellyplay.core.ui.components.ErrorScreen
 import com.raulshma.jellyplay.core.ui.components.JellyPlayScreenScaffold
 import com.raulshma.jellyplay.core.ui.components.ScreenEmptyState
 import com.raulshma.jellyplay.core.ui.components.ScreenLoadingState
+import com.raulshma.jellyplay.core.ui.components.focusIndicator
 import com.raulshma.jellyplay.core.ui.tv.TvGrabInitialFocus
+import com.raulshma.jellyplay.core.ui.tv.rememberTvFocusState
+import com.raulshma.jellyplay.core.ui.tv.tvFocusIndicator
 import com.raulshma.jellyplay.core.ui.tv.tvFocusRestorer
 import com.raulshma.jellyplay.feature.admin.components.AuditHistoryTab
 import java.text.SimpleDateFormat
@@ -299,7 +303,10 @@ private fun ScanResultsTab(
             ) {
                 Row(
                     verticalAlignment = Alignment.CenterVertically,
-                    modifier = Modifier.clickable(onClick = onSelectAll),
+                    modifier = Modifier
+                        .clip(ShapeCache.smooth12)
+                        .focusIndicator()
+                        .clickable(onClick = onSelectAll),
                 ) {
                     Checkbox(
                         checked = state.selectedItems.size == state.scanResults.size && state.scanResults.isNotEmpty(),
@@ -330,6 +337,7 @@ private fun ScanResultsTab(
                         animationSpec = MaterialTheme.motionScheme.fastSpatialSpec(),
                         label = "deleteBtnScale",
                     )
+                    val deleteFocusState = rememberTvFocusState()
                     FilledTonalButton(
                         onClick = onDeleteClick,
                         enabled = state.canDeleteContent,
@@ -338,7 +346,10 @@ private fun ScanResultsTab(
                             containerColor = MaterialTheme.colorScheme.errorContainer,
                             contentColor = MaterialTheme.colorScheme.onErrorContainer,
                         ),
-                        modifier = Modifier.graphicsLayer { scaleX = scale; scaleY = scale },
+                        modifier = Modifier
+                            .graphicsLayer { scaleX = scale; scaleY = scale }
+                            .then(deleteFocusState.focusModifier)
+                            .tvFocusIndicator(deleteFocusState, ShapeCache.smooth16),
                         interactionSource = deleteInteractionSource,
                     ) {
                         Icon(Tabler.Outline.Trash, contentDescription = null, modifier = Modifier.size(18.dp))
@@ -429,6 +440,8 @@ private fun StaleItemCard(
         Row(
             modifier = Modifier
                 .fillMaxWidth()
+                .clip(ShapeCache.smooth12)
+                .focusIndicator()
                 .clickable(onClick = onToggle)
                 .padding(horizontal = 8.dp, vertical = 6.dp),
             verticalAlignment = Alignment.CenterVertically,
@@ -736,12 +749,15 @@ private fun ConfigurationTab(
                 animationSpec = MaterialTheme.motionScheme.fastSpatialSpec(),
                 label = "scanBtnScale",
             )
+            val scanFocusState = rememberTvFocusState()
             FilledTonalButton(
                 onClick = onScan,
                 shape = ShapeCache.smooth16,
                 modifier = Modifier
                     .fillMaxWidth()
-                    .graphicsLayer { scaleX = scale; scaleY = scale },
+                    .graphicsLayer { scaleX = scale; scaleY = scale }
+                    .then(scanFocusState.focusModifier)
+                    .tvFocusIndicator(scanFocusState, ShapeCache.smooth16),
                 enabled = !isScanning,
                 interactionSource = interactionSource,
             ) {

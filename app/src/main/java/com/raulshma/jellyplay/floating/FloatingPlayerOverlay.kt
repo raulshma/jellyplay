@@ -32,6 +32,7 @@ import com.composables.icons.tabler.outline.PlayerPlay
 import com.composables.icons.tabler.outline.PlayerTrackNext
 import com.composables.icons.tabler.outline.PlayerTrackPrev
 import com.composables.icons.tabler.outline.X
+import com.raulshma.jellyplay.core.ui.components.focusIndicator
 
 /**
  * The compact floating media controller overlay rendered inside the
@@ -160,6 +161,8 @@ private fun ControlIcon(
     Box(
         modifier = Modifier
             .size(iconSize + 8.dp)
+            .clip(androidx.compose.foundation.shape.CircleShape)
+            .focusIndicator(androidx.compose.foundation.shape.CircleShape)
             .clickable(onClick = onClick),
         contentAlignment = Alignment.Center,
     ) {

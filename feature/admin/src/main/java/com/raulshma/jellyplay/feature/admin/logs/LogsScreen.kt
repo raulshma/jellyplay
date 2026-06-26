@@ -74,10 +74,13 @@ import com.raulshma.jellyplay.core.model.LogFile
 import com.raulshma.jellyplay.core.ui.adaptive.LocalAdaptiveInfo
 import com.raulshma.jellyplay.core.ui.adaptive.bottomPadding
 import com.raulshma.jellyplay.core.ui.components.JellyPlayScreenScaffold
+import com.raulshma.jellyplay.core.ui.components.focusIndicator
 import com.raulshma.jellyplay.core.ui.components.ScreenEmptyState
 import com.raulshma.jellyplay.core.ui.components.rememberScreenBackgroundColor
 import com.raulshma.jellyplay.core.ui.tv.LocalTvMode
 import com.raulshma.jellyplay.core.ui.tv.TvGrabInitialFocus
+import com.raulshma.jellyplay.core.ui.tv.rememberTvFocusState
+import com.raulshma.jellyplay.core.ui.tv.tvFocusIndicator
 import com.raulshma.jellyplay.core.ui.tv.tvFocusRestorer
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -111,8 +114,12 @@ fun LogsScreen(
         backgroundColor = backgroundColor,
         actions = {
             if (state.selectedTabIndex == 1) {
+                val liveFocusState = rememberTvFocusState()
                 if (state.isLiveStreamActive) {
-                    IconButton(onClick = { viewModel.stopLiveStream() }) {
+                    IconButton(
+                        onClick = { viewModel.stopLiveStream() },
+                        modifier = Modifier.then(liveFocusState.focusModifier).tvFocusIndicator(liveFocusState, CircleShape),
+                    ) {
                         Icon(
                             Tabler.Outline.PlayerPause,
                             contentDescription = "Stop Live",
@@ -120,12 +127,19 @@ fun LogsScreen(
                         )
                     }
                 } else {
-                    IconButton(onClick = { viewModel.startLiveStream() }) {
+                    IconButton(
+                        onClick = { viewModel.startLiveStream() },
+                        modifier = Modifier.then(liveFocusState.focusModifier).tvFocusIndicator(liveFocusState, CircleShape),
+                    ) {
                         Icon(Tabler.Outline.Activity, contentDescription = "Start Live")
                     }
                 }
             }
-            IconButton(onClick = { viewModel.loadInitialData() }) {
+            val refreshFocusState = rememberTvFocusState()
+            IconButton(
+                onClick = { viewModel.loadInitialData() },
+                modifier = Modifier.then(refreshFocusState.focusModifier).tvFocusIndicator(refreshFocusState, CircleShape),
+            ) {
                 Icon(Tabler.Outline.Refresh, contentDescription = "Refresh")
             }
         },
@@ -193,7 +207,11 @@ private fun LogFilesTab(
                     .padding(horizontal = 16.dp, vertical = 8.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
-                OutlinedButton(onClick = onBackToList) {
+                val backFocusState = rememberTvFocusState()
+                OutlinedButton(
+                    onClick = onBackToList,
+                    modifier = Modifier.then(backFocusState.focusModifier).tvFocusIndicator(backFocusState, ShapeCache.smooth12),
+                ) {
                     Icon(
                         Tabler.Outline.ArrowLeft,
                         contentDescription = null,
@@ -212,7 +230,11 @@ private fun LogFilesTab(
                     overflow = TextOverflow.Ellipsis,
                 )
                 if (!isLoadingContent && selectedLogFileLines.isNotEmpty()) {
-                    IconButton(onClick = onTogglePolling) {
+                    val pollingFocusState = rememberTvFocusState()
+                    IconButton(
+                        onClick = onTogglePolling,
+                        modifier = Modifier.then(pollingFocusState.focusModifier).tvFocusIndicator(pollingFocusState, CircleShape),
+                    ) {
                         Icon(
                             imageVector = if (isPollingActive) Tabler.Outline.PlayerPause else Tabler.Outline.PlayerPlay,
                             contentDescription = if (isPollingActive) "Pause Live Logs" else "Resume Live Logs",
@@ -350,6 +372,7 @@ private fun LogFileItem(file: LogFile, onClick: () -> Unit) {
         modifier = Modifier
             .fillMaxWidth()
             .graphicsLayer { scaleX = scale; scaleY = scale }
+            .focusIndicator(ShapeCache.smooth16)
             .clickable(interactionSource = interactionSource, indication = null, onClick = onClick),
         shape = ShapeCache.smooth16,
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerLow),

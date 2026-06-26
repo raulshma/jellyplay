@@ -22,6 +22,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Icon
@@ -43,6 +44,8 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.raulshma.jellyplay.core.ui.image.MediaImage
 import com.raulshma.jellyplay.core.designsystem.theme.ShapeCache
+import com.raulshma.jellyplay.core.ui.tv.rememberTvFocusState
+import com.raulshma.jellyplay.core.ui.tv.tvFocusIndicator
 import com.composables.icons.tabler.Tabler
 import com.composables.icons.tabler.outline.*
 import com.composables.icons.tabler.filled.*
@@ -88,6 +91,8 @@ fun TrackRow(
     )
 
     var showMenu by remember { mutableStateOf(false) }
+    val favoriteFocusState = rememberTvFocusState(focusedScale = 1.1f)
+    val moreOptionsFocusState = rememberTvFocusState(focusedScale = 1.1f)
 
     Row(
         modifier = modifier
@@ -190,7 +195,10 @@ fun TrackRow(
         if (onToggleFavorite != null) {
             IconButton(
                 onClick = onToggleFavorite,
-                modifier = Modifier.size(32.dp),
+                modifier = Modifier
+                    .then(favoriteFocusState.focusModifier)
+                    .tvFocusIndicator(favoriteFocusState, CircleShape)
+                    .size(32.dp),
             ) {
                 Icon(
                     if (isFavorite) Tabler.Filled.Heart else Tabler.Outline.Heart,
@@ -203,7 +211,12 @@ fun TrackRow(
         
         // More options button with expressive animation
         if (onAddToQueue != null) {
-            IconButton(onClick = { showMenu = true }) {
+            IconButton(
+                onClick = { showMenu = true },
+                modifier = Modifier
+                    .then(moreOptionsFocusState.focusModifier)
+                    .tvFocusIndicator(moreOptionsFocusState, CircleShape),
+            ) {
                 Icon(
                     Tabler.Outline.DotsVertical,
                     contentDescription = "More options",

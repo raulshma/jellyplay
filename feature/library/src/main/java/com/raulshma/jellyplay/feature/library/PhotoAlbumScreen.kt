@@ -9,6 +9,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.rememberLazyGridState
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -58,6 +59,8 @@ import com.raulshma.jellyplay.core.ui.components.ScreenLoadingState
 import com.raulshma.jellyplay.core.ui.components.resolveHeaderStatus
 import com.raulshma.jellyplay.core.ui.tv.LocalTvMode
 import com.raulshma.jellyplay.core.ui.tv.TvFocusableGrid
+import com.raulshma.jellyplay.core.ui.tv.rememberTvFocusState
+import com.raulshma.jellyplay.core.ui.tv.tvFocusIndicator
 import com.raulshma.jellyplay.feature.library.components.PhotoGridCard
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -104,7 +107,11 @@ fun PhotoAlbumScreen(
         actions = {
             var showSortMenu by remember { mutableStateOf(false) }
             Box {
-                IconButton(onClick = { showSortMenu = true }) {
+                val sortFocusState = rememberTvFocusState()
+                IconButton(
+                    onClick = { showSortMenu = true },
+                    modifier = Modifier.then(sortFocusState.focusModifier).tvFocusIndicator(sortFocusState, CircleShape),
+                ) {
                     Icon(
                         imageVector = Tabler.Outline.DotsVertical,
                         contentDescription = "Sort options",

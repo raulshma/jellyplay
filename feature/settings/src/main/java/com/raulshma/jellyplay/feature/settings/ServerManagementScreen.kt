@@ -61,6 +61,8 @@ import androidx.compose.ui.focus.focusRequester
 import com.raulshma.jellyplay.core.ui.tv.TvGrabInitialFocus
 import com.raulshma.jellyplay.core.ui.tv.rememberTvFocusState
 import com.raulshma.jellyplay.core.ui.tv.tvFocusIndicator
+import androidx.compose.foundation.shape.CircleShape
+import com.raulshma.jellyplay.core.ui.components.focusIndicator
 import com.composables.icons.tabler.Tabler
 import com.composables.icons.tabler.outline.*
 
@@ -107,7 +109,10 @@ fun ServerManagementScreen(
         onBack = onBack,
         backgroundColor = backgroundColor,
         actions = {
-            IconButton(onClick = onAddServer) {
+            IconButton(
+                onClick = onAddServer,
+                modifier = Modifier.focusIndicator(CircleShape),
+            ) {
                 Icon(Tabler.Outline.Plus, "Add Server")
             }
         },
@@ -291,7 +296,10 @@ private fun ServerCard(
 
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     if (isActive) {
-                        IconButton(onClick = onToggleExpand) {
+                        IconButton(
+                            onClick = onToggleExpand,
+                            modifier = Modifier.focusIndicator(CircleShape),
+                        ) {
                             Icon(
                                 if (isExpanded) Tabler.Outline.ChevronUp else Tabler.Outline.ChevronDown,
                                 contentDescription = if (isExpanded) "Collapse" else "Manage addresses",
@@ -308,7 +316,10 @@ private fun ServerCard(
                             modifier = Modifier.size(20.dp),
                         )
                     } else {
-                        IconButton(onClick = onDelete) {
+                        IconButton(
+                            onClick = onDelete,
+                            modifier = Modifier.focusIndicator(CircleShape),
+                        ) {
                             Icon(
                                 Tabler.Outline.Trash,
                                 contentDescription = "Remove",
@@ -456,7 +467,7 @@ private fun AddressRow(
         if (onRemove != null) {
             IconButton(
                 onClick = onRemove,
-                modifier = Modifier.size(32.dp),
+                modifier = Modifier.size(32.dp).focusIndicator(CircleShape),
             ) {
                 Icon(
                     Tabler.Outline.X,

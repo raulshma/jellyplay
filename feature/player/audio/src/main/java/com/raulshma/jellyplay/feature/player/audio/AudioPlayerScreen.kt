@@ -665,6 +665,7 @@ fun AudioPlayerScreen(
                 exit = fadeOut(tween(200)),
                 modifier = Modifier.align(Alignment.BottomCenter),
             ) {
+                val retryFocusState = rememberTvFocusState(focusedScale = 1.05f)
                 Surface(
                     shape = ShapeCache.smooth16,
                     color = MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.95f),
@@ -687,10 +688,15 @@ fun AudioPlayerScreen(
                             overflow = TextOverflow.Ellipsis,
                         )
                         Spacer(Modifier.width(8.dp))
-                        TextButton(onClick = {
-                            showErrorOverlay = false
-                            viewModel.play(itemId)
-                        }) {
+                        TextButton(
+                            onClick = {
+                                showErrorOverlay = false
+                                viewModel.play(itemId)
+                            },
+                            modifier = Modifier
+                                .then(retryFocusState.focusModifier)
+                                .tvFocusIndicator(retryFocusState, ShapeCache.smooth12),
+                        ) {
                             Text("Retry", color = MaterialTheme.colorScheme.error)
                         }
                     }
@@ -810,6 +816,7 @@ private fun LyricsOverlay(
         label = "lyricsOverlayAlpha",
     )
     val listState = rememberLazyListState()
+    val searchFocusState = rememberTvFocusState(focusedScale = 1.05f)
     val hasSyncedLyrics = lyrics.any { it.timeMs > 0 }
     val scrimBrush = remember {
         Brush.verticalGradient(
@@ -866,7 +873,10 @@ private fun LyricsOverlay(
                 Spacer(Modifier.height(12.dp))
                 FilledTonalButton(
                     onClick = onSearchClick,
-                    modifier = Modifier.height(32.dp),
+                    modifier = Modifier
+                        .then(searchFocusState.focusModifier)
+                        .tvFocusIndicator(searchFocusState, ShapeCache.smooth12)
+                        .height(32.dp),
                     contentPadding = PaddingValues(horizontal = 12.dp, vertical = 0.dp),
                 ) {
                     Icon(

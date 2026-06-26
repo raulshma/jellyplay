@@ -46,6 +46,7 @@ import com.composables.icons.tabler.outline.*
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import com.raulshma.jellyplay.core.ui.tv.tryRequestFocus
+import com.raulshma.jellyplay.core.ui.components.focusIndicator
 import androidx.compose.foundation.background
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.ui.graphics.Color
@@ -521,6 +522,7 @@ internal fun HiddenSettingsHint(
         modifier = Modifier
             .fillMaxWidth()
             .clip(ShapeCache.smooth16)
+            .focusIndicator()
             .clickable(onClick = onShowAdvanced)
             .padding(horizontal = 16.dp, vertical = 12.dp),
         horizontalArrangement = Arrangement.Center,

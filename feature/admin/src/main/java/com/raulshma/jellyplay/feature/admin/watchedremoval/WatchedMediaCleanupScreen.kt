@@ -73,8 +73,11 @@ import com.raulshma.jellyplay.core.model.ScanPhase
 import com.raulshma.jellyplay.core.ui.adaptive.LocalAdaptiveInfo
 import com.raulshma.jellyplay.core.ui.adaptive.bottomPadding
 import com.raulshma.jellyplay.core.ui.components.JellyPlayScreenScaffold
+import com.raulshma.jellyplay.core.ui.components.focusIndicator
 import com.raulshma.jellyplay.core.ui.components.ScreenEmptyState
 import com.raulshma.jellyplay.core.ui.tv.TvGrabInitialFocus
+import com.raulshma.jellyplay.core.ui.tv.rememberTvFocusState
+import com.raulshma.jellyplay.core.ui.tv.tvFocusIndicator
 import com.raulshma.jellyplay.core.ui.tv.tvFocusRestorer
 import com.raulshma.jellyplay.feature.admin.components.AuditHistoryTab
 import com.raulshma.jellyplay.feature.admin.stalemedia.MediaSortOption
@@ -211,6 +214,7 @@ private fun WatchedScanResultsTab(
     bottomPadding: androidx.compose.ui.unit.Dp,
     listFocusRequester: FocusRequester,
 ) {
+    val deleteFocusState = rememberTvFocusState(focusedScale = 1.05f)
     Column(modifier = Modifier.fillMaxSize()) {
         if (state.error != null) {
             Card(
@@ -282,7 +286,13 @@ private fun WatchedScanResultsTab(
                 modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
-                Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.clickable(onClick = onSelectAll)) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    modifier = Modifier
+                        .clip(ShapeCache.smooth12)
+                        .focusIndicator()
+                        .clickable(onClick = onSelectAll)
+                ) {
                     Checkbox(
                         checked = state.selectedItems.size == state.scanResults.size && state.scanResults.isNotEmpty(),
                         onCheckedChange = { onSelectAll() },
@@ -304,6 +314,9 @@ private fun WatchedScanResultsTab(
                     FilledTonalButton(
                         onClick = onDeleteClick,
                         enabled = state.canDeleteContent,
+                        modifier = Modifier
+                            .then(deleteFocusState.focusModifier)
+                            .tvFocusIndicator(deleteFocusState, ShapeCache.smooth12),
                         shape = ShapeCache.smooth16,
                         colors = ButtonDefaults.filledTonalButtonColors(
                             containerColor = MaterialTheme.colorScheme.errorContainer,
@@ -389,7 +402,12 @@ private fun WatchedItemCard(
         modifier = Modifier.fillMaxWidth(),
     ) {
         Row(
-            modifier = Modifier.fillMaxWidth().clickable(onClick = onToggle).padding(horizontal = 8.dp, vertical = 6.dp),
+            modifier = Modifier
+                .fillMaxWidth()
+                .clip(ShapeCache.smooth12)
+                .focusIndicator()
+                .clickable(onClick = onToggle)
+                .padding(horizontal = 8.dp, vertical = 6.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
             Checkbox(checked = isSelected, onCheckedChange = { onToggle() })

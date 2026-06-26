@@ -45,6 +45,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import com.raulshma.jellyplay.core.model.MediaType
+import com.raulshma.jellyplay.core.ui.components.focusIndicator
 import com.raulshma.jellyplay.feature.editor.EditorUiState
 import com.raulshma.jellyplay.feature.editor.EditorViewModel
 import com.composables.icons.tabler.Tabler
@@ -449,7 +450,7 @@ fun MetadataTab(
                                 }
                             },
                         )
-                        Text(label, modifier = Modifier.clickable {
+                        Text(label, modifier = Modifier.focusIndicator().clickable {
                             val checked = key !in state.lockedFields
                             viewModel.updateField { s ->
                                 s.copy(
@@ -482,6 +483,7 @@ private fun SectionHeader(
         Row(
             modifier = Modifier
                 .fillMaxWidth()
+                .focusIndicator()
                 .clickable { expanded = !expanded }
                 .padding(vertical = 8.dp),
             verticalAlignment = Alignment.CenterVertically,

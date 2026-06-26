@@ -57,6 +57,8 @@ import com.composables.icons.tabler.outline.DeviceMobile
 import com.composables.icons.tabler.outline.DeviceTv
 import com.composables.icons.tabler.outline.Message
 import com.composables.icons.tabler.outline.PlayerPause
+import androidx.compose.foundation.shape.CircleShape
+import com.raulshma.jellyplay.core.ui.components.focusIndicator
 import com.raulshma.jellyplay.core.designsystem.theme.ShapeCache
 import com.raulshma.jellyplay.core.model.SessionInfo
 
@@ -338,7 +340,7 @@ private fun ActiveDeviceCard(
                     ) {
                         IconButton(
                             onClick = onSendMessage,
-                            modifier = Modifier.size(28.dp),
+                            modifier = Modifier.size(28.dp).focusIndicator(CircleShape),
                         ) {
                             Icon(
                                 Tabler.Outline.Message,

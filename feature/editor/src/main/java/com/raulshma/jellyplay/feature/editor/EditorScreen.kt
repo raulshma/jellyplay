@@ -31,7 +31,10 @@ import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.unit.dp
 import com.raulshma.jellyplay.core.ui.components.JellyPlayScreenScaffold
 import com.raulshma.jellyplay.core.ui.tv.TvGrabInitialFocus
+import com.raulshma.jellyplay.core.ui.tv.rememberTvFocusState
+import com.raulshma.jellyplay.core.ui.tv.tvFocusIndicator
 import com.raulshma.jellyplay.core.ui.tv.tvFocusRestorer
+import com.raulshma.jellyplay.core.designsystem.theme.ShapeCache
 import com.raulshma.jellyplay.feature.editor.components.ImagesTab
 import com.raulshma.jellyplay.feature.editor.components.MetadataTab
 import com.raulshma.jellyplay.feature.editor.components.SubtitlesTab
@@ -65,10 +68,14 @@ fun EditorScreen(
         title = uiState.mediaDetail?.item?.name ?: "Edit Metadata",
         onBack = onBack,
         actions = {
+            val saveFocusState = rememberTvFocusState()
             FilledTonalButton(
                 onClick = { viewModel.saveMetadata() },
                 enabled = uiState.isDirty && !uiState.isSaving,
-                modifier = Modifier.padding(end = 8.dp),
+                modifier = Modifier
+                    .padding(end = 8.dp)
+                    .then(saveFocusState.focusModifier)
+                    .tvFocusIndicator(saveFocusState, ShapeCache.smooth12),
             ) {
                 if (uiState.isSaving) {
                     CircularProgressIndicator(

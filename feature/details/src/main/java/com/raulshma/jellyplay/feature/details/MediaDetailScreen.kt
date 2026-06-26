@@ -102,6 +102,7 @@ import com.raulshma.jellyplay.core.ui.adaptive.LocalAdaptiveInfo
 import com.raulshma.jellyplay.core.ui.adaptive.WindowSizeClass
 import com.raulshma.jellyplay.core.ui.adaptive.*
 import com.raulshma.jellyplay.core.ui.components.CircleBgBackButton
+import com.raulshma.jellyplay.core.ui.components.focusIndicator
 import com.raulshma.jellyplay.core.ui.components.ErrorScreen
 import com.raulshma.jellyplay.core.ui.components.InlineTrailerPlayer
 import com.raulshma.jellyplay.core.ui.components.LoadingScreen
@@ -1005,6 +1006,7 @@ private fun DetailContent(
                                 }
                             },
                                 modifier = Modifier
+                                    .focusIndicator(CircleShape)
                                     .focusProperties { down = contentFocusRequester }
                                     .padding(8.dp)
                                     .clip(CircleShape)
@@ -1314,7 +1316,7 @@ private fun TvOptionItem(
                        else if (!enabled) MaterialTheme.colorScheme.onSurface.copy(alpha = 0.38f)
                        else MaterialTheme.colorScheme.onSurface,
         interactionSource = interactionSource,
-        modifier = Modifier.fillMaxWidth(),
+        modifier = Modifier.focusIndicator().fillMaxWidth(),
     ) {
         Row(
             modifier = Modifier

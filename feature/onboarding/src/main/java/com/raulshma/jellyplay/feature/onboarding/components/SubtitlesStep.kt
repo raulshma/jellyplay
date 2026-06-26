@@ -27,8 +27,10 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.composables.icons.tabler.Tabler
 import com.composables.icons.tabler.outline.*
+import androidx.compose.foundation.shape.CircleShape
 import com.raulshma.jellyplay.core.designsystem.theme.ShapeCache
 import com.raulshma.jellyplay.core.model.SubtitleColor
+import com.raulshma.jellyplay.core.ui.components.focusIndicator
 import com.raulshma.jellyplay.core.model.SubtitleEdgeType
 import com.raulshma.jellyplay.core.model.SubtitleStyle
 
@@ -127,6 +129,7 @@ fun SubtitlesStep(
                                 if (selected) Modifier.background(borderColor, ShapeCache.smooth8)
                                 else Modifier
                             )
+                            .focusIndicator(CircleShape)
                             .clickable { onSubtitleStyleChange(subtitleStyle.copy(fontColor = color)) }
                             .padding(3.dp),
                     )

@@ -72,6 +72,7 @@ import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import com.raulshma.jellyplay.core.ui.tv.TvGrabInitialFocus
 import com.raulshma.jellyplay.core.ui.tv.tryRequestFocus
+import com.raulshma.jellyplay.core.ui.components.focusIndicator
 import com.raulshma.jellyplay.feature.settings.SeerrSettingsViewModel.ConnectionStatus
 import com.composables.icons.tabler.Tabler
 import com.composables.icons.tabler.outline.*
@@ -194,7 +195,10 @@ fun SeerrSettingsScreen(
                                 },
                                 trailingIcon = {
                                     if (viewModel.serverUrl.isNotBlank() && !isTesting) {
-                                        IconButton(onClick = { viewModel.onServerUrlChanged("") }) {
+                                        IconButton(
+                                            onClick = { viewModel.onServerUrlChanged("") },
+                                            modifier = Modifier.focusIndicator(CircleShape),
+                                        ) {
                                             Icon(Tabler.Outline.X, contentDescription = "Clear")
                                         }
                                     }
@@ -251,7 +255,7 @@ fun SeerrSettingsScreen(
                                         SeerrAuthMethod.JELLYFIN -> viewModel.username.isNotBlank() && viewModel.password.isNotBlank()
                                         SeerrAuthMethod.LOCAL -> viewModel.email.isNotBlank() && viewModel.password.isNotBlank()
                                     },
-                                    modifier = Modifier.weight(1f),
+                                    modifier = Modifier.weight(1f).focusIndicator(),
                                     shape = ShapeCache.smooth16,
                                 ) {
                                     if (isTesting) {
@@ -272,6 +276,7 @@ fun SeerrSettingsScreen(
                                 if (isConnected) {
                                     OutlinedButton(
                                         onClick = { viewModel.disconnect() },
+                                        modifier = Modifier.focusIndicator(),
                                         shape = ShapeCache.smooth16,
                                         colors = ButtonDefaults.outlinedButtonColors(
                                             contentColor = MaterialTheme.colorScheme.error,
@@ -581,7 +586,10 @@ private fun ApiKeyFields(viewModel: SeerrSettingsViewModel) {
             Icon(Tabler.Outline.Key, contentDescription = null)
         },
         trailingIcon = {
-            IconButton(onClick = { apiKeyVisible = !apiKeyVisible }) {
+            IconButton(
+                onClick = { apiKeyVisible = !apiKeyVisible },
+                modifier = Modifier.focusIndicator(CircleShape),
+            ) {
                 Icon(
                     imageVector = if (apiKeyVisible) Tabler.Outline.EyeOff else Tabler.Outline.Eye,
                     contentDescription = if (apiKeyVisible) "Hide API key" else "Show API key"
@@ -623,20 +631,23 @@ private fun JellyfinAuthFields(viewModel: SeerrSettingsViewModel) {
                 Icon(Tabler.Outline.Lock, contentDescription = null)
             },
             trailingIcon = {
-                IconButton(onClick = { passwordVisible = !passwordVisible }) {
-                    Icon(
-                        imageVector = if (passwordVisible) Tabler.Outline.EyeOff else Tabler.Outline.Eye,
-                        contentDescription = if (passwordVisible) "Hide password" else "Show password"
-                    )
-                }
-            },
-            visualTransformation = if (passwordVisible) VisualTransformation.None else PasswordVisualTransformation(),
-            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
-            singleLine = true,
-            modifier = Modifier.fillMaxWidth(),
-            enabled = !viewModel.isTesting,
-            shape = ShapeCache.smooth16,
-        )
+            IconButton(
+                onClick = { passwordVisible = !passwordVisible },
+                modifier = Modifier.focusIndicator(CircleShape),
+            ) {
+                Icon(
+                    imageVector = if (passwordVisible) Tabler.Outline.EyeOff else Tabler.Outline.Eye,
+                    contentDescription = if (passwordVisible) "Hide password" else "Show password"
+                )
+            }
+        },
+        visualTransformation = if (passwordVisible) VisualTransformation.None else PasswordVisualTransformation(),
+        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
+        singleLine = true,
+        modifier = Modifier.fillMaxWidth(),
+        enabled = !viewModel.isTesting,
+        shape = ShapeCache.smooth16,
+    )
     }
 }
 
@@ -667,7 +678,10 @@ private fun LocalAuthFields(viewModel: SeerrSettingsViewModel) {
                 Icon(Tabler.Outline.Lock, contentDescription = null)
             },
             trailingIcon = {
-                IconButton(onClick = { passwordVisible = !passwordVisible }) {
+                IconButton(
+                    onClick = { passwordVisible = !passwordVisible },
+                    modifier = Modifier.focusIndicator(CircleShape),
+                ) {
                     Icon(
                         imageVector = if (passwordVisible) Tabler.Outline.EyeOff else Tabler.Outline.Eye,
                         contentDescription = if (passwordVisible) "Hide password" else "Show password"

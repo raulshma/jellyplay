@@ -17,6 +17,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -56,6 +57,8 @@ import com.raulshma.jellyplay.core.ui.components.JellyPlayScreenScaffold
 import com.raulshma.jellyplay.core.ui.components.ScreenEmptyState
 import com.raulshma.jellyplay.core.ui.image.MediaImage
 import com.raulshma.jellyplay.core.ui.tv.TvGrabInitialFocus
+import com.raulshma.jellyplay.core.ui.tv.rememberTvFocusState
+import com.raulshma.jellyplay.core.ui.tv.tvFocusIndicator
 import com.raulshma.jellyplay.core.ui.tv.tvFocusRestorer
 import com.composables.icons.tabler.Tabler
 import com.composables.icons.tabler.outline.*
@@ -222,9 +225,13 @@ fun OfflineSeriesScreen(
                     item {
                         Spacer(Modifier.height(8.dp))
                         if (selectedSeason != null) {
+                            val deleteSeasonFocusState = rememberTvFocusState()
                             OutlinedButton(
                                 onClick = { viewModel.deleteSeason(selectedSeason.id) },
-                                modifier = Modifier.fillMaxWidth(),
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .then(deleteSeasonFocusState.focusModifier)
+                                    .tvFocusIndicator(deleteSeasonFocusState, ShapeCache.smooth12),
                             ) {
                                 Icon(
                                     Tabler.Outline.Trash,
@@ -239,9 +246,13 @@ fun OfflineSeriesScreen(
 
                     item {
                         Spacer(Modifier.height(4.dp))
+                        val deleteSeriesFocusState = rememberTvFocusState()
                         OutlinedButton(
                             onClick = { viewModel.deleteSeries(seriesId) },
-                            modifier = Modifier.fillMaxWidth(),
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .then(deleteSeriesFocusState.focusModifier)
+                                .tvFocusIndicator(deleteSeriesFocusState, ShapeCache.smooth12),
                         ) {
                             Icon(
                                 Tabler.Outline.Trash,
@@ -264,6 +275,8 @@ private fun OfflineEpisodeRow(
     onPlay: () -> Unit,
     onDelete: () -> Unit,
 ) {
+    val playFocusState = rememberTvFocusState()
+    val deleteFocusState = rememberTvFocusState()
     val epLabel = buildString {
         episode.seasonNumber?.let { append("S${it}") }
         episode.episodeNumber?.let {
@@ -383,7 +396,10 @@ private fun OfflineEpisodeRow(
         }
 
         if (episode.downloadStatus == DownloadStatus.COMPLETED) {
-            IconButton(onClick = onPlay) {
+            IconButton(
+                onClick = onPlay,
+                modifier = Modifier.then(playFocusState.focusModifier).tvFocusIndicator(playFocusState, CircleShape),
+            ) {
                 Icon(
                     Tabler.Outline.PlayerPlay,
                     contentDescription = "Play",
@@ -397,7 +413,10 @@ private fun OfflineEpisodeRow(
             )
         }
 
-        IconButton(onClick = onDelete) {
+        IconButton(
+            onClick = onDelete,
+            modifier = Modifier.then(deleteFocusState.focusModifier).tvFocusIndicator(deleteFocusState, CircleShape),
+        ) {
             Icon(
                 Tabler.Outline.Trash,
                 contentDescription = "Delete",

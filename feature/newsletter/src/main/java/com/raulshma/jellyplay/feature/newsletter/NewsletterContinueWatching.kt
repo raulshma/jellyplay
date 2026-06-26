@@ -34,6 +34,7 @@ import com.raulshma.jellyplay.core.designsystem.theme.RatingColors
 import com.raulshma.jellyplay.core.designsystem.theme.ShapeCache
 import com.raulshma.jellyplay.core.model.MediaItem
 import com.raulshma.jellyplay.core.model.MediaType
+import com.raulshma.jellyplay.core.ui.components.focusIndicator
 import com.raulshma.jellyplay.core.ui.components.formatDurationFromTicks
 import com.raulshma.jellyplay.core.ui.components.formatRemainingTimeFromTicks
 import com.raulshma.jellyplay.core.ui.image.MediaImage
@@ -98,6 +99,7 @@ private fun ContinueWatchingCard(
                 .fillMaxWidth()
                 .aspectRatio(16f / 9f)
                 .clip(ShapeCache.smooth12)
+                .focusIndicator(ShapeCache.smooth16)
                 .clickable(onClick = onClick),
         ) {
             MediaImage(
@@ -299,6 +301,7 @@ private fun NextUpCard(
                 .fillMaxWidth()
                 .aspectRatio(2f / 3f)
                 .clip(ShapeCache.smooth12)
+                .focusIndicator(ShapeCache.smooth16)
                 .clickable(onClick = onClick),
         ) {
             MediaImage(

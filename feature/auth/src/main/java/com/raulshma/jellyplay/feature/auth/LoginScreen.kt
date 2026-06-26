@@ -25,18 +25,25 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
 import com.raulshma.jellyplay.core.ui.adaptive.LocalAdaptiveInfo
 import com.raulshma.jellyplay.core.ui.adaptive.contentPadding
 import com.raulshma.jellyplay.core.ui.tv.LocalTvMode
+import com.raulshma.jellyplay.core.ui.tv.rememberTvFocusState
+import com.raulshma.jellyplay.core.ui.tv.tryRequestFocus
+import com.raulshma.jellyplay.core.ui.tv.tvFocusIndicator
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.raulshma.jellyplay.core.designsystem.theme.AlphaEasing
 import com.raulshma.jellyplay.core.designsystem.theme.FancyTransitionEasing
+import com.raulshma.jellyplay.core.designsystem.theme.ShapeCache
 import com.raulshma.jellyplay.core.ui.components.JellyPlayScreenScaffold
 import com.composables.icons.tabler.Tabler
 import com.composables.icons.tabler.outline.*
@@ -67,6 +74,11 @@ fun LoginScreen(
         val adaptiveInfo = LocalAdaptiveInfo.current
         val isTv = LocalTvMode.current
         val contentPad = adaptiveInfo.contentPadding(isTv)
+        val usernameFocusRequester = remember { FocusRequester() }
+
+        LaunchedEffect(Unit) {
+            if (isTv) usernameFocusRequester.tryRequestFocus("login_username")
+        }
 
         Column(
             modifier = Modifier
@@ -116,7 +128,7 @@ fun LoginScreen(
                     },
                     label = { Text("Username") },
                     singleLine = true,
-                    modifier = Modifier.fillMaxWidth(),
+                    modifier = Modifier.fillMaxWidth().focusRequester(usernameFocusRequester),
                     isError = error != null,
                 )
             }
@@ -166,6 +178,7 @@ fun LoginScreen(
                     animationSpec = tween(400, delayMillis = 250, easing = FancyTransitionEasing),
                 ),
             ) {
+                val signInFocusState = rememberTvFocusState(focusedScale = 1.04f)
                 Button(
                     onClick = {
                         if (username.isBlank()) {
@@ -184,7 +197,9 @@ fun LoginScreen(
                         }
                     },
                     enabled = !isLoggingIn,
-                    modifier = Modifier.fillMaxWidth(),
+                    modifier = Modifier.fillMaxWidth()
+                        .then(signInFocusState.focusModifier)
+                        .tvFocusIndicator(signInFocusState, ShapeCache.smooth12),
                 ) {
                     if (isLoggingIn) {
                         JellyPlayCircularProgressIndicator(
@@ -205,10 +220,13 @@ fun LoginScreen(
                     animationSpec = tween(400, delayMillis = 300, easing = FancyTransitionEasing),
                 ),
             ) {
+                val quickConnectFocusState = rememberTvFocusState(focusedScale = 1.04f)
                 OutlinedButton(
                     onClick = onQuickConnect,
                     enabled = !isLoggingIn,
-                    modifier = Modifier.fillMaxWidth(),
+                    modifier = Modifier.fillMaxWidth()
+                        .then(quickConnectFocusState.focusModifier)
+                        .tvFocusIndicator(quickConnectFocusState, ShapeCache.smooth12),
                 ) {
                     Icon(Tabler.Outline.Link, contentDescription = null, modifier = Modifier.size(18.dp))
                     Spacer(modifier = Modifier.width(8.dp))

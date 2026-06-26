@@ -19,6 +19,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
@@ -54,11 +55,14 @@ import com.raulshma.jellyplay.core.model.DeviceInfo
 import com.raulshma.jellyplay.core.ui.adaptive.LocalAdaptiveInfo
 import com.raulshma.jellyplay.core.ui.adaptive.bottomPadding
 import com.raulshma.jellyplay.core.ui.components.JellyPlayScreenScaffold
+import com.raulshma.jellyplay.core.ui.components.focusIndicator
 import com.raulshma.jellyplay.core.ui.components.ScreenEmptyState
 import com.raulshma.jellyplay.core.ui.components.ScreenLoadingState
 import com.raulshma.jellyplay.core.ui.components.rememberScreenBackgroundColor
 import com.raulshma.jellyplay.core.ui.tv.LocalTvMode
 import com.raulshma.jellyplay.core.ui.tv.TvGrabInitialFocus
+import com.raulshma.jellyplay.core.ui.tv.rememberTvFocusState
+import com.raulshma.jellyplay.core.ui.tv.tvFocusIndicator
 import com.raulshma.jellyplay.core.ui.tv.tvFocusRestorer
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -129,7 +133,11 @@ fun DevicesScreen(
         onBack = onBack,
         backgroundColor = backgroundColor,
         actions = {
-            IconButton(onClick = { viewModel.refresh() }) {
+            val refreshFocusState = rememberTvFocusState()
+            IconButton(
+                onClick = { viewModel.refresh() },
+                modifier = Modifier.then(refreshFocusState.focusModifier).tvFocusIndicator(refreshFocusState, CircleShape),
+            ) {
                 Icon(Tabler.Outline.Refresh, contentDescription = "Refresh")
             }
         },
@@ -146,7 +154,11 @@ fun DevicesScreen(
                     Column(horizontalAlignment = Alignment.CenterHorizontally) {
                         Text(state.error ?: "Unknown error", color = MaterialTheme.colorScheme.error)
                         Spacer(Modifier.height(16.dp))
-                        FilledTonalButton(onClick = { viewModel.loadDevices() }) { Text("Retry") }
+                        val retryFocusState = rememberTvFocusState()
+                        FilledTonalButton(
+                            onClick = { viewModel.loadDevices() },
+                            modifier = Modifier.then(retryFocusState.focusModifier).tvFocusIndicator(retryFocusState, ShapeCache.smooth12),
+                        ) { Text("Retry") }
                     }
                 }
             }
@@ -202,6 +214,8 @@ private fun DeviceItem(
         animationSpec = MaterialTheme.motionScheme.fastSpatialSpec(),
         label = "deviceScale",
     )
+    val editFocusState = rememberTvFocusState()
+    val deleteFocusState = rememberTvFocusState()
 
     Card(
         modifier = Modifier
@@ -213,6 +227,7 @@ private fun DeviceItem(
         Row(
             modifier = Modifier
                 .fillMaxWidth()
+                .focusIndicator(ShapeCache.smooth16)
                 .clickable(interactionSource = interactionSource, indication = null) {}
                 .padding(16.dp),
             verticalAlignment = Alignment.CenterVertically,
@@ -260,7 +275,13 @@ private fun DeviceItem(
                 }
             }
             Spacer(Modifier.width(8.dp))
-            IconButton(onClick = onEdit, modifier = Modifier.size(36.dp)) {
+            IconButton(
+                onClick = onEdit,
+                modifier = Modifier
+                    .size(36.dp)
+                    .then(editFocusState.focusModifier)
+                    .tvFocusIndicator(editFocusState, CircleShape),
+            ) {
                 Icon(
                     Tabler.Outline.Edit,
                     contentDescription = "Edit",
@@ -268,7 +289,13 @@ private fun DeviceItem(
                     tint = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
             }
-            IconButton(onClick = onDelete, modifier = Modifier.size(36.dp)) {
+            IconButton(
+                onClick = onDelete,
+                modifier = Modifier
+                    .size(36.dp)
+                    .then(deleteFocusState.focusModifier)
+                    .tvFocusIndicator(deleteFocusState, CircleShape),
+            ) {
                 Icon(
                     Tabler.Outline.Trash,
                     contentDescription = "Delete",

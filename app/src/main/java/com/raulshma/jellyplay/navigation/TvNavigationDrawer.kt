@@ -62,6 +62,9 @@ import com.raulshma.jellyplay.core.ui.navigation.Route
 import com.raulshma.jellyplay.core.ui.tv.ifElse
 import com.raulshma.jellyplay.core.ui.tv.tryRequestFocus
 import com.raulshma.jellyplay.core.ui.tv.tvFocusRestorer
+import com.raulshma.jellyplay.core.designsystem.theme.ShapeCache
+import com.raulshma.jellyplay.core.ui.components.focusIndicator
+
 
 // ──────────────────────────────────────────────────────────────────────────────
 // Constants
@@ -412,8 +415,9 @@ private fun TvDrawerRow(
         modifier = modifier
             .fillMaxWidth()
             .scale(rowScale)
-            .clip(RoundedCornerShape(28.dp))
+            .clip(ShapeCache.smooth28)
             .background(backgroundColor)
+            .focusIndicator(ShapeCache.smooth28)
             .clickable(
                 interactionSource = interactionSource,
                 indication = null,

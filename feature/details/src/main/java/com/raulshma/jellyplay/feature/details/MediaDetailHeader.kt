@@ -46,7 +46,6 @@ import com.raulshma.jellyplay.core.model.UserPreferences
 import com.raulshma.jellyplay.core.model.isLanguageMatch
 import com.raulshma.jellyplay.core.ui.components.TvSafeSheet
 import com.raulshma.jellyplay.core.ui.tv.LocalTvMode
-import com.raulshma.jellyplay.core.ui.tv.ifElse
 import com.raulshma.jellyplay.core.ui.tv.rememberTvFocusState
 import com.raulshma.jellyplay.core.ui.tv.tvFocusIndicator
 
@@ -333,7 +332,6 @@ internal fun QuickInfoPill(
     containerColor: Color = MaterialTheme.colorScheme.primary.copy(alpha = 0.45f),
     onClick: (() -> Unit)? = null,
 ) {
-    val isTv = LocalTvMode.current
     val pillFocusState = rememberTvFocusState(focusedScale = 1.05f)
 
     Row(
@@ -343,8 +341,8 @@ internal fun QuickInfoPill(
             .then(
                 if (onClick != null) {
                     Modifier
-                        .ifElse(isTv, pillFocusState.focusModifier)
-                        .ifElse(isTv, Modifier.tvFocusIndicator(pillFocusState, ShapeCache.smooth14))
+                        .then(pillFocusState.focusModifier)
+                        .then(Modifier.tvFocusIndicator(pillFocusState, ShapeCache.smooth14))
                         .clickable { onClick() }
                 } else Modifier
             )
@@ -417,15 +415,14 @@ internal fun SubtitleChip(
         animationSpec = MaterialTheme.motionScheme.fastEffectsSpec(),
         label = "subtitleChipContent",
     )
-    val isTv = LocalTvMode.current
     val chipFocusState = rememberTvFocusState(focusedScale = 1.05f)
 
     Row(
         modifier = Modifier
             .clip(ShapeCache.smooth16)
             .background(bgColor)
-            .ifElse(isTv, chipFocusState.focusModifier)
-            .ifElse(isTv, Modifier.tvFocusIndicator(chipFocusState, ShapeCache.smooth16))
+            .then(chipFocusState.focusModifier)
+            .then(Modifier.tvFocusIndicator(chipFocusState, ShapeCache.smooth16))
             .clickable { onClick() }
             .padding(horizontal = 16.dp, vertical = 8.dp),
         horizontalArrangement = Arrangement.spacedBy(4.dp),
