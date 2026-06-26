@@ -12,7 +12,6 @@
 
         <!-- Exclude sensitive/temporary data -->
         <exclude domain="sharedpref" path="device.xml"/>
-        <exclude domain="database" path="."/>
     </cloud-backup>
     <device-transfer>
         <!-- Include DataStore preferences (app settings) -->
@@ -20,13 +19,13 @@
         <include domain="file" path="datastore"/>
 
         <!--
-            Exclude the database from device-to-device transfer: it contains Jellyfin access
+            The database is excluded from device-to-device transfer because it contains Jellyfin access
             tokens (now encrypted at rest via TokenCipher, §4.10) and per-user playback
             history that shouldn't migrate to a different physical device without the user's
-            explicit action. The encrypted Seerr credential store is also excluded by virtue
+            explicit action. It is excluded implicitly by not being listed under <include>.
+            The encrypted Seerr credential store is also excluded by virtue
             of being in sharedpref/device.xml.
         -->
         <exclude domain="sharedpref" path="device.xml"/>
-        <exclude domain="database" path="."/>
     </device-transfer>
 </data-extraction-rules>

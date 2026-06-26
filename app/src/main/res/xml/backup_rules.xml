@@ -11,5 +11,4 @@
 
     <!-- Exclude sensitive/temporary data -->
     <exclude domain="sharedpref" path="device.xml"/>
-    <exclude domain="database" path="."/>
 </full-backup-content>
