@@ -17,6 +17,12 @@ import kotlinx.coroutines.flow.map
 import javax.inject.Inject
 import javax.inject.Singleton
 
+/**
+ * Minimum query length (in characters) before offline search is performed.
+ * Anything shorter would match too many unrelated items.
+ */
+const val MIN_OFFLINE_SEARCH_LENGTH: Int = 2
+
 @OptIn(ExperimentalCoroutinesApi::class)
 @Singleton
 class OfflineRepositoryImpl @Inject constructor(
@@ -127,6 +133,23 @@ class OfflineRepositoryImpl @Inject constructor(
 
     override suspend fun cleanupOrphans() {
         offlineMediaDao.cleanupOrphans()
+    }
+
+    override suspend fun searchOffline(query: String, limit: Int): List<OfflineMediaItem> {
+        val trimmed = query.trim()
+        if (trimmed.length < MIN_OFFLINE_SEARCH_LENGTH || limit <= 0) return emptyList()
+        // Escape LIKE wildcards in the user-supplied query so characters like
+        // `%` and `_` are treated as literals. SQLite LIKE uses `\` as the
+        // default escape character when the ESCAPE clause is supplied.
+        val escaped = trimmed
+            .replace("\\", "\\\\")
+            .replace("%", "\\%")
+            .replace("_", "\\_")
+        val pattern = "%$escaped%"
+        val prefixPattern = "$escaped%"
+        return offlineMediaDao
+            .search(pattern = pattern, prefixPattern = prefixPattern, limit = limit)
+            .map { it.toOfflineMediaItem() }
     }
 
     private fun safeMediaTypeOf(name: String): MediaType =

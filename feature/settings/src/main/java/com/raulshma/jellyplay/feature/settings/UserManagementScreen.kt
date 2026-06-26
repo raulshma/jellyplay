@@ -40,6 +40,7 @@ import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.raulshma.jellyplay.core.model.UserInfo
+import com.raulshma.jellyplay.core.designsystem.theme.ShapeCache
 import com.raulshma.jellyplay.core.ui.adaptive.LocalAdaptiveInfo
 import com.raulshma.jellyplay.core.ui.adaptive.contentPadding
 import com.raulshma.jellyplay.core.ui.adaptive.itemSpacing
@@ -53,7 +54,12 @@ import com.raulshma.jellyplay.core.ui.tv.tvFocusRestorer
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import com.raulshma.jellyplay.core.ui.tv.TvGrabInitialFocus
+import com.raulshma.jellyplay.core.ui.tv.rememberTvFocusState
 import com.raulshma.jellyplay.core.ui.tv.tryRequestFocus
+import com.raulshma.jellyplay.core.ui.tv.tvFocusIndicator
+import com.raulshma.jellyplay.core.ui.components.focusIndicator
+import androidx.compose.foundation.shape.CircleShape
+import com.raulshma.jellyplay.core.ui.components.focusIndicator
 import com.composables.icons.tabler.Tabler
 import com.composables.icons.tabler.outline.*
 
@@ -84,6 +90,7 @@ fun UserManagementScreen(
     val backgroundColor = com.raulshma.jellyplay.core.ui.components.rememberScreenBackgroundColor()
 
     val focusRequester = remember { FocusRequester() }
+    val addUserFocusState = rememberTvFocusState(focusedScale = 1.05f)
     TvGrabInitialFocus(
         focusRequester = focusRequester,
         itemCount = if (!isLoading) serverUsers.size else 0,
@@ -171,6 +178,9 @@ fun UserManagementScreen(
             ) {
                 ExtendedFloatingActionButton(
                     onClick = onAddUser,
+                    modifier = Modifier
+                        .then(addUserFocusState.focusModifier)
+                        .tvFocusIndicator(addUserFocusState, ShapeCache.smooth16),
                     icon = { Icon(Tabler.Outline.Plus, contentDescription = null) },
                     text = { Text("Add User") },
                 )
@@ -189,6 +199,7 @@ private fun UserManagementCard(
     ElevatedCard(
         modifier = Modifier
             .fillMaxWidth()
+            .focusIndicator()
             .clickable(onClick = onClick),
     ) {
         Row(
@@ -232,7 +243,10 @@ private fun UserManagementCard(
                     tint = MaterialTheme.colorScheme.primary,
                 )
             } else {
-                IconButton(onClick = onRemove) {
+                IconButton(
+                    onClick = onRemove,
+                    modifier = Modifier.focusIndicator(CircleShape),
+                ) {
                     Icon(
                         Tabler.Outline.Trash,
                         contentDescription = "Remove user",

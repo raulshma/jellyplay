@@ -2,6 +2,7 @@ package com.raulshma.jellyplay.feature.details
 
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.foundation.background
+import androidx.compose.foundation.focusGroup
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -26,6 +27,8 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -42,6 +45,8 @@ import com.raulshma.jellyplay.core.ui.adaptive.contentPadding
 import com.raulshma.jellyplay.core.ui.components.JellyPlayScreenScaffold
 import com.raulshma.jellyplay.core.ui.components.rememberScreenBackgroundColor
 import com.raulshma.jellyplay.core.ui.tv.LocalTvMode
+import com.raulshma.jellyplay.core.ui.tv.TvGrabInitialFocus
+import com.raulshma.jellyplay.core.ui.tv.tvFocusRestorer
 
 @Composable
 fun MediaInfoScreen(
@@ -57,6 +62,15 @@ fun MediaInfoScreen(
     val backgroundColor = rememberScreenBackgroundColor()
     val isTv = LocalTvMode.current
     val adaptiveInfo = LocalAdaptiveInfo.current
+
+    // TV focus-on-launch: focus the first info section once content arrives so D-pad input lands
+    // on content, not the navigation drawer.
+    val contentFocusRequester = remember { FocusRequester() }
+    TvGrabInitialFocus(
+        focusRequester = contentFocusRequester,
+        itemCount = if (detail == null) 0 else 1,
+        tag = "media_info_init",
+    )
 
     JellyPlayScreenScaffold(
         title = "Technical Info",
@@ -78,6 +92,9 @@ fun MediaInfoScreen(
             Column(
                 modifier = Modifier
                     .fillMaxSize()
+                    .tvFocusRestorer()
+                    .focusGroup()
+                    .focusRequester(contentFocusRequester)
                     .verticalScroll(scrollState)
                     .padding(
                         start = adaptiveInfo.contentPadding(isTv),

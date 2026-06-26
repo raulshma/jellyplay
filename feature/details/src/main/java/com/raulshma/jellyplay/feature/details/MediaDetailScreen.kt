@@ -16,6 +16,8 @@ import androidx.compose.animation.scaleIn
 import androidx.compose.animation.scaleOut
 import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.background
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.interaction.collectIsFocusedAsState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -46,6 +48,7 @@ import androidx.compose.material3.MediumTopAppBar
 import androidx.compose.material3.Snackbar
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBarDefaults
@@ -64,10 +67,12 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusProperties
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.lerp
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
@@ -97,6 +102,7 @@ import com.raulshma.jellyplay.core.ui.adaptive.LocalAdaptiveInfo
 import com.raulshma.jellyplay.core.ui.adaptive.WindowSizeClass
 import com.raulshma.jellyplay.core.ui.adaptive.*
 import com.raulshma.jellyplay.core.ui.components.CircleBgBackButton
+import com.raulshma.jellyplay.core.ui.components.focusIndicator
 import com.raulshma.jellyplay.core.ui.components.ErrorScreen
 import com.raulshma.jellyplay.core.ui.components.InlineTrailerPlayer
 import com.raulshma.jellyplay.core.ui.components.LoadingScreen
@@ -111,6 +117,7 @@ import com.raulshma.jellyplay.core.ui.tv.LocalTvMode
 import com.raulshma.jellyplay.core.ui.tv.input.onDpadKeyEvent
 import com.raulshma.jellyplay.core.ui.tv.tryRequestFocus
 import com.raulshma.jellyplay.core.ui.tv.tvFocusRestorer
+import com.raulshma.jellyplay.core.ui.tv.verticalWrapAround
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import android.content.Intent
@@ -322,6 +329,7 @@ fun MediaDetailScreen(
             },
             preferences = preferences,
             onHideFromNextUp = remember(viewModel) { { viewModel.hideFromNextUp() } },
+            onHideFromContinueWatching = remember(viewModel) { { viewModel.hideFromContinueWatching() } },
         )
 
         // Seerr request dialog
@@ -477,6 +485,7 @@ private fun DetailContent(
     onVideoClick: (SeerrRelatedVideo) -> Unit = {},
     preferences: UserPreferences,
     onHideFromNextUp: () -> Unit = {},
+    onHideFromContinueWatching: () -> Unit = {},
 ) {
     val item = detail?.item
     val listState = rememberLazyListState()
@@ -484,6 +493,7 @@ private fun DetailContent(
     val isAlbum = item?.mediaType == MediaType.ALBUM
     val isSeries = item?.mediaType == MediaType.SERIES
     var showDownloadDialog by remember { mutableStateOf(false) }
+    var showTvOptionsMenu by remember { mutableStateOf(false) }
     val artworkColors = LocalArtworkColors.current
 
     val trailerVideo = remember(relatedVideos) {
@@ -984,13 +994,20 @@ private fun DetailContent(
                     )
                 },
                 actions = {
-                    if (!isTv) {
-                        var menuExpanded by remember { mutableStateOf(false) }
-                        val editIconColor = if (scrollCollapsed < 0.5f) Color.White else MaterialTheme.colorScheme.onSurface
-                        Box {
-                            IconButton(
-                                onClick = { menuExpanded = true },
+                    var menuExpanded by remember { mutableStateOf(false) }
+                    val editIconColor = if (scrollCollapsed < 0.5f) Color.White else MaterialTheme.colorScheme.onSurface
+                    Box {
+                        IconButton(
+                            onClick = {
+                                if (isTv) {
+                                    showTvOptionsMenu = true
+                                } else {
+                                    menuExpanded = true
+                                }
+                            },
                                 modifier = Modifier
+                                    .focusIndicator(CircleShape)
+                                    .focusProperties { down = contentFocusRequester }
                                     .padding(8.dp)
                                     .clip(CircleShape)
                                     .background(
@@ -1003,6 +1020,7 @@ private fun DetailContent(
                                     tint = editIconColor,
                                 )
                             }
+                            if (!isTv) {
                             DropdownMenu(
                                 expanded = menuExpanded,
                                 onDismissRequest = { menuExpanded = false },
@@ -1096,6 +1114,16 @@ private fun DetailContent(
                                         }
                                     )
                                 }
+                                DropdownMenuItem(
+                                    text = { Text("Hide from Continue Watching") },
+                                    onClick = {
+                                        menuExpanded = false
+                                        onHideFromContinueWatching()
+                                    },
+                                    leadingIcon = {
+                                        Icon(Tabler.Outline.EyeOff, contentDescription = null)
+                                    }
+                                )
                             }
                         }
                     }
@@ -1169,6 +1197,97 @@ private fun DetailContent(
             },
         )
     }
+
+    if (showTvOptionsMenu) {
+        TvSafeSheet(
+            onDismissRequest = { showTvOptionsMenu = false },
+            title = "Options",
+        ) {
+            Column(modifier = Modifier.verticalWrapAround()) {
+                TvOptionItem(
+                    icon = Tabler.Outline.Pencil,
+                    label = "Edit",
+                    onClick = {
+                        showTvOptionsMenu = false
+                        onEditClick()
+                    },
+                )
+                TvOptionItem(
+                    icon = Tabler.Outline.Share,
+                    label = "Share",
+                    onClick = {
+                        showTvOptionsMenu = false
+                        val shareIntent = Intent(Intent.ACTION_SEND).apply {
+                            type = "text/plain"
+                            putExtra(Intent.EXTRA_TEXT, "jellyplay://media/$itemId")
+                            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                        }
+                        context.startActivity(Intent.createChooser(shareIntent, "Share via"))
+                    },
+                )
+                val canDownload = item != null && detail != null && detail.mediaSources.isNotEmpty() &&
+                        (item.mediaType == MediaType.AUDIO || item.mediaType == MediaType.MUSIC || (!isAudio && !isSeries))
+                if (canDownload) {
+                    val downloadStatus = activeDownload?.status
+                    val isDownloadActive = downloadStatus == DownloadStatus.PENDING ||
+                            downloadStatus == DownloadStatus.DOWNLOADING ||
+                            downloadStatus == DownloadStatus.PAUSED
+                    val isDownloadCompleted = downloadStatus == DownloadStatus.COMPLETED
+                    val downloadProgress = if (activeDownload != null && activeDownload.totalSizeBytes > 0) {
+                        activeDownload.downloadedBytes.toFloat() / activeDownload.totalSizeBytes
+                    } else 0f
+
+                    TvOptionItem(
+                        icon = if (isDownloadCompleted) Tabler.Outline.Check else Tabler.Outline.Download,
+                        label = when {
+                            isDownloadCompleted -> "Downloaded"
+                            isDownloading || isDownloadActive -> {
+                                if (downloadProgress > 0f && downloadStatus == DownloadStatus.DOWNLOADING) {
+                                    "Downloading (${(downloadProgress * 100).toInt()}%)"
+                                } else {
+                                    "Downloading..."
+                                }
+                            }
+                            else -> "Download"
+                        },
+                        enabled = !isDownloading && !isDownloadActive && !isDownloadCompleted,
+                        onClick = {
+                            showTvOptionsMenu = false
+                            showDownloadDialog = true
+                        },
+                    )
+                } else if (!isAudio && item != null && isSeries && seasons.isNotEmpty()) {
+                    TvOptionItem(
+                        icon = Tabler.Outline.Download,
+                        label = if (isDownloadingSeries) "Downloading Series..." else "Download Series",
+                        enabled = !isDownloadingSeries,
+                        onClick = {
+                            showTvOptionsMenu = false
+                            onDownloadSeriesClick()
+                        },
+                    )
+                }
+                if (isSeries || item?.seriesId != null) {
+                    TvOptionItem(
+                        icon = Tabler.Outline.EyeOff,
+                        label = "Hide from Next Up",
+                        onClick = {
+                            showTvOptionsMenu = false
+                            onHideFromNextUp()
+                        },
+                    )
+                }
+                TvOptionItem(
+                    icon = Tabler.Outline.EyeOff,
+                    label = "Hide from Continue Watching",
+                    onClick = {
+                        showTvOptionsMenu = false
+                        onHideFromContinueWatching()
+                    },
+                )
+            }
+        }
+    }
 }
 
 @Composable
@@ -1176,6 +1295,46 @@ private fun rememberIsLightTheme(): Boolean {
     val bg = MaterialTheme.colorScheme.background
     return remember(bg) {
         (bg.red * 0.299f + bg.green * 0.587f + bg.blue * 0.114f) > 0.5f
+    }
+}
+
+@Composable
+private fun TvOptionItem(
+    icon: ImageVector,
+    label: String,
+    enabled: Boolean = true,
+    onClick: () -> Unit,
+) {
+    val interactionSource = remember { MutableInteractionSource() }
+    val isFocused by interactionSource.collectIsFocusedAsState()
+    Surface(
+        onClick = onClick,
+        enabled = enabled,
+        shape = ShapeCache.smooth12,
+        color = if (isFocused) MaterialTheme.colorScheme.primaryContainer else Color.Transparent,
+        contentColor = if (isFocused) MaterialTheme.colorScheme.onPrimaryContainer
+                       else if (!enabled) MaterialTheme.colorScheme.onSurface.copy(alpha = 0.38f)
+                       else MaterialTheme.colorScheme.onSurface,
+        interactionSource = interactionSource,
+        modifier = Modifier.focusIndicator().fillMaxWidth(),
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 16.dp, vertical = 12.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(16.dp),
+        ) {
+            Icon(
+                imageVector = icon,
+                contentDescription = null,
+                modifier = Modifier.size(24.dp),
+            )
+            Text(
+                text = label,
+                style = MaterialTheme.typography.bodyLarge,
+            )
+        }
     }
 }
 

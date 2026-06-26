@@ -19,9 +19,12 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
 import androidx.compose.foundation.clickable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -30,9 +33,13 @@ import com.raulshma.jellyplay.core.ui.components.HeaderStatusIndicator
 import com.raulshma.jellyplay.core.ui.components.JellyPlayScreenScaffold
 import com.raulshma.jellyplay.core.ui.components.LocalNetworkStatus
 import com.raulshma.jellyplay.core.ui.components.resolveHeaderStatus
+import com.raulshma.jellyplay.core.ui.components.focusIndicator
+import com.raulshma.jellyplay.core.designsystem.theme.ShapeCache
 import com.raulshma.jellyplay.core.ui.adaptive.LocalAdaptiveInfo
 import com.raulshma.jellyplay.core.ui.adaptive.*
 import com.raulshma.jellyplay.core.ui.tv.LocalTvMode
+import com.raulshma.jellyplay.core.ui.tv.TvGrabInitialFocus
+import com.raulshma.jellyplay.core.ui.tv.tvFocusRestorer
 import com.composables.icons.tabler.Tabler
 import com.composables.icons.tabler.outline.*
 
@@ -50,6 +57,15 @@ fun SmartPlaylistsScreen(
         networkStatus = networkStatus,
     )
 
+    // TV focus-on-launch: focus the first smart playlist once data arrives so D-pad input lands on
+    // content, not the navigation drawer.
+    val listFocusRequester = remember { FocusRequester() }
+    TvGrabInitialFocus(
+        focusRequester = listFocusRequester,
+        itemCount = playlists.size,
+        tag = "smart_playlists_init",
+    )
+
     JellyPlayScreenScaffold(
         title = "Smart Playlists",
         onBack = onBack,
@@ -65,7 +81,10 @@ fun SmartPlaylistsScreen(
         val adaptiveInfo = LocalAdaptiveInfo.current
         val isTv = LocalTvMode.current
         LazyColumn(
-            modifier = Modifier.fillMaxSize(),
+            modifier = Modifier
+                .fillMaxSize()
+                .tvFocusRestorer()
+                .focusRequester(listFocusRequester),
             contentPadding = PaddingValues(
                 start = adaptiveInfo.contentPadding(isTv),
                 end = adaptiveInfo.contentPadding(isTv),
@@ -101,6 +120,7 @@ private fun PlaylistCard(
     Card(
         modifier = Modifier
             .fillMaxWidth()
+            .focusIndicator(ShapeCache.smooth16)
             .clickable(onClick = onClick),
         colors = CardDefaults.cardColors(
             containerColor = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.1f),
@@ -129,7 +149,7 @@ private fun PlaylistCard(
                     Text(
                         text = playlist.criteria.joinToString { it.type.name.lowercase().replaceFirstChar { c -> c.uppercase() } },
                         style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.6f),
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
                 }
             }

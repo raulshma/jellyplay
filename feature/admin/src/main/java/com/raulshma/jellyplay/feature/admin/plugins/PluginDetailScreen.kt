@@ -40,6 +40,8 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
@@ -61,6 +63,7 @@ import com.raulshma.jellyplay.core.ui.adaptive.contentPadding
 import com.raulshma.jellyplay.core.ui.components.JellyPlayScreenScaffold
 import com.raulshma.jellyplay.core.ui.components.ScreenLoadingState
 import com.raulshma.jellyplay.core.ui.components.rememberScreenBackgroundColor
+import com.raulshma.jellyplay.core.ui.tv.TvGrabInitialFocus
 import com.raulshma.jellyplay.core.ui.tv.rememberTvFocusState
 import com.raulshma.jellyplay.core.ui.tv.tvFocusIndicator
 import com.raulshma.jellyplay.core.ui.tv.tvFocusRestorer
@@ -81,6 +84,15 @@ fun PluginDetailScreen(
     val adaptiveInfo = LocalAdaptiveInfo.current
     var showUninstallDialog by remember { mutableStateOf(false) }
 
+    // TV focus-on-launch: focus the first card once content arrives so D-pad input lands on
+    // content, not the navigation drawer.
+    val listFocusRequester = remember { FocusRequester() }
+    TvGrabInitialFocus(
+        focusRequester = listFocusRequester,
+        itemCount = if (state.isLoading || state.plugin == null) 0 else 1,
+        tag = "plugin_detail_init",
+    )
+
     JellyPlayScreenScaffold(
         title = state.plugin?.name ?: pluginName,
         onBack = onBack,
@@ -94,7 +106,8 @@ fun PluginDetailScreen(
             LazyColumn(
                 modifier = Modifier
                     .fillMaxSize()
-                    .tvFocusRestorer(),
+                    .tvFocusRestorer()
+                    .focusRequester(listFocusRequester),
                 contentPadding = PaddingValues(
                     start = contentPadding,
                     end = contentPadding,
@@ -235,6 +248,8 @@ private fun PluginHeaderCard(
     onToggle: () -> Unit,
     onUninstall: () -> Unit,
 ) {
+    val toggleFocusState = rememberTvFocusState()
+    val uninstallFocusState = rememberTvFocusState()
     Card(
         modifier = Modifier.fillMaxWidth(),
         colors = CardDefaults.cardColors(
@@ -290,6 +305,7 @@ private fun PluginHeaderCard(
                     onClick = onToggle,
                     enabled = !isToggling,
                     contentPadding = PaddingValues(horizontal = 16.dp, vertical = 4.dp),
+                    modifier = Modifier.then(toggleFocusState.focusModifier).tvFocusIndicator(toggleFocusState, ShapeCache.smooth12),
                 ) {
                     Text(if (isEnabled) "Disable" else "Enable")
                 }
@@ -298,6 +314,7 @@ private fun PluginHeaderCard(
                     OutlinedButton(
                         onClick = onUninstall,
                         contentPadding = PaddingValues(horizontal = 12.dp, vertical = 4.dp),
+                        modifier = Modifier.then(uninstallFocusState.focusModifier).tvFocusIndicator(uninstallFocusState, ShapeCache.smooth12),
                     ) {
                         Icon(
                             Tabler.Outline.Trash,
@@ -395,6 +412,7 @@ private fun VersionHistoryItem(
     onInstall: () -> Unit,
 ) {
     val focusState = rememberTvFocusState()
+    val installFocusState = rememberTvFocusState()
 
     Card(
         modifier = Modifier
@@ -467,6 +485,7 @@ private fun VersionHistoryItem(
                     onClick = onInstall,
                     enabled = !isInstalling,
                     contentPadding = PaddingValues(horizontal = 12.dp, vertical = 4.dp),
+                    modifier = Modifier.then(installFocusState.focusModifier).tvFocusIndicator(installFocusState, ShapeCache.smooth12),
                 ) {
                     if (isInstalling) {
                         CircularProgressIndicator(

@@ -57,18 +57,19 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.raulshma.jellyplay.core.designsystem.theme.ShapeCache
-import com.raulshma.jellyplay.core.designsystem.theme.isLightColor
 import com.raulshma.jellyplay.core.designsystem.theme.ThemeVariantColors
 import com.raulshma.jellyplay.core.ui.adaptive.LocalJellyPlayUi
 import com.raulshma.jellyplay.core.ui.tv.LocalTvMode
+import com.raulshma.jellyplay.core.ui.tv.rememberTvFocusState
 import com.raulshma.jellyplay.core.ui.tv.tryRequestFocus
+import com.raulshma.jellyplay.core.ui.tv.tvFocusIndicator
 import com.composables.icons.tabler.Tabler
 import com.composables.icons.tabler.outline.*
 
 @Composable
 fun rememberScreenBackgroundColor(
     artworkColor: Color? = null,
-    isLightTheme: Boolean = isLightColor(MaterialTheme.colorScheme.background),
+    isLightTheme: Boolean = com.raulshma.jellyplay.core.designsystem.theme.LocalIsLightTheme.current,
 ): Color {
     val themeVariant = com.raulshma.jellyplay.core.designsystem.theme.LocalThemeVariant.current
     if (themeVariant == com.raulshma.jellyplay.core.designsystem.theme.ThemeVariant.SYNTHWAVE) return Color.Transparent
@@ -282,7 +283,7 @@ fun ScreenEmptyState(
                 icon,
                 contentDescription = null,
                 modifier = Modifier.size(64.dp),
-                tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f),
+                tint = MaterialTheme.colorScheme.onSurfaceVariant,
             )
             Text(
                 text = title,
@@ -298,7 +299,13 @@ fun ScreenEmptyState(
             }
             if (actionLabel != null && onAction != null) {
                 Spacer(Modifier.height(8.dp))
-                androidx.compose.material3.OutlinedButton(onClick = onAction) {
+                val actionFocusState = rememberTvFocusState(focusedScale = 1.05f)
+                androidx.compose.material3.OutlinedButton(
+                    onClick = onAction,
+                    modifier = Modifier
+                        .then(actionFocusState.focusModifier)
+                        .tvFocusIndicator(actionFocusState, ShapeCache.smooth12),
+                ) {
                     Text(actionLabel)
                 }
             }

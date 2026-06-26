@@ -17,13 +17,14 @@ import com.raulshma.jellyplay.core.data.repository.PlaybackRepository
 import com.raulshma.jellyplay.core.data.shortcuts.AppShortcutManager
 import com.raulshma.jellyplay.core.datastore.UserPreferencesStore
 import com.raulshma.jellyplay.core.model.DownloadStatus
+import com.raulshma.jellyplay.core.model.LibraryFolder
 import com.raulshma.jellyplay.core.model.PlayerType
 import com.raulshma.jellyplay.core.model.UserPreferences
 import com.raulshma.jellyplay.core.ui.navigation.Route
 import com.raulshma.jellyplay.core.ui.feedback.UserMessageBus
 import com.raulshma.jellyplay.core.ui.viewmodel.JellyPlayViewModel
 import com.raulshma.jellyplay.deeplink.DeepLinkHandler
-import com.raulshma.jellyplay.feature.player.video.VideoMiniPlayerState
+import com.raulshma.jellyplay.core.data.playback.VideoMiniPlayerState
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.SharingStarted
@@ -55,7 +56,10 @@ class MainViewModel @Inject constructor(
     private val playbackRepository: PlaybackRepository,
     private val offlineRepository: OfflineRepository,
     val userMessageBus: UserMessageBus,
+    private val serverHealthMonitor: com.raulshma.jellyplay.core.data.network.ServerHealthMonitor,
 ) : JellyPlayViewModel() {
+
+    val serverHealth = serverHealthMonitor.serverHealth
 
     private val _isRestoring = stateFlow(true)
     val isRestoring = _isRestoring.flow
@@ -70,8 +74,14 @@ class MainViewModel @Inject constructor(
     val preferences = preferencesStore.preferences
         .stateIn(scope, SharingStarted.WhileSubscribed(5_000), UserPreferences())
 
+    private val _libraryFolders = stateFlow<List<LibraryFolder>>(emptyList())
+    val libraryFolders = _libraryFolders.flow
+
     private val _pendingRoute = stateFlow<Route?>(null)
     val pendingRoute = _pendingRoute.flow
+
+    private val _pendingSearchQuery = stateFlow<String?>(null)
+    val pendingSearchQuery = _pendingSearchQuery.flow
 
     private val _globalMessage = MutableSharedFlow<String>(extraBufferCapacity = 1)
     val globalMessage = _globalMessage.asSharedFlow()
@@ -100,6 +110,7 @@ class MainViewModel @Inject constructor(
                     val server = authRepository.currentServer.first()
                     val user = authRepository.currentUser.first()
                     if (server != null && user != null) {
+                        serverHealthMonitor.startMonitoring(server.address)
                         val deviceId = preferencesStore.ensureDeviceId()
                         val deviceName = buildDeviceName(user.name)
                         webSocketClient.connect(
@@ -128,10 +139,14 @@ class MainViewModel @Inject constructor(
                         // state on cold start; for Library/Seerr it surfaces
                         // any cached items while the worker run completes.
                         com.raulshma.jellyplay.widget.ContinueWatchingWidget.triggerUpdate(context)
+                        // Fetch library folders for the TV navigation drawer
+                        launch { refreshLibraryFolders() }
                     }
                 } else {
+                    serverHealthMonitor.stopMonitoring()
                     webSocketClient.disconnect()
                     remoteControlReceiver.stop()
+                    _libraryFolders.set(emptyList())
                 }
             }
         }
@@ -146,6 +161,13 @@ class MainViewModel @Inject constructor(
         }
 
         appShortcutManager.observePlaybackForDynamicShortcuts()
+    }
+
+    fun refreshLibraryFolders() {
+        launch {
+            mediaRepository.getLibraryFolders()
+                .onSuccess { _libraryFolders.set(it) }
+        }
     }
 
     fun handleShortcutIntent(intent: Intent) {
@@ -171,14 +193,66 @@ class MainViewModel @Inject constructor(
         _pendingRoute.set(route)
     }
 
+    fun handleSharedText(sharedText: String) {
+        launch {
+            when (val target = parseSharedText(sharedText)) {
+                SharedTextTarget.Empty -> {
+                    _globalMessage.emit("No searchable content found in shared text")
+                }
+                is SharedTextTarget.Search -> {
+                    _pendingSearchQuery.set(target.query)
+                    _pendingRoute.set(Route.Search)
+                }
+                is SharedTextTarget.MediaDetail -> {
+                    _pendingRoute.set(Route.MediaDetail(target.mediaId))
+                }
+            }
+        }
+    }
+
+    private fun parseSharedText(text: String): SharedTextTarget {
+        val jellyfinUrlMatch = Regex("""jellyfin://media/([a-f0-9-]+)""").find(text)
+        if (jellyfinUrlMatch != null) {
+            return SharedTextTarget.MediaDetail(jellyfinUrlMatch.groupValues[1])
+        }
+        val urlMatch = Regex("""https?://[^\s]+""").find(text)
+        if (urlMatch != null) {
+            return SharedTextTarget.Search(urlMatch.value)
+        }
+        return text.takeIf { it.isNotBlank() }
+            ?.let(SharedTextTarget::Search)
+            ?: SharedTextTarget.Empty
+    }
+
+    private sealed class SharedTextTarget {
+        data object Empty : SharedTextTarget()
+        data class Search(val query: String) : SharedTextTarget()
+        data class MediaDetail(val mediaId: String) : SharedTextTarget()
+    }
+
     fun consumePendingRoute() {
         _pendingRoute.set(null)
+    }
+
+    fun consumePendingSearchQuery() {
+        _pendingSearchQuery.set(null)
+    }
+
+    fun handleSearchQuery(query: String) {
+        _pendingSearchQuery.set(query)
     }
 
     fun logout() {
         launch {
             remoteControlReceiver.stop()
             authRepository.logout()
+        }
+    }
+
+    fun revokeServerSession() {
+        launch {
+            remoteControlReceiver.stop()
+            authRepository.revokeServerSession()
         }
     }
 

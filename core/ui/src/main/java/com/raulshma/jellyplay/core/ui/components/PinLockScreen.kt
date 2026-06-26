@@ -38,6 +38,8 @@ import com.raulshma.jellyplay.core.ui.adaptive.LocalAdaptiveInfo
 import com.raulshma.jellyplay.core.ui.adaptive.WindowSizeClass
 import com.raulshma.jellyplay.core.ui.adaptive.contentPadding
 import com.raulshma.jellyplay.core.ui.tv.LocalTvMode
+import com.raulshma.jellyplay.core.ui.tv.rememberTvFocusState
+import com.raulshma.jellyplay.core.ui.tv.tvFocusIndicator
 import com.raulshma.jellyplay.core.ui.animation.AnimationTokens
 import com.raulshma.jellyplay.core.ui.animation.defaultSpatialSpec
 import com.raulshma.jellyplay.core.ui.animation.fastEffectsSpec
@@ -60,6 +62,7 @@ fun PinLockScreen(
     onErrorClear: () -> Unit = {},
     errorMessage: String? = null,
     compactMode: Boolean = false,
+    enabled: Boolean = true,
 ) {
     var pin by remember { mutableStateOf("") }
     val maxDigits = 4
@@ -159,13 +162,18 @@ fun PinLockScreen(
                         "backspace" -> {
                             val interactionSource = remember { MutableInteractionSource() }
                             val styleState = rememberUpdatedStyleState(interactionSource)
+                            val backspaceFocusState = rememberTvFocusState()
 
                             Box(
                                 modifier = Modifier
                                     .styleable(styleState, ComponentStyles.pinKeyStyle(keySize))
+                                    .then(backspaceFocusState.focusModifier)
+                                    .tvFocusIndicator(backspaceFocusState, MaterialTheme.shapes.extraLarge)
+                                    .graphicsLayer { alpha = if (enabled) 1f else 0.4f }
                                     .clickable(
                                         interactionSource = interactionSource,
                                         indication = null,
+                                        enabled = enabled,
                                     ) {
                                         if (pin.isNotEmpty()) {
                                             pin = pin.dropLast(1)
@@ -187,6 +195,7 @@ fun PinLockScreen(
                                 key = key,
                                 isPressed = false,
                                 keySize = keySize,
+                                enabled = enabled,
                                 onClick = {
                                     if (pin.length < maxDigits) {
                                         pin += key
@@ -213,17 +222,23 @@ private fun PinKeyButton(
     key: String,
     isPressed: Boolean,
     keySize: Dp = 72.dp,
+    enabled: Boolean = true,
     onClick: () -> Unit,
 ) {
     val interactionSource = remember { MutableInteractionSource() }
     val styleState = rememberUpdatedStyleState(interactionSource)
+    val tvFocusState = com.raulshma.jellyplay.core.ui.tv.rememberTvFocusState()
 
     Box(
         modifier = Modifier
             .styleable(styleState, ComponentStyles.pinKeyStyle(keySize))
+            .then(tvFocusState.focusModifier)
+            .tvFocusIndicator(tvFocusState, MaterialTheme.shapes.extraLarge)
+            .graphicsLayer { alpha = if (enabled) 1f else 0.4f }
             .clickable(
                 interactionSource = interactionSource,
                 indication = null,
+                enabled = enabled,
                 onClick = onClick,
             ),
         contentAlignment = Alignment.Center,

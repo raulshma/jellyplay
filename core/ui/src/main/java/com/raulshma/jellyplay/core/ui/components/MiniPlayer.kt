@@ -56,7 +56,10 @@ import com.raulshma.jellyplay.core.designsystem.theme.tonalElevation
 import com.raulshma.jellyplay.core.designsystem.theme.ThemeVariant
 import coil3.size.Size as CoilSize
 import androidx.compose.ui.graphics.Brush
+import com.raulshma.jellyplay.core.ui.components.focusIndicator
 import com.raulshma.jellyplay.core.ui.image.MediaImage
+import com.raulshma.jellyplay.core.ui.tv.rememberTvFocusState
+import com.raulshma.jellyplay.core.ui.tv.tvFocusIndicator
 import com.composables.icons.tabler.Tabler
 import com.composables.icons.tabler.outline.*
 
@@ -170,6 +173,7 @@ fun MiniPlayer(
                 modifier = Modifier
                     .fillMaxWidth()
                     .height(64.dp)
+                    .focusIndicator(shape)
                     .clickable(onClick = onClick)
                     .padding(horizontal = 12.dp),
                 verticalAlignment = Alignment.CenterVertically,
@@ -316,6 +320,7 @@ private fun AnimatedIconButton(
     val motionScheme = MaterialTheme.motionScheme
     val interactionSource = remember { MutableInteractionSource() }
     val isPressed by interactionSource.collectIsPressedAsState()
+    val iconFocusState = rememberTvFocusState(focusedScale = 1.1f)
     val scale by animateFloatAsState(
         targetValue = if (isPressed) 0.85f else 1f,
         animationSpec = motionScheme.fastSpatialSpec(),
@@ -336,7 +341,10 @@ private fun AnimatedIconButton(
     ) {
         IconButton(
             onClick = onClick,
-            modifier = Modifier.fillMaxSize(),
+            modifier = Modifier
+                .fillMaxSize()
+                .then(iconFocusState.focusModifier)
+                .tvFocusIndicator(iconFocusState, CircleShape),
             shapes = androidx.compose.material3.IconButtonDefaults.shapes(),
             interactionSource = interactionSource,
         ) {

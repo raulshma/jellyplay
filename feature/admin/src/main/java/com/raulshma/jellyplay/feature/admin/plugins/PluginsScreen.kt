@@ -1,6 +1,7 @@
 package com.raulshma.jellyplay.feature.admin.plugins
 
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.focusGroup
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -9,6 +10,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -26,6 +28,8 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
@@ -39,6 +43,9 @@ import com.raulshma.jellyplay.core.ui.adaptive.contentPadding
 import com.raulshma.jellyplay.core.ui.components.JellyPlayScreenScaffold
 import com.raulshma.jellyplay.core.ui.components.ScreenLoadingState
 import com.raulshma.jellyplay.core.ui.components.rememberScreenBackgroundColor
+import com.raulshma.jellyplay.core.ui.tv.TvGrabInitialFocus
+import com.raulshma.jellyplay.core.ui.tv.rememberTvFocusState
+import com.raulshma.jellyplay.core.ui.tv.tvFocusIndicator
 import com.raulshma.jellyplay.feature.admin.plugins.components.InstalledPluginsTab
 import com.raulshma.jellyplay.feature.admin.plugins.components.CatalogTab
 import com.raulshma.jellyplay.feature.admin.plugins.components.RepositoriesTab
@@ -56,12 +63,25 @@ fun PluginsScreen(
     val backgroundColor = rememberScreenBackgroundColor()
     val adaptiveInfo = LocalAdaptiveInfo.current
 
+    // TV focus-on-launch: focus the tab row once data arrives so D-pad input lands on content,
+    // not the navigation drawer.
+    val contentFocusRequester = remember { FocusRequester() }
+    TvGrabInitialFocus(
+        focusRequester = contentFocusRequester,
+        itemCount = if (state.isLoading && selectedTab == 0) 0 else 1,
+        tag = "plugins_init",
+    )
+
     JellyPlayScreenScaffold(
         title = "Plugins",
         onBack = onBack,
         backgroundColor = backgroundColor,
         actions = {
-            IconButton(onClick = { viewModel.refresh() }) {
+            val refreshFocusState = rememberTvFocusState()
+            IconButton(
+                onClick = { viewModel.refresh() },
+                modifier = Modifier.then(refreshFocusState.focusModifier).tvFocusIndicator(refreshFocusState, CircleShape),
+            ) {
                 Icon(Tabler.Outline.Refresh, contentDescription = "Refresh")
             }
         },
@@ -69,6 +89,8 @@ fun PluginsScreen(
         Column(
             modifier = Modifier
                 .fillMaxSize()
+                .focusGroup()
+                .focusRequester(contentFocusRequester)
                 .padding(paddingValues),
         ) {
             if (state.activeInstallations.isNotEmpty()) {

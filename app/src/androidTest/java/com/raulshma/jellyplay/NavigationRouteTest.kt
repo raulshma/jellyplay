@@ -39,7 +39,6 @@ class NavigationRouteTest {
             Route.MoodPlaylists,
             Route.MoodPlaylistDetail(playlistId = "mp-006"),
             Route.CollectionDetail(collectionId = "coll-007"),
-            Route.OfflinePlayer(filePath = "/path/to/file.mp4", title = "Test Video"),
             Route.LiveTvGuide,
             Route.Dvr,
             Route.Ambient(imageUrl = "http://test.com/img.jpg", title = "Test Song", artist = "Artist"),

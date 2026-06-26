@@ -35,6 +35,7 @@ import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import com.raulshma.jellyplay.core.designsystem.theme.ShapeCache
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
@@ -55,6 +56,7 @@ import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.input.pointer.positionChange
@@ -77,6 +79,7 @@ import com.composables.icons.tabler.outline.PlayerPlay
 import com.composables.icons.tabler.outline.Share
 import com.composables.icons.tabler.outline.X
 import com.raulshma.jellyplay.core.ui.components.DelayedLoadingScreen
+import com.raulshma.jellyplay.core.ui.components.focusIndicator
 import com.raulshma.jellyplay.core.ui.components.LoadingScreen
 import com.raulshma.jellyplay.core.ui.feedback.LocalUserMessageBus
 import com.raulshma.jellyplay.core.ui.feedback.uiTextOf
@@ -274,6 +277,18 @@ fun PhotoViewerScreen(
                             .navigationBarsPadding()
                             .padding(horizontal = 12.dp, vertical = 8.dp),
                     ) {
+                        Box(
+                            modifier = Modifier
+                                .align(Alignment.TopCenter)
+                                .fillMaxWidth()
+                                .height(112.dp)
+                                .background(
+                                    Brush.verticalGradient(
+                                        0f to MaterialTheme.colorScheme.scrim.copy(alpha = 0.7f),
+                                        1f to Color.Transparent,
+                                    )
+                                )
+                        )
                         Row(
                             modifier = Modifier
                                 .align(Alignment.TopStart)
@@ -753,7 +768,7 @@ private fun InfoRow(label: String, value: String?) {
             Text(
                 text = label,
                 style = MaterialTheme.typography.bodySmall,
-                color = Color.White.copy(alpha = 0.5f),
+                color = Color.White.copy(alpha = 0.7f),
                 modifier = Modifier.width(80.dp),
             )
             Text(
@@ -858,6 +873,7 @@ private fun OverlayIconButton(
             .size(44.dp)
             .clip(CircleShape)
             .background(Color.White.copy(alpha = 0.15f))
+            .focusIndicator(CircleShape)
             .clickable(
                 interactionSource = remember { MutableInteractionSource() },
                 indication = null,
@@ -880,6 +896,7 @@ private fun OverlayActionButton(
             .size(44.dp)
             .clip(CircleShape)
             .background(Color.White.copy(alpha = 0.15f))
+            .focusIndicator(ShapeCache.smooth12)
             .clickable(
                 interactionSource = remember { MutableInteractionSource() },
                 indication = null,

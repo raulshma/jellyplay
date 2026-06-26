@@ -13,6 +13,7 @@ data class ServerInfo(
     val accessToken: String? = null,
     val isConnected: Boolean = false,
     val alternateAddresses: List<String> = emptyList(),
+    val allowCleartext: Boolean = false,
 )
 
 @Immutable

@@ -11,6 +11,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.graphicsLayer
 import com.raulshma.jellyplay.core.ui.animation.fastEffectsSpec
+import com.raulshma.jellyplay.core.ui.components.focusIndicator
 
 @Composable
 fun PressScaleBox(
@@ -32,6 +33,7 @@ fun PressScaleBox(
                 scaleX = scale
                 scaleY = scale
             }
+            .focusIndicator()
             .clickable(
                 interactionSource = interactionSource,
                 indication = null,

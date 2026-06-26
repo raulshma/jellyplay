@@ -37,8 +37,11 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -52,6 +55,10 @@ import com.raulshma.jellyplay.core.ui.adaptive.contentPadding
 import com.raulshma.jellyplay.core.ui.adaptive.itemSpacing
 import com.raulshma.jellyplay.core.ui.image.MediaImage
 import com.raulshma.jellyplay.core.ui.tv.LocalTvMode
+import com.raulshma.jellyplay.core.ui.tv.TvGrabInitialFocus
+import com.raulshma.jellyplay.core.ui.tv.rememberTvFocusState
+import com.raulshma.jellyplay.core.ui.tv.tvFocusIndicator
+import com.raulshma.jellyplay.core.ui.tv.tvFocusRestorer
 import com.composables.icons.tabler.Tabler
 import com.composables.icons.tabler.outline.*
 
@@ -63,11 +70,12 @@ fun DownloadsScreen(
     onBack: () -> Unit,
     viewModel: DownloadsViewModel = hiltViewModel(),
 ) {
-    val downloads = viewModel.downloads
+    val uiState by viewModel.uiState.collectAsStateWithLifecycle()
+    val downloads = uiState.downloads
     val networkStatus by com.raulshma.jellyplay.core.ui.components.LocalNetworkStatus.current.collectAsStateWithLifecycle()
     val headerStatus = com.raulshma.jellyplay.core.ui.components.resolveHeaderStatus(
-        isLoading = viewModel.isLoading,
-        hasError = viewModel.error != null,
+        isLoading = uiState.isLoading,
+        hasError = uiState.error != null,
         networkStatus = networkStatus,
     )
 
@@ -75,6 +83,15 @@ fun DownloadsScreen(
     val isTv = LocalTvMode.current
 
     val backgroundColor = com.raulshma.jellyplay.core.ui.components.rememberScreenBackgroundColor()
+
+    // TV focus-on-launch: focus the first download row once data arrives so D-pad input lands on
+    // content, not the navigation drawer.
+    val listFocusRequester = remember { FocusRequester() }
+    TvGrabInitialFocus(
+        focusRequester = listFocusRequester,
+        itemCount = downloads.size,
+        tag = "downloads_init",
+    )
 
     com.raulshma.jellyplay.core.ui.components.JellyPlayScreenScaffold(
         title = "Downloads",
@@ -87,9 +104,9 @@ fun DownloadsScreen(
             )
         },
     ) {
-        if (viewModel.totalStorageBytes > 0) {
+        if (uiState.totalStorageBytes > 0) {
             Text(
-                "Storage used: ${viewModel.formatBytes(viewModel.totalStorageBytes)}",
+                "Storage used: ${viewModel.formatBytes(uiState.totalStorageBytes)}",
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 modifier = Modifier.padding(start = adaptiveInfo.contentPadding(isTv), end = adaptiveInfo.contentPadding(isTv), bottom = 8.dp),
@@ -104,7 +121,10 @@ fun DownloadsScreen(
             )
         } else {
             LazyColumn(
-                modifier = Modifier.fillMaxSize(),
+                modifier = Modifier
+                    .fillMaxSize()
+                    .tvFocusRestorer()
+                    .focusRequester(listFocusRequester),
                 contentPadding = PaddingValues(
                     start = adaptiveInfo.contentPadding(isTv),
                     end = adaptiveInfo.contentPadding(isTv),
@@ -140,6 +160,8 @@ fun DownloadsScreen(
                             onResume = { viewModel.resumeDownload(download) },
                             onDelete = { viewModel.deleteDownload(download) },
                             onRetry = { viewModel.retryDownload(download) },
+                            onMoveToFront = { viewModel.moveToFront(download) },
+                            onLowerPriority = { viewModel.lowerPriority(download) },
                         )
                     }
                 }
@@ -160,6 +182,8 @@ private fun DownloadItemRow(
     onResume: () -> Unit,
     onDelete: () -> Unit,
     onRetry: () -> Unit,
+    onMoveToFront: () -> Unit,
+    onLowerPriority: () -> Unit,
 ) {
     val progress = if (item.totalSizeBytes > 0) {
         item.downloadedBytes.toFloat() / item.totalSizeBytes
@@ -169,11 +193,17 @@ private fun DownloadItemRow(
         animationSpec = MaterialTheme.motionScheme.defaultEffectsSpec(),
         label = "downloadProgress",
     )
+    val cardRowFocusState = rememberTvFocusState(focusedScale = 1.01f)
 
     ElevatedCard(
         modifier = Modifier
             .fillMaxWidth()
-            .clickable(enabled = item.status == DownloadStatus.COMPLETED, onClick = onClick),
+            .then(cardRowFocusState.focusModifier)
+            .tvFocusIndicator(cardRowFocusState, ShapeCache.smooth12)
+            .clickable(
+                enabled = item.status == DownloadStatus.COMPLETED,
+                onClick = onClick,
+            ),
     ) {
         Row(
             modifier = Modifier
@@ -291,66 +321,94 @@ private fun DownloadItemRow(
 
             when (item.status) {
                 DownloadStatus.DOWNLOADING -> {
-                    IconButton(onClick = onPause) {
-                        Icon(
-                            Tabler.Outline.PlayerPause,
-                            "Pause",
-                            tint = MaterialTheme.colorScheme.primary,
-                        )
-                    }
-                    IconButton(onClick = onCancel) {
-                        Icon(
-                            Tabler.Outline.Trash,
-                            "Cancel",
-                            tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                        )
-                    }
+                    DownloadActionButton(
+                        icon = Tabler.Outline.ArrowDown,
+                        contentDescription = "Lower Priority",
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                        onClick = onLowerPriority,
+                    )
+                    DownloadActionButton(
+                        icon = Tabler.Outline.PlayerPause,
+                        contentDescription = "Pause",
+                        tint = MaterialTheme.colorScheme.primary,
+                        onClick = onPause,
+                    )
+                    DownloadActionButton(
+                        icon = Tabler.Outline.Trash,
+                        contentDescription = "Cancel",
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                        onClick = onCancel,
+                    )
                 }
                 DownloadStatus.PENDING -> {
-                    IconButton(onClick = onCancel) {
-                        Icon(
-                            Tabler.Outline.Trash,
-                            "Cancel",
-                            tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                        )
-                    }
+                    DownloadActionButton(
+                        icon = Tabler.Outline.ArrowUp,
+                        contentDescription = "Move to Front",
+                        tint = MaterialTheme.colorScheme.primary,
+                        onClick = onMoveToFront,
+                    )
+                    DownloadActionButton(
+                        icon = Tabler.Outline.Trash,
+                        contentDescription = "Cancel",
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                        onClick = onCancel,
+                    )
                 }
                 DownloadStatus.PAUSED -> {
-                    IconButton(onClick = onResume) {
-                        Icon(
-                            Tabler.Outline.PlayerPlay,
-                            "Resume",
-                            tint = MaterialTheme.colorScheme.primary,
-                        )
-                    }
-                    IconButton(onClick = onCancel) {
-                        Icon(
-                            Tabler.Outline.Trash,
-                            "Cancel",
-                            tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                        )
-                    }
+                    DownloadActionButton(
+                        icon = Tabler.Outline.PlayerPlay,
+                        contentDescription = "Resume",
+                        tint = MaterialTheme.colorScheme.primary,
+                        onClick = onResume,
+                    )
+                    DownloadActionButton(
+                        icon = Tabler.Outline.Trash,
+                        contentDescription = "Cancel",
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                        onClick = onCancel,
+                    )
                 }
                 DownloadStatus.FAILED -> {
-                    IconButton(onClick = onRetry) {
-                        Icon(
-                            Tabler.Outline.Refresh,
-                            "Retry",
-                            tint = MaterialTheme.colorScheme.primary,
-                        )
-                    }
+                    DownloadActionButton(
+                        icon = Tabler.Outline.Refresh,
+                        contentDescription = "Retry",
+                        tint = MaterialTheme.colorScheme.primary,
+                        onClick = onRetry,
+                    )
                 }
                 DownloadStatus.COMPLETED -> {
-                    IconButton(onClick = onDelete) {
-                        Icon(
-                            Tabler.Outline.Trash,
-                            "Delete",
-                            tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                        )
-                    }
+                    DownloadActionButton(
+                        icon = Tabler.Outline.Trash,
+                        contentDescription = "Delete",
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                        onClick = onDelete,
+                    )
                 }
                 else -> {}
             }
+        }
+    }
+}
+
+@Composable
+private fun DownloadActionButton(
+    icon: ImageVector,
+    contentDescription: String,
+    tint: Color,
+    onClick: () -> Unit,
+) {
+    val focusState = rememberTvFocusState(focusedScale = 1.1f)
+    Box(
+        modifier = Modifier
+            .then(focusState.focusModifier)
+            .tvFocusIndicator(focusState, ShapeCache.smooth10),
+    ) {
+        IconButton(onClick = onClick) {
+            Icon(
+                icon,
+                contentDescription,
+                tint = tint,
+            )
         }
     }
 }

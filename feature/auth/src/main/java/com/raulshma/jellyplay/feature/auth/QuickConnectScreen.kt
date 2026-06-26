@@ -30,11 +30,14 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
@@ -42,8 +45,12 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import com.raulshma.jellyplay.core.ui.adaptive.LocalAdaptiveInfo
 import com.raulshma.jellyplay.core.ui.adaptive.contentPadding
 import com.raulshma.jellyplay.core.ui.tv.LocalTvMode
+import com.raulshma.jellyplay.core.ui.tv.rememberTvFocusState
+import com.raulshma.jellyplay.core.ui.tv.tryRequestFocus
+import com.raulshma.jellyplay.core.ui.tv.tvFocusIndicator
 import com.raulshma.jellyplay.core.designsystem.theme.AlphaEasing
 import com.raulshma.jellyplay.core.designsystem.theme.FancyTransitionEasing
+import com.raulshma.jellyplay.core.designsystem.theme.ShapeCache
 import com.raulshma.jellyplay.core.ui.components.JellyPlayScreenScaffold
 import com.raulshma.jellyplay.core.ui.components.JellyPlayLoadingIndicator
 import com.composables.icons.tabler.Tabler
@@ -164,6 +171,13 @@ private fun WaitingForApprovalContent(
     code: String,
     onCancel: () -> Unit,
 ) {
+    val isTv = LocalTvMode.current
+    val cancelFocusRequester = remember { FocusRequester() }
+
+    LaunchedEffect(Unit) {
+        if (isTv) cancelFocusRequester.tryRequestFocus("qc_cancel")
+    }
+
     val infiniteTransition = rememberInfiniteTransition(label = "qc_pulse")
     val pulseAlpha by infiniteTransition.animateFloat(
         initialValue = 0.6f,
@@ -227,9 +241,13 @@ private fun WaitingForApprovalContent(
 
         Spacer(modifier = Modifier.height(32.dp))
 
+        val cancelFocusState = rememberTvFocusState(focusedScale = 1.04f)
         OutlinedButton(
             onClick = onCancel,
-            modifier = Modifier.fillMaxWidth(),
+            modifier = Modifier.fillMaxWidth()
+                .focusRequester(cancelFocusRequester)
+                .then(cancelFocusState.focusModifier)
+                .tvFocusIndicator(cancelFocusState, ShapeCache.smooth12),
         ) {
             Text("Cancel")
         }
@@ -270,6 +288,12 @@ private fun ErrorContent(
     onBack: () -> Unit,
     isTv: Boolean,
 ) {
+    val retryFocusRequester = remember { FocusRequester() }
+
+    LaunchedEffect(Unit) {
+        if (isTv) retryFocusRequester.tryRequestFocus("qc_retry")
+    }
+
     Column(
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
@@ -287,9 +311,13 @@ private fun ErrorContent(
         )
         Spacer(modifier = Modifier.height(32.dp))
 
+        val tryAgainFocusState = rememberTvFocusState(focusedScale = 1.04f)
         Button(
             onClick = onRetry,
-            modifier = Modifier.fillMaxWidth(),
+            modifier = Modifier.fillMaxWidth()
+                .focusRequester(retryFocusRequester)
+                .then(tryAgainFocusState.focusModifier)
+                .tvFocusIndicator(tryAgainFocusState, ShapeCache.smooth12),
         ) {
             Icon(Tabler.Outline.Refresh, contentDescription = null, modifier = Modifier.size(18.dp))
             Spacer(modifier = Modifier.width(8.dp))
@@ -298,9 +326,12 @@ private fun ErrorContent(
 
         Spacer(modifier = Modifier.height(12.dp))
 
+        val backFocusState = rememberTvFocusState(focusedScale = 1.04f)
         OutlinedButton(
             onClick = onBack,
-            modifier = Modifier.fillMaxWidth(),
+            modifier = Modifier.fillMaxWidth()
+                .then(backFocusState.focusModifier)
+                .tvFocusIndicator(backFocusState, ShapeCache.smooth12),
         ) {
             Text("Back to Sign In")
         }

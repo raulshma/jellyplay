@@ -4,10 +4,17 @@ import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
@@ -36,6 +43,7 @@ fun BackupSettingsScreen(
     val adaptiveInfo = LocalAdaptiveInfo.current
     val isTv = LocalTvMode.current
     val userMessageBus = LocalUserMessageBus.current
+    var showFactoryResetDialog by remember { mutableStateOf(false) }
 
     val settingsLauncher = androidx.activity.compose.rememberLauncherForActivityResult(
         contract = androidx.activity.result.contract.ActivityResultContracts.CreateDocument("application/json"),
@@ -85,7 +93,7 @@ fun BackupSettingsScreen(
                         icon = Tabler.Outline.FileExport,
                         title = "Export Settings",
                         subtitle = "Save current settings to a JSON file",
-                        index = 0, count = 2,
+                        index = 0, count = 3,
                         highlighted = highlightSettingId == "backup_export",
                         onClick = {
                             settingsLauncher.launch("jellyplay-settings.json")
@@ -95,10 +103,20 @@ fun BackupSettingsScreen(
                         icon = Tabler.Outline.FileImport,
                         title = "Import Settings",
                         subtitle = "Restore settings from a backup file",
-                        index = 1, count = 2,
+                        index = 1, count = 3,
                         highlighted = highlightSettingId == "backup_import",
                         onClick = {
                             importLauncher.launch(arrayOf("application/json"))
+                        },
+                    )
+                    SettingListItem(
+                        icon = Tabler.Outline.AlertTriangle,
+                        title = "Factory Reset",
+                        subtitle = "Reset all settings to factory defaults",
+                        index = 2, count = 3,
+                        highlighted = highlightSettingId == "factory_reset",
+                        onClick = {
+                            showFactoryResetDialog = true
                         },
                     )
                 }
@@ -111,5 +129,34 @@ fun BackupSettingsScreen(
                 }
             }
         }
+    }
+
+    if (showFactoryResetDialog) {
+        AlertDialog(
+            onDismissRequest = { showFactoryResetDialog = false },
+            title = { Text("Factory Reset") },
+            text = {
+                Text(
+                    text = "This will reset ALL settings to factory defaults. You will be logged out and all app data will be cleared. This action cannot be undone.",
+                    style = MaterialTheme.typography.bodyMedium,
+                )
+            },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        showFactoryResetDialog = false
+                        viewModel.clearAllPreferences()
+                        onBack()
+                    }
+                ) {
+                    Text("Reset", color = MaterialTheme.colorScheme.error)
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showFactoryResetDialog = false }) {
+                    Text("Cancel")
+                }
+            },
+        )
     }
 }

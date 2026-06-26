@@ -63,8 +63,8 @@ fun GlassDismissTag(
 
     val isLight = LocalIsLightTheme.current
     val glassBg = if (isLight) Color.Black.copy(alpha = 0.08f) else Color.White.copy(alpha = 0.12f)
-    val textColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.85f)
-    val iconTint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f)
+    val textColor = MaterialTheme.colorScheme.onSurface
+    val iconTint = MaterialTheme.colorScheme.onSurfaceVariant
 
     Row(
         modifier = Modifier

@@ -51,6 +51,7 @@ import com.composables.icons.tabler.Tabler
 import com.composables.icons.tabler.outline.ChevronDown
 import com.composables.icons.tabler.outline.Download
 import com.raulshma.jellyplay.core.designsystem.theme.ShapeCache
+import com.raulshma.jellyplay.core.ui.components.focusIndicator
 import com.raulshma.jellyplay.core.designsystem.theme.defaultContentSizeSpec
 import com.raulshma.jellyplay.core.designsystem.theme.defaultSpatialSpring
 import com.raulshma.jellyplay.core.designsystem.theme.expressiveListShape
@@ -160,7 +161,7 @@ fun SeriesDownloadSheet(
                     contentColor = if (allSelected) MaterialTheme.colorScheme.onErrorContainer
                     else MaterialTheme.colorScheme.onPrimaryContainer,
                 ),
-                modifier = Modifier.weight(1f),
+                modifier = Modifier.weight(1f).focusIndicator(),
             ) {
                 Text(if (allSelected) "Deselect All" else "Select All")
             }

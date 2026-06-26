@@ -2,6 +2,7 @@ package com.raulshma.jellyplay.core.database.migration
 
 import androidx.room.migration.Migration
 import androidx.sqlite.db.SupportSQLiteDatabase
+import com.raulshma.jellyplay.core.database.crypto.TokenCipher
 
 val MIGRATION_1_2 = object : Migration(1, 2) {
     override fun migrate(db: SupportSQLiteDatabase) {
@@ -385,6 +386,83 @@ val MIGRATION_22_23 = object : Migration(22, 23) {
     }
 }
 
+val MIGRATION_23_24 = object : Migration(23, 24) {
+    override fun migrate(db: SupportSQLiteDatabase) {
+        db.execSQL("ALTER TABLE downloads ADD COLUMN priority INTEGER NOT NULL DEFAULT 0")
+    }
+}
+
+/**
+ * Migration v24 → v25 (§4.10 of the architecture analysis): encrypts plaintext Jellyfin
+ * access tokens stored in the `users.accessToken` and `servers.accessToken` columns using
+ * the Keystore-backed [TokenCipher]. Existing encrypted rows are left untouched (cipher is
+ * idempotent), and rows with empty/null tokens are skipped.
+ *
+ * After this migration runs, the DB columns contain ciphertext that's only readable via
+ * [TokenCipher.decrypt]. The encryption key lives in the Android Keystore and never leaves
+ * the device, so an attacker extracting the DB file via `adb backup` or root access cannot
+ * read the tokens.
+ *
+ * If the Keystore is transiently unavailable (rare — usually right after a fresh boot before
+ * the user has unlocked the device), the migration re-throws to surface the failure; Room
+ * will retry on next launch.
+ */
+class Migration24To25(
+    private val tokenCipher: TokenCipher,
+) : Migration(24, 25) {
+    override fun migrate(db: SupportSQLiteDatabase) {
+        encryptUserTokens(db)
+        encryptServerTokens(db)
+    }
+
+    private fun encryptUserTokens(db: SupportSQLiteDatabase) {
+        db.query("SELECT userId, accessToken FROM users").use { cursor ->
+            while (cursor.moveToNext()) {
+                val userId = cursor.getString(0)
+                val rawToken = if (cursor.isNull(1)) null else cursor.getString(1)
+                val encrypted = try {
+                    tokenCipher.encrypt(rawToken)
+                } catch (e: Exception) {
+                    throw IllegalStateException(
+                        "Migration 24→25: failed to encrypt token for user $userId. " +
+                            "Aborting migration so Room can retry on next launch.",
+                        e,
+                    )
+                }
+                if (encrypted != rawToken) {
+                    db.execSQL(
+                        "UPDATE users SET accessToken = ? WHERE userId = ?",
+                        arrayOf(encrypted ?: "", userId),
+                    )
+                }
+            }
+        }
+    }
+
+    private fun encryptServerTokens(db: SupportSQLiteDatabase) {
+        db.query("SELECT id, accessToken FROM servers").use { cursor ->
+            while (cursor.moveToNext()) {
+                val serverId = cursor.getString(0)
+                val rawToken = if (cursor.isNull(1)) null else cursor.getString(1)
+                val encrypted = try {
+                    tokenCipher.encrypt(rawToken)
+                } catch (e: Exception) {
+                    throw IllegalStateException(
+                        "Migration 24→25: failed to encrypt token for server $serverId.",
+                        e,
+                    )
+                }
+                if (encrypted != rawToken) {
+                    db.execSQL(
+                        "UPDATE servers SET accessToken = ? WHERE id = ?",
+                        arrayOf(encrypted, serverId),
+                    )
+                }
+            }
+        }
+    }
+}
+
 val ALL_MIGRATIONS = listOf(
     MIGRATION_1_2,
     MIGRATION_2_3,
@@ -408,4 +486,5 @@ val ALL_MIGRATIONS = listOf(
     MIGRATION_20_21,
     MIGRATION_21_22,
     MIGRATION_22_23,
+    MIGRATION_23_24,
 )

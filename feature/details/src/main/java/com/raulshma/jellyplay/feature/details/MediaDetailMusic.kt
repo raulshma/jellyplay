@@ -13,6 +13,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -32,6 +33,7 @@ import com.composables.icons.tabler.Tabler
 import com.composables.icons.tabler.outline.PlayerPlay
 import com.raulshma.jellyplay.core.designsystem.theme.ShapeCache
 import com.raulshma.jellyplay.core.model.MediaItem
+import com.raulshma.jellyplay.core.ui.components.focusIndicator
 import com.raulshma.jellyplay.core.ui.image.MediaImage
 
 @Composable
@@ -54,6 +56,8 @@ internal fun AlbumTrackItem(
         modifier = Modifier
             .fillMaxWidth()
             .graphicsLayer { scaleX = scale; scaleY = scale }
+            .clip(ShapeCache.smooth12)
+            .focusIndicator()
             .clickable(
                 interactionSource = interactionSource,
                 indication = null,
@@ -103,7 +107,10 @@ internal fun AlbumTrackItem(
             }
         }
 
-        IconButton(onClick = onPlayClick) {
+        IconButton(
+            onClick = onPlayClick,
+            modifier = Modifier.focusIndicator(CircleShape),
+        ) {
             Icon(
                 Tabler.Outline.PlayerPlay,
                 contentDescription = "Play",

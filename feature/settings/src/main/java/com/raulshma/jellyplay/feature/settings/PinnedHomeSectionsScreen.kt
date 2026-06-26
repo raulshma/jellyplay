@@ -127,7 +127,7 @@ fun PinnedHomeSectionsScreen(
                             Icon(
                                 Tabler.Outline.PinnedOff,
                                 contentDescription = null,
-                                tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f),
+                                tint = MaterialTheme.colorScheme.onSurfaceVariant,
                                 modifier = Modifier.size(20.dp),
                             )
                             Spacer(Modifier.width(12.dp))
@@ -277,7 +277,7 @@ private fun ReorderIconButton(
 ) {
     val tvFocusState = rememberTvFocusState(focusedScale = 1.12f)
     val tint = when {
-        !enabled -> MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.25f)
+        !enabled -> MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f)
         isDestructive -> MaterialTheme.colorScheme.error
         else -> MaterialTheme.colorScheme.onSurfaceVariant
     }
@@ -612,8 +612,8 @@ private fun TvSafeTextButton(onClick: () -> Unit, content: @Composable () -> Uni
     Row(
         modifier = Modifier
             .clip(ShapeCache.smoothPill)
-            .then(if (isTv) tvFocusState.focusModifier else Modifier)
-            .then(if (isTv) Modifier.tvFocusIndicator(tvFocusState, ShapeCache.smoothPill) else Modifier)
+            .then(tvFocusState.focusModifier)
+            .then(Modifier.tvFocusIndicator(tvFocusState, ShapeCache.smoothPill))
             .clickable(onClick = onClick)
             .padding(horizontal = 12.dp, vertical = 6.dp),
         verticalAlignment = Alignment.CenterVertically,

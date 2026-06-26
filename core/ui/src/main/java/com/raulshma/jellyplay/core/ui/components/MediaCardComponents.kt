@@ -244,7 +244,7 @@ fun PlayButtonWithProgress(
             Tabler.Outline.PlayerPlay,
             contentDescription = "Play",
             modifier = Modifier.size(buttonSize * 0.55f),
-            tint = Color.White,
+            tint = MaterialTheme.colorScheme.onSurface,
         )
     }
 }
@@ -372,12 +372,16 @@ fun PosterCard(
                 )
 
                 if (item.isPlayed) {
+                    val playedBadgeColor = dominantColor
+                    val playedBadgeText = remember(playedBadgeColor) {
+                        if ((playedBadgeColor.red * 0.299f + playedBadgeColor.green * 0.587f + playedBadgeColor.blue * 0.114f) > 0.5f) Color.Black else Color.White
+                    }
                     Box(
                         modifier = Modifier
                             .align(Alignment.TopEnd)
                             .padding(6.dp)
                             .background(
-                                dominantColor.copy(alpha = 0.85f),
+                                playedBadgeColor.copy(alpha = 0.9f),
                                 ShapeCache.smooth4,
                             )
                             .padding(horizontal = 6.dp, vertical = 2.dp),
@@ -385,7 +389,7 @@ fun PosterCard(
                         Text(
                             text = "✓",
                             style = MaterialTheme.typography.labelSmall,
-                            color = Color.White,
+                            color = playedBadgeText,
                         )
                     }
                 }
@@ -414,7 +418,7 @@ fun PosterCard(
                             Text(
                                 text = ratingText,
                                 style = MaterialTheme.typography.labelSmall,
-                                color = Color.White,
+                                color = MaterialTheme.colorScheme.onSurface,
                             )
                         }
                     }
@@ -498,7 +502,7 @@ fun PosterCard(
                     Text(
                         text = "•",
                         style = if (isTv) MaterialTheme.typography.labelMedium else MaterialTheme.typography.labelSmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f),
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
                     Text(
                         text = if (remainingTime != null) "$timeText left" else timeText,

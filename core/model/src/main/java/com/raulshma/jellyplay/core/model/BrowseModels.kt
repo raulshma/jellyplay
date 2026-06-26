@@ -18,6 +18,14 @@ data class HomeSection(
     val title: String,
     val type: HomeSectionType,
     val items: List<MediaItem>,
+    val seedItem: MediaItem? = null,
+)
+
+@Immutable
+@Serializable
+data class RecommendationResult(
+    val items: List<MediaItem>,
+    val seedItem: MediaItem?,
 )
 
 @Immutable

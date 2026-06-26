@@ -1,6 +1,7 @@
 package com.raulshma.jellyplay.feature.admin.dashboard
 
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.focusGroup
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -28,8 +29,11 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.composables.icons.tabler.Tabler
 import com.composables.icons.tabler.outline.Refresh
 import com.raulshma.jellyplay.core.ui.adaptive.LocalAdaptiveInfo
@@ -40,8 +44,11 @@ import com.raulshma.jellyplay.core.ui.components.ErrorScreen
 import com.raulshma.jellyplay.core.ui.components.JellyPlayScreenScaffold
 import com.raulshma.jellyplay.core.ui.components.ScreenLoadingState
 import com.raulshma.jellyplay.core.ui.components.StaggeredSection
+import com.raulshma.jellyplay.core.ui.components.focusIndicator
 import com.raulshma.jellyplay.core.ui.components.rememberScreenBackgroundColor
 import com.raulshma.jellyplay.core.ui.tv.LocalTvMode
+import com.raulshma.jellyplay.core.ui.tv.TvGrabInitialFocus
+import com.raulshma.jellyplay.core.ui.tv.tvFocusRestorer
 import com.raulshma.jellyplay.feature.admin.dashboard.components.ActiveSessionsSection
 import com.raulshma.jellyplay.feature.admin.dashboard.components.LibraryStatsRow
 import com.raulshma.jellyplay.feature.admin.dashboard.components.QuickActionsSection
@@ -62,10 +69,19 @@ fun AdminDashboardScreen(
     onPlugins: () -> Unit = {},
     viewModel: AdminDashboardViewModel = hiltViewModel(),
 ) {
-    val state = viewModel.state
+    val state by viewModel.uiState.collectAsStateWithLifecycle()
     val adaptiveInfo = LocalAdaptiveInfo.current
     val isTv = LocalTvMode.current
     val backgroundColor = rememberScreenBackgroundColor()
+
+    // TV focus-on-launch: focus the first quick action once content arrives so D-pad input lands on
+    // content, not the navigation drawer.
+    val contentFocusRequester = remember { FocusRequester() }
+    TvGrabInitialFocus(
+        focusRequester = contentFocusRequester,
+        itemCount = if (state.isLoading || state.error != null) 0 else 1,
+        tag = "admin_dashboard_init",
+    )
 
     var showRestartDialog by remember { mutableStateOf(false) }
     var showShutdownDialog by remember { mutableStateOf(false) }
@@ -113,6 +129,7 @@ fun AdminDashboardScreen(
                 modifier = Modifier
                     .padding(4.dp)
                     .clip(CircleShape)
+                    .focusIndicator(CircleShape)
                     .clickable(onClick = { viewModel.loadDashboard() }),
             ) {
                 Icon(
@@ -150,6 +167,7 @@ fun AdminDashboardScreen(
                     onStaleMedia = onStaleMedia,
                     onWatchedMediaCleanup = onWatchedMediaCleanup,
                     onPlugins = onPlugins,
+                    contentFocusRequester = contentFocusRequester,
                     modifier = Modifier.fillMaxSize(),
                 )
             }
@@ -172,12 +190,16 @@ private fun DashboardContent(
     onStaleMedia: () -> Unit = {},
     onWatchedMediaCleanup: () -> Unit = {},
     onPlugins: () -> Unit = {},
+    contentFocusRequester: FocusRequester,
     modifier: Modifier = Modifier,
 ) {
     var staggerIndex = 0
 
     Column(
         modifier = modifier
+            .tvFocusRestorer()
+            .focusGroup()
+            .focusRequester(contentFocusRequester)
             .verticalScroll(rememberScrollState())
             .padding(
                 start = contentPadding,

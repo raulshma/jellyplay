@@ -111,7 +111,7 @@ private fun KaraokeLine(
 ) {
     val positionInLine = (positionMs - line.timeMs).coerceAtLeast(0L)
     val activeColor = MaterialTheme.colorScheme.primary
-    val inactiveColor = Color.White.copy(alpha = 0.55f)
+    val inactiveColor = Color.White.copy(alpha = 0.6f)
 
     val activeWordIndex by remember {
         derivedStateOf { LrcParser.findCurrentWordIndex(line, positionInLine) }

@@ -27,6 +27,10 @@ dependencies {
     implementation(project(":core:designsystem"))
     implementation(project(":core:data"))
     implementation(project(":core:ui"))
+    // §4.6: feature:livetv previously depended on feature:player:video only to reach
+    // VideoMiniPlayerState. That class has been moved to core:data/playback, so the
+    // feature→feature edge can be dropped — restoring the strict star topology where
+    // every feature depends only on core/* modules.
 
     implementation(platform(libs.compose.bom))
     implementation(libs.compose.ui)
@@ -46,4 +50,8 @@ dependencies {
     implementation(libs.hilt.android)
     ksp(libs.hilt.android.compiler)
     implementation(libs.hilt.navigation.compose)
+
+    testImplementation(libs.junit)
+    testImplementation(libs.mockk)
+    testImplementation(libs.coroutines.test)
 }

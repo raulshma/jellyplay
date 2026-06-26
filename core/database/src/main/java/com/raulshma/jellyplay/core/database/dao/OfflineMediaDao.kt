@@ -53,4 +53,16 @@ interface OfflineMediaDao {
 
     @Query("SELECT COUNT(*) FROM offline_media WHERE mediaType IN ('SERIES', 'MOVIE', 'AUDIO', 'MUSIC')")
     fun getOfflineItemCount(): Flow<Int>
+
+    @Query(
+        """
+        SELECT * FROM offline_media
+        WHERE (name LIKE :pattern ESCAPE '\' OR seriesName LIKE :pattern ESCAPE '\' OR seasonName LIKE :pattern ESCAPE '\')
+        ORDER BY
+            CASE WHEN name LIKE :prefixPattern ESCAPE '\' THEN 0 ELSE 1 END,
+            name COLLATE NOCASE ASC
+        LIMIT :limit
+        """
+    )
+    suspend fun search(pattern: String, prefixPattern: String, limit: Int): List<OfflineMediaEntity>
 }

@@ -71,7 +71,7 @@ fun PlaybackInfoOverlay(
     Surface(
         modifier = modifier,
         shape = ShapeCache.smooth20,
-        color = Color.White.copy(alpha = 0.08f),
+        color = MaterialTheme.colorScheme.surfaceContainerHigh,
     ) {
         Column(
             modifier = Modifier
@@ -85,7 +85,7 @@ fun PlaybackInfoOverlay(
                 style = MaterialTheme.typography.titleLarge.copy(
                     fontWeight = FontWeight.Bold,
                 ),
-                color = Color.White,
+                color = MaterialTheme.colorScheme.onSurface,
             )
 
             InfoSection(title = "Media Source") {
@@ -231,7 +231,7 @@ private fun InfoRow(
         modifier = Modifier
             .fillMaxWidth()
             .clip(ShapeCache.smooth8)
-            .background(Color.White.copy(alpha = 0.04f))
+            .background(MaterialTheme.colorScheme.onSurface.copy(alpha = 0.06f))
             .padding(horizontal = 12.dp, vertical = 6.dp),
         horizontalArrangement = Arrangement.SpaceBetween,
         verticalAlignment = Alignment.CenterVertically,
@@ -239,7 +239,7 @@ private fun InfoRow(
         Text(
             text = label,
             style = MaterialTheme.typography.bodySmall,
-            color = Color.White.copy(alpha = 0.6f),
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
         Text(
             text = value,
@@ -247,7 +247,7 @@ private fun InfoRow(
                 fontFamily = FontFamily.Monospace,
                 fontWeight = FontWeight.Medium,
             ),
-            color = Color.White,
+            color = MaterialTheme.colorScheme.onSurface,
         )
     }
 }

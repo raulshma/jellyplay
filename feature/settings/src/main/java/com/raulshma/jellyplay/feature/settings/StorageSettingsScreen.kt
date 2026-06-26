@@ -1,19 +1,35 @@
 package com.raulshma.jellyplay.feature.settings
 
 import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.unit.dp
+import androidx.compose.foundation.layout.Arrangement
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.raulshma.jellyplay.core.model.MeteredNetworkBehavior
 import com.raulshma.jellyplay.core.model.StreamingQuality
@@ -110,6 +126,68 @@ fun StorageSettingsScreen(
                     modifier = Modifier.padding(vertical = 8.dp),
                     initiallyExpanded = true,
                 ) {
+                    val breakdown = viewModel.storageBreakdown
+                    if (breakdown.totalMb > 0) {
+                        Column(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(horizontal = 16.dp, vertical = 8.dp),
+                        ) {
+                            Text(
+                                text = "Storage Breakdown",
+                                style = MaterialTheme.typography.titleSmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                modifier = Modifier.padding(bottom = 8.dp),
+                            )
+                            val barHeight = 12.dp
+                            val totalForFractions = breakdown.totalMb.coerceAtLeast(1L).toFloat()
+                            val cacheFraction = breakdown.cacheMb.toFloat() / totalForFractions
+                            val downloadsFraction = breakdown.downloadsMb.toFloat() / totalForFractions
+                            val imagesFraction = breakdown.imagesMb.toFloat() / totalForFractions
+
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .height(barHeight)
+                                    .clip(RoundedCornerShape(6.dp)),
+                            ) {
+                                if (cacheFraction > 0f) {
+                                    Box(
+                                        modifier = Modifier
+                                            .weight(cacheFraction)
+                                            .fillMaxHeight()
+                                            .background(MaterialTheme.colorScheme.primary),
+                                    )
+                                }
+                                if (downloadsFraction > 0f) {
+                                    Box(
+                                        modifier = Modifier
+                                            .weight(downloadsFraction)
+                                            .fillMaxHeight()
+                                            .background(MaterialTheme.colorScheme.tertiary),
+                                    )
+                                }
+                                if (imagesFraction > 0f) {
+                                    Box(
+                                        modifier = Modifier
+                                            .weight(imagesFraction)
+                                            .fillMaxHeight()
+                                            .background(MaterialTheme.colorScheme.secondary),
+                                    )
+                                }
+                            }
+                            Spacer(modifier = Modifier.height(6.dp))
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.spacedBy(16.dp),
+                            ) {
+                                LegendItem(color = MaterialTheme.colorScheme.primary, label = "Cache: ${breakdown.cacheMb} MB")
+                                LegendItem(color = MaterialTheme.colorScheme.tertiary, label = "Downloads: ${breakdown.downloadsMb} MB")
+                                LegendItem(color = MaterialTheme.colorScheme.secondary, label = "Images: ${breakdown.imagesMb} MB")
+                            }
+                        }
+                    }
+
                     val storageTotal = if (showAdvanced) 6 else 2
                     var storageIdx = 0
                     SettingInfoItem(
@@ -187,7 +265,7 @@ fun StorageSettingsScreen(
                     modifier = Modifier.padding(vertical = 8.dp),
                     initiallyExpanded = highlightSettingId in listOf("offline_mode", "adaptive_bitrate", "bandwidth_cap", "data_saver"),
                 ) {
-                    val networkTotal = 10
+                    val networkTotal = 11
                     var networkIdx = 0
 
                     SettingToggleItem(
@@ -264,6 +342,22 @@ fun StorageSettingsScreen(
                         },
                     )
 
+                    val downloadWarningOptions = listOf(0, 100, 250, 500, 1000, 2000)
+                    val downloadWarningLabel = if (preferences.cellularDownloadSizeWarningMb == 0) "Disabled" else "${preferences.cellularDownloadSizeWarningMb} MB"
+                    SettingListItem(
+                        icon = Tabler.Outline.AlertTriangle,
+                        title = "Cellular Download Size Warning",
+                        subtitle = "Warn before downloading large files on cellular",
+                        trailingText = downloadWarningLabel,
+                        highlighted = highlightSettingId == "cellular_download_warning",
+                        index = networkIdx++, count = networkTotal,
+                        onClick = {
+                            val currentIndex = downloadWarningOptions.indexOf(preferences.cellularDownloadSizeWarningMb)
+                            val nextIndex = if (currentIndex == -1) 0 else (currentIndex + 1) % downloadWarningOptions.size
+                            viewModel.setCellularDownloadSizeWarningMb(downloadWarningOptions[nextIndex])
+                        },
+                    )
+
                     SettingToggleItem(
                         icon = Tabler.Outline.Gauge,
                         title = "Data Saver Mode",
@@ -314,9 +408,9 @@ fun StorageSettingsScreen(
                     title = "Downloads",
                     summary = { "Quality: ${preferences.downloadQuality.displayName}" },
                     modifier = Modifier.padding(vertical = 8.dp),
-                    initiallyExpanded = true || highlightSettingId in listOf("download_quality", "smart_downloads"),
+                    initiallyExpanded = true,
                 ) {
-                    val downloadTotal = 5
+                    val downloadTotal = 7
                     var downloadIdx = 0
 
                     SettingListItem(
@@ -347,6 +441,43 @@ fun StorageSettingsScreen(
                         index = downloadIdx++, count = downloadTotal,
                         onCheckedChange = { viewModel.setAutoDownloadNewEpisodes(it) }
                     )
+
+                    SettingToggleItem(
+                        icon = Tabler.Outline.Clock,
+                        title = "Download Schedule",
+                        subtitle = "Only download during specific hours (e.g., overnight)",
+                        checked = preferences.downloadScheduleEnabled,
+                        index = downloadIdx++, count = downloadTotal,
+                        onCheckedChange = { viewModel.setDownloadScheduleEnabled(it) }
+                    )
+
+                    if (preferences.downloadScheduleEnabled) {
+                        SettingListItem(
+                            icon = Tabler.Outline.Sun,
+                            title = "Schedule Start",
+                            subtitle = "Hour when downloads are allowed (24h format)",
+                            trailingText = "${preferences.downloadScheduleWindow.startHour}:00",
+                            index = downloadIdx++, count = downloadTotal,
+                            onClick = {
+                                val current = preferences.downloadScheduleWindow
+                                val nextStart = (current.startHour + 1) % 24
+                                viewModel.setDownloadScheduleWindow(current.copy(startHour = nextStart))
+                            }
+                        )
+
+                        SettingListItem(
+                            icon = Tabler.Outline.Moon,
+                            title = "Schedule End",
+                            subtitle = "Hour when downloads stop (24h format)",
+                            trailingText = "${preferences.downloadScheduleWindow.endHour}:00",
+                            index = downloadIdx++, count = downloadTotal,
+                            onClick = {
+                                val current = preferences.downloadScheduleWindow
+                                val nextEnd = (current.endHour + 1) % 24
+                                viewModel.setDownloadScheduleWindow(current.copy(endHour = nextEnd))
+                            }
+                        )
+                    }
 
                     SettingListItem(
                         icon = Tabler.Outline.Database,
@@ -398,6 +529,24 @@ fun StorageSettingsScreen(
                 viewModel.setDownloadQuality(it)
                 showQualityPicker = false
             },
+        )
+    }
+}
+
+@Composable
+private fun LegendItem(color: androidx.compose.ui.graphics.Color, label: String) {
+    Row(verticalAlignment = Alignment.CenterVertically) {
+        Box(
+            modifier = Modifier
+                .size(10.dp)
+                .clip(RoundedCornerShape(2.dp))
+                .background(color),
+        )
+        Spacer(modifier = Modifier.width(4.dp))
+        Text(
+            text = label,
+            style = MaterialTheme.typography.labelSmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
     }
 }

@@ -27,6 +27,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.raulshma.jellyplay.core.designsystem.theme.ShapeCache
 import com.raulshma.jellyplay.core.ui.image.MediaImage
+import com.raulshma.jellyplay.core.ui.components.focusIndicator
 import com.raulshma.jellyplay.core.ui.tv.enableMarqueeOnFocus
 
 @Composable
@@ -46,6 +47,7 @@ fun LibraryListItem(
             .clickable(onClick = onClick)
             .onFocusChanged { isFocused = it.isFocused }
             .focusable()
+            .focusIndicator()
             .padding(horizontal = 16.dp, vertical = 8.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {

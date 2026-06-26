@@ -20,6 +20,7 @@ import androidx.work.ForegroundInfo
 import androidx.work.WorkerParameters
 import com.raulshma.jellyplay.core.database.dao.DownloadDao
 import com.raulshma.jellyplay.core.database.dao.UserDao
+import com.raulshma.jellyplay.core.database.crypto.TokenCipher
 import com.raulshma.jellyplay.core.datastore.UserPreferencesStore
 import com.raulshma.jellyplay.core.model.DownloadStatus
 import com.raulshma.jellyplay.core.model.formatBytes
@@ -51,6 +52,7 @@ class DownloadWorker @AssistedInject constructor(
     private val userDao: UserDao,
     private val preferencesStore: UserPreferencesStore,
     private val client: OkHttpClient,
+    private val tokenCipher: TokenCipher,
 ) : CoroutineWorker(context, params) {
 
     override suspend fun doWork(): Result {
@@ -86,7 +88,9 @@ class DownloadWorker @AssistedInject constructor(
 
         val activeUserId = preferencesStore.activeUserId.firstOrNull()
         val accessToken = activeUserId?.let { uid ->
-            userDao.getUserById(uid)?.accessToken
+            // Tokens are stored encrypted in Room (§4.10). Decrypt before use as a Bearer-style
+            // `X-Emby-Token` header value.
+            tokenCipher.decrypt(userDao.getUserById(uid)?.accessToken)
         }
 
         val downloadClient = client.newBuilder()

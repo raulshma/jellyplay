@@ -52,6 +52,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
@@ -60,6 +61,7 @@ import com.raulshma.jellyplay.core.model.seerr.SeerrRadarrServiceDetail
 import com.raulshma.jellyplay.core.model.seerr.SeerrSearchItem
 import com.raulshma.jellyplay.core.model.seerr.SeerrSeason
 import com.raulshma.jellyplay.core.model.seerr.SeerrSonarrServiceDetail
+import com.raulshma.jellyplay.core.ui.components.focusIndicator
 import com.raulshma.jellyplay.core.designsystem.theme.ShapeCache
 import com.raulshma.jellyplay.core.designsystem.theme.StatusColors
 import com.composables.icons.tabler.Tabler
@@ -419,6 +421,8 @@ fun SeerrRequestDialog(
                                     verticalAlignment = Alignment.CenterVertically,
                                     modifier = Modifier
                                         .fillMaxWidth()
+                                        .clip(ShapeCache.smooth12)
+                                        .focusIndicator()
                                         .clickable {
                                             selectAllSeasons = !selectAllSeasons
                                             selectedSeasonNumbers.clear()
@@ -457,6 +461,8 @@ fun SeerrRequestDialog(
                                     verticalAlignment = Alignment.CenterVertically,
                                     modifier = Modifier
                                         .fillMaxWidth()
+                                        .clip(ShapeCache.smooth12)
+                                        .focusIndicator()
                                         .clickable {
                                             if (selectAllSeasons) {
                                                 selectAllSeasons = false

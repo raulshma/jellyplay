@@ -6,6 +6,7 @@ import android.graphics.Bitmap
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.focusGroup
 import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.layout.Arrangement
@@ -23,6 +24,7 @@ import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
@@ -48,6 +50,8 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
@@ -81,6 +85,10 @@ import com.raulshma.jellyplay.core.designsystem.theme.isLightColor
 import com.raulshma.jellyplay.core.ui.adaptive.LocalAdaptiveInfo
 import com.raulshma.jellyplay.core.ui.adaptive.WindowSizeClass
 import com.raulshma.jellyplay.core.ui.components.JellyPlayScreenScaffold
+import com.raulshma.jellyplay.core.ui.tv.TvGrabInitialFocus
+import com.raulshma.jellyplay.core.ui.tv.rememberTvFocusState
+import com.raulshma.jellyplay.core.ui.tv.tvFocusIndicator
+import com.raulshma.jellyplay.core.ui.tv.tvFocusRestorer
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -104,6 +112,15 @@ fun WatchProgressHeatmapScreen(
     val view = LocalView.current
     val adaptiveInfo = LocalAdaptiveInfo.current
 
+    // TV focus-on-launch: focus the heatmap content once it arrives so D-pad input lands on
+    // content, not the navigation drawer.
+    val contentFocusRequester = remember { FocusRequester() }
+    TvGrabInitialFocus(
+        focusRequester = contentFocusRequester,
+        itemCount = if (state.isLoading) 0 else 1,
+        tag = "heatmap_init",
+    )
+
     if (state.shareRequested) {
         LaunchedEffect(state.shareRequested) {
             withContext(Dispatchers.IO) {
@@ -120,12 +137,20 @@ fun WatchProgressHeatmapScreen(
         title = "Watch Progress",
         onBack = onBack,
         actions = {
-            IconButton(onClick = { viewModel.onEvent(HeatmapEvent.RequestShare) }) {
+            val shareFocusState = rememberTvFocusState()
+            IconButton(
+                onClick = { viewModel.onEvent(HeatmapEvent.RequestShare) },
+                modifier = Modifier.then(shareFocusState.focusModifier).tvFocusIndicator(shareFocusState, CircleShape),
+            ) {
                 Icon(Tabler.Outline.Share, contentDescription = "Share")
             }
             var menuExpanded by remember { mutableStateOf(false) }
             Box {
-                IconButton(onClick = { menuExpanded = true }) {
+                val filterFocusState = rememberTvFocusState()
+                IconButton(
+                    onClick = { menuExpanded = true },
+                    modifier = Modifier.then(filterFocusState.focusModifier).tvFocusIndicator(filterFocusState, CircleShape),
+                ) {
                     Icon(Tabler.Outline.Filter, contentDescription = "Configure Heatmap")
                 }
                 DropdownMenu(
@@ -198,6 +223,9 @@ fun WatchProgressHeatmapScreen(
                 Column(
                     modifier = Modifier
                         .fillMaxSize()
+                        .tvFocusRestorer()
+                        .focusGroup()
+                        .focusRequester(contentFocusRequester)
                         .padding(innerPadding)
                         .verticalScroll(rememberScrollState())
                         .padding(horizontal = 16.dp),
@@ -247,6 +275,9 @@ fun WatchProgressHeatmapScreen(
                 Row(
                     modifier = Modifier
                         .fillMaxSize()
+                        .tvFocusRestorer()
+                        .focusGroup()
+                        .focusRequester(contentFocusRequester)
                         .padding(innerPadding)
                         .padding(horizontal = 16.dp),
                     horizontalArrangement = Arrangement.spacedBy(24.dp),
@@ -323,12 +354,17 @@ private fun YearSelector(
     year: Int,
     onYearChange: (Int) -> Unit,
 ) {
+    val prevYearFocusState = rememberTvFocusState()
+    val nextYearFocusState = rememberTvFocusState()
     Row(
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.Center,
         modifier = Modifier.fillMaxWidth(),
     ) {
-        IconButton(onClick = { onYearChange(year - 1) }) {
+        IconButton(
+            onClick = { onYearChange(year - 1) },
+            modifier = Modifier.then(prevYearFocusState.focusModifier).tvFocusIndicator(prevYearFocusState, CircleShape),
+        ) {
             Icon(Tabler.Outline.ChevronLeft, contentDescription = "Previous year")
         }
         Text(
@@ -341,6 +377,7 @@ private fun YearSelector(
         IconButton(
             onClick = { onYearChange(minOf(year + 1, currentYear)) },
             enabled = year < currentYear,
+            modifier = Modifier.then(nextYearFocusState.focusModifier).tvFocusIndicator(nextYearFocusState, CircleShape),
         ) {
             Icon(Tabler.Outline.ChevronRight, contentDescription = "Next year")
         }

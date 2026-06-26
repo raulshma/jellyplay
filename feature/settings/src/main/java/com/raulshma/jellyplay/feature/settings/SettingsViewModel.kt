@@ -2,6 +2,7 @@ package com.raulshma.jellyplay.feature.settings
 
 import android.content.Context
 import android.net.Uri
+import androidx.compose.runtime.Immutable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
@@ -23,7 +24,13 @@ import com.raulshma.jellyplay.core.model.LibraryFolder
 import com.raulshma.jellyplay.core.model.LibVlcEngineConfig
 import com.raulshma.jellyplay.core.model.MpvEngineConfig
 import com.raulshma.jellyplay.core.model.ContrastLevel
+import com.raulshma.jellyplay.core.model.PreferenceResetCategory
+import com.raulshma.jellyplay.core.model.DateFormatPreference
+import com.raulshma.jellyplay.core.model.AppFontScale
+import com.raulshma.jellyplay.core.model.ColorBlindMode
 import com.raulshma.jellyplay.core.model.CheckFrequency
+import com.raulshma.jellyplay.core.model.DownloadScheduleWindow
+import com.raulshma.jellyplay.core.model.HandMode
 import com.raulshma.jellyplay.core.model.LibraryNotificationConfig
 import com.raulshma.jellyplay.core.model.NotificationPreferences
 import com.raulshma.jellyplay.core.model.ThemeMode
@@ -58,6 +65,14 @@ import java.io.File
 import java.io.IOException
 import javax.inject.Inject
 
+@Immutable
+data class StorageBreakdown(
+    val cacheMb: Long = 0,
+    val downloadsMb: Long = 0,
+    val imagesMb: Long = 0,
+    val totalMb: Long = 0,
+)
+
 @HiltViewModel
 class SettingsViewModel @Inject constructor(
     @ApplicationContext private val context: Context,
@@ -78,6 +93,9 @@ class SettingsViewModel @Inject constructor(
         private set
 
     var cacheSizeMb by composeState(0L)
+        private set
+
+    var storageBreakdown by composeState(StorageBreakdown())
         private set
 
     val appVersion: String by lazy {
@@ -314,6 +332,30 @@ class SettingsViewModel @Inject constructor(
                 context.externalCacheDir?.let { getDirSize(it) } ?: 0L
             }
             cacheSizeMb = (cacheSize + externalCacheSize) / (1024 * 1024)
+
+            val downloadsDir = withContext(Dispatchers.IO) {
+                val prefs = preferencesStore.preferences.value
+                val location = prefs.downloadStorageLocation
+                if (location == "EXTERNAL" && context.getExternalFilesDir(null) != null) {
+                    context.getExternalFilesDir(null)!!
+                } else {
+                    context.filesDir
+                }
+            }
+            val downloadsSize = withContext(Dispatchers.IO) { getDirSize(downloadsDir) }
+
+            val imagesSize = withContext(Dispatchers.IO) {
+                val imageDir = File(context.cacheDir, "image_cache")
+                if (imageDir.exists()) getDirSize(imageDir) else 0L
+            }
+
+            val total = cacheSizeMb + (downloadsSize / (1024 * 1024)) + (imagesSize / (1024 * 1024))
+            storageBreakdown = StorageBreakdown(
+                cacheMb = cacheSizeMb,
+                downloadsMb = downloadsSize / (1024 * 1024),
+                imagesMb = imagesSize / (1024 * 1024),
+                totalMb = total,
+            )
         }
     }
 
@@ -329,9 +371,7 @@ class SettingsViewModel @Inject constructor(
         return size
     }
 
-    fun logout() {
-        launch { authRepository.logout() }
-    }
+
 
     fun setPinLockEnabled(enabled: Boolean) = editor.setPinLockEnabled(enabled)
 
@@ -366,6 +406,8 @@ class SettingsViewModel @Inject constructor(
     }
 
     fun setBiometricLockEnabled(enabled: Boolean) = editor.setBiometricLockEnabled(enabled)
+
+    fun setUsePinForPlayerLock(enabled: Boolean) = editor.setUsePinForPlayerLock(enabled)
 
     fun setShowAdvancedSettings(enabled: Boolean) {
         launch { preferencesStore.setShowAdvancedSettings(enabled) }
@@ -803,6 +845,16 @@ class SettingsViewModel @Inject constructor(
         applyPreset(com.raulshma.jellyplay.core.model.HomeLayoutConfig.DEFAULT)
     }
 
+    /** Resets all preferences in a specific category to their default values. */
+    fun resetCategory(category: PreferenceResetCategory) {
+        editor.resetCategory(category)
+    }
+
+    /** Clears all preferences and resets to factory defaults. */
+    fun clearAllPreferences() {
+        editor.clearAllPreferences()
+    }
+
     fun setNavBarShowLabels(show: Boolean) = editor.setNavBarShowLabels(show)
 
     fun setHomeHeroEnabled(enabled: Boolean) = editor.setHomeHeroEnabled(enabled)
@@ -934,6 +986,54 @@ class SettingsViewModel @Inject constructor(
         launch { preferencesStore.setHideWatchedItems(enabled) }
     }
 
+    fun setHideEpisodeThumbnails(enabled: Boolean) {
+        launch { preferencesStore.setHideEpisodeThumbnails(enabled) }
+    }
+
+    fun setSkipSpecials(enabled: Boolean) {
+        launch { preferencesStore.setSkipSpecials(enabled) }
+    }
+
+    fun setCellularDownloadSizeWarningMb(sizeMb: Int) {
+        launch { preferencesStore.setCellularDownloadSizeWarningMb(sizeMb) }
+    }
+
+    fun setHapticsEnabled(enabled: Boolean) {
+        launch { preferencesStore.setHapticsEnabled(enabled) }
+    }
+
+    fun setDateFormatPreference(preference: DateFormatPreference) {
+        launch { preferencesStore.setDateFormatPreference(preference) }
+    }
+
+    fun setAppFontScale(scale: AppFontScale) {
+        launch { preferencesStore.setAppFontScale(scale) }
+    }
+
+    fun setScheduledThemeStartHour(hour: Int) {
+        launch { preferencesStore.setScheduledThemeStartHour(hour) }
+    }
+
+    fun setScheduledThemeEndHour(hour: Int) {
+        launch { preferencesStore.setScheduledThemeEndHour(hour) }
+    }
+
+    fun setColorBlindMode(mode: ColorBlindMode) {
+        launch { preferencesStore.setColorBlindMode(mode) }
+    }
+
+    fun setHandMode(mode: HandMode) {
+        launch { preferencesStore.setHandMode(mode) }
+    }
+
+    fun setDownloadScheduleEnabled(enabled: Boolean) {
+        launch { preferencesStore.setDownloadScheduleEnabled(enabled) }
+    }
+
+    fun setDownloadScheduleWindow(window: DownloadScheduleWindow) {
+        launch { preferencesStore.setDownloadScheduleWindow(window) }
+    }
+
     fun setCellularStreamingQuality(quality: StreamingQuality) {
         launch { preferencesStore.setCellularStreamingQuality(quality) }
     }
@@ -982,6 +1082,10 @@ class SettingsViewModel @Inject constructor(
         launch { preferencesStore.setPauseOnAudioFocusLoss(enabled) }
     }
 
+    fun setDuckOnTransientFocusLoss(enabled: Boolean) {
+        launch { preferencesStore.setDuckOnTransientFocusLoss(enabled) }
+    }
+
     fun setVolumeBoostEnabled(enabled: Boolean) {
         launch { preferencesStore.setVolumeBoostEnabled(enabled) }
     }
@@ -1028,6 +1132,10 @@ class SettingsViewModel @Inject constructor(
 
     fun setMergeContinueWatchingAndNextUp(enabled: Boolean) {
         launch { preferencesStore.setMergeContinueWatchingAndNextUp(enabled) }
+    }
+
+    fun unhideAllCwItems() {
+        launch { preferencesStore.unhideAllCwItems() }
     }
 
     fun setNextUpMaxDays(days: Int) {
@@ -1138,14 +1246,6 @@ class SettingsViewModel @Inject constructor(
 
     fun setDownloadStorageLocation(location: String) {
         launch { preferencesStore.setDownloadStorageLocation(location) }
-    }
-
-    fun setKidsModeEnabled(enabled: Boolean) {
-        launch { preferencesStore.setKidsModeEnabled(enabled) }
-    }
-
-    fun setKidsModeMaxRating(rating: String) {
-        launch { preferencesStore.setKidsModeMaxRating(rating) }
     }
 
     fun setAndroidTvWatchNextEnabled(enabled: Boolean) {

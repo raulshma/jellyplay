@@ -20,6 +20,7 @@ import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.ui.unit.dp
 import com.raulshma.jellyplay.core.model.ContrastLevel
 import com.raulshma.jellyplay.core.model.ColorStyle
+import com.raulshma.jellyplay.core.model.AppFontScale
 
 enum class AccentColorSwatch(
     val displayName: String,
@@ -293,12 +294,20 @@ fun JellyPlayTheme(
     soothingMode: Boolean = false,
     soothingAccent: String = "ocean",
     monochromeMode: Boolean = false,
+    appFontScale: AppFontScale = AppFontScale.DEFAULT,
     content: @Composable () -> Unit,
 ) {
     val effectiveDarkTheme = darkTheme || isTv || synthwaveMode
     val effectiveOledMode = (oledMode || monochromeMode) && effectiveDarkTheme && !synthwaveMode && !soothingMode
 
-    _isSynthwaveActive.value = synthwaveMode
+    // §4.12: bridge the Compose-visible synthwave flag to the global state that
+    // `SynthwaveDynamicShape` reads from `Shape.createOutline` (which runs outside of
+    // composition and therefore can't consult `LocalIsSynthwave` directly). Using
+    // `SideEffect` ensures the write only happens after a *successful* composition, so
+    // intermediate recompositions from previews or parallel compositions don't flicker the
+    // global state. The CompositionLocal itself remains the source of truth for any
+    // composable consumer; this SideEffect only mirrors it for the non-composable Shape path.
+    androidx.compose.runtime.SideEffect { _isSynthwaveActive.value = synthwaveMode }
 
     val colorScheme = when {
         synthwaveMode -> {
@@ -388,6 +397,26 @@ fun JellyPlayTheme(
         monochromeMode -> MonochromeTypography
         isTv -> TvTypography
         else -> JellyPlayTypography
+    }.let { base ->
+        if (appFontScale != AppFontScale.DEFAULT) {
+            base.copy(
+                displayLarge = base.displayLarge.copy(fontSize = base.displayLarge.fontSize * appFontScale.scale),
+                displayMedium = base.displayMedium.copy(fontSize = base.displayMedium.fontSize * appFontScale.scale),
+                displaySmall = base.displaySmall.copy(fontSize = base.displaySmall.fontSize * appFontScale.scale),
+                headlineLarge = base.headlineLarge.copy(fontSize = base.headlineLarge.fontSize * appFontScale.scale),
+                headlineMedium = base.headlineMedium.copy(fontSize = base.headlineMedium.fontSize * appFontScale.scale),
+                headlineSmall = base.headlineSmall.copy(fontSize = base.headlineSmall.fontSize * appFontScale.scale),
+                titleLarge = base.titleLarge.copy(fontSize = base.titleLarge.fontSize * appFontScale.scale),
+                titleMedium = base.titleMedium.copy(fontSize = base.titleMedium.fontSize * appFontScale.scale),
+                titleSmall = base.titleSmall.copy(fontSize = base.titleSmall.fontSize * appFontScale.scale),
+                bodyLarge = base.bodyLarge.copy(fontSize = base.bodyLarge.fontSize * appFontScale.scale),
+                bodyMedium = base.bodyMedium.copy(fontSize = base.bodyMedium.fontSize * appFontScale.scale),
+                bodySmall = base.bodySmall.copy(fontSize = base.bodySmall.fontSize * appFontScale.scale),
+                labelLarge = base.labelLarge.copy(fontSize = base.labelLarge.fontSize * appFontScale.scale),
+                labelMedium = base.labelMedium.copy(fontSize = base.labelMedium.fontSize * appFontScale.scale),
+                labelSmall = base.labelSmall.copy(fontSize = base.labelSmall.fontSize * appFontScale.scale),
+            )
+        } else base
     }
 
     CompositionLocalProvider(

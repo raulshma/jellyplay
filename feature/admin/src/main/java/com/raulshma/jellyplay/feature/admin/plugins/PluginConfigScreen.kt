@@ -12,6 +12,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -33,6 +34,8 @@ import com.composables.icons.tabler.Tabler
 import com.composables.icons.tabler.outline.Refresh
 import com.raulshma.jellyplay.core.ui.components.JellyPlayScreenScaffold
 import com.raulshma.jellyplay.core.ui.components.rememberScreenBackgroundColor
+import com.raulshma.jellyplay.core.ui.tv.rememberTvFocusState
+import com.raulshma.jellyplay.core.ui.tv.tvFocusIndicator
 
 @Composable
 fun PluginConfigScreen(
@@ -52,9 +55,11 @@ fun PluginConfigScreen(
         onBack = onBack,
         backgroundColor = backgroundColor,
         actions = {
+            val refreshFocusState = rememberTvFocusState()
             IconButton(
                 onClick = { viewModel.refresh() },
                 enabled = !state.isLoading,
+                modifier = Modifier.then(refreshFocusState.focusModifier).tvFocusIndicator(refreshFocusState, CircleShape),
             ) {
                 Icon(Tabler.Outline.Refresh, contentDescription = "Refresh")
             }

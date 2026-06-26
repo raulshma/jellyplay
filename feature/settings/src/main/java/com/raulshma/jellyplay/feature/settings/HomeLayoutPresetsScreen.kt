@@ -64,9 +64,10 @@ import com.raulshma.jellyplay.core.ui.tv.rememberTvFocusState
 import com.raulshma.jellyplay.core.ui.tv.tvFocusIndicator
 import com.raulshma.jellyplay.core.ui.tv.tvFocusRestorer
 import com.raulshma.jellyplay.core.ui.feedback.uiTextOf
+import com.raulshma.jellyplay.core.ui.components.formatDate
+import com.raulshma.jellyplay.core.model.DateFormatPreference
 import androidx.compose.ui.res.stringResource
 import com.raulshma.jellyplay.feature.settings.R
-import java.text.DateFormat
 import java.util.Date
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -320,7 +321,7 @@ private fun ActionRow(
             Icon(
                 Tabler.Outline.ChevronRight,
                 contentDescription = null,
-                tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.4f),
+                tint = MaterialTheme.colorScheme.onSurfaceVariant,
                 modifier = Modifier.size(18.dp),
             )
         },
@@ -346,7 +347,7 @@ private fun PresetRow(
     val shape = expressiveListShape(index, count, innerRadius = 0.dp)
     val tvFocusState = rememberTvFocusState(focusedScale = 1.01f)
     val dateLabel = remember(preset.createdAt) {
-        runCatching { DateFormat.getDateInstance(DateFormat.MEDIUM).format(Date(preset.createdAt)) }
+        runCatching { formatDate(preset.createdAt, DateFormatPreference.LONG) }
             .getOrDefault("")
     }
     androidx.compose.material3.ListItem(
@@ -390,7 +391,7 @@ private fun PresetRow(
             Icon(
                 Tabler.Outline.DotsVertical,
                 contentDescription = "Preset actions",
-                tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f),
+                tint = MaterialTheme.colorScheme.onSurfaceVariant,
                 modifier = Modifier.size(18.dp),
             )
         },

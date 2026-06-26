@@ -48,6 +48,8 @@ import androidx.compose.ui.Alignment.Companion.CenterVertically
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.rotate
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -55,12 +57,16 @@ import com.raulshma.jellyplay.core.model.DiscoveredServer
 import com.raulshma.jellyplay.core.ui.adaptive.LocalAdaptiveInfo
 import com.raulshma.jellyplay.core.ui.adaptive.contentPadding
 import com.raulshma.jellyplay.core.ui.tv.LocalTvMode
+import com.raulshma.jellyplay.core.ui.tv.rememberTvFocusState
+import com.raulshma.jellyplay.core.ui.tv.tryRequestFocus
+import com.raulshma.jellyplay.core.ui.tv.tvFocusIndicator
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.raulshma.jellyplay.core.designsystem.theme.AlphaEasing
 import com.raulshma.jellyplay.core.designsystem.theme.FancyTransitionEasing
 import com.raulshma.jellyplay.core.designsystem.theme.ShapeCache
 import com.raulshma.jellyplay.core.designsystem.theme.expressiveListShape
 import com.raulshma.jellyplay.core.ui.components.JellyPlayScreenScaffold
+import com.raulshma.jellyplay.core.ui.components.focusIndicator
 import com.composables.icons.tabler.Tabler
 import com.composables.icons.tabler.outline.*
 
@@ -269,7 +275,12 @@ private fun ScanningRow(onStop: () -> Unit) {
             color = MaterialTheme.colorScheme.onSurface,
             modifier = Modifier.weight(1f),
         )
-        TextButton(onClick = onStop, contentPadding = androidx.compose.foundation.layout.PaddingValues()) {
+        val stopFocusState = rememberTvFocusState()
+        TextButton(
+            onClick = onStop,
+            contentPadding = androidx.compose.foundation.layout.PaddingValues(),
+            modifier = Modifier.then(stopFocusState.focusModifier).tvFocusIndicator(stopFocusState, ShapeCache.smooth12),
+        ) {
             Text("Stop")
         }
     }
@@ -297,8 +308,8 @@ private fun ServerCountRow(
                 .fillMaxWidth()
                 .clip(ShapeCache.smooth16)
                 .background(MaterialTheme.colorScheme.primaryContainer)
+                .focusIndicator(ShapeCache.smooth16)
                 .clickable { expanded = !expanded }
-                
                 .padding(horizontal = 16.dp, vertical = 12.dp),
         ) {
             if (isScanning) {
@@ -391,7 +402,12 @@ private fun DiscoveryFailedRow(onRetry: () -> Unit) {
             color = MaterialTheme.colorScheme.onSurface,
             modifier = Modifier.weight(1f),
         )
-        TextButton(onClick = onRetry, contentPadding = androidx.compose.foundation.layout.PaddingValues()) {
+        val retryFocusState = rememberTvFocusState()
+        TextButton(
+            onClick = onRetry,
+            contentPadding = androidx.compose.foundation.layout.PaddingValues(),
+            modifier = Modifier.then(retryFocusState.focusModifier).tvFocusIndicator(retryFocusState, ShapeCache.smooth12),
+        ) {
             Text("Retry")
         }
     }
@@ -413,7 +429,12 @@ private fun NoServersRow(onRetry: () -> Unit) {
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             modifier = Modifier.weight(1f),
         )
-        TextButton(onClick = onRetry, contentPadding = androidx.compose.foundation.layout.PaddingValues()) {
+        val noServersRetryFocusState = rememberTvFocusState()
+        TextButton(
+            onClick = onRetry,
+            contentPadding = androidx.compose.foundation.layout.PaddingValues(),
+            modifier = Modifier.then(noServersRetryFocusState.focusModifier).tvFocusIndicator(noServersRetryFocusState, ShapeCache.smooth12),
+        ) {
             Text("Retry")
         }
     }
@@ -431,7 +452,7 @@ private fun DiscoveredServerItem(
             .fillMaxWidth()
             .clip(shape)
             .background(MaterialTheme.colorScheme.surfaceContainerHigh)
-            
+            .focusIndicator(shape)
             .clickable(onClick = onClick, enabled = !isConnecting)
             .padding(horizontal = 16.dp, vertical = 14.dp),
         verticalAlignment = CenterVertically,
@@ -478,6 +499,13 @@ private fun ManualEntrySection(
     onAddressChange: (String) -> Unit,
     onConnect: () -> Unit,
 ) {
+    val isTv = LocalTvMode.current
+    val addressFocusRequester = remember { FocusRequester() }
+
+    LaunchedEffect(Unit) {
+        if (isTv) addressFocusRequester.tryRequestFocus("manual_address")
+    }
+
     Column {
         OutlinedTextField(
             value = uiState.manualAddress,
@@ -485,7 +513,7 @@ private fun ManualEntrySection(
             label = { Text("Server Address") },
             placeholder = { Text("https://jellyfin.example.com") },
             singleLine = true,
-            modifier = Modifier.fillMaxWidth(),
+            modifier = Modifier.fillMaxWidth().focusRequester(addressFocusRequester),
             isError = uiState.connectError != null,
             supportingText = uiState.connectError?.let { { Text(it) } },
             enabled = !uiState.isConnecting,
@@ -493,10 +521,13 @@ private fun ManualEntrySection(
 
         Spacer(modifier = Modifier.height(16.dp))
 
+        val connectFocusState = rememberTvFocusState(focusedScale = 1.04f)
         Button(
             onClick = onConnect,
             enabled = !uiState.isConnecting && uiState.manualAddress.isNotBlank(),
-            modifier = Modifier.fillMaxWidth(),
+            modifier = Modifier.fillMaxWidth()
+                .then(connectFocusState.focusModifier)
+                .tvFocusIndicator(connectFocusState, ShapeCache.smooth12),
         ) {
             if (uiState.isConnecting) {
                 JellyPlayLoadingIndicator(

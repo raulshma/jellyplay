@@ -23,6 +23,7 @@ import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
 import com.raulshma.jellyplay.core.model.NetworkStatus
+import com.raulshma.jellyplay.core.model.ServerHealth
 import com.composables.icons.tabler.Tabler
 import com.composables.icons.tabler.outline.*
 
@@ -44,17 +45,21 @@ sealed class HeaderStatus {
 
     /** Device is completely offline — no network at all. */
     data object Offline : HeaderStatus()
+
+    /** Server is unreachable despite having network connectivity. */
+    data object ServerUnreachable : HeaderStatus()
 }
 
 /**
  * A compact, animated status indicator for use in app headers / TopAppBars.
  *
  * Displays a small spinner for loading, an error icon for errors, a cloud-off icon
- * when offline, or a wifi-off icon when on a local network without internet.
+ * when offline, a wifi-off icon when on a local network without internet, or a
+ * server-off icon when the server is unreachable.
  *
  * Uses [AnimatedContent] for smooth transitions between states.
  *
- * Priority order: **Offline** > **Local** > **Error** > **Loading** > **None**
+ * Priority order: **Offline** > **ServerUnreachable** > **Local** > **Error** > **Loading** > **None**
  *
  * @param status The current [HeaderStatus] to display.
  * @param modifier Modifier applied to the indicator container.
@@ -95,6 +100,7 @@ fun HeaderStatusIndicator(
                 is HeaderStatus.Error -> "Error"
                 is HeaderStatus.Local -> "Local network, no internet"
                 is HeaderStatus.Offline -> "Offline"
+                is HeaderStatus.ServerUnreachable -> "Server unreachable"
                 is HeaderStatus.None -> ""
             }
         },
@@ -144,26 +150,42 @@ fun HeaderStatusIndicator(
                     )
                 }
             }
+            is HeaderStatus.ServerUnreachable -> {
+                Box(
+                    contentAlignment = Alignment.Center,
+                    modifier = Modifier.size(28.dp),
+                ) {
+                    Icon(
+                        imageVector = Tabler.Outline.Server,
+                        contentDescription = "Server unreachable",
+                        modifier = Modifier.size(18.dp),
+                        tint = MaterialTheme.colorScheme.error,
+                    )
+                }
+            }
         }
     }
 }
 
 /**
  * Resolves the effective [HeaderStatus] from individual state booleans
- * and the current [NetworkStatus].
+ * and the current [NetworkStatus] and [ServerHealth].
  *
- * Priority: **offline** > **local** > **error** > **loading** > **none**
+ * Priority: **offline** > **serverUnreachable** > **local** > **error** > **loading** > **none**
  *
  * @param isLoading Whether content is currently loading/refreshing.
  * @param hasError Whether an error has occurred.
  * @param networkStatus The current network connectivity state.
+ * @param serverHealth The current server health status.
  */
 fun resolveHeaderStatus(
     isLoading: Boolean,
     hasError: Boolean,
     networkStatus: NetworkStatus,
+    serverHealth: ServerHealth = ServerHealth.Unknown,
 ): HeaderStatus = when {
     networkStatus == NetworkStatus.Offline -> HeaderStatus.Offline
+    networkStatus == NetworkStatus.Online && serverHealth is ServerHealth.Unreachable -> HeaderStatus.ServerUnreachable
     networkStatus == NetworkStatus.Local -> HeaderStatus.Local
     hasError -> HeaderStatus.Error
     isLoading -> HeaderStatus.Loading

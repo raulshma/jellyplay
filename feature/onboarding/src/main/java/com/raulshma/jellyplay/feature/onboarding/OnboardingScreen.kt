@@ -42,12 +42,19 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.graphicsLayer
 import com.raulshma.jellyplay.core.ui.tv.input.onDpadKey
+import com.raulshma.jellyplay.core.ui.tv.LocalTvMode
+import com.raulshma.jellyplay.core.ui.tv.rememberTvFocusState
+import com.raulshma.jellyplay.core.ui.tv.tryRequestFocus
+import com.raulshma.jellyplay.core.ui.tv.tvFocusIndicator
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.raulshma.jellyplay.core.designsystem.theme.ShapeCache
 import com.composables.icons.tabler.Tabler
 import com.composables.icons.tabler.outline.ArrowRight
 import com.raulshma.jellyplay.feature.onboarding.components.AppearanceStep
@@ -295,6 +302,14 @@ private fun OnboardingBottomBar(
     modifier: Modifier = Modifier,
 ) {
     val isLastPage = pagerState.currentPage == OnboardingStep.count - 1
+    val isTv = LocalTvMode.current
+    val nextFocusRequester = remember { FocusRequester() }
+    val skipFocusState = rememberTvFocusState(focusedScale = 1.04f)
+    val nextFocusState = rememberTvFocusState(focusedScale = 1.04f)
+
+    LaunchedEffect(Unit) {
+        if (isTv) nextFocusRequester.tryRequestFocus("onboarding_next")
+    }
 
     Surface(
         color = MaterialTheme.colorScheme.surface.copy(alpha = 0.95f),
@@ -314,7 +329,10 @@ private fun OnboardingBottomBar(
                 label = "skipButtonTransition",
             ) { last ->
                 if (!last) {
-                    TextButton(onClick = onSkip) {
+                    TextButton(
+                        onClick = onSkip,
+                        modifier = Modifier.then(skipFocusState.focusModifier).tvFocusIndicator(skipFocusState, ShapeCache.smooth12),
+                    ) {
                         Text(
                             text = "Skip",
                             style = MaterialTheme.typography.labelLarge,
@@ -347,6 +365,9 @@ private fun OnboardingBottomBar(
                 if (!last) {
                     FilledTonalButton(
                         onClick = onNext,
+                        modifier = Modifier.focusRequester(nextFocusRequester)
+                            .then(nextFocusState.focusModifier)
+                            .tvFocusIndicator(nextFocusState, ShapeCache.smooth12),
                     ) {
                         Text(
                             text = "Next",

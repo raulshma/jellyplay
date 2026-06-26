@@ -126,7 +126,7 @@ class LibraryRecommendationsWidget : AppWidgetProvider() {
             appWidgetId: Int,
         ) {
             val views = RemoteViews(context.packageName, R.layout.library_recommendations_widget)
-            views.setTextViewText(R.id.lr_widget_subtitle, readSourceLabel(context))
+            views.setTextViewText(R.id.lr_widget_subtitle, readSourceLabel(context, appWidgetId))
 
             // Apply responsive rules
             val options = appWidgetManager.getAppWidgetOptions(appWidgetId)
@@ -202,13 +202,13 @@ class LibraryRecommendationsWidget : AppWidgetProvider() {
             appWidgetManager.updateAppWidget(appWidgetId, views)
         }
 
-        private fun readSourceLabel(context: Context): String = runCatching {
+        private fun readSourceLabel(context: Context, appWidgetId: Int): String = runCatching {
             val entryPoint = EntryPointAccessors.fromApplication(
                 context.applicationContext,
                 WidgetEntryPoint::class.java,
             )
             runBlocking {
-                entryPoint.userPreferencesStore().widgetConfig.first()
+                entryPoint.userPreferencesStore().getWidgetConfigForId(appWidgetId).first()
             }.librarySource.displayName
         }.getOrDefault(LibraryRecommendationsSource.SIMILAR_TO_RECENT.displayName)
     }
