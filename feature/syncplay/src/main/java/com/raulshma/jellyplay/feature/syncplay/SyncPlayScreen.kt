@@ -96,12 +96,13 @@ fun SyncPlayScreen(
     onPlayItem: (String, Long) -> Unit,
     viewModel: SyncPlayViewModel = hiltViewModel(),
 ) {
-    val groups = viewModel.groups
-    val currentGroup = viewModel.currentGroup
-    val isLoading = viewModel.isLoading
-    val error = viewModel.error
-    val isInGroup = viewModel.isInGroup
-    val showCreateDialog = viewModel.showCreateDialog
+    val uiState by viewModel.uiState.collectAsStateWithLifecycle()
+    val groups = uiState.groups
+    val currentGroup = uiState.currentGroup
+    val isLoading = uiState.isLoading
+    val error = uiState.error
+    val isInGroup = uiState.isInGroup
+    val showCreateDialog = uiState.showCreateDialog
     val navigateToPlayer by viewModel.navigateToPlayer.collectAsStateWithLifecycle()
     val networkStatus by LocalNetworkStatus.current.collectAsStateWithLifecycle()
     val adaptiveInfo = LocalAdaptiveInfo.current

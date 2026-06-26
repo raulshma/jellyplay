@@ -1,6 +1,6 @@
 package com.raulshma.jellyplay.core.data.playback
 
-import com.raulshma.jellyplay.core.data.repository.MediaRepository
+import com.raulshma.jellyplay.core.data.repository.LyricsRepository
 import com.raulshma.jellyplay.core.model.LrcLibTrack
 import com.raulshma.jellyplay.core.model.LyricsLine
 import com.raulshma.jellyplay.core.model.LyricsSource
@@ -14,7 +14,7 @@ import javax.inject.Singleton
 
 @Singleton
 class AudioLyricsManager @Inject constructor(
-    private val mediaRepository: MediaRepository,
+    private val lyricsRepository: LyricsRepository,
 ) {
     private lateinit var scope: CoroutineScope
 
@@ -62,7 +62,7 @@ class AudioLyricsManager @Inject constructor(
         restoreOffsetForItem(itemId)
         scope.launch {
             _isFetchingLyrics.value = true
-            mediaRepository.getLyricsWithFallback(itemId, artistName, trackName, durationSec)
+            lyricsRepository.getLyricsWithFallback(itemId, artistName, trackName, durationSec)
                 .onSuccess {
                     _lyrics.value = it.lines
                     _lyricsSource.value = it.source
@@ -77,7 +77,7 @@ class AudioLyricsManager @Inject constructor(
 
     fun searchLyrics(query: String, callback: (Result<List<LrcLibTrack>>) -> Unit) {
         scope.launch {
-            val result = mediaRepository.searchLyrics(query)
+            val result = lyricsRepository.searchLyrics(query)
             callback(result)
         }
     }
@@ -87,7 +87,7 @@ class AudioLyricsManager @Inject constructor(
         this.currentItemId = itemId
         restoreOffsetForItem(itemId)
         scope.launch {
-            mediaRepository.getLyricsById(lrcLibId, itemId)
+            lyricsRepository.getLyricsById(lrcLibId, itemId)
                 .onSuccess {
                     _lyrics.value = it.lines
                     _lyricsSource.value = it.source

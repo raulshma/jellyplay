@@ -70,11 +70,12 @@ fun DownloadsScreen(
     onBack: () -> Unit,
     viewModel: DownloadsViewModel = hiltViewModel(),
 ) {
-    val downloads = viewModel.downloads
+    val uiState by viewModel.uiState.collectAsStateWithLifecycle()
+    val downloads = uiState.downloads
     val networkStatus by com.raulshma.jellyplay.core.ui.components.LocalNetworkStatus.current.collectAsStateWithLifecycle()
     val headerStatus = com.raulshma.jellyplay.core.ui.components.resolveHeaderStatus(
-        isLoading = viewModel.isLoading,
-        hasError = viewModel.error != null,
+        isLoading = uiState.isLoading,
+        hasError = uiState.error != null,
         networkStatus = networkStatus,
     )
 
@@ -103,9 +104,9 @@ fun DownloadsScreen(
             )
         },
     ) {
-        if (viewModel.totalStorageBytes > 0) {
+        if (uiState.totalStorageBytes > 0) {
             Text(
-                "Storage used: ${viewModel.formatBytes(viewModel.totalStorageBytes)}",
+                "Storage used: ${viewModel.formatBytes(uiState.totalStorageBytes)}",
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 modifier = Modifier.padding(start = adaptiveInfo.contentPadding(isTv), end = adaptiveInfo.contentPadding(isTv), bottom = 8.dp),

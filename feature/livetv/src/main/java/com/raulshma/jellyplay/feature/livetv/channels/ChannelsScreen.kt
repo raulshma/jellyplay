@@ -69,11 +69,12 @@ fun ChannelsScreen(
     onDvrClick: () -> Unit = {},
     viewModel: ChannelsViewModel = hiltViewModel(),
 ) {
+    val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     val networkStatus by com.raulshma.jellyplay.core.ui.components.LocalNetworkStatus.current
         .collectAsStateWithLifecycle()
     val headerStatus = com.raulshma.jellyplay.core.ui.components.resolveHeaderStatus(
-        isLoading = viewModel.isLoading,
-        hasError = viewModel.error != null,
+        isLoading = uiState.isLoading,
+        hasError = uiState.error != null,
         networkStatus = networkStatus,
     )
 
@@ -86,11 +87,11 @@ fun ChannelsScreen(
     val bottomPad = adaptiveInfo.bottomPadding(isTv)
 
     val focusRequester = remember { FocusRequester() }
-    val channelsNotEmpty = viewModel.channels.isNotEmpty()
+    val channelsNotEmpty = uiState.channels.isNotEmpty()
     val nowPlayingChannelId by viewModel.nowPlayingChannelId.collectAsStateWithLifecycle()
     TvGrabInitialFocus(
         focusRequester = focusRequester,
-        itemCount = viewModel.channels.size,
+        itemCount = uiState.channels.size,
         tag = "channels_init",
     )
 
@@ -119,19 +120,19 @@ fun ChannelsScreen(
             }
         },
     ) {
-        if (viewModel.error != null && viewModel.channels.isEmpty()) {
+        if (uiState.error != null && uiState.channels.isEmpty()) {
             ErrorScreen(
-                message = viewModel.error!!,
+                message = uiState.error!!,
                 onRetry = { viewModel.loadChannels() },
             )
-        } else if (viewModel.channels.isEmpty() && !viewModel.isLoading) {
+        } else if (uiState.channels.isEmpty() && !uiState.isLoading) {
             ScreenEmptyState(
                 icon = Tabler.Outline.DeviceTv,
                 title = stringResource(R.string.livetv_no_channels_available),
             )
         } else {
             PullToRefreshBox(
-                isRefreshing = viewModel.isLoading,
+                isRefreshing = uiState.isLoading,
                 onRefresh = { viewModel.loadChannels() },
             ) {
                 LazyColumn(
@@ -148,7 +149,7 @@ fun ChannelsScreen(
                     verticalArrangement = Arrangement.spacedBy(spacing),
                 ) {
                     items(
-                        items = viewModel.channels,
+                        items = uiState.channels,
                         key = { it.id },
                         contentType = { "channel" },
                     ) { channel ->

@@ -2,6 +2,7 @@ package com.raulshma.jellyplay.feature.settings
 
 import android.content.Context
 import android.net.Uri
+import androidx.compose.runtime.Immutable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
@@ -64,6 +65,7 @@ import java.io.File
 import java.io.IOException
 import javax.inject.Inject
 
+@Immutable
 data class StorageBreakdown(
     val cacheMb: Long = 0,
     val downloadsMb: Long = 0,

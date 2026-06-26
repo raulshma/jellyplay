@@ -1,5 +1,6 @@
 package com.raulshma.jellyplay.feature.requests
 
+import androidx.compose.runtime.Immutable
 import androidx.compose.runtime.State
 import com.raulshma.jellyplay.core.data.repository.SeerrRepository
 import com.raulshma.jellyplay.core.model.seerr.SeerrCurrentUser
@@ -22,6 +23,7 @@ data class RequestMediaInfo(
     val year: Int?,
 )
 
+@Immutable
 data class RequestsUiState(
     val requests: List<SeerrRequestItem> = emptyList(),
     val mediaInfo: Map<Int, RequestMediaInfo> = emptyMap(),

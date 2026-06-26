@@ -164,15 +164,29 @@ class NotificationDispatcher @Inject constructor(
         private const val NOTIFICATION_ID_GLOBAL = 5000
         private const val NOTIFICATION_ID_BASE = 5001
 
+        // Per-library ID slots. Giving each library a dedicated block of IDs avoids
+        // cross-library collisions (the previous scheme added the library hash directly
+        // to the base, so libraries with adjacent hashes overlapped). 4096 buckets with
+        // 512 slots each comfortably covers realistic library counts and per-check item
+        // limits while keeping every ID a positive Int >= NOTIFICATION_ID_BASE.
+        private const val LIBRARY_BUCKETS = 4096
+        private const val SLOTS_PER_LIBRARY = 512
+        private const val SUMMARY_SLOT = SLOTS_PER_LIBRARY - 1
+
         /**
          * Computes a per-(library, item) notification ID. The ID must be stable across
          * re-dispatches so the system can coalesce updates instead of stacking duplicates.
          *
+         * `itemIndex == -1` selects the reserved summary slot for that library, which is
+         * always distinct from any per-item slot.
+         *
          * `internal` so unit tests can assert the deterministic mapping (§4.11).
          */
         internal fun notificationIdFor(libraryId: String, itemIndex: Int): Int {
-            val base = NOTIFICATION_ID_BASE + (libraryId.hashCode() and 0x0000FFFF)
-            return if (itemIndex == -1) base + 100 else base + itemIndex
+            val libraryBucket = (libraryId.hashCode().toLong() and 0xFFFFFFFFL).toInt() % LIBRARY_BUCKETS
+            val base = NOTIFICATION_ID_BASE + libraryBucket * SLOTS_PER_LIBRARY
+            val slot = if (itemIndex == -1) SUMMARY_SLOT else itemIndex
+            return base + slot
         }
     }
 }

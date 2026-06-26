@@ -1,5 +1,6 @@
 package com.raulshma.jellyplay.feature.livetv.channels
 
+import androidx.compose.runtime.Immutable
 import com.raulshma.jellyplay.core.data.repository.MediaRepository
 import com.raulshma.jellyplay.core.data.repository.PlaybackRepository
 import com.raulshma.jellyplay.core.model.LiveTvChannel
@@ -11,6 +12,13 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import javax.inject.Inject
 
+@Immutable
+data class ChannelsUiState(
+    val channels: List<LiveTvChannel> = emptyList(),
+    val isLoading: Boolean = false,
+    val error: String? = null,
+)
+
 @HiltViewModel
 class ChannelsViewModel @Inject constructor(
     private val mediaRepository: MediaRepository,
@@ -18,14 +26,8 @@ class ChannelsViewModel @Inject constructor(
     videoMiniPlayerState: VideoMiniPlayerState,
 ) : JellyPlayViewModel() {
 
-    private val _channels = composeState<List<LiveTvChannel>>(emptyList())
-    val channels: List<LiveTvChannel> get() = _channels.value
-
-    private val _isLoading = composeState(false)
-    val isLoading: Boolean get() = _isLoading.value
-
-    private val _error = composeState<String?>(null)
-    val error: String? get() = _error.value
+    private val _uiState = stateFlow(ChannelsUiState())
+    val uiState: StateFlow<ChannelsUiState> = _uiState.flow
 
     private val _nowPlayingChannelId = MutableStateFlow<String?>(null)
     val nowPlayingChannelId: StateFlow<String?> = _nowPlayingChannelId.asStateFlow()
@@ -43,12 +45,10 @@ class ChannelsViewModel @Inject constructor(
 
     fun loadChannels() {
         launch {
-            _isLoading.value = true
-            _error.value = null
+            _uiState.update { it.copy(isLoading = true, error = null) }
             mediaRepository.getLiveTvChannels(limit = 100)
-                .onSuccess { _channels.value = it }
-                .onFailure { _error.value = it.message }
-            _isLoading.value = false
+                .onSuccess { channels -> _uiState.update { it.copy(channels = channels, isLoading = false) } }
+                .onFailure { e -> _uiState.update { it.copy(error = e.message, isLoading = false) } }
         }
     }
 

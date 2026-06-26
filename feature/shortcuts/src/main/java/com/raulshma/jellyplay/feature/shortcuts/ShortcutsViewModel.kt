@@ -1,5 +1,6 @@
 package com.raulshma.jellyplay.feature.shortcuts
 
+import androidx.compose.runtime.Immutable
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.lifecycle.viewModelScope
 import com.composables.icons.tabler.Tabler
@@ -29,6 +30,7 @@ data class ShortcutItem(
     val requiresAdmin: Boolean = false,
 )
 
+@Immutable
 data class ShortcutsUiState(
     val categories: Map<ShortcutCategory, List<ShortcutItem>> = emptyMap(),
 )

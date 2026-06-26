@@ -1,6 +1,7 @@
 package com.raulshma.jellyplay.feature.downloads
 
 import android.content.Context
+import androidx.compose.runtime.Immutable
 import com.raulshma.jellyplay.core.data.repository.DownloadRepository
 import com.raulshma.jellyplay.core.model.DownloadItem
 import com.raulshma.jellyplay.core.model.formatBytes
@@ -9,10 +10,19 @@ import com.raulshma.jellyplay.core.model.formatSpeed
 import com.raulshma.jellyplay.core.ui.viewmodel.JellyPlayViewModel
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
+import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.distinctUntilChanged
 import javax.inject.Inject
+
+@Immutable
+data class DownloadsUiState(
+    val downloads: List<DownloadItem> = emptyList(),
+    val totalStorageBytes: Long = 0L,
+    val isLoading: Boolean = true,
+    val error: String? = null,
+)
 
 @HiltViewModel
 class DownloadsViewModel @Inject constructor(
@@ -22,17 +32,8 @@ class DownloadsViewModel @Inject constructor(
 
     private val workManager = androidx.work.WorkManager.getInstance(context)
 
-    private val _downloads = composeState<List<DownloadItem>>(emptyList())
-    val downloads: List<DownloadItem> get() = _downloads.value
-
-    private val _totalStorageBytes = composeLongState(0L)
-    val totalStorageBytes: Long get() = _totalStorageBytes.value
-
-    private val _isLoading = composeState(true)
-    val isLoading: Boolean get() = _isLoading.value
-
-    private val _error = composeState<String?>(null)
-    val error: String? get() = _error.value
+    private val _uiState = stateFlow(DownloadsUiState())
+    val uiState: StateFlow<DownloadsUiState> = _uiState.flow
 
     init {
         launch {
@@ -42,16 +43,19 @@ class DownloadsViewModel @Inject constructor(
                     old.zip(new).all { (o, n) -> o.downloadedBytes == n.downloadedBytes && o.id == n.id && o.status == n.status }
                 }
                 .catch { e ->
-                    _error.value = e.localizedMessage ?: "Failed to load downloads"
-                    _isLoading.value = false
+                    _uiState.update {
+                        it.copy(error = e.localizedMessage ?: "Failed to load downloads", isLoading = false)
+                    }
                 }
                 .collectLatest { items ->
-                    _error.value = null
-                    _downloads.value = items
-                    _isLoading.value = false
-                    val total = _totalStorageBytes.value
-                    val newTotal = items.sumOf { it.downloadedBytes }
-                    if (total != newTotal) _totalStorageBytes.value = newTotal
+                    _uiState.update {
+                        it.copy(
+                            downloads = items,
+                            error = null,
+                            isLoading = false,
+                            totalStorageBytes = items.sumOf { item -> item.downloadedBytes },
+                        )
+                    }
                 }
         }
     }
@@ -93,14 +97,14 @@ class DownloadsViewModel @Inject constructor(
 
     fun moveToFront(item: DownloadItem) {
         launch {
-            val maxPriority = downloads.maxOfOrNull { it.priority } ?: 0
+            val maxPriority = _uiState.value.downloads.maxOfOrNull { it.priority } ?: 0
             downloadRepository.setDownloadPriority(item.id, maxPriority + 1)
         }
     }
 
     fun lowerPriority(item: DownloadItem) {
         launch {
-            val minPriority = downloads.minOfOrNull { it.priority } ?: 0
+            val minPriority = _uiState.value.downloads.minOfOrNull { it.priority } ?: 0
             downloadRepository.setDownloadPriority(item.id, minPriority - 1)
         }
     }
