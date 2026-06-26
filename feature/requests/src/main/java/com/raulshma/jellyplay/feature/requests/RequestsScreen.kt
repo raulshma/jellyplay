@@ -32,6 +32,8 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -45,7 +47,10 @@ import com.composables.icons.tabler.outline.Inbox
 import com.raulshma.jellyplay.core.designsystem.theme.ShapeCache
 import com.raulshma.jellyplay.core.model.seerr.SeerrRequestItem
 import com.raulshma.jellyplay.core.ui.components.JellyPlayCircularProgressIndicator
+import com.raulshma.jellyplay.core.ui.components.focusIndicator
 import com.raulshma.jellyplay.core.ui.components.JellyPlayScreenScaffold
+import com.raulshma.jellyplay.core.ui.tv.TvGrabInitialFocus
+import com.raulshma.jellyplay.core.ui.tv.tvFocusRestorer
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -58,6 +63,15 @@ fun RequestsScreen(
     val isAdmin by viewModel.isAdmin.collectAsStateWithLifecycle()
 
     var selectedRequest by remember { mutableStateOf<SeerrRequestItem?>(null) }
+
+    // TV focus-on-launch: focus the first request row once data arrives so D-pad input lands on
+    // content, not the navigation drawer.
+    val listFocusRequester = remember { FocusRequester() }
+    TvGrabInitialFocus(
+        focusRequester = listFocusRequester,
+        itemCount = if (state.isLoading && state.requests.isEmpty()) 0 else state.requests.size,
+        tag = "requests_init",
+    )
 
     JellyPlayScreenScaffold(
         title = "Requests",
@@ -107,7 +121,10 @@ fun RequestsScreen(
                                     color = MaterialTheme.colorScheme.error,
                                 )
                                 Spacer(Modifier.height(12.dp))
-                                androidx.compose.material3.TextButton(onClick = { viewModel.loadRequests(refresh = true) }) {
+                                androidx.compose.material3.TextButton(
+                                    onClick = { viewModel.loadRequests(refresh = true) },
+                                    modifier = Modifier.focusIndicator(),
+                                ) {
                                     Text("Retry")
                                 }
                             }
@@ -122,7 +139,7 @@ fun RequestsScreen(
                                     Tabler.Outline.Inbox,
                                     contentDescription = null,
                                     modifier = Modifier.size(64.dp),
-                                    tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.4f),
+                                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
                                 )
                                 Spacer(Modifier.height(16.dp))
                                 Text(
@@ -134,12 +151,16 @@ fun RequestsScreen(
                                 Text(
                                     "Try adjusting your filters",
                                     style = MaterialTheme.typography.bodySmall,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f),
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
                                 )
                             }
                         }
                     } else {
                         LazyColumn(
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .tvFocusRestorer()
+                                .focusRequester(listFocusRequester),
                             contentPadding = PaddingValues(
                                 start = 16.dp,
                                 top = 8.dp,
@@ -196,6 +217,7 @@ fun RequestsScreen(
                                             onClick = { viewModel.prevPage() },
                                             enabled = state.currentPage > 1,
                                             shape = ShapeCache.smooth12,
+                                            modifier = Modifier.focusIndicator(),
                                         ) {
                                             Icon(
                                                 Tabler.Outline.ChevronLeft,
@@ -216,6 +238,7 @@ fun RequestsScreen(
                                             onClick = { viewModel.nextPage() },
                                             enabled = state.currentPage < state.totalPages,
                                             shape = ShapeCache.smooth12,
+                                            modifier = Modifier.focusIndicator(),
                                         ) {
                                             Text("Next")
                                             Spacer(Modifier.width(4.dp))

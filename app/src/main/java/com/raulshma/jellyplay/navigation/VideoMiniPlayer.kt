@@ -49,6 +49,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
 import com.raulshma.jellyplay.core.ui.components.LocalNavigationBarColor
+import com.raulshma.jellyplay.core.ui.components.focusIndicator
 import com.raulshma.jellyplay.feature.player.video.engine.MediaEngine
 import com.composables.icons.tabler.Tabler
 import com.composables.icons.tabler.outline.*
@@ -132,6 +133,12 @@ fun VideoMiniPlayer(
             else -> RoundedCornerShape(topStart = 12.dp, topEnd = 12.dp)
         }
 
+        val bottomShape = when {
+            isSynthwave -> RoundedCornerShape(0.dp)
+            isSoothing -> RoundedCornerShape(bottomStart = 16.dp, bottomEnd = 16.dp)
+            else -> RoundedCornerShape(bottomStart = 12.dp, bottomEnd = 12.dp)
+        }
+
         Surface(
             shape = shape,
             color = animatedColor,
@@ -146,6 +153,7 @@ fun VideoMiniPlayer(
                         .height(112.dp)
                         .clip(videoShape)
                         .background(Color.Black)
+                        .focusIndicator(videoShape)
                         .clickable(onClick = onClick),
                 ) {
                     if (engine != null) {
@@ -175,7 +183,9 @@ fun VideoMiniPlayer(
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
+                        .clip(bottomShape)
                         .background(animatedColor)
+                        .focusIndicator(bottomShape)
                         .clickable(onClick = onClick)
                         .padding(horizontal = 12.dp, vertical = 6.dp),
                     verticalAlignment = Alignment.CenterVertically,
@@ -241,7 +251,8 @@ private fun IconButtonWithPressAnimation(
         modifier = Modifier
             .size(size)
             .padding(4.dp)
-            .scale(scale),
+            .scale(scale)
+            .focusIndicator(androidx.compose.foundation.shape.CircleShape),
         shapes = androidx.compose.material3.IconButtonDefaults.shapes(),
         interactionSource = interactionSource,
     ) {

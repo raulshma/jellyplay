@@ -45,6 +45,9 @@ import androidx.compose.ui.unit.dp
 import com.composables.icons.tabler.Tabler
 import com.composables.icons.tabler.outline.*
 import com.raulshma.jellyplay.core.designsystem.theme.ShapeCache
+import com.raulshma.jellyplay.core.ui.components.focusIndicator
+import com.raulshma.jellyplay.core.ui.tv.rememberTvFocusState
+import com.raulshma.jellyplay.core.ui.tv.tvFocusIndicator
 import com.raulshma.jellyplay.core.model.seerr.SeerrAuthMethod
 import com.raulshma.jellyplay.core.model.seerr.SeerrPreferences
 
@@ -231,6 +234,7 @@ fun SeerrStep(
 
             if (isConnected) {
                 Spacer(Modifier.height(4.dp))
+                val disconnectFocusState = rememberTvFocusState(focusedScale = 1.04f)
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.spacedBy(12.dp),
@@ -260,7 +264,10 @@ fun SeerrStep(
                         colors = ButtonDefaults.outlinedButtonColors(
                             contentColor = MaterialTheme.colorScheme.error,
                         ),
-                        modifier = Modifier.height(36.dp),
+                        modifier = Modifier
+                            .then(disconnectFocusState.focusModifier)
+                            .tvFocusIndicator(disconnectFocusState, ShapeCache.smooth12)
+                            .height(36.dp),
                     ) {
                         Text("Disconnect", style = MaterialTheme.typography.labelMedium)
                     }
@@ -385,6 +392,7 @@ private fun RegionChip(
                             if (isSelected) MaterialTheme.colorScheme.primaryContainer
                             else MaterialTheme.colorScheme.surfaceVariant
                         )
+                        .focusIndicator()
                         .clickable { onSelect(code) }
                         .padding(vertical = 8.dp, horizontal = 4.dp),
                     contentAlignment = Alignment.Center,

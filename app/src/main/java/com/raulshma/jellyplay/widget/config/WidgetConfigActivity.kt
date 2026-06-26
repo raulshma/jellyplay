@@ -69,6 +69,7 @@ class LibraryWidgetConfigActivity : ComponentActivity() {
             finish()
             return
         }
+        viewModel.initWidgetId(widgetId)
         setResult(RESULT_OK, Intent().putExtra(AppWidgetManager.EXTRA_APPWIDGET_ID, widgetId))
         setContent {
             JellyPlayTheme {
@@ -115,6 +116,7 @@ class SeerrWidgetConfigActivity : ComponentActivity() {
             finish()
             return
         }
+        viewModel.initWidgetId(widgetId)
         setResult(RESULT_OK, Intent().putExtra(AppWidgetManager.EXTRA_APPWIDGET_ID, widgetId))
         setContent {
             JellyPlayTheme {
@@ -148,7 +150,7 @@ private fun ConfigScreen(
     isLibraryKind: Boolean,
     onSave: () -> Unit,
 ) {
-    val state by viewModel.state.collectAsStateWithLifecycle()
+    val state by viewModel.getWidgetConfig().collectAsStateWithLifecycle()
 
     Column(modifier = Modifier.fillMaxSize().padding(20.dp)) {
         Text(

@@ -164,7 +164,7 @@ private fun StatsRow(
                 fontFamily = FontFamily.Monospace,
                 fontSize = 10.sp,
             ),
-            color = Color.White.copy(alpha = 0.6f),
+            color = Color.White.copy(alpha = 0.85f),
         )
         Text(
             text = value,

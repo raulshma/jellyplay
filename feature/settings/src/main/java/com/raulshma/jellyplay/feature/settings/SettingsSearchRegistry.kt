@@ -78,6 +78,56 @@ object SettingsSearchRegistry {
             isAdvanced = true
         ),
         SettingsSearchItem(
+            id = "date_format",
+            title = "Date Format",
+            subtitle = "Choose how dates are displayed throughout the app",
+            category = "Appearance",
+            keywords = listOf("date", "format", "time", "calendar", "day", "month", "year", "display"),
+            route = Route.AppearanceSettings(),
+            icon = Tabler.Outline.Calendar,
+            isAdvanced = true
+        ),
+        SettingsSearchItem(
+            id = "font_scale",
+            title = "Font Size",
+            subtitle = "Adjust the text size across the entire app",
+            category = "Appearance",
+            keywords = listOf("font", "size", "text", "scale", "accessibility", "readability", "large", "small"),
+            route = Route.AppearanceSettings(),
+            icon = Tabler.Outline.TextSize,
+            isAdvanced = true
+        ),
+        SettingsSearchItem(
+            id = "color_blind_mode",
+            title = "Color Blind Mode",
+            subtitle = "Adjust colors for color vision deficiency",
+            category = "Appearance",
+            keywords = listOf("color", "blind", "daltonize", "accessibility", "protanopia", "deuteranopia", "tritanopia", "vision"),
+            route = Route.AppearanceSettings(),
+            icon = Tabler.Outline.Eye,
+            isAdvanced = true
+        ),
+        SettingsSearchItem(
+            id = "hand_mode",
+            title = "Handedness",
+            subtitle = "Mirror navigation for left-handed use",
+            category = "Appearance",
+            keywords = listOf("hand", "left", "right", "handed", "accessibility", "mirror", "one-handed"),
+            route = Route.AppearanceSettings(),
+            icon = Tabler.Outline.HandClick,
+            isAdvanced = true
+        ),
+        SettingsSearchItem(
+            id = "theme_scheduler",
+            title = "Theme Scheduler",
+            subtitle = "Automatically switch between light and dark theme by time of day",
+            category = "Appearance",
+            keywords = listOf("theme", "scheduler", "day", "night", "auto", "time", "scheduled", "dark", "light"),
+            route = Route.AppearanceSettings(),
+            icon = Tabler.Outline.Clock,
+            isAdvanced = true
+        ),
+        SettingsSearchItem(
             id = "theme_mode",
             title = "Theme Mode",
             subtitle = "Follow system setting, light mode, or dark mode",
@@ -183,6 +233,16 @@ object SettingsSearchRegistry {
             isAdvanced = true
         ),
         SettingsSearchItem(
+            id = "unhide_cw",
+            title = "Unhide All from Continue Watching",
+            subtitle = "Show all hidden items in the Continue Watching row",
+            category = "Appearance",
+            keywords = listOf("unhide", "continue watching", "hidden", "reset", "show"),
+            route = Route.AppearanceSettings(),
+            icon = Tabler.Outline.Eye,
+            isAdvanced = true
+        ),
+        SettingsSearchItem(
             id = "merge_continue_next_up",
             title = "Merge Continue & Next Up",
             subtitle = "Combine Next Up items into the Continue Watching row",
@@ -260,6 +320,36 @@ object SettingsSearchRegistry {
             keywords = listOf("hide", "watched", "filter", "library", "clean"),
             route = Route.AppearanceSettings(),
             icon = Tabler.Outline.EyeOff,
+            isAdvanced = true
+        ),
+        SettingsSearchItem(
+            id = "hide_episode_thumbnails",
+            title = "Hide Episode Thumbnails",
+            subtitle = "Hide episode preview images to avoid spoilers",
+            category = "Appearance",
+            keywords = listOf("hide", "episode", "thumbnail", "spoiler", "preview"),
+            route = Route.AppearanceSettings(),
+            icon = Tabler.Outline.PhotoOff,
+            isAdvanced = true
+        ),
+        SettingsSearchItem(
+            id = "skip_specials",
+            title = "Skip Special Episodes",
+            subtitle = "Exclude specials/bonus episodes from episode lists",
+            category = "Appearance",
+            keywords = listOf("skip", "special", "episode", "bonus", "exclude"),
+            route = Route.AppearanceSettings(),
+            icon = Tabler.Outline.PlayerSkipForward,
+            isAdvanced = true
+        ),
+        SettingsSearchItem(
+            id = "haptics_enabled",
+            title = "Haptic Feedback",
+            subtitle = "Enable vibration feedback for UI interactions",
+            category = "Appearance",
+            keywords = listOf("haptic", "vibration", "feedback", "vibrate", "touch"),
+            route = Route.AppearanceSettings(),
+            icon = Tabler.Outline.DeviceMobileVibration,
             isAdvanced = true
         ),
         SettingsSearchItem(
@@ -414,6 +504,16 @@ object SettingsSearchRegistry {
             keywords = listOf("pass out", "fall asleep", "auto pause", "sleep", "hours"),
             route = Route.PlaybackSettings(),
             icon = Tabler.Outline.Moon,
+            isAdvanced = true
+        ),
+        SettingsSearchItem(
+            id = "duck_on_transient_focus_loss",
+            title = "Duck on Phone Call",
+            subtitle = "Lower volume and rewind when a phone call arrives",
+            category = "Playback",
+            keywords = listOf("duck", "phone", "call", "focus", "transient", "volume", "rewind"),
+            route = Route.PlaybackSettings(),
+            icon = Tabler.Outline.Phone,
             isAdvanced = true
         ),
         SettingsSearchItem(
@@ -852,6 +952,26 @@ object SettingsSearchRegistry {
             route = Route.NotificationSettings(),
             icon = Tabler.Outline.Bell
         ),
+        SettingsSearchItem(
+            id = "respect_system_dnd",
+            title = "Respect System DND",
+            subtitle = "Don't show notifications when Do Not Disturb is active",
+            category = "Notifications",
+            keywords = listOf("dnd", "do not disturb", "quiet", "silent", "notification policy"),
+            route = Route.NotificationSettings(),
+            icon = Tabler.Outline.BellOff,
+            isAdvanced = true
+        ),
+        SettingsSearchItem(
+            id = "system_notification_settings",
+            title = "System Notification Settings",
+            subtitle = "Customize per-library channel in system settings",
+            category = "Notifications",
+            keywords = listOf("system", "notification", "channel", "settings", "customize"),
+            route = Route.NotificationSettings(),
+            icon = Tabler.Outline.Settings,
+            isAdvanced = true
+        ),
 
         // Storage, Network & Offline
         SettingsSearchItem(
@@ -930,6 +1050,16 @@ object SettingsSearchRegistry {
             icon = Tabler.Outline.Gauge
         ),
         SettingsSearchItem(
+            id = "cellular_download_warning",
+            title = "Cellular Download Size Warning",
+            subtitle = "Warn before downloading large files on cellular",
+            category = "Storage",
+            keywords = listOf("cellular", "download", "warning", "size", "data", "mobile"),
+            route = Route.StorageSettings(),
+            icon = Tabler.Outline.AlertTriangle,
+            isAdvanced = true
+        ),
+        SettingsSearchItem(
             id = "network_timeout",
             title = "Network Timeouts",
             subtitle = "Connect/read/write timeout preset for API requests",
@@ -998,6 +1128,15 @@ object SettingsSearchRegistry {
             icon = Tabler.Outline.Fingerprint
         ),
         SettingsSearchItem(
+            id = "pin_for_player_lock",
+            title = "PIN for Player Lock",
+            subtitle = "Require PIN to unlock the video player screen lock",
+            category = "Security",
+            keywords = listOf("pin", "player", "lock", "unlock", "screen lock"),
+            route = Route.SecuritySettings(),
+            icon = Tabler.Outline.Key
+        ),
+        SettingsSearchItem(
             id = "quick_connect_authorize",
             title = "Authorize Quick Connect",
             subtitle = "Approve Quick Connect codes from other devices",
@@ -1025,6 +1164,16 @@ object SettingsSearchRegistry {
             keywords = listOf("import", "restore", "load config", "backup restore"),
             route = Route.BackupSettings(),
             icon = Tabler.Outline.DatabaseImport
+        ),
+        SettingsSearchItem(
+            id = "factory_reset",
+            title = "Factory Reset",
+            subtitle = "Reset all settings to factory defaults",
+            category = "Backup & Restore",
+            keywords = listOf("factory", "reset", "defaults", "clear", "wipe"),
+            route = Route.BackupSettings(),
+            icon = Tabler.Outline.AlertTriangle,
+            isAdvanced = true
         ),
 
         // About

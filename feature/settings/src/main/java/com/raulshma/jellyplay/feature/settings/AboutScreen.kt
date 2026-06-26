@@ -32,6 +32,7 @@ import com.composables.icons.tabler.Tabler
 import com.composables.icons.tabler.outline.ChevronRight
 import com.composables.icons.tabler.outline.Download
 import com.composables.icons.tabler.outline.ExternalLink
+import com.composables.icons.tabler.outline.Help
 import com.composables.icons.tabler.outline.Heart
 import com.composables.icons.tabler.outline.InfoCircle
 import com.composables.icons.tabler.outline.License
@@ -49,6 +50,7 @@ import androidx.compose.ui.focus.focusRequester
 import androidx.compose.runtime.LaunchedEffect
 import com.raulshma.jellyplay.core.ui.tv.TvGrabInitialFocus
 import com.raulshma.jellyplay.core.ui.tv.tryRequestFocus
+import com.raulshma.jellyplay.core.ui.components.focusIndicator
 
 @Composable
 fun AboutScreen(
@@ -126,6 +128,32 @@ fun AboutScreen(
             }
 
             SettingsGroupHeader("Links")
+            SettingsClickableRow(
+                icon = { Icon(Tabler.Outline.InfoCircle, contentDescription = null, modifier = Modifier.size(20.dp)) },
+                title = "Changelog",
+                onClick = {
+                    try {
+                        val intent = android.content.Intent(
+                            android.content.Intent.ACTION_VIEW,
+                            android.net.Uri.parse("https://github.com/raulshma/jellyplay/releases"),
+                        )
+                        context.startActivity(intent)
+                    } catch (_: Exception) {}
+                },
+            )
+            SettingsClickableRow(
+                icon = { Icon(Tabler.Outline.Help, contentDescription = null, modifier = Modifier.size(20.dp)) },
+                title = "Help & FAQ",
+                onClick = {
+                    try {
+                        val intent = android.content.Intent(
+                            android.content.Intent.ACTION_VIEW,
+                            android.net.Uri.parse("https://github.com/raulshma/jellyplay/wiki"),
+                        )
+                        context.startActivity(intent)
+                    } catch (_: Exception) {}
+                },
+            )
             SettingsClickableRow(
                 icon = { Icon(Tabler.Outline.InfoCircle, contentDescription = null, modifier = Modifier.size(20.dp)) },
                 title = "GitHub",
@@ -276,6 +304,7 @@ private fun SettingsClickableRow(
         modifier = Modifier
             .fillMaxWidth()
             .clip(ShapeCache.smooth12)
+            .focusIndicator()
             .clickable(onClick = onClick)
             .padding(horizontal = 16.dp, vertical = 12.dp),
         verticalAlignment = Alignment.CenterVertically,

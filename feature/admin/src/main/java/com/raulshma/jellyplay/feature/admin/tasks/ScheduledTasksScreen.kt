@@ -17,6 +17,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -35,6 +36,8 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.text.font.FontWeight
@@ -56,6 +59,10 @@ import com.raulshma.jellyplay.core.ui.components.JellyPlayScreenScaffold
 import com.raulshma.jellyplay.core.ui.components.ScreenLoadingState
 import com.raulshma.jellyplay.core.ui.components.rememberScreenBackgroundColor
 import com.raulshma.jellyplay.core.ui.tv.LocalTvMode
+import com.raulshma.jellyplay.core.ui.tv.TvGrabInitialFocus
+import com.raulshma.jellyplay.core.ui.tv.rememberTvFocusState
+import com.raulshma.jellyplay.core.ui.tv.tvFocusIndicator
+import com.raulshma.jellyplay.core.ui.tv.tvFocusRestorer
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -68,12 +75,25 @@ fun ScheduledTasksScreen(
     val isTv = LocalTvMode.current
     val backgroundColor = rememberScreenBackgroundColor()
 
+    // TV focus-on-launch: focus the first task once data arrives so D-pad input lands on content,
+    // not the navigation drawer.
+    val listFocusRequester = remember { FocusRequester() }
+    TvGrabInitialFocus(
+        focusRequester = listFocusRequester,
+        itemCount = if (state.isLoading || state.error != null) 0 else state.tasks.size.coerceAtLeast(1),
+        tag = "scheduled_tasks_init",
+    )
+
     JellyPlayScreenScaffold(
         title = "Scheduled Tasks",
         onBack = onBack,
         backgroundColor = backgroundColor,
         actions = {
-            IconButton(onClick = { viewModel.refresh() }) {
+            val refreshFocusState = rememberTvFocusState()
+            IconButton(
+                onClick = { viewModel.refresh() },
+                modifier = Modifier.then(refreshFocusState.focusModifier).tvFocusIndicator(refreshFocusState, CircleShape),
+            ) {
                 Icon(Tabler.Outline.Refresh, contentDescription = "Refresh")
             }
         },
@@ -90,7 +110,11 @@ fun ScheduledTasksScreen(
                     Column(horizontalAlignment = Alignment.CenterHorizontally) {
                         Text(state.error ?: "Unknown error", color = MaterialTheme.colorScheme.error)
                         Spacer(Modifier.height(16.dp))
-                        FilledTonalButton(onClick = { viewModel.loadTasks() }) { Text("Retry") }
+                        val retryFocusState = rememberTvFocusState()
+                        FilledTonalButton(
+                            onClick = { viewModel.loadTasks() },
+                            modifier = Modifier.then(retryFocusState.focusModifier).tvFocusIndicator(retryFocusState, ShapeCache.smooth12),
+                        ) { Text("Retry") }
                     }
                 }
             }
@@ -100,7 +124,10 @@ fun ScheduledTasksScreen(
                     onRefresh = { viewModel.refresh() },
                 ) {
                     LazyColumn(
-                        modifier = Modifier.fillMaxSize(),
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .tvFocusRestorer()
+                            .focusRequester(listFocusRequester),
                         contentPadding = androidx.compose.foundation.layout.PaddingValues(
                             start = adaptiveInfo.contentPadding(false) - 8.dp,
                             end = adaptiveInfo.contentPadding(false) - 8.dp,
@@ -148,6 +175,8 @@ private fun TaskItem(
         animationSpec = MaterialTheme.motionScheme.fastSpatialSpec(),
         label = "taskItemScale",
     )
+    val stopFocusState = rememberTvFocusState()
+    val runFocusState = rememberTvFocusState()
 
     val stateColor = when (task.state) {
         TaskState.RUNNING -> MaterialTheme.colorScheme.primary
@@ -225,7 +254,10 @@ private fun TaskItem(
                             colors = androidx.compose.material3.ButtonDefaults.outlinedButtonColors(
                                 contentColor = MaterialTheme.colorScheme.error,
                             ),
-                            modifier = Modifier.height(36.dp),
+                            modifier = Modifier
+                                .height(36.dp)
+                                .then(stopFocusState.focusModifier)
+                                .tvFocusIndicator(stopFocusState, ShapeCache.smooth12),
                         ) {
                             Icon(Tabler.Outline.PlayerPause, contentDescription = null, modifier = Modifier.size(16.dp))
                             Spacer(Modifier.width(4.dp))
@@ -235,7 +267,10 @@ private fun TaskItem(
                     TaskState.IDLE -> {
                         FilledTonalButton(
                             onClick = onStart,
-                            modifier = Modifier.height(36.dp),
+                            modifier = Modifier
+                                .height(36.dp)
+                                .then(runFocusState.focusModifier)
+                                .tvFocusIndicator(runFocusState, ShapeCache.smooth12),
                         ) {
                             Icon(Tabler.Outline.PlayerPlay, contentDescription = null, modifier = Modifier.size(16.dp))
                             Spacer(Modifier.width(4.dp))

@@ -87,6 +87,7 @@ class HomeViewModel @Inject constructor(
     private var nextUpMaxDays = 0
     private var nextUpRewatching = false
     private var nextUpExcludedSeriesIds = emptySet<String>()
+    private var hiddenCwItemIds = emptySet<String>()
     private var pinnedHomeSections = emptyList<PinnedHomeSection>()
     private var androidTvWatchNextEnabled = true
     private var lastContinueWatchingIds: Set<String> = emptySet()
@@ -142,6 +143,7 @@ class HomeViewModel @Inject constructor(
                         prefs.nextUpMaxDays != nextUpMaxDays ||
                         prefs.nextUpRewatching != nextUpRewatching ||
                         prefs.nextUpExcludedSeriesIds != nextUpExcludedSeriesIds ||
+                        prefs.hiddenCwItemIds != hiddenCwItemIds ||
                         prefs.pinnedHomeSections != pinnedHomeSections
                     )
 
@@ -153,6 +155,7 @@ class HomeViewModel @Inject constructor(
                 nextUpMaxDays = prefs.nextUpMaxDays
                 nextUpRewatching = prefs.nextUpRewatching
                 nextUpExcludedSeriesIds = prefs.nextUpExcludedSeriesIds
+                hiddenCwItemIds = prefs.hiddenCwItemIds
                 pinnedHomeSections = prefs.pinnedHomeSections
                 androidTvWatchNextEnabled = prefs.androidTvWatchNextEnabled
                 _uiState.update { it.copy(
@@ -429,6 +432,7 @@ class HomeViewModel @Inject constructor(
                 nextUpRewatching,
                 nextUpMaxDays,
                 nextUpExcludedSeriesIds,
+                hiddenCwItemIds,
                 pinnedHomeSections,
             )
                 .onSuccess { fetchedSections ->

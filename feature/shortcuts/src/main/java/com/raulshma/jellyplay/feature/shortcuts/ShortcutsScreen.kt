@@ -50,10 +50,12 @@ import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.composables.icons.tabler.Tabler
 import com.composables.icons.tabler.outline.ArrowRight
+import com.composables.icons.tabler.outline.Keyboard
 import com.raulshma.jellyplay.core.ui.adaptive.LocalAdaptiveInfo
 import com.raulshma.jellyplay.core.ui.adaptive.bottomPadding
 import com.raulshma.jellyplay.core.ui.adaptive.contentPadding
 import com.raulshma.jellyplay.core.ui.components.JellyPlayScreenScaffold
+import com.raulshma.jellyplay.core.ui.components.ScreenEmptyState
 import com.raulshma.jellyplay.core.ui.components.TopBarStyle
 import com.raulshma.jellyplay.core.ui.navigation.Route
 import com.raulshma.jellyplay.core.ui.tv.LocalTvMode
@@ -117,7 +119,13 @@ fun ShortcutsScreen(
 
             if (state.categories.isEmpty()) {
                 item(span = { GridItemSpan(maxLineSpan) }) {
-                    EmptyShortcutsState()
+                    ScreenEmptyState(
+                        icon = Tabler.Outline.Keyboard,
+                        title = "No shortcuts available",
+                        description = "Browse the app to discover features and content",
+                        actionLabel = "Browse Library",
+                        onAction = { onNavigate(com.raulshma.jellyplay.core.ui.navigation.Route.Library) },
+                    )
                 }
             } else {
                 state.categories.forEach { (category, shortcuts) ->
@@ -222,22 +230,6 @@ private fun CountPill(text: String) {
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp),
             maxLines = 1,
-        )
-    }
-}
-
-@Composable
-private fun EmptyShortcutsState() {
-    Box(
-        modifier = Modifier
-            .fillMaxWidth()
-            .height(160.dp),
-        contentAlignment = Alignment.Center,
-    ) {
-        Text(
-            text = "No shortcuts available.",
-            style = MaterialTheme.typography.bodyLarge,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
     }
 }

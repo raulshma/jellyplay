@@ -1,3 +1,4 @@
+@file:Suppress("DEPRECATION")
 package com.raulshma.jellyplay.feature.home
 
 import androidx.compose.animation.AnimatedContent
@@ -16,6 +17,7 @@ import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.Arrangement
@@ -33,6 +35,8 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.relocation.BringIntoViewResponder
+import androidx.compose.foundation.relocation.bringIntoViewResponder
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
@@ -47,6 +51,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.onFocusChanged
+import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
@@ -75,6 +80,7 @@ import com.composables.icons.tabler.outline.Heart
 import com.composables.icons.tabler.outline.PlayerPlay
 import com.raulshma.jellyplay.core.designsystem.theme.smoothCornerShape
 
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 fun AnimatedHeroHeader(
     featuredItem: MediaItem,
@@ -89,6 +95,16 @@ fun AnimatedHeroHeader(
     requestInitialFocus: Boolean = true,
     focusRequester: FocusRequester? = null,
 ) {
+    val isTv = LocalTvMode.current
+    val bringIntoViewResponder = remember(listState) {
+        object : BringIntoViewResponder {
+            override fun calculateRectForParent(localRect: Rect): Rect = Rect.Zero
+            override suspend fun bringChildIntoView(localRect: () -> Rect?) {
+                listState.scrollToItem(0, 0)
+            }
+        }
+    }
+
     val parallaxOffset by remember(listState) {
         derivedStateOf {
             if (listState.firstVisibleItemIndex == 0) {
@@ -122,7 +138,8 @@ fun AnimatedHeroHeader(
         modifier = Modifier
             .fillMaxWidth()
             .height(height)
-            .clip(RoundedCornerShape(topStart = 0.dp, topEnd = 0.dp, bottomStart = 0.dp, bottomEnd = 0.dp)),
+            .clip(RoundedCornerShape(topStart = 0.dp, topEnd = 0.dp, bottomStart = 0.dp, bottomEnd = 0.dp))
+            .ifElse(isTv, Modifier.bringIntoViewResponder(bringIntoViewResponder)),
     ) { currentFeatured ->
         HeroHeader(
             item = currentFeatured,

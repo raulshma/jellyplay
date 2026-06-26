@@ -64,7 +64,7 @@ fun CastIndicatorOverlay(
             )
             Text(
                 text = "Connecting…",
-                color = Color.White,
+                color = MaterialTheme.colorScheme.onSurface,
                 fontSize = 11.sp,
                 fontWeight = FontWeight.SemiBold,
                 letterSpacing = 0.3.sp,
@@ -90,7 +90,7 @@ fun CastIndicatorOverlay(
             )
             Text(
                 text = "Casting",
-                color = Color.White,
+                color = MaterialTheme.colorScheme.onSurface,
                 fontSize = 11.sp,
                 fontWeight = FontWeight.SemiBold,
                 letterSpacing = 0.3.sp,

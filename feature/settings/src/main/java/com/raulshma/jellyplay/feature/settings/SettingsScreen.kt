@@ -93,7 +93,7 @@ private val LocalAnimateSettingsEntrance = staticCompositionLocalOf { false }
 @Composable
 fun SettingsScreen(
     onBack: () -> Unit,
-    onLogout: () -> Unit,
+    onLogout: (Boolean) -> Unit,
     onServerManagement: (String?) -> Unit = {},
     onUserManagement: (String?) -> Unit = {},
     onSeerrSettings: (String?) -> Unit = {},
@@ -275,7 +275,7 @@ fun SettingsScreen(
                                 placeholder = {
                                     Text(
                                         "Search settings...",
-                                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.4f),
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
                                     )
                                 },
                                 leadingIcon = {
@@ -484,7 +484,7 @@ fun SettingsScreen(
                                                 Icon(
                                                     imageVector = Tabler.Outline.ChevronRight,
                                                     contentDescription = null,
-                                                    tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.4f),
+                                                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
                                                     modifier = Modifier.size(16.dp)
                                                 )
                                             }
@@ -504,10 +504,9 @@ fun SettingsScreen(
                                                 }
                                                 isSearchActive = false
                                                 searchQuery = ""
-                                                if (item.id == "logout") {
-                                                    viewModel.logout()
-                                                    onLogout()
-                                                } else {
+                                                 if (item.id == "logout") {
+                                                     onLogout(false)
+                                                 } else {
                                                     when (item.route) {
                                                         is Route.ServerManagement -> onServerManagement(item.id)
                                                         is Route.UserManagement -> onUserManagement(item.id)
@@ -630,11 +629,20 @@ fun SettingsScreen(
                                 icon = Tabler.Outline.Logout,
                                 title = "Sign Out",
                                 subtitle = "Log out of current account",
-                                index = 0, count = 1,
+                                index = 0, count = 2,
                                 isDestructive = true,
                                 onClick = {
-                                    viewModel.logout()
-                                    onLogout()
+                                    onLogout(false)
+                                },
+                            )
+                            SettingListItem(
+                                icon = Tabler.Outline.Logout,
+                                title = "Sign Out from Server",
+                                subtitle = "Revoke this device's session on the server",
+                                index = 1, count = 2,
+                                isDestructive = true,
+                                onClick = {
+                                    onLogout(true)
                                 },
                             )
                         }
@@ -1050,7 +1058,7 @@ private fun SettingsTvCollapsedSearchRow(
             Spacer(Modifier.width(12.dp))
             Text(
                 text = "Search settings...",
-                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.4f),
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
                 style = MaterialTheme.typography.bodyMedium,
             )
         }

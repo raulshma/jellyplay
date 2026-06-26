@@ -29,6 +29,8 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.raulshma.jellyplay.core.designsystem.theme.ShapeCache
 import com.raulshma.jellyplay.core.designsystem.theme.StatusColors
+import com.raulshma.jellyplay.core.ui.tv.rememberTvFocusState
+import com.raulshma.jellyplay.core.ui.tv.tvFocusIndicator
 import com.raulshma.jellyplay.core.model.ScheduledTaskInfo
 import com.raulshma.jellyplay.core.model.TaskState
 
@@ -38,6 +40,8 @@ fun RunningTasksCard(
     onViewAll: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
+    val viewAllFocusState = rememberTvFocusState(focusedScale = 1.04f)
+
     Card(
         modifier = modifier.fillMaxWidth().padding(horizontal = 8.dp),
         shape = ShapeCache.smooth20,
@@ -72,7 +76,12 @@ fun RunningTasksCard(
                         )
                     }
                 }
-                TextButton(onClick = onViewAll) { Text("View All") }
+                TextButton(
+                    onClick = onViewAll,
+                    modifier = Modifier
+                        .then(viewAllFocusState.focusModifier)
+                        .tvFocusIndicator(viewAllFocusState, ShapeCache.smooth12),
+                ) { Text("View All") }
             }
             Spacer(Modifier.height(8.dp))
             tasks.take(3).forEachIndexed { index, task ->

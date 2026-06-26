@@ -9,8 +9,13 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
@@ -23,8 +28,11 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.unit.dp
+import com.raulshma.jellyplay.core.model.PreferenceResetCategory
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.raulshma.jellyplay.core.model.ContrastLevel
+import com.raulshma.jellyplay.core.model.DateFormatPreference
+import com.raulshma.jellyplay.core.model.AppFontScale
 import com.raulshma.jellyplay.core.model.HomeMode
 import com.raulshma.jellyplay.core.model.HomeSectionType
 import com.raulshma.jellyplay.core.model.ThemeMode
@@ -38,8 +46,11 @@ import com.raulshma.jellyplay.core.ui.tv.LocalTvMode
 import com.raulshma.jellyplay.core.ui.tv.tvFocusRestorer
 import com.raulshma.jellyplay.core.ui.tv.TvGrabInitialFocus
 import com.raulshma.jellyplay.core.ui.tv.tryRequestFocus
+import com.raulshma.jellyplay.core.ui.components.focusIndicator
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
+import androidx.compose.foundation.shape.CircleShape
+import com.raulshma.jellyplay.core.ui.components.focusIndicator
 import com.composables.icons.tabler.Tabler
 import com.composables.icons.tabler.outline.*
 
@@ -68,8 +79,8 @@ fun AppearanceSettingsScreen(
     val scrollState = rememberLazyListState()
     val scrollIndex = remember(highlightSettingId) {
         when (highlightSettingId) {
-            in listOf("theme_mode", "synthwave_mode", "soothing_mode", "dynamic_theming", "oled_mode", "contrast", "library_view_mode", "home_mode", "hero_section", "clock_home", "continue_watching_click", "merge_continue_next_up", "next_up_max_days", "next_up_rewatching", "theme_music", "nav_labels") -> 0
-            in listOf("show_unwatched_badge", "show_watched_checkmark", "hide_watched_items", "show_share_media", "show_external_ratings") -> 1
+            in listOf("theme_mode", "theme_scheduler", "synthwave_mode", "soothing_mode", "dynamic_theming", "oled_mode", "contrast", "library_view_mode", "home_mode", "hero_section", "clock_home", "continue_watching_click", "merge_continue_next_up", "next_up_max_days", "next_up_rewatching", "theme_music", "nav_labels", "date_format", "font_scale", "color_blind_mode", "hand_mode", "scheduled_start", "scheduled_end") -> 0
+            in listOf("show_unwatched_badge", "show_watched_checkmark", "hide_watched_items", "hide_episode_thumbnails", "skip_specials", "show_share_media", "show_external_ratings") -> 1
             in listOf("performance_mode", "reduce_motion") -> 2
             else -> -1
         }
@@ -83,6 +94,8 @@ fun AppearanceSettingsScreen(
         }
     }
 
+    var showResetDialog by remember { mutableStateOf(false) }
+
     JellyPlayScreenScaffold(
         title = "Appearance",
         onBack = onBack,
@@ -92,6 +105,16 @@ fun AppearanceSettingsScreen(
                 showAdvanced = showAdvanced,
                 onToggle = { viewModel.setShowAdvancedSettings(!showAdvanced) },
             )
+            IconButton(
+                onClick = { showResetDialog = true },
+                modifier = Modifier.focusIndicator(CircleShape),
+            ) {
+                Icon(
+                    Tabler.Outline.Refresh,
+                    contentDescription = "Reset to defaults",
+                    tint = MaterialTheme.colorScheme.onSurface,
+                )
+            }
         },
     ) { innerPadding ->
         LazyColumn(
@@ -138,6 +161,12 @@ fun AppearanceSettingsScreen(
                         ThemeMode.DARK -> true
                         ThemeMode.LIGHT -> false
                         ThemeMode.SYSTEM -> androidx.compose.foundation.isSystemInDarkTheme()
+                        ThemeMode.SCHEDULED -> {
+                            val hour = java.util.Calendar.getInstance().get(java.util.Calendar.HOUR_OF_DAY)
+                            val start = preferences.scheduledThemeStartHour
+                            val end = preferences.scheduledThemeEndHour
+                            if (start <= end) hour in start until end else hour >= start || hour < end
+                        }
                     }
 
                     val appearanceItems = buildList {
@@ -164,11 +193,22 @@ fun AppearanceSettingsScreen(
                             add("hero_section")
                             add("clock_home")
                             add("continue_watching_click")
+                            if (preferences.hiddenCwItemIds.isNotEmpty()) {
+                                add("unhide_cw")
+                            }
                             add("merge_continue_next_up")
                             add("next_up_max_days")
                             add("next_up_rewatching")
                             add("theme_music")
                             add("nav_labels")
+                            add("date_format")
+                            add("font_scale")
+                            add("color_blind_mode")
+                            add("hand_mode")
+                            if (preferences.themeMode == ThemeMode.SCHEDULED) {
+                                add("scheduled_start")
+                                add("scheduled_end")
+                            }
                         }
                     }
                     val totalCount = appearanceItems.size
@@ -191,17 +231,19 @@ fun AppearanceSettingsScreen(
                                             ThemeMode.SYSTEM -> "Follow system setting"
                                             ThemeMode.LIGHT -> "Always light"
                                             ThemeMode.DARK -> "Always dark"
+                                            ThemeMode.SCHEDULED -> "Auto day/night (${preferences.scheduledThemeStartHour}:00–${preferences.scheduledThemeEndHour}:00)"
                                         }
                                     },
                                     trailingText = if (preferences.synthwaveMode) "-" else if (preferences.soothingMode) "-" else if (preferences.monochromeMode) "-" else preferences.themeMode.name,
-                                    highlighted = highlightSettingId == "theme_mode",
+                                    highlighted = highlightSettingId in listOf("theme_mode", "theme_scheduler"),
                                     index = currentIdx++, count = totalCount,
                                     onClick = {
                                         if (!preferences.synthwaveMode && !preferences.soothingMode && !preferences.monochromeMode) {
                                             val next = when (preferences.themeMode) {
                                                 ThemeMode.SYSTEM -> ThemeMode.LIGHT
                                                 ThemeMode.LIGHT -> ThemeMode.DARK
-                                                ThemeMode.DARK -> ThemeMode.SYSTEM
+                                                ThemeMode.DARK -> ThemeMode.SCHEDULED
+                                                ThemeMode.SCHEDULED -> ThemeMode.SYSTEM
                                             }
                                             viewModel.setThemeMode(next)
                                         }
@@ -385,6 +427,15 @@ fun AppearanceSettingsScreen(
                                     },
                                 )
                             }
+                            "unhide_cw" -> {
+                                SettingListItem(
+                                    icon = Tabler.Outline.Eye,
+                                    title = "Unhide All from Continue Watching",
+                                    subtitle = "${preferences.hiddenCwItemIds.size} hidden item(s)",
+                                    index = currentIdx++, count = totalCount,
+                                    onClick = { viewModel.unhideAllCwItems() },
+                                )
+                            }
                             "merge_continue_next_up" -> {
                                 SettingToggleItem(
                                     icon = Tabler.Outline.LayersLinked,
@@ -446,6 +497,108 @@ fun AppearanceSettingsScreen(
                                     onCheckedChange = { viewModel.setNavBarShowLabels(it) },
                                 )
                             }
+                            "date_format" -> {
+                                SettingListItem(
+                                    icon = Tabler.Outline.Calendar,
+                                    title = "Date Format",
+                                    subtitle = "Choose how dates are displayed throughout the app",
+                                    trailingText = preferences.dateFormatPreference.displayName,
+                                    highlighted = highlightSettingId == "date_format",
+                                    index = currentIdx++, count = totalCount,
+                                    onClick = {
+                                        val next = when (preferences.dateFormatPreference) {
+                                            DateFormatPreference.SYSTEM -> DateFormatPreference.US
+                                            DateFormatPreference.US -> DateFormatPreference.ISO
+                                            DateFormatPreference.ISO -> DateFormatPreference.EU
+                                            DateFormatPreference.EU -> DateFormatPreference.LONG
+                                            DateFormatPreference.LONG -> DateFormatPreference.SHORT
+                                            DateFormatPreference.SHORT -> DateFormatPreference.SYSTEM
+                                        }
+                                        viewModel.setDateFormatPreference(next)
+                                    },
+                                )
+                            }
+                            "font_scale" -> {
+                                SettingListItem(
+                                    icon = Tabler.Outline.TextSize,
+                                    title = "Font Size",
+                                    subtitle = "Adjust the text size across the entire app",
+                                    trailingText = preferences.appFontScale.displayName,
+                                    highlighted = highlightSettingId == "font_scale",
+                                    index = currentIdx++, count = totalCount,
+                                    onClick = {
+                                        val next = when (preferences.appFontScale) {
+                                            AppFontScale.SMALL -> AppFontScale.DEFAULT
+                                            AppFontScale.DEFAULT -> AppFontScale.MEDIUM
+                                            AppFontScale.MEDIUM -> AppFontScale.LARGE
+                                            AppFontScale.LARGE -> AppFontScale.EXTRA_LARGE
+                                            AppFontScale.EXTRA_LARGE -> AppFontScale.SMALL
+                                        }
+                                        viewModel.setAppFontScale(next)
+                                    },
+                                )
+                            }
+                            "scheduled_start" -> {
+                                SettingListItem(
+                                    icon = Tabler.Outline.Sun,
+                                    title = "Night Starts At",
+                                    subtitle = "Hour when dark theme activates (24h format)",
+                                    trailingText = "${preferences.scheduledThemeStartHour}:00",
+                                    highlighted = highlightSettingId == "scheduled_start",
+                                    index = currentIdx++, count = totalCount,
+                                    onClick = {
+                                        val next = (preferences.scheduledThemeStartHour + 1) % 24
+                                        viewModel.setScheduledThemeStartHour(next)
+                                    },
+                                )
+                            }
+                            "scheduled_end" -> {
+                                SettingListItem(
+                                    icon = Tabler.Outline.Moon,
+                                    title = "Morning Starts At",
+                                    subtitle = "Hour when light theme activates (24h format)",
+                                    trailingText = "${preferences.scheduledThemeEndHour}:00",
+                                    highlighted = highlightSettingId == "scheduled_end",
+                                    index = currentIdx++, count = totalCount,
+                                    onClick = {
+                                        val next = (preferences.scheduledThemeEndHour + 1) % 24
+                                        viewModel.setScheduledThemeEndHour(next)
+                                    },
+                                )
+                            }
+                            "color_blind_mode" -> {
+                                SettingListItem(
+                                    icon = Tabler.Outline.Eye,
+                                    title = "Color Blind Mode",
+                                    subtitle = "Adjust colors for color vision deficiency",
+                                    trailingText = preferences.colorBlindMode.displayName,
+                                    highlighted = highlightSettingId == "color_blind_mode",
+                                    index = currentIdx++, count = totalCount,
+                                    onClick = {
+                                        val modes = com.raulshma.jellyplay.core.model.ColorBlindMode.entries
+                                        val nextIndex = (modes.indexOf(preferences.colorBlindMode) + 1) % modes.size
+                                        viewModel.setColorBlindMode(modes[nextIndex])
+                                    },
+                                )
+                            }
+                            "hand_mode" -> {
+                                SettingListItem(
+                                    icon = Tabler.Outline.HandClick,
+                                    title = "Handedness",
+                                    subtitle = "Mirror navigation for left-handed use",
+                                    trailingText = preferences.handMode.displayName,
+                                    highlighted = highlightSettingId == "hand_mode",
+                                    index = currentIdx++, count = totalCount,
+                                    onClick = {
+                                        val next = if (preferences.handMode == com.raulshma.jellyplay.core.model.HandMode.RIGHT) {
+                                            com.raulshma.jellyplay.core.model.HandMode.LEFT
+                                        } else {
+                                            com.raulshma.jellyplay.core.model.HandMode.RIGHT
+                                        }
+                                        viewModel.setHandMode(next)
+                                    },
+                                )
+                            }
                         }
                     }
                 }
@@ -460,14 +613,16 @@ fun AppearanceSettingsScreen(
                         val unwatched = if (preferences.showUnwatchedBadge) "Unwatched badges" else null
                         val checkmarks = if (preferences.showWatchedCheckmark) "Watched checkmarks" else null
                         val hideWatched = if (preferences.hideWatchedItems) "Hide watched" else null
+                        val hideThumbnails = if (preferences.hideEpisodeThumbnails) "Hide thumbnails" else null
+                        val skipSpecials = if (preferences.skipSpecials) "Skip specials" else null
                         val shareOpt = if (preferences.showShareMediaOption) "Share button" else null
                         val ratingsOpt = if (preferences.showExternalRatings) "External ratings" else null
-                        listOfNotNull(unwatched, checkmarks, hideWatched, shareOpt, ratingsOpt).joinToString(", ").ifEmpty { "All badges/checkmarks hidden" }
+                        listOfNotNull(unwatched, checkmarks, hideWatched, hideThumbnails, skipSpecials, shareOpt, ratingsOpt).joinToString(", ").ifEmpty { "All badges/checkmarks hidden" }
                     },
                     modifier = Modifier.padding(vertical = 8.dp),
-                    initiallyExpanded = highlightSettingId in listOf("show_unwatched_badge", "show_watched_checkmark", "hide_watched_items", "show_share_media", "show_external_ratings"),
+                    initiallyExpanded = highlightSettingId in listOf("show_unwatched_badge", "show_watched_checkmark", "hide_watched_items", "hide_episode_thumbnails", "skip_specials", "show_share_media", "show_external_ratings"),
                 ) {
-                    val cardTotal = 5
+                    val cardTotal = 7
                     var cardIdx = 0
 
                     SettingToggleItem(
@@ -498,6 +653,36 @@ fun AppearanceSettingsScreen(
                         highlighted = highlightSettingId == "hide_watched_items",
                         index = cardIdx++, count = cardTotal,
                         onCheckedChange = { viewModel.setHideWatchedItems(it) },
+                    )
+
+                    SettingToggleItem(
+                        icon = Tabler.Outline.PhotoOff,
+                        title = "Hide Episode Thumbnails",
+                        subtitle = "Hide episode preview images to avoid spoilers",
+                        checked = preferences.hideEpisodeThumbnails,
+                        highlighted = highlightSettingId == "hide_episode_thumbnails",
+                        index = cardIdx++, count = cardTotal,
+                        onCheckedChange = { viewModel.setHideEpisodeThumbnails(it) },
+                    )
+
+                    SettingToggleItem(
+                        icon = Tabler.Outline.PlayerSkipForward,
+                        title = "Skip Special Episodes",
+                        subtitle = "Exclude specials/bonus episodes from episode lists",
+                        checked = preferences.skipSpecials,
+                        highlighted = highlightSettingId == "skip_specials",
+                        index = cardIdx++, count = cardTotal,
+                        onCheckedChange = { viewModel.setSkipSpecials(it) },
+                    )
+
+                    SettingToggleItem(
+                        icon = Tabler.Outline.DeviceMobileVibration,
+                        title = "Haptic Feedback",
+                        subtitle = "Enable vibration feedback for UI interactions",
+                        checked = preferences.hapticsEnabled,
+                        highlighted = highlightSettingId == "haptics_enabled",
+                        index = cardIdx++, count = cardTotal,
+                        onCheckedChange = { viewModel.setHapticsEnabled(it) },
                     )
 
                     SettingToggleItem(
@@ -838,5 +1023,26 @@ fun AppearanceSettingsScreen(
                 }
             }
         }
+    }
+
+    if (showResetDialog) {
+        AlertDialog(
+            onDismissRequest = { showResetDialog = false },
+            title = { Text("Reset Appearance Settings") },
+            text = { Text("This will reset all appearance settings to their default values. This action cannot be undone.") },
+            confirmButton = {
+                TextButton(onClick = {
+                    viewModel.resetCategory(PreferenceResetCategory.APPEARANCE)
+                    showResetDialog = false
+                }) {
+                    Text("Reset", color = MaterialTheme.colorScheme.error)
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showResetDialog = false }) {
+                    Text("Cancel")
+                }
+            },
+        )
     }
 }

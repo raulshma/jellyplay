@@ -77,6 +77,8 @@ data class DownloadEntity(
     @ColumnInfo(defaultValue = "0")
     val createdAt: Long = System.currentTimeMillis(),
     val errorMessage: String? = null,
+    @ColumnInfo(defaultValue = "0")
+    val priority: Int = 0,
 )
 
 @Entity(

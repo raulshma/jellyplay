@@ -48,6 +48,7 @@ import com.raulshma.jellyplay.core.designsystem.theme.StatusColors
 import com.raulshma.jellyplay.core.model.seerr.SeerrMediaStatus
 import com.raulshma.jellyplay.core.model.seerr.SeerrRequestItem
 import com.raulshma.jellyplay.core.model.seerr.SeerrRequestStatus
+import com.raulshma.jellyplay.core.ui.components.focusIndicator
 import com.raulshma.jellyplay.core.ui.image.MediaImage
 import kotlinx.coroutines.delay
 import java.time.LocalDateTime
@@ -231,7 +232,9 @@ fun RequestDetailBottomSheet(
 
             OutlinedButton(
                 onClick = { onNavigateToDetail(request.media.tmdbId, request.type) },
-                modifier = Modifier.fillMaxWidth(),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .focusIndicator(),
                 shape = ShapeCache.smooth12,
             ) {
                 Icon(
@@ -249,7 +252,9 @@ fun RequestDetailBottomSheet(
                         requestStatus == SeerrRequestStatus.FAILED -> {
                             Button(
                                 onClick = onRetry,
-                                modifier = Modifier.fillMaxWidth(),
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .focusIndicator(),
                                 shape = ShapeCache.smooth12,
                                 colors = ButtonDefaults.buttonColors(
                                     containerColor = StatusColors.info,
@@ -268,7 +273,9 @@ fun RequestDetailBottomSheet(
                             ) {
                                 Button(
                                     onClick = onApprove,
-                                    modifier = Modifier.weight(1f),
+                                    modifier = Modifier
+                                        .weight(1f)
+                                        .focusIndicator(),
                                     shape = ShapeCache.smooth12,
                                     colors = ButtonDefaults.buttonColors(
                                         containerColor = StatusColors.available,
@@ -281,7 +288,9 @@ fun RequestDetailBottomSheet(
                                 }
                                 Button(
                                     onClick = onDecline,
-                                    modifier = Modifier.weight(1f),
+                                    modifier = Modifier
+                                        .weight(1f)
+                                        .focusIndicator(),
                                     shape = ShapeCache.smooth12,
                                     colors = ButtonDefaults.buttonColors(
                                         containerColor = StatusColors.error,
@@ -306,7 +315,9 @@ fun RequestDetailBottomSheet(
                                     isConfirmingDelete = true
                                 }
                             },
-                            modifier = Modifier.fillMaxWidth(),
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .focusIndicator(),
                             shape = ShapeCache.smooth12,
                             colors = ButtonDefaults.outlinedButtonColors(
                                 contentColor = colorScheme.error,
@@ -328,7 +339,9 @@ fun RequestDetailBottomSheet(
                                         isConfirmingRemoveFromService = true
                                     }
                                 },
-                                modifier = Modifier.fillMaxWidth(),
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .focusIndicator(),
                                 shape = ShapeCache.smooth12,
                                 colors = ButtonDefaults.outlinedButtonColors(
                                     contentColor = colorScheme.error,

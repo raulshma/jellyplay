@@ -181,9 +181,7 @@ fun ModeSwitch(
         label = "mode_switch_progress"
     )
 
-    val isLightTheme = MaterialTheme.colorScheme.background.let { bg ->
-        (bg.red * 0.299f + bg.green * 0.587f + bg.blue * 0.114f) > 0.5f
-    }
+    val isLightTheme = com.raulshma.jellyplay.core.designsystem.theme.LocalIsLightTheme.current
 
     val primaryColor = MaterialTheme.colorScheme.primary
     val trackBgColor = if (isLightTheme) {
@@ -228,7 +226,7 @@ fun ModeSwitch(
             Icon(
                 imageVector = Tabler.Outline.Music,
                 contentDescription = null,
-                tint = MaterialTheme.colorScheme.onSurface.copy(alpha = if (isLightTheme) 0.45f else 0.25f),
+                tint = MaterialTheme.colorScheme.onSurfaceVariant,
                 modifier = Modifier
                     .align(Alignment.CenterStart)
                     .padding(start = 10.dp)
@@ -237,7 +235,7 @@ fun ModeSwitch(
             Icon(
                 imageVector = Tabler.Outline.Movie,
                 contentDescription = null,
-                tint = MaterialTheme.colorScheme.onSurface.copy(alpha = if (isLightTheme) 0.45f else 0.25f),
+                tint = MaterialTheme.colorScheme.onSurfaceVariant,
                 modifier = Modifier
                     .align(Alignment.CenterEnd)
                     .padding(end = 10.dp)
@@ -282,7 +280,7 @@ fun ModeSwitch(
         ) {
             MorphingMusicVideoIcon(
                 progress = progress,
-                color = Color.White,
+                color = MaterialTheme.colorScheme.onPrimary,
                 modifier = Modifier.size(19.dp)
             )
         }

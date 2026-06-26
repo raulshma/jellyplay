@@ -5,6 +5,7 @@ import com.raulshma.jellyplay.core.database.dao.ServerDao
 import com.raulshma.jellyplay.core.database.dao.UserDao
 import com.raulshma.jellyplay.core.database.entity.ServerEntity
 import com.raulshma.jellyplay.core.database.entity.UserEntity
+import com.raulshma.jellyplay.core.database.crypto.TokenCipher
 import com.raulshma.jellyplay.core.datastore.UserPreferencesStore
 import com.raulshma.jellyplay.core.model.QuickConnectInfo
 import com.raulshma.jellyplay.core.model.QuickConnectState
@@ -38,6 +39,7 @@ class AuthRepositoryImpl @Inject constructor(
     private val serverDao: ServerDao,
     private val userDao: UserDao,
     private val preferencesStore: UserPreferencesStore,
+    private val tokenCipher: TokenCipher,
 ) : AuthRepository {
 
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
@@ -267,7 +269,7 @@ class AuthRepositoryImpl @Inject constructor(
                 preferencesStore.setActiveUser("")
                 return@runCatching
             }
-            val token = userEntity.accessToken
+            val token = tokenCipher.decrypt(userEntity.accessToken)
             if (token != null) {
                 apiClient.setUser(
                     UserInfo(
@@ -302,6 +304,20 @@ class AuthRepositoryImpl @Inject constructor(
         preferencesStore.clearSession()
     }
 
+    override suspend fun revokeServerSession() {
+        val currentUserId = apiClient.currentUser.first()?.id
+        try {
+            apiClient.revokeServerSession()
+        } catch (_: Exception) {
+            // Even if the server call fails, we should still clear local state
+        }
+        if (currentUserId != null) {
+            removeUser(currentUserId)
+        }
+        apiClient.disconnect()
+        preferencesStore.clearSession()
+    }
+
     override suspend fun switchUser(userId: String): Result<Unit> = runCatching {
         val userEntity = userDao.getUserById(userId) ?: return Result.success(Unit)
         val server = serverDao.getServerById(userEntity.serverId) ?: return Result.success(Unit)
@@ -323,7 +339,20 @@ class AuthRepositoryImpl @Inject constructor(
     }
 
     override suspend fun removeUser(userId: String) {
-        userDao.deleteUserById(userId)
+        database.withTransaction {
+            userDao.deleteUserById(userId)
+            val servers = serverDao.getAllServers().first()
+            servers.forEach { server ->
+                if (server.userId == userId) {
+                    serverDao.updateServer(
+                        server.copy(
+                            userId = null,
+                            accessToken = null
+                        )
+                    )
+                }
+            }
+        }
         val currentUserId = apiClient.currentUser.first()?.id
         if (currentUserId == userId) {
             apiClient.disconnect()
@@ -351,7 +380,7 @@ class AuthRepositoryImpl @Inject constructor(
             userId = user.id,
             serverId = server.id,
             name = user.name.ifBlank { fallbackUsername },
-            accessToken = user.accessToken,
+            accessToken = tokenCipher.encrypt(user.accessToken) ?: "",
             primaryImageTag = user.primaryImageTag,
             maxParentalAgeRating = user.maxParentalAgeRating,
             isAdmin = user.isAdmin,
@@ -366,7 +395,7 @@ class AuthRepositoryImpl @Inject constructor(
                     name = server.name,
                     address = server.address,
                     userId = user.id,
-                    accessToken = user.accessToken,
+                    accessToken = tokenCipher.encrypt(user.accessToken),
                     lastConnected = System.currentTimeMillis(),
                     alternateAddresses = preservedAlternateAddresses,
                 )
@@ -381,7 +410,7 @@ class AuthRepositoryImpl @Inject constructor(
         name = name,
         address = address,
         userId = userId,
-        accessToken = accessToken,
+        accessToken = tokenCipher.decrypt(accessToken),
         isConnected = accessToken != null,
         alternateAddresses = alternateAddresses?.let {
             runCatching { json.decodeFromString<List<String>>(it) }.getOrDefault(emptyList())
@@ -392,7 +421,7 @@ class AuthRepositoryImpl @Inject constructor(
         id = userId,
         name = name,
         serverAddress = serverAddress,
-        accessToken = accessToken,
+        accessToken = tokenCipher.decrypt(accessToken) ?: "",
         serverId = serverId,
         isAdmin = isAdmin,
         maxParentalAgeRating = maxParentalAgeRating,

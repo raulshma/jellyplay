@@ -11,6 +11,7 @@ import com.raulshma.jellyplay.core.model.MediaType
 import com.raulshma.jellyplay.core.model.PinnedHomeSection
 import com.raulshma.jellyplay.core.model.Playlist
 import com.raulshma.jellyplay.core.model.PlaylistItem
+import com.raulshma.jellyplay.core.model.RecommendationResult
 import com.raulshma.jellyplay.core.model.SearchResult
 import com.raulshma.jellyplay.core.model.Studio
 
@@ -21,6 +22,7 @@ interface LibraryApiClient {
         nextUpRewatching: Boolean = false,
         nextUpMaxDays: Int = 0,
         nextUpExcludedSeriesIds: Set<String> = emptySet(),
+        hiddenCwItemIds: Set<String> = emptySet(),
         pinnedSections: List<PinnedHomeSection> = emptyList(),
     ): Result<List<HomeSection>>
 
@@ -34,10 +36,13 @@ interface LibraryApiClient {
         mediaTypes: List<MediaType>? = null,
         genres: List<String>? = null,
         years: List<Int>? = null,
+        studioIds: List<String>? = null,
         sortBy: String = "SortName",
         sortOrder: String = "Ascending",
         startIndex: Int = 0,
         limit: Int = 50,
+        searchTerm: String? = null,
+        tags: List<String>? = null,
     ): Result<SearchResult>
 
     suspend fun getMediaDetail(itemId: String): Result<MediaDetail>
@@ -86,7 +91,7 @@ interface LibraryApiClient {
     suspend fun getAlbumTracks(albumId: String): Result<List<MediaItem>>
     suspend fun getSimilarItems(itemId: String, limit: Int = 12): Result<List<MediaItem>>
     suspend fun getInstantMix(itemId: String, limit: Int = 100): Result<List<MediaItem>>
-    suspend fun getRecommendations(limit: Int = 20): Result<List<MediaItem>>
+    suspend fun getRecommendations(limit: Int = 20): Result<RecommendationResult>
     suspend fun getItemsByPerson(personId: String, limit: Int = 50): Result<List<MediaItem>>
     suspend fun getThemeSongs(itemId: String): Result<List<MediaItem>>
     suspend fun getSeasons(seriesId: String): Result<List<MediaItem>>

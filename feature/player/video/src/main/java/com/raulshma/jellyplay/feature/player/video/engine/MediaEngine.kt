@@ -128,10 +128,10 @@ data class EngineVideoStats(
 )
 
 interface MediaEngine : PlayerLifecycleCallbacks, com.raulshma.jellyplay.core.data.remote.RemotePlayableEngine {
-    
+
     // 1. Initialization
     fun load(request: PlaybackRequest)
-    fun release()
+    override fun release()
 
     // 2. Core Controls
     override fun play()

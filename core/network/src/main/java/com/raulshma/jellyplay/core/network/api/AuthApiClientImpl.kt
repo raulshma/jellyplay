@@ -12,6 +12,7 @@ import kotlinx.coroutines.withContext
 import org.jellyfin.sdk.model.api.AuthenticateUserByName
 import org.jellyfin.sdk.model.api.QuickConnectDto
 import org.jellyfin.sdk.model.serializer.toUUID
+import org.jellyfin.sdk.api.client.HttpMethod
 import org.jellyfin.sdk.api.client.extensions.*
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -207,6 +208,13 @@ class AuthApiClientImpl @Inject constructor(
 
     override suspend fun postCapabilities(): Result<Unit> = engine.apiResultWithRetry {
         engine.requireApi().sessionApi.postFullCapabilities(data = JellyfinApiEngine.CACHED_CAPABILITIES)
+    }
+
+    override suspend fun revokeServerSession(): Result<Unit> = engine.apiResultWithRetry {
+        engine.requireApi().request(
+            method = HttpMethod.POST,
+            pathTemplate = "Sessions/Logout",
+        )
     }
 
     override suspend fun authorizeQuickConnect(code: String): Result<Boolean> = engine.apiResultWithRetry {

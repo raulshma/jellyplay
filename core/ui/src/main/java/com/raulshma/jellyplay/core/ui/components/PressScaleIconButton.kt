@@ -13,10 +13,11 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.scale
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import com.raulshma.jellyplay.core.ui.animation.AnimationTokens
+import com.raulshma.jellyplay.core.ui.tv.rememberTvFocusState
+import com.raulshma.jellyplay.core.ui.tv.tvFocusIndicator
 
 @OptIn(ExperimentalMaterial3ExpressiveApi::class)
 @Composable
@@ -37,12 +38,15 @@ fun PressScaleIconButton(
         animationSpec = motionScheme.fastSpatialSpec(),
         label = "pressScaleIconButton",
     )
+    val focusState = rememberTvFocusState(focusedScale = 1.12f)
 
     IconButton(
         onClick = onClick,
         modifier = modifier
             .size(size)
-            .scale(scale),
+            .scale(scale)
+            .then(focusState.focusModifier)
+            .tvFocusIndicator(focusState, CircleShape),
         enabled = enabled,
         shapes = shapes,
         colors = IconButtonDefaults.iconButtonColors(

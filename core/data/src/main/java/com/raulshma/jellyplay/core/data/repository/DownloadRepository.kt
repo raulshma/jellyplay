@@ -84,4 +84,6 @@ interface DownloadRepository {
     suspend fun loadLocalSegments(itemId: String): List<com.raulshma.jellyplay.core.model.MediaSegment>?
 
     fun enqueueDownload(downloadId: String)
+
+    suspend fun setDownloadPriority(id: String, priority: Int): Result<Unit>
 }

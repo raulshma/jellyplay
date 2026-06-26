@@ -61,6 +61,8 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
@@ -71,11 +73,16 @@ import com.raulshma.jellyplay.core.ui.adaptive.contentPadding
 import com.raulshma.jellyplay.core.ui.adaptive.itemSpacing
 import com.raulshma.jellyplay.core.ui.components.HeaderStatusIndicator
 import com.raulshma.jellyplay.core.ui.components.JellyPlayScreenScaffold
+import com.raulshma.jellyplay.core.ui.components.focusIndicator
 import com.raulshma.jellyplay.core.ui.components.LocalNetworkStatus
 import com.raulshma.jellyplay.core.ui.components.ScreenEmptyState
 import com.raulshma.jellyplay.core.ui.components.TooltipIconButton
 import com.raulshma.jellyplay.core.ui.components.resolveHeaderStatus
 import com.raulshma.jellyplay.core.ui.tv.LocalTvMode
+import com.raulshma.jellyplay.core.ui.tv.TvGrabInitialFocus
+import com.raulshma.jellyplay.core.ui.tv.rememberTvFocusState
+import com.raulshma.jellyplay.core.ui.tv.tvFocusIndicator
+import com.raulshma.jellyplay.core.ui.tv.tvFocusRestorer
 import kotlinx.coroutines.delay
 import com.raulshma.jellyplay.core.model.SyncPlayRepeatMode
 import com.raulshma.jellyplay.core.model.SyncPlayShuffleMode
@@ -89,12 +96,13 @@ fun SyncPlayScreen(
     onPlayItem: (String, Long) -> Unit,
     viewModel: SyncPlayViewModel = hiltViewModel(),
 ) {
-    val groups = viewModel.groups
-    val currentGroup = viewModel.currentGroup
-    val isLoading = viewModel.isLoading
-    val error = viewModel.error
-    val isInGroup = viewModel.isInGroup
-    val showCreateDialog = viewModel.showCreateDialog
+    val uiState by viewModel.uiState.collectAsStateWithLifecycle()
+    val groups = uiState.groups
+    val currentGroup = uiState.currentGroup
+    val isLoading = uiState.isLoading
+    val error = uiState.error
+    val isInGroup = uiState.isInGroup
+    val showCreateDialog = uiState.showCreateDialog
     val navigateToPlayer by viewModel.navigateToPlayer.collectAsStateWithLifecycle()
     val networkStatus by LocalNetworkStatus.current.collectAsStateWithLifecycle()
     val adaptiveInfo = LocalAdaptiveInfo.current
@@ -109,6 +117,16 @@ fun SyncPlayScreen(
         networkStatus = networkStatus,
     )
     val navOffsetPx = com.raulshma.jellyplay.core.ui.components.LocalFloatingNavOffset.current
+
+    // TV focus-on-launch: focus the first group card or the create-group FAB once data arrives so
+    // D-pad input lands on content, not the navigation drawer.
+    val listFocusRequester = remember { FocusRequester() }
+    val createGroupFocusState = rememberTvFocusState(focusedScale = 1.05f)
+    TvGrabInitialFocus(
+        focusRequester = listFocusRequester,
+        itemCount = if (error != null) 0 else groups.size.coerceAtLeast(1),
+        tag = "syncplay_init",
+    )
 
     LaunchedEffect(Unit) {
         viewModel.loadGroups()
@@ -168,7 +186,7 @@ fun SyncPlayScreen(
                     ) {
                         Text(error, color = MaterialTheme.colorScheme.error)
                         Spacer(Modifier.height(8.dp))
-                        OutlinedButton(onClick = { viewModel.loadGroups() }) {
+                        OutlinedButton(onClick = { viewModel.loadGroups() }, modifier = Modifier.focusIndicator()) {
                             Text("Retry")
                         }
                     }
@@ -205,7 +223,10 @@ fun SyncPlayScreen(
                         )
                     } else {
                         LazyColumn(
-                            modifier = Modifier.fillMaxSize(),
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .tvFocusRestorer()
+                                .focusRequester(listFocusRequester),
                             contentPadding = PaddingValues(contentPad),
                             verticalArrangement = Arrangement.spacedBy(spacing),
                         ) {
@@ -256,6 +277,10 @@ fun SyncPlayScreen(
             ) {
                 ExtendedFloatingActionButton(
                     onClick = { viewModel.updateShowCreateDialog(true) },
+                    shape = ShapeCache.smooth16,
+                    modifier = Modifier
+                        .then(createGroupFocusState.focusModifier)
+                        .tvFocusIndicator(createGroupFocusState, ShapeCache.smooth16),
                     icon = { Icon(Tabler.Outline.Plus, contentDescription = "Create group") },
                     text = { Text("Create group") },
                 )
@@ -279,7 +304,9 @@ private fun SyncPlayGroupCard(
     Card(
         modifier = Modifier
             .fillMaxWidth()
+            .focusIndicator(ShapeCache.smooth12)
             .clickable(onClick = onJoin),
+        shape = ShapeCache.smooth12,
         colors = CardDefaults.cardColors(
             containerColor = MaterialTheme.colorScheme.surfaceContainer,
         ),
@@ -323,7 +350,7 @@ private fun SyncPlayGroupCard(
                     )
                 }
             }
-            FilledTonalButton(onClick = onJoin) {
+            FilledTonalButton(onClick = onJoin, modifier = Modifier.focusIndicator()) {
                 Text("Join")
             }
         }
@@ -404,7 +431,7 @@ private fun ActiveGroupView(
                     horizontalArrangement = Arrangement.spacedBy(12.dp),
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
-                    FilledTonalButton(onClick = onTogglePlayback) {
+                    FilledTonalButton(onClick = onTogglePlayback, modifier = Modifier.focusIndicator()) {
                         Icon(
                             if (groupInfo.isPlaying) Tabler.Outline.PlayerPause else Tabler.Outline.PlayerPlay,
                             contentDescription = if (groupInfo.isPlaying) "Pause" else "Play",
@@ -412,10 +439,10 @@ private fun ActiveGroupView(
                         Spacer(Modifier.width(4.dp))
                         Text(if (groupInfo.isPlaying) "Pause" else "Play")
                     }
-                    FilledTonalButton(onClick = onStop) {
+                    FilledTonalButton(onClick = onStop, modifier = Modifier.focusIndicator()) {
                         Icon(Tabler.Outline.PlayerStop, contentDescription = "Stop")
                     }
-                    OutlinedButton(onClick = onLeave) {
+                    OutlinedButton(onClick = onLeave, modifier = Modifier.focusIndicator()) {
                         Icon(Tabler.Outline.Logout, contentDescription = "Leave")
                         Spacer(Modifier.width(4.dp))
                         Text("Leave")
@@ -438,7 +465,7 @@ private fun ActiveGroupView(
         ) {
             var repeatExpanded by remember { mutableStateOf(false) }
             Box {
-                FilledTonalButton(onClick = { repeatExpanded = true }) {
+                FilledTonalButton(onClick = { repeatExpanded = true }, modifier = Modifier.focusIndicator()) {
                     Icon(Tabler.Outline.Repeat, contentDescription = null, modifier = Modifier.size(16.dp))
                     Spacer(Modifier.width(4.dp))
                     Text(groupInfo.repeatMode.name, style = MaterialTheme.typography.labelSmall)
@@ -461,7 +488,7 @@ private fun ActiveGroupView(
 
             var shuffleExpanded by remember { mutableStateOf(false) }
             Box {
-                FilledTonalButton(onClick = { shuffleExpanded = true }) {
+                FilledTonalButton(onClick = { shuffleExpanded = true }, modifier = Modifier.focusIndicator()) {
                     Icon(Tabler.Outline.ArrowsShuffle, contentDescription = null, modifier = Modifier.size(16.dp))
                     Spacer(Modifier.width(4.dp))
                     Text(groupInfo.shuffleMode.name, style = MaterialTheme.typography.labelSmall)
@@ -562,12 +589,13 @@ private fun CreateGroupDialog(
             FilledTonalButton(
                 onClick = { if (groupName.isNotBlank()) onCreate(groupName) },
                 enabled = groupName.isNotBlank(),
+                modifier = Modifier.focusIndicator(),
             ) {
                 Text("Create")
             }
         },
         dismissButton = {
-            OutlinedButton(onClick = onDismiss) {
+            OutlinedButton(onClick = onDismiss, modifier = Modifier.focusIndicator()) {
                 Text("Cancel")
             }
         },

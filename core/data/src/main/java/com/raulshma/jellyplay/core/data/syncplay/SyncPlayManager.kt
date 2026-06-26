@@ -12,6 +12,7 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -72,12 +73,18 @@ class SyncPlayManager @Inject constructor(
         }
         keepAliveJob?.cancel()
         keepAliveJob = scope.launch {
-            while (true) {
-                delay(60_000)
-                try {
-                    webSocketClient.sendKeepAlive()
-                } catch (_: Exception) {
+            try {
+                while (true) {
+                    delay(60_000)
+                    try {
+                        webSocketClient.sendKeepAlive()
+                    } catch (ce: CancellationException) {
+                        throw ce
+                    } catch (_: Exception) {
+                    }
                 }
+            } catch (_: CancellationException) {
+                // Expected when leaveGroup()/reset() cancels the job.
             }
         }
     }
@@ -137,6 +144,8 @@ class SyncPlayManager @Inject constructor(
                     _events.tryEmit(event)
                 }
             }
+        } catch (ce: CancellationException) {
+            throw ce
         } catch (e: Exception) {
             Log.w(TAG, "Failed to handle SyncPlay event", e)
         }
@@ -208,6 +217,8 @@ class SyncPlayManager @Inject constructor(
             startPingReporting()
             refreshGroupInfo()
             Result.success(Unit)
+        } catch (ce: CancellationException) {
+            throw ce
         } catch (e: Exception) {
             Log.e(TAG, "Failed to join SyncPlay group", e)
             Result.failure(e)
@@ -236,6 +247,8 @@ class SyncPlayManager @Inject constructor(
         Log.d(TAG, "Leaving SyncPlay group")
         val apiResult = try {
             apiClient.leaveSyncPlayGroup()
+        } catch (ce: CancellationException) {
+            throw ce
         } catch (e: Exception) {
             Log.w(TAG, "leaveSyncPlayGroup API failed", e)
             Result.failure(e)
@@ -262,6 +275,8 @@ class SyncPlayManager @Inject constructor(
             apiClient.postCapabilities()
             apiClient.createSyncPlayGroup(groupName)
             Result.success(Unit)
+        } catch (ce: CancellationException) {
+            throw ce
         } catch (e: Exception) {
             Result.failure(e)
         }
@@ -277,6 +292,8 @@ class SyncPlayManager @Inject constructor(
                         try {
                             val ping = timeSyncManager.getPingMs()
                             apiClient.syncPlayPing(ping)
+                        } catch (ce: CancellationException) {
+                            throw ce
                         } catch (e: Exception) {
                             Log.w(TAG, "Failed to report ping", e)
                         }
@@ -307,6 +324,8 @@ class SyncPlayManager @Inject constructor(
             )
             cachedGroup.set(newGroup)
             _currentGroup.value = newGroup
+        } catch (ce: CancellationException) {
+            throw ce
         } catch (_: Exception) {}
     }
 

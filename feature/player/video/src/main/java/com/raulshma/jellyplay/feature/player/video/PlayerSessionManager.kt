@@ -82,69 +82,124 @@ class PlayerSessionManager(
         }
     }
 
+    /**
+     * Legacy entry point — preserved for binary compatibility with existing
+     * call-sites ([VideoPlayerViewModel.initializeInternal],
+     * [VideoPlayerViewModel.loadCinemaIntro]). Delegates to
+     * [loadMedia] with a [PlaybackSource.Auto].
+     */
     suspend fun loadMedia(itemId: String, mediaSourceId: String?, startPositionTicks: Long) {
+        loadMedia(PlaybackSource.Auto(itemId, mediaSourceId), startPositionTicks)
+    }
+
+    /**
+     * Unified media loader. Dispatches to [loadOffline] or [loadOnline] based
+     * on the resolved [PlaybackSource]. The [PlaybackSource.Auto] variant is
+     * resolved via [PlaybackSource.Auto.resolve] using the downloads DB,
+     * matching the historical auto-detection behaviour exactly.
+     */
+    suspend fun loadMedia(source: PlaybackSource, startPositionTicks: Long) {
+        val itemId = source.itemId
         _sessionState.update { it.copy(currentItemId = itemId, isReady = false) }
 
-        val localDownload = downloadRepository.getDownloadByMediaItemId(itemId)
-        val localFile = localDownload?.let {
-            java.io.File(it.downloadPath).takeIf { f -> f.exists() }
+        // The download lookup is needed both for Auto resolution and for
+        // metadata enrichment during offline playback, so it is performed
+        // unconditionally — identical to the pre-refactor behaviour.
+        val download = downloadRepository.getDownloadByMediaItemId(itemId)
+
+        val resolved = when (source) {
+            is PlaybackSource.Auto -> source.resolve(download)
+            is PlaybackSource.Offline -> source
+            is PlaybackSource.Online -> source
         }
 
-        if (localDownload != null && localFile != null &&
-            localDownload.status == com.raulshma.jellyplay.core.model.DownloadStatus.COMPLETED
-        ) {
-            val offlineItem = offlineRepository.getOfflineItem(itemId)
-            val title = offlineItem?.name ?: localDownload.name
-            val subtitle = offlineItem?.seriesName ?: offlineItem?.overview?.take(60) ?: ""
-            val url = Uri.fromFile(localFile).toString()
-
-            _sessionState.update {
-                it.copy(
-                    title = title,
-                    subtitle = subtitle,
-                    playMethodString = "Offline",
-                    playMethod = PlayMethod.DIRECT_PLAY,
-                    streamUrl = url,
-                )
-            }
-
-            val prefs = preferencesStore.preferences.first()
-            val playerType = prefs.preferredPlayer
-
-            if (playerType == PlayerType.EXTERNAL) {
-                _sessionState.update { it.copy(isReady = true) }
-                return
-            }
-
-            val detail = com.raulshma.jellyplay.core.model.MediaDetail(
-                item = com.raulshma.jellyplay.core.model.MediaItem(
-                    id = itemId,
-                    name = title,
-                    mediaType = localDownload.mediaType,
-                    overview = offlineItem?.overview,
-                    seriesName = offlineItem?.seriesName,
-                    runTimeTicks = offlineItem?.runTimeTicks,
-                ),
-                mediaSources = emptyList(),
-                chapters = emptyList(),
+        when (resolved) {
+            is PlaybackSource.Offline -> loadOffline(
+                itemId = itemId,
+                download = download,
+                downloadPath = resolved.downloadPath,
+                startPositionTicks = startPositionTicks,
             )
+            is PlaybackSource.Online -> loadOnline(
+                itemId = itemId,
+                mediaSourceId = resolved.mediaSourceId,
+                startPositionTicks = startPositionTicks,
+            )
+            is PlaybackSource.Auto -> error("PlaybackSource.Auto must be resolved before dispatch")
+        }
+    }
 
-            initializeEngine(playerType, detail, null, url, startPositionTicks, prefs)
-
-            // Attach external subtitles bundled with the download (offline subs).
-            loadOfflineSubtitles(localDownload.downloadPath)
-
-            val trickplayDir = com.raulshma.jellyplay.feature.player.video.trickplay.OfflineTrickplayHelper
-                .getLocalTrickplayDir(localDownload.downloadPath)
-
-            _sessionState.update { it.copy(
-                isReady = true,
-                mediaDetail = detail,
-                offlineTrickplayDir = trickplayDir,
-            ) }
+    private suspend fun loadOffline(
+        itemId: String,
+        download: com.raulshma.jellyplay.core.model.DownloadItem?,
+        downloadPath: String,
+        startPositionTicks: Long,
+    ) {
+        val localFile = java.io.File(downloadPath).takeIf { it.exists() }
+        if (localFile == null) {
+            // The file vanished after resolution — surface an error rather
+            // than silently falling back online (callers that want fallback
+            // should use [PlaybackSource.Auto]).
+            _sessionState.update { it.copy(title = "Error: offline file missing", isReady = false) }
             return
         }
 
+        val offlineItem = offlineRepository.getOfflineItem(itemId)
+        val title = offlineItem?.name ?: download?.name ?: itemId
+        val subtitle = offlineItem?.seriesName ?: offlineItem?.overview?.take(60) ?: ""
+        val url = Uri.fromFile(localFile).toString()
+
+        _sessionState.update {
+            it.copy(
+                title = title,
+                subtitle = subtitle,
+                playMethodString = "Offline",
+                playMethod = PlayMethod.DIRECT_PLAY,
+                streamUrl = url,
+            )
+        }
+
+        val prefs = preferencesStore.preferences.first()
+        val playerType = prefs.preferredPlayer
+
+        if (playerType == PlayerType.EXTERNAL) {
+            _sessionState.update { it.copy(isReady = true) }
+            return
+        }
+
+        val detail = com.raulshma.jellyplay.core.model.MediaDetail(
+            item = com.raulshma.jellyplay.core.model.MediaItem(
+                id = itemId,
+                name = title,
+                mediaType = download?.mediaType ?: com.raulshma.jellyplay.core.model.MediaType.UNKNOWN,
+                overview = offlineItem?.overview,
+                seriesName = offlineItem?.seriesName,
+                runTimeTicks = offlineItem?.runTimeTicks,
+            ),
+            mediaSources = emptyList(),
+            chapters = emptyList(),
+        )
+
+        initializeEngine(playerType, detail, null, url, startPositionTicks, prefs)
+
+        // Attach external subtitles bundled with the download (offline subs).
+        loadOfflineSubtitles(downloadPath)
+
+        val trickplayDir = com.raulshma.jellyplay.feature.player.video.trickplay.OfflineTrickplayHelper
+            .getLocalTrickplayDir(downloadPath)
+
+        _sessionState.update { it.copy(
+            isReady = true,
+            mediaDetail = detail,
+            offlineTrickplayDir = trickplayDir,
+        ) }
+    }
+
+    private suspend fun loadOnline(
+        itemId: String,
+        mediaSourceId: String?,
+        startPositionTicks: Long,
+    ) {
         val detailResult = mediaRepository.getMediaDetail(itemId)
         val detail = detailResult.getOrElse {
             _sessionState.update { it.copy(title = "Error loading media") }
@@ -184,7 +239,7 @@ class PlayerSessionManager(
 
         val prefs = preferencesStore.preferences.first()
         val playerType = prefs.preferredPlayer
-        
+
         if (playerType == PlayerType.EXTERNAL) {
             _sessionState.update { it.copy(isReady = true, streamUrl = url) }
             return

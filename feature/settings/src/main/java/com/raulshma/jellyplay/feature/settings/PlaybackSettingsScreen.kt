@@ -460,6 +460,14 @@ fun PlaybackSettingsScreen(
                             index = idx, count = total,
                             onCheckedChange = { viewModel.setPauseOnAudioFocusLoss(it) },
                         )
+                        SettingToggleItem(
+                            icon = Tabler.Outline.Phone,
+                            title = "Duck on Phone Call",
+                            subtitle = if (preferences.duckOnTransientFocusLoss) "Lower volume + rewind on phone call" else "No action on phone call",
+                            checked = preferences.duckOnTransientFocusLoss,
+                            index = idx++, count = total,
+                            onCheckedChange = { viewModel.setDuckOnTransientFocusLoss(it) },
+                        )
                     }
                 }
             }

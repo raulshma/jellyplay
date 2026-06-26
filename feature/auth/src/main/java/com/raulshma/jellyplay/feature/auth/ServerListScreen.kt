@@ -14,6 +14,8 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Card
 import androidx.compose.material3.ElevatedCard
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -39,6 +41,8 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.raulshma.jellyplay.core.model.ServerInfo
@@ -46,9 +50,14 @@ import com.raulshma.jellyplay.core.ui.adaptive.LocalAdaptiveInfo
 import com.raulshma.jellyplay.core.ui.adaptive.contentPadding
 import com.raulshma.jellyplay.core.ui.adaptive.itemSpacing
 import com.raulshma.jellyplay.core.ui.components.ScreenEmptyState
+import com.raulshma.jellyplay.core.ui.components.focusIndicator
 import com.raulshma.jellyplay.core.ui.components.ScreenLoadingState
 import com.raulshma.jellyplay.core.ui.components.rememberScreenBackgroundColor
 import com.raulshma.jellyplay.core.ui.tv.LocalTvMode
+import com.raulshma.jellyplay.core.ui.tv.rememberTvFocusState
+import com.raulshma.jellyplay.core.ui.tv.tryRequestFocus
+import com.raulshma.jellyplay.core.ui.tv.tvFocusIndicator
+import com.raulshma.jellyplay.core.ui.tv.tvFocusRestorer
 import com.composables.icons.tabler.Tabler
 import com.composables.icons.tabler.outline.*
 
@@ -76,8 +85,10 @@ fun ServerListScreen(
             )
         },
         floatingActionButton = {
+            val fabFocusState = rememberTvFocusState(focusedScale = 1.05f)
             ExtendedFloatingActionButton(
                 onClick = onAddServer,
+                modifier = Modifier.then(fabFocusState.focusModifier).tvFocusIndicator(fabFocusState, ShapeCache.smooth16),
                 icon = { Icon(Tabler.Outline.Plus, contentDescription = null) },
                 text = { Text("Add Server") },
             )
@@ -103,8 +114,12 @@ fun ServerListScreen(
                 modifier = Modifier.padding(padding),
             )
         } else {
+            val firstItemFocusRequester = remember { FocusRequester() }
+            LaunchedEffect(Unit) {
+                if (isTv) firstItemFocusRequester.tryRequestFocus("server_first")
+            }
             LazyColumn(
-                modifier = Modifier.padding(padding),
+                modifier = Modifier.padding(padding).tvFocusRestorer(),
                 contentPadding = PaddingValues(contentPad),
                 verticalArrangement = Arrangement.spacedBy(spacing),
             ) {
@@ -122,6 +137,7 @@ fun ServerListScreen(
                     ) {
                         ServerItem(
                             server = server,
+                            firstFocusModifier = if (index == 0) Modifier.focusRequester(firstItemFocusRequester) else Modifier,
                             onClick = { onServerSelected(server) },
                             onDelete = { viewModel.removeServer(server.id) },
                         )
@@ -137,6 +153,7 @@ private fun ServerItem(
     server: ServerInfo,
     onClick: () -> Unit,
     onDelete: () -> Unit,
+    firstFocusModifier: Modifier = Modifier,
 ) {
     val isSynthwave = LocalIsSynthwave.current
     val isSoothing = LocalIsSoothingTheme.current
@@ -161,10 +178,19 @@ private fun ServerItem(
         else -> null
     }
 
+    val shape = when {
+        isSynthwave -> RoundedCornerShape(0.dp)
+        isSoothing -> ShapeCache.smooth16
+        else -> ShapeCache.smooth12
+    }
+
     Card(
         modifier = Modifier
             .fillMaxWidth()
+            .then(firstFocusModifier)
+            .focusIndicator(shape)
             .clickable(onClick = onClick),
+        shape = shape,
         border = border,
     ) {
         Row(
@@ -185,7 +211,11 @@ private fun ServerItem(
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
             }
-            IconButton(onClick = onDelete) {
+            val deleteFocusState = rememberTvFocusState()
+            IconButton(
+                onClick = onDelete,
+                modifier = Modifier.then(deleteFocusState.focusModifier).tvFocusIndicator(deleteFocusState, CircleShape),
+            ) {
                 Icon(
                     Tabler.Outline.Trash,
                     contentDescription = "Remove server",

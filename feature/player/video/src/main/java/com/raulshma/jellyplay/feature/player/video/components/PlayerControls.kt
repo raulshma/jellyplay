@@ -155,6 +155,8 @@ internal fun PlayerControls(
     onEpisodesClick: () -> Unit = {},
     onSyncPlayClick: () -> Unit = {},
     onPipClick: () -> Unit = {},
+    onMuteClick: () -> Unit = {},
+    isMuted: Boolean = false,
     isInSyncPlaySession: Boolean = false,
     syncPlayGroupName: String? = null,
     syncPlayParticipantCount: Int = 0,
@@ -321,7 +323,7 @@ internal fun PlayerControls(
                                 Text(
                                     text = "•",
                                     style = MaterialTheme.typography.bodyMedium,
-                                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f),
+                                    color = MaterialTheme.colorScheme.outlineVariant,
                                 )
                             }
                             if (showEndsAt) {
@@ -370,9 +372,13 @@ internal fun PlayerControls(
                         } else Modifier
                     ),
             ) {
+                val tvRewindFocusState = rememberTvFocusState(focusedScale = 1.08f)
                 FilledTonalIconButton(
                     onClick = onSeekBack,
-                    modifier = Modifier.size(IconButtonDefaults.mediumContainerSize()),
+                    modifier = Modifier
+                        .size(IconButtonDefaults.mediumContainerSize())
+                        .then(tvRewindFocusState.focusModifier)
+                        .tvFocusIndicator(tvRewindFocusState, IconButtonDefaults.largeRoundShape),
                     shape = IconButtonDefaults.largeRoundShape,
                     colors = IconButtonDefaults.filledTonalIconButtonColors(
                         containerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
@@ -385,10 +391,13 @@ internal fun PlayerControls(
                     )
                 }
 
+                val tvPlayPauseFocusState = rememberTvFocusState(focusedScale = 1.08f)
                 FilledIconButton(
                     onClick = onPlayPause,
                     modifier = Modifier
                         .size(80.dp)
+                        .then(tvPlayPauseFocusState.focusModifier)
+                        .tvFocusIndicator(tvPlayPauseFocusState, CircleShape)
                         .ifElse(isTv, Modifier.focusRequester(tvPlayPauseFocusRequester)),
                     shape = CircleShape,
                     colors = IconButtonDefaults.filledIconButtonColors(
@@ -403,9 +412,13 @@ internal fun PlayerControls(
                     )
                 }
 
+                val tvForwardFocusState = rememberTvFocusState(focusedScale = 1.08f)
                 FilledTonalIconButton(
                     onClick = onSeekForward,
-                    modifier = Modifier.size(IconButtonDefaults.mediumContainerSize()),
+                    modifier = Modifier
+                        .size(IconButtonDefaults.mediumContainerSize())
+                        .then(tvForwardFocusState.focusModifier)
+                        .tvFocusIndicator(tvForwardFocusState, IconButtonDefaults.largeRoundShape),
                     shape = IconButtonDefaults.largeRoundShape,
                     colors = IconButtonDefaults.filledTonalIconButtonColors(
                         containerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
@@ -566,6 +579,9 @@ internal fun PlayerControls(
                                 contentDescription = "Lock screen",
                                 onClick = onLockClick,
                             )
+                        }
+                        if (!isTv) {
+                            MuteButton(isMuted = isMuted, onClick = onMuteClick)
                         }
                         if (!isTv) {
                             PipButton(onClick = onPipClick)

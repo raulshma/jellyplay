@@ -6,7 +6,10 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.res.stringResource
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -15,6 +18,8 @@ import com.raulshma.jellyplay.core.ui.components.JellyPlayScreenScaffold
 import com.raulshma.jellyplay.core.ui.components.ScreenEmptyState
 import com.raulshma.jellyplay.core.ui.components.ScreenLoadingState
 import com.raulshma.jellyplay.core.ui.components.rememberScreenBackgroundColor
+import com.raulshma.jellyplay.core.ui.tv.TvGrabInitialFocus
+import com.raulshma.jellyplay.core.ui.tv.tvFocusRestorer
 import com.raulshma.jellyplay.feature.newsletter.R
 import com.composables.icons.tabler.Tabler
 import com.composables.icons.tabler.outline.Mail
@@ -31,6 +36,21 @@ fun NewsletterScreen(
     val state by viewModel.uiState.collectAsStateWithLifecycle()
     val backgroundColor = rememberScreenBackgroundColor()
 
+    // TV focus-on-launch: focus the first newsletter section once data arrives so D-pad input
+    // lands on content, not the navigation drawer.
+    val listFocusRequester = remember { FocusRequester() }
+    val hasAnyData = state.recentlyAdded.isNotEmpty() ||
+        state.activityDigest.isNotEmpty() ||
+        state.libraryStats != null ||
+        state.continueWatching.isNotEmpty() ||
+        state.nextUp.isNotEmpty() ||
+        state.curatedPicks.isNotEmpty()
+    TvGrabInitialFocus(
+        focusRequester = listFocusRequester,
+        itemCount = if (state.isLoading && !hasAnyData) 0 else 1,
+        tag = "newsletter_init",
+    )
+
     JellyPlayScreenScaffold(
         title = "Newsletter",
         onBack = onBack,
@@ -43,13 +63,6 @@ fun NewsletterScreen(
                 .fillMaxSize()
                 .padding(paddingValues),
         ) {
-            val hasAnyData = state.recentlyAdded.isNotEmpty() ||
-                state.activityDigest.isNotEmpty() ||
-                state.libraryStats != null ||
-                state.continueWatching.isNotEmpty() ||
-                state.nextUp.isNotEmpty() ||
-                state.curatedPicks.isNotEmpty()
-
             when {
                 state.isLoading && !hasAnyData -> {
                     ScreenLoadingState(
@@ -74,6 +87,7 @@ fun NewsletterScreen(
                         onItemClick = onItemClick,
                         onPlayClick = onPlayClick,
                         onViewAllFreshPicks = onViewAllFreshPicks,
+                        listFocusRequester = listFocusRequester,
                     )
                 }
             }

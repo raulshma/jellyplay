@@ -30,6 +30,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import com.raulshma.jellyplay.core.ui.tv.TvGrabInitialFocus
@@ -75,6 +76,7 @@ fun NotificationSettingsScreen(
 ) {
     val preferences = viewModel.preferences
     val showAdvanced = preferences.showAdvancedSettings
+    val context = LocalContext.current
     val adaptiveInfo = LocalAdaptiveInfo.current
     val isTv = LocalTvMode.current
     var activeDialog by remember { mutableStateOf<NotificationSettingsDialog>(NotificationSettingsDialog.None) }
@@ -128,7 +130,7 @@ fun NotificationSettingsScreen(
                         if (notifPrefs.enabled) {
                             c += 4 // Check Frequency, Sound, Vibrate, Lights
                             if (showAdvanced) {
-                                c += 3 // Quiet Hours, Max Per Check, Libraries
+                                c += 5 // Quiet Hours, Max Per Check, Libraries, Respect System DND, System Notification Settings
                                 if (notifPrefs.quietHoursEnabled) c += 2
                             }
                         }
@@ -185,6 +187,28 @@ fun NotificationSettingsScreen(
                                     onClick = { activeDialog = NotificationSettingsDialog.QuietEndPicker },
                                 )
                             }
+                            SettingToggleItem(
+                                icon = Tabler.Outline.BellOff,
+                                title = "Respect System DND",
+                                subtitle = "Don't show notifications when Do Not Disturb is active",
+                                checked = notifPrefs.respectSystemDnd,
+                                index = notifIdx++, count = notifTotal,
+                                onCheckedChange = { enabled ->
+                                    viewModel.updateNotificationPreferences { it.copy(respectSystemDnd = enabled) }
+                                },
+                            )
+                            SettingListItem(
+                                icon = Tabler.Outline.Settings,
+                                title = "System Notification Settings",
+                                subtitle = "Customize per-library channel in system settings",
+                                index = notifIdx++, count = notifTotal,
+                                onClick = {
+                                    val intent = android.content.Intent(android.provider.Settings.ACTION_APP_NOTIFICATION_SETTINGS).apply {
+                                        putExtra(android.provider.Settings.EXTRA_APP_PACKAGE, context.packageName)
+                                    }
+                                    context.startActivity(intent)
+                                },
+                            )
                         }
                         SettingToggleItem(
                             icon = Tabler.Outline.Volume,

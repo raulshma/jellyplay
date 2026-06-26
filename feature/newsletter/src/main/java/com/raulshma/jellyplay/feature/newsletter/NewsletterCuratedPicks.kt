@@ -39,6 +39,7 @@ import com.raulshma.jellyplay.core.designsystem.theme.RatingColors
 import com.raulshma.jellyplay.core.designsystem.theme.ShapeCache
 import com.raulshma.jellyplay.core.model.MediaItem
 import com.raulshma.jellyplay.core.model.MediaType
+import com.raulshma.jellyplay.core.ui.components.focusIndicator
 import com.raulshma.jellyplay.core.ui.components.formatDurationFromTicks
 import com.raulshma.jellyplay.core.ui.image.MediaImage
 import com.raulshma.jellyplay.core.ui.tv.TvFocusableItemRow
@@ -74,6 +75,7 @@ fun NewsletterCuratedPicks(
             Row(
                 modifier = Modifier
                     .clip(ShapeCache.smooth8)
+                    .focusIndicator(ShapeCache.smooth16)
                     .clickable(onClick = onViewAllClick)
                     .padding(horizontal = 8.dp, vertical = 4.dp),
                 verticalAlignment = Alignment.CenterVertically,
@@ -134,6 +136,7 @@ private fun CuratedFeaturedCard(
     Box(
         modifier = modifier
             .clip(ShapeCache.smooth20)
+            .focusIndicator(ShapeCache.smooth16)
             .clickable(onClick = onClick),
     ) {
         MediaImage(
@@ -331,7 +334,7 @@ private fun CuratedPickCard(
                         Text(
                             text = "\u00B7",
                             style = MaterialTheme.typography.labelSmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f),
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
                         )
                     }
                     Text(
@@ -346,7 +349,7 @@ private fun CuratedPickCard(
                     Text(
                         text = "\u00B7",
                         style = MaterialTheme.typography.labelSmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f),
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
                     Box(
                         modifier = Modifier

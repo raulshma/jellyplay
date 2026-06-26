@@ -80,6 +80,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.navigation3.runtime.NavKey
 import androidx.navigation3.runtime.entryProvider
+import androidx.navigation3.runtime.rememberNavBackStack
 import androidx.navigation3.runtime.rememberSaveableStateHolderNavEntryDecorator
 import androidx.navigation3.runtime.NavEntryDecorator
 import androidx.navigation3.runtime.NavEntry
@@ -97,6 +98,7 @@ import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.foundation.layout.offset
 import androidx.compose.ui.draw.scale
+import androidx.compose.ui.draw.clip
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.NavigationBarItem
 import androidx.compose.material3.NavigationBarItemDefaults
@@ -124,6 +126,7 @@ import com.raulshma.jellyplay.core.designsystem.theme.shadowElevation
 import com.raulshma.jellyplay.core.designsystem.theme.tonalElevation
 import com.raulshma.jellyplay.core.ui.components.LocalNavigationBarColor
 import com.raulshma.jellyplay.core.ui.components.MiniPlayer
+import com.raulshma.jellyplay.core.ui.components.focusIndicator
 import com.raulshma.jellyplay.core.ui.components.LocalPerformanceMode
 import com.raulshma.jellyplay.core.ui.components.LocalFloatingNavVisibility
 import com.raulshma.jellyplay.core.ui.feedback.LocalUserMessageBus
@@ -222,9 +225,16 @@ fun JellyPlayApp(
         isAuthenticated -> {
             CompositionLocalProvider(
                 com.raulshma.jellyplay.core.ui.components.LocalNetworkStatus provides viewModel.networkMonitor.networkStatus,
+                com.raulshma.jellyplay.core.ui.components.LocalServerHealth provides viewModel.serverHealth,
             ) {
                 MainContent(
-                    onLogout = { viewModel.logout() },
+                    onLogout = { revoke ->
+                        if (revoke) {
+                            viewModel.revokeServerSession()
+                        } else {
+                            viewModel.logout()
+                        }
+                    },
                     viewModel = viewModel,
                     preferences = preferences,
                 )
@@ -273,7 +283,7 @@ private fun OnboardingContent(
 
 @Composable
 private fun MainContent(
-    onLogout: () -> Unit,
+    onLogout: (Boolean) -> Unit,
     viewModel: MainViewModel,
     preferences: com.raulshma.jellyplay.core.model.UserPreferences,
 ) {
@@ -397,6 +407,7 @@ private fun MainContent(
     val audioTitle by audioPlaybackManager.title.collectAsStateWithLifecycle()
     val audioArtist by audioPlaybackManager.artist.collectAsStateWithLifecycle()
     val audioArtworkUrl by audioPlaybackManager.albumArtUrl.collectAsStateWithLifecycle()
+    val libraryFolders by viewModel.libraryFolders.collectAsStateWithLifecycle()
     var isMiniPlayerDismissed by remember { mutableStateOf(false) }
     val showMiniPlayer by remember {
         derivedStateOf { audioItemId != null && !isFullScreenRoute && !isMiniPlayerDismissed }
@@ -441,8 +452,7 @@ private fun MainContent(
                             val last = stack.last()
                             if (last is Route.VideoPlayer ||
                                 last is Route.AudioPlayer ||
-                                last is Route.LiveTvChannelPlayer ||
-                                last is Route.OfflinePlayer
+                                last is Route.LiveTvChannelPlayer
                             ) {
                                 stack.removeLastOrNull()
                             } else {
@@ -572,13 +582,16 @@ private fun MainContent(
         LocalUserMessageBus provides userMessageBus,
     ) {
         val isExpanded = adaptiveInfo.windowSizeClass != WindowSizeClass.Compact
+        val pendingSearchQuery by viewModel.pendingSearchQuery.collectAsStateWithLifecycle()
 
         @OptIn(androidx.compose.animation.ExperimentalSharedTransitionApi::class)
         androidx.compose.animation.SharedTransitionLayout {
             CompositionLocalProvider(
                 com.raulshma.jellyplay.core.ui.components.LocalSharedTransitionScope provides if (preferences.performanceMode) null else this,
                 LocalNavigationBarColor provides navBarColorState,
-                com.raulshma.jellyplay.core.ui.components.LocalFloatingNavOffset provides (if (!isExpanded && !isFullScreenRoute) bottomNavOffsetHeightPx.floatValue else 0f)
+                com.raulshma.jellyplay.core.ui.components.LocalFloatingNavOffset provides (if (!isExpanded && !isFullScreenRoute) bottomNavOffsetHeightPx.floatValue else 0f),
+                com.raulshma.jellyplay.feature.search.LocalPendingSearchQuery provides pendingSearchQuery,
+                com.raulshma.jellyplay.feature.search.LocalConsumeSearchQuery provides { viewModel.consumePendingSearchQuery() },
             ) {
             // Hoist the saveable-state holder above the isTv/isFullScreenRoute branches so that
             // navigation-entry saveable state (scroll position, form fields, etc.) survives
@@ -587,7 +600,6 @@ private fun MainContent(
             // every layout-branch switch (e.g. entering the player and back).
             val saveableStateHolder = rememberSaveableStateHolder()
             val entryDecorator = rememberSaveableStateHolderNavEntryDecorator<NavKey>(saveableStateHolder)
-
             // Hoist the audio-mini-player navigation callbacks so all three layout branches
             // (TvContent / PhoneContent / FullScreenContent) can share identical instances
             // instead of allocating fresh lambdas per call site.
@@ -628,6 +640,9 @@ private fun MainContent(
                     onAmbientClick = onAmbientClick,
                     tvDrawerState = tvDrawerState,
                     tvDrawerListState = tvDrawerListState,
+                    libraryFolders = libraryFolders,
+                    nowPlayingTitle = audioTitle.takeIf { audioItemId != null },
+                    nowPlayingEnabled = audioItemId != null,
                 )
             } else {
                 if (!isFullScreenRoute) {
@@ -714,7 +729,7 @@ private fun TvContent(
     currentTopLevel: NavKey,
     activeTopLevelRoutes: LinkedHashMap<Route, String>,
     navigator: Navigator,
-    onLogout: () -> Unit,
+    onLogout: (Boolean) -> Unit,
     homeMode: HomeMode,
     onModeChange: (HomeMode) -> Unit,
     enterPip: () -> Unit,
@@ -725,6 +740,9 @@ private fun TvContent(
     onAmbientClick: () -> Unit,
     tvDrawerState: androidx.tv.material3.DrawerState,
     tvDrawerListState: androidx.compose.foundation.lazy.LazyListState,
+    libraryFolders: List<com.raulshma.jellyplay.core.model.LibraryFolder>,
+    nowPlayingTitle: String?,
+    nowPlayingEnabled: Boolean,
 ) {
     TvMaterial3Theme(
         colorScheme = tvDarkColorScheme(
@@ -753,6 +771,7 @@ private fun TvContent(
             }
             TvNavigationDrawer(
                 primaryItems = primaryNavItems,
+                libraryFolders = libraryFolders,
                 currentTopLevel = currentTopLevel,
                 isSubPage = tvIsSubPage,
                 onNavigate = { navigator.navigate(it) },
@@ -760,6 +779,9 @@ private fun TvContent(
                 drawerState = tvDrawerState,
                 drawerListState = tvDrawerListState,
                 currentRoute = tvCurrentRoute,
+                nowPlayingTitle = nowPlayingTitle,
+                nowPlayingEnabled = nowPlayingEnabled,
+                onNowPlayingClick = onNowPlayingClick,
             ) {
                 MainNavDisplay(
                     navigationState = navigationState,
@@ -790,7 +812,7 @@ private fun PhoneContent(
     currentTopLevel: NavKey,
     activeTopLevelRoutes: LinkedHashMap<Route, String>,
     navigator: Navigator,
-    onLogout: () -> Unit,
+    onLogout: (Boolean) -> Unit,
     homeMode: HomeMode,
     onModeChange: (HomeMode) -> Unit,
     enterPip: () -> Unit,
@@ -815,7 +837,7 @@ private fun PhoneContent(
     audioArtworkUrl: String,
     onDismissMiniPlayer: () -> Unit,
     isVideoMiniMode: Boolean,
-    videoMiniPlayerState: com.raulshma.jellyplay.feature.player.video.VideoMiniPlayerState,
+    videoMiniPlayerState: com.raulshma.jellyplay.core.data.playback.VideoMiniPlayerState,
     videoMiniTitle: String,
     videoMiniSubtitle: String,
     videoMiniIsPlaying: Boolean,
@@ -994,7 +1016,11 @@ private fun PhoneContent(
                 if (isVideoMiniMode) {
                     VideoMiniPlayer(
                         isVisible = true,
-                        engine = videoMiniPlayerState.engine,
+                        // The host app knows the engine is a video `MediaEngine` even though
+                        // the cross-feature holder types it as the more general
+                        // `RemotePlayableEngine` (§4.6). Cast is safe because only the video
+                        // engine ever enters mini mode.
+                        engine = videoMiniPlayerState.engine as? com.raulshma.jellyplay.feature.player.video.engine.MediaEngine,
                         title = videoMiniTitle,
                         subtitle = videoMiniSubtitle,
                         isPlaying = videoMiniIsPlaying,
@@ -1051,7 +1077,7 @@ private fun PhoneContent(
 private fun FullScreenContent(
     navigationState: com.raulshma.jellyplay.core.ui.navigation.NavigationState,
     navigator: Navigator,
-    onLogout: () -> Unit,
+    onLogout: (Boolean) -> Unit,
     homeMode: HomeMode,
     onModeChange: (HomeMode) -> Unit,
     enterPip: () -> Unit,
@@ -1061,7 +1087,7 @@ private fun FullScreenContent(
     onNowPlayingClick: () -> Unit,
     onAmbientClick: () -> Unit,
     isVideoMiniMode: Boolean,
-    videoMiniPlayerState: com.raulshma.jellyplay.feature.player.video.VideoMiniPlayerState,
+    videoMiniPlayerState: com.raulshma.jellyplay.core.data.playback.VideoMiniPlayerState,
     videoMiniTitle: String,
     videoMiniSubtitle: String,
     videoMiniIsPlaying: Boolean,
@@ -1088,7 +1114,7 @@ private fun FullScreenContent(
         if (isVideoMiniMode) {
             VideoMiniPlayer(
                 isVisible = true,
-                engine = videoMiniPlayerState.engine,
+                engine = videoMiniPlayerState.engine as? com.raulshma.jellyplay.feature.player.video.engine.MediaEngine,
                 title = videoMiniTitle,
                 subtitle = videoMiniSubtitle,
                 isPlaying = videoMiniIsPlaying,
@@ -1152,7 +1178,7 @@ private fun NavIcon(route: Route, label: String, selected: Boolean = false, tint
 private fun MainNavDisplay(
     navigationState: com.raulshma.jellyplay.core.ui.navigation.NavigationState,
     navigator: Navigator,
-    onLogout: () -> Unit,
+    onLogout: (Boolean) -> Unit,
     homeMode: HomeMode,
     onModeChange: (HomeMode) -> Unit,
     enterPip: () -> Unit,
@@ -1196,130 +1222,139 @@ private fun MainNavDisplay(
     val defaultSpatial = motionScheme.defaultSpatialSpec<Float>()
     val defaultSpatialOffset = motionScheme.defaultSpatialSpec<androidx.compose.ui.unit.IntOffset>()
 
+    val sharedEntryProvider = entryProvider {
+        homeSection(
+            navigator = navigator,
+            homeMode = homeMode,
+            onModeChange = onModeChange,
+            musicContent = {
+                MusicHomeScreen(
+                    onItemClick = { itemId -> navigator.navigate(Route.MediaDetail(itemId)) },
+                    onAlbumClick = { albumId -> navigator.navigate(Route.AlbumDetail(albumId)) },
+                    onArtistsClick = { navigator.navigate(Route.Artists) },
+                    onAlbumsClick = { navigator.navigate(Route.Albums) },
+                    onTracksClick = { navigator.navigate(Route.Tracks) },
+                    onGenresClick = { navigator.navigate(Route.Genres) },
+                    onPlaylistsClick = { navigator.navigate(Route.Playlists) },
+                    onNowPlayingClick = onNowPlayingClick,
+                    onAmbientClick = onAmbientClick,
+                )
+            },
+        )
+        librarySection(navigator)
+        searchSection(navigator)
+        liveTvSection(navigator)
+        detailsSection(navigator)
+        editorSection(navigator)
+        videoPlayerSection(navigator, onEnterPip = enterPip, onEnterMiniMode = enterVideoMiniMode)
+        audioPlayerSection(navigator)
+        downloadsSection(navigator)
+        authSection(navigator) { navigator.goBack() }
+        settingsSection(navigator, onLogout) { navigator.navigate(Route.Onboarding) }
+        adminSection(navigator)
+        musicSection(navigator)
+        syncPlaySection(navigator)
+        onboardingSection { navigator.goBack() }
+        newsletterSection(navigator)
+        insightsSection(navigator)
+        requestsSection(navigator)
+        shortcutsSection(navigator)
+    }
+
     NavDisplay(
         backStack = currentBackStack,
         onBack = { navigator.goBack() },
-                entryDecorators = listOf(entryDecorator, paddingDecorator),
-                transitionSpec = {
-                    val targetLast = targetState
-                    val initialLast = initialState
-                    val targetRoute = targetLast.entries.lastOrNull()?.contentKey as? Route
-                    val initialRoute = initialLast.entries.lastOrNull()?.contentKey as? Route
-                    val isModalRoute = targetRoute?.isModal == true
-                    val isModalPop = initialRoute?.isModal == true
-                    val isTabSwitch = targetRoute != null && initialRoute != null &&
-                            ALL_TOP_LEVEL_ROUTE_KEYS.contains(targetRoute) &&
-                            ALL_TOP_LEVEL_ROUTE_KEYS.contains(initialRoute)
-                    val isAmbient = targetRoute is Route.Ambient || initialRoute is Route.Ambient
+        entryDecorators = listOf(entryDecorator, paddingDecorator),
+        transitionSpec = {
+            val targetLast = targetState
+            val initialLast = initialState
+            val targetRoute = targetLast.entries.lastOrNull()?.contentKey as? Route
+            val initialRoute = initialLast.entries.lastOrNull()?.contentKey as? Route
+            val isModalRoute = targetRoute?.isModal == true
+            val isModalPop = initialRoute?.isModal == true
+            val isTabSwitch = targetRoute != null && initialRoute != null &&
+                    ALL_TOP_LEVEL_ROUTE_KEYS.contains(targetRoute) &&
+                    ALL_TOP_LEVEL_ROUTE_KEYS.contains(initialRoute)
+            val isAmbient = targetRoute is Route.Ambient || initialRoute is Route.Ambient
 
-                    when {
-                        isAmbient -> {
-                            fadeIn(defaultEffects) togetherWith fadeOut(fastEffects)
-                        }
-                        isModalRoute -> {
-                            fadeIn(
-                                defaultEffects
-                            ) + slideInVertically(
-                                initialOffsetY = { it / 4 },
-                                animationSpec = defaultSpatialOffset,
-                            ) togetherWith fadeOut(
-                                fastEffects
-                            )
-                        }
-                        isModalPop -> {
-                            fadeIn(fastEffects) togetherWith fadeOut(
-                                fastEffects
-                            ) + slideOutVertically(
-                                targetOffsetY = { it / 4 },
-                                animationSpec = defaultSpatialOffset,
-                            )
-                        }
-                        isTabSwitch -> {
-                            fadeIn(fastEffects) togetherWith fadeOut(
-                                fastEffects
-                            )
-                        }
-                        isDetailScene(targetLast) || isDetailScene(initialLast) -> {
-                            fadeIn(
-                                animationSpec = defaultEffects,
-                            ) togetherWith fadeOut(
-                                animationSpec = fastEffects,
-                            )
-                        }
-                        else -> {
-                            fadeIn(
-                                animationSpec = defaultEffects,
-                            ) + slideInHorizontally(
-                                initialOffsetX = { it / 8 },
-                                animationSpec = defaultSpatialOffset,
-                            ) + scaleIn(
-                                initialScale = 0.985f,
-                                animationSpec = defaultSpatial,
-                            ) togetherWith fadeOut(
-                                animationSpec = fastEffects,
-                            ) + slideOutHorizontally(
-                                targetOffsetX = { -it / 18 },
-                                animationSpec = defaultSpatialOffset,
-                            ) + scaleOut(
-                                targetScale = 1.015f,
-                                animationSpec = defaultEffects,
-                            )
-                        }
-                    }
-                },
-                popTransitionSpec = {
-                    val targetLast = targetState
-                    val initialLast = initialState
-                    val initialRoute = initialLast.entries.lastOrNull()?.contentKey as? Route
-                    val isModalPop = initialRoute?.isModal == true
-                    when {
-                        isModalPop -> {
-                            fadeIn(fastEffects) togetherWith fadeOut(
-                                fastEffects
-                            ) + slideOutVertically(
-                                    targetOffsetY = { it / 4 },
-                                    animationSpec = defaultSpatialOffset,
-                                )
-                        }
-                        isDetailScene(initialLast) || isDetailScene(targetLast) -> {
-                            fadeIn(
-                                animationSpec = defaultEffects,
-                            ) togetherWith fadeOut(
-                                animationSpec = defaultEffects,
-                            )
-                        }
-                        else -> {
-                            fadeIn(
-                                    animationSpec = defaultEffects,
-                                ) + slideInHorizontally(
-                                    initialOffsetX = { -it / 12 },
-                                    animationSpec = defaultSpatialOffset,
-                                ) + scaleIn(
-                                    initialScale = 1.015f,
-                                    animationSpec = defaultSpatial,
-                                ) togetherWith fadeOut(
-                                    animationSpec = fastEffects,
-                                ) + slideOutHorizontally(
-                                    targetOffsetX = { it / 10 },
-                                    animationSpec = defaultSpatialOffset,
-                                ) + scaleOut(
-                                    targetScale = 0.985f,
-                                    animationSpec = defaultEffects,
-                                )
-                        }
-                    }
-                },
-                predictivePopTransitionSpec = { _ ->
-                    val targetLast = targetState
-                    val initialLast = initialState
-                    if (isDetailScene(initialLast) || isDetailScene(targetLast)) {
-                        fadeIn(
-                            animationSpec = defaultEffects,
-                        ) togetherWith fadeOut(
-                            animationSpec = defaultEffects,
+            when {
+                isAmbient -> {
+                    fadeIn(defaultEffects) togetherWith fadeOut(fastEffects)
+                }
+                isModalRoute -> {
+                    fadeIn(
+                        defaultEffects
+                    ) + slideInVertically(
+                        initialOffsetY = { it / 4 },
+                        animationSpec = defaultSpatialOffset,
+                    ) togetherWith fadeOut(
+                        fastEffects
+                    )
+                }
+                isModalPop -> {
+                    fadeIn(fastEffects) togetherWith fadeOut(
+                        fastEffects
+                    ) + slideOutVertically(
+                        targetOffsetY = { it / 4 },
+                        animationSpec = defaultSpatialOffset,
+                    )
+                }
+                isTabSwitch -> {
+                    fadeIn(fastEffects) togetherWith fadeOut(
+                        fastEffects
+                    )
+                }
+                isDetailScene(targetLast) || isDetailScene(initialLast) -> {
+                    fadeIn(
+                        animationSpec = defaultEffects,
+                    ) togetherWith fadeOut(
+                        animationSpec = fastEffects,
+                    )
+                }
+                else -> {
+                    fadeIn(
+                        animationSpec = defaultEffects,
+                    ) + slideInHorizontally(
+                        initialOffsetX = { it / 8 },
+                        animationSpec = defaultSpatialOffset,
+                    ) + scaleIn(
+                        initialScale = 0.985f,
+                        animationSpec = defaultSpatial,
+                    ) togetherWith fadeOut(
+                        animationSpec = fastEffects,
+                    ) + slideOutHorizontally(
+                        targetOffsetX = { -it / 18 },
+                        animationSpec = defaultSpatialOffset,
+                    ) + scaleOut(
+                        targetScale = 1.015f,
+                        animationSpec = defaultEffects,
+                    )
+                }
+            }
+        },
+        popTransitionSpec = {
+            val targetLast = targetState
+            val initialLast = initialState
+            val initialRoute = initialLast.entries.lastOrNull()?.contentKey as? Route
+            val isModalPop = initialRoute?.isModal == true
+            when {
+                isModalPop -> {
+                    fadeIn(fastEffects) togetherWith fadeOut(
+                        fastEffects
+                    ) + slideOutVertically(
+                            targetOffsetY = { it / 4 },
+                            animationSpec = defaultSpatialOffset,
                         )
-                    } else {
-                        fadeIn(
+                }
+                isDetailScene(initialLast) || isDetailScene(targetLast) -> {
+                    fadeIn(
+                        animationSpec = defaultEffects,
+                    ) togetherWith fadeOut(
+                        animationSpec = defaultEffects,
+                    )
+                }
+                else -> {
+                    fadeIn(
                             animationSpec = defaultEffects,
                         ) + slideInHorizontally(
                             initialOffsetX = { -it / 12 },
@@ -1336,46 +1371,39 @@ private fun MainNavDisplay(
                             targetScale = 0.985f,
                             animationSpec = defaultEffects,
                         )
-                    }
-                },
-        entryProvider = entryProvider {
-            homeSection(
-                navigator = navigator,
-                homeMode = homeMode,
-                onModeChange = onModeChange,
-                musicContent = {
-                    MusicHomeScreen(
-                        onItemClick = { itemId -> navigator.navigate(Route.MediaDetail(itemId)) },
-                        onAlbumClick = { albumId -> navigator.navigate(Route.AlbumDetail(albumId)) },
-                        onArtistsClick = { navigator.navigate(Route.Artists) },
-                        onAlbumsClick = { navigator.navigate(Route.Albums) },
-                        onTracksClick = { navigator.navigate(Route.Tracks) },
-                        onGenresClick = { navigator.navigate(Route.Genres) },
-                        onPlaylistsClick = { navigator.navigate(Route.Playlists) },
-                        onNowPlayingClick = onNowPlayingClick,
-                        onAmbientClick = onAmbientClick,
-                    )
-                },
-            )
-            librarySection(navigator)
-            searchSection(navigator)
-            liveTvSection(navigator)
-            detailsSection(navigator)
-            editorSection(navigator)
-            videoPlayerSection(navigator, onEnterPip = enterPip, onEnterMiniMode = enterVideoMiniMode)
-            audioPlayerSection(navigator)
-            downloadsSection(navigator)
-            authSection(navigator) { navigator.goBack() }
-            settingsSection(navigator, onLogout) { navigator.navigate(Route.Onboarding) }
-            adminSection(navigator)
-            musicSection(navigator)
-            syncPlaySection(navigator)
-            onboardingSection { navigator.goBack() }
-            newsletterSection(navigator)
-            insightsSection(navigator)
-            requestsSection(navigator)
-            shortcutsSection(navigator)
+                }
+            }
         },
+        predictivePopTransitionSpec = { _ ->
+            val targetLast = targetState
+            val initialLast = initialState
+            if (isDetailScene(initialLast) || isDetailScene(targetLast)) {
+                fadeIn(
+                    animationSpec = defaultEffects,
+                ) togetherWith fadeOut(
+                    animationSpec = defaultEffects,
+                )
+            } else {
+                fadeIn(
+                    animationSpec = defaultEffects,
+                ) + slideInHorizontally(
+                    initialOffsetX = { -it / 12 },
+                    animationSpec = defaultSpatialOffset,
+                ) + scaleIn(
+                    initialScale = 1.015f,
+                    animationSpec = defaultSpatial,
+                ) togetherWith fadeOut(
+                    animationSpec = fastEffects,
+                ) + slideOutHorizontally(
+                    targetOffsetX = { it / 10 },
+                    animationSpec = defaultSpatialOffset,
+                ) + scaleOut(
+                    targetScale = 0.985f,
+                    animationSpec = defaultEffects,
+                )
+            }
+        },
+        entryProvider = sharedEntryProvider,
         modifier = modifier,
     )
 }
@@ -1405,10 +1433,11 @@ private fun FloatingNavigationBar(
         ) {
             routes.forEach { (route, label) ->
                 val selected = route == currentTopLevel
-                val tint = if (selected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f)
+                val tint = if (selected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
                 Row(
                     modifier = Modifier
                         .animateContentSize(animationSpec = MaterialTheme.motionScheme.defaultSpatialSpec())
+                        .focusIndicator(androidx.compose.foundation.shape.CircleShape)
                         .clickable(
                             interactionSource = remember { androidx.compose.foundation.interaction.MutableInteractionSource() },
                             indication = null,
@@ -1443,6 +1472,8 @@ private fun DrawerItem(
     Row(
         modifier = Modifier
             .fillMaxWidth()
+            .clip(ShapeCache.smooth12)
+            .focusIndicator()
             .clickable { onClick() }
             .padding(horizontal = 28.dp, vertical = 14.dp),
         verticalAlignment = Alignment.CenterVertically,

@@ -38,6 +38,8 @@ import com.composables.icons.tabler.outline.DeviceMobile
 import com.composables.icons.tabler.outline.DeviceTv
 import com.raulshma.jellyplay.core.designsystem.theme.ShapeCache
 import com.raulshma.jellyplay.core.model.SessionInfo
+import com.raulshma.jellyplay.core.ui.tv.rememberTvFocusState
+import com.raulshma.jellyplay.core.ui.tv.tvFocusIndicator
 
 @Composable
 fun ActiveSessionsSection(
@@ -45,6 +47,8 @@ fun ActiveSessionsSection(
     onViewAll: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
+    val viewAllFocusState = rememberTvFocusState(focusedScale = 1.04f)
+
     Card(
         modifier = modifier.fillMaxWidth().padding(horizontal = 8.dp),
         shape = ShapeCache.smooth20,
@@ -79,7 +83,12 @@ fun ActiveSessionsSection(
                         )
                     }
                 }
-                TextButton(onClick = onViewAll) { Text("View All") }
+                TextButton(
+                    onClick = onViewAll,
+                    modifier = Modifier
+                        .then(viewAllFocusState.focusModifier)
+                        .tvFocusIndicator(viewAllFocusState, ShapeCache.smooth12),
+                ) { Text("View All") }
             }
             Spacer(Modifier.height(8.dp))
             sessions.take(5).forEachIndexed { index, session ->

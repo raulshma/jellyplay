@@ -43,6 +43,8 @@ interface AuthApiClient {
 
     suspend fun postCapabilities(): Result<Unit>
 
+    suspend fun revokeServerSession(): Result<Unit>
+
     fun getServerUrl(): String?
     fun getAccessToken(): String?
 }

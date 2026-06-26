@@ -39,6 +39,9 @@ import com.composables.icons.tabler.outline.Lock
 import com.raulshma.jellyplay.core.ui.adaptive.LocalAdaptiveInfo
 import com.raulshma.jellyplay.core.ui.adaptive.WindowSizeClass
 import com.raulshma.jellyplay.core.ui.adaptive.contentPadding
+import com.raulshma.jellyplay.core.designsystem.theme.ShapeCache
+import com.raulshma.jellyplay.core.ui.tv.rememberTvFocusState
+import com.raulshma.jellyplay.core.ui.tv.tvFocusIndicator
 
 @Composable
 fun AuthChallengeScreen(
@@ -51,6 +54,7 @@ fun AuthChallengeScreen(
     errorMessage: String? = null,
     onDismiss: () -> Unit = {},
     showAsDialog: Boolean = false,
+    enabled: Boolean = true,
 ) {
     val context = LocalContext.current
     val activity = remember(context) { context.findFragmentActivity() }
@@ -117,11 +121,16 @@ fun AuthChallengeScreen(
                 }
                 Spacer(Modifier.height(32.dp))
                 Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                    val retryFocusState = rememberTvFocusState(focusedScale = 1.05f)
                     FilledTonalButton(
                         onClick = {
                             biometricError = null
                             biometricPromptTrigger++
                         },
+                        shape = ShapeCache.smooth12,
+                        modifier = Modifier
+                            .then(retryFocusState.focusModifier)
+                            .tvFocusIndicator(retryFocusState, ShapeCache.smooth12),
                     ) {
                         Icon(
                             Tabler.Outline.Fingerprint,
@@ -132,11 +141,16 @@ fun AuthChallengeScreen(
                         Text("Retry")
                     }
                     if (hasPin) {
+                        val usePinFocusState = rememberTvFocusState(focusedScale = 1.05f)
                         FilledTonalButton(
                             onClick = {
                                 showBiometric = false
                                 biometricError = null
                             },
+                            shape = ShapeCache.smooth12,
+                            modifier = Modifier
+                                .then(usePinFocusState.focusModifier)
+                                .tvFocusIndicator(usePinFocusState, ShapeCache.smooth12),
                         ) {
                             Icon(
                                 Tabler.Outline.Lock,
@@ -156,14 +170,20 @@ fun AuthChallengeScreen(
                     onErrorClear = onErrorClear,
                     errorMessage = errorMessage,
                     compactMode = showAsDialog,
+                    enabled = enabled,
                 )
                 if (canUseBiometric) {
                     Spacer(Modifier.height(16.dp))
+                    val useBiometricFocusState = rememberTvFocusState(focusedScale = 1.05f)
                     FilledTonalButton(
                         onClick = {
                             showBiometric = true
                             biometricError = null
                         },
+                        shape = ShapeCache.smooth12,
+                        modifier = Modifier
+                            .then(useBiometricFocusState.focusModifier)
+                            .tvFocusIndicator(useBiometricFocusState, ShapeCache.smooth12),
                     ) {
                         Icon(
                             Tabler.Outline.Fingerprint,

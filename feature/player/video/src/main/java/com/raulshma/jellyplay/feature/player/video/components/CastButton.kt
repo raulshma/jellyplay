@@ -2,6 +2,7 @@ package com.raulshma.jellyplay.feature.player.video.components
 
 import android.app.AlertDialog
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.runtime.Composable
@@ -17,6 +18,8 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.raulshma.jellyplay.core.data.cast.CastManager
 import com.raulshma.jellyplay.core.designsystem.theme.CastColors
+import com.raulshma.jellyplay.core.ui.tv.rememberTvFocusState
+import com.raulshma.jellyplay.core.ui.tv.tvFocusIndicator
 import com.composables.icons.tabler.Tabler
 import com.composables.icons.tabler.outline.*
 
@@ -28,6 +31,7 @@ internal fun CastButton(
     val isConnected by castManager.isConnectedFlow.collectAsStateWithLifecycle(initialValue = false)
     val discoveredDevices by castManager.discoveredDevices.collectAsStateWithLifecycle(initialValue = emptyList())
     var showDialog by remember { mutableStateOf(false) }
+    val castFocusState = rememberTvFocusState(focusedScale = 1.1f)
 
     DisposableEffect(Unit) {
         castManager.startDiscovery(context)
@@ -55,7 +59,10 @@ internal fun CastButton(
                 showDialog = true
             }
         },
-        modifier = Modifier.size(40.dp),
+        modifier = Modifier
+            .size(40.dp)
+            .then(castFocusState.focusModifier)
+            .tvFocusIndicator(castFocusState, CircleShape),
     ) {
         Icon(
             imageVector = Tabler.Outline.Cast,

@@ -61,6 +61,8 @@ import androidx.compose.ui.focus.focusRequester
 import com.raulshma.jellyplay.core.ui.tv.TvGrabInitialFocus
 import com.raulshma.jellyplay.core.ui.tv.rememberTvFocusState
 import com.raulshma.jellyplay.core.ui.tv.tvFocusIndicator
+import androidx.compose.foundation.shape.CircleShape
+import com.raulshma.jellyplay.core.ui.components.focusIndicator
 import com.composables.icons.tabler.Tabler
 import com.composables.icons.tabler.outline.*
 
@@ -107,7 +109,10 @@ fun ServerManagementScreen(
         onBack = onBack,
         backgroundColor = backgroundColor,
         actions = {
-            IconButton(onClick = onAddServer) {
+            IconButton(
+                onClick = onAddServer,
+                modifier = Modifier.focusIndicator(CircleShape),
+            ) {
                 Icon(Tabler.Outline.Plus, "Add Server")
             }
         },
@@ -291,7 +296,10 @@ private fun ServerCard(
 
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     if (isActive) {
-                        IconButton(onClick = onToggleExpand) {
+                        IconButton(
+                            onClick = onToggleExpand,
+                            modifier = Modifier.focusIndicator(CircleShape),
+                        ) {
                             Icon(
                                 if (isExpanded) Tabler.Outline.ChevronUp else Tabler.Outline.ChevronDown,
                                 contentDescription = if (isExpanded) "Collapse" else "Manage addresses",
@@ -308,7 +316,10 @@ private fun ServerCard(
                             modifier = Modifier.size(20.dp),
                         )
                     } else {
-                        IconButton(onClick = onDelete) {
+                        IconButton(
+                            onClick = onDelete,
+                            modifier = Modifier.focusIndicator(CircleShape),
+                        ) {
                             Icon(
                                 Tabler.Outline.Trash,
                                 contentDescription = "Remove",
@@ -413,7 +424,7 @@ private fun AddressRow(
                 if (isPrimary) Tabler.Outline.Star else Tabler.Outline.Link,
                 contentDescription = null,
                 modifier = Modifier.size(16.dp),
-                tint = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.6f),
+                tint = MaterialTheme.colorScheme.onPrimaryContainer,
             )
             Spacer(Modifier.width(8.dp))
             Text(
@@ -429,7 +440,7 @@ private fun AddressRow(
                 Text(
                     "Primary",
                     style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.5f),
+                    color = MaterialTheme.colorScheme.onPrimaryContainer,
                 )
             }
         }
@@ -456,13 +467,13 @@ private fun AddressRow(
         if (onRemove != null) {
             IconButton(
                 onClick = onRemove,
-                modifier = Modifier.size(32.dp),
+                modifier = Modifier.size(32.dp).focusIndicator(CircleShape),
             ) {
                 Icon(
                     Tabler.Outline.X,
                     contentDescription = "Remove address",
                     modifier = Modifier.size(16.dp),
-                    tint = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.6f),
+                    tint = MaterialTheme.colorScheme.onPrimaryContainer,
                 )
             }
         }

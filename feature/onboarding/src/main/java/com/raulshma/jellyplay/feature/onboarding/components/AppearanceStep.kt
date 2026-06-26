@@ -41,6 +41,7 @@ import androidx.compose.ui.unit.dp
 import com.composables.icons.tabler.Tabler
 import com.composables.icons.tabler.outline.*
 import com.raulshma.jellyplay.core.designsystem.theme.ShapeCache
+import com.raulshma.jellyplay.core.ui.components.focusIndicator
 import com.raulshma.jellyplay.core.model.ColorStyle
 import com.raulshma.jellyplay.core.model.ContrastLevel
 import com.raulshma.jellyplay.core.model.ThemeMode
@@ -96,11 +97,13 @@ fun AppearanceStep(
                             ThemeMode.SYSTEM -> "System"
                             ThemeMode.LIGHT -> "Light"
                             ThemeMode.DARK -> "Dark"
+                            ThemeMode.SCHEDULED -> "Scheduled"
                         },
                         icon = when (mode) {
                             ThemeMode.SYSTEM -> Tabler.Outline.BrightnessHalf
                             ThemeMode.LIGHT -> Tabler.Outline.BrightnessUp
                             ThemeMode.DARK -> Tabler.Outline.Moon
+                            ThemeMode.SCHEDULED -> Tabler.Outline.Clock
                         },
                         selected = selected,
                         onClick = { onThemeModeChange(mode) },
@@ -244,6 +247,7 @@ fun OnboardingOptionCard(
                     )
                 }
             }
+            .focusIndicator()
             .clickable(
                 interactionSource = interactionSource,
                 indication = null,
@@ -304,6 +308,7 @@ fun OnboardingToggleRow(
             }
             .clip(ShapeCache.smooth16)
             .background(backgroundColor)
+            .focusIndicator()
             .clickable(
                 interactionSource = interactionSource,
                 indication = null,

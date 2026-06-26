@@ -5,8 +5,6 @@ import com.raulshma.jellyplay.core.model.Genre
 import com.raulshma.jellyplay.core.model.HomeSection
 import com.raulshma.jellyplay.core.model.HomeSectionType
 import com.raulshma.jellyplay.core.model.LibraryFolder
-import com.raulshma.jellyplay.core.model.LrcLibTrack
-import com.raulshma.jellyplay.core.model.LyricsResult
 import com.raulshma.jellyplay.core.model.MediaDetail
 import com.raulshma.jellyplay.core.model.MediaItem
 import com.raulshma.jellyplay.core.model.MediaType
@@ -15,7 +13,7 @@ import com.raulshma.jellyplay.core.model.SearchResult
 import com.raulshma.jellyplay.core.model.Studio
 import kotlinx.coroutines.flow.Flow
 
-interface MediaRepository : LiveTvRepository, SyncPlayRepository, NewsletterRepository, PlaylistRepository {
+interface MediaRepository : LiveTvRepository, SyncPlayRepository, NewsletterRepository, PlaylistRepository, LyricsRepository {
 
     suspend fun getHomeSections(
         enabledSections: Set<HomeSectionType> = HomeSectionType.CONFIGURABLE.toSet(),
@@ -23,6 +21,7 @@ interface MediaRepository : LiveTvRepository, SyncPlayRepository, NewsletterRepo
         nextUpRewatching: Boolean = false,
         nextUpMaxDays: Int = 0,
         nextUpExcludedSeriesIds: Set<String> = emptySet(),
+        hiddenCwItemIds: Set<String> = emptySet(),
         pinnedSections: List<PinnedHomeSection> = emptyList(),
     ): Result<List<HomeSection>>
 
@@ -38,10 +37,12 @@ interface MediaRepository : LiveTvRepository, SyncPlayRepository, NewsletterRepo
         mediaTypes: List<MediaType>? = null,
         genres: List<String>? = null,
         years: List<Int>? = null,
+        studioIds: List<String>? = null,
         sortBy: String = "SortName",
         sortOrder: String = "Ascending",
         startIndex: Int = 0,
         limit: Int = 50,
+        tags: List<String>? = null,
     ): Result<SearchResult>
 
     suspend fun getMediaDetail(itemId: String): Result<MediaDetail>
@@ -56,6 +57,9 @@ interface MediaRepository : LiveTvRepository, SyncPlayRepository, NewsletterRepo
     suspend fun search(
         query: String,
         mediaTypes: List<MediaType>? = null,
+        genres: List<String>? = null,
+        years: List<Int>? = null,
+        tags: List<String>? = null,
         limit: Int = 50,
         startIndex: Int = 0,
     ): Result<SearchResult>
@@ -65,13 +69,18 @@ interface MediaRepository : LiveTvRepository, SyncPlayRepository, NewsletterRepo
         mediaTypes: List<MediaType>? = null,
         genres: List<String>? = null,
         years: List<Int>? = null,
+        studioIds: List<String>? = null,
         sortBy: String = "SortName",
         sortOrder: String = "Ascending",
+        tags: List<String>? = null,
     ): Flow<PagingData<MediaItem>>
 
     fun searchPaged(
         query: String,
         mediaTypes: List<MediaType>? = null,
+        genres: List<String>? = null,
+        years: List<Int>? = null,
+        tags: List<String>? = null,
     ): Flow<PagingData<MediaItem>>
 
     suspend fun getGenres(parentId: String? = null): Result<List<Genre>>
@@ -125,26 +134,11 @@ interface MediaRepository : LiveTvRepository, SyncPlayRepository, NewsletterRepo
         mediaTypes: List<MediaType>? = null,
     ): Flow<PagingData<MediaItem>>
 
-    suspend fun getLyrics(itemId: String): Result<LyricsResult>
-
-    suspend fun getLyricsWithFallback(
-        itemId: String,
-        artistName: String?,
-        trackName: String?,
-        duration: Double?,
-    ): Result<LyricsResult>
-
-    suspend fun searchLyrics(query: String): Result<List<LrcLibTrack>>
-
-    suspend fun getLyricsById(lrcLibId: Long, itemId: String): Result<LyricsResult>
-
     suspend fun toggleFavorite(itemId: String): Result<Boolean>
 
     suspend fun markPlayed(itemId: String): Result<Unit>
 
     suspend fun markUnplayed(itemId: String): Result<Unit>
-
-    suspend fun cleanupLyricsCache()
 
     /**
      * Drop in-memory caches so the next repository call fetches fresh user-data

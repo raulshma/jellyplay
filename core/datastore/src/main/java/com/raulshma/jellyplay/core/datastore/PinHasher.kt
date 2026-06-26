@@ -11,8 +11,9 @@ import javax.crypto.spec.PBEKeySpec
  * unit tested without an Android `Context`.
  *
  * Current hash format: `v2$<iterations>$<saltHex>$<hashHex>` where the hash
- * is derived via PBKDF2-HMAC-SHA256 (600k iterations, 128-bit salt, 256-bit
- * key). 600k iterations is the OWASP 2023 recommendation.
+ * is derived via PBKDF2-HMAC-SHA256 (310k iterations, 128-bit salt, 256-bit
+ * key). 310k iterations balances security with faster UI response, as 600k is too slow
+ * for quick PIN unlocks on some devices.
  *
  * Legacy format (unsalted SHA-256, 64 lowercase hex chars) is still accepted
  * by [verify] so existing users aren't locked out after upgrade. Callers can
@@ -24,7 +25,7 @@ import javax.crypto.spec.PBEKeySpec
  */
 internal object PinHasher {
     internal const val V2_PREFIX = "v2\$"
-    internal const val PBKDF2_ITERATIONS = 600_000
+    internal const val PBKDF2_ITERATIONS = 310_000
     internal const val PBKDF2_KEY_BITS = 256
     internal const val SALT_BYTES = 16
 
@@ -48,7 +49,15 @@ internal object PinHasher {
 
     fun needsMigration(storedHash: String?): Boolean {
         if (storedHash == null) return false
-        return !storedHash.startsWith(V2_PREFIX)
+        if (!storedHash.startsWith(V2_PREFIX)) return true
+        val parts = storedHash.split("$")
+        if (parts.size == 4) {
+            val iterations = parts[1].toIntOrNull()
+            if (iterations != null && iterations != PBKDF2_ITERATIONS) {
+                return true
+            }
+        }
+        return false
     }
 
     private fun verifyPbkdf2(input: String, stored: String): Boolean {

@@ -34,6 +34,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
@@ -68,6 +69,7 @@ import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.onFocusEvent
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
@@ -77,6 +79,8 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.paging.LoadState
 import androidx.paging.compose.collectAsLazyPagingItems
+import com.raulshma.jellyplay.core.model.MediaType
+import com.raulshma.jellyplay.core.model.OfflineMediaItem
 import androidx.paging.compose.itemKey
 import com.raulshma.jellyplay.core.data.repository.SearchHistoryItem
 import com.raulshma.jellyplay.core.ui.components.AppendErrorFooter
@@ -89,15 +93,20 @@ import com.raulshma.jellyplay.core.ui.components.rememberScreenBackgroundColor
 import com.raulshma.jellyplay.core.ui.components.SeerrMediaCard
 import com.raulshma.jellyplay.core.ui.components.SeerrRequestDialog
 import com.raulshma.jellyplay.core.ui.components.rememberSeerrCardLoadingState
+import com.raulshma.jellyplay.core.ui.image.MediaImage
 import com.raulshma.jellyplay.core.ui.adaptive.LocalAdaptiveInfo
 import com.raulshma.jellyplay.core.ui.navigation.Route
+import androidx.compose.runtime.compositionLocalOf
+import androidx.compose.runtime.staticCompositionLocalOf
 import com.raulshma.jellyplay.core.ui.adaptive.WindowSizeClass
 import com.raulshma.jellyplay.core.ui.adaptive.*
 import com.raulshma.jellyplay.core.ui.tv.LocalTvMode
 import com.raulshma.jellyplay.core.ui.tv.RequestOrRestoreFocus
 import com.raulshma.jellyplay.core.ui.tv.TvFocusableGrid
 import com.raulshma.jellyplay.core.ui.tv.TvFocusableItemRow
+import com.raulshma.jellyplay.core.ui.tv.rememberTvFocusState
 import com.raulshma.jellyplay.core.ui.tv.tryRequestFocus
+import com.raulshma.jellyplay.core.ui.tv.tvFocusIndicator
 import com.raulshma.jellyplay.feature.search.components.SearchFilterSheet
 import com.raulshma.jellyplay.core.designsystem.theme.ShapeCache
 import java.util.Locale
@@ -106,6 +115,9 @@ import com.composables.icons.tabler.outline.*
 import androidx.compose.ui.res.stringResource
 import com.raulshma.jellyplay.feature.search.R
 
+val LocalPendingSearchQuery = compositionLocalOf<String?> { null }
+val LocalConsumeSearchQuery = staticCompositionLocalOf<() -> Unit> { {} }
+
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class, ExperimentalMaterial3ExpressiveApi::class)
 @Composable
 fun SearchScreen(
@@ -113,6 +125,14 @@ fun SearchScreen(
     onNavigate: (Route) -> Unit = {},
     viewModel: SearchViewModel = hiltViewModel(),
 ) {
+    val pendingQuery = LocalPendingSearchQuery.current
+    val consumeQuery = LocalConsumeSearchQuery.current
+    androidx.compose.runtime.LaunchedEffect(pendingQuery) {
+        pendingQuery?.let { query ->
+            viewModel.search(query)
+            consumeQuery()
+        }
+    }
     var requestItem by remember { mutableStateOf<com.raulshma.jellyplay.core.model.seerr.SeerrSearchItem?>(null) }
     val requestResult by viewModel.requestResult.collectAsStateWithLifecycle()
     val radarrServers by viewModel.radarrServers.collectAsStateWithLifecycle()
@@ -124,6 +144,7 @@ fun SearchScreen(
     val query = viewModel.query
     val filters by viewModel.filters.collectAsStateWithLifecycle()
     val genres by viewModel.genres.collectAsStateWithLifecycle()
+    val tags by viewModel.tags.collectAsStateWithLifecycle()
     val showFilters by viewModel.showFilters.collectAsStateWithLifecycle()
     val searchHistory by viewModel.searchHistory.collectAsStateWithLifecycle()
 
@@ -297,17 +318,17 @@ fun SearchScreen(
                                     .focusRequester(focusRequester)
                                     .onFocusEvent { isSearchFocused = it.isFocused }
                                     ,
-                                placeholder = {
+                                    placeholder = {
                                     Text(
                                         "Search movies, shows, music...",
-                                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.4f),
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
                                     )
                                 },
                                 leadingIcon = {
                                     Icon(
                                         Tabler.Outline.Search,
                                         contentDescription = null,
-                                        tint = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f),
+                                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
                                         modifier = Modifier.size(20.dp),
                                     )
                                 },
@@ -324,7 +345,7 @@ fun SearchScreen(
                                             Icon(
                                                 imageVector = Tabler.Outline.X,
                                                 contentDescription = "Clear search",
-                                                tint = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f),
+                                                tint = MaterialTheme.colorScheme.onSurfaceVariant,
                                                 modifier = Modifier.size(16.dp),
                                             )
                                         }
@@ -350,7 +371,7 @@ fun SearchScreen(
                                             Icon(
                                                 imageVector = Tabler.Outline.Microphone,
                                                 contentDescription = "Voice search",
-                                                tint = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f),
+                                                tint = MaterialTheme.colorScheme.onSurfaceVariant,
                                                 modifier = Modifier.size(16.dp),
                                             )
                                         }
@@ -368,6 +389,66 @@ fun SearchScreen(
                             containerColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.08f),
                         ),
                     ) { }
+                }
+
+                // ── Search suggestions dropdown ──
+                val suggestions by viewModel.suggestions.collectAsStateWithLifecycle()
+                AnimatedVisibility(
+                    visible = suggestions.isNotEmpty() && query.isNotBlank() && isSearchFocused,
+                    enter = fadeIn(tween(200, easing = AlphaEasing)) + expandVertically(),
+                    exit = fadeOut(tween(150, easing = AlphaEasing)) + shrinkVertically(),
+                ) {
+                    androidx.compose.foundation.lazy.LazyColumn(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 24.dp)
+                            .padding(top = 4.dp)
+                            .clip(ShapeCache.smooth16)
+                            .background(MaterialTheme.colorScheme.surfaceContainerHigh.copy(alpha = 0.95f)),
+                    ) {
+                        items(suggestions.take(8), key = { it.id }) { item ->
+                            val suggestionFocusState = rememberTvFocusState(focusedScale = 1.0f)
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .then(suggestionFocusState.focusModifier)
+                                    .tvFocusIndicator(suggestionFocusState, ShapeCache.smooth8)
+                                    .clickable {
+                                        viewModel.search(item.name)
+                                    }
+                                    .padding(horizontal = 16.dp, vertical = 12.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(12.dp),
+                            ) {
+                                Icon(
+                                    imageVector = when (item.mediaType) {
+                                        MediaType.MOVIE -> Tabler.Outline.Movie
+                                        MediaType.SERIES -> Tabler.Outline.DeviceTv
+                                        MediaType.EPISODE -> Tabler.Outline.DeviceTv
+                                        MediaType.AUDIO, MediaType.MUSIC, MediaType.ALBUM -> Tabler.Outline.Music
+                                        else -> Tabler.Outline.File
+                                    },
+                                    contentDescription = null,
+                                    modifier = Modifier.size(18.dp),
+                                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                                )
+                                Column(modifier = Modifier.weight(1f)) {
+                                    Text(
+                                        item.name,
+                                        style = MaterialTheme.typography.bodyMedium,
+                                        maxLines = 1,
+                                        overflow = TextOverflow.Ellipsis,
+                                    )
+                                    val subtitle = item.year?.toString() ?: item.mediaType.name
+                                    Text(
+                                        subtitle,
+                                        style = MaterialTheme.typography.labelSmall,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    )
+                                }
+                            }
+                        }
+                    }
                 }
 
                 // ── Active filters bar (dismissible glass tags) ──
@@ -400,8 +481,11 @@ fun SearchScreen(
                                 },
                             )
                         }
+                        val clearAllFocusState = rememberTvFocusState()
                         Box(
                             modifier = Modifier
+                                .then(clearAllFocusState.focusModifier)
+                                .tvFocusIndicator(clearAllFocusState, ShapeCache.smooth8)
                                 .clip(ShapeCache.smooth8)
                                 .clickable { viewModel.clearFilters() }
                                 .padding(horizontal = 10.dp, vertical = 5.dp),
@@ -424,7 +508,7 @@ fun SearchScreen(
                     Text(
                         text = "${pagedResults.itemCount} results",
                         style = MaterialTheme.typography.labelMedium,
-                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f),
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
                         modifier = Modifier.padding(
                             horizontal = 24.dp,
                             vertical = 8.dp,
@@ -445,6 +529,25 @@ fun SearchScreen(
                 val showSeerr = isSeerrConnected && isSeerrSearchEnabled && seerrResults.isNotEmpty()
                 val showSeerrError = isSeerrConnected && isSeerrSearchEnabled && seerrSearchError && !showSeerr
 
+                // ── On-device (downloads) section ──
+                // Surfaces downloaded items that match the current query. Always
+                // rendered when non-empty so the user can play even without a
+                // server connection. Placed above Seerr/Library because on-device
+                // results are immediately playable.
+                val offlineResults by viewModel.offlineResults.collectAsStateWithLifecycle()
+                val showOffline = offlineResults.isNotEmpty() && query.isNotBlank()
+                if (showOffline) {
+                    OfflineSearchSection(
+                        items = offlineResults,
+                        contentPadding = contentPad,
+                        spacing = spacing,
+                        cardWidth = seerrCardWidth,
+                        onItemClick = { item ->
+                            onItemClick(item.id, item.mediaType, item.seriesId, item.name)
+                        },
+                    )
+                }
+
                 // Seerr results horizontal section (shown independently of library results)
                 if (showSeerr) {
                     val uniqueSeerrResults = remember(seerrResults) { seerrResults.distinctBy { it.id } }
@@ -456,7 +559,7 @@ fun SearchScreen(
                         Text(
                             text = "Request via Seerr",
                             style = MaterialTheme.typography.titleSmall,
-                            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f),
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
                             fontWeight = FontWeight.SemiBold,
                             modifier = Modifier.padding(bottom = 8.dp),
                         )
@@ -509,7 +612,7 @@ fun SearchScreen(
                             Text(
                                 text = "Seerr search failed",
                                 style = MaterialTheme.typography.labelMedium,
-                                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f),
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
                             )
                         }
                         Row(
@@ -541,14 +644,14 @@ fun SearchScreen(
                 // Library content (grid, empty state, or initial state)
                 Box(modifier = Modifier.fillMaxWidth().weight(1f)) {
                     when {
-                        pagedResults.itemCount == 0 && query.isNotBlank() && !isRefreshing && !showSeerr && !showSeerrError -> {
+                        pagedResults.itemCount == 0 && query.isNotBlank() && !isRefreshing && !showSeerr && !showSeerrError && !showOffline -> {
                             ScreenEmptyState(
                                 icon = Tabler.Outline.Search,
                                 title = stringResource(R.string.search_no_results_found),
                                 description = if (hasActiveFilters) stringResource(R.string.search_try_adjusting_filters) else null,
                             )
                         }
-                        pagedResults.itemCount == 0 && query.isBlank() && !showSeerr -> {
+                        query.isBlank() && !showSeerr -> {
                             if (searchHistory.isNotEmpty()) {
                                 Column(
                                     modifier = Modifier
@@ -568,11 +671,14 @@ fun SearchScreen(
                                             fontWeight = FontWeight.SemiBold,
                                             color = MaterialTheme.colorScheme.onSurface,
                                         )
+                                        val clearHistoryFocusState = rememberTvFocusState()
                                         Text(
                                             text = "Clear all",
                                             style = MaterialTheme.typography.labelMedium,
                                             color = MaterialTheme.colorScheme.primary,
                                             modifier = Modifier
+                                                .then(clearHistoryFocusState.focusModifier)
+                                                .tvFocusIndicator(clearHistoryFocusState, CircleShape)
                                                 .clip(CircleShape)
                                                 .clickable { viewModel.clearHistory() }
                                                 .padding(horizontal = 8.dp, vertical = 4.dp),
@@ -587,9 +693,12 @@ fun SearchScreen(
                                             key = { searchHistory[it].id },
                                         ) { index ->
                                             val item = searchHistory[index]
+                                            val historyRowFocusState = rememberTvFocusState()
                                             Row(
                                                 modifier = Modifier
                                                     .fillMaxWidth()
+                                                    .then(historyRowFocusState.focusModifier)
+                                                    .tvFocusIndicator(historyRowFocusState, MaterialTheme.shapes.small)
                                                     .clip(MaterialTheme.shapes.small)
                                                     .clickable { viewModel.search(item.query) }
                                                     .padding(horizontal = 12.dp, vertical = 10.dp),
@@ -614,10 +723,13 @@ fun SearchScreen(
                                                         overflow = TextOverflow.Ellipsis,
                                                     )
                                                 }
+                                                val deleteFocusState = rememberTvFocusState()
                                                 Box(
                                                     contentAlignment = Alignment.Center,
                                                     modifier = Modifier
                                                         .size(48.dp)
+                                                        .then(deleteFocusState.focusModifier)
+                                                        .tvFocusIndicator(deleteFocusState, CircleShape)
                                                         .clip(CircleShape)
                                                         .clickable { viewModel.deleteHistoryItem(item.id) },
                                                 ) {
@@ -644,7 +756,17 @@ fun SearchScreen(
                             // ── Library grid ──
                             TvFocusableGrid(
                                 itemCount = pagedResults.itemCount,
-                                key = pagedResults.itemKey { it.id },
+                                key = { index ->
+                                    if (index in 0 until pagedResults.itemCount) {
+                                        try {
+                                            pagedResults.peek(index)?.id ?: "search_item_placeholder_$index"
+                                        } catch (_: IndexOutOfBoundsException) {
+                                            "search_item_placeholder_$index"
+                                        }
+                                    } else {
+                                        "search_item_placeholder_$index"
+                                    }
+                                },
                                 columns = GridCells.Adaptive(gridCellSize),
                                 contentPadding = gridPadding,
                                 horizontalArrangement = Arrangement.spacedBy(spacing),
@@ -652,7 +774,15 @@ fun SearchScreen(
                                 modifier = Modifier.fillMaxSize(),
                                 contentType = { "mediaItem" },
                             ) { index, itemModifier ->
-                                val item = pagedResults[index]
+                                val item = if (index in 0 until pagedResults.itemCount) {
+                                    try {
+                                        pagedResults[index]
+                                    } catch (_: IndexOutOfBoundsException) {
+                                        null
+                                    }
+                                } else {
+                                    null
+                                }
                                 if (item != null) {
                                     AnimatedSearchItem(index = index) {
                                         val itemProgress = item.progressFraction()
@@ -775,6 +905,7 @@ fun SearchScreen(
         SearchFilterSheet(
             currentFilters = filters,
             genres = genres,
+            availableTags = tags,
             onApply = { newFilters ->
                 viewModel.updateFilters(newFilters)
                 viewModel.toggleShowFilters()
@@ -815,4 +946,144 @@ private fun AnimatedSearchItem(
     ) {
         content()
     }
+}
+
+/**
+ * Horizontal row of on-device (downloaded) items matching the current query.
+ * Rendered above the library grid and Seerr row because offline results are
+ * immediately playable, even without a server connection. Uses
+ * [TvFocusableItemRow] so the same code path handles touch and D-pad entry.
+ */
+@Composable
+private fun OfflineSearchSection(
+    items: List<OfflineMediaItem>,
+    contentPadding: androidx.compose.ui.unit.Dp,
+    spacing: androidx.compose.ui.unit.Dp,
+    cardWidth: androidx.compose.ui.unit.Dp,
+    onItemClick: (OfflineMediaItem) -> Unit,
+) {
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(start = contentPadding, end = contentPadding, top = 12.dp),
+    ) {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(6.dp),
+        ) {
+            Icon(
+                Tabler.Outline.DeviceTv,
+                contentDescription = null,
+                modifier = Modifier.size(16.dp),
+                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            Text(
+                text = "On-device",
+                style = MaterialTheme.typography.titleSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                fontWeight = FontWeight.SemiBold,
+            )
+        }
+        Spacer(modifier = Modifier.height(8.dp))
+        TvFocusableItemRow(
+            items = items,
+            key = { it.id },
+            horizontalArrangement = Arrangement.spacedBy(spacing),
+            contentPadding = PaddingValues(end = contentPadding),
+        ) { _, item, itemModifier ->
+            OfflineSearchCard(
+                item = item,
+                onClick = { onItemClick(item) },
+                modifier = itemModifier.width(cardWidth),
+            )
+        }
+    }
+}
+
+@Composable
+private fun OfflineSearchCard(
+    item: OfflineMediaItem,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    val focusState = rememberTvFocusState()
+    Column(
+        modifier = modifier
+            .fillMaxWidth()
+            .then(focusState.focusModifier)
+            .tvFocusIndicator(focusState, ShapeCache.smooth12)
+            .clip(ShapeCache.smooth12)
+            .clickable(
+                interactionSource = remember { MutableInteractionSource() },
+                indication = null,
+                onClick = onClick,
+            ),
+    ) {
+        val imageModifier = Modifier
+            .fillMaxWidth()
+            .aspectRatio(2f / 3f)
+            .clip(ShapeCache.smooth12)
+        if (!item.posterPath.isNullOrBlank()) {
+            MediaImage(
+                url = item.posterPath!!,
+                contentDescription = item.name,
+                blurHash = item.blurHashPrimary,
+                modifier = imageModifier,
+                contentScale = ContentScale.Crop,
+            )
+        } else {
+            Box(
+                modifier = imageModifier.background(MaterialTheme.colorScheme.surfaceVariant),
+                contentAlignment = Alignment.Center,
+            ) {
+                Text(
+                    text = item.name.take(2).uppercase(),
+                    style = MaterialTheme.typography.headlineMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+        }
+        Text(
+            text = item.name,
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurface,
+            maxLines = 2,
+            overflow = TextOverflow.Ellipsis,
+            modifier = Modifier.padding(top = 6.dp),
+        )
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            modifier = Modifier.padding(top = 2.dp),
+            horizontalArrangement = Arrangement.spacedBy(4.dp),
+        ) {
+            Icon(
+                Tabler.Outline.Download,
+                contentDescription = null,
+                modifier = Modifier.size(10.dp),
+                tint = MaterialTheme.colorScheme.tertiary,
+            )
+            Text(
+                text = item.mediaType.displayName(),
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+    }
+}
+
+private fun MediaType.displayName(): String = when (this) {
+    MediaType.MOVIE -> "Movie"
+    MediaType.SERIES -> "Series"
+    MediaType.SEASON -> "Season"
+    MediaType.EPISODE -> "Episode"
+    MediaType.MUSIC, MediaType.AUDIO -> "Track"
+    MediaType.ALBUM -> "Album"
+    MediaType.ARTIST -> "Artist"
+    MediaType.MUSIC_VIDEO -> "Music Video"
+    MediaType.COLLECTION -> "Collection"
+    MediaType.PHOTO, MediaType.PHOTO_FOLDER -> "Photo"
+    MediaType.LIVE_TV -> "Live TV"
+    MediaType.CHANNEL -> "Channel"
+    MediaType.UNKNOWN -> "Item"
 }

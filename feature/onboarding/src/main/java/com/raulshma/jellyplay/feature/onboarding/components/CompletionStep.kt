@@ -43,6 +43,8 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import com.raulshma.jellyplay.core.designsystem.theme.JellyPlayExpressiveTitles
 import com.raulshma.jellyplay.core.designsystem.theme.ShapeCache
+import com.raulshma.jellyplay.core.ui.tv.rememberTvFocusState
+import com.raulshma.jellyplay.core.ui.tv.tvFocusIndicator
 
 @Composable
 fun CompletionStep(
@@ -198,10 +200,13 @@ fun CompletionStep(
 
         Spacer(Modifier.height(40.dp))
 
+        val focusState = rememberTvFocusState(focusedScale = 1.05f)
         Button(
             onClick = onStartWatching,
             modifier = Modifier
                 .fillMaxWidth()
+                .then(focusState.focusModifier)
+                .tvFocusIndicator(focusState, ShapeCache.smooth12)
                 .height(56.dp)
                 .graphicsLayer {
                     scaleX = buttonScale

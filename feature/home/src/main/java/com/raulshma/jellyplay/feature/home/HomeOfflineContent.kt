@@ -34,6 +34,7 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import com.raulshma.jellyplay.core.model.DownloadStatus
 import com.raulshma.jellyplay.core.model.OfflineMediaItem
+import com.raulshma.jellyplay.core.ui.components.focusIndicator
 import com.raulshma.jellyplay.core.ui.image.MediaImage
 import com.raulshma.jellyplay.core.ui.components.JellyPlayLinearProgressIndicator
 import com.composables.icons.tabler.Tabler
@@ -73,18 +74,18 @@ fun OfflineHomeContent(
                             Tabler.Outline.Download,
                             contentDescription = null,
                             modifier = Modifier.size(48.dp),
-                            tint = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.3f),
+                            tint = MaterialTheme.colorScheme.onSurfaceVariant,
                         )
                         Spacer(Modifier.height(12.dp))
                         Text(
                             "No downloads yet",
                             style = MaterialTheme.typography.bodyLarge,
-                            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f),
+                            color = MaterialTheme.colorScheme.onSurface,
                         )
                         Text(
                             "Download media while online to access it offline",
                             style = MaterialTheme.typography.bodyMedium,
-                            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.4f),
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
                         )
                     }
                 }
@@ -110,6 +111,7 @@ fun OfflineHomeContent(
                         .fillMaxWidth()
                         .clip(RoundedCornerShape(12.dp))
                         .background(MaterialTheme.colorScheme.surfaceContainer)
+                        .focusIndicator()
                         .clickable { onItemClick() }
                         .padding(12.dp),
                     verticalAlignment = Alignment.CenterVertically,
@@ -156,7 +158,7 @@ fun OfflineHomeContent(
                             Text(
                                 text = offlineItem.seriesName!!,
                                 style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f),
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
                                 maxLines = 1,
                                 overflow = TextOverflow.Ellipsis,
                             )
@@ -169,7 +171,7 @@ fun OfflineHomeContent(
                                 Text(
                                     text = offlineItem.year.toString(),
                                     style = MaterialTheme.typography.labelSmall,
-                                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f),
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
                                 )
                             }
                             if (offlineItem.communityRating != null && offlineItem.communityRating!! > 0) {
@@ -177,20 +179,20 @@ fun OfflineHomeContent(
                                     Text(
                                         text = " · ",
                                         style = MaterialTheme.typography.labelSmall,
-                                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.3f),
+                                        color = MaterialTheme.colorScheme.outlineVariant,
                                     )
                                 }
                                 Text(
                                     text = "★ ${String.format("%.1f", offlineItem.communityRating)}",
                                     style = MaterialTheme.typography.labelSmall,
-                                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f),
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
                                 )
                             }
                             if (!offlineItem.officialRating.isNullOrBlank()) {
                                 Text(
                                     text = " · ${offlineItem.officialRating}",
                                     style = MaterialTheme.typography.labelSmall,
-                                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.4f),
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
                                 )
                             }
                         }
@@ -198,7 +200,7 @@ fun OfflineHomeContent(
                             Text(
                                 text = offlineItem.genres.take(3).joinToString(", "),
                                 style = MaterialTheme.typography.labelSmall,
-                                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.4f),
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
                                 maxLines = 1,
                                 overflow = TextOverflow.Ellipsis,
                             )
@@ -275,6 +277,7 @@ fun DownloadedSection(
             Column(
                 modifier = Modifier
                     .width(120.dp)
+                    .focusIndicator()
                     .clickable { onOfflineLibraryClick() },
             ) {
                 val posterModifier = Modifier

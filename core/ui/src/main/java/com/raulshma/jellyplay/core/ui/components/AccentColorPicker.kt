@@ -46,6 +46,7 @@ import com.raulshma.jellyplay.core.designsystem.theme.AccentColorSwatch
 import com.raulshma.jellyplay.core.designsystem.theme.ShapeCache
 import com.raulshma.jellyplay.core.model.ColorStyle
 import com.raulshma.jellyplay.core.ui.tv.rememberTvFocusState
+import com.raulshma.jellyplay.core.ui.tv.tvFocusIndicator
 
 @Composable
 fun AccentColorPicker(
@@ -160,6 +161,7 @@ fun SwatchCircle(
             .clip(CircleShape)
             .background(color)
             .then(tvFocusState.focusModifier)
+            .tvFocusIndicator(tvFocusState, CircleShape)
             .clickable(
                 interactionSource = interactionSource,
                 indication = null,
@@ -222,6 +224,7 @@ fun DynamicSwatchCircle(
             .clip(CircleShape)
             .background(gradient)
             .then(tvFocusState.focusModifier)
+            .tvFocusIndicator(tvFocusState, CircleShape)
             .clickable(
                 interactionSource = interactionSource,
                 indication = null,
@@ -229,12 +232,20 @@ fun DynamicSwatchCircle(
             ),
         contentAlignment = Alignment.Center
     ) {
-        Icon(
-            imageVector = Tabler.Outline.Wand,
-            contentDescription = "Dynamic wallpaper colors",
-            tint = Color.White,
-            modifier = Modifier.size(18.dp)
-        )
+        Box(
+            modifier = Modifier
+                .size(22.dp)
+                .clip(CircleShape)
+                .background(Color.Black.copy(alpha = 0.35f)),
+            contentAlignment = Alignment.Center,
+        ) {
+            Icon(
+                imageVector = Tabler.Outline.Wand,
+                contentDescription = "Dynamic wallpaper colors",
+                tint = Color.White,
+                modifier = Modifier.size(16.dp)
+            )
+        }
     }
 }
 
@@ -323,6 +334,7 @@ fun ColorStylePicker(
                         .clip(ShapeCache.smooth14)
                         .background(containerColor)
                         .then(tvFocusState.focusModifier)
+                        .tvFocusIndicator(tvFocusState, ShapeCache.smooth14)
                         .clickable(
                             interactionSource = interactionSource,
                             indication = null,
@@ -430,6 +442,7 @@ fun SynthwaveAccentPicker(
                         .clip(CircleShape)
                         .background(color)
                         .then(tvFocusState.focusModifier)
+                        .tvFocusIndicator(tvFocusState, CircleShape)
                         .clickable(
                             interactionSource = interactionSource,
                             indication = null,
@@ -543,6 +556,7 @@ fun SoothingAccentPicker(
                         .clip(CircleShape)
                         .background(color)
                         .then(tvFocusState.focusModifier)
+                        .tvFocusIndicator(tvFocusState, CircleShape)
                         .clickable(
                             interactionSource = interactionSource,
                             indication = null,

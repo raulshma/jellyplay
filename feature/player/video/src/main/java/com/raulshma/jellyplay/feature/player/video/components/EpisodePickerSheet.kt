@@ -368,7 +368,7 @@ private fun EpisodeRow(
                     Text(
                         text = "•",
                         style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.4f),
+                        color = MaterialTheme.colorScheme.outlineVariant,
                     )
                     Spacer(Modifier.width(4.dp))
                     Text(

@@ -12,8 +12,10 @@ class MediaPagingSource(
     private val mediaTypes: List<MediaType>? = null,
     private val genres: List<String>? = null,
     private val years: List<Int>? = null,
+    private val studioIds: List<String>? = null,
     private val sortBy: String = "SortName",
     private val sortOrder: String = "Ascending",
+    private val tags: List<String>? = null,
 ) : PagingSource<Int, MediaItem>() {
 
     override fun getRefreshKey(state: PagingState<Int, MediaItem>): Int? {
@@ -33,10 +35,12 @@ class MediaPagingSource(
                 mediaTypes = mediaTypes,
                 genres = genres,
                 years = years,
+                studioIds = studioIds,
                 sortBy = sortBy,
                 sortOrder = sortOrder,
                 startIndex = startIndex,
                 limit = pageSize,
+                tags = tags,
             )
 
             result.fold(

@@ -87,11 +87,15 @@ fun AdaptiveInfo.toLayoutTokens(isTv: Boolean): JellyPlayLayoutTokens =
         detailBodyMaxWidth = detailBodyMaxWidth(isTv),
     )
 
+object PhoneFocusDefaults {
+    val BorderWidth = 1.5.dp
+}
+
 private fun defaultFocusTokens(isTv: Boolean): JellyPlayFocusTokens =
     JellyPlayFocusTokens(
-        enabled = isTv,
+        enabled = true,
         focusedScale = if (isTv) 1.08f else 1f,
         compactFocusedScale = if (isTv) 1.04f else 1f,
-        borderWidth = if (isTv) TvFocusDefaults.BorderWidth else 0.dp,
+        borderWidth = if (isTv) TvFocusDefaults.BorderWidth else PhoneFocusDefaults.BorderWidth,
         glowElevation = if (isTv) TvFocusDefaults.GlowElevation else 0.dp,
     )

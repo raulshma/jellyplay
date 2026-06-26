@@ -391,10 +391,13 @@ private fun InstantMixButton(
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
+    val focusState = rememberTvFocusState(focusedScale = 1.04f)
     Button(
         onClick = onClick,
         enabled = !isStartingMix,
-        modifier = modifier,
+        modifier = modifier
+            .then(focusState.focusModifier)
+            .tvFocusIndicator(focusState, ShapeCache.smooth12),
     ) {
         if (isStartingMix) {
             JellyPlayCircularProgressIndicator(

@@ -60,7 +60,16 @@ class JellyfinApiEngine @Inject constructor(
 
     suspend fun <T> apiResult(block: suspend () -> T): Result<T> =
         runCatching { withContext(Dispatchers.IO) { block() } }
-            .recoverCatching { throw RuntimeException(JellyfinErrorMapper.map(it), it) }
+            .recoverCatching {
+                // Wrap into a typed ApiException carrying a pre-classified retryable flag.
+                // The friendly message is still produced by JellyfinErrorMapper so existing
+                // consumers reading `.message` see the same user-facing text.
+                // Note: CancellationException thrown by `block` is captured by the outer
+                // runCatching (Kotlin stdlib behaviour) and reaches here as a failure; we
+                // preserve it on the result so RetryPolicy.isRetryable() returns false and
+                // the caller can observe the cancellation rather than silently retrying.
+                throw ApiException.fromJellyfin(it)
+            }
 
     suspend fun <T> apiResultWithRetry(
         maxRetries: Int = RetryPolicy.DEFAULT_MAX_RETRIES,

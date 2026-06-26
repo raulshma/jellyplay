@@ -135,6 +135,7 @@ fun LibraryScreen(
     val selectedFolder by viewModel.selectedFolder.collectAsStateWithLifecycle()
     val filters by viewModel.filters.collectAsStateWithLifecycle()
     val genres by viewModel.genres.collectAsStateWithLifecycle()
+    val tags by viewModel.tags.collectAsStateWithLifecycle()
     val showFilters by viewModel.showFilters.collectAsStateWithLifecycle()
     val viewMode by viewModel.viewMode.collectAsStateWithLifecycle()
 
@@ -400,6 +401,7 @@ fun LibraryScreen(
                 PullToRefreshBox(
                     isRefreshing = pagedItems.loadState.refresh is LoadState.Loading,
                     onRefresh = { pagedItems.refresh() },
+                    enabled = !isTv,
                     modifier = Modifier.fillMaxSize(),
                 ) {
                     when (pagedItems.loadState.refresh) {
@@ -431,7 +433,7 @@ fun LibraryScreen(
                                             Tabler.Outline.Search,
                                             contentDescription = null,
                                             modifier = Modifier.size(48.dp),
-                                            tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.4f),
+                                            tint = MaterialTheme.colorScheme.onSurfaceVariant,
                                         )
                                         Text(
                                             text = "No items found",
@@ -442,7 +444,7 @@ fun LibraryScreen(
                                             Text(
                                                 text = "Try adjusting your filters",
                                                 style = MaterialTheme.typography.bodySmall,
-                                                color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f),
+                                                color = MaterialTheme.colorScheme.onSurfaceVariant,
                                             )
                                         }
                                     }
@@ -615,6 +617,16 @@ fun LibraryScreen(
                                         modifier = Modifier.size(20.dp),
                                     )
                                 }
+                                IconButton(
+                                    onClick = { viewModel.shuffleLibrary() },
+                                    shapes = IconButtonDefaults.shapes(),
+                                ) {
+                                    Icon(
+                                        Tabler.Outline.ArrowsShuffle,
+                                        contentDescription = "Shuffle",
+                                        modifier = Modifier.size(20.dp),
+                                    )
+                                }
                             }
                         }
                     }
@@ -665,6 +677,7 @@ fun LibraryScreen(
         LibraryFilterSheet(
             currentFilters = filters,
             genres = genres,
+            availableTags = tags,
             onApply = { newFilters ->
                 viewModel.updateFilters(newFilters)
                 viewModel.toggleShowFilters()

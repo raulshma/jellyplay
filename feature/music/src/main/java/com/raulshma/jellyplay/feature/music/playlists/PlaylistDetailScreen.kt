@@ -19,6 +19,7 @@ import androidx.compose.foundation.layout.asPaddingValues
 import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
@@ -36,12 +37,15 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.raulshma.jellyplay.core.designsystem.theme.ShapeCache
 import com.raulshma.jellyplay.core.ui.adaptive.LocalAdaptiveInfo
 import com.raulshma.jellyplay.core.ui.adaptive.bottomPadding
 import com.raulshma.jellyplay.core.ui.adaptive.contentPadding
@@ -53,6 +57,10 @@ import com.raulshma.jellyplay.core.ui.components.ScreenLoadingState
 import com.raulshma.jellyplay.core.ui.components.resolveHeaderStatus
 import com.raulshma.jellyplay.core.ui.components.LocalNetworkStatus
 import com.raulshma.jellyplay.core.ui.tv.LocalTvMode
+import com.raulshma.jellyplay.core.ui.tv.TvGrabInitialFocus
+import com.raulshma.jellyplay.core.ui.tv.rememberTvFocusState
+import com.raulshma.jellyplay.core.ui.tv.tvFocusIndicator
+import com.raulshma.jellyplay.core.ui.tv.tvFocusRestorer
 import com.composables.icons.tabler.Tabler
 import com.composables.icons.tabler.outline.*
 
@@ -83,6 +91,15 @@ fun PlaylistDetailScreen(
 
     val navOffsetPx = com.raulshma.jellyplay.core.ui.components.LocalFloatingNavOffset.current
     var isRefreshing by remember { mutableStateOf(false) }
+
+    // TV focus-on-launch: focus the first track once data arrives so D-pad input lands on content,
+    // not the navigation drawer.
+    val listFocusRequester = remember { FocusRequester() }
+    TvGrabInitialFocus(
+        focusRequester = listFocusRequester,
+        itemCount = viewModel.items.size,
+        tag = "playlist_detail_init",
+    )
 
     JellyPlayScreenScaffold(
         title = resolvedPlaylistName,
@@ -116,7 +133,10 @@ fun PlaylistDetailScreen(
                 }
                 else -> {
                     LazyColumn(
-                        modifier = Modifier.fillMaxSize(),
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .tvFocusRestorer()
+                            .focusRequester(listFocusRequester),
                         contentPadding = PaddingValues(
                             start = contentPad,
                             end = contentPad,
@@ -137,12 +157,15 @@ fun PlaylistDetailScreen(
             }
 
             if (viewModel.items.isNotEmpty()) {
+                val playAllFocusState = rememberTvFocusState(focusedScale = 1.05f)
                 ExtendedFloatingActionButton(
                     onClick = { viewModel.playAll() },
                     icon = { Icon(Tabler.Outline.PlayerPlay, contentDescription = null) },
                     text = { Text("Play All") },
                     modifier = Modifier
                         .align(Alignment.BottomEnd)
+                        .then(playAllFocusState.focusModifier)
+                        .tvFocusIndicator(playAllFocusState, ShapeCache.smooth16)
                         .padding(end = 16.dp, bottom = 64.dp + WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding())
                         .offset {
                             val maxOffset = com.raulshma.jellyplay.core.designsystem.theme.Dimensions.floatingNavHeight.toPx()
@@ -171,6 +194,8 @@ private fun PlaylistTrackRow(
     )
 
     var showMenu by remember { mutableStateOf(false) }
+    val menuFocusState = rememberTvFocusState()
+    val playFocusState = rememberTvFocusState()
 
     Row(
         modifier = Modifier
@@ -202,14 +227,17 @@ private fun PlaylistTrackRow(
                 Text(
                     text = subtitle,
                     style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.6f),
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
                 )
             }
         }
         if (onAddToQueue != null) {
-            IconButton(onClick = { showMenu = true }) {
+            IconButton(
+                onClick = { showMenu = true },
+                modifier = Modifier.then(menuFocusState.focusModifier).tvFocusIndicator(menuFocusState, CircleShape),
+            ) {
                 Icon(
                     Tabler.Outline.DotsVertical,
                     contentDescription = "More options",
@@ -252,7 +280,10 @@ private fun PlaylistTrackRow(
                 }
             }
         }
-        IconButton(onClick = onClick) {
+        IconButton(
+            onClick = onClick,
+            modifier = Modifier.then(playFocusState.focusModifier).tvFocusIndicator(playFocusState, CircleShape),
+        ) {
             Icon(
                 Tabler.Outline.PlayerPlay,
                 contentDescription = "Play",

@@ -17,6 +17,8 @@ import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.flatMapLatest
+import kotlinx.serialization.Serializable
+import kotlinx.serialization.json.Json
 import javax.inject.Inject
 
 @Immutable
@@ -26,6 +28,19 @@ data class LibraryFilters(
     val years: List<Int> = emptyList(),
     val sortBy: SortOption = SortOption.SORT_NAME,
     val playedStatus: PlayedStatus = PlayedStatus.ALL,
+    val tags: List<String> = emptyList(),
+    val minRating: Float = 0f,
+)
+
+@Serializable
+internal data class SavedLibraryFilters(
+    val mediaTypes: List<String> = emptyList(),
+    val genres: List<String> = emptyList(),
+    val years: List<Int> = emptyList(),
+    val sortBy: String = "SORT_NAME",
+    val playedStatus: String = "ALL",
+    val tags: List<String> = emptyList(),
+    val minRating: Float = 0f,
 )
 
 enum class SortOption(val displayName: String, val apiValue: String) {
@@ -34,6 +49,9 @@ enum class SortOption(val displayName: String, val apiValue: String) {
     YEAR_ASC("Oldest", "ProductionYear,SortName"),
     RATING("Rating", "CommunityRating,SortName"),
     DATE_ADDED("Recently Added", "DateCreated,SortName"),
+    RANDOM("Random", "Random"),
+    DATE_PLAYED("Recently Played", "DatePlayed,SortName"),
+    PREMIERE_DATE("Release Date", "PremiereDate,SortName"),
 }
 
 enum class PlayedStatus(val displayName: String) {
@@ -67,6 +85,9 @@ class LibraryViewModel @Inject constructor(
     private val _genres = stateFlow<List<Genre>>(emptyList())
     val genres = _genres.flow
 
+    private val _tags = stateFlow<List<String>>(emptyList())
+    val tags = _tags.flow
+
     private val _showFilters = stateFlow(false)
     val showFilters = _showFilters.flow
 
@@ -86,6 +107,7 @@ class LibraryViewModel @Inject constructor(
             genres = filters.genres.ifEmpty { null },
             years = filters.years.ifEmpty { null },
             sortBy = filters.sortBy.apiValue,
+            tags = filters.tags.ifEmpty { null },
         )
     }
     .cachedIn(scope)
@@ -93,6 +115,7 @@ class LibraryViewModel @Inject constructor(
     init {
         loadFolders()
         loadGenres()
+        loadTags()
         loadViewMode()
     }
 
@@ -138,17 +161,42 @@ class LibraryViewModel @Inject constructor(
         }
     }
 
+    private fun loadTags() {
+        launch {
+            mediaRepository.getTags()
+                .onSuccess { _tags.set(it) }
+        }
+    }
+
     fun selectFolder(folder: LibraryFolder?) {
         _selectedFolder.set(folder)
         if (folder != null) {
             val prefs = preferencesStore.preferences.value
             val savedOrder = prefs.defaultLibrarySortOrders[folder.id]
-            if (savedOrder != null) {
+            val savedFiltersJson = prefs.libraryFilters[folder.id]
+
+            var newFilters = LibraryFilters()
+
+            if (savedFiltersJson != null) {
+                try {
+                    val saved = Json.decodeFromString<SavedLibraryFilters>(savedFiltersJson)
+                    newFilters = LibraryFilters(
+                        mediaTypes = saved.mediaTypes.mapNotNull { runCatching { MediaType.valueOf(it) }.getOrNull() },
+                        genres = saved.genres,
+                        years = saved.years,
+                        sortBy = SortOption.entries.find { it.name == saved.sortBy || it.apiValue == saved.sortBy } ?: SortOption.SORT_NAME,
+                        playedStatus = PlayedStatus.entries.find { it.name == saved.playedStatus } ?: PlayedStatus.ALL,
+                    )
+                } catch (_: Exception) {
+                    newFilters = LibraryFilters()
+                }
+            } else if (savedOrder != null) {
                 val option = SortOption.entries.find { it.name == savedOrder || it.apiValue == savedOrder } ?: SortOption.SORT_NAME
-                _filters.set(_filters.value.copy(sortBy = option))
-            } else {
-                _filters.set(_filters.value.copy(sortBy = SortOption.SORT_NAME))
+                newFilters = LibraryFilters(sortBy = option)
             }
+
+            _filters.set(newFilters)
+
             val savedViewMode = prefs.libraryViewModes[folder.id]?.let { modeName ->
                 runCatching { LibraryViewMode.valueOf(modeName) }.getOrNull()
             }
@@ -161,20 +209,31 @@ class LibraryViewModel @Inject constructor(
     }
 
     fun updateFilters(newFilters: LibraryFilters) {
-        val currentFilters = _filters.value
         _filters.set(newFilters)
-        if (newFilters.sortBy != currentFilters.sortBy) {
-            val folder = _selectedFolder.value
-            if (folder != null) {
-                launch {
-                    preferencesStore.setDefaultLibrarySortOrder(folder.id, newFilters.sortBy.name)
-                }
+        val folder = _selectedFolder.value
+        if (folder != null) {
+            launch {
+                preferencesStore.setDefaultLibrarySortOrder(folder.id, newFilters.sortBy.name)
+                val saved = SavedLibraryFilters(
+                    mediaTypes = newFilters.mediaTypes.map { it.name },
+                    genres = newFilters.genres,
+                    years = newFilters.years,
+                    sortBy = newFilters.sortBy.name,
+                    playedStatus = newFilters.playedStatus.name,
+                    tags = newFilters.tags,
+                    minRating = newFilters.minRating,
+                )
+                preferencesStore.setLibraryFilters(folder.id, Json.encodeToString(saved))
             }
         }
     }
 
     fun toggleShowFilters() {
         _showFilters.set(!_showFilters.value)
+    }
+
+    fun shuffleLibrary() {
+        updateFilters(_filters.value.copy(sortBy = SortOption.RANDOM))
     }
 
     fun clearFilters() {

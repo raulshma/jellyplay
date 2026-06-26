@@ -23,6 +23,7 @@ enum class ThemeMode {
     SYSTEM,
     LIGHT,
     DARK,
+    SCHEDULED,
 }
 
 @Immutable
@@ -201,3 +202,48 @@ enum class MeteredNetworkBehavior(val displayName: String) {
     WARN("Warn Before Streaming"),
     BLOCK("Block Streaming"),
 }
+
+@Immutable
+@Serializable
+enum class DateFormatPreference(val displayName: String) {
+    SYSTEM("System Default"),
+    US("MM/dd/yyyy"),
+    ISO("yyyy-MM-dd"),
+    EU("dd/MM/yyyy"),
+    LONG("MMMM d, yyyy"),
+    SHORT("M/d/yy"),
+}
+
+@Immutable
+@Serializable
+enum class AppFontScale(val displayName: String, val scale: Float) {
+    SMALL("Small (85%)", 0.85f),
+    DEFAULT("Default (100%)", 1.0f),
+    MEDIUM("Medium (115%)", 1.15f),
+    LARGE("Large (130%)", 1.3f),
+    EXTRA_LARGE("Extra Large (150%)", 1.5f),
+}
+
+@Immutable
+@Serializable
+enum class ColorBlindMode(val displayName: String) {
+    NONE("None"),
+    PROTANOPIA("Protanopia (Red-weak)"),
+    DEUTERANOPIA("Deuteranopia (Green-weak)"),
+    TRITANOPIA("Tritanopia (Blue-weak)"),
+}
+
+@Immutable
+@Serializable
+enum class HandMode(val displayName: String) {
+    RIGHT("Right-handed (default)"),
+    LEFT("Left-handed"),
+}
+
+@Immutable
+@Serializable
+data class DownloadScheduleWindow(
+    val startHour: Int = 0,
+    val endHour: Int = 6,
+    val wifiOnly: Boolean = true,
+)

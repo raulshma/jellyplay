@@ -42,7 +42,6 @@ import com.raulshma.jellyplay.core.model.MediaItem
 import com.raulshma.jellyplay.core.model.MediaType
 import com.raulshma.jellyplay.core.ui.components.progressFraction
 import com.raulshma.jellyplay.core.ui.tv.LocalTvMode
-import com.raulshma.jellyplay.core.ui.tv.ifElse
 import com.raulshma.jellyplay.core.ui.tv.rememberTvFocusState
 import com.raulshma.jellyplay.core.ui.tv.tvFocusIndicator
 
@@ -138,12 +137,8 @@ internal fun DetailActionButtons(
                 .then(
                     contentFocusRequester?.let { Modifier.focusRequester(it) } ?: Modifier
                 )
-                .then(
-                    if (isTv) playTvFocusState.focusModifier else Modifier
-                )
-                .then(
-                    if (isTv) Modifier.tvFocusIndicator(playTvFocusState, ShapeCache.smooth14, color = MaterialTheme.colorScheme.onPrimary) else Modifier
-                )
+                .then(playTvFocusState.focusModifier)
+                .then(Modifier.tvFocusIndicator(playTvFocusState, ShapeCache.smooth14, color = MaterialTheme.colorScheme.onPrimary))
                 .graphicsLayer { scaleX = playScale; scaleY = playScale }
                 .clickable(
                     interactionSource = playInteractionSource,
@@ -222,12 +217,8 @@ internal fun DetailActionButtons(
                             .height(48.dp)
                             .clip(ShapeCache.smooth12)
                             .background(MaterialTheme.colorScheme.onSurface.copy(alpha = 0.15f))
-                            .then(
-                                if (isTv) markTvFocusState.focusModifier else Modifier
-                            )
-                            .then(
-                                if (isTv) Modifier.tvFocusIndicator(markTvFocusState, ShapeCache.smooth12) else Modifier
-                            )
+                            .then(markTvFocusState.focusModifier)
+                            .then(Modifier.tvFocusIndicator(markTvFocusState, ShapeCache.smooth12))
                             .graphicsLayer { scaleX = markScale; scaleY = markScale }
                             .clickable(interactionSource = markInteractionSource, indication = null) {
                                 if (item.isPlayed) onMarkUnplayed() else onMarkPlayed()
@@ -248,12 +239,8 @@ internal fun DetailActionButtons(
                             .height(48.dp)
                             .clip(ShapeCache.smooth12)
                             .background(MaterialTheme.colorScheme.onSurface.copy(alpha = 0.15f))
-                            .then(
-                                if (isTv) favoriteTvFocusState.focusModifier else Modifier
-                            )
-                            .then(
-                                if (isTv) Modifier.tvFocusIndicator(favoriteTvFocusState, ShapeCache.smooth12) else Modifier
-                            )
+                            .then(favoriteTvFocusState.focusModifier)
+                            .then(Modifier.tvFocusIndicator(favoriteTvFocusState, ShapeCache.smooth12))
                             .graphicsLayer { scaleX = favoriteScale; scaleY = favoriteScale }
                             .clickable(interactionSource = favoriteInteractionSource, indication = null) { onToggleFavorite() }
                     ) {
@@ -273,8 +260,8 @@ internal fun DetailActionButtons(
                             .height(48.dp)
                             .clip(ShapeCache.smooth12)
                             .background(MaterialTheme.colorScheme.onSurface.copy(alpha = 0.15f))
-                            .ifElse(isTv, infoVTvFocusState.focusModifier)
-                            .ifElse(isTv, Modifier.tvFocusIndicator(infoVTvFocusState, ShapeCache.smooth12))
+                            .then(infoVTvFocusState.focusModifier)
+                            .then(Modifier.tvFocusIndicator(infoVTvFocusState, ShapeCache.smooth12))
                             .clickable { onMediaInfoClick() }
                     ) {
                         Icon(
@@ -309,8 +296,8 @@ internal fun DetailActionButtons(
                         .then(
                             contentFocusRequester?.let { Modifier.focusRequester(it) } ?: Modifier
                         )
-                        .ifElse(isTv, playHFocusState.focusModifier)
-                        .ifElse(isTv, Modifier.tvFocusIndicator(playHFocusState, ShapeCache.smooth16, color = MaterialTheme.colorScheme.onPrimary))
+                        .then(playHFocusState.focusModifier)
+                        .then(Modifier.tvFocusIndicator(playHFocusState, ShapeCache.smooth16, color = MaterialTheme.colorScheme.onPrimary))
                         .graphicsLayer { scaleX = playScale; scaleY = playScale }
                         .clickable(
                             interactionSource = playInteractionSource,
@@ -367,8 +354,8 @@ internal fun DetailActionButtons(
                         .clip(ShapeCache.smooth16)
                         .background(MaterialTheme.colorScheme.onSurface.copy(alpha = 0.15f))
                         .graphicsLayer { scaleX = markScale; scaleY = markScale }
-                        .ifElse(isTv, markHFocusState.focusModifier)
-                        .ifElse(isTv, Modifier.tvFocusIndicator(markHFocusState, ShapeCache.smooth16))
+                        .then(markHFocusState.focusModifier)
+                        .then(Modifier.tvFocusIndicator(markHFocusState, ShapeCache.smooth16))
                         .clickable(interactionSource = markInteractionSource, indication = null) {
                             if (item.isPlayed) onMarkUnplayed() else onMarkPlayed()
                         }
@@ -389,8 +376,8 @@ internal fun DetailActionButtons(
                         .clip(ShapeCache.smooth16)
                         .background(MaterialTheme.colorScheme.onSurface.copy(alpha = 0.15f))
                         .graphicsLayer { scaleX = favoriteScale; scaleY = favoriteScale }
-                        .ifElse(isTv, favoriteHFocusState.focusModifier)
-                        .ifElse(isTv, Modifier.tvFocusIndicator(favoriteHFocusState, ShapeCache.smooth16))
+                        .then(favoriteHFocusState.focusModifier)
+                        .then(Modifier.tvFocusIndicator(favoriteHFocusState, ShapeCache.smooth16))
                         .clickable(interactionSource = favoriteInteractionSource, indication = null) { onToggleFavorite() }
                 ) {
                     Icon(
@@ -409,8 +396,8 @@ internal fun DetailActionButtons(
                         .size(56.dp)
                         .clip(ShapeCache.smooth16)
                         .background(MaterialTheme.colorScheme.onSurface.copy(alpha = 0.15f))
-                        .ifElse(isTv, infoHFocusState.focusModifier)
-                        .ifElse(isTv, Modifier.tvFocusIndicator(infoHFocusState, ShapeCache.smooth16))
+                        .then(infoHFocusState.focusModifier)
+                        .then(Modifier.tvFocusIndicator(infoHFocusState, ShapeCache.smooth16))
                         .clickable { onMediaInfoClick() }
                 ) {
                     Icon(

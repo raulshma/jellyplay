@@ -18,6 +18,8 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.raulshma.jellyplay.core.ui.adaptive.LocalAdaptiveInfo
@@ -28,6 +30,11 @@ import com.raulshma.jellyplay.core.ui.components.JellyPlayScreenScaffold
 import com.raulshma.jellyplay.core.ui.components.ScreenEmptyState
 import com.raulshma.jellyplay.core.ui.components.ScreenLoadingState
 import com.raulshma.jellyplay.core.ui.tv.LocalTvMode
+import com.raulshma.jellyplay.core.ui.tv.TvGrabInitialFocus
+import com.raulshma.jellyplay.core.ui.tv.rememberTvFocusState
+import com.raulshma.jellyplay.core.ui.tv.tvFocusIndicator
+import com.raulshma.jellyplay.core.ui.tv.tvFocusRestorer
+import com.raulshma.jellyplay.core.designsystem.theme.ShapeCache
 import com.raulshma.jellyplay.core.ui.components.AnimatedEntrance
 import com.raulshma.jellyplay.feature.music.components.TrackRow
 import com.composables.icons.tabler.Tabler
@@ -52,6 +59,15 @@ fun SmartPlaylistDetailScreen(
             viewModel.generatePlaylist(playlist)
         }
     }
+
+    // TV focus-on-launch: focus the first track once data arrives so D-pad input lands on content,
+    // not the navigation drawer.
+    val listFocusRequester = androidx.compose.runtime.remember { FocusRequester() }
+    TvGrabInitialFocus(
+        focusRequester = listFocusRequester,
+        itemCount = viewModel.generatedItems.size,
+        tag = "smart_playlist_detail_init",
+    )
 
     JellyPlayScreenScaffold(
         title = playlist?.name ?: "Smart Playlist",
@@ -78,7 +94,10 @@ fun SmartPlaylistDetailScreen(
                 }
                 else -> AnimatedEntrance(visible = true) {
                     LazyColumn(
-                        modifier = Modifier.fillMaxSize(),
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .tvFocusRestorer()
+                            .focusRequester(listFocusRequester),
                         contentPadding = PaddingValues(
                             top = 8.dp,
                             bottom = adaptiveInfo.bottomPadding(isTv),
@@ -110,12 +129,15 @@ fun SmartPlaylistDetailScreen(
 
             val firstTrack = viewModel.generatedItems.firstOrNull()
             if (firstTrack != null && !viewModel.isLoading) {
+                val playAllFocusState = rememberTvFocusState(focusedScale = 1.05f)
                 ExtendedFloatingActionButton(
                     onClick = { viewModel.playAll() },
                     icon = { Icon(Tabler.Outline.PlayerPlay, contentDescription = null) },
                     text = { Text("Play All") },
                     modifier = Modifier
                         .align(Alignment.BottomEnd)
+                        .then(playAllFocusState.focusModifier)
+                        .tvFocusIndicator(playAllFocusState, ShapeCache.smooth16)
                         .padding(end = 16.dp, bottom = 64.dp + WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding())
                         .offset {
                             val maxOffset = com.raulshma.jellyplay.core.designsystem.theme.Dimensions.floatingNavHeight.toPx()

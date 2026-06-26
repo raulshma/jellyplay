@@ -41,6 +41,7 @@ import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import com.raulshma.jellyplay.core.ui.tv.TvGrabInitialFocus
 import com.raulshma.jellyplay.core.ui.tv.tryRequestFocus
+import com.raulshma.jellyplay.core.ui.components.focusIndicator
 
 @Composable
 fun LicensesScreen(
@@ -122,6 +123,7 @@ private fun LicenseRow(
         Modifier
             .fillMaxWidth()
             .clip(ShapeCache.smooth8)
+            .focusIndicator()
             .clickable(onClick = {})
             .padding(horizontal = 16.dp, vertical = 8.dp)
     } else {

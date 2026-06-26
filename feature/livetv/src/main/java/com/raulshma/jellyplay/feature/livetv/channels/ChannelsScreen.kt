@@ -41,6 +41,7 @@ import com.raulshma.jellyplay.core.ui.adaptive.bottomPadding
 import com.raulshma.jellyplay.core.ui.adaptive.contentPadding
 import com.raulshma.jellyplay.core.ui.adaptive.itemSpacing
 import com.raulshma.jellyplay.core.ui.components.ErrorScreen
+import com.raulshma.jellyplay.core.ui.components.focusIndicator
 import com.raulshma.jellyplay.core.ui.components.ExpressiveToolbarIconButton
 import com.raulshma.jellyplay.core.ui.components.JellyPlayScreenScaffold
 import com.raulshma.jellyplay.core.ui.components.ScreenEmptyState
@@ -68,11 +69,12 @@ fun ChannelsScreen(
     onDvrClick: () -> Unit = {},
     viewModel: ChannelsViewModel = hiltViewModel(),
 ) {
+    val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     val networkStatus by com.raulshma.jellyplay.core.ui.components.LocalNetworkStatus.current
         .collectAsStateWithLifecycle()
     val headerStatus = com.raulshma.jellyplay.core.ui.components.resolveHeaderStatus(
-        isLoading = viewModel.isLoading,
-        hasError = viewModel.error != null,
+        isLoading = uiState.isLoading,
+        hasError = uiState.error != null,
         networkStatus = networkStatus,
     )
 
@@ -85,10 +87,11 @@ fun ChannelsScreen(
     val bottomPad = adaptiveInfo.bottomPadding(isTv)
 
     val focusRequester = remember { FocusRequester() }
-    val channelsNotEmpty = viewModel.channels.isNotEmpty()
+    val channelsNotEmpty = uiState.channels.isNotEmpty()
+    val nowPlayingChannelId by viewModel.nowPlayingChannelId.collectAsStateWithLifecycle()
     TvGrabInitialFocus(
         focusRequester = focusRequester,
-        itemCount = viewModel.channels.size,
+        itemCount = uiState.channels.size,
         tag = "channels_init",
     )
 
@@ -117,19 +120,19 @@ fun ChannelsScreen(
             }
         },
     ) {
-        if (viewModel.error != null && viewModel.channels.isEmpty()) {
+        if (uiState.error != null && uiState.channels.isEmpty()) {
             ErrorScreen(
-                message = viewModel.error!!,
+                message = uiState.error!!,
                 onRetry = { viewModel.loadChannels() },
             )
-        } else if (viewModel.channels.isEmpty() && !viewModel.isLoading) {
+        } else if (uiState.channels.isEmpty() && !uiState.isLoading) {
             ScreenEmptyState(
                 icon = Tabler.Outline.DeviceTv,
                 title = stringResource(R.string.livetv_no_channels_available),
             )
         } else {
             PullToRefreshBox(
-                isRefreshing = viewModel.isLoading,
+                isRefreshing = uiState.isLoading,
                 onRefresh = { viewModel.loadChannels() },
             ) {
                 LazyColumn(
@@ -146,13 +149,14 @@ fun ChannelsScreen(
                     verticalArrangement = Arrangement.spacedBy(spacing),
                 ) {
                     items(
-                        items = viewModel.channels,
+                        items = uiState.channels,
                         key = { it.id },
                         contentType = { "channel" },
                     ) { channel ->
                         ChannelCard(
                             channel = channel,
                             imageUrl = viewModel.getImageUrl(channel.id, channel.imageTag),
+                            isNowPlaying = channel.id == nowPlayingChannelId,
                             onClick = { onChannelClick(channel.id, channel.name) },
                         )
                     }
@@ -166,13 +170,21 @@ fun ChannelsScreen(
 private fun ChannelCard(
     channel: LiveTvChannel,
     imageUrl: String,
+    isNowPlaying: Boolean = false,
     onClick: () -> Unit,
 ) {
     Row(
         modifier = Modifier
             .fillMaxWidth()
             .clip(ShapeCache.smooth16)
-            .background(MaterialTheme.colorScheme.onSurface.copy(alpha = 0.05f))
+            .background(
+                if (isNowPlaying) {
+                    MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.3f)
+                } else {
+                    MaterialTheme.colorScheme.onSurface.copy(alpha = 0.05f)
+                }
+            )
+            .focusIndicator()
             .clickable(onClick = onClick)
             .padding(horizontal = 16.dp, vertical = 14.dp),
         verticalAlignment = Alignment.CenterVertically,
@@ -197,7 +209,7 @@ private fun ChannelCard(
                     Tabler.Outline.DeviceTv,
                     contentDescription = null,
                     modifier = Modifier.size(28.dp),
-                    tint = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f),
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
             }
         }
@@ -206,20 +218,31 @@ private fun ChannelCard(
 
         // ── Channel info ──
         Column(modifier = Modifier.weight(1f)) {
-            Text(
-                text = channel.name,
-                style = MaterialTheme.typography.bodyLarge.copy(fontWeight = FontWeight.SemiBold),
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-                color = MaterialTheme.colorScheme.onSurface,
-            )
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text(
+                    text = channel.name,
+                    style = MaterialTheme.typography.bodyLarge.copy(fontWeight = FontWeight.SemiBold),
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    color = MaterialTheme.colorScheme.onSurface,
+                )
+                if (isNowPlaying) {
+                    Spacer(Modifier.width(8.dp))
+                    Box(
+                        modifier = Modifier
+                            .size(8.dp)
+                            .clip(CircleShape)
+                            .background(MaterialTheme.colorScheme.primary)
+                    )
+                }
+            }
             val currentProgram = channel.currentProgram
             if (currentProgram != null) {
                 Spacer(Modifier.height(2.dp))
                 Text(
                     text = currentProgram.name,
                     style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f),
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
                 )
@@ -241,6 +264,7 @@ private fun ChannelCard(
                 .size(40.dp)
                 .clip(CircleShape)
                 .background(MaterialTheme.colorScheme.onSurface.copy(alpha = 0.12f))
+                .focusIndicator(CircleShape)
                 .clickable(onClick = onClick),
             contentAlignment = Alignment.Center,
         ) {

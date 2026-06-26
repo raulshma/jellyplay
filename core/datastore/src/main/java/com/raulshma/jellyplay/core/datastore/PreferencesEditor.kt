@@ -2,6 +2,12 @@ package com.raulshma.jellyplay.core.datastore
 
 import com.raulshma.jellyplay.core.model.ColorStyle
 import com.raulshma.jellyplay.core.model.ContrastLevel
+import com.raulshma.jellyplay.core.model.PreferenceResetCategory
+import com.raulshma.jellyplay.core.model.DateFormatPreference
+import com.raulshma.jellyplay.core.model.AppFontScale
+import com.raulshma.jellyplay.core.model.ColorBlindMode
+import com.raulshma.jellyplay.core.model.DownloadScheduleWindow
+import com.raulshma.jellyplay.core.model.HandMode
 import com.raulshma.jellyplay.core.model.HomeMode
 import com.raulshma.jellyplay.core.model.HomeSectionType
 import com.raulshma.jellyplay.core.model.OrientationMode
@@ -44,6 +50,34 @@ class PreferencesEditor(
     fun setPinLockEnabled(enabled: Boolean) = scope.launch { store.setPinLockEnabled(enabled) }
     fun setPinHash(hash: String?) = scope.launch { store.setPinHash(hash) }
     fun setBiometricLockEnabled(enabled: Boolean) = scope.launch { store.setBiometricLockEnabled(enabled) }
+    fun setUsePinForPlayerLock(enabled: Boolean) = scope.launch { store.setUsePinForPlayerLock(enabled) }
+    fun setDuckOnTransientFocusLoss(enabled: Boolean) = scope.launch { store.setDuckOnTransientFocusLoss(enabled) }
     fun setAutoLockTimerMs(ms: Long) = scope.launch { store.setAutoLockTimerMs(ms) }
     fun hashPin(pin: String): String = store.hashPin(pin)
+
+    /**
+     * Resets all preferences in a specific category to their default values.
+     * @param category The [PreferenceResetCategory] to reset.
+     */
+    fun resetCategory(category: PreferenceResetCategory) = scope.launch {
+        store.resetCategory(category)
+    }
+
+    /**
+     * Clears all preferences and resets to factory defaults.
+     * This will log out the user and clear all app data.
+     */
+    fun clearAllPreferences() = scope.launch {
+        store.clearAllPreferences()
+    }
+
+    fun setHapticsEnabled(enabled: Boolean) = scope.launch { store.setHapticsEnabled(enabled) }
+    fun setDateFormatPreference(preference: DateFormatPreference) = scope.launch { store.setDateFormatPreference(preference) }
+    fun setAppFontScale(scale: AppFontScale) = scope.launch { store.setAppFontScale(scale) }
+    fun setScheduledThemeStartHour(hour: Int) = scope.launch { store.setScheduledThemeStartHour(hour) }
+    fun setScheduledThemeEndHour(hour: Int) = scope.launch { store.setScheduledThemeEndHour(hour) }
+    fun setColorBlindMode(mode: ColorBlindMode) = scope.launch { store.setColorBlindMode(mode) }
+    fun setHandMode(mode: HandMode) = scope.launch { store.setHandMode(mode) }
+    fun setDownloadScheduleEnabled(enabled: Boolean) = scope.launch { store.setDownloadScheduleEnabled(enabled) }
+    fun setDownloadScheduleWindow(window: DownloadScheduleWindow) = scope.launch { store.setDownloadScheduleWindow(window) }
 }

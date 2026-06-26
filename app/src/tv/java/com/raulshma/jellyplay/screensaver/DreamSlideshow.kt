@@ -155,14 +155,14 @@ private fun DreamEmptyState() {
             Icon(
                 imageVector = Tabler.Outline.Movie,
                 contentDescription = null,
-                tint = Color.White.copy(alpha = 0.3f),
+                tint = Color.White.copy(alpha = 0.7f),
                 modifier = Modifier.padding(bottom = 8.dp),
             )
             Text(
                 text = "JellyPlay",
                 style = MaterialTheme.typography.headlineMedium,
                 fontWeight = FontWeight.Bold,
-                color = Color.White.copy(alpha = 0.5f),
+                color = Color.White.copy(alpha = 0.85f),
                 textAlign = TextAlign.Center,
             )
         }

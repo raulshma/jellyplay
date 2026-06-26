@@ -32,6 +32,8 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import coil3.request.ImageRequest
 import com.raulshma.jellyplay.core.ui.image.MediaImage
+import com.raulshma.jellyplay.core.ui.tv.rememberTvFocusState
+import com.raulshma.jellyplay.core.ui.tv.tvFocusIndicator
 import com.composables.icons.tabler.Tabler
 import com.composables.icons.tabler.outline.*
 import com.raulshma.jellyplay.core.designsystem.theme.LocalArtworkColors
@@ -104,7 +106,8 @@ fun CompanionDashboard(
             .background(
                 Brush.verticalGradient(
                     colors = listOf(
-                        animatedBgStart.copy(alpha = 0.5f),
+                        animatedBgEnd,
+                        animatedBgStart.copy(alpha = 0.35f),
                         animatedBgEnd
                     )
                 )
@@ -168,6 +171,8 @@ fun CompanionDashboard(
                             }
                         }
 
+                        val rotateFocusStateA = rememberTvFocusState(focusedScale = 1.1f)
+                        val disconnectFocusStateA = rememberTvFocusState(focusedScale = 1.05f)
                         Row(
                             horizontalArrangement = Arrangement.spacedBy(8.dp),
                             verticalAlignment = Alignment.CenterVertically
@@ -179,6 +184,8 @@ fun CompanionDashboard(
                                     contentColor = MaterialTheme.colorScheme.onSurfaceVariant
                                 ),
                                 modifier = Modifier.size(36.dp)
+                                    .then(rotateFocusStateA.focusModifier)
+                                    .tvFocusIndicator(rotateFocusStateA, CircleShape)
                             ) {
                                 Icon(
                                     imageVector = Tabler.Outline.Rotate,
@@ -194,7 +201,10 @@ fun CompanionDashboard(
                                     contentColor = MaterialTheme.colorScheme.onErrorContainer
                                 ),
                                 shape = ShapeCache.smoothPill,
-                                contentPadding = PaddingValues(horizontal = 16.dp, vertical = 6.dp)
+                                contentPadding = PaddingValues(horizontal = 16.dp, vertical = 6.dp),
+                                modifier = Modifier
+                                    .then(disconnectFocusStateA.focusModifier)
+                                    .tvFocusIndicator(disconnectFocusStateA, ShapeCache.smoothPill)
                             ) {
                                 Icon(
                                     imageVector = Tabler.Outline.X,
@@ -362,6 +372,8 @@ fun CompanionDashboard(
                         }
                     }
 
+                    val rotateFocusStateB = rememberTvFocusState(focusedScale = 1.1f)
+                    val disconnectFocusStateB = rememberTvFocusState(focusedScale = 1.05f)
                     Row(
                         horizontalArrangement = Arrangement.spacedBy(8.dp),
                         verticalAlignment = Alignment.CenterVertically
@@ -373,6 +385,8 @@ fun CompanionDashboard(
                                 contentColor = MaterialTheme.colorScheme.onSurfaceVariant
                             ),
                             modifier = Modifier.size(36.dp)
+                                .then(rotateFocusStateB.focusModifier)
+                                .tvFocusIndicator(rotateFocusStateB, CircleShape)
                         ) {
                             Icon(
                                 imageVector = Tabler.Outline.Rotate,
@@ -388,7 +402,10 @@ fun CompanionDashboard(
                                 contentColor = MaterialTheme.colorScheme.onErrorContainer
                             ),
                             shape = ShapeCache.smoothPill,
-                            contentPadding = PaddingValues(horizontal = 16.dp, vertical = 6.dp)
+                            contentPadding = PaddingValues(horizontal = 16.dp, vertical = 6.dp),
+                            modifier = Modifier
+                                .then(disconnectFocusStateB.focusModifier)
+                                .tvFocusIndicator(disconnectFocusStateB, ShapeCache.smoothPill)
                         ) {
                             Icon(
                                 imageVector = Tabler.Outline.X,
@@ -648,7 +665,7 @@ fun SubtitlesTabContent(
                     itemsIndexed(lyricsLines) { index, line ->
                         val isActive = index == activeLineIndex
                         val textColor by animateColorAsState(
-                            targetValue = if (isActive) MaterialTheme.colorScheme.primary else Color.White.copy(alpha = 0.5f),
+                            targetValue = if (isActive) MaterialTheme.colorScheme.primary else Color.White.copy(alpha = 0.7f),
                             label = "lyricColor"
                         )
                         val scale by animateFloatAsState(
@@ -906,7 +923,13 @@ fun CompanionControlBar(
             }
 
             // Seek Back
-            IconButton(onClick = onSeekBack) {
+            val seekBackFocusState = rememberTvFocusState(focusedScale = 1.1f)
+            IconButton(
+                onClick = onSeekBack,
+                modifier = Modifier
+                    .then(seekBackFocusState.focusModifier)
+                    .tvFocusIndicator(seekBackFocusState, CircleShape),
+            ) {
                 Icon(
                     imageVector = Tabler.Outline.PlayerSkipBack,
                     contentDescription = "-10s",
@@ -916,12 +939,15 @@ fun CompanionControlBar(
             }
 
             // Play/Pause Floating Circle
+            val playPauseFocusState = rememberTvFocusState(focusedScale = 1.08f)
             FloatingActionButton(
                 onClick = onPlayPause,
                 containerColor = MaterialTheme.colorScheme.primary,
                 contentColor = MaterialTheme.colorScheme.onPrimary,
                 shape = CircleShape,
                 modifier = Modifier.size(56.dp)
+                    .then(playPauseFocusState.focusModifier)
+                    .tvFocusIndicator(playPauseFocusState, CircleShape)
             ) {
                 Icon(
                     imageVector = if (isPlaying) Tabler.Outline.PlayerPause else Tabler.Outline.PlayerPlay,
@@ -931,7 +957,13 @@ fun CompanionControlBar(
             }
 
             // Seek Forward
-            IconButton(onClick = onSeekForward) {
+            val seekForwardFocusState = rememberTvFocusState(focusedScale = 1.1f)
+            IconButton(
+                onClick = onSeekForward,
+                modifier = Modifier
+                    .then(seekForwardFocusState.focusModifier)
+                    .tvFocusIndicator(seekForwardFocusState, CircleShape),
+            ) {
                 Icon(
                     imageVector = Tabler.Outline.PlayerSkipForward,
                     contentDescription = "+30s",

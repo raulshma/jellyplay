@@ -46,6 +46,14 @@ interface AuthRepository {
 
     suspend fun logout()
 
+    /**
+     * Logs out the current session on the server (revokes the active access token)
+     * and clears local state. Despite the historical Jellyfin naming of the
+     * underlying endpoint, this affects only the current device's session — it
+     * does not revoke other active sessions for the same user.
+     */
+    suspend fun revokeServerSession()
+
     suspend fun switchUser(userId: String): Result<Unit>
 
     suspend fun removeUser(userId: String)

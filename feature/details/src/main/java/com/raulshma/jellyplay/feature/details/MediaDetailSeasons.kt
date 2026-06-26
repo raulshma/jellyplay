@@ -77,6 +77,7 @@ internal fun SeasonsSection(
     onEpisodePlayClick: (MediaItem) -> Unit,
     onEpisodeDetailClick: (MediaItem) -> Unit,
     onSeasonSelected: (seasonId: String) -> Unit = {},
+    hideEpisodeThumbnails: Boolean = false,
 ) {
     val smartTargetSeasonId = smartPlayTarget?.episode?.seasonId
     val initialSeasonIndex = when {
@@ -202,6 +203,7 @@ internal fun SeasonsSection(
                                     onPlayClick = { onEpisodePlayClick(episode) },
                                     onDetailClick = { onEpisodeDetailClick(episode) },
                                     modifier = focusModifier,
+                                    hideThumbnail = hideEpisodeThumbnails,
                                 )
                             }
                     }
@@ -214,7 +216,7 @@ internal fun SeasonsSection(
                         contentAlignment = Alignment.Center,
                     ) {
                         FadingItem {
-                            Text("No episodes available", color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f))
+                            Text("No episodes available", color = MaterialTheme.colorScheme.onSurfaceVariant)
                         }
                     }
                 }
@@ -237,6 +239,7 @@ internal fun EpisodeCard(
     onPlayClick: () -> Unit,
     onDetailClick: () -> Unit,
     modifier: Modifier = Modifier,
+    hideThumbnail: Boolean = false,
 ) {
     val cardInteractionSource = remember { MutableInteractionSource() }
     val isCardPressed by cardInteractionSource.collectIsPressedAsState()
@@ -305,14 +308,29 @@ internal fun EpisodeCard(
                 .clip(RoundedCornerShape(topStart = 16.dp, topEnd = 16.dp)),
             contentAlignment = Alignment.Center,
         ) {
-            MediaImage(
-                url = getImageUrl(episode.id),
-                contentDescription = episode.name,
-                blurHash = episode.blurHashes.primary,
-                modifier = Modifier.fillMaxSize(),
-                contentScale = ContentScale.Crop,
-            )
-            Box(modifier = Modifier.fillMaxSize().background(MaterialTheme.colorScheme.scrim.copy(alpha = 0.3f)))
+            if (!hideThumbnail) {
+                MediaImage(
+                    url = getImageUrl(episode.id),
+                    contentDescription = episode.name,
+                    blurHash = episode.blurHashes.primary,
+                    modifier = Modifier.fillMaxSize(),
+                    contentScale = ContentScale.Crop,
+                )
+                Box(modifier = Modifier.fillMaxSize().background(MaterialTheme.colorScheme.scrim.copy(alpha = 0.3f)))
+            } else {
+                Box(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .background(MaterialTheme.colorScheme.surfaceVariant),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    Text(
+                        text = "Spoiler",
+                        style = MaterialTheme.typography.titleMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+            }
             val epPlayFocusState = rememberTvFocusState(focusedScale = 1.15f)
             Icon(
                 Tabler.Outline.PlayerPlay,
@@ -397,19 +415,19 @@ internal fun EpisodeCard(
                     Text(
                         text = "•",
                         style = MaterialTheme.typography.labelMedium,
-                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.4f),
+                        color = MaterialTheme.colorScheme.outlineVariant,
                     )
                     Text(
                         text = totalTime,
                         style = MaterialTheme.typography.labelMedium,
-                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f),
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
                 }
             } else if (totalTime != null) {
                 Text(
                     text = totalTime,
                     style = MaterialTheme.typography.labelMedium,
-                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f),
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
                     modifier = Modifier.padding(top = 4.dp)
                 )
             }
@@ -418,7 +436,7 @@ internal fun EpisodeCard(
                 Text(
                     text = overview,
                     style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f),
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
                     maxLines = 3,
                     overflow = TextOverflow.Ellipsis,
                     lineHeight = androidx.compose.ui.unit.TextUnit(16f, androidx.compose.ui.unit.TextUnitType.Sp)

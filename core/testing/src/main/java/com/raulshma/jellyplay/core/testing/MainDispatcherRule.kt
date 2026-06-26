@@ -1,4 +1,4 @@
-package com.raulshma.jellyplay.feature.details.util
+package com.raulshma.jellyplay.core.testing
 
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi

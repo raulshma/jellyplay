@@ -23,7 +23,13 @@ import com.raulshma.jellyplay.core.model.DecoderMode
 import com.raulshma.jellyplay.core.model.DlnaDeviceRef
 import com.raulshma.jellyplay.core.model.DreamImageCategory
 import com.raulshma.jellyplay.core.model.DreamTransitionStyle
+import com.raulshma.jellyplay.core.model.PreferenceResetCategory
+import com.raulshma.jellyplay.core.model.DateFormatPreference
+import com.raulshma.jellyplay.core.model.AppFontScale
+import com.raulshma.jellyplay.core.model.ColorBlindMode
+import com.raulshma.jellyplay.core.model.DownloadScheduleWindow
 import com.raulshma.jellyplay.core.model.EffectStrength
+import com.raulshma.jellyplay.core.model.HandMode
 import com.raulshma.jellyplay.core.model.EqualizerPreset
 import com.raulshma.jellyplay.core.model.EqualizerSettings
 import com.raulshma.jellyplay.core.model.ExoPlayerEngineConfig
@@ -70,6 +76,7 @@ import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
+import kotlinx.serialization.decodeFromString
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
 import javax.inject.Inject
@@ -140,6 +147,7 @@ class UserPreferencesStore @Inject constructor(
         val AUTO_DELETE_CACHE = booleanPreferencesKey("auto_delete_cache")
         val PIN_LOCK_ENABLED = booleanPreferencesKey("pin_lock_enabled")
         val BIOMETRIC_LOCK_ENABLED = booleanPreferencesKey("biometric_lock_enabled")
+        val USE_PIN_FOR_PLAYER_LOCK = booleanPreferencesKey("use_pin_for_player_lock")
         val DIALOGUE_BOOST_ENABLED = booleanPreferencesKey("dialogue_boost_enabled")
         val EQUALIZER_ENABLED = booleanPreferencesKey("equalizer_enabled")
         val AUDIO_PASSTHROUGH = booleanPreferencesKey("audio_passthrough")
@@ -204,6 +212,7 @@ class UserPreferencesStore @Inject constructor(
 
         // ── Home-screen recommendations widgets ──
         val WIDGET_CONFIG = stringPreferencesKey("widget_config")
+        val WIDGET_CONFIGS = stringPreferencesKey("widget_configs")
         val LIBRARY_WIDGET_ITEMS = stringPreferencesKey("library_widget_items")
         val LIBRARY_WIDGET_VERSION = longPreferencesKey("library_widget_version")
         val LIBRARY_WIDGET_UPDATED_AT_MS = longPreferencesKey("library_widget_updated_at_ms")
@@ -253,6 +262,7 @@ class UserPreferencesStore @Inject constructor(
         val NEXT_UP_MAX_DAYS = intPreferencesKey("next_up_max_days")
         val NEXT_UP_REWATCHING = booleanPreferencesKey("next_up_rewatching")
         val NEXT_UP_EXCLUDED_SERIES_IDS = stringPreferencesKey("next_up_excluded_series_ids")
+        val HIDDEN_CW_ITEM_IDS = stringPreferencesKey("hidden_cw_item_ids")
         val PINNED_HOME_SECTIONS = stringPreferencesKey("pinned_home_sections")
         val HOME_LAYOUT_PRESETS = stringPreferencesKey("home_layout_presets")
         val CONTINUE_WATCHING_CLICK_BEHAVIOR = stringPreferencesKey("continue_watching_click_behavior")
@@ -260,6 +270,7 @@ class UserPreferencesStore @Inject constructor(
         val SHOW_WATCHED_CHECKMARK = booleanPreferencesKey("show_watched_checkmark")
         val DEFAULT_LIBRARY_SORT_ORDERS = stringPreferencesKey("default_library_sort_orders")
         val LIBRARY_VIEW_MODES = stringPreferencesKey("library_view_modes")
+        val LIBRARY_FILTERS = stringPreferencesKey("library_filters")
         val KEEP_SCREEN_ON_DURING_VIDEO = booleanPreferencesKey("keep_screen_on_during_video")
         val DOWNLOAD_QUALITY = stringPreferencesKey("download_quality")
         val SMART_DOWNLOADS_ENABLED = booleanPreferencesKey("smart_downloads_enabled")
@@ -269,6 +280,7 @@ class UserPreferencesStore @Inject constructor(
         val SHOW_CLOCK_ON_HOME = booleanPreferencesKey("show_clock_on_home")
         val SHOW_CLOCK_IN_PLAYER = booleanPreferencesKey("show_clock_in_player")
         val PAUSE_ON_AUDIO_FOCUS_LOSS = booleanPreferencesKey("pause_on_audio_focus_loss")
+        val DUCK_ON_TRANSIENT_FOCUS_LOSS = booleanPreferencesKey("duck_on_transient_focus_loss")
         val VOLUME_BOOST_ENABLED = booleanPreferencesKey("volume_boost_enabled")
         val VOLUME_BOOST_GAIN = intPreferencesKey("volume_boost_gain")
         val SHOW_SHARE_MEDIA_OPTION = booleanPreferencesKey("show_share_media_option")
@@ -286,8 +298,6 @@ class UserPreferencesStore @Inject constructor(
         val REMOTE_CONTROL_ENABLED = booleanPreferencesKey("remote_control_enabled")
         val MAX_DOWNLOAD_STORAGE_GB = intPreferencesKey("max_download_storage_gb")
         val DOWNLOAD_STORAGE_LOCATION = stringPreferencesKey("download_storage_location")
-        val KIDS_MODE_ENABLED = booleanPreferencesKey("kids_mode_enabled")
-        val KIDS_MODE_MAX_RATING = stringPreferencesKey("kids_mode_max_rating")
         val ANDROID_TV_WATCH_NEXT_ENABLED = booleanPreferencesKey("android_tv_watch_next_enabled")
         val USER_DATA_SYNC_ENABLED = booleanPreferencesKey("user_data_sync_enabled")
         val SYNTHWAVE_MODE = booleanPreferencesKey("synthwave_mode")
@@ -305,6 +315,20 @@ class UserPreferencesStore @Inject constructor(
         val SELF_UPDATE_CHECK_ENABLED = booleanPreferencesKey("self_update_check_enabled")
         val PIN_FAILED_ATTEMPTS = intPreferencesKey("pin_failed_attempts")
         val PIN_LOCKOUT_UNTIL_MS = longPreferencesKey("pin_lockout_until_ms")
+        val HIDE_EPISODE_THUMBNAILS = booleanPreferencesKey("hide_episode_thumbnails")
+        val SKIP_SPECIALS = booleanPreferencesKey("skip_specials")
+        val CELLULAR_DOWNLOAD_SIZE_WARNING_MB = intPreferencesKey("cellular_download_size_warning_mb")
+        val HAPTICS_ENABLED = booleanPreferencesKey("haptics_enabled")
+        val DATE_FORMAT_PREFERENCE = stringPreferencesKey("date_format_preference")
+        val APP_FONT_SCALE = stringPreferencesKey("app_font_scale")
+        val SCHEDULED_THEME_START_HOUR = intPreferencesKey("scheduled_theme_start_hour")
+        val SCHEDULED_THEME_END_HOUR = intPreferencesKey("scheduled_theme_end_hour")
+        val COLOR_BLIND_MODE = stringPreferencesKey("color_blind_mode")
+        val HAND_MODE = stringPreferencesKey("hand_mode")
+        val DOWNLOAD_SCHEDULE_ENABLED = booleanPreferencesKey("download_schedule_enabled")
+        val DOWNLOAD_SCHEDULE_START = intPreferencesKey("download_schedule_start")
+        val DOWNLOAD_SCHEDULE_END = intPreferencesKey("download_schedule_end")
+        val DOWNLOAD_SCHEDULE_WIFI_ONLY = booleanPreferencesKey("download_schedule_wifi_only")
     }
 
     private companion object {
@@ -694,6 +718,7 @@ class UserPreferencesStore @Inject constructor(
             pinLockEnabled = readBool(prefs, Keys.PIN_LOCK_ENABLED, "pin_lock_enabled", false),
             pinHash = prefs[Keys.PIN_HASH],
             biometricLockEnabled = readBool(prefs, Keys.BIOMETRIC_LOCK_ENABLED, "biometric_lock_enabled", false),
+            usePinForPlayerLock = readBool(prefs, Keys.USE_PIN_FOR_PLAYER_LOCK, "use_pin_for_player_lock", false),
             autoLockTimerMs = readLong(prefs, Keys.AUTO_LOCK_TIMER_MS, "auto_lock_timer_ms", 30_000L),
             pinFailedAttempts = prefs[Keys.PIN_FAILED_ATTEMPTS] ?: 0,
             pinLockoutUntilEpochMs = prefs[Keys.PIN_LOCKOUT_UNTIL_MS] ?: 0L,
@@ -874,6 +899,9 @@ class UserPreferencesStore @Inject constructor(
             nextUpExcludedSeriesIds = prefs[Keys.NEXT_UP_EXCLUDED_SERIES_IDS]?.let {
                 try { json.decodeFromString<Set<String>>(it) } catch (_: Exception) { emptySet() }
             } ?: emptySet(),
+            hiddenCwItemIds = prefs[Keys.HIDDEN_CW_ITEM_IDS]?.let {
+                try { json.decodeFromString<Set<String>>(it) } catch (_: Exception) { emptySet() }
+            } ?: emptySet(),
             pinnedHomeSections = prefs[Keys.PINNED_HOME_SECTIONS]?.let {
                 try { json.decodeFromString<List<PinnedHomeSection>>(it) } catch (_: Exception) { emptyList() }
             } ?: emptyList(),
@@ -893,6 +921,9 @@ class UserPreferencesStore @Inject constructor(
             libraryViewModes = prefs[Keys.LIBRARY_VIEW_MODES]?.let {
                 try { json.decodeFromString<Map<String, String>>(it) } catch (_: Exception) { emptyMap() }
             } ?: emptyMap(),
+            libraryFilters = prefs[Keys.LIBRARY_FILTERS]?.let {
+                try { json.decodeFromString<Map<String, String>>(it) } catch (_: Exception) { emptyMap() }
+            } ?: emptyMap(),
             keepScreenOnDuringVideo = readBool(prefs, Keys.KEEP_SCREEN_ON_DURING_VIDEO, "keep_screen_on_during_video", true),
             downloadQuality = try {
                 DownloadQuality.valueOf(prefs[Keys.DOWNLOAD_QUALITY] ?: DownloadQuality.ORIGINAL.name)
@@ -904,6 +935,7 @@ class UserPreferencesStore @Inject constructor(
             showClockOnHome = readBool(prefs, Keys.SHOW_CLOCK_ON_HOME, "show_clock_on_home", false),
             showClockInPlayer = readBool(prefs, Keys.SHOW_CLOCK_IN_PLAYER, "show_clock_in_player", false),
             pauseOnAudioFocusLoss = readBool(prefs, Keys.PAUSE_ON_AUDIO_FOCUS_LOSS, "pause_on_audio_focus_loss", true),
+            duckOnTransientFocusLoss = readBool(prefs, Keys.DUCK_ON_TRANSIENT_FOCUS_LOSS, "duck_on_transient_focus_loss", false),
             volumeBoostEnabled = readBool(prefs, Keys.VOLUME_BOOST_ENABLED, "volume_boost_enabled", false),
             volumeBoostGain = readInt(prefs, Keys.VOLUME_BOOST_GAIN, "volume_boost_gain", 0),
             showShareMediaOption = readBool(prefs, Keys.SHOW_SHARE_MEDIA_OPTION, "show_share_media_option", true),
@@ -923,8 +955,6 @@ class UserPreferencesStore @Inject constructor(
             remoteControlEnabled = readBool(prefs, Keys.REMOTE_CONTROL_ENABLED, "remote_control_enabled", true),
             maxDownloadStorageGb = readInt(prefs, Keys.MAX_DOWNLOAD_STORAGE_GB, "max_download_storage_gb", 0),
             downloadStorageLocation = prefs[Keys.DOWNLOAD_STORAGE_LOCATION] ?: "INTERNAL",
-            kidsModeEnabled = readBool(prefs, Keys.KIDS_MODE_ENABLED, "kids_mode_enabled", false),
-            kidsModeMaxRating = prefs[Keys.KIDS_MODE_MAX_RATING] ?: "G",
             androidTvWatchNextEnabled = readBool(prefs, Keys.ANDROID_TV_WATCH_NEXT_ENABLED, "android_tv_watch_next_enabled", true),
             userDataSyncEnabled = readBool(prefs, Keys.USER_DATA_SYNC_ENABLED, "user_data_sync_enabled", true),
             appLanguage = prefs[Keys.APP_LANGUAGE],
@@ -937,6 +967,30 @@ class UserPreferencesStore @Inject constructor(
                 try { json.decodeFromString<List<String>>(it) } catch (_: Exception) { emptyList() }
             } ?: emptyList(),
             selfUpdateCheckEnabled = readBool(prefs, Keys.SELF_UPDATE_CHECK_ENABLED, "self_update_check_enabled", true),
+            hideEpisodeThumbnails = readBool(prefs, Keys.HIDE_EPISODE_THUMBNAILS, "hide_episode_thumbnails", false),
+            skipSpecials = readBool(prefs, Keys.SKIP_SPECIALS, "skip_specials", false),
+            cellularDownloadSizeWarningMb = readInt(prefs, Keys.CELLULAR_DOWNLOAD_SIZE_WARNING_MB, "cellular_download_size_warning_mb", 0),
+            hapticsEnabled = readBool(prefs, Keys.HAPTICS_ENABLED, "haptics_enabled", true),
+            dateFormatPreference = try {
+                DateFormatPreference.valueOf(prefs[Keys.DATE_FORMAT_PREFERENCE] ?: DateFormatPreference.SYSTEM.name)
+            } catch (_: Exception) { DateFormatPreference.SYSTEM },
+            appFontScale = try {
+                AppFontScale.valueOf(prefs[Keys.APP_FONT_SCALE] ?: AppFontScale.DEFAULT.name)
+            } catch (_: Exception) { AppFontScale.DEFAULT },
+            scheduledThemeStartHour = readInt(prefs, Keys.SCHEDULED_THEME_START_HOUR, "scheduled_theme_start_hour", 22),
+            scheduledThemeEndHour = readInt(prefs, Keys.SCHEDULED_THEME_END_HOUR, "scheduled_theme_end_hour", 7),
+            colorBlindMode = try {
+                ColorBlindMode.valueOf(prefs[Keys.COLOR_BLIND_MODE] ?: ColorBlindMode.NONE.name)
+            } catch (_: Exception) { ColorBlindMode.NONE },
+            handMode = try {
+                HandMode.valueOf(prefs[Keys.HAND_MODE] ?: HandMode.RIGHT.name)
+            } catch (_: Exception) { HandMode.RIGHT },
+            downloadScheduleEnabled = prefs[Keys.DOWNLOAD_SCHEDULE_ENABLED] ?: false,
+            downloadScheduleWindow = DownloadScheduleWindow(
+                startHour = prefs[Keys.DOWNLOAD_SCHEDULE_START] ?: 0,
+                endHour = prefs[Keys.DOWNLOAD_SCHEDULE_END] ?: 6,
+                wifiOnly = prefs[Keys.DOWNLOAD_SCHEDULE_WIFI_ONLY] ?: true,
+            ),
         )
     }.distinctUntilChanged().stateIn(scope, SharingStarted.Eagerly, UserPreferences())
 
@@ -996,6 +1050,58 @@ class UserPreferencesStore @Inject constructor(
 
     suspend fun setSelfUpdateCheckEnabled(enabled: Boolean) {
         context.dataStore.edit { it[Keys.SELF_UPDATE_CHECK_ENABLED] = enabled }
+    }
+
+    suspend fun setHideEpisodeThumbnails(enabled: Boolean) {
+        context.dataStore.edit { it[Keys.HIDE_EPISODE_THUMBNAILS] = enabled }
+    }
+
+    suspend fun setSkipSpecials(enabled: Boolean) {
+        context.dataStore.edit { it[Keys.SKIP_SPECIALS] = enabled }
+    }
+
+    suspend fun setCellularDownloadSizeWarningMb(sizeMb: Int) {
+        context.dataStore.edit { it[Keys.CELLULAR_DOWNLOAD_SIZE_WARNING_MB] = sizeMb }
+    }
+
+    suspend fun setHapticsEnabled(enabled: Boolean) {
+        context.dataStore.edit { it[Keys.HAPTICS_ENABLED] = enabled }
+    }
+
+    suspend fun setDateFormatPreference(preference: DateFormatPreference) {
+        context.dataStore.edit { it[Keys.DATE_FORMAT_PREFERENCE] = preference.name }
+    }
+
+    suspend fun setAppFontScale(scale: AppFontScale) {
+        context.dataStore.edit { it[Keys.APP_FONT_SCALE] = scale.name }
+    }
+
+    suspend fun setScheduledThemeStartHour(hour: Int) {
+        context.dataStore.edit { it[Keys.SCHEDULED_THEME_START_HOUR] = hour }
+    }
+
+    suspend fun setScheduledThemeEndHour(hour: Int) {
+        context.dataStore.edit { it[Keys.SCHEDULED_THEME_END_HOUR] = hour }
+    }
+
+    suspend fun setColorBlindMode(mode: ColorBlindMode) {
+        context.dataStore.edit { it[Keys.COLOR_BLIND_MODE] = mode.name }
+    }
+
+    suspend fun setHandMode(mode: HandMode) {
+        context.dataStore.edit { it[Keys.HAND_MODE] = mode.name }
+    }
+
+    suspend fun setDownloadScheduleEnabled(enabled: Boolean) {
+        context.dataStore.edit { it[Keys.DOWNLOAD_SCHEDULE_ENABLED] = enabled }
+    }
+
+    suspend fun setDownloadScheduleWindow(window: DownloadScheduleWindow) {
+        context.dataStore.edit {
+            it[Keys.DOWNLOAD_SCHEDULE_START] = window.startHour
+            it[Keys.DOWNLOAD_SCHEDULE_END] = window.endHour
+            it[Keys.DOWNLOAD_SCHEDULE_WIFI_ONLY] = window.wifiOnly
+        }
     }
 
     suspend fun setSubtitlesForcedOnly(enabled: Boolean) {
@@ -1189,6 +1295,15 @@ class UserPreferencesStore @Inject constructor(
         context.dataStore.edit { it[Keys.BIOMETRIC_LOCK_ENABLED] = enabled }
     }
 
+    suspend fun setUsePinForPlayerLock(enabled: Boolean) {
+        context.dataStore.edit { it[Keys.USE_PIN_FOR_PLAYER_LOCK] = enabled }
+    }
+
+    fun verifyPin(pin: String): Boolean {
+        val storedHash = preferences.value.pinHash ?: return false
+        return PinHasher.verify(pin, storedHash)
+    }
+
     suspend fun setShowAdvancedSettings(enabled: Boolean) {
         context.dataStore.edit { it[Keys.SHOW_ADVANCED_SETTINGS] = enabled }
     }
@@ -1309,6 +1424,32 @@ class UserPreferencesStore @Inject constructor(
         }
     }
 
+    suspend fun setHiddenCwItemIds(ids: Set<String>) {
+        context.dataStore.edit { it[Keys.HIDDEN_CW_ITEM_IDS] = json.encodeToString(ids) }
+    }
+
+    suspend fun hideCwItem(itemId: String) {
+        context.dataStore.edit { prefs ->
+            val current = prefs[Keys.HIDDEN_CW_ITEM_IDS]?.let {
+                try { json.decodeFromString<Set<String>>(it) } catch (_: Exception) { emptySet() }
+            } ?: emptySet()
+            prefs[Keys.HIDDEN_CW_ITEM_IDS] = json.encodeToString(current + itemId)
+        }
+    }
+
+    suspend fun unhideCwItem(itemId: String) {
+        context.dataStore.edit { prefs ->
+            val current = prefs[Keys.HIDDEN_CW_ITEM_IDS]?.let {
+                try { json.decodeFromString<Set<String>>(it) } catch (_: Exception) { emptySet() }
+            } ?: emptySet()
+            prefs[Keys.HIDDEN_CW_ITEM_IDS] = json.encodeToString(current - itemId)
+        }
+    }
+
+    suspend fun unhideAllCwItems() {
+        context.dataStore.edit { it.remove(Keys.HIDDEN_CW_ITEM_IDS) }
+    }
+
     suspend fun setPinnedHomeSections(sections: List<PinnedHomeSection>) {
         context.dataStore.edit { prefs ->
             prefs[Keys.PINNED_HOME_SECTIONS] = json.encodeToString(sections)
@@ -1396,6 +1537,16 @@ class UserPreferencesStore @Inject constructor(
         }
     }
 
+    suspend fun setLibraryFilters(libraryId: String, filters: String) {
+        context.dataStore.edit { prefs ->
+            val current = prefs[Keys.LIBRARY_FILTERS]?.let {
+                try { json.decodeFromString<Map<String, String>>(it) } catch (_: Exception) { emptyMap() }
+            } ?: emptyMap()
+            val next = current.toMutableMap().apply { put(libraryId, filters) }
+            prefs[Keys.LIBRARY_FILTERS] = json.encodeToString(next)
+        }
+    }
+
     suspend fun setKeepScreenOnDuringVideo(enabled: Boolean) {
         context.dataStore.edit { it[Keys.KEEP_SCREEN_ON_DURING_VIDEO] = enabled }
     }
@@ -1430,6 +1581,10 @@ class UserPreferencesStore @Inject constructor(
 
     suspend fun setPauseOnAudioFocusLoss(enabled: Boolean) {
         context.dataStore.edit { it[Keys.PAUSE_ON_AUDIO_FOCUS_LOSS] = enabled }
+    }
+
+    suspend fun setDuckOnTransientFocusLoss(enabled: Boolean) {
+        context.dataStore.edit { it[Keys.DUCK_ON_TRANSIENT_FOCUS_LOSS] = enabled }
     }
 
     suspend fun setVolumeBoostEnabled(enabled: Boolean) {
@@ -1847,6 +2002,51 @@ class UserPreferencesStore @Inject constructor(
         context.dataStore.edit { it[Keys.WIDGET_CONFIG] = json.encodeToString(config) }
     }
 
+    /**
+     * Returns the [WidgetConfig] for a specific widget instance, falling back
+     * to the global config if no per-widget config exists.
+     */
+    fun getWidgetConfigForId(appWidgetId: Int): kotlinx.coroutines.flow.Flow<WidgetConfig> =
+        sharedPrefs.map { prefs ->
+            val perWidgetConfig = prefs[Keys.WIDGET_CONFIGS]?.let { configsJson ->
+                try {
+                    val configs = json.decodeFromString<Map<Int, WidgetConfig>>(configsJson)
+                    configs[appWidgetId]
+                } catch (_: Exception) { null }
+            }
+            perWidgetConfig ?: run {
+                prefs[Keys.WIDGET_CONFIG]?.let {
+                    try { json.decodeFromString<WidgetConfig>(it) } catch (_: Exception) { null }
+                } ?: WidgetConfig()
+            }
+        }
+
+    /**
+     * Saves the [WidgetConfig] for a specific widget instance.
+     */
+    suspend fun setWidgetConfigForId(appWidgetId: Int, config: WidgetConfig) {
+        context.dataStore.edit { prefs ->
+            val current = prefs[Keys.WIDGET_CONFIGS]?.let {
+                try { json.decodeFromString<Map<Int, WidgetConfig>>(it) } catch (_: Exception) { emptyMap() }
+            } ?: emptyMap()
+            val next = current.toMutableMap().apply { put(appWidgetId, config) }
+            prefs[Keys.WIDGET_CONFIGS] = json.encodeToString(next)
+        }
+    }
+
+    /**
+     * Removes the per-widget config for a specific widget instance (used on widget deletion).
+     */
+    suspend fun removeWidgetConfigForId(appWidgetId: Int) {
+        context.dataStore.edit { prefs ->
+            val current = prefs[Keys.WIDGET_CONFIGS]?.let {
+                try { json.decodeFromString<Map<Int, WidgetConfig>>(it) } catch (_: Exception) { emptyMap() }
+            } ?: emptyMap()
+            val next = current.toMutableMap().apply { remove(appWidgetId) }
+            prefs[Keys.WIDGET_CONFIGS] = json.encodeToString(next)
+        }
+    }
+
     suspend fun setLibraryWidgetItems(
         items: List<LibraryWidgetItem>,
         version: Long,
@@ -2078,6 +2278,7 @@ class UserPreferencesStore @Inject constructor(
             settings[Keys.NEXT_UP_MAX_DAYS] = prefs.nextUpMaxDays
             settings[Keys.NEXT_UP_REWATCHING] = prefs.nextUpRewatching
             settings[Keys.NEXT_UP_EXCLUDED_SERIES_IDS] = json.encodeToString(prefs.nextUpExcludedSeriesIds)
+            settings[Keys.HIDDEN_CW_ITEM_IDS] = json.encodeToString(prefs.hiddenCwItemIds)
             settings[Keys.PINNED_HOME_SECTIONS] = json.encodeToString(prefs.pinnedHomeSections)
             settings[Keys.HOME_LAYOUT_PRESETS] = json.encodeToString(prefs.homeLayoutPresets)
             settings[Keys.CONTINUE_WATCHING_CLICK_BEHAVIOR] = prefs.continueWatchingClickBehavior.name
@@ -2085,6 +2286,7 @@ class UserPreferencesStore @Inject constructor(
             settings[Keys.SHOW_WATCHED_CHECKMARK] = prefs.showWatchedCheckmark
             settings[Keys.DEFAULT_LIBRARY_SORT_ORDERS] = json.encodeToString(prefs.defaultLibrarySortOrders)
             settings[Keys.LIBRARY_VIEW_MODES] = json.encodeToString(prefs.libraryViewModes)
+            settings[Keys.LIBRARY_FILTERS] = json.encodeToString(prefs.libraryFilters)
             settings[Keys.KEEP_SCREEN_ON_DURING_VIDEO] = prefs.keepScreenOnDuringVideo
             settings[Keys.DOWNLOAD_QUALITY] = prefs.downloadQuality.name
             settings[Keys.SMART_DOWNLOADS_ENABLED] = prefs.smartDownloadsEnabled
@@ -2111,8 +2313,6 @@ class UserPreferencesStore @Inject constructor(
             settings[Keys.REMOTE_CONTROL_ENABLED] = prefs.remoteControlEnabled
             settings[Keys.MAX_DOWNLOAD_STORAGE_GB] = prefs.maxDownloadStorageGb
             settings[Keys.DOWNLOAD_STORAGE_LOCATION] = prefs.downloadStorageLocation
-            settings[Keys.KIDS_MODE_ENABLED] = prefs.kidsModeEnabled
-            settings[Keys.KIDS_MODE_MAX_RATING] = prefs.kidsModeMaxRating
             settings[Keys.ANDROID_TV_WATCH_NEXT_ENABLED] = prefs.androidTvWatchNextEnabled
             settings[Keys.USER_DATA_SYNC_ENABLED] = prefs.userDataSyncEnabled
             prefs.appLanguage?.let { settings[Keys.APP_LANGUAGE] = it }
@@ -2254,14 +2454,6 @@ class UserPreferencesStore @Inject constructor(
         context.dataStore.edit { it[Keys.DOWNLOAD_STORAGE_LOCATION] = location }
     }
 
-    suspend fun setKidsModeEnabled(enabled: Boolean) {
-        context.dataStore.edit { it[Keys.KIDS_MODE_ENABLED] = enabled }
-    }
-
-    suspend fun setKidsModeMaxRating(rating: String) {
-        context.dataStore.edit { it[Keys.KIDS_MODE_MAX_RATING] = rating }
-    }
-
     suspend fun setAndroidTvWatchNextEnabled(enabled: Boolean) {
         context.dataStore.edit { it[Keys.ANDROID_TV_WATCH_NEXT_ENABLED] = enabled }
     }
@@ -2305,6 +2497,95 @@ class UserPreferencesStore @Inject constructor(
                 prefs[Keys.SYNTHWAVE_MODE] = false
                 prefs[Keys.SOOTHING_MODE] = false
             }
+        }
+    }
+
+    /**
+     * Resets all preferences in a specific category to their default values.
+     * @param category The [PreferenceResetCategory] to reset.
+     */
+    suspend fun resetCategory(category: PreferenceResetCategory) {
+        val keysToReset = when (category) {
+            PreferenceResetCategory.APPEARANCE -> listOf(
+                Keys.THEME_MODE, Keys.CONTRAST_LEVEL, Keys.DYNAMIC_THEMING, Keys.OLED_MODE,
+                Keys.ACCENT_COLOR_SWATCH, Keys.COLOR_STYLE, Keys.HOME_MODE,
+                Keys.HOME_ENABLED_SECTION_TYPES, Keys.HOME_SECTION_ORDER,
+                Keys.NAV_BAR_SHOW_LABELS, Keys.LIBRARY_VIEW_MODE,
+                Keys.HIDE_WATCHED_ITEMS, Keys.SHOW_UNWATCHED_BADGE,
+                Keys.SHOW_WATCHED_CHECKMARK, Keys.SHOW_SHARE_MEDIA_OPTION,
+                Keys.SHOW_EXTERNAL_RATINGS, Keys.PERFORMANCE_MODE,
+                Keys.REDUCE_MOTION_ENABLED, Keys.SYNTHWAVE_MODE, Keys.SYNTHWAVE_ACCENT,
+                Keys.SOOTHING_MODE, Keys.SOOTHING_ACCENT, Keys.MONOCHROME_MODE,
+                Keys.BACKDROP_THEME_MUSIC_ENABLED, Keys.NAV_ITEM_ORDER,
+                Keys.HIDDEN_NAV_ITEMS, Keys.HIDDEN_CW_ITEM_IDS,
+                Keys.DATE_FORMAT_PREFERENCE,
+                Keys.APP_FONT_SCALE,
+                Keys.SCHEDULED_THEME_START_HOUR,
+                Keys.SCHEDULED_THEME_END_HOUR,
+                Keys.COLOR_BLIND_MODE,
+                Keys.HAND_MODE,
+            )
+            PreferenceResetCategory.PLAYBACK -> listOf(
+                Keys.PREFERRED_PLAYER, Keys.STREAMING_QUALITY, Keys.VIDEO_SEEK_DURATION_MS,
+                Keys.VIDEO_GESTURES_ENABLED, Keys.VIDEO_DEFAULT_ORIENTATION,
+                Keys.VIDEO_DEFAULT_ASPECT_RATIO, Keys.VIDEO_AUTOPLAY_NEXT,
+                Keys.VIDEO_CONTROLS_TIMEOUT_MS,
+                Keys.VIDEO_SKIP_BACK_ON_RESUME_MS, Keys.SHOW_CLOCK_IN_PLAYER,
+                Keys.VIDEO_PASS_OUT_PROTECTION_HOURS,
+                Keys.CINEMA_MODE_ENABLED, Keys.VIDEO_EPISODE_BROWSER_ENABLED,
+                Keys.VIDEO_SHOW_PLAYBACK_METADATA, Keys.VIDEO_SWIPE_SEEK_MAX_MS,
+                Keys.VIDEO_REMEMBER_BRIGHTNESS, Keys.TRICKPLAY_ENABLED,
+                Keys.TRICKPLAY_ON_SEEK_GESTURE, Keys.VIDEO_PRELOAD_BUFFER_SIZE,
+                Keys.BACKGROUND_VIDEO_AUDIO_ENABLED, Keys.KEEP_SCREEN_ON_DURING_VIDEO,
+                Keys.INCOGNITO_MODE_ENABLED, Keys.FRAME_RATE_MATCHING,
+                Keys.FORCE_DIRECT_PLAY, Keys.DECODER_MODE,
+                Keys.AUDIO_PASSTHROUGH, Keys.DIALOGUE_BOOST_ENABLED,
+                Keys.DIALOGUE_BOOST_STRENGTH, Keys.NIGHT_MODE_ENABLED,
+                Keys.NIGHT_MODE_STRENGTH, Keys.SEGMENT_BEHAVIORS,
+                Keys.SKIP_INTRO_ENABLED, Keys.SKIP_OUTRO_ENABLED,
+                Keys.AUTO_SKIP_INTRO, Keys.AUTO_SKIP_OUTRO,
+                Keys.PAUSE_ON_AUDIO_FOCUS_LOSS, Keys.DUCK_ON_TRANSIENT_FOCUS_LOSS,
+            )
+            PreferenceResetCategory.AUDIO -> listOf(
+                Keys.AUDIO_DEFAULT_SPEED, Keys.AUDIO_VISUALIZER_ENABLED,
+                Keys.AUDIO_GAPLESS_ENABLED, Keys.AUDIO_CROSSFADE_DURATION_MS,
+                Keys.AUDIO_NORMALIZATION_ENABLED, Keys.AUDIO_NORMALIZATION_MODE,
+                Keys.CHANNEL_MIX_ENABLED, Keys.CHANNEL_MIX_MODE,
+                Keys.EQUALIZER_ENABLED, Keys.EQUALIZER_SETTINGS,
+                Keys.EQUALIZER_PRESET, Keys.BASS_BOOST_STRENGTH,
+                Keys.VIRTUALIZER_ENABLED, Keys.VIRTUALIZER_STRENGTH,
+                Keys.REVERB_PRESET, Keys.VOLUME_BOOST_ENABLED,
+                Keys.VOLUME_BOOST_GAIN, Keys.LR_BALANCE,
+                Keys.AUDIO_AUTOPLAY_NEXT, Keys.AUDIO_PRELOAD_BUFFER_SIZE,
+            )
+            PreferenceResetCategory.SECURITY -> listOf(
+                Keys.PIN_LOCK_ENABLED, Keys.PIN_HASH, Keys.BIOMETRIC_LOCK_ENABLED,
+                Keys.USE_PIN_FOR_PLAYER_LOCK, Keys.AUTO_LOCK_TIMER_MS,
+            )
+            PreferenceResetCategory.NOTIFICATIONS -> listOf(
+                Keys.NOTIFICATIONS_ENABLED, Keys.NOTIFICATIONS_CHECK_FREQUENCY,
+                Keys.NOTIFICATIONS_QUIET_HOURS_ENABLED,
+                Keys.NOTIFICATIONS_QUIET_HOURS_START, Keys.NOTIFICATIONS_QUIET_HOURS_END,
+                Keys.NOTIFICATIONS_SOUND_ENABLED, Keys.NOTIFICATIONS_VIBRATE_ENABLED,
+                Keys.NOTIFICATIONS_LIGHTS_ENABLED, Keys.NOTIFICATIONS_MAX_PER_CHECK,
+                Keys.NOTIFICATIONS_LIBRARY_CONFIGS,
+            )
+        }
+
+        context.dataStore.edit { prefs ->
+            keysToReset.forEach { key ->
+                prefs.remove(key)
+            }
+        }
+    }
+
+    /**
+     * Clears all preferences and resets to factory defaults.
+     * This will log out the user and clear all app data.
+     */
+    suspend fun clearAllPreferences() {
+        context.dataStore.edit { prefs ->
+            prefs.clear()
         }
     }
 }
