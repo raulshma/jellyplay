@@ -15,6 +15,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.FilterChipDefaults
@@ -39,8 +40,10 @@ import androidx.compose.ui.unit.dp
 import com.composables.icons.tabler.Tabler
 import com.composables.icons.tabler.outline.ArrowDown
 import com.composables.icons.tabler.outline.ArrowUp
+import com.raulshma.jellyplay.core.designsystem.theme.ShapeCache
 import com.raulshma.jellyplay.core.model.seerr.SeerrRequestFilter
 import com.raulshma.jellyplay.core.model.seerr.SeerrRequestSort
+import com.raulshma.jellyplay.core.ui.components.focusIndicator
 
 @Composable
 fun RequestsFilterBar(
@@ -79,6 +82,7 @@ fun RequestsFilterBar(
                 FilterChip(
                     selected = isSelected,
                     onClick = { onFilterChange(filter) },
+                    modifier = Modifier.focusIndicator(ShapeCache.smoothPill),
                     label = {
                         Text(
                             filter.value.replaceFirstChar { it.uppercase() },
@@ -114,6 +118,7 @@ fun RequestsFilterBar(
                 FilterChip(
                     selected = isSelected,
                     onClick = { onMediaTypeChange(type) },
+                    modifier = Modifier.focusIndicator(ShapeCache.smoothPill),
                     label = {
                         Text(
                             label,
@@ -142,6 +147,7 @@ fun RequestsFilterBar(
                 FilterChip(
                     selected = isSelected,
                     onClick = { onSortChange(sort) },
+                    modifier = Modifier.focusIndicator(ShapeCache.smoothPill),
                     label = {
                         Text(label, style = MaterialTheme.typography.labelSmall)
                     },
@@ -157,7 +163,9 @@ fun RequestsFilterBar(
 
             androidx.compose.material3.IconButton(
                 onClick = onSortDirectionToggle,
-                modifier = Modifier.size(32.dp),
+                modifier = Modifier
+                    .size(32.dp)
+                    .focusIndicator(CircleShape),
             ) {
                 Icon(
                     if (currentSortDirection == "desc") Tabler.Outline.ArrowDown else Tabler.Outline.ArrowUp,
@@ -179,6 +187,7 @@ fun RequestsFilterBar(
                     verticalAlignment = Alignment.CenterVertically,
                     modifier = Modifier
                         .clip(RoundedCornerShape(8.dp))
+                        .focusIndicator()
                         .clickable { onMyRequestsToggle() }
                         .padding(horizontal = 4.dp),
                 ) {

@@ -44,6 +44,7 @@ fun PluginCatalogCard(
     modifier: Modifier = Modifier,
 ) {
     val focusState = rememberTvFocusState()
+    val installFocusState = rememberTvFocusState(focusedScale = 1.05f)
 
     Card(
         modifier = modifier
@@ -152,6 +153,9 @@ fun PluginCatalogCard(
                                     latestVer.repositoryUrl,
                                 )
                             },
+                            modifier = Modifier
+                                .then(installFocusState.focusModifier)
+                                .tvFocusIndicator(installFocusState, ShapeCache.smooth12),
                             contentPadding = PaddingValues(
                                 horizontal = 16.dp,
                                 vertical = 4.dp,

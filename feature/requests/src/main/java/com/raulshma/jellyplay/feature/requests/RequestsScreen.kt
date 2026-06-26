@@ -47,6 +47,7 @@ import com.composables.icons.tabler.outline.Inbox
 import com.raulshma.jellyplay.core.designsystem.theme.ShapeCache
 import com.raulshma.jellyplay.core.model.seerr.SeerrRequestItem
 import com.raulshma.jellyplay.core.ui.components.JellyPlayCircularProgressIndicator
+import com.raulshma.jellyplay.core.ui.components.focusIndicator
 import com.raulshma.jellyplay.core.ui.components.JellyPlayScreenScaffold
 import com.raulshma.jellyplay.core.ui.tv.TvGrabInitialFocus
 import com.raulshma.jellyplay.core.ui.tv.tvFocusRestorer
@@ -120,7 +121,10 @@ fun RequestsScreen(
                                     color = MaterialTheme.colorScheme.error,
                                 )
                                 Spacer(Modifier.height(12.dp))
-                                androidx.compose.material3.TextButton(onClick = { viewModel.loadRequests(refresh = true) }) {
+                                androidx.compose.material3.TextButton(
+                                    onClick = { viewModel.loadRequests(refresh = true) },
+                                    modifier = Modifier.focusIndicator(),
+                                ) {
                                     Text("Retry")
                                 }
                             }
@@ -213,6 +217,7 @@ fun RequestsScreen(
                                             onClick = { viewModel.prevPage() },
                                             enabled = state.currentPage > 1,
                                             shape = ShapeCache.smooth12,
+                                            modifier = Modifier.focusIndicator(),
                                         ) {
                                             Icon(
                                                 Tabler.Outline.ChevronLeft,
@@ -233,6 +238,7 @@ fun RequestsScreen(
                                             onClick = { viewModel.nextPage() },
                                             enabled = state.currentPage < state.totalPages,
                                             shape = ShapeCache.smooth12,
+                                            modifier = Modifier.focusIndicator(),
                                         ) {
                                             Text("Next")
                                             Spacer(Modifier.width(4.dp))

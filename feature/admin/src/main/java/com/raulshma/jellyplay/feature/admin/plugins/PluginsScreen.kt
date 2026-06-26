@@ -10,6 +10,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -43,6 +44,8 @@ import com.raulshma.jellyplay.core.ui.components.JellyPlayScreenScaffold
 import com.raulshma.jellyplay.core.ui.components.ScreenLoadingState
 import com.raulshma.jellyplay.core.ui.components.rememberScreenBackgroundColor
 import com.raulshma.jellyplay.core.ui.tv.TvGrabInitialFocus
+import com.raulshma.jellyplay.core.ui.tv.rememberTvFocusState
+import com.raulshma.jellyplay.core.ui.tv.tvFocusIndicator
 import com.raulshma.jellyplay.feature.admin.plugins.components.InstalledPluginsTab
 import com.raulshma.jellyplay.feature.admin.plugins.components.CatalogTab
 import com.raulshma.jellyplay.feature.admin.plugins.components.RepositoriesTab
@@ -74,7 +77,11 @@ fun PluginsScreen(
         onBack = onBack,
         backgroundColor = backgroundColor,
         actions = {
-            IconButton(onClick = { viewModel.refresh() }) {
+            val refreshFocusState = rememberTvFocusState()
+            IconButton(
+                onClick = { viewModel.refresh() },
+                modifier = Modifier.then(refreshFocusState.focusModifier).tvFocusIndicator(refreshFocusState, CircleShape),
+            ) {
                 Icon(Tabler.Outline.Refresh, contentDescription = "Refresh")
             }
         },

@@ -35,3 +35,20 @@ fun Modifier.jellyFocusIndicator(
     interaction: JellyFocusableInteraction,
     shape: Shape = ShapeCache.smooth12,
 ): Modifier = tvFocusIndicator(interaction.focusState, shape)
+
+/**
+ * Simple focus indicator modifier for any clickable/focusable element.
+ * Usage: `.focusIndicator()` or `.focusIndicator(shape = CircleShape)`
+ *
+ * Tracks focus state and shows a subtle border when focused.
+ * Works on both phone and TV.
+ */
+@Composable
+fun Modifier.focusIndicator(
+    shape: Shape = ShapeCache.smooth12,
+): Modifier {
+    val focusState = rememberTvFocusState()
+    return this
+        .then(focusState.focusModifier)
+        .tvFocusIndicator(focusState, shape)
+}

@@ -65,7 +65,6 @@ import com.raulshma.jellyplay.core.ui.components.progressFraction
 import com.raulshma.jellyplay.core.ui.image.MediaImage
 import com.raulshma.jellyplay.core.ui.tv.LocalTvMode
 import com.raulshma.jellyplay.core.ui.tv.TvFocusableItemRow
-import com.raulshma.jellyplay.core.ui.tv.ifElse
 import com.raulshma.jellyplay.core.ui.tv.rememberTvFocusState
 import com.raulshma.jellyplay.core.ui.tv.tvFocusIndicator
 import com.raulshma.jellyplay.core.ui.tv.tvFocusRestorer
@@ -738,7 +737,6 @@ private fun VideosSection(
                     "https://img.youtube.com/vi/${video.key}/mqdefault.jpg"
                 } else null
 
-                val isTv = LocalTvMode.current
                 val videoCardFocusState = rememberTvFocusState(focusedScale = 1.05f)
                 val isSynthwave = LocalIsSynthwave.current
                 val isSoothing = LocalIsSoothingTheme.current
@@ -768,8 +766,8 @@ private fun VideosSection(
                         modifier = focusModifier
                             .width(240.dp)
                             .aspectRatio(16f / 9f)
-                            .ifElse(isTv, videoCardFocusState.focusModifier)
-                            .ifElse(isTv, Modifier.tvFocusIndicator(videoCardFocusState, ShapeCache.smooth8))
+                            .then(videoCardFocusState.focusModifier)
+                            .then(Modifier.tvFocusIndicator(videoCardFocusState, ShapeCache.smooth8))
                             .clickable {
                                 onVideoClick(video)
                             },

@@ -14,6 +14,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
@@ -47,11 +48,15 @@ import com.raulshma.jellyplay.core.ui.components.HeaderStatusIndicator
 import com.raulshma.jellyplay.core.ui.components.JellyPlayScreenScaffold
 import com.raulshma.jellyplay.core.ui.components.LocalNetworkStatus
 import com.raulshma.jellyplay.core.ui.components.resolveHeaderStatus
+import com.raulshma.jellyplay.core.ui.components.focusIndicator
+import com.raulshma.jellyplay.core.designsystem.theme.ShapeCache
 import com.raulshma.jellyplay.core.ui.adaptive.LocalAdaptiveInfo
 import com.raulshma.jellyplay.core.ui.adaptive.bottomPadding
 import com.raulshma.jellyplay.core.ui.adaptive.contentPadding
 import com.raulshma.jellyplay.core.ui.tv.LocalTvMode
 import com.raulshma.jellyplay.core.ui.tv.TvGrabInitialFocus
+import com.raulshma.jellyplay.core.ui.tv.rememberTvFocusState
+import com.raulshma.jellyplay.core.ui.tv.tvFocusIndicator
 import com.raulshma.jellyplay.core.ui.tv.tvFocusRestorer
 import com.composables.icons.tabler.Tabler
 import com.composables.icons.tabler.outline.*
@@ -145,12 +150,15 @@ fun PlaylistsScreen(
                 }
             }
 
+            val newPlaylistFocusState = rememberTvFocusState(focusedScale = 1.05f)
             ExtendedFloatingActionButton(
                 onClick = { viewModel.openCreateDialog() },
                 icon = { Icon(Tabler.Outline.Plus, contentDescription = null) },
                 text = { Text("New Playlist") },
                 modifier = Modifier
                     .align(Alignment.BottomEnd)
+                    .then(newPlaylistFocusState.focusModifier)
+                    .tvFocusIndicator(newPlaylistFocusState, ShapeCache.smooth16)
                     .padding(end = 16.dp, bottom = 16.dp),
             )
         }
@@ -276,10 +284,13 @@ private fun PlaylistItemRow(
     onDelete: () -> Unit,
 ) {
     var menuExpanded by remember { mutableStateOf(false) }
+    val menuFocusState = rememberTvFocusState()
+    val openFocusState = rememberTvFocusState()
     Row(
         modifier = Modifier
             .fillMaxWidth()
             
+            .focusIndicator(ShapeCache.smooth16)
             .clickable(onClick = onClick)
             .padding(horizontal = 16.dp, vertical = 12.dp),
         verticalAlignment = Alignment.CenterVertically,
@@ -315,7 +326,10 @@ private fun PlaylistItemRow(
             )
         }
         Box {
-            IconButton(onClick = { menuExpanded = true }) {
+            IconButton(
+                onClick = { menuExpanded = true },
+                modifier = Modifier.then(menuFocusState.focusModifier).tvFocusIndicator(menuFocusState, CircleShape),
+            ) {
                 Icon(
                     imageVector = Tabler.Outline.DotsVertical,
                     contentDescription = "More options",
@@ -352,7 +366,10 @@ private fun PlaylistItemRow(
                 )
             }
         }
-        IconButton(onClick = onClick) {
+        IconButton(
+            onClick = onClick,
+            modifier = Modifier.then(openFocusState.focusModifier).tvFocusIndicator(openFocusState, CircleShape),
+        ) {
             Icon(
                 Tabler.Outline.PlayerPlay,
                 contentDescription = "Open",

@@ -44,6 +44,7 @@ import com.raulshma.jellyplay.core.ui.adaptive.contentPadding
 import com.raulshma.jellyplay.core.ui.components.JellyPlayScreenScaffold
 import com.raulshma.jellyplay.core.ui.components.ScreenEmptyState
 import com.raulshma.jellyplay.core.ui.components.ScreenLoadingState
+import com.raulshma.jellyplay.core.ui.components.focusIndicator
 import com.raulshma.jellyplay.core.ui.image.MediaImage
 import com.raulshma.jellyplay.core.ui.tv.TvFocusableGrid
 import com.composables.icons.tabler.Tabler
@@ -157,6 +158,7 @@ private fun OfflineMediaCard(
         modifier = modifier
             .fillMaxWidth()
             .clip(ShapeCache.smooth8)
+            .focusIndicator()
             .clickable(onClick = onClick),
     ) {
         val imageModifier = Modifier

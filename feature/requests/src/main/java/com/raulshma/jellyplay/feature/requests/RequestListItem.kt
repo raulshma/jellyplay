@@ -38,6 +38,7 @@ import com.raulshma.jellyplay.core.designsystem.theme.StatusColors
 import com.raulshma.jellyplay.core.model.seerr.SeerrMediaStatus
 import com.raulshma.jellyplay.core.model.seerr.SeerrRequestItem
 import com.raulshma.jellyplay.core.model.seerr.SeerrRequestStatus
+import com.raulshma.jellyplay.core.ui.components.focusIndicator
 import com.raulshma.jellyplay.core.ui.image.MediaImage
 import kotlinx.coroutines.delay
 import java.time.Duration
@@ -88,6 +89,7 @@ fun RequestListItem(
         modifier = Modifier
             .fillMaxWidth()
             .clip(ShapeCache.smooth16)
+            .focusIndicator()
             .clickable { onClick() },
         shape = ShapeCache.smooth16,
         color = colorScheme.surfaceContainer.copy(alpha = 0.6f),
@@ -220,7 +222,9 @@ fun RequestListItem(
                                 onClick = onRetry,
                                 enabled = !actionInProgress,
                                 contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 8.dp, vertical = 2.dp),
-                                modifier = Modifier.height(28.dp),
+                                modifier = Modifier
+                                    .height(28.dp)
+                                    .focusIndicator(),
                             ) {
                                 Text("Retry", style = MaterialTheme.typography.labelSmall)
                             }
@@ -230,7 +234,9 @@ fun RequestListItem(
                                 onClick = onApprove,
                                 enabled = !actionInProgress,
                                 contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 8.dp, vertical = 2.dp),
-                                modifier = Modifier.height(28.dp),
+                                modifier = Modifier
+                                    .height(28.dp)
+                                    .focusIndicator(),
                             ) {
                                 Text("Approve", style = MaterialTheme.typography.labelSmall)
                             }
@@ -238,7 +244,9 @@ fun RequestListItem(
                                 onClick = onDecline,
                                 enabled = !actionInProgress,
                                 contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 8.dp, vertical = 2.dp),
-                                modifier = Modifier.height(28.dp),
+                                modifier = Modifier
+                                    .height(28.dp)
+                                    .focusIndicator(),
                                 colors = ButtonDefaults.filledTonalButtonColors(
                                     containerColor = colorScheme.errorContainer,
                                     contentColor = colorScheme.onErrorContainer,
@@ -259,7 +267,9 @@ fun RequestListItem(
                                 },
                                 enabled = !actionInProgress,
                                 contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 8.dp, vertical = 2.dp),
-                                modifier = Modifier.height(28.dp),
+                                modifier = Modifier
+                                    .height(28.dp)
+                                    .focusIndicator(),
                                 colors = ButtonDefaults.filledTonalButtonColors(
                                     containerColor = colorScheme.errorContainer,
                                     contentColor = colorScheme.onErrorContainer,

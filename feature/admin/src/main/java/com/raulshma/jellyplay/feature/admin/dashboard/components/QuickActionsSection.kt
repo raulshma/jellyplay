@@ -38,6 +38,7 @@ import com.composables.icons.tabler.outline.Trash
 import com.composables.icons.tabler.outline.EyeOff
 import com.composables.icons.tabler.outline.Tool
 import com.raulshma.jellyplay.core.designsystem.theme.ShapeCache
+import com.raulshma.jellyplay.core.ui.components.focusIndicator
 
 @Composable
 fun QuickActionsSection(
@@ -156,10 +157,10 @@ private fun QuickActionButton(
             .clip(ShapeCache.smooth16)
             .background(MaterialTheme.colorScheme.surfaceContainerLow)
             .graphicsLayer { scaleX = scale; scaleY = scale }
+            .focusIndicator(ShapeCache.smooth16)
             .clickable(interactionSource = interactionSource, indication = null, onClick = onClick)
             .padding(vertical = 20.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.Center,
     ) {
         Box(
             modifier = Modifier

@@ -34,6 +34,7 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import com.raulshma.jellyplay.core.model.DownloadStatus
 import com.raulshma.jellyplay.core.model.OfflineMediaItem
+import com.raulshma.jellyplay.core.ui.components.focusIndicator
 import com.raulshma.jellyplay.core.ui.image.MediaImage
 import com.raulshma.jellyplay.core.ui.components.JellyPlayLinearProgressIndicator
 import com.composables.icons.tabler.Tabler
@@ -110,6 +111,7 @@ fun OfflineHomeContent(
                         .fillMaxWidth()
                         .clip(RoundedCornerShape(12.dp))
                         .background(MaterialTheme.colorScheme.surfaceContainer)
+                        .focusIndicator()
                         .clickable { onItemClick() }
                         .padding(12.dp),
                     verticalAlignment = Alignment.CenterVertically,
@@ -275,6 +277,7 @@ fun DownloadedSection(
             Column(
                 modifier = Modifier
                     .width(120.dp)
+                    .focusIndicator()
                     .clickable { onOfflineLibraryClick() },
             ) {
                 val posterModifier = Modifier

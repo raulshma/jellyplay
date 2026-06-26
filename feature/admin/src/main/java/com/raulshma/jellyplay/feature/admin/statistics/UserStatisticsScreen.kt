@@ -50,6 +50,7 @@ import com.raulshma.jellyplay.core.ui.adaptive.LocalAdaptiveInfo
 import com.raulshma.jellyplay.core.ui.adaptive.bottomPadding
 import com.raulshma.jellyplay.core.ui.components.ErrorScreen
 import com.raulshma.jellyplay.core.ui.components.JellyPlayScreenScaffold
+import com.raulshma.jellyplay.core.ui.components.focusIndicator
 import com.raulshma.jellyplay.core.ui.components.ScreenLoadingState
 import com.raulshma.jellyplay.core.ui.components.StaggeredSection
 import com.raulshma.jellyplay.core.ui.tv.TvGrabInitialFocus
@@ -227,6 +228,7 @@ private fun UserStatisticsCard(
             .fillMaxWidth()
             .padding(horizontal = 8.dp)
             .graphicsLayer { scaleX = scale; scaleY = scale }
+            .focusIndicator(ShapeCache.smooth20)
             .clickable(interactionSource = interactionSource, indication = null, onClick = onClick),
     ) {
         Column(modifier = Modifier.padding(20.dp)) {

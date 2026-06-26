@@ -35,6 +35,7 @@ import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import com.raulshma.jellyplay.core.designsystem.theme.ShapeCache
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
@@ -78,6 +79,7 @@ import com.composables.icons.tabler.outline.PlayerPlay
 import com.composables.icons.tabler.outline.Share
 import com.composables.icons.tabler.outline.X
 import com.raulshma.jellyplay.core.ui.components.DelayedLoadingScreen
+import com.raulshma.jellyplay.core.ui.components.focusIndicator
 import com.raulshma.jellyplay.core.ui.components.LoadingScreen
 import com.raulshma.jellyplay.core.ui.feedback.LocalUserMessageBus
 import com.raulshma.jellyplay.core.ui.feedback.uiTextOf
@@ -871,6 +873,7 @@ private fun OverlayIconButton(
             .size(44.dp)
             .clip(CircleShape)
             .background(Color.White.copy(alpha = 0.15f))
+            .focusIndicator(CircleShape)
             .clickable(
                 interactionSource = remember { MutableInteractionSource() },
                 indication = null,
@@ -893,6 +896,7 @@ private fun OverlayActionButton(
             .size(44.dp)
             .clip(CircleShape)
             .background(Color.White.copy(alpha = 0.15f))
+            .focusIndicator(ShapeCache.smooth12)
             .clickable(
                 interactionSource = remember { MutableInteractionSource() },
                 indication = null,

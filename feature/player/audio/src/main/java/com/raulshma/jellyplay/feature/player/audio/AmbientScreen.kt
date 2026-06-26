@@ -8,7 +8,6 @@ import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -20,6 +19,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.LinearProgressIndicator
@@ -31,6 +31,8 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
@@ -42,7 +44,12 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.raulshma.jellyplay.core.designsystem.theme.AmbientColors
 import com.raulshma.jellyplay.core.designsystem.theme.ArtworkColors
+import com.raulshma.jellyplay.core.designsystem.theme.ShapeCache
 import com.raulshma.jellyplay.core.designsystem.theme.rememberArtworkColors
+import com.raulshma.jellyplay.core.ui.tv.LocalTvMode
+import com.raulshma.jellyplay.core.ui.tv.rememberTvFocusState
+import com.raulshma.jellyplay.core.ui.tv.tryRequestFocus
+import com.raulshma.jellyplay.core.ui.tv.tvFocusIndicator
 import com.composables.icons.tabler.Tabler
 import com.composables.icons.tabler.outline.*
 
@@ -83,6 +90,13 @@ private fun AmbientScreenContent(
 ) {
     val artworkColors = rememberArtworkColors(imageUrl)
     val colors = extractAmbientColors(artworkColors)
+
+    val isTv = LocalTvMode.current
+    val controlsFocusRequester = remember { FocusRequester() }
+    // On TV grab focus onto the play/pause button so the D-pad lands somewhere actionable.
+    LaunchedEffect(Unit) {
+        if (isTv) controlsFocusRequester.tryRequestFocus("ambient_controls")
+    }
 
     BackHandler { onTap() }
 
@@ -133,9 +147,13 @@ private fun AmbientScreenContent(
                 horizontalArrangement = Arrangement.Center,
                 verticalAlignment = Alignment.CenterVertically,
             ) {
+                val prevFocusState = rememberTvFocusState(focusedScale = 1.08f)
                 IconButton(
                     onClick = onSkipPrevious,
-                    modifier = Modifier.size(48.dp),
+                    modifier = Modifier
+                        .size(48.dp)
+                        .then(prevFocusState.focusModifier)
+                        .tvFocusIndicator(prevFocusState, CircleShape),
                 ) {
                     Icon(
                         Tabler.Outline.PlayerSkipBack,
@@ -145,9 +163,14 @@ private fun AmbientScreenContent(
                     )
                 }
                 Spacer(Modifier.width(16.dp))
+                val playPauseFocusState = rememberTvFocusState(focusedScale = 1.08f)
                 IconButton(
                     onClick = onPlayPause,
-                    modifier = Modifier.size(56.dp),
+                    modifier = Modifier
+                        .size(56.dp)
+                        .then(playPauseFocusState.focusModifier)
+                        .tvFocusIndicator(playPauseFocusState, CircleShape)
+                        .then(if (isTv) Modifier.focusRequester(controlsFocusRequester) else Modifier),
                 ) {
                     Icon(
                         if (isPlaying) Tabler.Outline.PlayerPause else Tabler.Outline.PlayerPlay,
@@ -157,9 +180,13 @@ private fun AmbientScreenContent(
                     )
                 }
                 Spacer(Modifier.width(16.dp))
+                val nextFocusState = rememberTvFocusState(focusedScale = 1.08f)
                 IconButton(
                     onClick = onSkipNext,
-                    modifier = Modifier.size(48.dp),
+                    modifier = Modifier
+                        .size(48.dp)
+                        .then(nextFocusState.focusModifier)
+                        .tvFocusIndicator(nextFocusState, CircleShape),
                 ) {
                     Icon(
                         Tabler.Outline.PlayerSkipForward,

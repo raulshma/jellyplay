@@ -43,6 +43,7 @@ import com.raulshma.jellyplay.core.ui.components.ErrorScreen
 import com.raulshma.jellyplay.core.ui.components.JellyPlayScreenScaffold
 import com.raulshma.jellyplay.core.ui.components.ScreenLoadingState
 import com.raulshma.jellyplay.core.ui.components.StaggeredSection
+import com.raulshma.jellyplay.core.ui.components.focusIndicator
 import com.raulshma.jellyplay.core.ui.components.rememberScreenBackgroundColor
 import com.raulshma.jellyplay.core.ui.tv.LocalTvMode
 import com.raulshma.jellyplay.core.ui.tv.TvGrabInitialFocus
@@ -127,6 +128,7 @@ fun AdminDashboardScreen(
                 modifier = Modifier
                     .padding(4.dp)
                     .clip(CircleShape)
+                    .focusIndicator(CircleShape)
                     .clickable(onClick = { viewModel.loadDashboard() }),
             ) {
                 Icon(

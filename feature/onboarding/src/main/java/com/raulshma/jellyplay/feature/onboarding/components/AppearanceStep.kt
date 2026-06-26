@@ -41,6 +41,7 @@ import androidx.compose.ui.unit.dp
 import com.composables.icons.tabler.Tabler
 import com.composables.icons.tabler.outline.*
 import com.raulshma.jellyplay.core.designsystem.theme.ShapeCache
+import com.raulshma.jellyplay.core.ui.components.focusIndicator
 import com.raulshma.jellyplay.core.model.ColorStyle
 import com.raulshma.jellyplay.core.model.ContrastLevel
 import com.raulshma.jellyplay.core.model.ThemeMode
@@ -246,6 +247,7 @@ fun OnboardingOptionCard(
                     )
                 }
             }
+            .focusIndicator()
             .clickable(
                 interactionSource = interactionSource,
                 indication = null,
@@ -306,6 +308,7 @@ fun OnboardingToggleRow(
             }
             .clip(ShapeCache.smooth16)
             .background(backgroundColor)
+            .focusIndicator()
             .clickable(
                 interactionSource = interactionSource,
                 indication = null,

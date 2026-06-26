@@ -66,6 +66,8 @@ import com.raulshma.jellyplay.core.ui.components.JellyPlayScreenScaffold
 import com.raulshma.jellyplay.core.ui.components.ScreenLoadingState
 import com.raulshma.jellyplay.core.ui.components.StaggeredSection
 import com.raulshma.jellyplay.core.ui.tv.TvGrabInitialFocus
+import com.raulshma.jellyplay.core.ui.tv.rememberTvFocusState
+import com.raulshma.jellyplay.core.ui.tv.tvFocusIndicator
 import com.raulshma.jellyplay.core.ui.tv.tvFocusRestorer
 import com.raulshma.jellyplay.feature.admin.statistics.components.ActivityBarChart
 import com.raulshma.jellyplay.feature.admin.statistics.components.ComparisonCard
@@ -110,6 +112,7 @@ fun UserStatisticsDetailScreen(
         onBack = onBack,
         actions = {
             if (!state.isLoading && state.error == null) {
+                val shareFocusState = rememberTvFocusState()
                 IconButton(
                     onClick = {
                         scope.launch {
@@ -119,6 +122,7 @@ fun UserStatisticsDetailScreen(
                             )
                         }
                     },
+                    modifier = Modifier.then(shareFocusState.focusModifier).tvFocusIndicator(shareFocusState, CircleShape),
                 ) {
                     Icon(
                         Tabler.Outline.Share,
@@ -279,10 +283,12 @@ fun UserStatisticsDetailScreen(
                                 modifier = Modifier.fillMaxWidth().padding(16.dp),
                                 contentAlignment = Alignment.Center,
                             ) {
+                                val loadMoreFocusState = rememberTvFocusState()
                                 FilledTonalButton(
                                     onClick = { viewModel.loadMore() },
                                     enabled = !state.isLoadingMore,
                                     shape = ShapeCache.smooth16,
+                                    modifier = Modifier.then(loadMoreFocusState.focusModifier).tvFocusIndicator(loadMoreFocusState, ShapeCache.smooth16),
                                 ) {
                                     Text(if (state.isLoadingMore) "Loading..." else "Load More")
                                 }

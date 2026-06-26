@@ -46,8 +46,11 @@ import com.raulshma.jellyplay.core.ui.tv.LocalTvMode
 import com.raulshma.jellyplay.core.ui.tv.tvFocusRestorer
 import com.raulshma.jellyplay.core.ui.tv.TvGrabInitialFocus
 import com.raulshma.jellyplay.core.ui.tv.tryRequestFocus
+import com.raulshma.jellyplay.core.ui.components.focusIndicator
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
+import androidx.compose.foundation.shape.CircleShape
+import com.raulshma.jellyplay.core.ui.components.focusIndicator
 import com.composables.icons.tabler.Tabler
 import com.composables.icons.tabler.outline.*
 
@@ -104,6 +107,7 @@ fun AppearanceSettingsScreen(
             )
             IconButton(
                 onClick = { showResetDialog = true },
+                modifier = Modifier.focusIndicator(CircleShape),
             ) {
                 Icon(
                     Tabler.Outline.Refresh,

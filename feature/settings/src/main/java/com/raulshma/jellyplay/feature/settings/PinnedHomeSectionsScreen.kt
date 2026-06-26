@@ -612,8 +612,8 @@ private fun TvSafeTextButton(onClick: () -> Unit, content: @Composable () -> Uni
     Row(
         modifier = Modifier
             .clip(ShapeCache.smoothPill)
-            .then(if (isTv) tvFocusState.focusModifier else Modifier)
-            .then(if (isTv) Modifier.tvFocusIndicator(tvFocusState, ShapeCache.smoothPill) else Modifier)
+            .then(tvFocusState.focusModifier)
+            .then(Modifier.tvFocusIndicator(tvFocusState, ShapeCache.smoothPill))
             .clickable(onClick = onClick)
             .padding(horizontal = 12.dp, vertical = 6.dp),
         verticalAlignment = Alignment.CenterVertically,

@@ -32,7 +32,10 @@ import com.raulshma.jellyplay.core.ui.components.ScreenEmptyState
 import com.raulshma.jellyplay.core.ui.components.ScreenLoadingState
 import com.raulshma.jellyplay.core.ui.tv.LocalTvMode
 import com.raulshma.jellyplay.core.ui.tv.TvGrabInitialFocus
+import com.raulshma.jellyplay.core.ui.tv.rememberTvFocusState
+import com.raulshma.jellyplay.core.ui.tv.tvFocusIndicator
 import com.raulshma.jellyplay.core.ui.tv.tvFocusRestorer
+import com.raulshma.jellyplay.core.designsystem.theme.ShapeCache
 import com.raulshma.jellyplay.core.ui.components.AnimatedEntrance
 import com.raulshma.jellyplay.feature.music.components.TrackRow
 import com.composables.icons.tabler.Tabler
@@ -129,12 +132,15 @@ fun MoodPlaylistDetailScreen(
 
             val firstTrack = viewModel.generatedItems.firstOrNull()
             if (firstTrack != null && !viewModel.isLoading) {
+                val playAllFocusState = rememberTvFocusState(focusedScale = 1.05f)
                 ExtendedFloatingActionButton(
                     onClick = { viewModel.playAll() },
                     icon = { Icon(Tabler.Outline.PlayerPlay, contentDescription = null) },
                     text = { Text("Play All") },
                     modifier = Modifier
                         .align(Alignment.BottomEnd)
+                        .then(playAllFocusState.focusModifier)
+                        .tvFocusIndicator(playAllFocusState, ShapeCache.smooth16)
                         .padding(bottom = 64.dp + WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding(), end = 16.dp)
                         .offset {
                             val maxOffset = com.raulshma.jellyplay.core.designsystem.theme.Dimensions.floatingNavHeight.toPx()

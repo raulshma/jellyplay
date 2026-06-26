@@ -24,6 +24,7 @@ import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
@@ -85,6 +86,8 @@ import com.raulshma.jellyplay.core.ui.adaptive.LocalAdaptiveInfo
 import com.raulshma.jellyplay.core.ui.adaptive.WindowSizeClass
 import com.raulshma.jellyplay.core.ui.components.JellyPlayScreenScaffold
 import com.raulshma.jellyplay.core.ui.tv.TvGrabInitialFocus
+import com.raulshma.jellyplay.core.ui.tv.rememberTvFocusState
+import com.raulshma.jellyplay.core.ui.tv.tvFocusIndicator
 import com.raulshma.jellyplay.core.ui.tv.tvFocusRestorer
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -134,12 +137,20 @@ fun WatchProgressHeatmapScreen(
         title = "Watch Progress",
         onBack = onBack,
         actions = {
-            IconButton(onClick = { viewModel.onEvent(HeatmapEvent.RequestShare) }) {
+            val shareFocusState = rememberTvFocusState()
+            IconButton(
+                onClick = { viewModel.onEvent(HeatmapEvent.RequestShare) },
+                modifier = Modifier.then(shareFocusState.focusModifier).tvFocusIndicator(shareFocusState, CircleShape),
+            ) {
                 Icon(Tabler.Outline.Share, contentDescription = "Share")
             }
             var menuExpanded by remember { mutableStateOf(false) }
             Box {
-                IconButton(onClick = { menuExpanded = true }) {
+                val filterFocusState = rememberTvFocusState()
+                IconButton(
+                    onClick = { menuExpanded = true },
+                    modifier = Modifier.then(filterFocusState.focusModifier).tvFocusIndicator(filterFocusState, CircleShape),
+                ) {
                     Icon(Tabler.Outline.Filter, contentDescription = "Configure Heatmap")
                 }
                 DropdownMenu(
@@ -343,12 +354,17 @@ private fun YearSelector(
     year: Int,
     onYearChange: (Int) -> Unit,
 ) {
+    val prevYearFocusState = rememberTvFocusState()
+    val nextYearFocusState = rememberTvFocusState()
     Row(
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.Center,
         modifier = Modifier.fillMaxWidth(),
     ) {
-        IconButton(onClick = { onYearChange(year - 1) }) {
+        IconButton(
+            onClick = { onYearChange(year - 1) },
+            modifier = Modifier.then(prevYearFocusState.focusModifier).tvFocusIndicator(prevYearFocusState, CircleShape),
+        ) {
             Icon(Tabler.Outline.ChevronLeft, contentDescription = "Previous year")
         }
         Text(
@@ -361,6 +377,7 @@ private fun YearSelector(
         IconButton(
             onClick = { onYearChange(minOf(year + 1, currentYear)) },
             enabled = year < currentYear,
+            modifier = Modifier.then(nextYearFocusState.focusModifier).tvFocusIndicator(nextYearFocusState, CircleShape),
         ) {
             Icon(Tabler.Outline.ChevronRight, contentDescription = "Next year")
         }

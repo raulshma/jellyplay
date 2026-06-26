@@ -248,6 +248,8 @@ private fun PluginHeaderCard(
     onToggle: () -> Unit,
     onUninstall: () -> Unit,
 ) {
+    val toggleFocusState = rememberTvFocusState()
+    val uninstallFocusState = rememberTvFocusState()
     Card(
         modifier = Modifier.fillMaxWidth(),
         colors = CardDefaults.cardColors(
@@ -303,6 +305,7 @@ private fun PluginHeaderCard(
                     onClick = onToggle,
                     enabled = !isToggling,
                     contentPadding = PaddingValues(horizontal = 16.dp, vertical = 4.dp),
+                    modifier = Modifier.then(toggleFocusState.focusModifier).tvFocusIndicator(toggleFocusState, ShapeCache.smooth12),
                 ) {
                     Text(if (isEnabled) "Disable" else "Enable")
                 }
@@ -311,6 +314,7 @@ private fun PluginHeaderCard(
                     OutlinedButton(
                         onClick = onUninstall,
                         contentPadding = PaddingValues(horizontal = 12.dp, vertical = 4.dp),
+                        modifier = Modifier.then(uninstallFocusState.focusModifier).tvFocusIndicator(uninstallFocusState, ShapeCache.smooth12),
                     ) {
                         Icon(
                             Tabler.Outline.Trash,
@@ -408,6 +412,7 @@ private fun VersionHistoryItem(
     onInstall: () -> Unit,
 ) {
     val focusState = rememberTvFocusState()
+    val installFocusState = rememberTvFocusState()
 
     Card(
         modifier = Modifier
@@ -480,6 +485,7 @@ private fun VersionHistoryItem(
                     onClick = onInstall,
                     enabled = !isInstalling,
                     contentPadding = PaddingValues(horizontal = 12.dp, vertical = 4.dp),
+                    modifier = Modifier.then(installFocusState.focusModifier).tvFocusIndicator(installFocusState, ShapeCache.smooth12),
                 ) {
                     if (isInstalling) {
                         CircularProgressIndicator(

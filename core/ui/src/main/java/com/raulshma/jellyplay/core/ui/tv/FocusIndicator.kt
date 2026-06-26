@@ -26,6 +26,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+import com.raulshma.jellyplay.core.ui.adaptive.LocalJellyPlayUi
 
 object TvFocusDefaults {
     val BorderWidth = 2.dp
@@ -52,11 +53,12 @@ fun rememberTvFocusState(
     focusedBorderWidth: Dp = TvFocusDefaults.BorderWidth,
 ): TvFocusState {
     val isTv = LocalTvMode.current
+    val focusTokens = LocalJellyPlayUi.current.focus
     var isFocused by remember { mutableStateOf(false) }
 
     val motionScheme = MaterialTheme.motionScheme
 
-    // Breathing fade alpha animation
+    // Breathing fade alpha animation (TV only)
     val infiniteTransition = rememberInfiniteTransition(label = "tvFocusBreathing")
     val breathingAlpha = infiniteTransition.animateFloat(
         initialValue = 1f,
@@ -82,7 +84,9 @@ fun rememberTvFocusState(
     }
 
     val animatedBorder by animateDpAsState(
-        targetValue = if (isFocused && isTv) focusedBorderWidth else 0.dp,
+        targetValue = if (isFocused) {
+            if (isTv) focusedBorderWidth else focusTokens.borderWidth
+        } else 0.dp,
         animationSpec = motionScheme.fastSpatialSpec(),
         label = "tvFocusBorder",
     )
@@ -93,16 +97,12 @@ fun rememberTvFocusState(
         label = "tvFocusGlow",
     )
 
-    val focusModifier = if (isTv) {
-        Modifier.onFocusChanged { focusState ->
-            isFocused = focusState.isFocused
-        }
-    } else {
-        Modifier
+    val focusModifier = Modifier.onFocusChanged { focusState ->
+        isFocused = focusState.isFocused
     }
 
     return TvFocusState(
-        isFocused = isFocused && isTv,
+        isFocused = isFocused,
         scale = 1f, // Always 1f to disable scaling on TV focused items
         alphaProvider = alphaProvider,
         borderWidth = animatedBorder,
@@ -117,9 +117,10 @@ fun rememberRowSharedFocusState(
     focusedBorderWidth: Dp = TvFocusDefaults.BorderWidth,
 ): TvFocusState {
     val isTv = LocalTvMode.current
+    val focusTokens = LocalJellyPlayUi.current.focus
     var isFocused by remember { mutableStateOf(false) }
 
-    // Breathing fade alpha animation
+    // Breathing fade alpha animation (TV only)
     val infiniteTransition = rememberInfiniteTransition(label = "tvFocusBreathingShared")
     val breathingAlpha = infiniteTransition.animateFloat(
         initialValue = 1f,
@@ -144,7 +145,9 @@ fun rememberRowSharedFocusState(
     }
 
     val animatedBorder by animateDpAsState(
-        targetValue = if (isFocused && isTv) focusedBorderWidth else 0.dp,
+        targetValue = if (isFocused) {
+            if (isTv) focusedBorderWidth else focusTokens.borderWidth
+        } else 0.dp,
         label = "tvFocusBorderShared",
     )
 
@@ -153,16 +156,12 @@ fun rememberRowSharedFocusState(
         label = "tvFocusGlowShared",
     )
 
-    val focusModifier = if (isTv) {
-        Modifier.onFocusChanged { focusState ->
-            isFocused = focusState.isFocused
-        }
-    } else {
-        Modifier
+    val focusModifier = Modifier.onFocusChanged { focusState ->
+        isFocused = focusState.isFocused
     }
 
     return TvFocusState(
-        isFocused = isFocused && isTv,
+        isFocused = isFocused,
         scale = 1f, // Always 1f to disable scaling on TV focused items
         alphaProvider = alphaProvider,
         borderWidth = animatedBorder,
@@ -176,9 +175,6 @@ fun Modifier.tvFocusIndicator(
     shape: Shape = RectangleShape,
     color: Color? = null,
 ): Modifier = composed {
-    val isTv = LocalTvMode.current
-    if (!isTv) return@composed this
-
     val glowColor = color ?: MaterialTheme.colorScheme.primary
     val borderColor = color ?: MaterialTheme.colorScheme.primary
 
@@ -213,9 +209,6 @@ fun Modifier.tvFocusIndicator(
 }
 
 fun Modifier.tvFocusChanged(onFocusChanged: (Boolean) -> Unit): Modifier = composed {
-    val isTv = LocalTvMode.current
-    if (!isTv) return@composed this
-
     this.onFocusChanged { focusState ->
         onFocusChanged(focusState.isFocused)
     }

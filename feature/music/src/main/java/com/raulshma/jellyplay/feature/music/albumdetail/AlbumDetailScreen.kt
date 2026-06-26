@@ -252,6 +252,10 @@ private fun AlbumDetailContent(
 
                     Spacer(Modifier.height(16.dp))
 
+                    val playAllFocusState = rememberTvFocusState(focusedScale = 1.04f)
+                    val instantMixFocusState = rememberTvFocusState(focusedScale = 1.1f)
+                    val downloadAlbumFocusState = rememberTvFocusState(focusedScale = 1.1f)
+
                     Row(
                         horizontalArrangement = Arrangement.spacedBy(8.dp),
                         verticalAlignment = Alignment.CenterVertically
@@ -263,7 +267,10 @@ private fun AlbumDetailContent(
                                 }
                             },
                             enabled = tracks.isNotEmpty(),
-                            modifier = Modifier.weight(1f),
+                            modifier = Modifier
+                                .weight(1f)
+                                .then(playAllFocusState.focusModifier)
+                                .tvFocusIndicator(playAllFocusState, ShapeCache.smooth12),
                         ) {
                             Icon(Tabler.Outline.PlayerPlay, contentDescription = null)
                             Spacer(Modifier.size(8.dp))
@@ -274,6 +281,8 @@ private fun AlbumDetailContent(
                             onClick = onInstantMix,
                             enabled = !isStartingMix,
                             modifier = Modifier
+                                .then(instantMixFocusState.focusModifier)
+                                .tvFocusIndicator(instantMixFocusState, CircleShape)
                                 .background(MaterialTheme.colorScheme.surfaceVariant, CircleShape)
                                 .size(40.dp)
                         ) {
@@ -307,6 +316,8 @@ private fun AlbumDetailContent(
                                 }
                             },
                             modifier = Modifier
+                                .then(downloadAlbumFocusState.focusModifier)
+                                .tvFocusIndicator(downloadAlbumFocusState, CircleShape)
                                 .background(MaterialTheme.colorScheme.surfaceVariant, CircleShape)
                                 .size(40.dp)
                         ) {
@@ -374,6 +385,8 @@ private fun TrackItem(
     onDownloadClick: (() -> Unit)? = null,
 ) {
     val tvFocusState = rememberTvFocusState()
+    val downloadFocusState = rememberTvFocusState()
+    val addToQueueFocusState = rememberTvFocusState()
     Row(
         modifier = Modifier
             .fillMaxWidth()
@@ -426,7 +439,10 @@ private fun TrackItem(
         }
 
         if (onDownloadClick != null) {
-            androidx.compose.material3.IconButton(onClick = onDownloadClick) {
+            androidx.compose.material3.IconButton(
+                onClick = onDownloadClick,
+                modifier = Modifier.then(downloadFocusState.focusModifier).tvFocusIndicator(downloadFocusState, CircleShape),
+            ) {
                 if (downloadItem?.status == DownloadStatus.DOWNLOADING || downloadItem?.status == DownloadStatus.PENDING) {
                     val progressVal = if (downloadItem.totalSizeBytes > 0) {
                         downloadItem.downloadedBytes.toFloat() / downloadItem.totalSizeBytes
@@ -455,7 +471,10 @@ private fun TrackItem(
         }
 
         if (onAddToQueue != null) {
-            androidx.compose.material3.IconButton(onClick = { onAddToQueue() }) {
+            androidx.compose.material3.IconButton(
+                onClick = { onAddToQueue() },
+                modifier = Modifier.then(addToQueueFocusState.focusModifier).tvFocusIndicator(addToQueueFocusState, CircleShape),
+            ) {
                 Icon(
                     Tabler.Outline.Playlist,
                     contentDescription = "Add to Queue",

@@ -51,6 +51,7 @@ import com.raulshma.jellyplay.core.ui.adaptive.LocalAdaptiveInfo
 import com.raulshma.jellyplay.core.ui.adaptive.contentPadding
 import com.raulshma.jellyplay.core.ui.components.JellyPlayScreenScaffold
 import com.raulshma.jellyplay.core.ui.components.PosterCard
+import com.raulshma.jellyplay.core.ui.components.focusIndicator
 import com.raulshma.jellyplay.core.ui.components.rememberScreenBackgroundColor
 import com.raulshma.jellyplay.core.designsystem.theme.ShapeCache
 import com.raulshma.jellyplay.core.ui.tv.LocalTvMode
@@ -229,6 +230,7 @@ private fun MediaTypeFilterRow(
                     .clip(ShapeCache.smooth14)
                     .graphicsLayer { scaleX = scale; scaleY = scale }
                     .background(containerColor)
+                    .focusIndicator(ShapeCache.smooth16)
                     .clickable(
                         interactionSource = interactionSource,
                         indication = null,

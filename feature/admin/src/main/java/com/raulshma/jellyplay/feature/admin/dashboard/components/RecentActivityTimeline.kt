@@ -29,6 +29,8 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.raulshma.jellyplay.core.designsystem.theme.ShapeCache
 import com.raulshma.jellyplay.core.designsystem.theme.StatusColors
+import com.raulshma.jellyplay.core.ui.tv.rememberTvFocusState
+import com.raulshma.jellyplay.core.ui.tv.tvFocusIndicator
 import com.raulshma.jellyplay.core.model.ActivityLogEntry
 import com.raulshma.jellyplay.core.model.ActivityLogSeverity
 
@@ -38,6 +40,8 @@ fun RecentActivityTimeline(
     onViewAll: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
+    val viewAllFocusState = rememberTvFocusState(focusedScale = 1.04f)
+
     Card(
         modifier = modifier.fillMaxWidth().padding(horizontal = 8.dp),
         shape = ShapeCache.smooth20,
@@ -56,7 +60,12 @@ fun RecentActivityTimeline(
                     style = MaterialTheme.typography.titleMedium,
                     fontWeight = FontWeight.SemiBold,
                 )
-                TextButton(onClick = onViewAll) { Text("View All") }
+                TextButton(
+                    onClick = onViewAll,
+                    modifier = Modifier
+                        .then(viewAllFocusState.focusModifier)
+                        .tvFocusIndicator(viewAllFocusState, ShapeCache.smooth12),
+                ) { Text("View All") }
             }
             Spacer(Modifier.height(8.dp))
             entries.take(5).forEachIndexed { index, entry ->
