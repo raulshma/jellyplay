@@ -251,6 +251,13 @@ private fun MainHomeContent(
         )
     }
 
+    // When the hero actually receives focus, snap the list back to the top so the full hero is
+    // visible. This is keyed on real focus state (not a BringIntoViewResponder), so it cannot
+    // interfere with D-pad traversal between content rows.
+    LaunchedEffect(focusInHero) {
+        if (focusInHero && isTv) listState.scrollToItem(0, 0)
+    }
+
     val headerHeight = remember(isTv, adaptiveInfo.isLandscape, adaptiveInfo.windowSizeClass) {
         when {
             isTv -> AdaptiveHeroHeight.Tv
@@ -932,7 +939,7 @@ private fun HomeContentList(
                         listState = listState,
                         onItemClick = onItemClick,
                         onDetailsClick = onItemClick,
-                        requestInitialFocus = isTv || !savedRowIsValid,
+                        requestInitialFocus = !savedRowIsValid,
                         onFocusChange = onFocusChange,
                         focusRequester = heroFocusRequester,
                     )
