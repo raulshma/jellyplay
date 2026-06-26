@@ -3,9 +3,13 @@ package com.raulshma.jellyplay.core.data.repository
 import com.raulshma.jellyplay.core.model.CreditTimestamps
 import com.raulshma.jellyplay.core.model.IntroTimestamps
 import com.raulshma.jellyplay.core.model.MediaSegment
+import com.raulshma.jellyplay.core.model.PlaybackInfoResult
+import com.raulshma.jellyplay.core.model.PlaybackMode
 import com.raulshma.jellyplay.core.model.PlaybackProgress
 import com.raulshma.jellyplay.core.model.PlaybackStartInfo
+import com.raulshma.jellyplay.core.model.PlayerType
 import com.raulshma.jellyplay.core.model.RemoteSubtitleInfo
+import com.raulshma.jellyplay.core.model.ResolvedPlayback
 
 interface PlaybackRepository {
 
@@ -20,6 +24,39 @@ interface PlaybackRepository {
     fun getBackdropUrl(itemId: String, maxWidth: Int = 1280): String
 
     fun getStreamUrl(itemId: String, mediaSourceId: String, startTimeTicks: Long = 0): String
+
+    /**
+     * Queries the server `PlaybackInfo` endpoint. See
+     * [PlaybackApiClient.fetchPlaybackInfo] for parameter semantics.
+     */
+    suspend fun fetchPlaybackInfo(
+        itemId: String,
+        mediaSourceId: String,
+        startTimeTicks: Long,
+        audioStreamIndex: Int?,
+        subtitleStreamIndex: Int?,
+        maxStreamingBitrateBits: Long?,
+        mode: PlaybackMode,
+        playerType: PlayerType,
+    ): Result<PlaybackInfoResult>
+
+    /**
+     * Resolves a playable [ResolvedPlayback] (URL + PlayMethod + server
+     * playSessionId) for [itemId] by consulting the `PlaybackInfo` endpoint
+     * under [mode] and then choosing Direct Play / Direct Stream / Transcode
+     * per the server's playability decision. Returns `null` when the server
+     * offers no playable method for the source.
+     */
+    suspend fun resolvePlayback(
+        itemId: String,
+        mediaSourceId: String,
+        startTimeTicks: Long,
+        audioStreamIndex: Int?,
+        subtitleStreamIndex: Int?,
+        maxStreamingBitrateBits: Long?,
+        mode: PlaybackMode,
+        playerType: PlayerType,
+    ): ResolvedPlayback?
 
     fun getStreamUrl(
         itemId: String,

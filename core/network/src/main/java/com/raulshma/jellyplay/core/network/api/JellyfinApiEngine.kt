@@ -17,11 +17,8 @@ import okhttp3.OkHttpClient
 import org.jellyfin.sdk.Jellyfin
 import org.jellyfin.sdk.api.client.ApiClient
 import org.jellyfin.sdk.model.api.ClientCapabilitiesDto
-import org.jellyfin.sdk.model.api.DeviceProfile
 import org.jellyfin.sdk.model.api.GeneralCommandType
 import org.jellyfin.sdk.model.api.MediaType as SdkMediaType
-import org.jellyfin.sdk.model.api.SubtitleDeliveryMethod
-import org.jellyfin.sdk.model.api.SubtitleProfile
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -30,6 +27,7 @@ class JellyfinApiEngine @Inject constructor(
     @ApplicationContext val context: Context,
     val jellyfin: Jellyfin,
     val okHttpClient: OkHttpClient,
+    private val deviceProfileProvider: DeviceProfileProvider,
 ) {
     private val _currentServer = MutableStateFlow<ServerInfo?>(null)
     val currentServer: StateFlow<ServerInfo?> = _currentServer.asStateFlow()
@@ -99,6 +97,16 @@ class JellyfinApiEngine @Inject constructor(
         }
     }
 
+    val cachedCapabilities by lazy {
+        ClientCapabilitiesDto(
+            playableMediaTypes = listOf(SdkMediaType.VIDEO, SdkMediaType.AUDIO),
+            supportedCommands = SUPPORTED_REMOTE_COMMANDS,
+            supportsMediaControl = true,
+            supportsPersistentIdentifier = true,
+            deviceProfile = deviceProfileProvider.default,
+        )
+    }
+
     companion object {
         val sharedJson = kotlinx.serialization.json.Json { ignoreUnknownKeys = true }
         private val SUPPORTED_REMOTE_COMMANDS = listOf(
@@ -118,27 +126,5 @@ class JellyfinApiEngine @Inject constructor(
             GeneralCommandType.DISPLAY_MESSAGE,
             GeneralCommandType.PLAY,
         )
-        val CACHED_CAPABILITIES by lazy {
-            ClientCapabilitiesDto(
-                playableMediaTypes = listOf(SdkMediaType.VIDEO, SdkMediaType.AUDIO),
-                supportedCommands = SUPPORTED_REMOTE_COMMANDS,
-                supportsMediaControl = true,
-                supportsPersistentIdentifier = true,
-                deviceProfile = DeviceProfile(
-                    directPlayProfiles = emptyList(),
-                    transcodingProfiles = emptyList(),
-                    containerProfiles = emptyList(),
-                    codecProfiles = emptyList(),
-                    subtitleProfiles = listOf(
-                        SubtitleProfile(format = "srt", method = SubtitleDeliveryMethod.EXTERNAL),
-                        SubtitleProfile(format = "ass", method = SubtitleDeliveryMethod.EXTERNAL),
-                        SubtitleProfile(format = "ssa", method = SubtitleDeliveryMethod.EXTERNAL),
-                        SubtitleProfile(format = "subrip", method = SubtitleDeliveryMethod.EXTERNAL),
-                        SubtitleProfile(format = "vtt", method = SubtitleDeliveryMethod.EXTERNAL),
-                        SubtitleProfile(format = "webvtt", method = SubtitleDeliveryMethod.EXTERNAL),
-                    ),
-                ),
-            )
-        }
     }
 }

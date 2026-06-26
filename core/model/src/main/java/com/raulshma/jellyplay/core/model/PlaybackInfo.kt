@@ -14,12 +14,34 @@ data class PlaybackInfo(
     val playSessionId: String? = null,
 )
 
+/**
+ * Parsed response from the Jellyfin `PlaybackInfo` endpoint. The
+ * [mediaSources] carry the server's refreshed playability decision
+ * (supportsDirectPlay / supportsDirectStream / supportsTranscoding and a
+ * ready-to-use [MediaSource.transcodeUrl]) for the requested
+ * [PlaybackMode], and [playSessionId] is the server-issued id that must
+ * accompany subsequent progress reports so transcode sessions are tracked
+ * correctly.
+ */
+@Immutable
+@Serializable
+data class PlaybackInfoResult(
+    val playSessionId: String?,
+    val mediaSources: List<MediaSource>,
+)
+
 @Immutable
 @Serializable
 enum class PlayMethod {
     DIRECT_PLAY,
     DIRECT_STREAM,
-    TRANSCODE,
+    TRANSCODE;
+
+    fun displayName(): String = when (this) {
+        DIRECT_PLAY -> "Direct Play"
+        DIRECT_STREAM -> "Direct Stream"
+        TRANSCODE -> "Transcode"
+    }
 }
 
 @Immutable

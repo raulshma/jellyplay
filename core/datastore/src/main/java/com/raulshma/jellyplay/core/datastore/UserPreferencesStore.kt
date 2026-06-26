@@ -49,6 +49,7 @@ import com.raulshma.jellyplay.core.model.PreloadBufferSize
 import com.raulshma.jellyplay.core.model.ReverbPreset
 import com.raulshma.jellyplay.core.model.SegmentBehavior
 import com.raulshma.jellyplay.core.model.StreamingQuality
+import com.raulshma.jellyplay.core.model.PlaybackMode
 import com.raulshma.jellyplay.core.model.SubtitleStyle
 import com.raulshma.jellyplay.core.model.SubtitleEdgeType
 import com.raulshma.jellyplay.core.model.ThemeMode
@@ -108,6 +109,7 @@ class UserPreferencesStore @Inject constructor(
         val SUBTITLE_STYLE = stringPreferencesKey("subtitle_style")
         val STREAMING_QUALITY = stringPreferencesKey("streaming_quality")
         val FORCE_DIRECT_PLAY = booleanPreferencesKey("force_direct_play")
+        val PLAYBACK_MODE = stringPreferencesKey("playback_mode")
         val PIN_HASH = stringPreferencesKey("pin_hash")
         val DIALOGUE_BOOST_STRENGTH = stringPreferencesKey("dialogue_boost_strength")
         val DECODER_MODE = stringPreferencesKey("decoder_mode")
@@ -431,6 +433,22 @@ class UserPreferencesStore @Inject constructor(
         return typed ?: prefs[stringPreferencesKey(name)]?.toBoolean() ?: default
     }
 
+    /**
+     * Reads [UserPreferences.playbackMode]. Migrates the legacy boolean
+     * `force_direct_play` key when the new enum key is absent: a legacy
+     * value of `true` (the historical default) maps to
+     * [PlaybackMode.FORCE_DIRECT_PLAY] to preserve the prior behaviour of
+     * always requesting a static stream; `false` maps to
+     * [PlaybackMode.AUTO] so the server negotiates the best method.
+     */
+    private fun readPlaybackMode(prefs: Preferences): PlaybackMode {
+        prefs[Keys.PLAYBACK_MODE]?.let { raw ->
+            return try { PlaybackMode.valueOf(raw) } catch (_: Exception) { PlaybackMode.AUTO }
+        }
+        val legacyForce = readBool(prefs, Keys.FORCE_DIRECT_PLAY, "force_direct_play", true)
+        return if (legacyForce) PlaybackMode.FORCE_DIRECT_PLAY else PlaybackMode.AUTO
+    }
+
     private fun readInt(prefs: Preferences, key: Preferences.Key<Int>, name: String, default: Int): Int {
         val typed = try { prefs[key] } catch (_: ClassCastException) { null }
         return typed ?: prefs[stringPreferencesKey(name)]?.toIntOrNull() ?: default
@@ -712,7 +730,7 @@ class UserPreferencesStore @Inject constructor(
             streamingQuality = try {
                 StreamingQuality.valueOf(prefs[Keys.STREAMING_QUALITY] ?: StreamingQuality.AUTO.name)
             } catch (_: Exception) { StreamingQuality.AUTO },
-            forceDirectPlay = readBool(prefs, Keys.FORCE_DIRECT_PLAY, "force_direct_play", true),
+            playbackMode = readPlaybackMode(prefs),
             maxCacheSizeMb = readInt(prefs, Keys.MAX_CACHE_SIZE_MB, "max_cache_size_mb", 0),
             autoDeleteCache = readBool(prefs, Keys.AUTO_DELETE_CACHE, "auto_delete_cache", true),
             pinLockEnabled = readBool(prefs, Keys.PIN_LOCK_ENABLED, "pin_lock_enabled", false),
@@ -1167,8 +1185,8 @@ class UserPreferencesStore @Inject constructor(
         context.dataStore.edit { it[Keys.STREAMING_QUALITY] = quality.name }
     }
 
-    suspend fun setForceDirectPlay(enabled: Boolean) {
-        context.dataStore.edit { it[Keys.FORCE_DIRECT_PLAY] = enabled }
+    suspend fun setPlaybackMode(mode: PlaybackMode) {
+        context.dataStore.edit { it[Keys.PLAYBACK_MODE] = mode.name }
     }
 
     suspend fun setMaxCacheSize(sizeMb: Int) {
@@ -2123,6 +2141,7 @@ class UserPreferencesStore @Inject constructor(
                 prefs.subtitleStyle,
             )
             settings[Keys.STREAMING_QUALITY] = prefs.streamingQuality.name
+            settings[Keys.PLAYBACK_MODE] = prefs.playbackMode.name
             settings[Keys.MAX_CACHE_SIZE_MB] = prefs.maxCacheSizeMb
             settings[Keys.AUTO_DELETE_CACHE] = prefs.autoDeleteCache
             settings[Keys.PIN_LOCK_ENABLED] = prefs.pinLockEnabled
@@ -2538,7 +2557,7 @@ class UserPreferencesStore @Inject constructor(
                 Keys.TRICKPLAY_ON_SEEK_GESTURE, Keys.VIDEO_PRELOAD_BUFFER_SIZE,
                 Keys.BACKGROUND_VIDEO_AUDIO_ENABLED, Keys.KEEP_SCREEN_ON_DURING_VIDEO,
                 Keys.INCOGNITO_MODE_ENABLED, Keys.FRAME_RATE_MATCHING,
-                Keys.FORCE_DIRECT_PLAY, Keys.DECODER_MODE,
+                Keys.FORCE_DIRECT_PLAY, Keys.PLAYBACK_MODE, Keys.DECODER_MODE,
                 Keys.AUDIO_PASSTHROUGH, Keys.DIALOGUE_BOOST_ENABLED,
                 Keys.DIALOGUE_BOOST_STRENGTH, Keys.NIGHT_MODE_ENABLED,
                 Keys.NIGHT_MODE_STRENGTH, Keys.SEGMENT_BEHAVIORS,

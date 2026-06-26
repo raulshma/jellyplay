@@ -5,9 +5,14 @@ import com.raulshma.jellyplay.core.model.CreditTimestamps
 import com.raulshma.jellyplay.core.model.IntroTimestamps
 import com.raulshma.jellyplay.core.model.MediaSegment
 import com.raulshma.jellyplay.core.model.MediaSegmentType
+import com.raulshma.jellyplay.core.model.PlaybackInfoResult
+import com.raulshma.jellyplay.core.model.PlayMethod
+import com.raulshma.jellyplay.core.model.PlaybackMode
 import com.raulshma.jellyplay.core.model.PlaybackProgress
 import com.raulshma.jellyplay.core.model.PlaybackStartInfo
+import com.raulshma.jellyplay.core.model.PlayerType
 import com.raulshma.jellyplay.core.model.RemoteSubtitleInfo
+import com.raulshma.jellyplay.core.model.ResolvedPlayback
 import com.raulshma.jellyplay.core.network.JellyfinApiClient
 import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
@@ -50,6 +55,83 @@ class PlaybackRepositoryImpl @Inject constructor(
 
     override fun getStreamUrl(itemId: String, mediaSourceId: String, startTimeTicks: Long): String =
         apiClient.getStreamUrl(itemId, mediaSourceId, startTimeTicks)
+
+    override suspend fun fetchPlaybackInfo(
+        itemId: String,
+        mediaSourceId: String,
+        startTimeTicks: Long,
+        audioStreamIndex: Int?,
+        subtitleStreamIndex: Int?,
+        maxStreamingBitrateBits: Long?,
+        mode: PlaybackMode,
+        playerType: PlayerType,
+    ): Result<PlaybackInfoResult> = apiClient.fetchPlaybackInfo(
+        itemId = itemId,
+        mediaSourceId = mediaSourceId,
+        startTimeTicks = startTimeTicks,
+        audioStreamIndex = audioStreamIndex,
+        subtitleStreamIndex = subtitleStreamIndex,
+        maxStreamingBitrateBits = maxStreamingBitrateBits,
+        mode = mode,
+        playerType = playerType,
+    )
+
+    override suspend fun resolvePlayback(
+        itemId: String,
+        mediaSourceId: String,
+        startTimeTicks: Long,
+        audioStreamIndex: Int?,
+        subtitleStreamIndex: Int?,
+        maxStreamingBitrateBits: Long?,
+        mode: PlaybackMode,
+        playerType: PlayerType,
+    ): ResolvedPlayback? {
+        val result = fetchPlaybackInfo(
+            itemId = itemId,
+            mediaSourceId = mediaSourceId,
+            startTimeTicks = startTimeTicks,
+            audioStreamIndex = audioStreamIndex,
+            subtitleStreamIndex = subtitleStreamIndex,
+            maxStreamingBitrateBits = maxStreamingBitrateBits,
+            mode = mode,
+            playerType = playerType,
+        ).getOrNull() ?: return null
+
+        val source = result.mediaSources.firstOrNull { it.id == mediaSourceId }
+            ?: result.mediaSources.firstOrNull()
+            ?: return null
+
+        val (url, method) = when {
+            source.supportsDirectPlay ->
+                getStreamUrl(itemId, source.id, startTimeTicks) to PlayMethod.DIRECT_PLAY
+            source.supportsDirectStream ->
+                resolveTranscodeUrl(source.transcodeUrl) to PlayMethod.DIRECT_STREAM
+            source.supportsTranscoding ->
+                resolveTranscodeUrl(source.transcodeUrl) to PlayMethod.TRANSCODE
+            // No playable method offered by the server for this source/mode.
+            else -> return null
+        }
+        if (url.isBlank()) return null
+
+        return ResolvedPlayback(
+            mediaSourceId = source.id,
+            streamUrl = url,
+            playMethod = method,
+            playSessionId = result.playSessionId,
+            maxStreamingBitrate = maxStreamingBitrateBits,
+        )
+    }
+
+    private fun resolveTranscodeUrl(transcodeUrl: String?): String {
+        if (transcodeUrl.isNullOrBlank()) return ""
+        val server = apiClient.getServerUrl() ?: return ""
+        val base = if (transcodeUrl.startsWith("http")) transcodeUrl else "$server$transcodeUrl"
+        val token = apiClient.getAccessToken()
+        if (token.isNullOrBlank()) return base
+        // Avoid duplicating an api_key query param if the server already
+        // embedded one in the transcoding URL.
+        return if ("api_key=" in base) base else "$base${if ('?' in base) "&" else "?"}api_key=$token"
+    }
 
     override fun getStreamUrl(
         itemId: String,

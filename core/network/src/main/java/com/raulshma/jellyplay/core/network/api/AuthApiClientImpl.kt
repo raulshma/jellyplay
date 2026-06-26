@@ -207,7 +207,7 @@ class AuthApiClientImpl @Inject constructor(
     }
 
     override suspend fun postCapabilities(): Result<Unit> = engine.apiResultWithRetry {
-        engine.requireApi().sessionApi.postFullCapabilities(data = JellyfinApiEngine.CACHED_CAPABILITIES)
+        engine.requireApi().sessionApi.postFullCapabilities(data = engine.cachedCapabilities)
     }
 
     override suspend fun revokeServerSession(): Result<Unit> = engine.apiResultWithRetry {
