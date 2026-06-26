@@ -139,8 +139,6 @@ fun TvNavigationDrawer(
     val drawerSheetFocusRequester = remember { FocusRequester() }
     val contentFocusRequester = remember { FocusRequester() }
 
-    var initializationComplete by remember { mutableStateOf(false) }
-    var sheetHasFocus by remember { mutableStateOf(false) }
     var contentHasFocus by remember { mutableStateOf(false) }
     var lastBackPressTime by remember { mutableLongStateOf(0L) }
 
@@ -211,13 +209,6 @@ fun TvNavigationDrawer(
         }
     }
 
-    LaunchedEffect(drawerState.currentValue) {
-        if (drawerState.currentValue == DrawerValue.Open && !sheetHasFocus) {
-            drawerSheetFocusRequester.tryRequestFocus("tv_drawer_sheet")
-        }
-        initializationComplete = true
-    }
-
     LaunchedEffect(drawerState.currentValue, selectedIndex, primaryItems.size, drawerFolders.size) {
         if (drawerState.currentValue == DrawerValue.Open && totalItemCount > 0) {
             drawerListState.scrollToItem(selectedIndex.coerceIn(0, totalItemCount - 1))
@@ -227,7 +218,10 @@ fun TvNavigationDrawer(
 
     LaunchedEffect(currentRoute, drawerState.currentValue, contentHasFocus) {
         if (drawerState.currentValue == DrawerValue.Closed && !contentHasFocus) {
-            contentFocusRequester.tryRequestFocus("tv_content_guard")
+            for (attempt in 1..3) {
+                androidx.compose.runtime.withFrameNanos { }
+                if (contentFocusRequester.tryRequestFocus("tv_content_guard")) break
+            }
         }
     }
 
@@ -258,14 +252,6 @@ fun TvNavigationDrawer(
                         bottom = 16.dp,
                     )
                     .focusRequester(drawerSheetFocusRequester)
-                    .onFocusChanged {
-                        sheetHasFocus = it.hasFocus
-                        if (initializationComplete) {
-                            drawerState.setValue(
-                                if (it.hasFocus) DrawerValue.Open else DrawerValue.Closed,
-                            )
-                        }
-                    }
                     .focusGroup()
                     .tvFocusRestorer(selectedItemFocusRequester)
                     .focusProperties {

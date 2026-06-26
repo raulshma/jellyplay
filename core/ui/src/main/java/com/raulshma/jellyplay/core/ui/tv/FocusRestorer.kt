@@ -50,8 +50,16 @@ fun RequestOrRestoreFocus(
     debugKey: String? = null,
 ) {
     if (focusRequester != null) {
+        val isTv = LocalTvMode.current
         LaunchedEffect(Unit) {
-            focusRequester.tryRequestFocus(debugKey)
+            if (isTv) {
+                for (attempt in 1..3) {
+                    androidx.compose.runtime.withFrameNanos { }
+                    if (focusRequester.tryRequestFocus(debugKey)) break
+                }
+            } else {
+                focusRequester.tryRequestFocus(debugKey)
+            }
         }
     }
 }
