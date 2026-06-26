@@ -900,7 +900,10 @@ private fun HomeContentList(
     // left the 420dp hero half-clipped at the top (only the title/buttons visible). Instead we scroll
     // back to the very top; RequestOrRestoreFocus inside the hero re-grabs focus on back-stack pops.
     LaunchedEffect(Unit) {
-        if (isTv) listState.scrollToItem(0, 0)
+        if (isTv) {
+            listState.scrollToItem(0, 0)
+            homeFocusRow = -1
+        }
     }
 
     if (sections.isEmpty()) {
