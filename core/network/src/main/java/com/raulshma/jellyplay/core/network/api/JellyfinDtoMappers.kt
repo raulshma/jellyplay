@@ -14,11 +14,14 @@ import com.raulshma.jellyplay.core.model.LiveTvProgram
 import com.raulshma.jellyplay.core.model.LogFile
 import com.raulshma.jellyplay.core.model.MediaItem
 import com.raulshma.jellyplay.core.model.MediaType
+import com.raulshma.jellyplay.core.model.MediaSource
+import com.raulshma.jellyplay.core.model.MediaStream
 import com.raulshma.jellyplay.core.model.PersonInfo
 import com.raulshma.jellyplay.core.model.ScheduledTaskInfo
 import com.raulshma.jellyplay.core.model.SessionInfo
 import com.raulshma.jellyplay.core.model.SessionNowPlayingItem
 import com.raulshma.jellyplay.core.model.SessionPlayState
+import com.raulshma.jellyplay.core.model.StreamType
 import com.raulshma.jellyplay.core.model.TaskExecutionInfo
 import com.raulshma.jellyplay.core.model.TaskState
 import com.raulshma.jellyplay.core.model.TaskTriggerInfo
@@ -26,6 +29,8 @@ import com.raulshma.jellyplay.core.model.TrickplayInfo
 import org.jellyfin.sdk.model.api.BaseItemDto
 import org.jellyfin.sdk.model.api.BaseItemKind
 import org.jellyfin.sdk.model.api.ImageType
+import org.jellyfin.sdk.model.api.MediaSourceInfo
+import org.jellyfin.sdk.model.api.MediaStreamType
 import org.jellyfin.sdk.model.api.RecordingStatus
 import org.jellyfin.sdk.model.api.TrickplayInfoDto
 import org.jellyfin.sdk.model.serializer.toUUID
@@ -109,6 +114,58 @@ internal fun TrickplayInfoDto.toTrickplayInfo() = TrickplayInfo(
     thumbnailCount = thumbnailCount ?: 0,
     interval = interval ?: 10_000,
     bandwidth = bandwidth ?: 0,
+)
+
+/**
+ * Maps a Jellyfin [MediaSourceInfo] to the domain [MediaSource]. Shared by
+ * the item-detail fetch ([LibraryApiClientImpl]) and the `PlaybackInfo`
+ * fetch ([PlaybackApiClientImpl]) so the playability flags and stream list
+ * are parsed identically. [trickplayInfo] is item-scoped so callers that
+ * have it (detail) pass it in; [PlaybackInfo] callers pass `null`.
+ */
+internal fun MediaSourceInfo.toMediaSource(
+    trickplayInfo: TrickplayInfo? = null,
+) = MediaSource(
+    id = id.toString(),
+    name = name ?: "",
+    container = container,
+    size = size,
+    bitrate = bitrate?.toLong(),
+    runTimeTicks = runTimeTicks,
+    supportsTranscoding = supportsTranscoding,
+    supportsDirectStream = supportsDirectStream,
+    supportsDirectPlay = supportsDirectPlay,
+    transcodeUrl = transcodingUrl,
+    path = path,
+    mediaStreams = mediaStreams?.map { it.toMediaStream() } ?: emptyList(),
+    trickplayInfo = trickplayInfo,
+)
+
+internal fun org.jellyfin.sdk.model.api.MediaStream.toMediaStream() = MediaStream(
+    index = index,
+    type = when (type) {
+        MediaStreamType.VIDEO -> StreamType.VIDEO
+        MediaStreamType.AUDIO -> StreamType.AUDIO
+        MediaStreamType.SUBTITLE -> StreamType.SUBTITLE
+        else -> StreamType.EMBEDDED_IMAGE
+    },
+    codec = codec,
+    language = language,
+    title = title,
+    displayTitle = displayTitle,
+    isDefault = isDefault,
+    isForced = isForced,
+    isExternal = isExternal,
+    width = width,
+    height = height,
+    bitRate = bitRate?.toLong(),
+    sampleRate = sampleRate,
+    channels = channels,
+    deliveryUrl = deliveryUrl,
+    videoRange = videoRange?.serialName,
+    videoRangeType = videoRangeType?.serialName,
+    realFrameRate = realFrameRate,
+    videoDoViTitle = videoDoViTitle,
 )
 
 internal fun BaseItemDto.toLiveTvChannel() = LiveTvChannel(

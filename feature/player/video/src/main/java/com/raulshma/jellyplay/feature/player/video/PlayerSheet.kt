@@ -18,6 +18,7 @@ sealed class PlayerSheet {
     data object Episodes : PlayerSheet()
     data object SyncPlay : PlayerSheet()
     data object Quality : PlayerSheet()
+    data object PlaybackMode : PlayerSheet()
     data object SleepTimer : PlayerSheet()
     data object VideoFilter : PlayerSheet()
 }
@@ -50,6 +51,7 @@ private val ALL_SHEETS: List<PlayerSheet> = listOf(
     PlayerSheet.Episodes,
     PlayerSheet.SyncPlay,
     PlayerSheet.Quality,
+    PlayerSheet.PlaybackMode,
     PlayerSheet.SleepTimer,
     PlayerSheet.VideoFilter,
 )

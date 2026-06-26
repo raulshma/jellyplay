@@ -3,6 +3,9 @@ package com.raulshma.jellyplay.core.network.api
 import com.raulshma.jellyplay.core.model.CreditTimestamps
 import com.raulshma.jellyplay.core.model.IntroTimestamps
 import com.raulshma.jellyplay.core.model.MediaSegment
+import com.raulshma.jellyplay.core.model.PlaybackInfoResult
+import com.raulshma.jellyplay.core.model.PlaybackMode
+import com.raulshma.jellyplay.core.model.PlayerType
 import com.raulshma.jellyplay.core.model.RemoteSubtitleInfo
 
 interface PlaybackApiClient {
@@ -27,6 +30,36 @@ interface PlaybackApiClient {
     ): Result<Unit>
 
     fun getStreamUrl(itemId: String, mediaSourceId: String, startTimeTicks: Long = 0): String
+
+    /**
+     * Queries the Jellyfin `PlaybackInfo` endpoint to obtain the server's
+     * playability decision for [itemId] under the requested [mode].
+     *
+     * The returned [PlaybackInfoResult] carries a refreshed
+     * [com.raulshma.jellyplay.core.model.MediaSource] (with the server-decided
+     * Direct Play / Direct Stream / Transcode support and a ready-to-use
+     * `transcodeUrl`) plus the server-issued `playSessionId`.
+     *
+     * @param mode drives the `enableDirectPlay` / `enableDirectStream` /
+     *   `enableTranscoding` / `allowVideoStreamCopy` flags on the request.
+     *   `AUTO` enables everything; `FORCE_DIRECT_PLAY` disables stream copy
+     *   and transcoding; `FORCE_TRANSCODE` disables direct play and direct
+     *   stream.
+     * @param maxStreamingBitrateBits optional bitrate ceiling (bits/s) derived
+     *   from the streaming-quality picker. Sent for `AUTO` and
+     *   `FORCE_TRANSCODE` so a forced transcode still targets the chosen
+     *   resolution; omitted for `FORCE_DIRECT_PLAY`.
+     */
+    suspend fun fetchPlaybackInfo(
+        itemId: String,
+        mediaSourceId: String,
+        startTimeTicks: Long,
+        audioStreamIndex: Int?,
+        subtitleStreamIndex: Int?,
+        maxStreamingBitrateBits: Long?,
+        mode: PlaybackMode,
+        playerType: PlayerType,
+    ): Result<PlaybackInfoResult>
 
     /**
      * Build a stream URL with an optional max bitrate cap (in bits per

@@ -74,6 +74,14 @@ class PlayerSessionManagerTest {
         every { preferencesStore.preferences } returns
             MutableStateFlow(UserPreferences(preferredPlayer = PlayerType.EXTERNAL))
 
+        // Default: PlaybackInfo resolution yields nothing, so loadOnline
+        // falls back to the static direct-stream URL (PlayMethod.DIRECT_PLAY).
+        coEvery {
+            playbackRepository.resolvePlayback(
+                any(), any(), any(), any(), any(), any(), any(), any(),
+            )
+        } returns null
+
         // android.net.Uri.fromFile returns null in JVM unit tests; mock it so
         // loadOffline's URL construction doesn't NPE. A relaxed mock returns
         // "" for toString(), which is sufficient — we assert on dispatch

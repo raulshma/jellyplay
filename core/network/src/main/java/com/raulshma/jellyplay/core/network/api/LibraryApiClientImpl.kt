@@ -397,46 +397,7 @@ class LibraryApiClientImpl @Inject constructor(
                 )
             } ?: emptyList()
             val mediaSources = item.mediaSources?.map { source ->
-                com.raulshma.jellyplay.core.model.MediaSource(
-                    id = source.id.toString(),
-                    name = source.name ?: "",
-                    container = source.container,
-                    size = source.size,
-                    bitrate = source.bitrate?.toLong(),
-                    runTimeTicks = source.runTimeTicks,
-                    supportsTranscoding = source.supportsTranscoding,
-                    supportsDirectStream = source.supportsDirectStream,
-                    supportsDirectPlay = source.supportsDirectPlay,
-                    transcodeUrl = source.transcodingUrl,
-                    path = source.path,
-                    mediaStreams = source.mediaStreams?.map { stream ->
-                        com.raulshma.jellyplay.core.model.MediaStream(
-                            index = stream.index,
-                            type = when (stream.type) {
-                                org.jellyfin.sdk.model.api.MediaStreamType.VIDEO -> com.raulshma.jellyplay.core.model.StreamType.VIDEO
-                                org.jellyfin.sdk.model.api.MediaStreamType.AUDIO -> com.raulshma.jellyplay.core.model.StreamType.AUDIO
-                                org.jellyfin.sdk.model.api.MediaStreamType.SUBTITLE -> com.raulshma.jellyplay.core.model.StreamType.SUBTITLE
-                                else -> com.raulshma.jellyplay.core.model.StreamType.EMBEDDED_IMAGE
-                            },
-                            codec = stream.codec,
-                            language = stream.language,
-                            title = stream.title,
-                            displayTitle = stream.displayTitle,
-                            isDefault = stream.isDefault,
-                            isForced = stream.isForced,
-                            isExternal = stream.isExternal,
-                            width = stream.width,
-                            height = stream.height,
-                            bitRate = stream.bitRate?.toLong(),
-                            sampleRate = stream.sampleRate,
-                            channels = stream.channels,
-                            deliveryUrl = stream.deliveryUrl,
-                            videoRange = stream.videoRange?.serialName,
-                            videoRangeType = stream.videoRangeType?.serialName,
-                            realFrameRate = stream.realFrameRate,
-                            videoDoViTitle = stream.videoDoViTitle,
-                        )
-                    } ?: emptyList(),
+                source.toMediaSource(
                     trickplayInfo = item.trickplay
                         ?.get(source.id.toString())
                         ?.values

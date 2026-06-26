@@ -39,6 +39,7 @@ class AuthApiClientImplTest {
             context = mockk(relaxed = true),
             jellyfin = jellyfin,
             okHttpClient = okHttpClient,
+            deviceProfileProvider = DeviceProfileProvider(),
         )
         authClient = AuthApiClientImpl(engine)
     }

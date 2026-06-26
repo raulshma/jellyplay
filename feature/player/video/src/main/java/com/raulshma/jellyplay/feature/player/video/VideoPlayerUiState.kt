@@ -11,6 +11,7 @@ import com.raulshma.jellyplay.core.model.MediaSource
 import com.raulshma.jellyplay.core.model.MediaStream
 import com.raulshma.jellyplay.core.model.OrientationMode
 import com.raulshma.jellyplay.core.model.EffectStrength
+import com.raulshma.jellyplay.core.model.PlaybackMode
 import com.raulshma.jellyplay.core.model.PlayerType
 import com.raulshma.jellyplay.core.model.ReverbPreset
 import com.raulshma.jellyplay.core.model.SegmentBehavior
@@ -116,7 +117,7 @@ data class VideoPlayerUiState(
     val showVideoStats: Boolean = false,
     val videoStats: EngineVideoStats = EngineVideoStats(),
     val streamingQuality: StreamingQuality = StreamingQuality.AUTO,
-    val forceDirectPlay: Boolean = true,
+    val playbackMode: PlaybackMode = PlaybackMode.AUTO,
     val showPlaybackErrorDialog: Boolean = false,
     val audioNormalizationMode: AudioNormalizationMode = AudioNormalizationMode.NONE,
     val audioNormalizationEnabled: Boolean = false,
