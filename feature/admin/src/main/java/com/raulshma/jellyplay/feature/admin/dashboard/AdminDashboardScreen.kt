@@ -33,6 +33,7 @@ import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.composables.icons.tabler.Tabler
 import com.composables.icons.tabler.outline.Refresh
 import com.raulshma.jellyplay.core.ui.adaptive.LocalAdaptiveInfo
@@ -68,7 +69,7 @@ fun AdminDashboardScreen(
     onPlugins: () -> Unit = {},
     viewModel: AdminDashboardViewModel = hiltViewModel(),
 ) {
-    val state = viewModel.state
+    val state by viewModel.uiState.collectAsStateWithLifecycle()
     val adaptiveInfo = LocalAdaptiveInfo.current
     val isTv = LocalTvMode.current
     val backgroundColor = rememberScreenBackgroundColor()

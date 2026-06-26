@@ -58,7 +58,10 @@ class NewMediaCheckWorker @AssistedInject constructor(
             Result.retry()
         } catch (e: IOException) {
             Result.retry()
-        } catch (_: Exception) {
+        } catch (ce: kotlinx.coroutines.CancellationException) {
+            throw ce
+        } catch (e: Exception) {
+            android.util.Log.e("NewMediaCheckWorker", "New media check failed", e)
             Result.failure()
         }
     }

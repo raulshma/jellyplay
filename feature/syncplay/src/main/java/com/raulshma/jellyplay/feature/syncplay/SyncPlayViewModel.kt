@@ -1,7 +1,6 @@
 package com.raulshma.jellyplay.feature.syncplay
 
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.setValue
+import androidx.compose.runtime.Immutable
 import com.raulshma.jellyplay.core.data.repository.MediaRepository
 import com.raulshma.jellyplay.core.data.syncplay.SyncPlayEvent
 import com.raulshma.jellyplay.core.data.syncplay.SyncPlayManager
@@ -26,29 +25,24 @@ data class PlayItemRequest(
     val positionTicks: Long,
 )
 
+@Immutable
+data class SyncPlayUiState(
+    val groups: List<SyncPlayGroup> = emptyList(),
+    val currentGroup: SyncPlayGroupInfo? = null,
+    val isLoading: Boolean = false,
+    val error: String? = null,
+    val isInGroup: Boolean = false,
+    val showCreateDialog: Boolean = false,
+)
+
 @HiltViewModel
 class SyncPlayViewModel @Inject constructor(
     private val mediaRepository: MediaRepository,
     private val syncPlayManager: SyncPlayManager,
 ) : JellyPlayViewModel() {
 
-    var groups by composeState<List<SyncPlayGroup>>(emptyList())
-        private set
-
-    var currentGroup by composeState<SyncPlayGroupInfo?>(null)
-        private set
-
-    var isLoading by composeState(false)
-        private set
-
-    var error by composeState<String?>(null)
-        private set
-
-    var isInGroup by composeState(false)
-        private set
-
-    var showCreateDialog by composeState(false)
-        private set
+    private val _uiState = stateFlow(SyncPlayUiState())
+    val uiState: StateFlow<SyncPlayUiState> = _uiState.flow
 
     private val _notifications = MutableSharedFlow<String>(extraBufferCapacity = 10)
     val notifications: SharedFlow<String> = _notifications.asSharedFlow()
@@ -66,16 +60,15 @@ class SyncPlayViewModel @Inject constructor(
 
     fun loadGroups() {
         launch {
-            isLoading = true
-            error = null
+            _uiState.update { it.copy(isLoading = true, error = null) }
             mediaRepository.getSyncPlayGroups()
-                .onSuccess {
-                    groups = it
-                    if (!isInGroup) {
-                        currentGroup = null
+                .onSuccess { result ->
+                    _uiState.update { state ->
+                        val currentGroup = if (state.isInGroup) state.currentGroup else null
+                        state.copy(groups = result, currentGroup = currentGroup)
                     }
                     autoJoinGroupId?.let { gid ->
-                        val target = it.find { g -> g.groupId == gid }
+                        val target = result.find { g -> g.groupId == gid }
                         if (target != null) {
                             autoJoinGroupId = null
                             joinGroup(target.groupId)
@@ -83,19 +76,18 @@ class SyncPlayViewModel @Inject constructor(
                     }
                 }
                 .onFailure {
-                    error = it.message ?: "Failed to load groups"
+                    _uiState.update { state -> state.copy(error = it.message ?: "Failed to load groups") }
                 }
-            isLoading = false
+            _uiState.update { it.copy(isLoading = false) }
         }
     }
 
     fun joinGroup(groupId: String) {
         launch {
-            isLoading = true
-            error = null
+            _uiState.update { it.copy(isLoading = true, error = null) }
             syncPlayManager.joinGroup(groupId)
                 .onSuccess {
-                    isInGroup = true
+                    _uiState.update { it.copy(isInGroup = true) }
                     loadCurrentGroup()
                     startEventListener()
                     val group = syncPlayManager.currentGroup
@@ -109,9 +101,9 @@ class SyncPlayViewModel @Inject constructor(
                     }
                 }
                 .onFailure {
-                    error = it.message ?: "Failed to join group"
+                    _uiState.update { state -> state.copy(error = it.message ?: "Failed to join group") }
                 }
-            isLoading = false
+            _uiState.update { it.copy(isLoading = false) }
         }
     }
 
@@ -119,40 +111,39 @@ class SyncPlayViewModel @Inject constructor(
         launch {
             syncPlayManager.leaveGroup()
                 .onSuccess {
-                    isInGroup = false
-                    currentGroup = null
+                    _uiState.update { it.copy(isInGroup = false, currentGroup = null) }
                     commandJob?.cancel()
                     lastHandledPlayingItemId = null
                     loadGroups()
                 }
                 .onFailure {
-                    error = it.message ?: "Failed to leave group"
+                    _uiState.update { state -> state.copy(error = it.message ?: "Failed to leave group") }
                 }
         }
     }
 
     fun createGroup(name: String) {
         launch {
-            isLoading = true
-            error = null
+            _uiState.update { it.copy(isLoading = true, error = null) }
             mediaRepository.createSyncPlayGroup(name)
                 .onSuccess {
-                    showCreateDialog = false
+                    _uiState.update { it.copy(showCreateDialog = false) }
                     delay(500)
                     val updatedGroups = mediaRepository.getSyncPlayGroups().getOrElse { emptyList() }
-                    groups = updatedGroups
                     val newGroup = updatedGroups.find { it.groupName == name }
                     if (newGroup != null) {
+                        _uiState.update { it.copy(groups = updatedGroups) }
                         joinGroup(newGroup.groupId)
                     } else {
                         autoJoinGroupId = null
+                        _uiState.update { it.copy(groups = updatedGroups) }
                         loadGroups()
                     }
                 }
                 .onFailure {
-                    error = it.message ?: "Failed to create group"
+                    _uiState.update { state -> state.copy(error = it.message ?: "Failed to create group") }
                 }
-            isLoading = false
+            _uiState.update { it.copy(isLoading = false) }
         }
     }
 
@@ -166,7 +157,6 @@ class SyncPlayViewModel @Inject constructor(
             syncPlayManager.events.collect { event ->
                 when (event) {
                     is SyncPlayEvent.PlayQueueUpdate -> {
-                        val current = currentGroup
                         if (event.data.playingItemId.isNotBlank() && lastHandledPlayingItemId != event.data.playingItemId) {
                             _navigateToPlayer.value = PlayItemRequest(
                                 itemId = event.data.playingItemId,
@@ -174,22 +164,28 @@ class SyncPlayViewModel @Inject constructor(
                             )
                             lastHandledPlayingItemId = event.data.playingItemId
                         }
-                        currentGroup = (current ?: SyncPlayGroupInfo(
-                            groupId = "",
-                            groupName = "",
-                        )).copy(
-                            playingItemId = event.data.playingItemId,
-                            isPlaying = event.data.isPlaying,
-                            positionTicks = event.data.startPositionTicks,
-                        )
+                        _uiState.update { state ->
+                            val current = state.currentGroup ?: SyncPlayGroupInfo(
+                                groupId = "",
+                                groupName = "",
+                            )
+                            state.copy(
+                                currentGroup = current.copy(
+                                    playingItemId = event.data.playingItemId,
+                                    isPlaying = event.data.isPlaying,
+                                    positionTicks = event.data.startPositionTicks,
+                                ),
+                            )
+                        }
                     }
                     is SyncPlayEvent.StateUpdate -> {
-                        currentGroup = currentGroup?.copy(isPlaying = event.isPlaying)
+                        _uiState.update { state ->
+                            state.copy(currentGroup = state.currentGroup?.copy(isPlaying = event.isPlaying))
+                        }
                     }
                     is SyncPlayEvent.GroupUpdate -> {
                         if (event.groupName.isBlank() && event.participantCount == 0) {
-                            isInGroup = false
-                            currentGroup = null
+                            _uiState.update { it.copy(isInGroup = false, currentGroup = null) }
                             commandJob?.cancel()
                         } else {
                             loadCurrentGroup()
@@ -206,7 +202,7 @@ class SyncPlayViewModel @Inject constructor(
 
     fun togglePlayback() {
         launch {
-            val group = currentGroup ?: return@launch
+            val group = _uiState.value.currentGroup ?: return@launch
             if (group.isPlaying) {
                 mediaRepository.syncPlayPause()
             } else {
@@ -246,13 +242,13 @@ class SyncPlayViewModel @Inject constructor(
     }
 
     fun updateShowCreateDialog(show: Boolean) {
-        showCreateDialog = show
+        _uiState.update { it.copy(showCreateDialog = show) }
     }
 
     fun refreshGroups() {
         launch {
             mediaRepository.getSyncPlayGroups()
-                .onSuccess { groups = it }
+                .onSuccess { groups -> _uiState.update { it.copy(groups = groups) } }
                 .onFailure { }
         }
     }
@@ -260,8 +256,8 @@ class SyncPlayViewModel @Inject constructor(
     private suspend fun loadCurrentGroup() {
         val groupId = syncPlayManager.activeGroupId ?: return
         mediaRepository.getSyncPlayInfo(groupId)
-            .onSuccess { currentGroup = it }
-            .onFailure { currentGroup = null }
+            .onSuccess { currentGroup -> _uiState.update { it.copy(currentGroup = currentGroup) } }
+            .onFailure { _uiState.update { it.copy(currentGroup = null) } }
     }
 
     override fun onCleared() {
