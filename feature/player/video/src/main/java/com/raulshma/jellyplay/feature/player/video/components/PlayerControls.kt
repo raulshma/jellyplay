@@ -73,6 +73,7 @@ import com.raulshma.jellyplay.core.model.ChapterInfo
 import com.raulshma.jellyplay.core.model.EffectStrength
 import com.raulshma.jellyplay.core.model.MediaSegment
 import com.raulshma.jellyplay.core.model.StreamingQuality
+import com.raulshma.jellyplay.core.model.PlaybackMode
 import com.raulshma.jellyplay.core.designsystem.theme.AlphaEasing
 import com.raulshma.jellyplay.core.designsystem.theme.FancyTransitionEasing
 import com.raulshma.jellyplay.core.designsystem.theme.ShapeCache
@@ -166,9 +167,9 @@ internal fun PlayerControls(
     onVideoStatsClick: () -> Unit = {},
     bufferedPosition: Long = 0L,
     streamingQuality: StreamingQuality = StreamingQuality.AUTO,
-    forceDirectPlay: Boolean = true,
+    playbackMode: PlaybackMode = PlaybackMode.AUTO,
     onQualityClick: () -> Unit = {},
-    onForceDirectPlayToggle: () -> Unit = {},
+    onPlaybackModeClick: () -> Unit = {},
     audioNormalizationMode: AudioNormalizationMode = AudioNormalizationMode.NONE,
     audioNormalizationEnabled: Boolean = false,
     channelMixMode: ChannelMixMode = ChannelMixMode.AUTO,
@@ -645,10 +646,10 @@ internal fun PlayerControls(
                                     showOverflow = false
                                     onAVSyncClick()
                                 },
-                                forceDirectPlay = forceDirectPlay,
-                                onForceDirectPlayToggle = {
+                                playbackMode = playbackMode,
+                                onPlaybackModeClick = {
                                     showOverflow = false
-                                    onForceDirectPlayToggle()
+                                    onPlaybackModeClick()
                                 },
                                 onDecoderClick = {
                                     showOverflow = false
@@ -1097,8 +1098,8 @@ private fun PlayerOverflowMenu(
     onNightModeClick: () -> Unit,
     onNightModeStrengthChange: (EffectStrength) -> Unit,
     onAVSyncClick: () -> Unit,
-    forceDirectPlay: Boolean = true,
-    onForceDirectPlayToggle: () -> Unit = {},
+    playbackMode: PlaybackMode = PlaybackMode.AUTO,
+    onPlaybackModeClick: () -> Unit = {},
     onDecoderClick: () -> Unit,
     onPassthroughClick: () -> Unit,
     onSubtitleDownloadClick: () -> Unit,
@@ -1367,9 +1368,11 @@ private fun PlayerOverflowMenu(
         }
         OverflowMenuItem(
             icon = Tabler.Outline.Bolt,
-            label = if (forceDirectPlay) "Force Direct Play \u00B7 On" else "Force Direct Play",
-            onClick = onForceDirectPlayToggle,
-            tint = if (forceDirectPlay) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface,
+            label = if (playbackMode == PlaybackMode.AUTO) "Playback Mode"
+                else "${playbackMode.displayName} \u00B7 On",
+            onClick = onPlaybackModeClick,
+            tint = if (playbackMode != PlaybackMode.AUTO) MaterialTheme.colorScheme.primary
+                else MaterialTheme.colorScheme.onSurface,
         )
         OverflowMenuItem(
             icon = Tabler.Outline.InfoCircle,

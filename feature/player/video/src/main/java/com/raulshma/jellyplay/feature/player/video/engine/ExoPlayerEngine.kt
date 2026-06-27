@@ -22,10 +22,12 @@ import androidx.media3.datasource.DefaultHttpDataSource
 import androidx.media3.datasource.ResolvingDataSource
 import androidx.media3.exoplayer.DefaultLoadControl
 import androidx.media3.exoplayer.DefaultRenderersFactory
+import androidx.media3.exoplayer.DecoderCounters
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
 import androidx.media3.exoplayer.trackselection.DefaultTrackSelector
 import androidx.media3.exoplayer.upstream.DefaultBandwidthMeter
+import androidx.media3.exoplayer.analytics.AnalyticsListener
 import androidx.media3.ui.AspectRatioFrameLayout
 import androidx.media3.ui.CaptionStyleCompat
 import androidx.media3.ui.PlayerView
@@ -153,6 +155,18 @@ class ExoPlayerEngine(
     private val loudnessEnhancerHelper = LoudnessEnhancerHelper()
 
     private var lastVideoStats: EngineVideoStats? = null
+
+    /**
+     * Live decoder counters captured from the video renderer's
+     * [AnalyticsListener.onVideoEnabled] callback. Held by reference so
+     * [updateVideoStats] can read the renderer's running dropped/rendered
+     * frame tallies (after [DecoderCounters.ensureUpdated]) — without this,
+     * the "Stats for Nerds" dropped-frame and total-frame rows are stuck at
+     * 0 because ExoPlayer doesn't surface them through the plain
+     * [Player.Listener] API.
+     */
+    @Volatile
+    private var videoDecoderCounters: DecoderCounters? = null
     private var audioEffectsAttached = false
     private var lastAudioEffectsConfig: AudioEffectsConfig? = null
 
@@ -198,6 +212,21 @@ class ExoPlayerEngine(
 
         override fun onVolumeChanged(volume: Float) {
             cachedVolume = volume
+        }
+    }
+
+    /**
+     * Captures the video renderer's [DecoderCounters] the moment the video
+     * stream is enabled, so [updateVideoStats] can read live dropped/rendered
+     * frame counts. Reset on disable/release.
+     */
+    private val decoderCountersListener = object : AnalyticsListener {
+        override fun onVideoEnabled(eventTime: AnalyticsListener.EventTime, decoderCounters: DecoderCounters) {
+            videoDecoderCounters = decoderCounters
+        }
+
+        override fun onVideoDisabled(eventTime: AnalyticsListener.EventTime, decoderCounters: DecoderCounters) {
+            videoDecoderCounters = null
         }
     }
 
@@ -276,6 +305,7 @@ class ExoPlayerEngine(
             .build()
 
         exo.addListener(listener)
+        exo.addAnalyticsListener(decoderCountersListener)
         player = exo
         
         // Build media item
@@ -357,6 +387,7 @@ class ExoPlayerEngine(
         currentMediaItem = null
         currentSubtitleConfigs.clear()
         lastVideoStats = null
+        videoDecoderCounters = null
         releaseAudioEffects()
         cachedVolume = 1f
         lastUnmuteVolume = 1f
@@ -627,13 +658,30 @@ class ExoPlayerEngine(
         val bufferedPos = p.bufferedPosition.coerceAtLeast(0L)
         val bandwidthEstimate = bandwidthMeter.bitrateEstimate
 
+        val counters = videoDecoderCounters
+        counters?.ensureUpdated()
+        val dropped = (counters?.droppedInputBufferCount ?: 0)
+            .coerceAtLeast(counters?.droppedToKeyframeCount ?: 0)
+            .toLong()
+        val rendered = (counters?.renderedOutputBufferCount ?: 0).toLong()
+
         val last = lastVideoStats
-        if (last != null && last.bufferedPositionMs == bufferedPos && last.estimatedBandwidthBps == bandwidthEstimate) {
+        if (last != null && last.bufferedPositionMs == bufferedPos &&
+            last.estimatedBandwidthBps == bandwidthEstimate &&
+            last.droppedFrames == dropped && last.totalVideoFrames == rendered
+        ) {
             return
         }
 
         val videoFormat = p.videoFormat
         val audioFormat = p.audioFormat
+
+        val combinedBitrate = (videoFormat?.bitrate ?: 0) + (audioFormat?.bitrate ?: 0)
+        val bufferHealthMs = (bufferedPos - p.currentPosition).coerceAtLeast(0L)
+        // Approximate buffered bytes from buffer health and the active stream
+        // bitrate (bytes = bits/8 * seconds). Falls back to 0 when the formats
+        // don't expose a bitrate.
+        val bufferSizeBytes = if (combinedBitrate > 0) combinedBitrate * bufferHealthMs / 8000 else 0L
 
         val newStats = EngineVideoStats(
             videoCodec = videoFormat?.sampleMimeType?.let { codecFromMime(it) },
@@ -661,12 +709,19 @@ class ExoPlayerEngine(
                     else -> null
                 }
             },
+            videoColorDepth = videoFormat?.colorInfo?.let { ci ->
+                val depth = ci.lumaBitdepth
+                if (depth > 0 && depth != androidx.media3.common.Format.NO_VALUE) "$depth-bit" else null
+            },
             audioCodec = audioFormat?.sampleMimeType?.let { codecFromMime(it) },
             audioSampleRate = audioFormat?.sampleRate?.let { if (it > 0) it else null },
             audioChannels = audioFormat?.channelCount?.let { if (it > 0) it else null },
             audioBitrate = audioFormat?.bitrate?.let { if (it > 0) it else null },
-            bufferedPositionMs = bufferedPos,
             estimatedBandwidthBps = bandwidthEstimate,
+            droppedFrames = dropped,
+            totalVideoFrames = rendered,
+            bufferedPositionMs = bufferedPos,
+            bufferSizeBytes = bufferSizeBytes,
         )
 
         val currentStats = lastVideoStats

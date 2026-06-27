@@ -110,6 +110,7 @@ import com.raulshma.jellyplay.feature.player.video.components.NextEpisodeOverlay
 import com.raulshma.jellyplay.feature.player.video.components.PlaybackInfoOverlay
 import com.raulshma.jellyplay.feature.player.video.components.PlaybackErrorDialog
 import com.raulshma.jellyplay.feature.player.video.components.QualityPickerSheet
+import com.raulshma.jellyplay.feature.player.video.components.PlaybackModeSheet
 import com.raulshma.jellyplay.feature.player.video.components.PlayerModalBottomSheet
 import com.raulshma.jellyplay.feature.player.video.components.SubtitleDownloadSheet
 import com.raulshma.jellyplay.feature.player.video.components.CastIndicatorOverlay
@@ -1160,9 +1161,9 @@ fun VideoPlayerScreen(
                 onVideoStatsClick = { viewModel.toggleVideoStats() },
                 bufferedPosition = uiState.bufferedPosition,
                 streamingQuality = uiState.streamingQuality,
-                forceDirectPlay = uiState.forceDirectPlay,
+                playbackMode = uiState.playbackMode,
                 onQualityClick = { currentSheet = PlayerSheet.Quality },
-                onForceDirectPlayToggle = { viewModel.toggleForceDirectPlay() },
+                onPlaybackModeClick = { currentSheet = PlayerSheet.PlaybackMode },
                 audioNormalizationMode = uiState.audioNormalizationMode,
                 audioNormalizationEnabled = uiState.audioNormalizationEnabled,
                 channelMixMode = uiState.channelMixMode,
@@ -1675,6 +1676,13 @@ private fun PlayerSheetRouter(
             QualityPickerSheet(
                 currentQuality = uiState.streamingQuality,
                 onSelect = { viewModel.setStreamingQuality(it) },
+                onDismiss = dismissSheet,
+            )
+        }
+        is PlayerSheet.PlaybackMode -> {
+            PlaybackModeSheet(
+                currentMode = uiState.playbackMode,
+                onSelect = { viewModel.setPlaybackMode(it) },
                 onDismiss = dismissSheet,
             )
         }
