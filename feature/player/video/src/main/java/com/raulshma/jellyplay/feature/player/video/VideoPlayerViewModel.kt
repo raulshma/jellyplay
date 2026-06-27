@@ -1207,13 +1207,22 @@ class VideoPlayerViewModel @Inject constructor(
     fun playNextEpisode() {
         val detail = mediaDetail ?: return
         val seriesId = detail.item.seriesId ?: return
+        val currentItemId = playerSessionManager.sessionState.value.currentItemId ?: return
         launch {
             val episodes = mediaRepository.getEpisodes(seriesId, detail.item.seasonId ?: return@launch)
                 .getOrElse { return@launch }
-            val currentItemId = playerSessionManager.sessionState.value.currentItemId
             val currentIndex = episodes.indexOfFirst { it.id == currentItemId }
             if (currentIndex < 0 || currentIndex + 1 >= episodes.size) return@launch
             val next = episodes[currentIndex + 1]
+
+            // Auto-advancing is only reachable near the episode's end, so the
+            // current episode was effectively watched. Mark it played so it
+            // drops out of Continue Watching. This also covers the SyncPlay
+            // branch below, which bypasses [initialize] and its stopped-position
+            // report.
+            if (!cachedPreferences.incognitoModeEnabled) {
+                runCatching { mediaRepository.markPlayed(currentItemId) }
+            }
 
             if (syncPlayManager.isInSyncPlaySession) {
                 val group = syncPlayManager.currentGroup
