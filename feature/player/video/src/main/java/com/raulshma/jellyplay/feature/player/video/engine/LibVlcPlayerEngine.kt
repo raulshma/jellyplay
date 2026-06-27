@@ -791,7 +791,13 @@ class LibVlcPlayerEngine(
     private fun updateVideoStats() {
         val mp = mediaPlayer ?: return
         try {
+            val videoTrack = try { mp.currentVideoTrack } catch (_: Exception) { null }
             val newStats = EngineVideoStats(
+                videoResolution = videoTrack?.let { vt ->
+                    val w = vt.width
+                    val h = vt.height
+                    if (w > 0 && h > 0) "${w}x${h}" else null
+                },
                 audioCodec = try {
                     val tracks = mp.getAudioTracks()
                     val currentId = mp.audioTrack
