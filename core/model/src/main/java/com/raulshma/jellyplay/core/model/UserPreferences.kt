@@ -19,7 +19,7 @@ data class UserPreferences(
     val useBottomNav: Boolean = true,
     val subtitleStyle: SubtitleStyle = SubtitleStyle(),
     val streamingQuality: StreamingQuality = StreamingQuality.AUTO,
-    val forceDirectPlay: Boolean = true,
+    val playbackMode: PlaybackMode = PlaybackMode.AUTO,
     val maxCacheSizeMb: Int = 0,
     val autoDeleteCache: Boolean = true,
     val pinLockEnabled: Boolean = false,

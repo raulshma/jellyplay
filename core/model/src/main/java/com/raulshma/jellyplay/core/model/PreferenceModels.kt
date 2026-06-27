@@ -118,6 +118,14 @@ enum class StreamingQuality {
 
 @Immutable
 @Serializable
+enum class PlaybackMode(val displayName: String) {
+    AUTO("Auto"),
+    FORCE_DIRECT_PLAY("Force Direct Play"),
+    FORCE_TRANSCODE("Force Transcode"),
+}
+
+@Immutable
+@Serializable
 data class EqualizerSettings(
     val bandLevels: List<Int> = List(10) { 0 },
 ) {

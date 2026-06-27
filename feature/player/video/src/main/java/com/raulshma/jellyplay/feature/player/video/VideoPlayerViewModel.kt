@@ -33,6 +33,7 @@ import com.raulshma.jellyplay.core.model.DecoderMode
 import com.raulshma.jellyplay.core.model.EffectStrength
 import com.raulshma.jellyplay.core.model.MediaDetail
 import com.raulshma.jellyplay.core.model.MediaStream
+import com.raulshma.jellyplay.core.model.PlaybackMode
 import com.raulshma.jellyplay.core.model.PlayerType
 import com.raulshma.jellyplay.core.model.ReverbPreset
 import com.raulshma.jellyplay.core.model.StreamType
@@ -264,7 +265,7 @@ class VideoPlayerViewModel @Inject constructor(
         viewModel = this,
         uiState = _uiState,
         getCurrentItemId = { playerSessionManager.sessionState.value.currentItemId },
-        getPlaySessionId = { playSessionId },
+        getPlaySessionId = { playerSessionManager.sessionState.value.playSessionId ?: playSessionId },
         getResolvedPlayMethod = { playerSessionManager.sessionState.value.playMethod },
         getMediaEngine = { playerSessionManager.engine },
         getIncognitoModeEnabled = { cachedPreferences.incognitoModeEnabled },
@@ -667,7 +668,7 @@ class VideoPlayerViewModel @Inject constructor(
                 showClock = prefs.showClockInPlayer,
                 keepScreenOnDuringVideo = prefs.keepScreenOnDuringVideo,
                 streamingQuality = prefs.streamingQuality,
-                forceDirectPlay = prefs.forceDirectPlay,
+                playbackMode = prefs.playbackMode,
             ) }
             autoplayNext = prefs.videoAutoplayNext
 
@@ -951,18 +952,54 @@ class VideoPlayerViewModel @Inject constructor(
         setSubtitleStyle(current.copy(offsetMs = ms))
     }
 
-    fun setForceDirectPlay(enabled: Boolean) {
-        if (_uiState.value.forceDirectPlay == enabled) return
-        _uiState.update { it.copy(forceDirectPlay = enabled) }
+    fun setPlaybackMode(mode: PlaybackMode) {
+        if (_uiState.value.playbackMode == mode) return
+        _uiState.update { it.copy(playbackMode = mode) }
         launch {
-            preferencesStore.setForceDirectPlay(enabled)
+            preferencesStore.setPlaybackMode(mode)
+            reloadPlaybackForMode()
         }
-        val maxBitrate = if (enabled) null
-            else adaptiveBitrateManager.resolveMaxBitrate(_uiState.value.streamingQuality)?.toInt()
-        playerSessionManager.engine?.setMaxVideoBitrate(maxBitrate)
     }
 
-    fun toggleForceDirectPlay() = setForceDirectPlay(!_uiState.value.forceDirectPlay)
+    fun setStreamingQuality(quality: StreamingQuality) {
+        if (_uiState.value.streamingQuality == quality) return
+        _uiState.update { it.copy(streamingQuality = quality) }
+        launch {
+            preferencesStore.setStreamingQuality(quality)
+            reloadPlaybackForMode()
+        }
+    }
+
+    /**
+     * Re-resolves the current item against the (possibly changed)
+     * [PlaybackMode]/[StreamingQuality] and swaps the engine onto the new
+     * stream at the current position. Surfaces a toast when switching to a
+     * transcode since the brief re-buffer is otherwise surprising, and
+     * auto-falls-back to transcode when a forced-direct-play request yields
+     * no playable method.
+     */
+    private suspend fun reloadPlaybackForMode() {
+        val mode = _uiState.value.playbackMode
+        val quality = _uiState.value.streamingQuality
+        val pos = playerSessionManager.engine?.currentPositionMs ?: 0L
+        val resolved = playerSessionManager.reloadPlayback(mode, quality, pos) ?: return
+        if (resolved.playMethod == com.raulshma.jellyplay.core.model.PlayMethod.TRANSCODE) {
+            userMessageBus.info("Switched to transcoded stream — re-buffering")
+        }
+        if (mode == PlaybackMode.FORCE_DIRECT_PLAY &&
+            resolved.playMethod != com.raulshma.jellyplay.core.model.PlayMethod.DIRECT_PLAY
+        ) {
+            userMessageBus.info("Direct Play unavailable for this item — falling back to transcode")
+            _uiState.update { it.copy(playbackMode = PlaybackMode.FORCE_TRANSCODE) }
+            launch {
+                preferencesStore.setPlaybackMode(PlaybackMode.FORCE_TRANSCODE)
+                playerSessionManager.reloadPlayback(
+                    PlaybackMode.FORCE_TRANSCODE, quality,
+                    playerSessionManager.engine?.currentPositionMs ?: pos,
+                )
+            }
+        }
+    }
 
     fun setDecoderMode(mode: DecoderMode) {
         _uiState.update { it.copy(decoderMode = mode) }
@@ -970,12 +1007,6 @@ class VideoPlayerViewModel @Inject constructor(
         launch {
             preferencesStore.setDecoderMode(mode)
         }
-    }
-
-    fun setStreamingQuality(quality: StreamingQuality) {
-        _uiState.update { it.copy(streamingQuality = quality) }
-        val maxBitrate = adaptiveBitrateManager.resolveMaxBitrate(quality)?.toInt()
-        playerSessionManager.engine?.setMaxVideoBitrate(maxBitrate)
     }
 
     fun retryWithEngine(playerType: PlayerType) {
@@ -1574,7 +1605,7 @@ class VideoPlayerViewModel @Inject constructor(
         val tracks = playerSessionManager.engine?.availableTracks?.value.orEmpty()
         val audioIndex = tracks.firstOrNull { it.isSelected && it.type == TrackType.AUDIO }?.index
         val subtitleIndex = tracks.firstOrNull { it.isSelected && it.type == TrackType.SUBTITLE }?.index
-        val maxBitrate = if (_uiState.value.forceDirectPlay) {
+        val maxBitrate = if (_uiState.value.playbackMode == PlaybackMode.FORCE_DIRECT_PLAY) {
             null
         } else {
             adaptiveBitrateManager.resolveMaxBitrate(_uiState.value.streamingQuality)?.toInt()

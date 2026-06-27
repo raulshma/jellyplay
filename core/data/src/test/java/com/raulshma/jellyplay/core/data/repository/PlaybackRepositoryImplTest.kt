@@ -4,9 +4,14 @@ import com.raulshma.jellyplay.core.model.CreditTimestamps
 import com.raulshma.jellyplay.core.model.IntroTimestamps
 import com.raulshma.jellyplay.core.model.MediaSegment
 import com.raulshma.jellyplay.core.model.MediaSegmentType
+import com.raulshma.jellyplay.core.model.MediaSource
+import com.raulshma.jellyplay.core.model.PlaybackInfoResult
+import com.raulshma.jellyplay.core.model.PlaybackMode
 import com.raulshma.jellyplay.core.model.PlaybackProgress
 import com.raulshma.jellyplay.core.model.PlaybackStartInfo
 import com.raulshma.jellyplay.core.model.PlayMethod
+import com.raulshma.jellyplay.core.model.PlayerType
+import com.raulshma.jellyplay.core.model.ResolvedPlayback
 import com.raulshma.jellyplay.core.network.JellyfinApiClient
 import io.mockk.coEvery
 import io.mockk.coVerify
@@ -14,6 +19,7 @@ import io.mockk.every
 import io.mockk.mockk
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
@@ -186,5 +192,142 @@ class PlaybackRepositoryImplTest {
         every { apiClient.getAccessToken() } returns "token-123"
 
         assertEquals("token-123", repository.getAccessToken())
+    }
+
+    // ── resolvePlayback ───────────────────────────────────────────────
+
+    private fun stubServer() {
+        every { apiClient.getServerUrl() } returns "https://test.example.com"
+        every { apiClient.getAccessToken() } returns "token-123"
+    }
+
+    @Test
+    fun `resolvePlayback picks Direct Play when supported and uses static URL`() = runTest {
+        stubServer()
+        every { apiClient.getStreamUrl("item-1", "source-1", 0L) } returns "https://test/stream"
+        coEvery {
+            apiClient.fetchPlaybackInfo(any(), any(), any(), any(), any(), any(), any(), any())
+        } returns Result.success(
+            PlaybackInfoResult(
+                playSessionId = "session-xyz",
+                mediaSources = listOf(
+                    MediaSource(
+                        id = "source-1",
+                        name = "main",
+                        supportsDirectPlay = true,
+                        supportsDirectStream = true,
+                        supportsTranscoding = true,
+                    ),
+                ),
+            ),
+        )
+
+        val resolved = repository.resolvePlayback(
+            itemId = "item-1",
+            mediaSourceId = "source-1",
+            startTimeTicks = 0L,
+            audioStreamIndex = null,
+            subtitleStreamIndex = null,
+            maxStreamingBitrateBits = null,
+            mode = PlaybackMode.AUTO,
+            playerType = PlayerType.EXO_PLAYER,
+        )
+
+        assertEquals(PlayMethod.DIRECT_PLAY, resolved?.playMethod)
+        assertEquals("https://test/stream", resolved?.streamUrl)
+        assertEquals("session-xyz", resolved?.playSessionId)
+    }
+
+    @Test
+    fun `resolvePlayback falls back to transcode URL when only transcoding is supported`() = runTest {
+        stubServer()
+        coEvery {
+            apiClient.fetchPlaybackInfo(any(), any(), any(), any(), any(), any(), any(), any())
+        } returns Result.success(
+            PlaybackInfoResult(
+                playSessionId = "session-t",
+                mediaSources = listOf(
+                    MediaSource(
+                        id = "source-1",
+                        name = "main",
+                        supportsDirectPlay = false,
+                        supportsDirectStream = false,
+                        supportsTranscoding = true,
+                        transcodeUrl = "/Videos/item-1/master.m3u8?PlaySessionId=session-t",
+                    ),
+                ),
+            ),
+        )
+
+        val resolved = repository.resolvePlayback(
+            itemId = "item-1",
+            mediaSourceId = "source-1",
+            startTimeTicks = 0L,
+            audioStreamIndex = null,
+            subtitleStreamIndex = null,
+            maxStreamingBitrateBits = 3_000_000L,
+            mode = PlaybackMode.FORCE_TRANSCODE,
+            playerType = PlayerType.MPV,
+        )
+
+        assertEquals(PlayMethod.TRANSCODE, resolved?.playMethod)
+        assertTrue(resolved?.streamUrl?.startsWith("https://test.example.com/Videos/item-1/master.m3u8") == true)
+        assertTrue(resolved?.streamUrl?.contains("api_key=token-123") == true)
+        assertEquals(3_000_000L, resolved?.maxStreamingBitrate)
+    }
+
+    @Test
+    fun `resolvePlayback returns null when server offers no playable method`() = runTest {
+        stubServer()
+        coEvery {
+            apiClient.fetchPlaybackInfo(any(), any(), any(), any(), any(), any(), any(), any())
+        } returns Result.success(
+            PlaybackInfoResult(
+                playSessionId = null,
+                mediaSources = listOf(
+                    MediaSource(
+                        id = "source-1",
+                        name = "main",
+                        supportsDirectPlay = false,
+                        supportsDirectStream = false,
+                        supportsTranscoding = false,
+                    ),
+                ),
+            ),
+        )
+
+        val resolved = repository.resolvePlayback(
+            itemId = "item-1",
+            mediaSourceId = "source-1",
+            startTimeTicks = 0L,
+            audioStreamIndex = null,
+            subtitleStreamIndex = null,
+            maxStreamingBitrateBits = null,
+            mode = PlaybackMode.FORCE_DIRECT_PLAY,
+            playerType = PlayerType.EXO_PLAYER,
+        )
+
+        assertEquals(null, resolved)
+    }
+
+    @Test
+    fun `resolvePlayback returns null when PlaybackInfo fetch fails`() = runTest {
+        stubServer()
+        coEvery {
+            apiClient.fetchPlaybackInfo(any(), any(), any(), any(), any(), any(), any(), any())
+        } returns Result.failure(RuntimeException("network down"))
+
+        val resolved = repository.resolvePlayback(
+            itemId = "item-1",
+            mediaSourceId = "source-1",
+            startTimeTicks = 0L,
+            audioStreamIndex = null,
+            subtitleStreamIndex = null,
+            maxStreamingBitrateBits = null,
+            mode = PlaybackMode.AUTO,
+            playerType = PlayerType.EXO_PLAYER,
+        )
+
+        assertEquals(null, resolved)
     }
 }

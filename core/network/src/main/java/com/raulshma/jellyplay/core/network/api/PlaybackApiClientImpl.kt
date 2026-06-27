@@ -4,10 +4,15 @@ import com.raulshma.jellyplay.core.model.CreditTimestamps
 import com.raulshma.jellyplay.core.model.IntroTimestamps
 import com.raulshma.jellyplay.core.model.MediaSegment
 import com.raulshma.jellyplay.core.model.MediaSegmentType
+import com.raulshma.jellyplay.core.model.MediaSource
+import com.raulshma.jellyplay.core.model.PlaybackInfoResult
+import com.raulshma.jellyplay.core.model.PlaybackMode
+import com.raulshma.jellyplay.core.model.PlayerType
 import com.raulshma.jellyplay.core.model.RemoteSubtitleInfo
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import okhttp3.Request
+import org.jellyfin.sdk.model.api.PlaybackInfoDto
 import org.jellyfin.sdk.model.serializer.toUUID
 import org.jellyfin.sdk.api.client.extensions.*
 import javax.inject.Inject
@@ -16,6 +21,7 @@ import javax.inject.Singleton
 @Singleton
 class PlaybackApiClientImpl @Inject constructor(
     private val engine: JellyfinApiEngine,
+    private val deviceProfileProvider: DeviceProfileProvider,
 ) : PlaybackApiClient {
 
     override suspend fun reportPlaybackStart(
@@ -125,6 +131,52 @@ class PlaybackApiClientImpl @Inject constructor(
         }
         val paramPrefix = if (useAudioEndpoint) "?" else "?static=true&"
         return "${server.address}$path$paramPrefix$baseParams&api_key=${user.accessToken}"
+    }
+
+    override suspend fun fetchPlaybackInfo(
+        itemId: String,
+        mediaSourceId: String,
+        startTimeTicks: Long,
+        audioStreamIndex: Int?,
+        subtitleStreamIndex: Int?,
+        maxStreamingBitrateBits: Long?,
+        mode: PlaybackMode,
+        playerType: PlayerType,
+    ): Result<PlaybackInfoResult> = engine.apiResultWithRetry {
+        val api = engine.requireApi()
+        val uuid = itemId.toUUID()
+
+        val enableDirectPlay = mode != PlaybackMode.FORCE_TRANSCODE
+        val enableDirectStream = mode == PlaybackMode.AUTO
+        val enableTranscoding = mode != PlaybackMode.FORCE_DIRECT_PLAY
+        // Stream copy is only relevant when direct stream is allowed.
+        val allowStreamCopy = enableDirectStream
+        // Bitrate ceiling is sent for AUTO and FORCE_TRANSCODE (so a forced
+        // transcode still targets the chosen resolution) but omitted for
+        // FORCE_DIRECT_PLAY (no cap — the file is served verbatim).
+        val sendBitrate = if (mode == PlaybackMode.FORCE_DIRECT_PLAY) null else maxStreamingBitrateBits
+
+        val dto = PlaybackInfoDto(
+            userId = engine.currentUser.value?.id?.toUUID(),
+            startTimeTicks = startTimeTicks.takeIf { it > 0 },
+            maxStreamingBitrate = sendBitrate?.toInt(),
+            audioStreamIndex = audioStreamIndex,
+            subtitleStreamIndex = subtitleStreamIndex,
+            mediaSourceId = mediaSourceId.takeIf { it.isNotBlank() },
+            deviceProfile = deviceProfileProvider.forPlayer(playerType),
+            enableDirectPlay = enableDirectPlay,
+            enableDirectStream = enableDirectStream,
+            enableTranscoding = enableTranscoding,
+            allowVideoStreamCopy = allowStreamCopy,
+            allowAudioStreamCopy = allowStreamCopy,
+            autoOpenLiveStream = true,
+        )
+
+        val response = api.mediaInfoApi.getPostedPlaybackInfo(uuid, dto).content
+        PlaybackInfoResult(
+            playSessionId = response.playSessionId,
+            mediaSources = response.mediaSources.orEmpty().map { it.toMediaSource() },
+        )
     }
 
     override fun getSubtitleDeliveryUrl(deliveryUrl: String): String {

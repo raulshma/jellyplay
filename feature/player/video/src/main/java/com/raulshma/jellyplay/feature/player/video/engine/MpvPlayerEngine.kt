@@ -815,6 +815,9 @@ class MpvPlayerEngine(
                     if (br > 0) br.toInt() else null
                 }
             } catch (_: Exception) { null }
+            val combinedBitrate = (videoBitrateBps ?: 0) + (audioBitrateBps ?: 0)
+            val bufferHealthMs = (_bufferedPositionMs.value - currentPositionMs).coerceAtLeast(0L)
+            val bufferSizeBytes = if (combinedBitrate > 0) combinedBitrate * bufferHealthMs / 8000 else 0L
             val newStats = EngineVideoStats(
                 videoCodec = try { m.getPropertyString("video-format") } catch (_: Exception) { null },
                 videoDecoder = try { m.getPropertyString("hwdec-current") } catch (_: Exception) { null },
@@ -841,11 +844,15 @@ class MpvPlayerEngine(
                     }
                 } catch (_: Exception) { null },
                 audioBitrate = audioBitrateBps,
-                estimatedBandwidthBps = ((videoBitrateBps ?: 0) + (audioBitrateBps ?: 0)).toLong(),
+                estimatedBandwidthBps = combinedBitrate.toLong(),
                 droppedFrames = try {
                     m.getPropertyInt("decoder-frame-drop-count")?.toLong() ?: 0L
                 } catch (_: Exception) { 0L },
+                totalVideoFrames = try {
+                    m.getPropertyInt("displayed-frame-count")?.toLong() ?: 0L
+                } catch (_: Exception) { 0L },
                 bufferedPositionMs = _bufferedPositionMs.value,
+                bufferSizeBytes = bufferSizeBytes,
             )
             val currentStats = _videoStats.value
             if (newStats != currentStats) {

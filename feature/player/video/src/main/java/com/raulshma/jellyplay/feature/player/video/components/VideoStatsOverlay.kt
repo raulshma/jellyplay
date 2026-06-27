@@ -111,13 +111,22 @@ fun VideoStatsOverlay(
             ))
         }
 
-        if (stats.droppedFrames > 0) {
-            StatsSection("Performance") {
-                StatsRow("Dropped Frames", "${stats.droppedFrames}")
+        StatsSection("Performance") {
+            StatsRow("Dropped Frames", "${stats.droppedFrames}")
+            // Only show total rendered frames when the engine actually
+            // reports them (ExoPlayer via DecoderCounters, MPV via
+            // displayed-frame-count); otherwise the row is hidden rather
+            // than stuck on a misleading 0.
+            if (stats.totalVideoFrames > 0) {
+                StatsRow("Total Frames", "${stats.totalVideoFrames}")
+                val dropPct = if (stats.totalVideoFrames > 0) {
+                    stats.droppedFrames.toFloat() /
+                        (stats.droppedFrames + stats.totalVideoFrames) * 100f
+                } else 0f
+                StatsRow("Drop Rate", String.format("%.2f%%", dropPct))
             }
-        } else {
-            StatsSection("Performance") {
-                StatsRow("Dropped Frames", "0")
+            if (stats.bufferSizeBytes > 0) {
+                StatsRow("Buffer Size", formatBytes(stats.bufferSizeBytes))
             }
         }
 
@@ -190,6 +199,12 @@ private fun formatBandwidth(bps: Long): String = when {
     bps >= 1_000_000 -> String.format("%.1f Mbps", bps / 1_000_000.0)
     bps >= 1_000 -> String.format("%.0f kbps", bps / 1_000.0)
     else -> "$bps bps"
+}
+
+private fun formatBytes(bytes: Long): String = when {
+    bytes >= 1_048_576 -> String.format("%.1f MB", bytes / 1_048_576.0)
+    bytes >= 1_024 -> String.format("%.0f KB", bytes / 1_024.0)
+    else -> "$bytes B"
 }
 
 private fun formatChannels(ch: Int): String = when (ch) {

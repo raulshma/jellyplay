@@ -12,7 +12,9 @@ import com.raulshma.jellyplay.core.model.MediaDetail
 import com.raulshma.jellyplay.core.model.MediaSource
 import com.raulshma.jellyplay.core.model.MediaStream
 import com.raulshma.jellyplay.core.model.PlayMethod
+import com.raulshma.jellyplay.core.model.PlaybackMode
 import com.raulshma.jellyplay.core.model.PlayerType
+import com.raulshma.jellyplay.core.model.ResolvedPlayback
 import com.raulshma.jellyplay.core.model.StreamType
 import com.raulshma.jellyplay.core.model.SubtitleStyle
 import com.raulshma.jellyplay.core.model.EngineSpecificConfig
@@ -40,6 +42,13 @@ data class PlayerSessionState(
     val playMethodString: String = "Direct Play",
     val playMethod: PlayMethod = PlayMethod.DIRECT_PLAY,
     val isDirectPlayForced: Boolean = false,
+    /**
+     * The server-issued play session id returned by the `PlaybackInfo`
+     * endpoint. Used for progress reporting so the server can associate
+     * reports with (possibly transcoded) streams. `null` for offline
+     * playback or when the client falls back to a static direct URL.
+     */
+    val playSessionId: String? = null,
     val isReady: Boolean = false,
     val offlineTrickplayDir: java.io.File? = null,
     val streamUrl: String? = null,
@@ -213,10 +222,29 @@ class PlayerSessionManager(
         }
         val streams = source?.mediaStreams ?: emptyList()
 
-        val serverSupportsDirectPlay = source?.supportsDirectPlay == true
-        val playMethodStr = "Direct Play"
-        val resolvedPlayMethod = PlayMethod.DIRECT_PLAY
-        val isDirectPlayForced = !serverSupportsDirectPlay
+        val prefs = preferencesStore.preferences.first()
+        val playerType = prefs.preferredPlayer
+        val sourceId = source?.id ?: ""
+
+        // Consult the PlaybackInfo endpoint so the server decides Direct
+        // Play / Direct Stream / Transcode based on the device profile and
+        // the user's PlaybackMode. Falls back to a static direct URL when
+        // the server cannot resolve a playable method (preserving the
+        // historical behaviour for non-conforming sources).
+        val maxBitrate = adaptiveBitrateManager.resolveMaxBitrate(prefs.streamingQuality)
+        val resolved = playbackRepository.resolvePlayback(
+            itemId = itemId,
+            mediaSourceId = sourceId,
+            startTimeTicks = startPositionTicks,
+            audioStreamIndex = null,
+            subtitleStreamIndex = null,
+            maxStreamingBitrateBits = maxBitrate,
+            mode = prefs.playbackMode,
+            playerType = playerType,
+        )
+        val url = resolved?.streamUrl
+            ?: playbackRepository.getStreamUrl(itemId, sourceId, startPositionTicks)
+        val playMethod = resolved?.playMethod ?: PlayMethod.DIRECT_PLAY
 
         _sessionState.update {
             it.copy(
@@ -225,23 +253,16 @@ class PlayerSessionManager(
                 mediaDetail = detail,
                 currentMediaSource = source,
                 mediaStreams = streams,
-                playMethodString = playMethodStr,
-                playMethod = resolvedPlayMethod,
-                isDirectPlayForced = isDirectPlayForced,
+                playMethodString = playMethod.displayName(),
+                playMethod = playMethod,
+                isDirectPlayForced = prefs.playbackMode == PlaybackMode.FORCE_DIRECT_PLAY,
+                playSessionId = resolved?.playSessionId,
+                streamUrl = url,
             )
         }
 
-        val url = playbackRepository.getStreamUrl(
-            itemId,
-            source?.id ?: "",
-            startPositionTicks,
-        )
-
-        val prefs = preferencesStore.preferences.first()
-        val playerType = prefs.preferredPlayer
-
         if (playerType == PlayerType.EXTERNAL) {
-            _sessionState.update { it.copy(isReady = true, streamUrl = url) }
+            _sessionState.update { it.copy(isReady = true) }
             return
         }
 
@@ -332,8 +353,9 @@ class PlayerSessionManager(
             headers = headers,
             preferredAudioLanguage = prefs.preferredAudioLanguage,
             preferredSubtitleLanguage = prefs.preferredSubtitleLanguage,
-            maxVideoBitrate = if (prefs.forceDirectPlay) null
-                else adaptiveBitrateManager.resolveMaxBitrate(prefs.streamingQuality)?.toInt(),
+            maxVideoBitrate = if (prefs.playbackMode == PlaybackMode.AUTO)
+                adaptiveBitrateManager.resolveMaxBitrate(prefs.streamingQuality)?.toInt()
+                else null,
             serverUrl = serverUrl,
             authToken = token,
             minBufferMs = prefs.videoPreloadBufferSize.minBufferMs,
@@ -354,11 +376,66 @@ class PlayerSessionManager(
         PlayerType.EXTERNAL -> null
     }
 
+    /**
+     * Re-resolves playback for the current item under [mode] and reloads the
+     * engine with the resulting URL at [currentPositionMs]. Used when the
+     * user toggles [PlaybackMode] or [com.raulshma.jellyplay.core.model.StreamingQuality]
+     * mid-playback so a switch to/from transcode swaps the underlying stream
+     * without restarting the item.
+     *
+     * Returns the resolved [ResolvedPlayback] (or `null` on failure) so the
+     * caller can react — e.g. fall back to transcode when a forced direct
+     * play request yields no playable method.
+     */
+    suspend fun reloadPlayback(
+        mode: PlaybackMode,
+        quality: com.raulshma.jellyplay.core.model.StreamingQuality,
+        currentPositionMs: Long,
+    ): ResolvedPlayback? {
+        val itemId = _sessionState.value.currentItemId ?: return null
+        val sourceId = _sessionState.value.currentMediaSource?.id ?: ""
+        val prefs = preferencesStore.preferences.first()
+        val playerType = lastPlayerType ?: prefs.preferredPlayer
+        val maxBitrate = adaptiveBitrateManager.resolveMaxBitrate(quality)
+
+        val resolved = playbackRepository.resolvePlayback(
+            itemId = itemId,
+            mediaSourceId = sourceId,
+            startTimeTicks = currentPositionMs * 10_000,
+            audioStreamIndex = null,
+            subtitleStreamIndex = null,
+            maxStreamingBitrateBits = maxBitrate,
+            mode = mode,
+            playerType = playerType,
+        )
+        val url = resolved?.streamUrl
+            ?: playbackRepository.getStreamUrl(itemId, sourceId, currentPositionMs * 10_000)
+        val playMethod = resolved?.playMethod ?: PlayMethod.DIRECT_PLAY
+
+        _sessionState.update {
+            it.copy(
+                playMethodString = playMethod.displayName(),
+                playMethod = playMethod,
+                isDirectPlayForced = mode == PlaybackMode.FORCE_DIRECT_PLAY,
+                playSessionId = resolved?.playSessionId,
+                streamUrl = url,
+            )
+        }
+
+        // Swap the engine onto the freshly resolved URL. The engine-level
+        // bitrate cap is only meaningful for AUTO (server-side cap drives
+        // transcode; direct play is uncapped).
+        val engineMaxBitrate = if (mode == PlaybackMode.AUTO) maxBitrate?.toInt() else null
+        reloadWithEngine(playerType, currentPositionMs, prefs.videoDefaultSpeed, engineMaxBitrate, uriOverride = url)
+        return resolved
+    }
+
     suspend fun reloadWithEngine(
         playerType: PlayerType,
         currentPositionMs: Long,
         playbackSpeed: Float = 1.0f,
         maxVideoBitrate: Int? = null,
+        uriOverride: String? = null,
     ) {
         val last = lastPlaybackRequest ?: return
         val prefs = preferencesStore.preferences.first()
@@ -401,6 +478,7 @@ class PlayerSessionManager(
         val request = last.copy(
             startPositionMs = currentPositionMs,
             maxVideoBitrate = maxVideoBitrate,
+            uri = uriOverride ?: last.uri,
         )
         lastPlaybackRequest = request
         eng.load(request)

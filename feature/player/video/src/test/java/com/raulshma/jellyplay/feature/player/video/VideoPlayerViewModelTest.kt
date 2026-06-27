@@ -16,6 +16,7 @@ import com.raulshma.jellyplay.core.data.syncplay.SyncPlayManager
 import com.raulshma.jellyplay.core.data.syncplay.SyncPlayPlaybackCore
 import com.raulshma.jellyplay.core.datastore.UserPreferencesStore
 import com.raulshma.jellyplay.core.model.EffectStrength
+import com.raulshma.jellyplay.core.model.PlaybackMode
 import com.raulshma.jellyplay.core.model.UserPreferences
 import com.raulshma.jellyplay.core.ui.feedback.UserMessageBus
 import com.raulshma.jellyplay.feature.player.video.components.AspectRatio
@@ -205,10 +206,11 @@ class VideoPlayerViewModelTest {
     }
 
     @Test
-    fun toggleForceDirectPlay_flipsValue() {
-        val before = viewModel.uiState.value.forceDirectPlay
-        viewModel.toggleForceDirectPlay()
-        assertEquals(!before, viewModel.uiState.value.forceDirectPlay)
+    fun setPlaybackMode_updatesState() {
+        val target = if (viewModel.uiState.value.playbackMode == PlaybackMode.FORCE_TRANSCODE)
+            PlaybackMode.FORCE_DIRECT_PLAY else PlaybackMode.FORCE_TRANSCODE
+        viewModel.setPlaybackMode(target)
+        assertEquals(target, viewModel.uiState.value.playbackMode)
     }
 
     @Test
