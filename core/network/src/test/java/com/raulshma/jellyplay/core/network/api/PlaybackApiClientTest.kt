@@ -45,12 +45,12 @@ class PlaybackApiClientImplTest {
             context = mockk(relaxed = true),
             jellyfin = jellyfin,
             okHttpClient = okHttpClient,
-            deviceProfileProvider = DeviceProfileProvider(),
+            deviceProfileProvider = DeviceProfileProvider(DeviceCodecCapabilities()),
         )
         engine.updateServer(testServer.copy(address = baseUrl))
         engine.updateUser(testUser.copy(serverAddress = baseUrl))
 
-        playbackClient = PlaybackApiClientImpl(engine, DeviceProfileProvider())
+        playbackClient = PlaybackApiClientImpl(engine, DeviceProfileProvider(DeviceCodecCapabilities()))
     }
 
     @After

@@ -18,22 +18,22 @@ import javax.inject.Singleton
  * transcode target to fall back to. It is varied by [PlayerType]:
  *
  * - **MPV** uses libav/ffmpeg under the hood and can decode almost
- *   everything, so it advertises a permissive direct-play profile
- *   (adapted from Wholphin's `mpvDeviceProfile`).
+ *   everything, so it advertises a fixed permissive direct-play profile.
  * - **ExoPlayer / LibVLC** rely on the hardware/media framework codecs,
- *   so they advertise the common natively-decodable set (H.264/HEVC in
- *   MP4/MKV/TS, AAC/AC3/EAC3/MP3 audio). Anything outside that set the
- *   server will remux or transcode.
+ *   so the direct-play codec set is derived from
+ *   [DeviceCodecCapabilities] (an actual `MediaCodecList` query) rather
+ *   than a hardcoded list. This avoids over-claiming codecs the device
+ *   cannot decode (which would make the server hand back an unplayable
+ *   direct stream) and under-claiming (which would trigger needless
+ *   transcoding).
  *
- * The profile is intentionally conservative on the hardware path: an
- * over-claim here (e.g. declaring AV1/HEVC 10-bit direct-playable when
- * the device decoder cannot) would make the server hand back a direct
- * stream that the player then fails to render. The
- * [com.raulshma.jellyplay.core.model.PlaybackMode.FORCE_DIRECT_PLAY]
- * failure fallback handles the residual edge cases.
+ * The candidate codec lists per container mirror the official Jellyfin
+ * Android client's `AVAILABLE_VIDEO_CODECS` / `AVAILABLE_AUDIO_CODECS`.
  */
 @Singleton
-class DeviceProfileProvider @Inject constructor() {
+class DeviceProfileProvider @Inject constructor(
+    private val deviceCodecCapabilities: DeviceCodecCapabilities,
+) {
 
     fun forPlayer(playerType: PlayerType): org.jellyfin.sdk.model.api.DeviceProfile = when (playerType) {
         PlayerType.MPV -> mpvProfile
@@ -43,7 +43,7 @@ class DeviceProfileProvider @Inject constructor() {
 
     /**
      * Profile used for client-capabilities registration when no player is
-     * known yet (defaults to the conservative hardware profile).
+     * known yet (defaults to the device-derived hardware profile).
      */
     val default: org.jellyfin.sdk.model.api.DeviceProfile get() = hardwareProfile
 
@@ -91,29 +91,48 @@ class DeviceProfileProvider @Inject constructor() {
         subtitleFormats.forEach { (format, method) -> subtitleProfile(format, method) }
     }
 
-    private val hardwareProfile = buildDeviceProfile {
-        name = "jellyplay-hardware"
+    /**
+     * Built from [DeviceCodecCapabilities]: each candidate codec is only
+     * advertised for direct play if the device actually exposes a decoder
+     * for it. Lazily computed once (codec availability is fixed for the
+     * process lifetime).
+     */
+    private val hardwareProfile: org.jellyfin.sdk.model.api.DeviceProfile by lazy {
+        val videoCodecs = HARDWARE_VIDEO_CANDIDATES.intersect(deviceCodecCapabilities.supportedVideoCodecs)
+        val audioCodecs = HARDWARE_AUDIO_CANDIDATES.intersect(deviceCodecCapabilities.supportedAudioCodecs)
+        buildDeviceProfile {
+            name = "jellyplay-hardware"
 
-        transcodingProfile {
-            type = DlnaProfileType.VIDEO
-            context = EncodingContext.STREAMING
-            container = "ts"
-            protocol = MediaStreamProtocol.HLS
-            videoCodec("h264", "hevc")
-            audioCodec("aac", "ac3", "eac3", "mp3")
-            copyTimestamps = false
-            enableSubtitlesInManifest = true
+            transcodingProfile {
+                type = DlnaProfileType.VIDEO
+                context = EncodingContext.STREAMING
+                container = "ts"
+                protocol = MediaStreamProtocol.HLS
+                videoCodec("h264", "hevc")
+                audioCodec("aac", "ac3", "eac3", "mp3")
+                copyTimestamps = false
+                enableSubtitlesInManifest = true
+            }
+
+            directPlayProfile {
+                type = DlnaProfileType.VIDEO
+                container("mp4", "mkv", "ts", "mov", "webm", "m4v", "mpegts", "flv", "3gp")
+                if (videoCodecs.isNotEmpty()) videoCodec(*videoCodecs.toTypedArray())
+                if (audioCodecs.isNotEmpty()) audioCodec(*audioCodecs.toTypedArray())
+            }
+
+            subtitleFormats.forEach { (format, method) -> subtitleProfile(format, method) }
         }
+    }
 
-        directPlayProfile {
-            type = DlnaProfileType.VIDEO
-            container("mp4", "mkv", "ts", "mov", "webm", "m4v")
-            videoCodec("h264", "hevc", "vp9", "av1", "mpeg2video", "mpeg4")
-            audioCodec(
-                "aac", "ac3", "eac3", "mp3", "opus", "vorbis", "flac", "alac",
-            )
-        }
-
-        subtitleFormats.forEach { (format, method) -> subtitleProfile(format, method) }
+    private companion object {
+        /** Candidate video codecs intersected with the device decoder list. */
+        private val HARDWARE_VIDEO_CANDIDATES = setOf(
+            "h264", "hevc", "vp8", "vp9", "av1", "mpeg2video", "mpeg4", "h263",
+        )
+        /** Candidate audio codecs intersected with the device decoder list. */
+        private val HARDWARE_AUDIO_CANDIDATES = setOf(
+            "aac", "ac3", "eac3", "mp3", "opus", "vorbis", "flac", "alac", "raw",
+        )
     }
 }
