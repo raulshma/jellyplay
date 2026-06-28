@@ -8,6 +8,7 @@ import com.raulshma.jellyplay.feature.settings.AboutScreen
 import com.raulshma.jellyplay.feature.settings.AppearanceSettingsScreen
 import com.raulshma.jellyplay.feature.settings.AudioSettingsScreen
 import com.raulshma.jellyplay.feature.settings.BackupSettingsScreen
+import com.raulshma.jellyplay.feature.settings.ExperimentalSettingsScreen
 import com.raulshma.jellyplay.feature.settings.LanguageSettingsScreen
 import com.raulshma.jellyplay.feature.settings.LicensesScreen
 import com.raulshma.jellyplay.feature.settings.HomeLayoutPresetsScreen
@@ -47,6 +48,7 @@ fun EntryProviderScope<NavKey>.settingsSection(
             onStorageSettings = { id -> navigator.navigate(Route.StorageSettings(id)) },
             onSecuritySettings = { id -> navigator.navigate(Route.SecuritySettings(id)) },
             onBackupSettings = { id -> navigator.navigate(Route.BackupSettings(id)) },
+            onExperimentalSettings = { id -> navigator.navigate(Route.ExperimentalSettings(id)) },
         )
     }
 
@@ -141,6 +143,13 @@ fun EntryProviderScope<NavKey>.settingsSection(
 
     entry<Route.BackupSettings> { entry ->
         BackupSettingsScreen(
+            onBack = { navigator.goBack() },
+            highlightSettingId = entry.highlightSettingId,
+        )
+    }
+
+    entry<Route.ExperimentalSettings> { entry ->
+        ExperimentalSettingsScreen(
             onBack = { navigator.goBack() },
             highlightSettingId = entry.highlightSettingId,
         )
