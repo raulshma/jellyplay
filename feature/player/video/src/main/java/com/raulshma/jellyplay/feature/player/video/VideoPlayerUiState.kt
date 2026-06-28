@@ -41,6 +41,25 @@ data class CinemaIntroUiState(
     val totalCount: Int,
 )
 
+/**
+ * Narrow, low-frequency view of the segment / up-next overlays.
+ *
+ * Derived on the ViewModel by combining the high-frequency position flow with
+ * the (low-frequency) [VideoPlayerUiState]. It only re-emits when one of these
+ * values actually changes, so collecting it at the root of [VideoPlayerScreen]
+ * does NOT trigger the 4 Hz recomposition driven by playback position ticks —
+ * the position itself is now delivered through dedicated StateFlows and read
+ * only inside the composables that render it (see V-1).
+ */
+@Immutable
+data class SegmentOverlayState(
+    val activeSegment: MediaSegment? = null,
+    val activeSegmentBehavior: SegmentBehavior = SegmentBehavior.IGNORE,
+    val isInIntro: Boolean = false,
+    val isInCredits: Boolean = false,
+    val shouldShowUpNext: Boolean = false,
+)
+
 @Immutable
 data class VideoPlayerUiState(
     val title: String = "",

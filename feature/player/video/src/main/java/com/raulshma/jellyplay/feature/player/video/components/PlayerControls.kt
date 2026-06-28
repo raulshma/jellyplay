@@ -50,6 +50,8 @@ import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import kotlinx.coroutines.flow.StateFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -111,8 +113,12 @@ internal fun PlayerControls(
     title: String,
     subtitle: String,
     isPlaying: Boolean,
-    currentPosition: Long,
+    // High-frequency playback streams collected here (V-1) so the seek bar /
+    // time labels recompose at 4 Hz without invalidating the whole screen.
+    currentPositionFlow: StateFlow<Long>,
     duration: Long,
+    bufferedPositionFlow: StateFlow<Long>,
+    videoStatsFlow: StateFlow<EngineVideoStats>,
     playbackSpeed: Float,
     chapters: List<ChapterInfo>,
     dialogueBoostEnabled: Boolean,
@@ -168,7 +174,6 @@ internal fun PlayerControls(
     isSyncPlaySyncing: Boolean = false,
     showVideoStats: Boolean = false,
     onVideoStatsClick: () -> Unit = {},
-    bufferedPosition: Long = 0L,
     streamingQuality: StreamingQuality = StreamingQuality.AUTO,
     playbackMode: PlaybackMode = PlaybackMode.AUTO,
     onQualityClick: () -> Unit = {},
@@ -198,7 +203,6 @@ internal fun PlayerControls(
     isDirectPlayForced: Boolean = false,
     hdrType: String? = null,
     mediaStreams: List<MediaStream> = emptyList(),
-    videoStats: EngineVideoStats = EngineVideoStats(),
     audioTracks: List<TrackOption> = emptyList(),
     showPlaybackMetadata: Boolean = true,
     showClock: Boolean = false,
@@ -209,6 +213,14 @@ internal fun PlayerControls(
     isNextEpisodeVisible: Boolean = false,
     modifier: Modifier = Modifier,
 ) {
+    // Collect the high-frequency streams here (V-1): the recomposition they
+    // drive is scoped to PlayerControls (the seek bar / time labels), not the
+    // whole screen. PlayerControls is itself gated by an AnimatedVisibility in
+    // the screen, so collection only runs while the controls are shown.
+    val currentPosition by currentPositionFlow.collectAsStateWithLifecycle()
+    val bufferedPosition by bufferedPositionFlow.collectAsStateWithLifecycle()
+    val videoStats by videoStatsFlow.collectAsStateWithLifecycle()
+
     val isTv = LocalTvMode.current
     val tvPlayPauseFocusRequester = remember { FocusRequester() }
     val tvBackFocusRequester = remember { FocusRequester() }

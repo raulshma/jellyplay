@@ -58,6 +58,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
 import kotlinx.coroutines.flow.conflate
 import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.StateFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
@@ -422,8 +423,12 @@ fun VideoPlayerScreen(
     val castVolume by viewModel.castVolumeFlow.collectAsStateWithLifecycle(initialValue = 1f)
 
     val isPlaying = if (isCastConnected) castIsPlaying else uiState.isPlaying
-    val currentPosition = if (isCastConnected) castPosition else uiState.currentPosition
-    val duration = if (isCastConnected) castDuration else uiState.duration
+    // duration is low-frequency (changes only on media load / live updates),
+    // so it is safe to collect at the screen root. currentPosition is NOT
+    // collected here — it now lives on viewModel.currentPositionMs and is read
+    // only inside the leaf composables that render it (V-1).
+    val engineDuration by viewModel.durationMs.collectAsStateWithLifecycle()
+    val duration = if (isCastConnected) castDuration else engineDuration
     val playbackSpeed = uiState.playbackSpeed
     val currentMediaSource = uiState.currentMediaSource
     val mediaStreams = uiState.mediaStreams
@@ -469,11 +474,15 @@ fun VideoPlayerScreen(
         }
     }
 
-    val isInIntro = uiState.isInIntro
-    val isInCredits = uiState.isInCredits
-    val shouldShowUpNext = uiState.shouldShowUpNext
-    val activeSegment = uiState.activeSegment
-    val activeSegmentBehavior = activeSegment?.let { uiState.behaviorForType(it.type) }
+    // Segment / up-next overlay state is derived on the ViewModel from the
+    // high-frequency position flow but only re-emits at segment boundaries, so
+    // collecting it here keeps the root a low-frequency recomposition scope.
+    val segmentOverlay by viewModel.segmentOverlayState.collectAsStateWithLifecycle()
+    val isInIntro = segmentOverlay.isInIntro
+    val isInCredits = segmentOverlay.isInCredits
+    val shouldShowUpNext = segmentOverlay.shouldShowUpNext
+    val activeSegment = segmentOverlay.activeSegment
+    val activeSegmentBehavior = segmentOverlay.activeSegmentBehavior
     val cinemaIntroState = uiState.cinemaIntroState
 
     LaunchedEffect(aspectRatio, detectedAspectRatio, engine) {
@@ -582,7 +591,7 @@ fun VideoPlayerScreen(
             lyricsLines = uiState.lyricsLines,
             artworkUrl = uiState.artworkUrl,
             isPlaying = isPlaying,
-            currentPositionMs = currentPosition,
+            currentPositionMs = castPosition,
             durationMs = duration,
             volume = castVolume,
             isConnecting = isCastConnecting,
@@ -1030,8 +1039,8 @@ fun VideoPlayerScreen(
 
             if (uiState.showVideoStats) {
                 VideoStatsOverlay(
-                    stats = uiState.videoStats,
-                    currentPositionMs = currentPosition,
+                    statsFlow = viewModel.videoStats,
+                    currentPositionFlow = viewModel.currentPositionMs,
                     durationMs = duration,
                     playbackSpeed = playbackSpeed,
                     isPlaying = isPlaying,
@@ -1151,8 +1160,10 @@ fun VideoPlayerScreen(
                 title = title,
                 subtitle = subtitle,
                 isPlaying = isPlaying,
-                currentPosition = currentPosition,
+                currentPositionFlow = viewModel.currentPositionMs,
                 duration = duration,
+                bufferedPositionFlow = viewModel.bufferedPositionMs,
+                videoStatsFlow = viewModel.videoStats,
                 playbackSpeed = playbackSpeed,
                 chapters = uiState.chapters,
                 dialogueBoostEnabled = uiState.dialogueBoostEnabled,
@@ -1164,7 +1175,6 @@ fun VideoPlayerScreen(
                 playMethod = uiState.playMethod,
                 hdrType = uiState.hdrType,
                 mediaStreams = uiState.mediaStreams,
-                videoStats = uiState.videoStats,
                 audioTracks = uiState.audioTracks,
                 showPlaybackMetadata = uiState.showPlaybackMetadata,
                 showClock = uiState.showClock,
@@ -1219,7 +1229,6 @@ fun VideoPlayerScreen(
                 isSyncPlaySyncing = uiState.isSyncPlaySyncing,
                 showVideoStats = uiState.showVideoStats,
                 onVideoStatsClick = onVideoStatsClick,
-                bufferedPosition = uiState.bufferedPosition,
                 streamingQuality = uiState.streamingQuality,
                 playbackMode = uiState.playbackMode,
                 onQualityClick = onQualityClick,
@@ -1359,7 +1368,7 @@ fun VideoPlayerScreen(
         onSheetChange = { sheet -> currentSheet = sheet },
         dismissSheet = dismissSheet,
         uiState = uiState,
-        currentPosition = currentPosition,
+        currentPositionFlow = viewModel.currentPositionMs,
         doSeekTo = doSeekTo,
         viewModel = viewModel,
         itemId = itemId,
@@ -1572,7 +1581,7 @@ private fun PlayerSheetRouter(
     onSheetChange: (PlayerSheet) -> Unit,
     dismissSheet: () -> Unit,
     uiState: VideoPlayerUiState,
-    currentPosition: Long,
+    currentPositionFlow: StateFlow<Long>,
     doSeekTo: (Long) -> Unit,
     viewModel: VideoPlayerViewModel,
     itemId: String,
@@ -1608,9 +1617,12 @@ private fun PlayerSheetRouter(
             )
         }
         is PlayerSheet.Chapter -> {
-            ChapterPickerSheet(
+            // Collect position only while the chapter sheet is open (V-1), so
+            // the router itself stays a low-frequency scope when no sheet (or
+            // a non-chapter sheet) is shown.
+            ChapterPickerBinder(
                 chapters = uiState.chapters,
-                currentPositionMs = currentPosition,
+                currentPositionFlow = currentPositionFlow,
                 onSelect = { positionTicks ->
                     doSeekTo(positionTicks / 10_000)
                     onSheetChange(PlayerSheet.None)
@@ -1766,4 +1778,25 @@ private fun PlayerSheetRouter(
         }
         PlayerSheet.None -> { }
     }
+}
+
+/**
+ * Narrow binder that subscribes to [currentPositionFlow] only while the
+ * chapter picker sheet is open (V-1), so the screen root and the sheet router
+ * are not invalidated at 4 Hz on every position tick.
+ */
+@Composable
+private fun ChapterPickerBinder(
+    chapters: List<com.raulshma.jellyplay.core.model.ChapterInfo>,
+    currentPositionFlow: StateFlow<Long>,
+    onSelect: (Long) -> Unit,
+    onDismiss: () -> Unit,
+) {
+    val currentPositionMs by currentPositionFlow.collectAsStateWithLifecycle()
+    ChapterPickerSheet(
+        chapters = chapters,
+        currentPositionMs = currentPositionMs,
+        onSelect = onSelect,
+        onDismiss = onDismiss,
+    )
 }
