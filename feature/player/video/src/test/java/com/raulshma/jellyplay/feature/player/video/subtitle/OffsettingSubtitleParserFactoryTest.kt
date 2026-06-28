@@ -9,7 +9,10 @@ import java.util.concurrent.atomic.AtomicLong
 class OffsettingSubtitleParserFactoryTest {
 
     @Test
-    fun offsettingSubtitleParser_zeroOffset_delegatesDirectly() {
+    fun offsettingSubtitleParser_zeroOffset_wrapsAndDelegatesAtParseTime() {
+        // After M17 the factory always wraps (so the offset can be read
+        // dynamically on each parse). At offset 0 the wrapper delegates
+        // unchanged, preserving the zero-cost path at runtime.
         val offsetUs = AtomicLong(0L)
         val factory = OffsettingSubtitleParserFactory(
             FakeParserFactory(),
@@ -17,7 +20,7 @@ class OffsettingSubtitleParserFactoryTest {
         )
 
         val parser = factory.create(androidx.media3.common.Format.Builder().build())
-        assertTrue(parser is FakeParser)
+        assertTrue(parser is OffsettingSubtitleParser)
     }
 
     @Test
@@ -29,7 +32,6 @@ class OffsettingSubtitleParserFactoryTest {
         )
 
         val parser = factory.create(androidx.media3.common.Format.Builder().build())
-        assertFalse(parser is FakeParser)
         assertTrue(parser is OffsettingSubtitleParser)
     }
 
@@ -57,9 +59,9 @@ class OffsettingSubtitleParserFactoryTest {
 
     @Test
     fun offsettingSubtitleParser_adjustsTimestamps() {
-        val offsetUs = 2_000_000L
+        val offsetUs = AtomicLong(2_000_000L)
         val delegate = FakeParser()
-        val offsetting = OffsettingSubtitleParser(delegate, offsetUs)
+        val offsetting = OffsettingSubtitleParser(delegate, offsetUs::get)
 
         val result = mutableListOf<androidx.media3.extractor.text.CuesWithTiming>()
         val output = androidx.media3.common.util.Consumer<androidx.media3.extractor.text.CuesWithTiming> { result.add(it) }
@@ -73,6 +75,34 @@ class OffsettingSubtitleParserFactoryTest {
 
         assertEquals(1, result.size)
         assertEquals(3_000_000L, result[0].startTimeUs)
+    }
+
+    @Test
+    fun offsettingSubtitleParser_offsetChangeTakesEffectOnSubsequentParse() {
+        // M17: the delay is read on each parse(), so adjusting it after the
+        // parser was created shifts subsequent cues without a media reload.
+        val offsetUs = AtomicLong(0L)
+        val delegate = FakeParser()
+        val offsetting = OffsettingSubtitleParser(delegate, offsetUs::get)
+
+        val firstResult = mutableListOf<androidx.media3.extractor.text.CuesWithTiming>()
+        offsetting.parse(
+            byteArrayOf(), 0, 0,
+            androidx.media3.extractor.text.SubtitleParser.OutputOptions.allCues(),
+            androidx.media3.common.util.Consumer { firstResult.add(it) },
+        )
+        // Offset 0 → unshifted (FakeParser emits startTimeUs = 1_000_000).
+        assertEquals(1_000_000L, firstResult[0].startTimeUs)
+
+        offsetUs.set(5_000_000L)
+        val secondResult = mutableListOf<androidx.media3.extractor.text.CuesWithTiming>()
+        offsetting.parse(
+            byteArrayOf(), 0, 0,
+            androidx.media3.extractor.text.SubtitleParser.OutputOptions.allCues(),
+            androidx.media3.common.util.Consumer { secondResult.add(it) },
+        )
+        // Offset now 5s → shifted by 5_000_000.
+        assertEquals(6_000_000L, secondResult[0].startTimeUs)
     }
 
     private class FakeParser : androidx.media3.extractor.text.SubtitleParser {

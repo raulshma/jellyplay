@@ -96,10 +96,18 @@ class DeviceProfileProvider @Inject constructor(
      * advertised for direct play if the device actually exposes a decoder
      * for it. Lazily computed once (codec availability is fixed for the
      * process lifetime).
+     *
+     * The audio set additionally includes [FORCED_AUDIO_CODECS] — codecs
+     * ExoPlayer handles but that are not reliably surfaced by
+     * [android.media.MediaCodecList] (notably DTS/MLP/TrueHD, which have no
+     * standard [android.media.MediaFormat] mime and are therefore never
+     * detected, yet are extremely common in MKV movie rips). Without these,
+     * the server transcodes every file carrying such audio. This mirrors the
+     * official Jellyfin Android client's `FORCED_AUDIO_CODECS`.
      */
     private val hardwareProfile: org.jellyfin.sdk.model.api.DeviceProfile by lazy {
         val videoCodecs = HARDWARE_VIDEO_CANDIDATES.intersect(deviceCodecCapabilities.supportedVideoCodecs)
-        val audioCodecs = HARDWARE_AUDIO_CANDIDATES.intersect(deviceCodecCapabilities.supportedAudioCodecs)
+        val audioCodecs = HARDWARE_AUDIO_CANDIDATES.intersect(deviceCodecCapabilities.supportedAudioCodecs) + FORCED_AUDIO_CODECS
         buildDeviceProfile {
             name = "jellyplay-hardware"
 
@@ -116,7 +124,19 @@ class DeviceProfileProvider @Inject constructor(
 
             directPlayProfile {
                 type = DlnaProfileType.VIDEO
-                container("mp4", "mkv", "ts", "mov", "webm", "m4v", "mpegts", "flv", "3gp")
+                // Containers ExoPlayer's bundled extractors can demux. Includes
+                // MPEG-TS variants (m2ts/mts for Blu-ray BDAV / AVCHD) and
+                // MPEG-PS (mpeg/mpg/vob) — omitting these made the server
+                // transcode items in those containers even with supported codecs.
+                container(
+                    "mp4", "m4v", "mov",                 // MP4 / QuickTime family
+                    "mkv",                                // Matroska
+                    "webm",                               // WebM
+                    "ts", "mpegts", "m2ts", "mts",       // MPEG-TS family
+                    "mpeg", "mpg", "vob",                 // MPEG-PS family
+                    "flv",                                // FLV
+                    "3gp", "3g2", "3gpp",                 // 3GPP family
+                )
                 if (videoCodecs.isNotEmpty()) videoCodec(*videoCodecs.toTypedArray())
                 if (audioCodecs.isNotEmpty()) audioCodec(*audioCodecs.toTypedArray())
             }
@@ -133,6 +153,19 @@ class DeviceProfileProvider @Inject constructor(
         /** Candidate audio codecs intersected with the device decoder list. */
         private val HARDWARE_AUDIO_CANDIDATES = setOf(
             "aac", "ac3", "eac3", "mp3", "opus", "vorbis", "flac", "alac", "raw",
+        )
+        /**
+         * Audio codecs advertised for direct play regardless of a
+         * [DeviceCodecCapabilities] hit. Either ExoPlayer decodes them in
+         * software, or the platform decoder exists but is not enumerated via a
+         * recognisable [android.media.MediaFormat] mime (DTS, MLP, TrueHD).
+         * Omitting these caused the server to transcode media whose audio the
+         * device can in fact decode.
+         */
+        private val FORCED_AUDIO_CODECS = setOf(
+            "aac", "ac3", "eac3", "mp3", "alac", "dts", "mlp", "truehd",
+            "pcm_s8", "pcm_s16be", "pcm_s16le", "pcm_s24le", "pcm_s32le",
+            "pcm_f32le", "pcm_alaw", "pcm_mulaw",
         )
     }
 }

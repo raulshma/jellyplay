@@ -11,7 +11,7 @@ internal object SubtitleMimeMapper {
             "vtt", "webvtt" -> MimeTypes.TEXT_VTT
             "ttml", "dfxp" -> MimeTypes.APPLICATION_TTML
             "pgs" -> MimeTypes.APPLICATION_PGS
-            "mov_text" -> MimeTypes.APPLICATION_TTML
+            "mov_text" -> MimeTypes.APPLICATION_TX3G
             else -> null
         }
     }

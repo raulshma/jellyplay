@@ -262,6 +262,7 @@ fun PosterCard(
     onPlayClick: (() -> Unit)? = null,
     sharedElementKey: String? = null,
     photoFolderChildImageUrls: List<String> = emptyList(),
+    clipToShape: Boolean = false,
 ) {
     val uiEnvironment = LocalJellyPlayUi.current
     val isTv = uiEnvironment.isTv
@@ -283,7 +284,7 @@ fun PosterCard(
         isTvFocused = focusInteraction.isFocused,
         isTv = isTv,
     )
-    val shape = ShapeCache.smooth12
+    val cardShape = ShapeCache.smooth12
 
     val dominantColor = rememberDominantColor(imageUrl, itemId = item.id)
     val playButtonSize = if (isTv) 44.dp else 36.dp
@@ -332,15 +333,16 @@ fun PosterCard(
                     scaleX = scale
                     scaleY = scale
                     shadowElevation = elevation.toPx()
-                    clip = false
+                    clip = clipToShape
+                    shape = cardShape
                 }
-                .jellyFocusIndicator(focusInteraction, shape)
+                .jellyFocusIndicator(focusInteraction, cardShape)
                 .clickable(
                     interactionSource = interactionSource,
                     indication = null,
                     onClick = onClick,
                 ),
-            shape = shape,
+            shape = cardShape,
             border = border,
             elevation = CardDefaults.cardElevation(defaultElevation = 0.dp),
         ) {

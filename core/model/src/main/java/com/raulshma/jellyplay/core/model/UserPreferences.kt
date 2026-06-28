@@ -211,4 +211,5 @@ data class UserPreferences(
     val handMode: HandMode = HandMode.RIGHT,
     val downloadScheduleEnabled: Boolean = false,
     val downloadScheduleWindow: DownloadScheduleWindow = DownloadScheduleWindow(),
+    val enabledExperimentalFeatures: Set<ExperimentalFeature> = emptySet(),
 )

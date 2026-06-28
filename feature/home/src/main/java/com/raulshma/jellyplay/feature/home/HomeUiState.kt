@@ -37,6 +37,7 @@ data class HomeUiState(
     val searchState: HomeSearchState = HomeSearchState(),
     val seerrRequestState: SeerrRequestState = SeerrRequestState(),
     val newsletterBannerVisible: Boolean = false,
+    val experimentalCardClippingEnabled: Boolean = false,
     val currentUser: UserInfo? = null,
 )
 

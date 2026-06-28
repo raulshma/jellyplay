@@ -7,6 +7,7 @@ import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import com.raulshma.jellyplay.core.ui.components.LocalFloatingNavVisibility
@@ -666,6 +667,7 @@ private fun MainHomeContent(
                             homeHeroEnabled = state.homeHeroEnabled,
                             newsletterBannerVisible = state.newsletterBannerVisible,
                             discoverEnabled = state.discoverEnabled,
+                            experimentalCardClippingEnabled = state.experimentalCardClippingEnabled,
                             offlineLibrary = state.offlineLibrary,
                             sections = state.sections,
                             featuredItem = featuredItem,
@@ -855,6 +857,7 @@ private fun HomeContentList(
     homeHeroEnabled: Boolean,
     newsletterBannerVisible: Boolean,
     discoverEnabled: Boolean,
+    experimentalCardClippingEnabled: Boolean,
     offlineLibrary: List<com.raulshma.jellyplay.core.model.OfflineMediaItem>,
     sections: List<com.raulshma.jellyplay.core.model.HomeSection>,
     featuredItem: com.raulshma.jellyplay.core.model.MediaItem?,
@@ -1028,6 +1031,7 @@ private fun HomeContentList(
                         modifier = sectionModifier,
                         focusRequester = rowFocusRequesters[index],
                         onRowFocused = { homeFocusRow = index },
+                        clippingEnabled = experimentalCardClippingEnabled,
                     )
                 } else {
                     HomeMediaRow(
@@ -1041,6 +1045,7 @@ private fun HomeContentList(
                         photoFolderChildUrls = photoFolderChildUrls,
                         focusRequester = rowFocusRequesters[index],
                         onRowFocused = { homeFocusRow = index },
+                        clippingEnabled = experimentalCardClippingEnabled,
                     )
                 }
             }
@@ -1078,6 +1083,7 @@ private fun HomeContentList(
                         LazyRow(
                             modifier = Modifier
                                 .fillMaxWidth()
+                                .then(if (experimentalCardClippingEnabled) Modifier.clipToBounds() else Modifier)
                                 .background(backgroundColor)
                                 .padding(horizontal = contentPad, vertical = spacing / 2),
                             horizontalArrangement = Arrangement.spacedBy(spacing),
@@ -1093,6 +1099,7 @@ private fun HomeContentList(
                                     item = seerrItem,
                                     imageUrl = seerrItem.posterUrl,
                                     isLoading = seerrCardLoadingState.isLoading(seerrItem.id),
+                                    clipToShape = experimentalCardClippingEnabled,
                                     onClick = {
                                         val mediaType = when {
                                             seerrItem.mediaType.equals("movie", ignoreCase = true) -> "movie"

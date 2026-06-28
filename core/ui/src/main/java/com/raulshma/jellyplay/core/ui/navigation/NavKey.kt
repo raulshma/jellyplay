@@ -66,6 +66,7 @@ sealed class Route : NavKey {
     @Serializable data class StorageSettings(val highlightSettingId: String? = null) : Route()
     @Serializable data class SecuritySettings(val highlightSettingId: String? = null) : Route()
     @Serializable data class BackupSettings(val highlightSettingId: String? = null) : Route()
+    @Serializable data class ExperimentalSettings(val highlightSettingId: String? = null) : Route()
 
     @Serializable data object Artists : Route()
     @Serializable data object Albums : Route()
@@ -88,6 +89,13 @@ sealed class Route : NavKey {
     @Serializable data class LiveTvChannelPlayer(
         val channelId: String,
         val channelName: String,
+        // Optional stream overrides. Defaulted so existing two-arg call sites
+        // (LiveTvNavigation.kt) keep compiling; when a caller has a preferred
+        // audio/subtitle index (e.g. a "default track" preference) it is now
+        // honoured by the player exactly as Route.VideoPlayer honours it,
+        // closing the previous inconsistency between the two entry points.
+        val subtitleStreamIndex: Int? = null,
+        val audioStreamIndex: Int? = null,
     ) : Route()
 
     @Serializable data object LiveTvGuide : Route()
