@@ -17,7 +17,6 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.composed
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Shape
@@ -170,15 +169,16 @@ fun rememberRowSharedFocusState(
     )
 }
 
+@Composable
 fun Modifier.tvFocusIndicator(
     focusState: TvFocusState,
     shape: Shape = RectangleShape,
     color: Color? = null,
-): Modifier = composed {
+): Modifier {
     val glowColor = color ?: MaterialTheme.colorScheme.primary
     val borderColor = color ?: MaterialTheme.colorScheme.primary
 
-    this
+    return this
         .graphicsLayer {
             alpha = focusState.alphaProvider()
         }
@@ -208,8 +208,7 @@ fun Modifier.tvFocusIndicator(
         )
 }
 
-fun Modifier.tvFocusChanged(onFocusChanged: (Boolean) -> Unit): Modifier = composed {
+fun Modifier.tvFocusChanged(onFocusChanged: (Boolean) -> Unit): Modifier =
     this.onFocusChanged { focusState ->
         onFocusChanged(focusState.isFocused)
     }
-}
