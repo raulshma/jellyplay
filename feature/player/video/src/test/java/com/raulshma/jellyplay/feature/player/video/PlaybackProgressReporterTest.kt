@@ -74,6 +74,7 @@ class PlaybackProgressReporterTest {
             onAutoSkip = { autoSkipCalls += it },
             onPlaybackEndedNoNext = { endedNoNextCalls++ },
             onWatchedThresholdReached = { watchedThresholdCalls += it },
+            onPositionPersisted = {},
         )
     }
 
@@ -107,6 +108,7 @@ class PlaybackProgressReporterTest {
             onAutoSkip = { autoSkipCalls += it },
             onPlaybackEndedNoNext = { endedNoNextCalls++ },
             onWatchedThresholdReached = { watchedThresholdCalls += it },
+            onPositionPersisted = {},
         )
         reporter.startPositionTracking()
         assertEquals(0L, uiState.value.currentPosition)
@@ -274,6 +276,7 @@ class PlaybackProgressReporterTest {
             onAutoSkip = { autoSkipCalls += it },
             onPlaybackEndedNoNext = { endedNoNextCalls++ },
             onWatchedThresholdReached = { watchedThresholdCalls += it },
+            onPositionPersisted = {},
         )
 
         kotlinx.coroutines.runBlocking {
@@ -299,6 +302,7 @@ class PlaybackProgressReporterTest {
             onAutoSkip = { autoSkipCalls += it },
             onPlaybackEndedNoNext = { endedNoNextCalls++ },
             onWatchedThresholdReached = { watchedThresholdCalls += it },
+            onPositionPersisted = {},
         )
         every { engine.currentPositionMs } returns 5_000L
 

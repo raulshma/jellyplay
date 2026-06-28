@@ -2,6 +2,7 @@ package com.raulshma.jellyplay.feature.player.video.engine
 
 import android.content.Context
 
+import android.media.AudioManager
 import android.os.Handler
 import android.os.Looper
 import android.util.Log
@@ -30,6 +31,7 @@ import com.raulshma.jellyplay.core.model.TrackType
 import com.raulshma.jellyplay.core.model.VideoEffectsConfig
 import kotlinx.coroutines.channels.awaitClose
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.withTimeoutOrNull
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -51,7 +53,10 @@ class MpvPlayerEngine(
 
     companion object {
         private const val TAG = "MpvPlayerEngine"
-        private const val LOW_RAM_THRESHOLD_MB = 2048L
+        // Max time the position-polling loop will wait for playback to resume
+        // before re-checking config (M2). Prevents the ticker from suspending
+        // forever while paused.
+        private const val POSITION_PAUSED_RECHECK_MS = 2_500L
         private const val DEMUXER_MAX_BYTES_LOW = 32 * 1024 * 1024L
         private const val DEMUXER_MAX_BYTES_NORMAL = 64 * 1024 * 1024L
         private const val DEMUXER_MAX_BACK_BYTES_LOW = 16 * 1024 * 1024L
@@ -64,7 +69,11 @@ class MpvPlayerEngine(
     }
 
     private val isLowRamDevice by lazy { EngineDeviceProfile.isLowRamDevice(context) }
-    private val engineScope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
+    // `var` so [load] can recreate it if a prior [release] cancelled the
+    // SupervisorJob. Without this the engine is permanently unusable after
+    // release() (positionFlow's ticker launches on this scope and would
+    // silently never emit). Recreated lazily, only when inactive.
+    private var engineScope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
 
     override val capabilities = EngineCapabilities(
         supportsPip = true,
@@ -113,8 +122,13 @@ class MpvPlayerEngine(
     private var mpvView: PlayerMPVView? = null
     private var pendingRequest: PlaybackRequest? = null
     @Volatile private var pendingSubtitles: List<SubtitleSource> = emptyList()
-    @Volatile private var pendingPreferredSubtitleLanguage: String? = null
     @Volatile private var lastLoggedSubtitleText: String? = null
+    // Android audio session id generated via AudioManager and pushed into
+    // mpv's audiotrack/aaudio outputs so Android AudioEffects (dialogue
+    // boost, night mode) can bind to mpv's output. Previously read back
+    // the string property "audio-device-id" as an int, which always
+    // threw and returned 0 — leaving the effect chain unbound.
+    @Volatile private var generatedAudioSessionId: Int = 0
     
     private var currentConfig = EngineConfig()
     // mpv handles its own internal EQ via af filters; this helper exists
@@ -316,6 +330,7 @@ class MpvPlayerEngine(
             mpv.observeProperty("track-list", MPV.mpvFormat.MPV_FORMAT_NODE)
             mpv.observeProperty("sub-text", MPV.mpvFormat.MPV_FORMAT_STRING)
             mpv.observeProperty("sub-visibility", MPV.mpvFormat.MPV_FORMAT_FLAG)
+            assignAudioSessionId()
         }
 
         override fun observeProperties() {}
@@ -326,10 +341,36 @@ class MpvPlayerEngine(
         }
     }
 
+    /**
+     * Allocates a real Android audio session id and pushes it into mpv's
+     * audiotrack / aaudio outputs so Android [android.media.audiofx.AudioEffect]
+     * instances (dialogue boost, night mode) can bind to mpv's output.
+     * Must run after [PlayerMPVView.initialize] has created the mpv handle
+     * and before playback starts.
+     */
+    private fun assignAudioSessionId() {
+        val mpv = mpvView?.mpv ?: return
+        try {
+            val audioManager = context.getSystemService(Context.AUDIO_SERVICE) as? AudioManager
+            val sid = audioManager?.generateAudioSessionId() ?: AudioManager.ERROR
+            if (sid == AudioManager.ERROR) {
+                generatedAudioSessionId = 0
+                return
+            }
+            generatedAudioSessionId = sid
+            try { mpv.setPropertyInt("audiotrack-session-id", sid) } catch (_: Exception) {}
+            try { mpv.setPropertyInt("aaudio-session-id", sid) } catch (_: Exception) {}
+        } catch (e: Exception) {
+            Log.w(TAG, "Failed to assign MPV audio session id", e)
+        }
+    }
+
     override fun load(request: PlaybackRequest) {
+        if (!engineScope.isActive) {
+            engineScope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
+        }
         pendingRequest = request
         pendingSubtitles = request.externalSubtitles
-        pendingPreferredSubtitleLanguage = request.preferredSubtitleLanguage
         Log.d(
             TAG,
             "MPV load requested: uri=${redactSensitive(request.uri)}, start=${request.startPositionMs}ms, " +
@@ -351,8 +392,8 @@ class MpvPlayerEngine(
     override fun release() {
         pendingRequest = null
         pendingSubtitles = emptyList()
-        pendingPreferredSubtitleLanguage = null
         lastLoggedSubtitleText = null
+        generatedAudioSessionId = 0
         _currentCues.value = emptyList()
         mainHandler.removeCallbacksAndMessages(null)
         dialogueBoost.detach()
@@ -378,25 +419,25 @@ class MpvPlayerEngine(
                 mpvView?.mpv?.command("seek", "0", "absolute")
             }
             mpvView?.mpv?.setPropertyBoolean("pause", false)
-        } catch (_: Exception) {}
+        } catch (e: Exception) { Log.w(TAG, "play failed", e) }
     }
 
     override fun pause() {
-        try { mpvView?.mpv?.setPropertyBoolean("pause", true) } catch (_: Exception) {}
+        try { mpvView?.mpv?.setPropertyBoolean("pause", true) } catch (e: Exception) { Log.w(TAG, "pause failed", e) }
     }
 
     override fun stop() {
         try {
             mpvView?.mpv?.command("stop")
-        } catch (_: Exception) {}
+        } catch (e: Exception) { Log.w(TAG, "stop failed", e) }
     }
 
     override fun seekTo(positionMs: Long) {
-        try { mpvView?.mpv?.command("seek", "%.6f".format(positionMs / 1000.0), "absolute") } catch (_: Exception) {}
+        try { mpvView?.mpv?.command("seek", "%.6f".format(positionMs / 1000.0), "absolute") } catch (e: Exception) { Log.w(TAG, "seekTo failed", e) }
     }
 
     override fun setPlaybackSpeed(speed: Float) {
-        try { mpvView?.mpv?.setPropertyDouble("speed", speed.toDouble()) } catch (_: Exception) {}
+        try { mpvView?.mpv?.setPropertyDouble("speed", speed.toDouble()) } catch (e: Exception) { Log.w(TAG, "setPlaybackSpeed failed", e) }
     }
 
     override fun updateConfig(config: EngineConfig) {
@@ -758,9 +799,7 @@ class MpvPlayerEngine(
         } catch (_: Exception) { 1f }
 
     override val audioSessionId: Int
-        get() = try {
-            mpvView?.mpv?.getPropertyInt("audio-device-id") ?: 0
-        } catch (_: Exception) { 0 }
+        get() = generatedAudioSessionId
 
     override fun setPollingIntervalMs(ms: Long) { _pollingIntervalMs.value = ms }
     override fun setVideoStatsEnabled(enabled: Boolean) { _videoStatsEnabled.value = enabled }
@@ -771,7 +810,13 @@ class MpvPlayerEngine(
         val ticker = engineScope.launch {
             while (isActive) {
                 if (!_isPlaying.value) {
-                    _isPlaying.first { it }
+                    // Bounded wait (M2): previously `_isPlaying.first { it }`
+                    // suspended forever while paused, freezing buffer/stats
+                    // updates and ignoring polling-interval changes. Re-check
+                    // every few seconds so config is honoured even while paused.
+                    withTimeoutOrNull(POSITION_PAUSED_RECHECK_MS) {
+                        _isPlaying.first { it }
+                    }
                 }
                 delay(_pollingIntervalMs.value)
                 trySend(currentPositionMs)
@@ -969,40 +1014,6 @@ class MpvPlayerEngine(
         }
     }
 
-    private fun shouldSelectSubtitle(subtitle: SubtitleSource, preferredLanguage: String?): Boolean {
-        if (subtitle.isDefault || subtitle.isForced) return true
-        val preferred = preferredLanguage?.takeIf { it.isNotBlank() } ?: return false
-        return languageMatches(subtitle.language, preferred)
-    }
-
-    private fun languageMatches(candidate: String?, preferredLanguageList: String): Boolean {
-        val candidateValues = normalizedLanguageValues(candidate) ?: return false
-        return preferredLanguageList
-            .split(',', ';')
-            .map { it.trim() }
-            .filter { it.isNotBlank() }
-            .any { preferred ->
-                val preferredValues = normalizedLanguageValues(preferred) ?: return@any false
-                candidateValues.any { it in preferredValues }
-            }
-    }
-
-    private fun normalizedLanguageValues(language: String?): Set<String>? {
-        val raw = language?.trim()?.takeIf { it.isNotBlank() } ?: return null
-        val tag = raw.replace('_', '-').lowercase()
-        val base = tag.substringBefore('-')
-        val display = try {
-            java.util.Locale.forLanguageTag(tag).displayLanguage.lowercase()
-        } catch (_: Exception) {
-            null
-        }
-        return buildSet {
-            add(tag)
-            add(base)
-            if (!display.isNullOrBlank()) add(display)
-        }
-    }
-
     private fun normalizeLanguageList(language: String): String =
         language.split(',', ';')
             .map { it.trim().replace('_', '-') }
@@ -1038,19 +1049,11 @@ class MpvPlayerEngine(
     private fun applySubtitleStyleOptions(mpv: MPV, style: SubtitleStyle) {
         val values = subtitleStyleValues(style)
         if (style.applyCustomStyle) {
-            mpv.safeSetOption("sub-color", values.textColor)
-            mpv.safeSetOption("sub-back-color", values.backgroundColor)
-            mpv.safeSetOption("sub-outline-color", values.edgeColor)
-            mpv.safeSetOption("sub-shadow-color", values.edgeColor)
-            val borderStyle = if (style.backgroundOpacity > 0f) "background-box" else "outline-and-shadow"
-            mpv.safeSetOption("sub-border-style", borderStyle)
-            mpv.safeSetOption("sub-ass-override", "scale")
-            mpv.safeSetOption("sub-outline-size", values.outlineSize.toString())
-            mpv.safeSetOption("sub-shadow-offset", values.shadowOffset.toString())
+            customSubtitleStyleEntries(style, values).forEach { (k, v) -> mpv.safeSetOption(k, v) }
         } else {
             mpv.safeSetOption("sub-ass-override", "no")
         }
-        
+
         mpv.safeSetOption("sub-font", "sans-serif")
         mpv.safeSetOption("sub-font-size", "55")
         mpv.safeSetOption("sub-scale", (style.fontSize.toDouble() / 24.0).toString())
@@ -1065,13 +1068,8 @@ class MpvPlayerEngine(
         mpv.safeSetPropertyBoolean("sub-visibility", true)
         mpv.safeSetPropertyBoolean("secondary-sub-visibility", true)
         if (style.applyCustomStyle) {
-            mpv.safeSetPropertyString("sub-color", values.textColor)
-            mpv.safeSetPropertyString("sub-back-color", values.backgroundColor)
-            mpv.safeSetPropertyString("sub-outline-color", values.edgeColor)
-            mpv.safeSetPropertyString("sub-shadow-color", values.edgeColor)
-            val borderStyle = if (style.backgroundOpacity > 0f) "background-box" else "outline-and-shadow"
-            mpv.safeSetPropertyString("sub-border-style", borderStyle)
-            mpv.safeSetPropertyString("sub-ass-override", "scale")
+            customSubtitleStyleEntries(style, values).forEach { (k, v) -> mpv.safeSetPropertyString(k, v) }
+            // Numeric properties are typed (Double) for the runtime path.
             mpv.safeSetPropertyDouble("sub-outline-size", values.outlineSize)
             mpv.safeSetPropertyDouble("sub-shadow-offset", values.shadowOffset)
         } else {
@@ -1085,7 +1083,7 @@ class MpvPlayerEngine(
             mpv.safeSetPropertyDouble("sub-outline-size", 3.0)
             mpv.safeSetPropertyDouble("sub-shadow-offset", 0.0)
         }
-        
+
         mpv.safeSetPropertyString("sub-font", "sans-serif")
         mpv.safeSetPropertyDouble("sub-font-size", 55.0)
         mpv.safeSetPropertyDouble("sub-scale", style.fontSize.toDouble() / 24.0)
@@ -1093,6 +1091,26 @@ class MpvPlayerEngine(
         mpv.safeSetPropertyInt("sub-pos", subPosValue)
         mpv.safeSetPropertyInt("sub-margin-y", values.marginY)
         mpv.safeSetPropertyDouble("sub-delay", currentConfig.subtitleDelayMs / 1000.0)
+    }
+
+    /**
+     * The string-typed subtitle-style key/value pairs shared by both
+     * [applySubtitleStyleOptions] (init-time, setOptionString) and
+     * [applySubtitleStyleProperties] (runtime, setPropertyString). Extracted
+     * (L6) so the two near-identical consumers can't drift on key names or
+     * derived values. Callers apply each pair through their own setter.
+     */
+    private fun customSubtitleStyleEntries(
+        style: SubtitleStyle,
+        values: MpvSubtitleStyleValues,
+    ): List<Pair<String, String>> = buildList {
+        add("sub-color" to values.textColor)
+        add("sub-back-color" to values.backgroundColor)
+        add("sub-outline-color" to values.edgeColor)
+        add("sub-shadow-color" to values.edgeColor)
+        val borderStyle = if (style.backgroundOpacity > 0f) "background-box" else "outline-and-shadow"
+        add("sub-border-style" to borderStyle)
+        add("sub-ass-override" to "scale")
     }
 
     private data class MpvSubtitleStyleValues(
@@ -1143,14 +1161,6 @@ class MpvPlayerEngine(
         val alpha = (opacity.coerceIn(0f, 1f) * 255).toInt().coerceIn(0, 255)
         val rgb = color and 0x00FFFFFF
         return String.format("#%02X%06X", alpha, rgb)
-    }
-
-    private fun colorToAssHex(color: Int, opacity: Float): String {
-        val transparency = ((1f - opacity.coerceIn(0f, 1f)) * 255).toInt().coerceIn(0, 255)
-        val red = (color shr 16) and 0xFF
-        val green = (color shr 8) and 0xFF
-        val blue = color and 0xFF
-        return "&H%02X%02X%02X%02X&".format(transparency, blue, green, red)
     }
 
     private fun buildTrackLabel(

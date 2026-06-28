@@ -34,7 +34,7 @@ class DeviceProfileProviderTest {
     }
 
     @Test
-    fun `hardware direct play only advertises codecs the device reports`() {
+    fun `hardware direct play only advertises detected video codecs but forces common audio codecs`() {
         // Fake device that decodes only h264 + aac.
         val fakeCapabilities = object : DeviceCodecCapabilities() {
             override val supportedVideoCodecs get() = setOf("h264")
@@ -45,5 +45,10 @@ class DeviceProfileProviderTest {
         assertTrue(videoDirectPlay.videoCodec?.contains("h264") == true)
         assertTrue("must not claim hevc the fake device lacks", videoDirectPlay.videoCodec?.contains("hevc") != true)
         assertTrue(videoDirectPlay.audioCodec?.contains("aac") == true)
+        // DTS/TrueHD have no MediaFormat mime and are therefore never reported
+        // by MediaCodecList, yet they are common in MKV rips and must be
+        // advertised so the server does not transcode them away.
+        assertTrue("forced audio codecs must always be advertised", videoDirectPlay.audioCodec?.contains("dts") == true)
+        assertTrue(videoDirectPlay.audioCodec?.contains("truehd") == true)
     }
 }

@@ -28,6 +28,7 @@ internal class PlaybackProgressReporter(
     private val onAutoSkip: (MediaSegment) -> Unit,
     private val onPlaybackEndedNoNext: () -> Unit,
     private val onWatchedThresholdReached: (String) -> Unit,
+    private val onPositionPersisted: (positionMs: Long) -> Unit,
 ) {
     private var positionJob: Job? = null
     private var progressJob: Job? = null
@@ -59,6 +60,7 @@ internal class PlaybackProgressReporter(
                             videoStats = stats,
                         )
                     }
+                    onPositionPersisted(pos)
                 }
                 checkAutoSkip(pos)
                 checkEndedNoNext(pos, dur)
