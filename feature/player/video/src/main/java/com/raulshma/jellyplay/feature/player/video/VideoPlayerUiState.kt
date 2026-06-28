@@ -117,6 +117,7 @@ data class VideoPlayerUiState(
     val showVideoStats: Boolean = false,
     val videoStats: EngineVideoStats = EngineVideoStats(),
     val streamingQuality: StreamingQuality = StreamingQuality.AUTO,
+    val adaptiveBitrateEnabled: Boolean = true,
     val playbackMode: PlaybackMode = PlaybackMode.AUTO,
     val showPlaybackErrorDialog: Boolean = false,
     val audioNormalizationMode: AudioNormalizationMode = AudioNormalizationMode.NONE,

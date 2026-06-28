@@ -20,6 +20,7 @@ import androidx.compose.material3.FilterChip
 import androidx.compose.material3.FilterChipDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
@@ -48,6 +49,8 @@ import com.composables.icons.tabler.outline.Check
 @Composable
 fun QualityPickerSheet(
     currentQuality: StreamingQuality,
+    adaptiveBitrateEnabled: Boolean,
+    onToggleAdaptiveBitrate: (Boolean) -> Unit,
     onSelect: (StreamingQuality) -> Unit,
     onDismiss: () -> Unit,
 ) {
@@ -164,7 +167,52 @@ fun QualityPickerSheet(
                     }
                 }
             }
+
+            Spacer(Modifier.height(20.dp))
+
+            AdaptiveBitrateToggle(
+                enabled = adaptiveBitrateEnabled,
+                onToggle = onToggleAdaptiveBitrate,
+            )
         }
+    }
+}
+
+@Composable
+private fun AdaptiveBitrateToggle(
+    enabled: Boolean,
+    onToggle: (Boolean) -> Unit,
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 24.dp)
+            .clip(ShapeCache.smooth8)
+            .clickable { onToggle(!enabled) }
+            .padding(horizontal = 4.dp, vertical = 8.dp),
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Column(modifier = Modifier.padding(end = 16.dp)) {
+            Text(
+                text = "Adaptive Bitrate Cap",
+                style = MaterialTheme.typography.bodyLarge.copy(fontWeight = FontWeight.SemiBold),
+                color = MaterialTheme.colorScheme.onSurface,
+            )
+            Text(
+                text = if (enabled) {
+                    "Caps quality on metered networks"
+                } else {
+                    "Off — full quality (direct play)"
+                },
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+        Switch(
+            checked = enabled,
+            onCheckedChange = onToggle,
+        )
     }
 }
 
