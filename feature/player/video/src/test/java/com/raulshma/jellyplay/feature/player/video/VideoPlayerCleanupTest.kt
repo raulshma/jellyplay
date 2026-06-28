@@ -93,7 +93,8 @@ class VideoPlayerCleanupTest {
             getIncognitoModeEnabled = { false },
             onAutoSkip = {},
             onPlaybackEndedNoNext = {},
-            onWatchedThresholdReached = {}
+            onWatchedThresholdReached = {},
+            onPositionPersisted = {},
         )
 
         reporter.cancelJobs()
@@ -165,6 +166,7 @@ class VideoPlayerCleanupTest {
             videoMiniPlayerState = videoMiniPlayerState,
             sleepTimerManager = sleepTimerManager,
             userMessageBus = UserMessageBus(),
+            savedStateHandle = androidx.lifecycle.SavedStateHandle(),
         )
 
         // Set some media-specific states to verify they are cleared on release

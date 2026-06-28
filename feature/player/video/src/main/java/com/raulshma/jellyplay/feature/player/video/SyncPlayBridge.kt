@@ -9,9 +9,7 @@ import com.raulshma.jellyplay.core.model.SyncPlayShuffleMode
 import com.raulshma.jellyplay.core.ui.viewmodel.StateFlowHandle
 import com.raulshma.jellyplay.feature.player.video.engine.MediaEngine
 import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
-import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -24,7 +22,12 @@ internal class SyncPlayBridge(
     private val getMediaEngine: () -> MediaEngine?,
     private val getCurrentItemId: () -> String?,
     private val onLoadItem: (String, Long) -> Unit,
-    private val scope: CoroutineScope = CoroutineScope(SupervisorJob() + Dispatchers.Main),
+    // No default: a previous default of `CoroutineScope(SupervisorJob() +
+    // Dispatchers.Main)` was an uncancellable root scope that would leak if a
+    // caller forgot to pass its own. Forcing the caller (the ViewModel) to
+    // supply its viewModelScope-bound scope makes the lifecycle explicit and
+    // guarantees the bridge dies with its owner.
+    private val scope: CoroutineScope,
 ) : PlaybackCoreCallbacks {
 
     private var eventJob: Job? = null
@@ -37,6 +40,13 @@ internal class SyncPlayBridge(
     val ignoreWait: StateFlow<Boolean> get() = syncPlayManager.playbackCore.ignoreWait
 
     fun start() {
+        // Defensive clear before re-registering (M13): the @Singleton
+        // SyncPlayPlaybackCore retains its callbacks until clearCallbacks()
+        // runs. If a previous bridge for this VM was never torn down (e.g. an
+        // early init failure path, or a future registration site that forgets
+        // reset()), the singleton would hold two refs — the stale one keeping
+        // a dead VM alive. Clearing first makes start() idempotent.
+        syncPlayManager.playbackCore.clearCallbacks()
         syncPlayManager.playbackCore.setCallbacks(this)
         if (syncPlayManager.isInSyncPlaySession) {
             val group = syncPlayManager.currentGroup
@@ -84,6 +94,10 @@ internal class SyncPlayBridge(
 
     fun reattachSession() {
         if (!syncPlayManager.isInSyncPlaySession) return
+        // Same defensive clear as start() — see the note there. reattach runs
+        // after process death / mini-player reclaim where the prior bridge may
+        // not have cleared cleanly.
+        syncPlayManager.playbackCore.clearCallbacks()
         syncPlayManager.playbackCore.setCallbacks(this)
         val group = syncPlayManager.currentGroup
         uiState.update { it.copy(

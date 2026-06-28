@@ -86,6 +86,7 @@ class VideoPlayerViewModelTest {
             videoMiniPlayerState = videoMiniPlayerState,
             sleepTimerManager = sleepTimerManager,
             userMessageBus = UserMessageBus(),
+            savedStateHandle = androidx.lifecycle.SavedStateHandle(),
         )
     }
 

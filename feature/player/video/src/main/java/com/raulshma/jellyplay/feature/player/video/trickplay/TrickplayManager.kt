@@ -8,6 +8,7 @@ import com.raulshma.jellyplay.core.model.TrickplayInfo
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.sync.Mutex
@@ -25,32 +26,23 @@ class TrickplayManager(
     private val maxThumbnailCacheBytes = if (lowRamDevice) LOW_RAM_THUMBNAIL_BYTES else MAX_THUMBNAIL_CACHE_BYTES
     private val maxSpriteSheetCacheBytes = if (lowRamDevice) LOW_RAM_SPRITE_SHEET_BYTES else MAX_SPRITE_SHEET_CACHE_BYTES
 
-    private val bitmapPool = java.util.ArrayDeque<Bitmap>(4)
-
     private fun obtainTileBitmap(width: Int, height: Int): Bitmap {
-        val pooled: Bitmap? = bitmapPool.pollFirst()
-        if (pooled != null && !pooled.isRecycled && pooled.width == width && pooled.height == height) {
-            pooled.eraseColor(android.graphics.Color.TRANSPARENT)
-            return pooled
-        }
-        pooled?.recycle()
+        // NOTE: a bitmap pool previously fed by thumbnailCache.entryRemoved
+        // was removed to fix the recycle-vs-Compose-use race (H8) and the
+        // non-thread-safe ArrayDeque access (H9). Thumbnails handed to the
+        // UI are now dropped (never recycled) on eviction and left for GC.
         return Bitmap.createBitmap(width, height, Bitmap.Config.RGB_565)
-    }
-
-    private fun releaseToPool(bitmap: Bitmap) {
-        if (bitmap.isRecycled) return
-        if (!bitmap.isMutable) { bitmap.recycle(); return }
-        if (bitmapPool.size < 4) {
-            bitmapPool.addFirst(bitmap)
-        } else {
-            bitmap.recycle()
-        }
     }
 
     private val thumbnailCache = object : LruCache<Int, Bitmap>((maxThumbnailCacheBytes / 1024).toInt()) {
         override fun sizeOf(key: Int, value: Bitmap): Int = value.allocationByteCount / 1024
         override fun entryRemoved(evictedBySize: Boolean, key: Int, oldValue: Bitmap, newValue: Bitmap?) {
-            releaseToPool(oldValue)
+            // Intentionally do NOT recycle. Thumbnails returned from
+            // [getThumbnail] are held directly by TrickplayOverlay's
+            // `remember(bitmap) { bitmap?.asImageBitmap() }`. Recycling an
+            // evicted entry here used to race with Compose's draw pass and
+            // threw IllegalStateException ("Cannot draw a recycled bitmap").
+            // Let GC reclaim bitmaps once no caller (cache or UI) holds them.
         }
     }
     private val spriteSheetCache = object : LruCache<Int, Bitmap>((maxSpriteSheetCacheBytes / 1024).toInt()) {
@@ -61,7 +53,14 @@ class TrickplayManager(
     }
     private val sheetMutexes = ConcurrentHashMap<Int, Mutex>()
 
-    private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
+    // `var` so [clear] can cancel the supervisor and its orphaned children
+    // (fire-and-forget `scope.launch { persistDirectory…writeBytes }` and any
+    // outstanding `preloadJob`). Without this the supervisor and pending IO
+    // outlive `clear()` — the manager is held as a VM field so dies with the
+    // VM, but per-item `clear()` on item switch leaked work from the previous
+    // item. Recreated lazily, only when inactive (mirrors the engineScope
+    // pattern that fixed H5).
+    private var scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
     private var info: TrickplayInfo? = null
     private var itemId: String? = null
     private var preloadJob: kotlinx.coroutines.Job? = null
@@ -271,16 +270,43 @@ class TrickplayManager(
                     fetched
                 }
 
-                val options = BitmapFactory.Options().apply {
-                    inPreferredConfig = Bitmap.Config.RGB_565
-                    inMutable = false
-                }
-                BitmapFactory.decodeByteArray(data, 0, data.size, options)
+                decodeSpriteSheetSafely(data, trickplayInfo)
             }.also { bitmap ->
                 if (bitmap != null) {
                     spriteSheetCache.put(sheetIndex, bitmap)
                 }
             }
+        }
+    }
+
+    /**
+     * Decodes a sprite-sheet JPEG with an explicit OOM guard. A malicious or
+     * truncated payload can otherwise force [BitmapFactory.decodeByteArray]
+     * to allocate a multi-GB bitmap; `OutOfMemoryError` extends `Error`, not
+     * `Exception`, so the callers' `catch (_: Exception)` would not catch it
+     * and the process would crash. We bounds-check first (rejecting anything
+     * beyond 2x the expected sheet dimensions or an absolute pixel ceiling)
+     * and catch [Throwable] as a last line of defence. No downsampling is
+     * applied because [extractTile] assumes full-resolution sheets.
+     */
+    private fun decodeSpriteSheetSafely(data: ByteArray, trickplayInfo: TrickplayInfo): Bitmap? {
+        val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
+        BitmapFactory.decodeByteArray(data, 0, data.size, bounds)
+        val expectedWidth = trickplayInfo.width * trickplayInfo.tileWidth
+        val expectedHeight = trickplayInfo.height * trickplayInfo.tileHeight
+        val widthCap = expectedWidth.coerceAtLeast(1) * 2
+        val heightCap = expectedHeight.coerceAtLeast(1) * 2
+        if (bounds.outWidth > widthCap || bounds.outHeight > heightCap) return null
+        if (bounds.outWidth.toLong() * bounds.outHeight.toLong() > MAX_SPRITE_SHEET_PIXELS) return null
+
+        val options = BitmapFactory.Options().apply {
+            inPreferredConfig = Bitmap.Config.RGB_565
+            inMutable = false
+        }
+        return try {
+            BitmapFactory.decodeByteArray(data, 0, data.size, options)
+        } catch (t: Throwable) {
+            null
         }
     }
 
@@ -296,6 +322,16 @@ class TrickplayManager(
         localCacheDir = null
         persistDir = null
         sheetMutexes.clear()
+
+        // Cancel the supervisor and any in-flight children (preload, persist
+        // writes) so work from the previous item does not leak into the next
+        // session. A fresh scope is created for the next [initialize] call.
+        // Guarded because clear() is idempotent and may be invoked twice
+        // (once per initialize, once on VM release).
+        if (scope.isActive) {
+            scope.cancel()
+        }
+        scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
     }
 
     companion object {
@@ -307,5 +343,9 @@ class TrickplayManager(
         private const val PREFETCH_TILE_RANGE = 10
         private const val ADJACENT_SHEET_PRELOAD_COUNT = 1
         private const val SHEET_PRELOAD_TIMEOUT_MS = 3000L
+        // Absolute pixel backstop for sprite-sheet decoding, guarding against
+        // pathological payloads even when reported tile dimensions are huge.
+        // ~40 MP fits well within the RGB_565 sprite-sheet cache budget.
+        private const val MAX_SPRITE_SHEET_PIXELS = 40_000_000L
     }
 }

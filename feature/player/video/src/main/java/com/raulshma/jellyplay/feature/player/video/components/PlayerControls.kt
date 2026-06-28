@@ -62,6 +62,9 @@ import androidx.compose.ui.graphics.Color
 import com.raulshma.jellyplay.core.ui.tv.input.onDpadKey
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.setProgress
+import androidx.compose.ui.semantics.progressBarRangeInfo
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
@@ -844,6 +847,31 @@ private fun TvControllableSeekBar(
             modifier = Modifier
                 .fillMaxWidth()
                 .height(24.dp)
+                // a11y (M10): the Canvas-drawn seekbar previously carried no
+                // semantics, so TalkBack ignored the primary scrub control
+                // entirely. Expose it as a Role.Slider with a ProgressBarRangeInfo
+                // (announces "% of duration") and a SetProgress action so
+                // accessibility services can both read and move the position.
+                .semantics {
+                    // No explicit Role.Slider/Role.ProgressBar (neither value is
+                    // present in this Compose BOM). The setProgress action and
+                    // progressBarRangeInfo together make TalkBack announce the
+                    // control as an adjustable progress element.
+                    progressBarRangeInfo = androidx.compose.ui.semantics.ProgressBarRangeInfo(
+                        progress.coerceIn(0f, 1f),
+                        0f..1f,
+                    )
+                    if (duration > 0) {
+                        setProgress { target ->
+                            val clamped = target.coerceIn(0f, 1f)
+                            onSeekStart()
+                            onSeek(clamped)
+                            onSeekPositionChange((clamped * duration).toLong())
+                            onSeekEnd()
+                            true
+                        }
+                    }
+                }
                 .then(
                     if (isTv) {
                         Modifier

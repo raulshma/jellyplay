@@ -90,6 +90,9 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.raulshma.jellyplay.core.designsystem.theme.ShapeCache
 import com.raulshma.jellyplay.core.data.playback.FrameRateMatcher
 import com.raulshma.jellyplay.core.data.cast.CastSessionEvent
+import com.raulshma.jellyplay.core.model.AudioNormalizationMode
+import com.raulshma.jellyplay.core.model.ChannelMixMode
+import com.raulshma.jellyplay.core.model.EffectStrength
 import com.raulshma.jellyplay.core.model.OrientationMode
 import com.raulshma.jellyplay.core.model.SubtitleEdgeType
 import com.raulshma.jellyplay.core.model.SubtitleStyle
@@ -408,7 +411,7 @@ fun VideoPlayerScreen(
         }
     }
 
-    val engine = viewModel.playerEngineRef
+    val engine by viewModel.playerEngineFlow.collectAsStateWithLifecycle()
     val title = uiState.title
     val subtitle = uiState.subtitle
     val isCastConnected by viewModel.isConnectedFlow.collectAsStateWithLifecycle(initialValue = false)
@@ -753,11 +756,12 @@ fun VideoPlayerScreen(
                     }
                 },
         ) {
-            if (engine != null) {
-                key(engine) {
+            val currentEngine = engine
+            if (currentEngine != null) {
+                key(currentEngine) {
                     AndroidView(
                         factory = { ctx ->
-                            val view = engine.createSurfaceView(ctx)
+                            val view = currentEngine.createSurfaceView(ctx)
                             lastAppliedSubtitleStyle = uiState.subtitleStyle
                             viewModel.applySubtitleStyleToView(view)
                             playerViewRef = view
@@ -1079,6 +1083,70 @@ fun VideoPlayerScreen(
             val hasEpisodes = uiState.seriesSeasons.isNotEmpty() && uiState.seasonEpisodes.isNotEmpty()
             val episodeBrowserEnabled = uiState.videoEpisodeBrowserEnabled
 
+            // Hoist PlayerControls callbacks into remembered lambdas (M9).
+            // Each fresh `{ ... }` passed inline below allocated a new lambda
+            // per recomposition, defeating PlayerControls' skippability and
+            // forcing the 1500-line controls tree to recompose on every
+            // position tick. The lambdas below capture only stable handles
+            // — viewModel (same Hilt instance for the screen's lifetime) and
+            // the rememberSaveable property delegates (currentSheet,
+            // showControls, isSeeking, controlsHasFocus, isOverflowMenuOpen)
+            // whose MutableState references are stable across recomposition —
+            // so they need no keys. The few that capture a value (onSeekEnd,
+            // onPassthroughClick) are keyed on exactly that value so they
+            // recreate only when it actually changes.
+            val onPlayPause by remember(doTogglePlayPause) { mutableStateOf({ doTogglePlayPause() }) }
+            val onSeekBack by remember(doSeekBack) { mutableStateOf({ doSeekBack() }) }
+            val onSeekForward by remember(doSeekForward) { mutableStateOf({ doSeekForward() }) }
+            val onSeekEnd by remember(duration, doSeekTo) {
+                mutableStateOf({
+                    isSeeking = false
+                    if (duration > 0) doSeekTo(seekPositionMs)
+                })
+            }
+            val onSeekStart by remember { mutableStateOf({ isSeeking = true }) }
+            val onSeekPositionChange by remember { mutableStateOf({ positionMs: Long -> seekPositionMs = positionMs }) }
+            val onSpeedClick by remember { mutableStateOf({ currentSheet = PlayerSheet.Speed }) }
+            val onAudioClick by remember { mutableStateOf({ currentSheet = PlayerSheet.Audio }) }
+            val onSubtitleClick by remember { mutableStateOf({ currentSheet = PlayerSheet.Subtitle }) }
+            val onSubtitleStyleClick by remember { mutableStateOf({ currentSheet = PlayerSheet.SubtitleStyle }) }
+            val onChapterClick by remember { mutableStateOf({ currentSheet = PlayerSheet.Chapter }) }
+            val onInfoClick by remember { mutableStateOf({ currentSheet = PlayerSheet.PlaybackInfo }) }
+            val onAspectRatioClick by remember { mutableStateOf({ currentSheet = PlayerSheet.AspectRatio }) }
+            val onDialogueBoostClick by remember { mutableStateOf({ viewModel.toggleDialogueBoost() }) }
+            val onDialogueBoostStrengthChange by remember { mutableStateOf({ strength: EffectStrength -> viewModel.setDialogueBoostStrength(strength) }) }
+            val onNightModeClick by remember { mutableStateOf({ viewModel.toggleNightMode() }) }
+            val onNightModeStrengthChange by remember { mutableStateOf({ strength: EffectStrength -> viewModel.setNightModeStrength(strength) }) }
+            val onAVSyncClick by remember { mutableStateOf({ currentSheet = PlayerSheet.AVSync }) }
+            val onDecoderClick by remember { mutableStateOf({ currentSheet = PlayerSheet.Decoder }) }
+            // uiState is a `by collectAsStateWithLifecycle()` delegate, so
+            // `uiState.audioPassthrough` is read at invocation time — no key
+            // needed and the lambda never goes stale.
+            val onPassthroughClick by remember { mutableStateOf({ viewModel.setAudioPassthrough(!uiState.audioPassthrough) }) }
+            val onSubtitleDownloadClick by remember { mutableStateOf({
+                viewModel.loadRemoteSubtitles()
+                currentSheet = PlayerSheet.SubtitleDownload
+            }) }
+            val onEpisodesClick by remember { mutableStateOf({ currentSheet = PlayerSheet.Episodes }) }
+            val onSyncPlayClick by remember { mutableStateOf({ currentSheet = PlayerSheet.SyncPlay }) }
+            val onPipClick by remember(onEnterPip) { mutableStateOf({ onEnterPip() }) }
+            val onMuteClick by remember { mutableStateOf({ viewModel.toggleMute() }) }
+            val onVideoStatsClick by remember { mutableStateOf({ viewModel.toggleVideoStats() }) }
+            val onQualityClick by remember { mutableStateOf({ currentSheet = PlayerSheet.Quality }) }
+            val onPlaybackModeClick by remember { mutableStateOf({ currentSheet = PlayerSheet.PlaybackMode }) }
+            val onAudioNormalizationClick by remember { mutableStateOf({ viewModel.toggleAudioNormalization() }) }
+            val onAudioNormalizationModeChange by remember { mutableStateOf({ mode: AudioNormalizationMode -> viewModel.setAudioNormalizationMode(mode) }) }
+            val onChannelMixClick by remember { mutableStateOf({ viewModel.toggleChannelMix() }) }
+            val onChannelMixModeChange by remember { mutableStateOf({ mode: ChannelMixMode -> viewModel.setChannelMixMode(mode) }) }
+            val onSleepTimerClick by remember { mutableStateOf({ currentSheet = PlayerSheet.SleepTimer }) }
+            val onVideoFilterClick by remember { mutableStateOf({ currentSheet = PlayerSheet.VideoFilter }) }
+            val onLockClick by remember { mutableStateOf({
+                viewModel.setScreenLocked(true)
+                showControls = false
+            }) }
+            val onControlsFocusChange by remember { mutableStateOf({ hasFocus: Boolean -> controlsHasFocus = hasFocus }) }
+            val onOverflowMenuChange by remember { mutableStateOf({ open: Boolean -> isOverflowMenuOpen = open }) }
+
             PlayerControls(
                 title = title,
                 subtitle = subtitle,
@@ -1114,43 +1182,35 @@ fun VideoPlayerScreen(
                 supportsAudioPassthrough = uiState.engineCapabilities.supportsAudioPassthrough,
                 hasEpisodes = hasEpisodes,
                 episodeBrowserEnabled = episodeBrowserEnabled,
-                onPlayPause = { doTogglePlayPause() },
-                onSeekBack = { doSeekBack() },
-                onSeekForward = { doSeekForward() },
+                onPlayPause = onPlayPause,
+                onSeekBack = onSeekBack,
+                onSeekForward = onSeekForward,
                 onSeek = { },
-                onSeekStart = { isSeeking = true },
-                onSeekEnd = {
-                    isSeeking = false
-                    if (duration > 0) doSeekTo(seekPositionMs)
-                },
-                onSeekPositionChange = { positionMs -> seekPositionMs = positionMs },
+                onSeekStart = onSeekStart,
+                onSeekEnd = onSeekEnd,
+                onSeekPositionChange = onSeekPositionChange,
                 tvTrickplayBitmap = if (isTv) tvTrickplayBitmap else null,
                 onToggleOrientation = toggleOrientation,
                 onBack = onBack,
-                onSpeedClick = { currentSheet = PlayerSheet.Speed },
-                onAudioClick = { currentSheet = PlayerSheet.Audio },
-                onSubtitleClick = { currentSheet = PlayerSheet.Subtitle },
-                onSubtitleStyleClick = { currentSheet = PlayerSheet.SubtitleStyle },
-                onChapterClick = { currentSheet = PlayerSheet.Chapter },
-                onInfoClick = { currentSheet = PlayerSheet.PlaybackInfo },
-                onAspectRatioClick = { currentSheet = PlayerSheet.AspectRatio },
-                onDialogueBoostClick = { viewModel.toggleDialogueBoost() },
-                onDialogueBoostStrengthChange = { viewModel.setDialogueBoostStrength(it) },
-                onNightModeClick = { viewModel.toggleNightMode() },
-                onNightModeStrengthChange = { viewModel.setNightModeStrength(it) },
-                onAVSyncClick = { currentSheet = PlayerSheet.AVSync },
-                onDecoderClick = { currentSheet = PlayerSheet.Decoder },
-                onPassthroughClick = { viewModel.setAudioPassthrough(!uiState.audioPassthrough) },
-                onSubtitleDownloadClick = {
-                    viewModel.loadRemoteSubtitles()
-                    currentSheet = PlayerSheet.SubtitleDownload
-                },
-                onEpisodesClick = { currentSheet = PlayerSheet.Episodes },
-                onSyncPlayClick = { currentSheet = PlayerSheet.SyncPlay },
-                onPipClick = {
-                    onEnterPip()
-                },
-                onMuteClick = { viewModel.toggleMute() },
+                onSpeedClick = onSpeedClick,
+                onAudioClick = onAudioClick,
+                onSubtitleClick = onSubtitleClick,
+                onSubtitleStyleClick = onSubtitleStyleClick,
+                onChapterClick = onChapterClick,
+                onInfoClick = onInfoClick,
+                onAspectRatioClick = onAspectRatioClick,
+                onDialogueBoostClick = onDialogueBoostClick,
+                onDialogueBoostStrengthChange = onDialogueBoostStrengthChange,
+                onNightModeClick = onNightModeClick,
+                onNightModeStrengthChange = onNightModeStrengthChange,
+                onAVSyncClick = onAVSyncClick,
+                onDecoderClick = onDecoderClick,
+                onPassthroughClick = onPassthroughClick,
+                onSubtitleDownloadClick = onSubtitleDownloadClick,
+                onEpisodesClick = onEpisodesClick,
+                onSyncPlayClick = onSyncPlayClick,
+                onPipClick = onPipClick,
+                onMuteClick = onMuteClick,
                 isMuted = uiState.isMuted,
                 isInSyncPlaySession = isInSyncPlaySession,
                 syncPlayGroupName = uiState.syncPlayGroupName,
@@ -1158,12 +1218,12 @@ fun VideoPlayerScreen(
                 isSyncPlaySynced = uiState.isSyncPlaySynced,
                 isSyncPlaySyncing = uiState.isSyncPlaySyncing,
                 showVideoStats = uiState.showVideoStats,
-                onVideoStatsClick = { viewModel.toggleVideoStats() },
+                onVideoStatsClick = onVideoStatsClick,
                 bufferedPosition = uiState.bufferedPosition,
                 streamingQuality = uiState.streamingQuality,
                 playbackMode = uiState.playbackMode,
-                onQualityClick = { currentSheet = PlayerSheet.Quality },
-                onPlaybackModeClick = { currentSheet = PlayerSheet.PlaybackMode },
+                onQualityClick = onQualityClick,
+                onPlaybackModeClick = onPlaybackModeClick,
                 audioNormalizationMode = uiState.audioNormalizationMode,
                 audioNormalizationEnabled = uiState.audioNormalizationEnabled,
                 channelMixMode = uiState.channelMixMode,
@@ -1171,22 +1231,19 @@ fun VideoPlayerScreen(
                 supportsAudioNormalization = uiState.engineCapabilities.supportsAudioNormalization,
                 supportsChannelMixing = uiState.engineCapabilities.supportsChannelMixing,
                 supportsLiveQualitySwitch = uiState.engineCapabilities.supportsLiveQualitySwitch,
-                onAudioNormalizationClick = { viewModel.toggleAudioNormalization() },
-                onAudioNormalizationModeChange = { viewModel.setAudioNormalizationMode(it) },
-                onChannelMixClick = { viewModel.toggleChannelMix() },
-                onChannelMixModeChange = { viewModel.setChannelMixMode(it) },
+                onAudioNormalizationClick = onAudioNormalizationClick,
+                onAudioNormalizationModeChange = onAudioNormalizationModeChange,
+                onChannelMixClick = onChannelMixClick,
+                onChannelMixModeChange = onChannelMixModeChange,
                 sleepTimerActive = uiState.sleepTimerActive,
                 sleepTimerDisplayText = if (uiState.sleepTimerEndOfEpisode) "End of episode" else formatDuration(uiState.sleepTimerRemainingMs),
-                onSleepTimerClick = { currentSheet = PlayerSheet.SleepTimer },
+                onSleepTimerClick = onSleepTimerClick,
                 supportsVideoFilters = uiState.engineCapabilities.supportsVideoFilters,
                 videoFiltersActive = uiState.videoEffects != com.raulshma.jellyplay.core.model.VideoEffectsConfig(),
-                onVideoFilterClick = { currentSheet = PlayerSheet.VideoFilter },
-                onLockClick = {
-                    viewModel.setScreenLocked(true)
-                    showControls = false
-                },
-                onControlsFocusChange = { controlsHasFocus = it },
-                onOverflowMenuChange = { isOverflowMenuOpen = it },
+                onVideoFilterClick = onVideoFilterClick,
+                onLockClick = onLockClick,
+                onControlsFocusChange = onControlsFocusChange,
+                onOverflowMenuChange = onOverflowMenuChange,
                 castManager = viewModel.castManagerField,
                 modifier = Modifier.fillMaxSize(),
             )

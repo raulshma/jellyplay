@@ -143,28 +143,23 @@ data class VideoPlayerUiState(
     val isMuted: Boolean = false,
 ) {
 
-    @Transient
-    private var cachedSegmentPosition: Long = Long.MIN_VALUE
-    @Transient
-    private var cachedSegmentResult: MediaSegment? = null
-    @Transient
-    private var cachedSegmentKey: Pair<List<MediaSegment>, List<ChapterInfo>>? = null
-
     fun behaviorForType(type: MediaSegmentType): SegmentBehavior =
         segmentBehaviors[type] ?: SegmentBehavior.IGNORE
 
-    fun computeActiveSegment(): MediaSegment? {
-        val currentKey = Pair(segments, chapters)
-        if (cachedSegmentKey != currentKey) {
-            cachedSegmentPosition = Long.MIN_VALUE
-            cachedSegmentResult = null
-            cachedSegmentKey = currentKey
-        }
-        if (cachedSegmentPosition == currentPosition && cachedSegmentResult != null) return cachedSegmentResult
-        cachedSegmentPosition = currentPosition
-        cachedSegmentResult = computeActiveSegmentInternal()
-        return cachedSegmentResult
-    }
+    /**
+     * Pure (side-effect-free) derivation of the active segment at
+     * [currentPosition]. Previously this method mutated `@Transient var`
+     * cache fields declared on this `@Immutable` data class — that broke
+     * Compose's stability contract (the caches were invisible to
+     * `equals`/`hashCode`, so a cache-only change could suppress state
+     * propagation, and mutation happened mid-composition via the
+     * [activeSegment] getter). The cache optimisation was micro at best
+     * (typical segment/chapter lists are tiny) and the callers already read
+     * [activeSegment] once per recomposition into a local `val`, so the
+     * recomputation cost is negligible. Kept as a `fun` (not a `val`) so it
+     * is only evaluated when actually needed.
+     */
+    fun computeActiveSegment(): MediaSegment? = computeActiveSegmentInternal()
 
     companion object {
         private val INTRO_CHAPTER_NAMES = setOf("intro", "introduction", "opening", "op")

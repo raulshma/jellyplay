@@ -18,6 +18,7 @@ import com.raulshma.jellyplay.core.model.VideoEffectsConfig
 import com.raulshma.jellyplay.core.model.parseLanguageFromLabel
 import kotlinx.coroutines.channels.awaitClose
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.withTimeoutOrNull
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -44,11 +45,18 @@ class LibVlcPlayerEngine(
 
     companion object {
         private const val TAG = "LibVlcPlayerEngine"
-        private const val LOW_RAM_THRESHOLD_MB = 2048L
+        // Max time the position-polling loop will wait for playback to resume
+        // before re-checking config (M2). Prevents the ticker from suspending
+        // forever while paused.
+        private const val POSITION_PAUSED_RECHECK_MS = 2_500L
     }
 
     private val isLowRamDevice by lazy { EngineDeviceProfile.isLowRamDevice(context) }
-    private val engineScope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
+    // `var` so [load] can recreate it if a prior [release] cancelled the
+    // SupervisorJob. Without this the engine is permanently unusable after
+    // release() (positionFlow's ticker launches on this scope and would
+    // silently never emit). Recreated lazily, only when inactive.
+    private var engineScope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
 
     override val capabilities = EngineCapabilities(
         supportsPip = true,
@@ -58,6 +66,10 @@ class LibVlcPlayerEngine(
         supportsSubtitleDelay = true,
         supportsAudioPassthrough = true,
         supportsSubtitleStyle = true,
+        // Honoured in `Media.applySubtitleStyle` via `:sub-margin`; surfacing
+        // the flag lets the SubtitleStyleSheet UI expose the slider for VLC
+        // (parity with ExoPlayer/MPV) instead of hiding it.
+        supportsSubtitleVerticalPosition = true,
         supportsDialogueBoost = true,
         supportsNightMode = true,
         supportsAudioNormalization = true,
@@ -168,6 +180,9 @@ class LibVlcPlayerEngine(
     }
 
     override fun load(request: PlaybackRequest) {
+        if (!engineScope.isActive) {
+            engineScope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
+        }
         releaseInternal(releaseVlc = true)
 
         currentPlaybackRequest = request
@@ -213,6 +228,13 @@ class LibVlcPlayerEngine(
         options.add("--network-caching=$networkCaching")
 
         if (isLowRamDevice) {
+            // Low-RAM tradeoff (M14): VLC's clock synchronisation periodically
+            // adjusts the playback clock to keep audio/video aligned, which
+            // costs CPU on memory-constrained devices. Disabling it here
+            // reduces decode contention (avoiding stutter / dropped frames)
+            // at the cost of potential long-term A/V drift on long streams.
+            // Revisit if drift reports surface for the low-RAM tier; the
+            // escape hatch is to lower `decoderThreads`/`skipFrame` instead.
             options.add("--clock-jitter=0")
             options.add("--clock-synchro=0")
         }
@@ -477,10 +499,18 @@ class LibVlcPlayerEngine(
         // libVLC 3.7.x MediaPlayer has no native mute API — emulate it via volume.
         try {
             val mp = mediaPlayer ?: return
-            val restored = lastUnmuteVolume.coerceIn(0f, 1f)
-            val target = if (muted) 0f else restored
-            mp.volume = (target * 100).toInt().coerceIn(0, 100)
-            MediaStreamVolume.setNormalized(context, target)
+            if (muted) {
+                mp.volume = 0
+                MediaStreamVolume.setNormalized(context, 0f)
+            } else {
+                // Restore the full VLC range (0..200) so a >100% boost
+                // survives a mute cycle. Previously this clamped via
+                // coerceIn(0f, 1f) / coerceIn(0, 100), which permanently
+                // discarded any volume above 100% on the first unmute.
+                val restored = lastUnmuteVolume.coerceIn(0.05f, 2f)
+                mp.volume = (restored * 100).toInt().coerceIn(0, 200)
+                MediaStreamVolume.setNormalized(context, restored.coerceIn(0f, 1f))
+            }
         } catch (_: Exception) {}
     }
 
@@ -626,6 +656,7 @@ class LibVlcPlayerEngine(
         }
 
         if (isLowRamDevice) {
+            // Mirrors the load() options above; see the M14 comment there.
             media.addOption(":clock-jitter=0")
             media.addOption(":clock-synchro=0")
         }
@@ -755,7 +786,12 @@ class LibVlcPlayerEngine(
         get() = try { mediaPlayer?.rate ?: 1f } catch (_: Exception) { 1f }
 
     override val audioSessionId: Int
-        get() = try { mediaPlayer?.audioTrack ?: 0 } catch (_: Exception) { 0 }
+        // LibVLC 3.7.x MediaPlayer exposes no audio-session-id API (only
+        // audio *track* ids). Returning the track id here previously made
+        // Android AudioEffect consumers attach to a non-existent session.
+        // Return the unset sentinel (0 == C.AUDIO_SESSION_ID_UNSET) so the
+        // helpers' `if (sid == UNSET) return` guard short-circuits cleanly.
+        get() = 0
 
     override fun setPollingIntervalMs(ms: Long) { _pollingIntervalMs.value = ms }
     override fun setVideoStatsEnabled(enabled: Boolean) { _videoStatsEnabled.value = enabled }
@@ -766,7 +802,13 @@ class LibVlcPlayerEngine(
         val ticker = engineScope.launch {
             while (isActive) {
                 if (!_isPlaying.value) {
-                    _isPlaying.first { it }
+                    // Bounded wait (M2): previously `_isPlaying.first { it }`
+                    // suspended forever while paused, freezing buffer/stats
+                    // updates and ignoring polling-interval changes. Re-check
+                    // every few seconds so config is honoured even while paused.
+                    withTimeoutOrNull(POSITION_PAUSED_RECHECK_MS) {
+                        _isPlaying.first { it }
+                    }
                 }
                 delay(_pollingIntervalMs.value)
                 runCatching {

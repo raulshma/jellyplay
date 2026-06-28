@@ -15,27 +15,16 @@ permissions:
   contents: write
 
 jobs:
-  build-and-release:
+  determine-version:
     runs-on: ubuntu-latest
-
+    outputs:
+      tag: ${{ steps.version.outputs.tag }}
+      apk_version: ${{ steps.version.outputs.apk_version }}
     steps:
       - name: Checkout Repository
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
-
-      - name: Set up JDK 17
-        uses: actions/setup-java@v4
-        with:
-          java-version: '17'
-          distribution: 'temurin'
-
-      - name: Setup Gradle
-        uses: gradle/actions/setup-gradle@v3
-
-      - name: Decode Keystore
-        run: |
-          echo "${{ secrets.KEYSTORE_BASE64 }}" | base64 -d > jellyplay-release.jks
 
       - name: Calculate Release Version
         id: version
@@ -67,19 +56,43 @@ jobs:
           echo "tag=$NEW_TAG" >> $GITHUB_OUTPUT
           echo "apk_version=$NEW_APK_VERSION" >> $GITHUB_OUTPUT
 
+  build:
+    needs: determine-version
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        flavor: [phone, tv]
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          java-version: '17'
+          distribution: 'temurin'
+
+      - name: Setup Gradle
+        uses: gradle/actions/setup-gradle@v3
+
+      - name: Decode Keystore
+        run: |
+          echo "${{ secrets.KEYSTORE_BASE64 }}" | base64 -d > jellyplay-release.jks
+
       - name: Grant Execute Permission for Gradlew
         run: chmod +x ./gradlew
 
-      - name: Build Android App (Release)
+      - name: Build Android App (Release - ${{ matrix.flavor }})
         env:
           KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
           KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
           KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
-        run: ./gradlew assembleRelease -PversionName="${{ steps.version.outputs.apk_version }}" -PversionCode="${{ github.run_number }}"
+        run: ./gradlew assemble${{ matrix.flavor == 'phone' && 'Phone' || 'Tv' }}Release -PversionName="${{ needs.determine-version.outputs.apk_version }}" -PversionCode="${{ github.run_number }}"
 
       - name: Rename APK Outputs
         run: |
-          VERSION="${{ steps.version.outputs.apk_version }}"
+          VERSION="${{ needs.determine-version.outputs.apk_version }}"
           shopt -s nullglob
           apks=(app/build/outputs/apk/*/*/*.apk)
           if [ ${#apks[@]} -eq 0 ]; then
@@ -112,11 +125,33 @@ jobs:
             mv "$apk" "$new_filename"
           done
 
+      - name: Upload APK Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: apk-${{ matrix.flavor }}
+          path: jellyplay-*.apk
+          retention-days: 7
+
+  release:
+    needs: [determine-version, build]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Download APK Artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: apks
+          merge-multiple: true
+
       - name: Publish to GitHub Releases
         uses: softprops/action-gh-release@v3
         with:
-          tag_name: "${{ steps.version.outputs.tag }}"
-          name: "Release ${{ steps.version.outputs.tag }}"
-          files: jellyplay-*.apk
+          tag_name: "${{ needs.determine-version.outputs.tag }}"
+          name: "Release ${{ needs.determine-version.outputs.tag }}"
+          files: apks/jellyplay-*.apk
           generate_release_notes: true
           make_latest: true
