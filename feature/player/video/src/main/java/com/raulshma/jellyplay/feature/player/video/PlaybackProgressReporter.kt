@@ -9,6 +9,7 @@ import com.raulshma.jellyplay.core.model.SegmentBehavior
 import com.raulshma.jellyplay.core.ui.viewmodel.StateFlowHandle
 
 import com.raulshma.jellyplay.feature.player.video.engine.MediaEngine
+import com.raulshma.jellyplay.feature.player.video.engine.EngineVideoStats
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import kotlinx.coroutines.Job
@@ -28,6 +29,14 @@ internal class PlaybackProgressReporter(
     private val onAutoSkip: (MediaSegment) -> Unit,
     private val onPlaybackEndedNoNext: () -> Unit,
     private val onWatchedThresholdReached: (String) -> Unit,
+    private val onPositionPersisted: (positionMs: Long) -> Unit,
+    /**
+     * Receives every engine position tick (position, duration, buffered,
+     * stats). The ViewModel routes these to dedicated high-frequency
+     * StateFlows (V-1) instead of the monolithic [uiState], so the screen
+     * root stops recomposing at 4 Hz.
+     */
+    private val onEnginePositionUpdate: (positionMs: Long, durationMs: Long, bufferedPositionMs: Long, videoStats: EngineVideoStats) -> Unit,
 ) {
     private var positionJob: Job? = null
     private var progressJob: Job? = null
@@ -51,14 +60,13 @@ internal class PlaybackProgressReporter(
                 if (pos != lastPos || dur != lastDur) {
                     lastPos = pos
                     lastDur = dur
-                    uiState.update { state ->
-                        state.copy(
-                            currentPosition = pos,
-                            duration = dur,
-                            bufferedPosition = buffered,
-                            videoStats = stats,
-                        )
-                    }
+                    // Route the high-frequency display values to dedicated
+                    // flows (V-1) — NOT into uiState — so the screen root is
+                    // not invalidated at 4 Hz. The segment auto-skip logic
+                    // below operates on the raw `pos` directly, decoupled from
+                    // uiState.currentPosition, so behavior is unchanged.
+                    onEnginePositionUpdate(pos, dur, buffered, stats)
+                    onPositionPersisted(pos)
                 }
                 checkAutoSkip(pos)
                 checkEndedNoNext(pos, dur)
@@ -84,8 +92,13 @@ internal class PlaybackProgressReporter(
     }
 
     private fun checkAutoSkip(currentPositionMs: Long) {
-        val state = uiState.value
-        val seg = state.activeSegment ?: return
+        // Compute the active segment from the raw tick position rather than
+        // uiState.currentPosition (which is no longer updated at 4 Hz — see
+        // V-1). The result is identical to the previous behaviour, where the
+        // reporter had just pushed this same position into uiState before
+        // reading state.activeSegment.
+        val state = uiState.value.copy(currentPosition = currentPositionMs)
+        val seg = state.computeActiveSegment() ?: return
         val behavior = state.behaviorForType(seg.type)
         if (behavior != SegmentBehavior.AUTO_SKIP) return
         if (seg.id in autoSkippedSegments) return

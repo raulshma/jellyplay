@@ -1185,6 +1185,26 @@ object SettingsSearchRegistry {
             keywords = listOf("about", "version", "licenses", "open source", "developer"),
             route = Route.About,
             icon = Tabler.Outline.InfoCircle
+        ),
+
+        // Experimental
+        SettingsSearchItem(
+            id = "experimental",
+            title = "Experimental",
+            subtitle = "Early-access features in development",
+            category = "Experimental",
+            keywords = listOf("experimental", "beta", "labs", "preview", "early access", "developer"),
+            route = Route.ExperimentalSettings(),
+            icon = Tabler.Outline.Flask
+        ),
+        SettingsSearchItem(
+            id = "HOME_CARD_CLIPPING",
+            title = "Card Clipping",
+            subtitle = "Clip home-screen cards to their rounded shape",
+            category = "Experimental",
+            keywords = listOf("clipping", "clip", "rounded", "corners", "cards", "home", "shadow", "elevation"),
+            route = Route.ExperimentalSettings(),
+            icon = Tabler.Outline.Crop
         )
     )
 }

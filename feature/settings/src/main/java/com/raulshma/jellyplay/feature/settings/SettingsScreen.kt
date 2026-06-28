@@ -111,6 +111,7 @@ fun SettingsScreen(
     onStorageSettings: (String?) -> Unit = {},
     onSecuritySettings: (String?) -> Unit = {},
     onBackupSettings: (String?) -> Unit = {},
+    onExperimentalSettings: (String?) -> Unit = {},
     viewModel: SettingsViewModel = hiltViewModel(),
 ) {
     val preferences = viewModel.preferences
@@ -543,6 +544,10 @@ fun SettingsScreen(
                                                             lastClickedSettingId = "backup"
                                                             onBackupSettings(item.id)
                                                         }
+                                                        is Route.ExperimentalSettings -> {
+                                                            lastClickedSettingId = "experimental"
+                                                            onExperimentalSettings(item.id)
+                                                        }
                                                         Route.About -> {
                                                             lastClickedSettingId = "about"
                                                             onAboutClick()
@@ -870,6 +875,22 @@ fun SettingsScreen(
                 item {
                     AnimatedSettingsEntrance(if (isTv) 11 else 10) {
                         SettingListItem(
+                            icon = Tabler.Outline.Flask,
+                            title = "Experimental",
+                            subtitle = buildExperimentalSummary(preferences),
+                            index = 0, count = 1,
+                            highlighted = lastClickedSettingId == "experimental",
+                            onClick = {
+                                lastClickedSettingId = "experimental"
+                                onExperimentalSettings(null)
+                            },
+                        )
+                    }
+                }
+
+                item {
+                    AnimatedSettingsEntrance(if (isTv) 12 else 11) {
+                        SettingListItem(
                             icon = Tabler.Outline.InfoCircle,
                             title = "About",
                             subtitle = "App version and licenses",
@@ -897,6 +918,11 @@ private fun buildAppearanceSummary(preferences: com.raulshma.jellyplay.core.mode
     if (preferences.contrastLevel != ContrastLevel.DEFAULT) parts.add("${preferences.contrastLevel.name.lowercase().replaceFirstChar { it.uppercase() }} contrast")
     if (preferences.performanceMode) parts.add("Performance")
     return parts.joinToString(", ")
+}
+
+private fun buildExperimentalSummary(preferences: com.raulshma.jellyplay.core.model.UserPreferences): String {
+    val count = preferences.enabledExperimentalFeatures.size
+    return if (count == 0) "Early-access features" else "$count feature${if (count != 1) "s" else ""} enabled"
 }
 
 @Composable

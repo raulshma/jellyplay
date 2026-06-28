@@ -238,6 +238,7 @@ class UserPreferencesStore @Inject constructor(
 
         val SHOW_ADVANCED_SETTINGS = booleanPreferencesKey("show_advanced_settings")
         val AUDIO_VISUALIZER_ENABLED = booleanPreferencesKey("audio_visualizer_enabled")
+        val ENABLED_EXPERIMENTAL_FEATURES = stringPreferencesKey("enabled_experimental_features")
 
         val SYNC_PLAY_JOIN_BEHAVIOR = stringPreferencesKey("sync_play_join_behavior")
         val SYNC_PLAY_TOLERANCE_MS = longPreferencesKey("sync_play_tolerance_ms")
@@ -580,6 +581,19 @@ class UserPreferencesStore @Inject constructor(
     private var cachedVideoEffectsByItem: ParsedCache<Map<String, VideoEffectsConfig>> = ParsedCache(null, emptyMap())
     private var cachedSegmentBehaviors: ParsedCache<Map<MediaSegmentType, SegmentBehavior>> = ParsedCache(null, SegmentBehavior.DEFAULT_BEHAVIORS)
     private var cachedNotificationLibraryConfigs: ParsedCache<Map<String, LibraryNotificationConfig>> = ParsedCache(null, emptyMap())
+    private var cachedEnabledExperimentalFeatures: ParsedCache<Set<com.raulshma.jellyplay.core.model.ExperimentalFeature>> = ParsedCache(null, emptySet())
+    private var cachedFavoriteChannels: ParsedCache<Set<String>> = ParsedCache(null, emptySet())
+    private var cachedEnabledNewsletterSections: ParsedCache<Set<NewsletterSectionType>> = ParsedCache(null, NewsletterSectionType.entries.toSet())
+    private var cachedNewsletterSectionOrder: ParsedCache<List<NewsletterSectionType>> = ParsedCache(null, NewsletterSectionType.DEFAULT_ORDER)
+    private var cachedNextUpExcludedSeriesIds: ParsedCache<Set<String>> = ParsedCache(null, emptySet())
+    private var cachedHiddenCwItemIds: ParsedCache<Set<String>> = ParsedCache(null, emptySet())
+    private var cachedPinnedHomeSections: ParsedCache<List<PinnedHomeSection>> = ParsedCache(null, emptyList())
+    private var cachedHomeLayoutPresets: ParsedCache<List<HomeLayoutPreset>> = ParsedCache(null, emptyList())
+    private var cachedDefaultLibrarySortOrders: ParsedCache<Map<String, String>> = ParsedCache(null, emptyMap())
+    private var cachedLibraryViewModes: ParsedCache<Map<String, String>> = ParsedCache(null, emptyMap())
+    private var cachedLibraryFilters: ParsedCache<Map<String, String>> = ParsedCache(null, emptyMap())
+    private var cachedHiddenNavItems: ParsedCache<Set<String>> = ParsedCache(null, emptySet())
+    private var cachedNavItemOrder: ParsedCache<List<String>> = ParsedCache(null, emptyList())
 
     val preferences: StateFlow<UserPreferences> = sharedPrefs.map { prefs ->
         val subtitleStyleRaw = prefs[Keys.SUBTITLE_STYLE]
@@ -702,6 +716,118 @@ class UserPreferencesStore @Inject constructor(
             } catch (_: Exception) { emptyMap() }
                 .also { cachedNotificationLibraryConfigs = ParsedCache(notificationLibraryConfigsRaw, it) }
         } else cachedNotificationLibraryConfigs.value
+
+        val enabledExperimentalFeaturesRaw = prefs[Keys.ENABLED_EXPERIMENTAL_FEATURES]
+        val enabledExperimentalFeatures = if (enabledExperimentalFeaturesRaw != cachedEnabledExperimentalFeatures.raw) {
+            try {
+                enabledExperimentalFeaturesRaw?.let {
+                    json.decodeFromString<Set<String>>(it)
+                        .mapNotNull { name ->
+                            com.raulshma.jellyplay.core.model.ExperimentalFeature.entries.find { e -> e.name == name }
+                        }
+                        .toSet()
+                } ?: emptySet()
+            } catch (_: Exception) { emptySet() }
+                .also { cachedEnabledExperimentalFeatures = ParsedCache(enabledExperimentalFeaturesRaw, it) }
+        } else cachedEnabledExperimentalFeatures.value
+
+        val favoriteChannelsRaw = prefs[Keys.FAVORITE_CHANNELS]
+        val favoriteChannels = if (favoriteChannelsRaw != cachedFavoriteChannels.raw) {
+            try {
+                favoriteChannelsRaw?.let { json.decodeFromString<Set<String>>(it) } ?: emptySet()
+            } catch (_: Exception) { emptySet() }
+                .also { cachedFavoriteChannels = ParsedCache(favoriteChannelsRaw, it) }
+        } else cachedFavoriteChannels.value
+
+        val enabledNewsletterSectionsRaw = prefs[Keys.ENABLED_NEWSLETTER_SECTIONS]
+        val enabledNewsletterSections = if (enabledNewsletterSectionsRaw != cachedEnabledNewsletterSections.raw) {
+            try {
+                enabledNewsletterSectionsRaw?.let { json.decodeFromString<Set<NewsletterSectionType>>(it) }
+                    ?: NewsletterSectionType.entries.toSet()
+            } catch (_: Exception) { NewsletterSectionType.entries.toSet() }
+                .also { cachedEnabledNewsletterSections = ParsedCache(enabledNewsletterSectionsRaw, it) }
+        } else cachedEnabledNewsletterSections.value
+
+        val newsletterSectionOrderRaw = prefs[Keys.NEWSLETTER_SECTION_ORDER]
+        val newsletterSectionOrder = if (newsletterSectionOrderRaw != cachedNewsletterSectionOrder.raw) {
+            try {
+                newsletterSectionOrderRaw?.let { json.decodeFromString<List<NewsletterSectionType>>(it) }
+                    ?: NewsletterSectionType.DEFAULT_ORDER
+            } catch (_: Exception) { NewsletterSectionType.DEFAULT_ORDER }
+                .also { cachedNewsletterSectionOrder = ParsedCache(newsletterSectionOrderRaw, it) }
+        } else cachedNewsletterSectionOrder.value
+
+        val nextUpExcludedSeriesIdsRaw = prefs[Keys.NEXT_UP_EXCLUDED_SERIES_IDS]
+        val nextUpExcludedSeriesIds = if (nextUpExcludedSeriesIdsRaw != cachedNextUpExcludedSeriesIds.raw) {
+            try {
+                nextUpExcludedSeriesIdsRaw?.let { json.decodeFromString<Set<String>>(it) } ?: emptySet()
+            } catch (_: Exception) { emptySet() }
+                .also { cachedNextUpExcludedSeriesIds = ParsedCache(nextUpExcludedSeriesIdsRaw, it) }
+        } else cachedNextUpExcludedSeriesIds.value
+
+        val hiddenCwItemIdsRaw = prefs[Keys.HIDDEN_CW_ITEM_IDS]
+        val hiddenCwItemIds = if (hiddenCwItemIdsRaw != cachedHiddenCwItemIds.raw) {
+            try {
+                hiddenCwItemIdsRaw?.let { json.decodeFromString<Set<String>>(it) } ?: emptySet()
+            } catch (_: Exception) { emptySet() }
+                .also { cachedHiddenCwItemIds = ParsedCache(hiddenCwItemIdsRaw, it) }
+        } else cachedHiddenCwItemIds.value
+
+        val pinnedHomeSectionsRaw = prefs[Keys.PINNED_HOME_SECTIONS]
+        val pinnedHomeSections = if (pinnedHomeSectionsRaw != cachedPinnedHomeSections.raw) {
+            try {
+                pinnedHomeSectionsRaw?.let { json.decodeFromString<List<PinnedHomeSection>>(it) } ?: emptyList()
+            } catch (_: Exception) { emptyList() }
+                .also { cachedPinnedHomeSections = ParsedCache(pinnedHomeSectionsRaw, it) }
+        } else cachedPinnedHomeSections.value
+
+        val homeLayoutPresetsRaw = prefs[Keys.HOME_LAYOUT_PRESETS]
+        val homeLayoutPresets = if (homeLayoutPresetsRaw != cachedHomeLayoutPresets.raw) {
+            try {
+                homeLayoutPresetsRaw?.let { json.decodeFromString<List<HomeLayoutPreset>>(it) } ?: emptyList()
+            } catch (_: Exception) { emptyList() }
+                .also { cachedHomeLayoutPresets = ParsedCache(homeLayoutPresetsRaw, it) }
+        } else cachedHomeLayoutPresets.value
+
+        val defaultLibrarySortOrdersRaw = prefs[Keys.DEFAULT_LIBRARY_SORT_ORDERS]
+        val defaultLibrarySortOrders = if (defaultLibrarySortOrdersRaw != cachedDefaultLibrarySortOrders.raw) {
+            try {
+                defaultLibrarySortOrdersRaw?.let { json.decodeFromString<Map<String, String>>(it) } ?: emptyMap()
+            } catch (_: Exception) { emptyMap() }
+                .also { cachedDefaultLibrarySortOrders = ParsedCache(defaultLibrarySortOrdersRaw, it) }
+        } else cachedDefaultLibrarySortOrders.value
+
+        val libraryViewModesRaw = prefs[Keys.LIBRARY_VIEW_MODES]
+        val libraryViewModes = if (libraryViewModesRaw != cachedLibraryViewModes.raw) {
+            try {
+                libraryViewModesRaw?.let { json.decodeFromString<Map<String, String>>(it) } ?: emptyMap()
+            } catch (_: Exception) { emptyMap() }
+                .also { cachedLibraryViewModes = ParsedCache(libraryViewModesRaw, it) }
+        } else cachedLibraryViewModes.value
+
+        val libraryFiltersRaw = prefs[Keys.LIBRARY_FILTERS]
+        val libraryFilters = if (libraryFiltersRaw != cachedLibraryFilters.raw) {
+            try {
+                libraryFiltersRaw?.let { json.decodeFromString<Map<String, String>>(it) } ?: emptyMap()
+            } catch (_: Exception) { emptyMap() }
+                .also { cachedLibraryFilters = ParsedCache(libraryFiltersRaw, it) }
+        } else cachedLibraryFilters.value
+
+        val hiddenNavItemsRaw = prefs[Keys.HIDDEN_NAV_ITEMS]
+        val hiddenNavItems = if (hiddenNavItemsRaw != cachedHiddenNavItems.raw) {
+            try {
+                hiddenNavItemsRaw?.let { json.decodeFromString<Set<String>>(it) } ?: emptySet()
+            } catch (_: Exception) { emptySet() }
+                .also { cachedHiddenNavItems = ParsedCache(hiddenNavItemsRaw, it) }
+        } else cachedHiddenNavItems.value
+
+        val navItemOrderRaw = prefs[Keys.NAV_ITEM_ORDER]
+        val navItemOrder = if (navItemOrderRaw != cachedNavItemOrder.raw) {
+            try {
+                navItemOrderRaw?.let { json.decodeFromString<List<String>>(it) } ?: emptyList()
+            } catch (_: Exception) { emptyList() }
+                .also { cachedNavItemOrder = ParsedCache(navItemOrderRaw, it) }
+        } else cachedNavItemOrder.value
 
         UserPreferences(
             preferredPlayer = try {
@@ -887,19 +1013,9 @@ class UserPreferencesStore @Inject constructor(
             dvrPrePaddingMinutes = readInt(prefs, Keys.DVR_PRE_PADDING_MINUTES, "dvr_pre_padding_minutes", 0),
             dvrPostPaddingMinutes = readInt(prefs, Keys.DVR_POST_PADDING_MINUTES, "dvr_post_padding_minutes", 0),
             dvrRecordingQuality = prefs[Keys.DVR_RECORDING_QUALITY] ?: "AUTO",
-            favoriteChannels = prefs[Keys.FAVORITE_CHANNELS]?.let {
-                try { json.decodeFromString<Set<String>>(it) } catch(_: Exception) { emptySet() }
-            } ?: emptySet(),
-            enabledNewsletterSections = prefs[Keys.ENABLED_NEWSLETTER_SECTIONS]?.let {
-                try { json.decodeFromString<Set<NewsletterSectionType>>(it) } catch(_: Exception) {
-                    NewsletterSectionType.entries.toSet()
-                }
-            } ?: NewsletterSectionType.entries.toSet(),
-            newsletterSectionOrder = prefs[Keys.NEWSLETTER_SECTION_ORDER]?.let {
-                try { json.decodeFromString<List<NewsletterSectionType>>(it) } catch(_: Exception) {
-                    NewsletterSectionType.DEFAULT_ORDER
-                }
-            } ?: NewsletterSectionType.DEFAULT_ORDER,
+            favoriteChannels = favoriteChannels,
+            enabledNewsletterSections = enabledNewsletterSections,
+            newsletterSectionOrder = newsletterSectionOrder,
             manualOfflineEnabled = readBool(prefs, Keys.MANUAL_OFFLINE_ENABLED, "manual_offline_enabled", false),
             autoOfflineEnabled = readBool(prefs, Keys.AUTO_OFFLINE_ENABLED, "auto_offline_enabled", true),
             manualBandwidthCap = prefs[Keys.MANUAL_BANDWIDTH_CAP] ?: 0L,
@@ -914,18 +1030,10 @@ class UserPreferencesStore @Inject constructor(
             mergeContinueWatchingAndNextUp = readBool(prefs, Keys.MERGE_CONTINUE_WATCHING_NEXT_UP, "merge_continue_watching_next_up", false),
             nextUpMaxDays = readInt(prefs, Keys.NEXT_UP_MAX_DAYS, "next_up_max_days", 0),
             nextUpRewatching = readBool(prefs, Keys.NEXT_UP_REWATCHING, "next_up_rewatching", false),
-            nextUpExcludedSeriesIds = prefs[Keys.NEXT_UP_EXCLUDED_SERIES_IDS]?.let {
-                try { json.decodeFromString<Set<String>>(it) } catch (_: Exception) { emptySet() }
-            } ?: emptySet(),
-            hiddenCwItemIds = prefs[Keys.HIDDEN_CW_ITEM_IDS]?.let {
-                try { json.decodeFromString<Set<String>>(it) } catch (_: Exception) { emptySet() }
-            } ?: emptySet(),
-            pinnedHomeSections = prefs[Keys.PINNED_HOME_SECTIONS]?.let {
-                try { json.decodeFromString<List<PinnedHomeSection>>(it) } catch (_: Exception) { emptyList() }
-            } ?: emptyList(),
-            homeLayoutPresets = prefs[Keys.HOME_LAYOUT_PRESETS]?.let {
-                try { json.decodeFromString<List<HomeLayoutPreset>>(it) } catch (_: Exception) { emptyList() }
-            } ?: emptyList(),
+            nextUpExcludedSeriesIds = nextUpExcludedSeriesIds,
+            hiddenCwItemIds = hiddenCwItemIds,
+            pinnedHomeSections = pinnedHomeSections,
+            homeLayoutPresets = homeLayoutPresets,
             continueWatchingClickBehavior = try {
                 ContinueWatchingClickBehavior.valueOf(prefs[Keys.CONTINUE_WATCHING_CLICK_BEHAVIOR] ?: ContinueWatchingClickBehavior.DETAILS.name)
             } catch (_: Exception) { ContinueWatchingClickBehavior.DETAILS },
@@ -933,15 +1041,9 @@ class UserPreferencesStore @Inject constructor(
                 StreamingQuality.valueOf(prefs[Keys.CELLULAR_STREAMING_QUALITY] ?: StreamingQuality.AUTO.name)
             } catch (_: Exception) { StreamingQuality.AUTO },
             showWatchedCheckmark = readBool(prefs, Keys.SHOW_WATCHED_CHECKMARK, "show_watched_checkmark", true),
-            defaultLibrarySortOrders = prefs[Keys.DEFAULT_LIBRARY_SORT_ORDERS]?.let {
-                try { json.decodeFromString<Map<String, String>>(it) } catch (_: Exception) { emptyMap() }
-            } ?: emptyMap(),
-            libraryViewModes = prefs[Keys.LIBRARY_VIEW_MODES]?.let {
-                try { json.decodeFromString<Map<String, String>>(it) } catch (_: Exception) { emptyMap() }
-            } ?: emptyMap(),
-            libraryFilters = prefs[Keys.LIBRARY_FILTERS]?.let {
-                try { json.decodeFromString<Map<String, String>>(it) } catch (_: Exception) { emptyMap() }
-            } ?: emptyMap(),
+            defaultLibrarySortOrders = defaultLibrarySortOrders,
+            libraryViewModes = libraryViewModes,
+            libraryFilters = libraryFilters,
             keepScreenOnDuringVideo = readBool(prefs, Keys.KEEP_SCREEN_ON_DURING_VIDEO, "keep_screen_on_during_video", true),
             downloadQuality = try {
                 DownloadQuality.valueOf(prefs[Keys.DOWNLOAD_QUALITY] ?: DownloadQuality.ORIGINAL.name)
@@ -978,12 +1080,8 @@ class UserPreferencesStore @Inject constructor(
             appLanguage = prefs[Keys.APP_LANGUAGE],
             pgsSubtitleDirectPlay = readBool(prefs, Keys.PGS_SUBTITLE_DIRECT_PLAY, "pgs_subtitle_direct_play", false),
             backdropThemeMusicEnabled = readBool(prefs, Keys.BACKDROP_THEME_MUSIC_ENABLED, "backdrop_theme_music_enabled", false),
-            hiddenNavItems = prefs[Keys.HIDDEN_NAV_ITEMS]?.let {
-                try { json.decodeFromString<Set<String>>(it) } catch (_: Exception) { emptySet() }
-            } ?: emptySet(),
-            navItemOrder = prefs[Keys.NAV_ITEM_ORDER]?.let {
-                try { json.decodeFromString<List<String>>(it) } catch (_: Exception) { emptyList() }
-            } ?: emptyList(),
+            hiddenNavItems = hiddenNavItems,
+            navItemOrder = navItemOrder,
             selfUpdateCheckEnabled = readBool(prefs, Keys.SELF_UPDATE_CHECK_ENABLED, "self_update_check_enabled", true),
             hideEpisodeThumbnails = readBool(prefs, Keys.HIDE_EPISODE_THUMBNAILS, "hide_episode_thumbnails", false),
             skipSpecials = readBool(prefs, Keys.SKIP_SPECIALS, "skip_specials", false),
@@ -1009,6 +1107,7 @@ class UserPreferencesStore @Inject constructor(
                 endHour = prefs[Keys.DOWNLOAD_SCHEDULE_END] ?: 6,
                 wifiOnly = prefs[Keys.DOWNLOAD_SCHEDULE_WIFI_ONLY] ?: true,
             ),
+            enabledExperimentalFeatures = enabledExperimentalFeatures,
         )
     }.distinctUntilChanged().stateIn(scope, SharingStarted.Eagerly, UserPreferences())
 
@@ -1324,6 +1423,13 @@ class UserPreferencesStore @Inject constructor(
 
     suspend fun setShowAdvancedSettings(enabled: Boolean) {
         context.dataStore.edit { it[Keys.SHOW_ADVANCED_SETTINGS] = enabled }
+    }
+
+    suspend fun setEnabledExperimentalFeatures(features: Set<com.raulshma.jellyplay.core.model.ExperimentalFeature>) {
+        context.dataStore.edit {
+            it[Keys.ENABLED_EXPERIMENTAL_FEATURES] =
+                json.encodeToString(features.map { f -> f.name }.toSet())
+        }
     }
 
     suspend fun setAudioVisualizerEnabled(enabled: Boolean) {
@@ -2271,6 +2377,10 @@ class UserPreferencesStore @Inject constructor(
             )
             settings[Keys.SHOW_ADVANCED_SETTINGS] = prefs.showAdvancedSettings
             settings[Keys.AUDIO_VISUALIZER_ENABLED] = prefs.audioVisualizerEnabled
+            settings[Keys.ENABLED_EXPERIMENTAL_FEATURES] = json.encodeToString(
+                kotlinx.serialization.serializer<Set<com.raulshma.jellyplay.core.model.ExperimentalFeature>>(),
+                prefs.enabledExperimentalFeatures,
+            )
 
             settings[Keys.SYNC_PLAY_JOIN_BEHAVIOR] = prefs.syncPlayJoinBehavior.name
             settings[Keys.SYNC_PLAY_TOLERANCE_MS] = prefs.syncPlayToleranceMs

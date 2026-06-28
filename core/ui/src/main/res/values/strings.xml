@@ -11,4 +11,5 @@
     <!-- Truly cross-module feedback (posted from the app/navigation layer
          and referenced by multiple feature modules). -->
     <string name="msg_no_video_player_found">No video player found</string>
+    <string name="msg_smart_download_deleted">Watched download removed to free up space</string>
 </resources>

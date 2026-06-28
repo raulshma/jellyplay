@@ -24,14 +24,14 @@ class AdaptiveBitrateManager @Inject constructor(
         }
 
         val resolved = when (quality) {
-            StreamingQuality.AUTO -> {
-                if (!prefs.adaptiveBitrateEnabled) {
-                    MAX_BITRATE_720P
-                } else if (isUnmeteredConnection()) {
-                    null
-                } else {
-                    MAX_BITRATE_METERED
-                }
+            StreamingQuality.AUTO -> when {
+                // Adaptive disabled by the user → no dynamic cap, so the server
+                // direct-plays whatever the device can decode (no transcode just
+                // to hit a bitrate ceiling). Previously this fell back to a 720p
+                // cap, which silently transcode high-bitrate direct-playable media.
+                !prefs.adaptiveBitrateEnabled -> null
+                isUnmeteredConnection() -> null
+                else -> MAX_BITRATE_METERED
             }
             StreamingQuality.LOW_360P -> MAX_BITRATE_360P
             StreamingQuality.SD_480P -> MAX_BITRATE_480P

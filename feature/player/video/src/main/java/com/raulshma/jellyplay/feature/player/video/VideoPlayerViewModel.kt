@@ -3,6 +3,7 @@ package com.raulshma.jellyplay.feature.player.video
 import android.content.Context
 import android.graphics.Bitmap
 import android.net.Uri
+import androidx.lifecycle.SavedStateHandle
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import androidx.media3.common.MediaItem
@@ -32,8 +33,10 @@ import com.raulshma.jellyplay.core.model.ChannelMixMode
 import com.raulshma.jellyplay.core.model.DecoderMode
 import com.raulshma.jellyplay.core.model.EffectStrength
 import com.raulshma.jellyplay.core.model.MediaDetail
+import com.raulshma.jellyplay.core.model.MediaSegment
 import com.raulshma.jellyplay.core.model.MediaStream
 import com.raulshma.jellyplay.core.model.PlaybackMode
+import com.raulshma.jellyplay.core.model.SegmentBehavior
 import com.raulshma.jellyplay.core.model.PlayerType
 import com.raulshma.jellyplay.core.model.ReverbPreset
 import com.raulshma.jellyplay.core.model.StreamType
@@ -45,6 +48,7 @@ import com.raulshma.jellyplay.core.model.isMusicTrack
 import com.raulshma.jellyplay.core.ui.feedback.UserMessageBus
 import com.raulshma.jellyplay.core.ui.viewmodel.JellyPlayViewModel
 import com.raulshma.jellyplay.feature.player.video.components.AspectRatio
+import com.raulshma.jellyplay.feature.player.video.engine.EngineVideoStats
 import com.raulshma.jellyplay.feature.player.video.engine.MpvPlayerEngine
 import com.raulshma.jellyplay.feature.player.video.engine.SubtitleSource
 import com.raulshma.jellyplay.core.model.VideoEffectsConfig
@@ -64,11 +68,24 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.receiveAsFlow
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import okhttp3.OkHttpClient
 import javax.inject.Inject
+
+/** Minimum resolved duration (ms) before smart-download auto-cleanup may fire. */
+private const val MIN_DURATION_FOR_SMART_DELETE_MS = 5 * 60 * 1000L
+
+// SavedStateHandle keys for surviving process death (H13). The in-stream
+// playback position, the item it belongs to, and the server session id are
+// persisted so playback resumes from the user's last seek rather than the
+// original entry point, and so the eventual stop-report matches the start.
+private const val SAVED_KEY_ITEM_ID = "video_player.saved_item_id"
+private const val SAVED_KEY_POSITION_MS = "video_player.saved_position_ms"
+private const val SAVED_KEY_PLAY_SESSION_ID = "video_player.saved_play_session_id"
+private const val POSITION_PERSIST_MIN_INTERVAL_MS = 5_000L
 
 @HiltViewModel
 class VideoPlayerViewModel @Inject constructor(
@@ -88,10 +105,55 @@ class VideoPlayerViewModel @Inject constructor(
     val videoMiniPlayerState: VideoMiniPlayerState,
     private val sleepTimerManager: SleepTimerManager,
     private val userMessageBus: UserMessageBus,
+    private val savedStateHandle: SavedStateHandle,
 ) : JellyPlayViewModel() {
 
     private val _uiState = stateFlow(VideoPlayerUiState())
     val uiState: StateFlow<VideoPlayerUiState> = _uiState.flow
+
+    // --- High-frequency playback streams (V-1) ---------------------------------
+    // currentPosition / bufferedPosition / videoStats (and duration) update at
+    // up to 4 Hz while controls are visible. Previously they were folded into
+    // the ~60-field [VideoPlayerUiState], so every tick invalidated the entire
+    // VideoPlayerScreen body. They now live on dedicated StateFlows and are
+    // collected only inside the leaf composables that render them
+    // (PlayerControls seek bar, VideoStatsOverlay). The remaining uiState is
+    // thereby reduced to a low-frequency stream.
+    private val _currentPositionMs = MutableStateFlow(0L)
+    val currentPositionMs: StateFlow<Long> = _currentPositionMs.asStateFlow()
+
+    private val _durationMs = MutableStateFlow(0L)
+    val durationMs: StateFlow<Long> = _durationMs.asStateFlow()
+
+    private val _bufferedPositionMs = MutableStateFlow(0L)
+    val bufferedPositionMs: StateFlow<Long> = _bufferedPositionMs.asStateFlow()
+
+    private val _videoStats = MutableStateFlow(EngineVideoStats())
+    val videoStats: StateFlow<EngineVideoStats> = _videoStats.asStateFlow()
+    // ---------------------------------------------------------------------------
+
+    /**
+     * Low-frequency view of the segment / up-next overlays, derived by folding
+     * the high-frequency [currentPositionMs] / [durationMs] into [uiState] only
+     * to compute the active segment. The result is `distinctUntilChanged` via
+     * [StateFlow], so collectors (the screen root) only recompose when one of
+     * these values actually changes — i.e. at segment boundaries, not at 4 Hz.
+     */
+    val segmentOverlayState: StateFlow<SegmentOverlayState> = stateIn(
+        initial = SegmentOverlayState(),
+        flow = combine(currentPositionMs, durationMs, uiState) { pos, dur, state ->
+            val positioned = state.copy(currentPosition = pos, duration = dur)
+            val seg = positioned.computeActiveSegment()
+            SegmentOverlayState(
+                activeSegment = seg,
+                activeSegmentBehavior = seg?.let { positioned.behaviorForType(it.type) }
+                    ?: SegmentBehavior.IGNORE,
+                isInIntro = positioned.isInIntro,
+                isInCredits = positioned.isInCredits,
+                shouldShowUpNext = positioned.shouldShowUpNext,
+            )
+        },
+    )
 
     private val _closePlayer = Channel<Unit>(Channel.BUFFERED)
     val closePlayer = _closePlayer.receiveAsFlow()
@@ -112,6 +174,21 @@ class VideoPlayerViewModel @Inject constructor(
 
     private var equalizerEnabled: Boolean = false
     private var playSessionId: String = java.util.UUID.randomUUID().toString()
+    // Last position (ms) written to savedStateHandle; used to throttle writes.
+    private var lastPersistedPositionMs: Long = Long.MIN_VALUE
+
+    /**
+     * Single resolved playback-session id (M19). The server issues its own id
+     * via the `PlaybackInfo` endpoint (stored in [PlayerSessionState.playSessionId]);
+     * [playSessionId] above is the locally-allocated UUID fallback. Previously
+     * start/stop reports read the local UUID directly while progress reports
+     * read `sessionState.playSessionId ?: playSessionId`, so the two could
+     * desync (start reported id A, stop reported id B). Routing every report
+     * and the SavedStateHandle persist through this resolver guarantees a
+     * single value is used for the whole session lifecycle.
+     */
+    private val currentPlaySessionId: String
+        get() = playerSessionManager.sessionState.value.playSessionId ?: playSessionId
     private var autoplayNext: Boolean = false
     private var cachedPreferences: com.raulshma.jellyplay.core.model.UserPreferences = com.raulshma.jellyplay.core.model.UserPreferences()
 
@@ -162,11 +239,28 @@ class VideoPlayerViewModel @Inject constructor(
     private var lastSeekPositionMs: Long? = null
     private var lastSeekTimestamp: Long = 0L
 
+    /**
+     * Snapshot of [uiState] with the live playback position/duration injected
+     * from the dedicated high-frequency flows (V-1). Use this anywhere that
+     * needs the position-aware derived properties ([activeSegment],
+     * [shouldShowUpNext], …) so the logic does not depend on the (now stale)
+     * `currentPosition`/`duration` fields stored on uiState itself.
+     */
+    private fun positionAwareState(): VideoPlayerUiState = _uiState.value.copy(
+        currentPosition = _currentPositionMs.value,
+        duration = _durationMs.value,
+    )
+
     fun seekTo(positionMs: Long) {
         lastSeekPositionMs = positionMs
         lastSeekTimestamp = System.currentTimeMillis()
-        _uiState.update { it.copy(currentPosition = positionMs) }
+        // Update the dedicated position flow (V-1) so the seek bar reflects the
+        // new position immediately; uiState is no longer the source of truth.
+        _currentPositionMs.value = positionMs
         playerSessionManager.engine?.seekTo(positionMs)
+        // Explicit seeks are the most important position to survive process
+        // death; persist immediately rather than waiting for the throttle.
+        persistPlaybackPosition(positionMs, force = true)
     }
 
     fun resumePlayback() {
@@ -195,7 +289,13 @@ class VideoPlayerViewModel @Inject constructor(
                 }
                 android.media.AudioManager.AUDIOFOCUS_LOSS_TRANSIENT,
                 android.media.AudioManager.AUDIOFOCUS_LOSS_TRANSIENT_CAN_DUCK -> {
-                    if (preDuckVolume == null) preDuckVolume = engine.volume.coerceIn(0f, 1f)
+                    // Store the raw engine volume without clamping (M1): VLC's
+                    // range is 0..2 (to support >100% boost) while ExoPlayer/MPV
+                    // use 0..1. A previous coerceIn(0f, 1f) here permanently
+                    // halved VLC volumes above 100% on the first duck cycle.
+                    // Each engine's setVolume accepts its own native range, so
+                    // round-tripping the unclamped value is correct.
+                    if (preDuckVolume == null) preDuckVolume = engine.volume
                     wasPlayingBeforeTransientLoss = engine.isPlaying.value
                     engine.setVolume(0.2f)
                 }
@@ -278,15 +378,15 @@ class VideoPlayerViewModel @Inject constructor(
             }
         },
         onWatchedThresholdReached = { itemId ->
-            if (cachedPreferences.smartDownloadsEnabled) {
-                launch {
-                    val download = downloadRepository.getDownloadByMediaItemId(itemId)
-                    if (download != null) {
-                        downloadRepository.deleteDownload(download.id)
-                    }
-                }
-            }
-        }
+            handleSmartDownloadCleanup(itemId)
+        },
+        onPositionPersisted = { positionMs -> persistPlaybackPosition(positionMs, force = false) },
+        onEnginePositionUpdate = { positionMs, durationMs, bufferedPositionMs, videoStats ->
+            _currentPositionMs.value = positionMs
+            _durationMs.value = durationMs
+            _bufferedPositionMs.value = bufferedPositionMs
+            _videoStats.value = videoStats
+        },
     )
     private val syncPlayBridge = SyncPlayBridge(
         syncPlayManager = syncPlayManager,
@@ -305,9 +405,58 @@ class VideoPlayerViewModel @Inject constructor(
 
     private var engineCollectionJob: Job? = null
 
+    // Tracks the in-flight media-load coroutine so a new [initializeInternal]
+    // call can cancel it before launching its own — prevents overlapping
+    // network/teardown side effects when a SyncPlay load event races a user
+    // navigation. See [initializeInternal] for the full rationale (M12).
+    private var loadJob: Job? = null
+
+    /**
+     * Auto-removes a finished download when the user crosses the watched
+     * threshold, gated by [com.raulshma.jellyplay.core.model.UserPreferences.smartDownloadsEnabled].
+     *
+     * Guards against the two risks flagged in the architecture analysis:
+     *  - *Premature delete on misreported duration*: the reporter derives
+     *    "95% watched" from `position / duration`. A live stream or a buggy
+     *    container can report a tiny/growing duration and trip the threshold
+     *    almost immediately. We require the resolved duration to be at least
+     *    [MIN_DURATION_FOR_SMART_DELETE_MS] before deleting.
+     *  - *Silent destructive action*: the deletion is now surfaced to the
+     *    user via [userMessageBus] instead of happening invisibly.
+     */
+    private fun handleSmartDownloadCleanup(itemId: String) {
+        if (!cachedPreferences.smartDownloadsEnabled) return
+        if (_uiState.value.duration < MIN_DURATION_FOR_SMART_DELETE_MS) return
+        launch {
+            val download = downloadRepository.getDownloadByMediaItemId(itemId) ?: return@launch
+            downloadRepository.deleteDownload(download.id)
+            userMessageBus.info(
+                com.raulshma.jellyplay.core.ui.feedback.uiTextOf(
+                    com.raulshma.jellyplay.core.ui.R.string.msg_smart_download_deleted,
+                ),
+            )
+        }
+    }
+
     val hapticsEnabled: Boolean get() = cachedPreferences.hapticsEnabled
 
+    // Declared BEFORE the `init {}` block below because the engine-flow
+    // collector launched from init calls `trackSelectionHelper.updateTracksFromEngine()`.
+    // Kotlin initialises properties and init blocks in declaration order, so a
+    // declaration after init would leave this field uninitialised at the moment
+    // the collector callback is registered. The latent NPE has not fired only
+    // because engine is null until loadMedia(); this removes the foot-gun.
+    private val trackSelectionHelper = TrackSelectionHelper(
+        preferencesStore = preferencesStore,
+        getEngine = { playerSessionManager.engine },
+        getUiState = { _uiState.value },
+        updateUiState = { transform -> _uiState.update(transform) },
+        getCurrentItemId = { playerSessionManager.sessionState.value.currentItemId },
+        scope = scope,
+    )
+
     init {
+        castManager.acquireConsumer()
         launch {
             preferencesStore.preferences.collect { prefs ->
                 val oldPrefs = cachedPreferences
@@ -527,14 +676,18 @@ class VideoPlayerViewModel @Inject constructor(
 
     val playerEngineRef: com.raulshma.jellyplay.feature.player.video.engine.MediaEngine? get() = playerSessionManager.engine
 
-    private val trackSelectionHelper = TrackSelectionHelper(
-        preferencesStore = preferencesStore,
-        getEngine = { playerSessionManager.engine },
-        getUiState = { _uiState.value },
-        updateUiState = { transform -> _uiState.update(transform) },
-        getCurrentItemId = { playerSessionManager.sessionState.value.currentItemId },
-        scope = scope,
-    )
+    /**
+     * Reactive engine handle for composition (M11). The screen previously read
+     * [playerEngineRef] as a plain property; Compose had no subscription, so a
+     * engine swap only re-created the surface `AndroidView` if some unrelated
+     * state happened to recompose. Exposing the session manager's StateFlow
+     * and collecting it with `collectAsStateWithLifecycle` makes engine swaps
+     * deterministic: `key(engine)` now always re-keys on a real swap.
+     * [playerEngineRef] is retained for the one-shot lambda reads that want
+     * the current value without subscribing.
+     */
+    val playerEngineFlow: StateFlow<com.raulshma.jellyplay.feature.player.video.engine.MediaEngine?>
+        get() = playerSessionManager.engineFlow
 
     fun initialize(
         itemId: String,
@@ -546,11 +699,44 @@ class VideoPlayerViewModel @Inject constructor(
         initializeInternal(
             itemId = itemId,
             mediaSourceId = mediaSourceId,
-            startPositionTicks = startPositionTicks,
+            startPositionTicks = resolveStartTicksAfterProcessDeath(itemId, startPositionTicks),
             subtitleStreamIndex = subtitleStreamIndex,
             audioStreamIndex = audioStreamIndex,
             allowCinemaMode = true,
         )
+    }
+
+    /**
+     * After process death the Navigation 3 route still carries the *original*
+     * entry-point ticks, but the user's in-stream seeks were tracked only in
+     * `_uiState`. SavedStateHandle survives process death, so if we have a
+     * persisted position for [itemId] that is beyond the entry point we resume
+     * from there. A fresh navigation (new entry) has an empty SavedStateHandle,
+     * so this is a no-op outside the process-death-restore path.
+     */
+    private fun resolveStartTicksAfterProcessDeath(itemId: String, startPositionTicks: Long): Long {
+        val savedItemId = savedStateHandle.get<String>(SAVED_KEY_ITEM_ID) ?: return startPositionTicks
+        if (savedItemId != itemId) return startPositionTicks
+        val savedPosMs = savedStateHandle.get<Long>(SAVED_KEY_POSITION_MS) ?: return startPositionTicks
+        if (savedPosMs <= 0L) return startPositionTicks
+        val savedTicks = savedPosMs * 10_000
+        // Only advance forward; never rewind below a deliberate entry point.
+        return if (savedTicks > startPositionTicks) savedTicks else startPositionTicks
+    }
+
+    /**
+     * Persists the current playback position so it survives process death.
+     * Throttled to at most one write per [POSITION_PERSIST_MIN_INTERVAL_MS]
+     * unless [force] (e.g. an explicit seek). Also stashes the server session
+     * id so the post-restore stop-report pairs with the original start-report.
+     */
+    private fun persistPlaybackPosition(positionMs: Long, force: Boolean) {
+        if (!force && kotlin.math.abs(positionMs - lastPersistedPositionMs) < POSITION_PERSIST_MIN_INTERVAL_MS) return
+        val itemId = playerSessionManager.sessionState.value.currentItemId ?: return
+        lastPersistedPositionMs = positionMs
+        savedStateHandle[SAVED_KEY_ITEM_ID] = itemId
+        savedStateHandle[SAVED_KEY_POSITION_MS] = positionMs
+        savedStateHandle[SAVED_KEY_PLAY_SESSION_ID] = currentPlaySessionId
     }
 
     private fun initializeInternal(
@@ -579,9 +765,21 @@ class VideoPlayerViewModel @Inject constructor(
 
         reportCurrentPlaybackStopped()
 
+        // Cancel any in-flight load before starting a new one (M12).
+        // initializeInternal itself runs on Main.immediate so its synchronous
+        // prefix cannot interleave with another call; but each call launches a
+        // long-lived async load coroutine (media-detail fetch, engine load,
+        // trickplay/segments/episodes). Two of those coroutines — e.g. a
+        // SyncPlay `onLoadItem` event arriving while a user tap is also
+        // loading — could interleave their network/teardown side effects
+        // (double stop-reports, crossed engine binds). Tracking and cancelling
+        // the previous load makes "latest load wins" deterministic without
+        // changing the synchronous semantics of this function.
+        loadJob?.cancel()
+
         val reclaimed = videoMiniPlayerState.tryReclaimEngine(itemId) as? com.raulshma.jellyplay.feature.player.video.engine.MediaEngine
         if (reclaimed != null) {
-            launch {
+            loadJob = launch {
                 val detailResult = mediaRepository.getMediaDetail(itemId)
                 val detail = detailResult.getOrNull()
                 if (detail != null) {
@@ -605,14 +803,24 @@ class VideoPlayerViewModel @Inject constructor(
         videoMiniPlayerState.release()
 
         releaseInternals()
-        playSessionId = java.util.UUID.randomUUID().toString()
+        // Restore the server session id after process death (if this is the
+        // same item) so the eventual stop-report pairs with the start-report
+        // instead of orphaning it. Otherwise allocate a fresh session id.
+        val restoredSessionId = savedStateHandle.get<String>(SAVED_KEY_PLAY_SESSION_ID)
+        val savedItemId = savedStateHandle.get<String>(SAVED_KEY_ITEM_ID)
+        playSessionId = if (savedItemId == itemId && !restoredSessionId.isNullOrEmpty()) {
+            restoredSessionId
+        } else {
+            java.util.UUID.randomUUID().toString()
+        }
+        lastPersistedPositionMs = Long.MIN_VALUE
         trickplayManager.clear()
 
         if (wasInSyncPlay) {
             syncPlayBridge.reattachSession()
         }
 
-        launch {
+        loadJob = launch {
             val currentGroup = syncPlayManager.currentGroup
             val groupPlayingId = currentGroup?.playingItemId
             if (syncPlayManager.isInSyncPlaySession && groupPlayingId != null && groupPlayingId != itemId) {
@@ -668,6 +876,7 @@ class VideoPlayerViewModel @Inject constructor(
                 showClock = prefs.showClockInPlayer,
                 keepScreenOnDuringVideo = prefs.keepScreenOnDuringVideo,
                 streamingQuality = prefs.streamingQuality,
+                adaptiveBitrateEnabled = prefs.adaptiveBitrateEnabled,
                 playbackMode = prefs.playbackMode,
             ) }
             autoplayNext = prefs.videoAutoplayNext
@@ -745,7 +954,7 @@ class VideoPlayerViewModel @Inject constructor(
                 playbackRepository.reportPlaybackStart(
                     com.raulshma.jellyplay.core.model.PlaybackStartInfo(
                         itemId = itemId,
-                        sessionId = playSessionId,
+                        sessionId = currentPlaySessionId,
                         mediaSourceId = source?.id,
                         playMethod = sessionState.playMethod,
                     )
@@ -966,6 +1175,21 @@ class VideoPlayerViewModel @Inject constructor(
         _uiState.update { it.copy(streamingQuality = quality) }
         launch {
             preferencesStore.setStreamingQuality(quality)
+            reloadPlaybackForMode()
+        }
+    }
+
+    /**
+     * Toggles adaptive bitrate (the AUTO-mode network cap). Persisted and
+     * re-resolved immediately so the cap change takes effect for the running
+     * stream: disabling it drops the cap so the server direct-plays instead of
+     * transcoding high-bitrate media.
+     */
+    fun setAdaptiveBitrateEnabled(enabled: Boolean) {
+        if (_uiState.value.adaptiveBitrateEnabled == enabled) return
+        _uiState.update { it.copy(adaptiveBitrateEnabled = enabled) }
+        launch {
+            preferencesStore.setAdaptiveBitrateEnabled(enabled)
             reloadPlaybackForMode()
         }
     }
@@ -1207,13 +1431,22 @@ class VideoPlayerViewModel @Inject constructor(
     fun playNextEpisode() {
         val detail = mediaDetail ?: return
         val seriesId = detail.item.seriesId ?: return
+        val currentItemId = playerSessionManager.sessionState.value.currentItemId ?: return
         launch {
             val episodes = mediaRepository.getEpisodes(seriesId, detail.item.seasonId ?: return@launch)
                 .getOrElse { return@launch }
-            val currentItemId = playerSessionManager.sessionState.value.currentItemId
             val currentIndex = episodes.indexOfFirst { it.id == currentItemId }
             if (currentIndex < 0 || currentIndex + 1 >= episodes.size) return@launch
             val next = episodes[currentIndex + 1]
+
+            // Auto-advancing is only reachable near the episode's end, so the
+            // current episode was effectively watched. Mark it played so it
+            // drops out of Continue Watching. This also covers the SyncPlay
+            // branch below, which bypasses [initialize] and its stopped-position
+            // report.
+            if (!cachedPreferences.incognitoModeEnabled) {
+                runCatching { mediaRepository.markPlayed(currentItemId) }
+            }
 
             if (syncPlayManager.isInSyncPlaySession) {
                 val group = syncPlayManager.currentGroup
@@ -1251,7 +1484,7 @@ class VideoPlayerViewModel @Inject constructor(
     }
 
     fun skipIntro() {
-        val state = _uiState.value
+        val state = positionAwareState()
         if (state.cinemaIntroState != null) {
             advanceCinemaIntro()
             return
@@ -1379,7 +1612,7 @@ class VideoPlayerViewModel @Inject constructor(
     }
 
     fun skipCredits() {
-        val state = _uiState.value
+        val state = positionAwareState()
 
         if (state.isOutroNearEnd && state.nextEpisode != null && autoplayNext) {
             playNextEpisode()
@@ -1746,7 +1979,7 @@ class VideoPlayerViewModel @Inject constructor(
     private fun reportCurrentPlaybackStopped() {
         if (cachedPreferences.incognitoModeEnabled) return
         val itemId = playerSessionManager.sessionState.value.currentItemId ?: return
-        val sessionId = playSessionId
+        val sessionId = currentPlaySessionId
         val positionTicks = getReportPositionMs() * 10_000
         if (positionTicks > 0) {
             launch {
@@ -1783,6 +2016,8 @@ class VideoPlayerViewModel @Inject constructor(
     }
 
     private fun releaseInternals() {
+        loadJob?.cancel()
+        loadJob = null
         progressReporter.cancelJobs()
         syncPlayBridge.reset()
         releaseVideoMediaSession()
@@ -1933,7 +2168,7 @@ class VideoPlayerViewModel @Inject constructor(
 
     private fun performRelease() {
         val itemId = playerSessionManager.sessionState.value.currentItemId
-        val sessionId = playSessionId
+        val sessionId = currentPlaySessionId
         val positionTicks = getReportPositionMs() * 10_000
         playerLifecycleManager.requestAutoEnterPip(false)
         // Unregister headphone unplug receiver
@@ -1946,7 +2181,7 @@ class VideoPlayerViewModel @Inject constructor(
         unregisterTransientFocusLossListener()
         sleepTimerManager.setOnFadeProgress(null)
         releaseInternals()
-        castManager.release()
+        castManager.releaseConsumer()
         activePlayerController.clearEngine()
         if (itemId != null && positionTicks > 0) {
             releaseScope.launch(NonCancellable) {

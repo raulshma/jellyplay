@@ -266,7 +266,7 @@ class PlayerSessionManager(
             return
         }
 
-        initializeEngine(playerType, detail, source, url, startPositionTicks, prefs)
+        initializeEngine(playerType, detail, source, url, startPositionTicks, prefs, playMethod)
         _sessionState.update { it.copy(isReady = true) }
     }
 
@@ -277,6 +277,7 @@ class PlayerSessionManager(
         url: String,
         startPositionTicks: Long,
         prefs: com.raulshma.jellyplay.core.model.UserPreferences,
+        playMethod: PlayMethod = PlayMethod.DIRECT_PLAY,
     ) {
         _engine.value?.release()
         val eng = PlayerEngineFactory.create(context, playerType)
@@ -311,29 +312,7 @@ class PlayerSessionManager(
         eng.updateConfig(config)
         eng.setPlaybackSpeed(prefs.videoDefaultSpeed)
 
-        val externalSubtitles = source?.mediaStreams
-            ?.filter { it.type == StreamType.SUBTITLE }
-            ?.mapNotNull { stream ->
-                val subUrl = when {
-                    !stream.deliveryUrl.isNullOrBlank() -> playbackRepository.getSubtitleDeliveryUrl(stream.deliveryUrl!!)
-                    stream.isExternal -> playbackRepository.buildSubtitleDeliveryUrl(
-                        detail.item.id, source.id, stream.index, stream.codec,
-                    )
-                    else -> return@mapNotNull null
-                }
-                if (subUrl.isBlank()) return@mapNotNull null
-                
-                SubtitleSource(
-                    url = subUrl,
-                    label = stream.displayTitle ?: stream.title ?: stream.language ?: "Unknown",
-                    language = stream.language,
-                    mimeType = null, // Will be mapped by engine using codec or extension
-                    codec = stream.codec,
-                    isDefault = stream.isDefault,
-                    isForced = stream.isForced,
-                    id = "external:${stream.index}"
-                )
-            } ?: emptyList()
+        val externalSubtitles = buildExternalSubtitles(detail, source, playMethod)
 
         val artworkUri = playbackRepository.getImageUrl(detail.item.id, maxWidth = 300)
         
@@ -424,9 +403,22 @@ class PlayerSessionManager(
 
         // Swap the engine onto the freshly resolved URL. The engine-level
         // bitrate cap is only meaningful for AUTO (server-side cap drives
-        // transcode; direct play is uncapped).
+        // transcode; direct play is uncapped). Rebuild the side-loaded
+        // subtitle set for the new play method so the subtitle picker stays
+        // populated when switching to/from a transcode.
         val engineMaxBitrate = if (mode == PlaybackMode.AUTO) maxBitrate?.toInt() else null
-        reloadWithEngine(playerType, currentPositionMs, prefs.videoDefaultSpeed, engineMaxBitrate, uriOverride = url)
+        val state = _sessionState.value
+        val rebuiltSubtitles = state.mediaDetail?.let { detail ->
+            buildExternalSubtitles(detail, state.currentMediaSource, playMethod)
+        } ?: emptyList()
+        reloadWithEngine(
+            playerType = playerType,
+            currentPositionMs = currentPositionMs,
+            playbackSpeed = prefs.videoDefaultSpeed,
+            maxVideoBitrate = engineMaxBitrate,
+            uriOverride = url,
+            externalSubtitlesOverride = rebuiltSubtitles,
+        )
         return resolved
     }
 
@@ -436,6 +428,7 @@ class PlayerSessionManager(
         playbackSpeed: Float = 1.0f,
         maxVideoBitrate: Int? = null,
         uriOverride: String? = null,
+        externalSubtitlesOverride: List<SubtitleSource>? = null,
     ) {
         val last = lastPlaybackRequest ?: return
         val prefs = preferencesStore.preferences.first()
@@ -479,6 +472,7 @@ class PlayerSessionManager(
             startPositionMs = currentPositionMs,
             maxVideoBitrate = maxVideoBitrate,
             uri = uriOverride ?: last.uri,
+            externalSubtitles = externalSubtitlesOverride ?: last.externalSubtitles,
         )
         lastPlaybackRequest = request
         eng.load(request)
@@ -489,6 +483,53 @@ class PlayerSessionManager(
         val updatedSubtitles = last.externalSubtitles + source
         lastPlaybackRequest = last.copy(externalSubtitles = updatedSubtitles)
         _engine.value?.addExternalSubtitle(source)
+    }
+
+    /**
+     * Builds the side-loaded [SubtitleSource] list for the engine.
+     *
+     * Subtitles that already carry a server [MediaStream.deliveryUrl] (the
+     * PlaybackInfo response populates this for externally-delivered subs) or
+     * that are flagged [MediaStream.isExternal] are always side-loaded. For
+     * direct play, embedded subtitles are intentionally left out — ExoPlayer
+     * reads them from the container and side-loading would duplicate every
+     * track. When the server transcodes or direct-streams, however, embedded
+     * subtitles are not reliably present in the HLS manifest, so each one is
+     * fetched via the Jellyfin subtitle endpoint and side-loaded; this is
+     * what makes the subtitle picker populate during transcoded playback.
+     */
+    private fun buildExternalSubtitles(
+        detail: MediaDetail,
+        source: MediaSource?,
+        playMethod: PlayMethod,
+    ): List<SubtitleSource> {
+        val streams = source?.mediaStreams ?: return emptyList()
+        return streams.filter { it.type == StreamType.SUBTITLE }.mapNotNull { stream ->
+            val subUrl = when {
+                !stream.deliveryUrl.isNullOrBlank() ->
+                    playbackRepository.getSubtitleDeliveryUrl(stream.deliveryUrl!!)
+                // External subs are always side-loaded; embedded subs are also
+                // side-loaded when not direct-playing, because transcoded HLS
+                // does not reliably expose them in-manifest.
+                stream.isExternal || playMethod != PlayMethod.DIRECT_PLAY ->
+                    playbackRepository.buildSubtitleDeliveryUrl(
+                        detail.item.id, source.id, stream.index, stream.codec,
+                    )
+                else -> return@mapNotNull null
+            }
+            if (subUrl.isBlank()) return@mapNotNull null
+
+            SubtitleSource(
+                url = subUrl,
+                label = stream.displayTitle ?: stream.title ?: stream.language ?: "Unknown",
+                language = stream.language,
+                mimeType = null, // Mapped by the engine using codec or extension.
+                codec = stream.codec,
+                isDefault = stream.isDefault,
+                isForced = stream.isForced,
+                id = "external:${stream.index}",
+            )
+        }
     }
 
     private suspend fun loadOfflineSubtitles(downloadPath: String) {

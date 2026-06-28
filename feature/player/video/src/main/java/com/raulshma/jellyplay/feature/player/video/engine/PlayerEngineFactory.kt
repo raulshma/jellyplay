@@ -17,6 +17,25 @@ object PlayerEngineFactory {
         }
     }
 
+    /**
+     * Drops the process-wide [DefaultBandwidthMeter] so the next
+     * [getSharedBandwidthMeter] call builds a fresh one.
+     *
+     * The meter is intentionally shared across streams: ABR adaptation learns
+     * network conditions from every observation, so cross-stream retention is
+     * a feature, not a leak. However, the previous design offered no escape
+     * hatch — a single pathological stream's observations would pollute every
+     * subsequent item, and the singleton was invisible to tests. Resetting
+     * between unrelated test cases (or, optionally, on a user-triggered
+     * "reset playback diagnostics" action) restores a clean baseline without
+     * forcing a full Hilt migration of this `object`.
+     */
+    fun resetBandwidthMeter() {
+        synchronized(this) {
+            sharedBandwidthMeter = null
+        }
+    }
+
     fun create(context: Context, playerType: PlayerType): MediaEngine {
         return when (playerType) {
             PlayerType.EXO_PLAYER -> ExoPlayerEngine(context, getSharedBandwidthMeter(context))

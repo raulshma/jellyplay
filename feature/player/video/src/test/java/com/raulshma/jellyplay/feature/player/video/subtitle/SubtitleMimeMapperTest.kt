@@ -53,8 +53,10 @@ class SubtitleMimeMapperTest {
     }
 
     @Test
-    fun mov_text_mapsToTtml() {
-        assertEquals(MimeTypes.APPLICATION_TTML, SubtitleMimeMapper.mapCodecToMime("mov_text"))
+    fun mov_text_mapsToTx3g() {
+        // mov_text is MPEG-4 Part-17 (tx3g / 3GPP Timed Text), NOT TTML.
+        // Routing it through TTML mis-renders or drops MP4-embedded subs.
+        assertEquals(MimeTypes.APPLICATION_TX3G, SubtitleMimeMapper.mapCodecToMime("mov_text"))
     }
 
     @Test

@@ -167,6 +167,7 @@ class HomeViewModel @Inject constructor(
                     homeHeroEnabled = prefs.homeHeroEnabled,
                     showClock = prefs.showClockOnHome,
                     continueWatchingClickBehavior = prefs.continueWatchingClickBehavior,
+                    experimentalCardClippingEnabled = com.raulshma.jellyplay.core.model.ExperimentalFeature.HOME_CARD_CLIPPING in prefs.enabledExperimentalFeatures,
                 ) }
 
                 if (homeSectionPrefsChanged) {
