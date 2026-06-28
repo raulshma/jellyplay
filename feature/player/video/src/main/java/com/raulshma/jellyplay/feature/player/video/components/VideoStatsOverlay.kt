@@ -14,6 +14,8 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import kotlinx.coroutines.flow.StateFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -31,8 +33,10 @@ import java.util.Locale
 
 @Composable
 fun VideoStatsOverlay(
-    stats: EngineVideoStats,
-    currentPositionMs: Long,
+    // High-frequency streams collected here (V-1) so only this overlay (shown
+    // only while "Stats for Nerds" is enabled) recomposes on position ticks.
+    statsFlow: StateFlow<EngineVideoStats>,
+    currentPositionFlow: StateFlow<Long>,
     durationMs: Long,
     playbackSpeed: Float,
     isPlaying: Boolean,
@@ -44,6 +48,9 @@ fun VideoStatsOverlay(
     audioSessionId: Int,
     modifier: Modifier = Modifier,
 ) {
+    val stats by statsFlow.collectAsStateWithLifecycle()
+    val currentPositionMs by currentPositionFlow.collectAsStateWithLifecycle()
+
     Column(
         modifier = modifier
             .clip(ShapeCache.smooth12)

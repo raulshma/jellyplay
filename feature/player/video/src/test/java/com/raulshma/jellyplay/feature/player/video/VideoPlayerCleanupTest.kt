@@ -95,6 +95,7 @@ class VideoPlayerCleanupTest {
             onPlaybackEndedNoNext = {},
             onWatchedThresholdReached = {},
             onPositionPersisted = {},
+            onEnginePositionUpdate = { _, _, _, _ -> },
         )
 
         reporter.cancelJobs()

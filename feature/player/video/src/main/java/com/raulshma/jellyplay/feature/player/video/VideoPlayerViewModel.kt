@@ -33,8 +33,10 @@ import com.raulshma.jellyplay.core.model.ChannelMixMode
 import com.raulshma.jellyplay.core.model.DecoderMode
 import com.raulshma.jellyplay.core.model.EffectStrength
 import com.raulshma.jellyplay.core.model.MediaDetail
+import com.raulshma.jellyplay.core.model.MediaSegment
 import com.raulshma.jellyplay.core.model.MediaStream
 import com.raulshma.jellyplay.core.model.PlaybackMode
+import com.raulshma.jellyplay.core.model.SegmentBehavior
 import com.raulshma.jellyplay.core.model.PlayerType
 import com.raulshma.jellyplay.core.model.ReverbPreset
 import com.raulshma.jellyplay.core.model.StreamType
@@ -46,6 +48,7 @@ import com.raulshma.jellyplay.core.model.isMusicTrack
 import com.raulshma.jellyplay.core.ui.feedback.UserMessageBus
 import com.raulshma.jellyplay.core.ui.viewmodel.JellyPlayViewModel
 import com.raulshma.jellyplay.feature.player.video.components.AspectRatio
+import com.raulshma.jellyplay.feature.player.video.engine.EngineVideoStats
 import com.raulshma.jellyplay.feature.player.video.engine.MpvPlayerEngine
 import com.raulshma.jellyplay.feature.player.video.engine.SubtitleSource
 import com.raulshma.jellyplay.core.model.VideoEffectsConfig
@@ -65,6 +68,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.receiveAsFlow
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -106,6 +110,50 @@ class VideoPlayerViewModel @Inject constructor(
 
     private val _uiState = stateFlow(VideoPlayerUiState())
     val uiState: StateFlow<VideoPlayerUiState> = _uiState.flow
+
+    // --- High-frequency playback streams (V-1) ---------------------------------
+    // currentPosition / bufferedPosition / videoStats (and duration) update at
+    // up to 4 Hz while controls are visible. Previously they were folded into
+    // the ~60-field [VideoPlayerUiState], so every tick invalidated the entire
+    // VideoPlayerScreen body. They now live on dedicated StateFlows and are
+    // collected only inside the leaf composables that render them
+    // (PlayerControls seek bar, VideoStatsOverlay). The remaining uiState is
+    // thereby reduced to a low-frequency stream.
+    private val _currentPositionMs = MutableStateFlow(0L)
+    val currentPositionMs: StateFlow<Long> = _currentPositionMs.asStateFlow()
+
+    private val _durationMs = MutableStateFlow(0L)
+    val durationMs: StateFlow<Long> = _durationMs.asStateFlow()
+
+    private val _bufferedPositionMs = MutableStateFlow(0L)
+    val bufferedPositionMs: StateFlow<Long> = _bufferedPositionMs.asStateFlow()
+
+    private val _videoStats = MutableStateFlow(EngineVideoStats())
+    val videoStats: StateFlow<EngineVideoStats> = _videoStats.asStateFlow()
+    // ---------------------------------------------------------------------------
+
+    /**
+     * Low-frequency view of the segment / up-next overlays, derived by folding
+     * the high-frequency [currentPositionMs] / [durationMs] into [uiState] only
+     * to compute the active segment. The result is `distinctUntilChanged` via
+     * [StateFlow], so collectors (the screen root) only recompose when one of
+     * these values actually changes — i.e. at segment boundaries, not at 4 Hz.
+     */
+    val segmentOverlayState: StateFlow<SegmentOverlayState> = stateIn(
+        initial = SegmentOverlayState(),
+        flow = combine(currentPositionMs, durationMs, uiState) { pos, dur, state ->
+            val positioned = state.copy(currentPosition = pos, duration = dur)
+            val seg = positioned.computeActiveSegment()
+            SegmentOverlayState(
+                activeSegment = seg,
+                activeSegmentBehavior = seg?.let { positioned.behaviorForType(it.type) }
+                    ?: SegmentBehavior.IGNORE,
+                isInIntro = positioned.isInIntro,
+                isInCredits = positioned.isInCredits,
+                shouldShowUpNext = positioned.shouldShowUpNext,
+            )
+        },
+    )
 
     private val _closePlayer = Channel<Unit>(Channel.BUFFERED)
     val closePlayer = _closePlayer.receiveAsFlow()
@@ -191,10 +239,24 @@ class VideoPlayerViewModel @Inject constructor(
     private var lastSeekPositionMs: Long? = null
     private var lastSeekTimestamp: Long = 0L
 
+    /**
+     * Snapshot of [uiState] with the live playback position/duration injected
+     * from the dedicated high-frequency flows (V-1). Use this anywhere that
+     * needs the position-aware derived properties ([activeSegment],
+     * [shouldShowUpNext], …) so the logic does not depend on the (now stale)
+     * `currentPosition`/`duration` fields stored on uiState itself.
+     */
+    private fun positionAwareState(): VideoPlayerUiState = _uiState.value.copy(
+        currentPosition = _currentPositionMs.value,
+        duration = _durationMs.value,
+    )
+
     fun seekTo(positionMs: Long) {
         lastSeekPositionMs = positionMs
         lastSeekTimestamp = System.currentTimeMillis()
-        _uiState.update { it.copy(currentPosition = positionMs) }
+        // Update the dedicated position flow (V-1) so the seek bar reflects the
+        // new position immediately; uiState is no longer the source of truth.
+        _currentPositionMs.value = positionMs
         playerSessionManager.engine?.seekTo(positionMs)
         // Explicit seeks are the most important position to survive process
         // death; persist immediately rather than waiting for the throttle.
@@ -319,6 +381,12 @@ class VideoPlayerViewModel @Inject constructor(
             handleSmartDownloadCleanup(itemId)
         },
         onPositionPersisted = { positionMs -> persistPlaybackPosition(positionMs, force = false) },
+        onEnginePositionUpdate = { positionMs, durationMs, bufferedPositionMs, videoStats ->
+            _currentPositionMs.value = positionMs
+            _durationMs.value = durationMs
+            _bufferedPositionMs.value = bufferedPositionMs
+            _videoStats.value = videoStats
+        },
     )
     private val syncPlayBridge = SyncPlayBridge(
         syncPlayManager = syncPlayManager,
@@ -1416,7 +1484,7 @@ class VideoPlayerViewModel @Inject constructor(
     }
 
     fun skipIntro() {
-        val state = _uiState.value
+        val state = positionAwareState()
         if (state.cinemaIntroState != null) {
             advanceCinemaIntro()
             return
@@ -1544,7 +1612,7 @@ class VideoPlayerViewModel @Inject constructor(
     }
 
     fun skipCredits() {
-        val state = _uiState.value
+        val state = positionAwareState()
 
         if (state.isOutroNearEnd && state.nextEpisode != null && autoplayNext) {
             playNextEpisode()
