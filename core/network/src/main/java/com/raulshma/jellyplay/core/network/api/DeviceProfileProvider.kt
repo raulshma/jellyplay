@@ -124,7 +124,19 @@ class DeviceProfileProvider @Inject constructor(
 
             directPlayProfile {
                 type = DlnaProfileType.VIDEO
-                container("mp4", "mkv", "ts", "mov", "webm", "m4v", "mpegts", "flv", "3gp")
+                // Containers ExoPlayer's bundled extractors can demux. Includes
+                // MPEG-TS variants (m2ts/mts for Blu-ray BDAV / AVCHD) and
+                // MPEG-PS (mpeg/mpg/vob) — omitting these made the server
+                // transcode items in those containers even with supported codecs.
+                container(
+                    "mp4", "m4v", "mov",                 // MP4 / QuickTime family
+                    "mkv",                                // Matroska
+                    "webm",                               // WebM
+                    "ts", "mpegts", "m2ts", "mts",       // MPEG-TS family
+                    "mpeg", "mpg", "vob",                 // MPEG-PS family
+                    "flv",                                // FLV
+                    "3gp", "3g2", "3gpp",                 // 3GPP family
+                )
                 if (videoCodecs.isNotEmpty()) videoCodec(*videoCodecs.toTypedArray())
                 if (audioCodecs.isNotEmpty()) audioCodec(*audioCodecs.toTypedArray())
             }

@@ -24,6 +24,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.material3.carousel.HorizontalUncontainedCarousel
 import androidx.compose.material3.carousel.rememberCarouselState
+import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
@@ -63,6 +64,42 @@ import com.raulshma.jellyplay.core.ui.tv.rememberTvFocusState
 import com.raulshma.jellyplay.core.ui.tv.tvFocusIndicator
 import com.raulshma.jellyplay.core.ui.tv.tvFocusRestorer
 
+/**
+ * Horizontal scroller for a home media row on touch devices. When [clippingEnabled]
+ * is true (the experimental "Card Clipping" feature) it renders the
+ * [HorizontalUncontainedCarousel], which caps/clips items at the row edges for the
+ * carousel effect. When false (the default) it falls back to a plain [LazyRow]
+ * with `clipToBounds = false` so items and their elevation bleed past the edges.
+ */
+@Composable
+private fun HorizontalMediaScroller(
+    itemCount: Int,
+    itemWidth: androidx.compose.ui.unit.Dp,
+    spacing: androidx.compose.ui.unit.Dp,
+    contentPad: androidx.compose.ui.unit.Dp,
+    clippingEnabled: Boolean,
+    modifier: Modifier = Modifier,
+    itemContent: @Composable (index: Int) -> Unit,
+) {
+    if (clippingEnabled) {
+        HorizontalUncontainedCarousel(
+            state = rememberCarouselState { itemCount },
+            itemWidth = itemWidth,
+            itemSpacing = spacing,
+            contentPadding = PaddingValues(horizontal = contentPad),
+            modifier = modifier,
+        ) { index -> itemContent(index) }
+    } else {
+        LazyRow(
+            contentPadding = PaddingValues(horizontal = contentPad),
+            horizontalArrangement = Arrangement.spacedBy(spacing),
+            modifier = modifier,
+        ) {
+            items(itemCount) { index -> itemContent(index) }
+        }
+    }
+}
+
 @Composable
 fun ContinueWatchingRow(
     title: String,
@@ -74,6 +111,7 @@ fun ContinueWatchingRow(
     modifier: Modifier = Modifier,
     focusRequester: FocusRequester? = null,
     onRowFocused: (() -> Unit)? = null,
+    clippingEnabled: Boolean = false,
 ) {
     val adaptiveInfo = LocalAdaptiveInfo.current
     val isTv = LocalTvMode.current
@@ -101,6 +139,7 @@ fun ContinueWatchingRow(
                 horizontalArrangement = Arrangement.spacedBy(spacing),
                 focusRequester = focusRequester,
                 onRowFocused = onRowFocused,
+                clipToBounds = clippingEnabled,
             ) { _, item, focusModifier ->
                 val memoizedClick = remember(item) { { onItemClick(item) } }
                 val memoizedPlayClick = onPlayClick?.let { click -> remember(item, click) { { click(item) } } }
@@ -112,14 +151,16 @@ fun ContinueWatchingRow(
                     onPlayClick = memoizedPlayClick,
                     cardWidth = cardWidth,
                     modifier = focusModifier,
+                    clipToShape = clippingEnabled,
                 )
             }
         } else {
-            HorizontalUncontainedCarousel(
-                state = rememberCarouselState { items.size },
+            HorizontalMediaScroller(
+                itemCount = items.size,
                 itemWidth = cardWidth,
-                itemSpacing = spacing,
-                contentPadding = PaddingValues(horizontal = contentPad),
+                spacing = spacing,
+                contentPad = contentPad,
+                clippingEnabled = clippingEnabled,
                 modifier = Modifier.tvFocusRestorer(),
             ) { index ->
                 val item = items[index]
@@ -132,6 +173,7 @@ fun ContinueWatchingRow(
                     onClick = memoizedClick,
                     onPlayClick = memoizedPlayClick,
                     cardWidth = cardWidth,
+                    clipToShape = clippingEnabled,
                 )
             }
         }
@@ -147,6 +189,7 @@ fun WideMediaCard(
     onPlayClick: (() -> Unit)? = null,
     cardWidth: Dp,
     modifier: Modifier = Modifier,
+    clipToShape: Boolean = false,
 ) {
     val isTv = LocalTvMode.current
     val tvFocusState = rememberTvFocusState()
@@ -194,7 +237,8 @@ fun WideMediaCard(
                     scaleX = scale
                     scaleY = scale
                     shadowElevation = elevation.dp.toPx()
-                    clip = false
+                    clip = clipToShape
+                    shape = ShapeCache.smooth12
                 }
                 .tvFocusIndicator(tvFocusState, ShapeCache.smooth12)
                 .clickable(
@@ -394,6 +438,7 @@ fun HomeMediaRow(
     photoFolderChildUrls: Map<String, List<String>> = emptyMap(),
     focusRequester: FocusRequester? = null,
     onRowFocused: (() -> Unit)? = null,
+    clippingEnabled: Boolean = false,
 ) {
     val adaptiveInfo = LocalAdaptiveInfo.current
     val isTv = LocalTvMode.current
@@ -417,6 +462,7 @@ fun HomeMediaRow(
                 horizontalArrangement = Arrangement.spacedBy(spacing),
                 focusRequester = focusRequester,
                 onRowFocused = onRowFocused,
+                clipToBounds = clippingEnabled,
             ) { _, item, focusModifier ->
                 val memoizedClick = remember(item) { { onItemClick(item) } }
                 val memoizedPlayClick = onPlayClick?.let { click -> remember(item, click) { { click(item) } } }
@@ -434,14 +480,16 @@ fun HomeMediaRow(
                     onPlayClick = memoizedPlayClick,
                     sharedElementKey = "poster_${item.id}",
                     photoFolderChildImageUrls = photoFolderChildUrls[item.id].orEmpty(),
+                    clipToShape = clippingEnabled,
                 )
             }
         } else {
-            HorizontalUncontainedCarousel(
-                state = rememberCarouselState { items.size },
+            HorizontalMediaScroller(
+                itemCount = items.size,
                 itemWidth = cardWidth,
-                itemSpacing = spacing,
-                contentPadding = PaddingValues(horizontal = contentPad),
+                spacing = spacing,
+                contentPad = contentPad,
+                clippingEnabled = clippingEnabled,
                 modifier = Modifier.tvFocusRestorer(),
             ) { index ->
                 val item = items[index]
@@ -461,6 +509,7 @@ fun HomeMediaRow(
                     onPlayClick = memoizedPlayClick,
                     sharedElementKey = "poster_${item.id}",
                     photoFolderChildImageUrls = photoFolderChildUrls[item.id].orEmpty(),
+                    clipToShape = clippingEnabled,
                 )
             }
         }

@@ -16,6 +16,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusProperties
 import androidx.compose.ui.focus.focusRequester
@@ -43,6 +44,7 @@ fun <T> TvFocusableItemRow(
     onFocusedIndexChange: (Int) -> Unit = {},
     focusRequester: FocusRequester? = null,
     onRowFocused: (() -> Unit)? = null,
+    clipToBounds: Boolean = false,
     itemContent: @Composable (
         index: Int,
         item: T,
@@ -81,23 +83,25 @@ fun <T> TvFocusableItemRow(
         state = state,
         contentPadding = contentPadding,
         horizontalArrangement = horizontalArrangement,
-        modifier = if (isTv) {
-            modifier
-                .focusProperties {
-                    onEnter = {
-                        rowFocusRequester.tryRequestFocus("tv_row")
+        modifier = (if (clipToBounds) modifier.clipToBounds() else modifier).let { m ->
+            if (isTv) {
+                m
+                    .focusProperties {
+                        onEnter = {
+                            rowFocusRequester.tryRequestFocus("tv_row")
+                        }
                     }
-                }
-                .focusGroup()
-                .tvFocusRestorer(fallbackFocusRequester)
-                .focusRequester(rowFocusRequester)
-                .then(focusRequester?.let { Modifier.focusRequester(it) } ?: Modifier)
-                .ifElse(
-                    condition = onRowFocused != null,
-                    ifTrueModifier = Modifier.onFocusChanged { if (it.hasFocus) onRowFocused?.invoke() },
-                )
-        } else {
-            modifier
+                    .focusGroup()
+                    .tvFocusRestorer(fallbackFocusRequester)
+                    .focusRequester(rowFocusRequester)
+                    .then(focusRequester?.let { Modifier.focusRequester(it) } ?: Modifier)
+                    .ifElse(
+                        condition = onRowFocused != null,
+                        ifTrueModifier = Modifier.onFocusChanged { if (it.hasFocus) onRowFocused?.invoke() },
+                    )
+            } else {
+                m
+            }
         },
     ) {
         itemsIndexed(

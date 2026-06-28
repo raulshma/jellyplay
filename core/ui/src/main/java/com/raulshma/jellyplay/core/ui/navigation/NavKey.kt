@@ -66,6 +66,7 @@ sealed class Route : NavKey {
     @Serializable data class StorageSettings(val highlightSettingId: String? = null) : Route()
     @Serializable data class SecuritySettings(val highlightSettingId: String? = null) : Route()
     @Serializable data class BackupSettings(val highlightSettingId: String? = null) : Route()
+    @Serializable data class ExperimentalSettings(val highlightSettingId: String? = null) : Route()
 
     @Serializable data object Artists : Route()
     @Serializable data object Albums : Route()

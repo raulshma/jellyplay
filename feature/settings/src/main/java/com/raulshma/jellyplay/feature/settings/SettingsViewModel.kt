@@ -18,6 +18,7 @@ import com.raulshma.jellyplay.core.model.DreamTransitionStyle
 import com.raulshma.jellyplay.core.model.EffectStrength
 import com.raulshma.jellyplay.core.model.EqualizerSettings
 import com.raulshma.jellyplay.core.model.ExoPlayerEngineConfig
+import com.raulshma.jellyplay.core.model.ExperimentalFeature
 import com.raulshma.jellyplay.core.model.HomeMode
 import com.raulshma.jellyplay.core.model.HomeSectionType
 import com.raulshma.jellyplay.core.model.LibraryFolder
@@ -411,6 +412,14 @@ class SettingsViewModel @Inject constructor(
 
     fun setShowAdvancedSettings(enabled: Boolean) {
         launch { preferencesStore.setShowAdvancedSettings(enabled) }
+    }
+
+    fun setExperimentalFeatureEnabled(feature: ExperimentalFeature, enabled: Boolean) {
+        launch {
+            val current = preferences.enabledExperimentalFeatures
+            val updated = if (enabled) current + feature else current - feature
+            preferencesStore.setEnabledExperimentalFeatures(updated)
+        }
     }
 
     fun setAutoLockTimerMs(ms: Long) = editor.setAutoLockTimerMs(ms)

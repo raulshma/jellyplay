@@ -238,6 +238,7 @@ class UserPreferencesStore @Inject constructor(
 
         val SHOW_ADVANCED_SETTINGS = booleanPreferencesKey("show_advanced_settings")
         val AUDIO_VISUALIZER_ENABLED = booleanPreferencesKey("audio_visualizer_enabled")
+        val ENABLED_EXPERIMENTAL_FEATURES = stringPreferencesKey("enabled_experimental_features")
 
         val SYNC_PLAY_JOIN_BEHAVIOR = stringPreferencesKey("sync_play_join_behavior")
         val SYNC_PLAY_TOLERANCE_MS = longPreferencesKey("sync_play_tolerance_ms")
@@ -580,6 +581,7 @@ class UserPreferencesStore @Inject constructor(
     private var cachedVideoEffectsByItem: ParsedCache<Map<String, VideoEffectsConfig>> = ParsedCache(null, emptyMap())
     private var cachedSegmentBehaviors: ParsedCache<Map<MediaSegmentType, SegmentBehavior>> = ParsedCache(null, SegmentBehavior.DEFAULT_BEHAVIORS)
     private var cachedNotificationLibraryConfigs: ParsedCache<Map<String, LibraryNotificationConfig>> = ParsedCache(null, emptyMap())
+    private var cachedEnabledExperimentalFeatures: ParsedCache<Set<com.raulshma.jellyplay.core.model.ExperimentalFeature>> = ParsedCache(null, emptySet())
 
     val preferences: StateFlow<UserPreferences> = sharedPrefs.map { prefs ->
         val subtitleStyleRaw = prefs[Keys.SUBTITLE_STYLE]
@@ -702,6 +704,20 @@ class UserPreferencesStore @Inject constructor(
             } catch (_: Exception) { emptyMap() }
                 .also { cachedNotificationLibraryConfigs = ParsedCache(notificationLibraryConfigsRaw, it) }
         } else cachedNotificationLibraryConfigs.value
+
+        val enabledExperimentalFeaturesRaw = prefs[Keys.ENABLED_EXPERIMENTAL_FEATURES]
+        val enabledExperimentalFeatures = if (enabledExperimentalFeaturesRaw != cachedEnabledExperimentalFeatures.raw) {
+            try {
+                enabledExperimentalFeaturesRaw?.let {
+                    json.decodeFromString<Set<String>>(it)
+                        .mapNotNull { name ->
+                            com.raulshma.jellyplay.core.model.ExperimentalFeature.entries.find { e -> e.name == name }
+                        }
+                        .toSet()
+                } ?: emptySet()
+            } catch (_: Exception) { emptySet() }
+                .also { cachedEnabledExperimentalFeatures = ParsedCache(enabledExperimentalFeaturesRaw, it) }
+        } else cachedEnabledExperimentalFeatures.value
 
         UserPreferences(
             preferredPlayer = try {
@@ -1009,6 +1025,7 @@ class UserPreferencesStore @Inject constructor(
                 endHour = prefs[Keys.DOWNLOAD_SCHEDULE_END] ?: 6,
                 wifiOnly = prefs[Keys.DOWNLOAD_SCHEDULE_WIFI_ONLY] ?: true,
             ),
+            enabledExperimentalFeatures = enabledExperimentalFeatures,
         )
     }.distinctUntilChanged().stateIn(scope, SharingStarted.Eagerly, UserPreferences())
 
@@ -1324,6 +1341,13 @@ class UserPreferencesStore @Inject constructor(
 
     suspend fun setShowAdvancedSettings(enabled: Boolean) {
         context.dataStore.edit { it[Keys.SHOW_ADVANCED_SETTINGS] = enabled }
+    }
+
+    suspend fun setEnabledExperimentalFeatures(features: Set<com.raulshma.jellyplay.core.model.ExperimentalFeature>) {
+        context.dataStore.edit {
+            it[Keys.ENABLED_EXPERIMENTAL_FEATURES] =
+                json.encodeToString(features.map { f -> f.name }.toSet())
+        }
     }
 
     suspend fun setAudioVisualizerEnabled(enabled: Boolean) {
@@ -2271,6 +2295,10 @@ class UserPreferencesStore @Inject constructor(
             )
             settings[Keys.SHOW_ADVANCED_SETTINGS] = prefs.showAdvancedSettings
             settings[Keys.AUDIO_VISUALIZER_ENABLED] = prefs.audioVisualizerEnabled
+            settings[Keys.ENABLED_EXPERIMENTAL_FEATURES] = json.encodeToString(
+                kotlinx.serialization.serializer<Set<com.raulshma.jellyplay.core.model.ExperimentalFeature>>(),
+                prefs.enabledExperimentalFeatures,
+            )
 
             settings[Keys.SYNC_PLAY_JOIN_BEHAVIOR] = prefs.syncPlayJoinBehavior.name
             settings[Keys.SYNC_PLAY_TOLERANCE_MS] = prefs.syncPlayToleranceMs
