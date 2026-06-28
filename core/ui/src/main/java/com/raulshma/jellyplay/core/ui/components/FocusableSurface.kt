@@ -31,6 +31,7 @@ fun rememberJellyFocusableInteraction(
     )
 }
 
+@Composable
 fun Modifier.jellyFocusIndicator(
     interaction: JellyFocusableInteraction,
     shape: Shape = ShapeCache.smooth12,
