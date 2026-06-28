@@ -808,6 +808,7 @@ class VideoPlayerViewModel @Inject constructor(
                 showClock = prefs.showClockInPlayer,
                 keepScreenOnDuringVideo = prefs.keepScreenOnDuringVideo,
                 streamingQuality = prefs.streamingQuality,
+                adaptiveBitrateEnabled = prefs.adaptiveBitrateEnabled,
                 playbackMode = prefs.playbackMode,
             ) }
             autoplayNext = prefs.videoAutoplayNext
@@ -1106,6 +1107,21 @@ class VideoPlayerViewModel @Inject constructor(
         _uiState.update { it.copy(streamingQuality = quality) }
         launch {
             preferencesStore.setStreamingQuality(quality)
+            reloadPlaybackForMode()
+        }
+    }
+
+    /**
+     * Toggles adaptive bitrate (the AUTO-mode network cap). Persisted and
+     * re-resolved immediately so the cap change takes effect for the running
+     * stream: disabling it drops the cap so the server direct-plays instead of
+     * transcoding high-bitrate media.
+     */
+    fun setAdaptiveBitrateEnabled(enabled: Boolean) {
+        if (_uiState.value.adaptiveBitrateEnabled == enabled) return
+        _uiState.update { it.copy(adaptiveBitrateEnabled = enabled) }
+        launch {
+            preferencesStore.setAdaptiveBitrateEnabled(enabled)
             reloadPlaybackForMode()
         }
     }

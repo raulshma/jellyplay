@@ -1732,6 +1732,8 @@ private fun PlayerSheetRouter(
         is PlayerSheet.Quality -> {
             QualityPickerSheet(
                 currentQuality = uiState.streamingQuality,
+                adaptiveBitrateEnabled = uiState.adaptiveBitrateEnabled,
+                onToggleAdaptiveBitrate = { viewModel.setAdaptiveBitrateEnabled(it) },
                 onSelect = { viewModel.setStreamingQuality(it) },
                 onDismiss = dismissSheet,
             )
