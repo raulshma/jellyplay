@@ -64,10 +64,16 @@ import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withTimeoutOrNull
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
+
+// Max time the position-polling loop will wait for playback to resume before
+// re-checking config (M2). Prevents the ticker from suspending forever while
+// paused.
+private const val POSITION_PAUSED_RECHECK_MS = 2_500L
 
 class ExoPlayerEngine(
     private val context: Context,
@@ -206,6 +212,14 @@ class ExoPlayerEngine(
         override fun onAudioSessionIdChanged(audioSessionId: Int) {
             if (audioSessionId != lastAppliedAudioSessionId) {
                 lastAppliedAudioSessionId = audioSessionId
+                // The audio session id changed mid-playback (e.g. track
+                // switch). AudioEffect handles are bound to the *old*
+                // session id, which is now dead. Detach everything so
+                // applyAudioEffects() re-binds to the new session instead
+                // of short-circuiting on the cached config.
+                if (audioEffectsAttached) {
+                    releaseAudioEffects()
+                }
                 applyAudioEffects()
             }
         }
@@ -379,6 +393,7 @@ class ExoPlayerEngine(
     override fun release() {
         engineScope.cancel()
         player?.removeListener(listener)
+        player?.removeAnalyticsListener(decoderCountersListener)
         playerView?.player = null
         playerView = null
         player?.release()
@@ -448,14 +463,14 @@ class ExoPlayerEngine(
         val oldConfig = currentConfig
         currentConfig = config
 
-        if (oldConfig.decoderMode != config.decoderMode) {
-            // Decoding changes require reload, usually handled by upper layer recreating player
-        }
-
-        if (oldConfig.subtitleDelayMs != config.subtitleDelayMs) {
-            // The OffsettingSubtitleParserFactory reads currentConfig.subtitleDelayMs
-            // dynamically via its lambda, so no media reload is needed.
-        }
+        // decoderMode change: decoding changes require a reload, which is
+        // handled by the upper layer recreating the player — nothing to do here.
+        //
+        // subtitleDelayMs change (M17): the OffsettingSubtitleParserFactory's
+        // wrapper reads currentConfig.subtitleDelayMs on each parse() call, so
+        // a delay adjustment takes effect for subsequent cues without a media
+        // reload. (Previously the offset was snapshotted at prepare() time and
+        // the delay slider appeared broken for side-loaded subtitles.)
 
         if (oldConfig.audioEffects != config.audioEffects) {
             applyAudioEffects()
@@ -627,7 +642,14 @@ class ExoPlayerEngine(
         val ticker = engineScope.launch {
             while (isActive) {
                 if (!p.isPlaying) {
-                    _isPlaying.first { it }
+                    // Bounded wait (M2): a previous `_isPlaying.first { it }`
+                    // suspended forever while paused, so polling-interval and
+                    // video-stats-config changes were ignored until playback
+                    // resumed and buffer/stats froze. Re-check every few
+                    // seconds so config is honoured even while paused.
+                    withTimeoutOrNull(POSITION_PAUSED_RECHECK_MS) {
+                        _isPlaying.first { it }
+                    }
                 }
                 delay(_pollingIntervalMs.value)
                 runCatching {

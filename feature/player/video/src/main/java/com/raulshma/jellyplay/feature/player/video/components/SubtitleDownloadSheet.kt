@@ -113,7 +113,17 @@ fun SubtitleDownloadSheet(
                 )
             } else {
                 LazyColumn(modifier = Modifier.verticalWrapAround()) {
-                    itemsIndexed(subtitles, key = { _, sub -> sub.id }, contentType = { _, _ -> "subtitle" }) { index, sub ->
+                    // Composite key: providers (OpenSubtitles, etc.) occasionally
+                    // return duplicate `Id`s across sources, which previously
+                    // crashed with `IllegalArgumentException: Key "x" was already
+                    // used`. Combining the (stable where unique) id with the
+                    // index guarantees uniqueness without losing identity on
+                    // ordinary list updates.
+                    itemsIndexed(
+                        subtitles,
+                        key = { index, sub -> "${sub.id}_$index" },
+                        contentType = { _, _ -> "subtitle" },
+                    ) { index, sub ->
                         SubtitleDownloadItem(
                             subtitle = sub,
                             isLast = index == subtitles.lastIndex,

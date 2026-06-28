@@ -43,6 +43,9 @@ class PlaybackProgressReporterTest {
     private var endedNoNextCalls = 0
     private var watchedThresholdCalls = mutableListOf<String>()
 
+    private var reportedPositionMs: Long = 0L
+    private var reportedDurationMs: Long = 0L
+
     private lateinit var reporter: PlaybackProgressReporter
 
     @Before
@@ -57,6 +60,8 @@ class PlaybackProgressReporterTest {
         autoSkipCalls = mutableListOf()
         endedNoNextCalls = 0
         watchedThresholdCalls = mutableListOf()
+        reportedPositionMs = 0L
+        reportedDurationMs = 0L
 
         every { engine.bufferedPositionMs } returns MutableStateFlow(0L)
         every { engine.videoStats } returns MutableStateFlow(EngineVideoStats())
@@ -74,6 +79,11 @@ class PlaybackProgressReporterTest {
             onAutoSkip = { autoSkipCalls += it },
             onPlaybackEndedNoNext = { endedNoNextCalls++ },
             onWatchedThresholdReached = { watchedThresholdCalls += it },
+            onPositionPersisted = {},
+            onEnginePositionUpdate = { pos, dur, _, _ ->
+                reportedPositionMs = pos
+                reportedDurationMs = dur
+            },
         )
     }
 
@@ -89,8 +99,10 @@ class PlaybackProgressReporterTest {
 
         reporter.startPositionTracking()
 
-        assertEquals(1_200_000L, uiState.value.currentPosition)
-        assertEquals(3_600_000L, uiState.value.duration)
+        // V-1: position/duration now flow through the dedicated sink callback
+        // instead of the monolithic uiState.
+        assertEquals(1_200_000L, reportedPositionMs)
+        assertEquals(3_600_000L, reportedDurationMs)
     }
 
     @Test
@@ -107,9 +119,14 @@ class PlaybackProgressReporterTest {
             onAutoSkip = { autoSkipCalls += it },
             onPlaybackEndedNoNext = { endedNoNextCalls++ },
             onWatchedThresholdReached = { watchedThresholdCalls += it },
+            onPositionPersisted = {},
+            onEnginePositionUpdate = { pos, dur, _, _ ->
+                reportedPositionMs = pos
+                reportedDurationMs = dur
+            },
         )
         reporter.startPositionTracking()
-        assertEquals(0L, uiState.value.currentPosition)
+        assertEquals(0L, reportedPositionMs)
     }
 
     @Test
@@ -274,6 +291,8 @@ class PlaybackProgressReporterTest {
             onAutoSkip = { autoSkipCalls += it },
             onPlaybackEndedNoNext = { endedNoNextCalls++ },
             onWatchedThresholdReached = { watchedThresholdCalls += it },
+            onPositionPersisted = {},
+            onEnginePositionUpdate = { _, _, _, _ -> },
         )
 
         kotlinx.coroutines.runBlocking {
@@ -299,6 +318,8 @@ class PlaybackProgressReporterTest {
             onAutoSkip = { autoSkipCalls += it },
             onPlaybackEndedNoNext = { endedNoNextCalls++ },
             onWatchedThresholdReached = { watchedThresholdCalls += it },
+            onPositionPersisted = {},
+            onEnginePositionUpdate = { _, _, _, _ -> },
         )
         every { engine.currentPositionMs } returns 5_000L
 

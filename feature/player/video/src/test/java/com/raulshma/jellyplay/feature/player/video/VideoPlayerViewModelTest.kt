@@ -86,6 +86,7 @@ class VideoPlayerViewModelTest {
             videoMiniPlayerState = videoMiniPlayerState,
             sleepTimerManager = sleepTimerManager,
             userMessageBus = UserMessageBus(),
+            savedStateHandle = androidx.lifecycle.SavedStateHandle(),
         )
     }
 
@@ -97,7 +98,8 @@ class VideoPlayerViewModelTest {
     @Test
     fun seekTo_updatesCurrentPosition() {
         viewModel.seekTo(5_000L)
-        assertEquals(5_000L, viewModel.uiState.value.currentPosition)
+        // V-1: position now lives on the dedicated currentPositionMs flow.
+        assertEquals(5_000L, viewModel.currentPositionMs.value)
     }
 
     @Test
@@ -105,7 +107,7 @@ class VideoPlayerViewModelTest {
         viewModel.seekTo(1_000L)
         viewModel.seekTo(2_000L)
         viewModel.seekTo(3_000L)
-        assertEquals(3_000L, viewModel.uiState.value.currentPosition)
+        assertEquals(3_000L, viewModel.currentPositionMs.value)
     }
 
     @Test

@@ -71,6 +71,7 @@ fun SeerrMediaCard(
     modifier: Modifier = Modifier,
     onRequestClick: (() -> Unit)? = null,
     isLoading: Boolean = false,
+    clipToShape: Boolean = false,
 ) {
     val isTv = LocalTvMode.current
     val tvFocusState = rememberTvFocusState()
@@ -208,6 +209,8 @@ fun SeerrMediaCard(
                 .graphicsLayer {
                     scaleX = scale
                     scaleY = scale
+                    clip = clipToShape
+                    shape = cardShape
                 }
                 .then(
                     if (isLoading) {

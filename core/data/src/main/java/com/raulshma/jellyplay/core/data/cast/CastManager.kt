@@ -109,6 +109,12 @@ class CastManager @Inject constructor(
     @Volatile
     private var released = false
 
+    // Number of active cast consumers (e.g. live video screens). The shared
+    // singleton is only torn down when the last consumer releases — see
+    // [acquireConsumer] / [releaseConsumer]. AtomicInteger because acquire
+    // and release may originate from different VM lifecycles.
+    private val consumerRefCount = java.util.concurrent.atomic.AtomicInteger(0)
+
     private val backgroundCasting = AtomicBoolean(false)
     val isBackgroundCasting: Boolean get() = backgroundCasting.get()
 
@@ -454,6 +460,40 @@ class CastManager @Inject constructor(
     }
 
     fun release() {
+        teardownSharedState()
+        coroutineScope.cancel()
+    }
+
+    /**
+     * Registers an active consumer of cast (e.g. the video player screen).
+     * Pairs with [releaseConsumer]. The shared singleton is only fully torn
+     * down once the *last* consumer releases, so a second feature using cast
+     * is not forcibly killed when one consumer exits. Also flips the
+     * [released] flag back so [ensureCastPlayer] will build a fresh
+     * [CastPlayer] on demand.
+     */
+    fun acquireConsumer() {
+        consumerRefCount.incrementAndGet()
+        released = false
+    }
+
+    /**
+     * Releases a consumer previously registered via [acquireConsumer]. When
+     * the refcount reaches zero the shared cast state (cast player, session
+     * listener, strategies, flows) is torn down — but the singleton's
+     * [coroutineScope] is deliberately kept alive so a subsequent
+     * [acquireConsumer] works without re-injecting a fresh scope. Previously
+     * the video VM called [release] directly, which cancelled this scope and
+     * left cast permanently broken for every subsequent video session.
+     */
+    fun releaseConsumer() {
+        if (consumerRefCount.decrementAndGet() <= 0) {
+            consumerRefCount.set(0)
+            teardownSharedState()
+        }
+    }
+
+    private fun teardownSharedState() {
         released = true
         backgroundCasting.set(false)
         tickerJob?.cancel()
@@ -489,9 +529,8 @@ class CastManager @Inject constructor(
         // own session/state listeners; DLNA owns its own discovery sockets).
         strategies.values.forEach {
             runCatching { it.release() }
-                .onFailure { Log.w("CastManager", "Cast strategy release failed", it) }
+                .onFailure { Log.w(TAG, "Cast strategy release failed", it) }
         }
-        coroutineScope.cancel()
     }
 
     fun softRelease() {

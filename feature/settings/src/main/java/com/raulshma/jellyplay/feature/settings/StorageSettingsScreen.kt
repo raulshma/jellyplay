@@ -290,7 +290,7 @@ fun StorageSettingsScreen(
                     SettingToggleItem(
                         icon = Tabler.Outline.Gauge,
                         title = "Adaptive Bitrate",
-                        subtitle = "Dynamically adjust playback quality based on network bandwidth",
+                        subtitle = "Cap streaming bitrate on metered networks. Off = full quality (direct play)",
                         checked = preferences.adaptiveBitrateEnabled,
                         highlighted = highlightSettingId == "adaptive_bitrate",
                         index = networkIdx++, count = networkTotal,

@@ -9,7 +9,6 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.composed
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.platform.LocalContext
 
@@ -43,12 +42,16 @@ fun Modifier.playSoundOnFocus(enabled: Boolean): Modifier {
  * ```
  * Text(title, modifier = Modifier.enableMarqueeOnFocus(focused = tvFocusState.isFocused))
  * ```
+ *
+ * Implementation note: a `@Composable` modifier (not a `composed { }` extension) so the
+ * `remember`/`LaunchedEffect` are hosted directly in the caller's composition without a
+ * per-recomposition factory allocation (see audit U-2).
  */
 @Composable
 fun Modifier.enableMarqueeOnFocus(
     focused: Boolean,
     delayMillis: Long = 500L,
-): Modifier = composed {
+): Modifier {
     var marqueeEnabled by remember { mutableStateOf(false) }
     LaunchedEffect(focused) {
         if (focused) {
@@ -58,7 +61,7 @@ fun Modifier.enableMarqueeOnFocus(
             marqueeEnabled = false
         }
     }
-    if (marqueeEnabled) {
+    return if (marqueeEnabled) {
         this.basicMarquee()
     } else {
         this

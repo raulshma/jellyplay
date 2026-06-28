@@ -58,6 +58,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
 import kotlinx.coroutines.flow.conflate
 import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.StateFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
@@ -90,6 +91,9 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.raulshma.jellyplay.core.designsystem.theme.ShapeCache
 import com.raulshma.jellyplay.core.data.playback.FrameRateMatcher
 import com.raulshma.jellyplay.core.data.cast.CastSessionEvent
+import com.raulshma.jellyplay.core.model.AudioNormalizationMode
+import com.raulshma.jellyplay.core.model.ChannelMixMode
+import com.raulshma.jellyplay.core.model.EffectStrength
 import com.raulshma.jellyplay.core.model.OrientationMode
 import com.raulshma.jellyplay.core.model.SubtitleEdgeType
 import com.raulshma.jellyplay.core.model.SubtitleStyle
@@ -408,7 +412,7 @@ fun VideoPlayerScreen(
         }
     }
 
-    val engine = viewModel.playerEngineRef
+    val engine by viewModel.playerEngineFlow.collectAsStateWithLifecycle()
     val title = uiState.title
     val subtitle = uiState.subtitle
     val isCastConnected by viewModel.isConnectedFlow.collectAsStateWithLifecycle(initialValue = false)
@@ -419,8 +423,12 @@ fun VideoPlayerScreen(
     val castVolume by viewModel.castVolumeFlow.collectAsStateWithLifecycle(initialValue = 1f)
 
     val isPlaying = if (isCastConnected) castIsPlaying else uiState.isPlaying
-    val currentPosition = if (isCastConnected) castPosition else uiState.currentPosition
-    val duration = if (isCastConnected) castDuration else uiState.duration
+    // duration is low-frequency (changes only on media load / live updates),
+    // so it is safe to collect at the screen root. currentPosition is NOT
+    // collected here — it now lives on viewModel.currentPositionMs and is read
+    // only inside the leaf composables that render it (V-1).
+    val engineDuration by viewModel.durationMs.collectAsStateWithLifecycle()
+    val duration = if (isCastConnected) castDuration else engineDuration
     val playbackSpeed = uiState.playbackSpeed
     val currentMediaSource = uiState.currentMediaSource
     val mediaStreams = uiState.mediaStreams
@@ -466,11 +474,15 @@ fun VideoPlayerScreen(
         }
     }
 
-    val isInIntro = uiState.isInIntro
-    val isInCredits = uiState.isInCredits
-    val shouldShowUpNext = uiState.shouldShowUpNext
-    val activeSegment = uiState.activeSegment
-    val activeSegmentBehavior = activeSegment?.let { uiState.behaviorForType(it.type) }
+    // Segment / up-next overlay state is derived on the ViewModel from the
+    // high-frequency position flow but only re-emits at segment boundaries, so
+    // collecting it here keeps the root a low-frequency recomposition scope.
+    val segmentOverlay by viewModel.segmentOverlayState.collectAsStateWithLifecycle()
+    val isInIntro = segmentOverlay.isInIntro
+    val isInCredits = segmentOverlay.isInCredits
+    val shouldShowUpNext = segmentOverlay.shouldShowUpNext
+    val activeSegment = segmentOverlay.activeSegment
+    val activeSegmentBehavior = segmentOverlay.activeSegmentBehavior
     val cinemaIntroState = uiState.cinemaIntroState
 
     LaunchedEffect(aspectRatio, detectedAspectRatio, engine) {
@@ -579,7 +591,7 @@ fun VideoPlayerScreen(
             lyricsLines = uiState.lyricsLines,
             artworkUrl = uiState.artworkUrl,
             isPlaying = isPlaying,
-            currentPositionMs = currentPosition,
+            currentPositionMs = castPosition,
             durationMs = duration,
             volume = castVolume,
             isConnecting = isCastConnecting,
@@ -753,11 +765,12 @@ fun VideoPlayerScreen(
                     }
                 },
         ) {
-            if (engine != null) {
-                key(engine) {
+            val currentEngine = engine
+            if (currentEngine != null) {
+                key(currentEngine) {
                     AndroidView(
                         factory = { ctx ->
-                            val view = engine.createSurfaceView(ctx)
+                            val view = currentEngine.createSurfaceView(ctx)
                             lastAppliedSubtitleStyle = uiState.subtitleStyle
                             viewModel.applySubtitleStyleToView(view)
                             playerViewRef = view
@@ -1026,8 +1039,8 @@ fun VideoPlayerScreen(
 
             if (uiState.showVideoStats) {
                 VideoStatsOverlay(
-                    stats = uiState.videoStats,
-                    currentPositionMs = currentPosition,
+                    statsFlow = viewModel.videoStats,
+                    currentPositionFlow = viewModel.currentPositionMs,
                     durationMs = duration,
                     playbackSpeed = playbackSpeed,
                     isPlaying = isPlaying,
@@ -1079,12 +1092,78 @@ fun VideoPlayerScreen(
             val hasEpisodes = uiState.seriesSeasons.isNotEmpty() && uiState.seasonEpisodes.isNotEmpty()
             val episodeBrowserEnabled = uiState.videoEpisodeBrowserEnabled
 
+            // Hoist PlayerControls callbacks into remembered lambdas (M9).
+            // Each fresh `{ ... }` passed inline below allocated a new lambda
+            // per recomposition, defeating PlayerControls' skippability and
+            // forcing the 1500-line controls tree to recompose on every
+            // position tick. The lambdas below capture only stable handles
+            // — viewModel (same Hilt instance for the screen's lifetime) and
+            // the rememberSaveable property delegates (currentSheet,
+            // showControls, isSeeking, controlsHasFocus, isOverflowMenuOpen)
+            // whose MutableState references are stable across recomposition —
+            // so they need no keys. The few that capture a value (onSeekEnd,
+            // onPassthroughClick) are keyed on exactly that value so they
+            // recreate only when it actually changes.
+            val onPlayPause by remember(doTogglePlayPause) { mutableStateOf({ doTogglePlayPause() }) }
+            val onSeekBack by remember(doSeekBack) { mutableStateOf({ doSeekBack() }) }
+            val onSeekForward by remember(doSeekForward) { mutableStateOf({ doSeekForward() }) }
+            val onSeekEnd by remember(duration, doSeekTo) {
+                mutableStateOf({
+                    isSeeking = false
+                    if (duration > 0) doSeekTo(seekPositionMs)
+                })
+            }
+            val onSeekStart by remember { mutableStateOf({ isSeeking = true }) }
+            val onSeekPositionChange by remember { mutableStateOf({ positionMs: Long -> seekPositionMs = positionMs }) }
+            val onSpeedClick by remember { mutableStateOf({ currentSheet = PlayerSheet.Speed }) }
+            val onAudioClick by remember { mutableStateOf({ currentSheet = PlayerSheet.Audio }) }
+            val onSubtitleClick by remember { mutableStateOf({ currentSheet = PlayerSheet.Subtitle }) }
+            val onSubtitleStyleClick by remember { mutableStateOf({ currentSheet = PlayerSheet.SubtitleStyle }) }
+            val onChapterClick by remember { mutableStateOf({ currentSheet = PlayerSheet.Chapter }) }
+            val onInfoClick by remember { mutableStateOf({ currentSheet = PlayerSheet.PlaybackInfo }) }
+            val onAspectRatioClick by remember { mutableStateOf({ currentSheet = PlayerSheet.AspectRatio }) }
+            val onDialogueBoostClick by remember { mutableStateOf({ viewModel.toggleDialogueBoost() }) }
+            val onDialogueBoostStrengthChange by remember { mutableStateOf({ strength: EffectStrength -> viewModel.setDialogueBoostStrength(strength) }) }
+            val onNightModeClick by remember { mutableStateOf({ viewModel.toggleNightMode() }) }
+            val onNightModeStrengthChange by remember { mutableStateOf({ strength: EffectStrength -> viewModel.setNightModeStrength(strength) }) }
+            val onAVSyncClick by remember { mutableStateOf({ currentSheet = PlayerSheet.AVSync }) }
+            val onDecoderClick by remember { mutableStateOf({ currentSheet = PlayerSheet.Decoder }) }
+            // uiState is a `by collectAsStateWithLifecycle()` delegate, so
+            // `uiState.audioPassthrough` is read at invocation time — no key
+            // needed and the lambda never goes stale.
+            val onPassthroughClick by remember { mutableStateOf({ viewModel.setAudioPassthrough(!uiState.audioPassthrough) }) }
+            val onSubtitleDownloadClick by remember { mutableStateOf({
+                viewModel.loadRemoteSubtitles()
+                currentSheet = PlayerSheet.SubtitleDownload
+            }) }
+            val onEpisodesClick by remember { mutableStateOf({ currentSheet = PlayerSheet.Episodes }) }
+            val onSyncPlayClick by remember { mutableStateOf({ currentSheet = PlayerSheet.SyncPlay }) }
+            val onPipClick by remember(onEnterPip) { mutableStateOf({ onEnterPip() }) }
+            val onMuteClick by remember { mutableStateOf({ viewModel.toggleMute() }) }
+            val onVideoStatsClick by remember { mutableStateOf({ viewModel.toggleVideoStats() }) }
+            val onQualityClick by remember { mutableStateOf({ currentSheet = PlayerSheet.Quality }) }
+            val onPlaybackModeClick by remember { mutableStateOf({ currentSheet = PlayerSheet.PlaybackMode }) }
+            val onAudioNormalizationClick by remember { mutableStateOf({ viewModel.toggleAudioNormalization() }) }
+            val onAudioNormalizationModeChange by remember { mutableStateOf({ mode: AudioNormalizationMode -> viewModel.setAudioNormalizationMode(mode) }) }
+            val onChannelMixClick by remember { mutableStateOf({ viewModel.toggleChannelMix() }) }
+            val onChannelMixModeChange by remember { mutableStateOf({ mode: ChannelMixMode -> viewModel.setChannelMixMode(mode) }) }
+            val onSleepTimerClick by remember { mutableStateOf({ currentSheet = PlayerSheet.SleepTimer }) }
+            val onVideoFilterClick by remember { mutableStateOf({ currentSheet = PlayerSheet.VideoFilter }) }
+            val onLockClick by remember { mutableStateOf({
+                viewModel.setScreenLocked(true)
+                showControls = false
+            }) }
+            val onControlsFocusChange by remember { mutableStateOf({ hasFocus: Boolean -> controlsHasFocus = hasFocus }) }
+            val onOverflowMenuChange by remember { mutableStateOf({ open: Boolean -> isOverflowMenuOpen = open }) }
+
             PlayerControls(
                 title = title,
                 subtitle = subtitle,
                 isPlaying = isPlaying,
-                currentPosition = currentPosition,
+                currentPositionFlow = viewModel.currentPositionMs,
                 duration = duration,
+                bufferedPositionFlow = viewModel.bufferedPositionMs,
+                videoStatsFlow = viewModel.videoStats,
                 playbackSpeed = playbackSpeed,
                 chapters = uiState.chapters,
                 dialogueBoostEnabled = uiState.dialogueBoostEnabled,
@@ -1096,7 +1175,6 @@ fun VideoPlayerScreen(
                 playMethod = uiState.playMethod,
                 hdrType = uiState.hdrType,
                 mediaStreams = uiState.mediaStreams,
-                videoStats = uiState.videoStats,
                 audioTracks = uiState.audioTracks,
                 showPlaybackMetadata = uiState.showPlaybackMetadata,
                 showClock = uiState.showClock,
@@ -1114,43 +1192,35 @@ fun VideoPlayerScreen(
                 supportsAudioPassthrough = uiState.engineCapabilities.supportsAudioPassthrough,
                 hasEpisodes = hasEpisodes,
                 episodeBrowserEnabled = episodeBrowserEnabled,
-                onPlayPause = { doTogglePlayPause() },
-                onSeekBack = { doSeekBack() },
-                onSeekForward = { doSeekForward() },
+                onPlayPause = onPlayPause,
+                onSeekBack = onSeekBack,
+                onSeekForward = onSeekForward,
                 onSeek = { },
-                onSeekStart = { isSeeking = true },
-                onSeekEnd = {
-                    isSeeking = false
-                    if (duration > 0) doSeekTo(seekPositionMs)
-                },
-                onSeekPositionChange = { positionMs -> seekPositionMs = positionMs },
+                onSeekStart = onSeekStart,
+                onSeekEnd = onSeekEnd,
+                onSeekPositionChange = onSeekPositionChange,
                 tvTrickplayBitmap = if (isTv) tvTrickplayBitmap else null,
                 onToggleOrientation = toggleOrientation,
                 onBack = onBack,
-                onSpeedClick = { currentSheet = PlayerSheet.Speed },
-                onAudioClick = { currentSheet = PlayerSheet.Audio },
-                onSubtitleClick = { currentSheet = PlayerSheet.Subtitle },
-                onSubtitleStyleClick = { currentSheet = PlayerSheet.SubtitleStyle },
-                onChapterClick = { currentSheet = PlayerSheet.Chapter },
-                onInfoClick = { currentSheet = PlayerSheet.PlaybackInfo },
-                onAspectRatioClick = { currentSheet = PlayerSheet.AspectRatio },
-                onDialogueBoostClick = { viewModel.toggleDialogueBoost() },
-                onDialogueBoostStrengthChange = { viewModel.setDialogueBoostStrength(it) },
-                onNightModeClick = { viewModel.toggleNightMode() },
-                onNightModeStrengthChange = { viewModel.setNightModeStrength(it) },
-                onAVSyncClick = { currentSheet = PlayerSheet.AVSync },
-                onDecoderClick = { currentSheet = PlayerSheet.Decoder },
-                onPassthroughClick = { viewModel.setAudioPassthrough(!uiState.audioPassthrough) },
-                onSubtitleDownloadClick = {
-                    viewModel.loadRemoteSubtitles()
-                    currentSheet = PlayerSheet.SubtitleDownload
-                },
-                onEpisodesClick = { currentSheet = PlayerSheet.Episodes },
-                onSyncPlayClick = { currentSheet = PlayerSheet.SyncPlay },
-                onPipClick = {
-                    onEnterPip()
-                },
-                onMuteClick = { viewModel.toggleMute() },
+                onSpeedClick = onSpeedClick,
+                onAudioClick = onAudioClick,
+                onSubtitleClick = onSubtitleClick,
+                onSubtitleStyleClick = onSubtitleStyleClick,
+                onChapterClick = onChapterClick,
+                onInfoClick = onInfoClick,
+                onAspectRatioClick = onAspectRatioClick,
+                onDialogueBoostClick = onDialogueBoostClick,
+                onDialogueBoostStrengthChange = onDialogueBoostStrengthChange,
+                onNightModeClick = onNightModeClick,
+                onNightModeStrengthChange = onNightModeStrengthChange,
+                onAVSyncClick = onAVSyncClick,
+                onDecoderClick = onDecoderClick,
+                onPassthroughClick = onPassthroughClick,
+                onSubtitleDownloadClick = onSubtitleDownloadClick,
+                onEpisodesClick = onEpisodesClick,
+                onSyncPlayClick = onSyncPlayClick,
+                onPipClick = onPipClick,
+                onMuteClick = onMuteClick,
                 isMuted = uiState.isMuted,
                 isInSyncPlaySession = isInSyncPlaySession,
                 syncPlayGroupName = uiState.syncPlayGroupName,
@@ -1158,12 +1228,11 @@ fun VideoPlayerScreen(
                 isSyncPlaySynced = uiState.isSyncPlaySynced,
                 isSyncPlaySyncing = uiState.isSyncPlaySyncing,
                 showVideoStats = uiState.showVideoStats,
-                onVideoStatsClick = { viewModel.toggleVideoStats() },
-                bufferedPosition = uiState.bufferedPosition,
+                onVideoStatsClick = onVideoStatsClick,
                 streamingQuality = uiState.streamingQuality,
                 playbackMode = uiState.playbackMode,
-                onQualityClick = { currentSheet = PlayerSheet.Quality },
-                onPlaybackModeClick = { currentSheet = PlayerSheet.PlaybackMode },
+                onQualityClick = onQualityClick,
+                onPlaybackModeClick = onPlaybackModeClick,
                 audioNormalizationMode = uiState.audioNormalizationMode,
                 audioNormalizationEnabled = uiState.audioNormalizationEnabled,
                 channelMixMode = uiState.channelMixMode,
@@ -1171,22 +1240,19 @@ fun VideoPlayerScreen(
                 supportsAudioNormalization = uiState.engineCapabilities.supportsAudioNormalization,
                 supportsChannelMixing = uiState.engineCapabilities.supportsChannelMixing,
                 supportsLiveQualitySwitch = uiState.engineCapabilities.supportsLiveQualitySwitch,
-                onAudioNormalizationClick = { viewModel.toggleAudioNormalization() },
-                onAudioNormalizationModeChange = { viewModel.setAudioNormalizationMode(it) },
-                onChannelMixClick = { viewModel.toggleChannelMix() },
-                onChannelMixModeChange = { viewModel.setChannelMixMode(it) },
+                onAudioNormalizationClick = onAudioNormalizationClick,
+                onAudioNormalizationModeChange = onAudioNormalizationModeChange,
+                onChannelMixClick = onChannelMixClick,
+                onChannelMixModeChange = onChannelMixModeChange,
                 sleepTimerActive = uiState.sleepTimerActive,
                 sleepTimerDisplayText = if (uiState.sleepTimerEndOfEpisode) "End of episode" else formatDuration(uiState.sleepTimerRemainingMs),
-                onSleepTimerClick = { currentSheet = PlayerSheet.SleepTimer },
+                onSleepTimerClick = onSleepTimerClick,
                 supportsVideoFilters = uiState.engineCapabilities.supportsVideoFilters,
                 videoFiltersActive = uiState.videoEffects != com.raulshma.jellyplay.core.model.VideoEffectsConfig(),
-                onVideoFilterClick = { currentSheet = PlayerSheet.VideoFilter },
-                onLockClick = {
-                    viewModel.setScreenLocked(true)
-                    showControls = false
-                },
-                onControlsFocusChange = { controlsHasFocus = it },
-                onOverflowMenuChange = { isOverflowMenuOpen = it },
+                onVideoFilterClick = onVideoFilterClick,
+                onLockClick = onLockClick,
+                onControlsFocusChange = onControlsFocusChange,
+                onOverflowMenuChange = onOverflowMenuChange,
                 castManager = viewModel.castManagerField,
                 modifier = Modifier.fillMaxSize(),
             )
@@ -1302,7 +1368,7 @@ fun VideoPlayerScreen(
         onSheetChange = { sheet -> currentSheet = sheet },
         dismissSheet = dismissSheet,
         uiState = uiState,
-        currentPosition = currentPosition,
+        currentPositionFlow = viewModel.currentPositionMs,
         doSeekTo = doSeekTo,
         viewModel = viewModel,
         itemId = itemId,
@@ -1515,7 +1581,7 @@ private fun PlayerSheetRouter(
     onSheetChange: (PlayerSheet) -> Unit,
     dismissSheet: () -> Unit,
     uiState: VideoPlayerUiState,
-    currentPosition: Long,
+    currentPositionFlow: StateFlow<Long>,
     doSeekTo: (Long) -> Unit,
     viewModel: VideoPlayerViewModel,
     itemId: String,
@@ -1551,9 +1617,12 @@ private fun PlayerSheetRouter(
             )
         }
         is PlayerSheet.Chapter -> {
-            ChapterPickerSheet(
+            // Collect position only while the chapter sheet is open (V-1), so
+            // the router itself stays a low-frequency scope when no sheet (or
+            // a non-chapter sheet) is shown.
+            ChapterPickerBinder(
                 chapters = uiState.chapters,
-                currentPositionMs = currentPosition,
+                currentPositionFlow = currentPositionFlow,
                 onSelect = { positionTicks ->
                     doSeekTo(positionTicks / 10_000)
                     onSheetChange(PlayerSheet.None)
@@ -1675,6 +1744,8 @@ private fun PlayerSheetRouter(
         is PlayerSheet.Quality -> {
             QualityPickerSheet(
                 currentQuality = uiState.streamingQuality,
+                adaptiveBitrateEnabled = uiState.adaptiveBitrateEnabled,
+                onToggleAdaptiveBitrate = { viewModel.setAdaptiveBitrateEnabled(it) },
                 onSelect = { viewModel.setStreamingQuality(it) },
                 onDismiss = dismissSheet,
             )
@@ -1707,4 +1778,25 @@ private fun PlayerSheetRouter(
         }
         PlayerSheet.None -> { }
     }
+}
+
+/**
+ * Narrow binder that subscribes to [currentPositionFlow] only while the
+ * chapter picker sheet is open (V-1), so the screen root and the sheet router
+ * are not invalidated at 4 Hz on every position tick.
+ */
+@Composable
+private fun ChapterPickerBinder(
+    chapters: List<com.raulshma.jellyplay.core.model.ChapterInfo>,
+    currentPositionFlow: StateFlow<Long>,
+    onSelect: (Long) -> Unit,
+    onDismiss: () -> Unit,
+) {
+    val currentPositionMs by currentPositionFlow.collectAsStateWithLifecycle()
+    ChapterPickerSheet(
+        chapters = chapters,
+        currentPositionMs = currentPositionMs,
+        onSelect = onSelect,
+        onDismiss = onDismiss,
+    )
 }
