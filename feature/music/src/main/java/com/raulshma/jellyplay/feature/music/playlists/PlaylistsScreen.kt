@@ -88,8 +88,6 @@ fun PlaylistsScreen(
         tag = "playlists_init",
     )
 
-    var isRefreshing by remember { mutableStateOf(false) }
-
     LaunchedEffect(viewModel.error) {
         // Errors are surfaced via the dialogs/state; we keep state-based clearing
     }
@@ -106,11 +104,9 @@ fun PlaylistsScreen(
     ) { _ ->
         Box(modifier = Modifier.fillMaxSize()) {
             PullToRefreshBox(
-                isRefreshing = isRefreshing,
+                isRefreshing = viewModel.isLoading && viewModel.playlists.isNotEmpty(),
                 onRefresh = {
-                    isRefreshing = true
                     viewModel.load()
-                    isRefreshing = false
                 },
                 modifier = Modifier.fillMaxSize(),
             ) {

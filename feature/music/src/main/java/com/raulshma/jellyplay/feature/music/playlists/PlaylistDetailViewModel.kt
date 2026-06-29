@@ -55,6 +55,13 @@ class PlaylistDetailViewModel @Inject constructor(
         }
     }
 
+    fun refreshPlaylist(playlistId: String) {
+        launch {
+            mediaRepository.invalidateDetailCache(playlistId)
+            load(playlistId, playlistName.takeIf { it.isNotEmpty() })
+        }
+    }
+
     fun addToQueue(item: PlaylistItem) {
         val queueItem = item.toAudioQueueItem()
         audioPlaybackManager.addToQueue(queueItem)

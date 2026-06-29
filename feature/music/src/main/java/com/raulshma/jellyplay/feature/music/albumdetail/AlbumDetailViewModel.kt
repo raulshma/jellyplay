@@ -57,6 +57,13 @@ class AlbumDetailViewModel @Inject constructor(
         }
     }
 
+    fun refreshAlbum(albumId: String) {
+        launch {
+            mediaRepository.invalidateDetailCache(albumId)
+            loadAlbum(albumId)
+        }
+    }
+
     fun playAlbum(tracks: List<MediaItem>, startIndex: Int = 0) {
         if (tracks.isEmpty()) return
         val queueItems = tracks.map { track ->
