@@ -55,11 +55,9 @@ class BandwidthMonitor @Inject constructor() {
     }
 
     private fun computeAverageKbpsInternal(): Double {
-        if (samples.isEmpty()) return 0.0
-        val totalBytes = samples.sumOf { it.bytes }
-        val totalMs = samples.sumOf { it.elapsedMs }
+        val totalMs = _totalElapsedMs.value
         if (totalMs == 0L) return 0.0
-        return (totalBytes * 8.0) / (totalMs / 1000.0) / 1000.0
+        return (_totalBytes.value * 8.0) / (totalMs / 1000.0) / 1000.0
     }
 
     fun computeAverageKbps(): Double = synchronized(samples) { computeAverageKbpsInternal() }

@@ -10,6 +10,7 @@ import androidx.room.PrimaryKey
     indices = [
         Index(value = ["timestamp"]),
         Index(value = ["actionType"]),
+        Index(value = ["actionType", "timestamp"]),
     ],
 )
 data class MediaAuditLogEntity(

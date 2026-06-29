@@ -398,6 +398,7 @@ fun SearchScreen(
                     enter = fadeIn(tween(200, easing = AlphaEasing)) + expandVertically(),
                     exit = fadeOut(tween(150, easing = AlphaEasing)) + shrinkVertically(),
                 ) {
+                    val topSuggestions = remember(suggestions) { suggestions.take(8) }
                     androidx.compose.foundation.lazy.LazyColumn(
                         modifier = Modifier
                             .fillMaxWidth()
@@ -406,7 +407,7 @@ fun SearchScreen(
                             .clip(ShapeCache.smooth16)
                             .background(MaterialTheme.colorScheme.surfaceContainerHigh.copy(alpha = 0.95f)),
                     ) {
-                        items(suggestions.take(8), key = { it.id }) { item ->
+                        items(topSuggestions, key = { it.id }) { item ->
                             val suggestionFocusState = rememberTvFocusState(focusedScale = 1.0f)
                             Row(
                                 modifier = Modifier

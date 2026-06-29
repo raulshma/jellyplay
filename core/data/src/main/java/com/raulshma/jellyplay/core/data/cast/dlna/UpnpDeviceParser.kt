@@ -19,6 +19,9 @@ object UpnpDeviceParser {
     private val RENDERING_CONTROL_TYPE = "urn:schemas-upnp-org:service:RenderingControl"
     private val CONNECTION_MANAGER_TYPE = "urn:schemas-upnp-org:service:ConnectionManager"
 
+    private val docBuilderFactory: DocumentBuilderFactory =
+        DocumentBuilderFactory.newInstance().also { it.isNamespaceAware = true }
+
     suspend fun fetchAndParse(
         locationUrl: String,
         client: OkHttpClient,
@@ -40,9 +43,7 @@ object UpnpDeviceParser {
 
     internal fun parseDeviceXml(xml: String, locationUrl: String): UpnpDevice? {
         return try {
-            val factory = DocumentBuilderFactory.newInstance()
-            factory.isNamespaceAware = true
-            val builder = factory.newDocumentBuilder()
+            val builder = docBuilderFactory.newDocumentBuilder()
             val doc = builder.parse(InputSource(StringReader(xml)))
 
             val root = doc.documentElement

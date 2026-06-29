@@ -19,6 +19,8 @@ object UpnpControlPoint {
     private const val AV_TRANSPORT_NS = "urn:schemas-upnp-org:service:AVTransport:1"
     private const val RENDERING_CONTROL_NS = "urn:schemas-upnp-org:service:RenderingControl:1"
 
+    private val docBuilderFactory: DocumentBuilderFactory = DocumentBuilderFactory.newInstance()
+
     suspend fun setAvTransportUri(
         controlUrl: String,
         instanceId: Int = 0,
@@ -244,8 +246,7 @@ object UpnpControlPoint {
 
     private fun parsePositionInfo(xml: String): Pair<Long, Long>? {
         return try {
-            val factory = DocumentBuilderFactory.newInstance()
-            val builder = factory.newDocumentBuilder()
+            val builder = docBuilderFactory.newDocumentBuilder()
             val doc = builder.parse(InputSource(StringReader(xml)))
 
             val relTime = getTagText(doc, "RelTime") ?: return null
@@ -262,8 +263,7 @@ object UpnpControlPoint {
 
     private fun parseTransportState(xml: String): TransportState {
         return try {
-            val factory = DocumentBuilderFactory.newInstance()
-            val builder = factory.newDocumentBuilder()
+            val builder = docBuilderFactory.newDocumentBuilder()
             val doc = builder.parse(InputSource(StringReader(xml)))
             val state = getTagText(doc, "CurrentTransportState") ?: return TransportState.UNKNOWN
             when (state) {
@@ -281,8 +281,7 @@ object UpnpControlPoint {
 
     private fun parseVolume(xml: String): Float {
         return try {
-            val factory = DocumentBuilderFactory.newInstance()
-            val builder = factory.newDocumentBuilder()
+            val builder = docBuilderFactory.newDocumentBuilder()
             val doc = builder.parse(InputSource(StringReader(xml)))
             val volumeStr = getTagText(doc, "CurrentVolume") ?: return 1f
             val volumeInt = volumeStr.toIntOrNull() ?: return 1f
