@@ -205,6 +205,7 @@ class FloatingPlayerService : Service() {
         var initialTouchX = 0f
         var initialTouchY = 0f
         var isDragging = false
+        var layoutFramePending = false
 
         view.setOnTouchListener { v, event ->
             when (event.action) {
@@ -221,9 +222,19 @@ class FloatingPlayerService : Service() {
                     if (abs(dx) > 10 || abs(dy) > 10) isDragging = true
                     params.x = initialX + dx.toInt()
                     params.y = initialY + dy.toInt()
-                    windowManager.updateViewLayout(view, params)
+                    if (!layoutFramePending) {
+                        layoutFramePending = true
+                        view.postOnAnimation {
+                            layoutFramePending = false
+                            windowManager.updateViewLayout(view, params)
+                        }
+                    }
                 }
                 MotionEvent.ACTION_UP -> {
+                    if (layoutFramePending) {
+                        layoutFramePending = false
+                        windowManager.updateViewLayout(view, params)
+                    }
                     if (!isDragging) {
                         v.performClick()
                     }

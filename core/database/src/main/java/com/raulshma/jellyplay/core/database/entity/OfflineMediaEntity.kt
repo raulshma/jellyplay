@@ -14,6 +14,7 @@ import androidx.room.PrimaryKey
         Index(value = ["mediaType"]),
         Index(value = ["seriesId", "mediaType"]),
         Index(value = ["seasonId", "mediaType"]),
+        Index(value = ["mediaType", "createdAt"]),
     ],
 )
 data class OfflineMediaEntity(

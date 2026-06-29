@@ -13,7 +13,9 @@ import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.collectLatest
 import javax.inject.Inject
 
 @Immutable
@@ -41,6 +43,8 @@ class AdminDashboardViewModel @Inject constructor(
     private val _isAdmin = stateFlow(false)
     val isAdmin: StateFlow<Boolean> = _isAdmin.flow
 
+    private val hasRunningTasks = MutableStateFlow(false)
+
     init {
         launch {
             authRepository.currentUser.collect { user ->
@@ -67,12 +71,14 @@ class AdminDashboardViewModel @Inject constructor(
                     val allTasks = tasksDeferred.await() ?: emptyList()
                     val activity = activityDeferred.await() ?: emptyList()
 
+                    val running = allTasks.filter { task -> task.state == TaskState.RUNNING }
+                    hasRunningTasks.value = running.isNotEmpty()
                     _uiState.update {
                         it.copy(
                             isLoading = false,
                             systemInfo = sysInfo,
                             itemCounts = counts,
-                            runningTasks = allTasks.filter { task -> task.state == TaskState.RUNNING },
+                            runningTasks = running,
                             sessions = sessions,
                             recentActivity = activity,
                         )
@@ -90,9 +96,11 @@ class AdminDashboardViewModel @Inject constructor(
     private fun startAutoRefresh() {
         refreshJob?.cancel()
         refreshJob = launch {
-            while (true) {
-                delay(15000)
-                refreshRunningTasks()
+            hasRunningTasks.collectLatest { running ->
+                while (running) {
+                    delay(15000)
+                    refreshRunningTasks()
+                }
             }
         }
     }
@@ -100,8 +108,10 @@ class AdminDashboardViewModel @Inject constructor(
     private suspend fun refreshRunningTasks() {
         val result = apiClient.getScheduledTasks()
         val tasks = result.getOrNull() ?: return
+        val running = tasks.filter { task -> task.state == TaskState.RUNNING }
+        hasRunningTasks.value = running.isNotEmpty()
         _uiState.update {
-            it.copy(runningTasks = tasks.filter { task -> task.state == TaskState.RUNNING })
+            it.copy(runningTasks = running)
         }
     }
 
