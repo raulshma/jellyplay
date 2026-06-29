@@ -72,6 +72,7 @@ fun NextEpisodeOverlay(
     episodeNumber: Int?,
     thumbnailUrl: String?,
     countdownSeconds: Int = 10,
+    autoplayEnabled: Boolean = true,
     onPlayNext: () -> Unit,
     onCancel: () -> Unit,
     isPlaying: Boolean,
@@ -96,8 +97,8 @@ fun NextEpisodeOverlay(
         }
     }
 
-    LaunchedEffect(isVisible, countdown, dismissed, isPlaying) {
-        if (isVisible && !dismissed && isPlaying) {
+    LaunchedEffect(isVisible, countdown, dismissed, isPlaying, autoplayEnabled) {
+        if (isVisible && !dismissed && isPlaying && autoplayEnabled) {
             if (countdown > 0) {
                 kotlinx.coroutines.delay(1000)
                 countdown--
@@ -243,7 +244,7 @@ fun NextEpisodeOverlay(
                         )
                     }
 
-                    if (show && countdown > 0) {
+                    if (show && autoplayEnabled && countdown > 0) {
                         Spacer(modifier = Modifier.height(12.dp))
                         Row(
                             modifier = Modifier.fillMaxWidth(),

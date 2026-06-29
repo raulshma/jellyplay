@@ -35,6 +35,9 @@ class GenresViewModel @Inject constructor(
     }
 
     fun refresh() {
-        loadGenres()
+        launch {
+            mediaRepository.invalidateCaches()
+            loadGenres()
+        }
     }
 }

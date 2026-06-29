@@ -241,7 +241,12 @@ class LibraryViewModel @Inject constructor(
     }
 
     fun refresh() {
-        loadFolders()
+        launch {
+            mediaRepository.invalidateCaches()
+            loadFolders()
+            loadGenres()
+            loadTags()
+        }
     }
 
     fun getImageUrl(itemId: String): String =

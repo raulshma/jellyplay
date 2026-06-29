@@ -89,8 +89,6 @@ fun AlbumDetailScreen(
     }
 
     val trackDownloads by viewModel.trackDownloads.collectAsStateWithLifecycle()
-    var isRefreshing by remember { mutableStateOf(false) }
-
     // TV focus-on-launch: focus the first track once content arrives so D-pad input lands on
     // content, not the navigation drawer.
     val listFocusRequester = remember { FocusRequester() }
@@ -101,11 +99,9 @@ fun AlbumDetailScreen(
     )
 
     PullToRefreshBox(
-        isRefreshing = isRefreshing,
+        isRefreshing = viewModel.isLoading && viewModel.detail != null,
         onRefresh = {
-            isRefreshing = true
-            viewModel.loadAlbum(albumId)
-            isRefreshing = false
+            viewModel.refreshAlbum(albumId)
         },
     ) {
     when {

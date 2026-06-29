@@ -90,7 +90,6 @@ fun PlaylistDetailScreen(
     val contentPad = adaptiveInfo.contentPadding(isTv)
 
     val navOffsetPx = com.raulshma.jellyplay.core.ui.components.LocalFloatingNavOffset.current
-    var isRefreshing by remember { mutableStateOf(false) }
 
     // TV focus-on-launch: focus the first track once data arrives so D-pad input lands on content,
     // not the navigation drawer.
@@ -112,11 +111,9 @@ fun PlaylistDetailScreen(
         },
     ) { _ ->
         PullToRefreshBox(
-            isRefreshing = isRefreshing,
+            isRefreshing = viewModel.isLoading && viewModel.items.isNotEmpty(),
             onRefresh = {
-                isRefreshing = true
-                viewModel.load(playlistId)
-                isRefreshing = false
+                viewModel.refreshPlaylist(playlistId)
             },
             modifier = Modifier.fillMaxSize(),
         ) {

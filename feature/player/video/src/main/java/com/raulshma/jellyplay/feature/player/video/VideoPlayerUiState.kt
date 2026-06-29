@@ -161,6 +161,9 @@ data class VideoPlayerUiState(
     val keepScreenOnDuringVideo: Boolean = true,
     val cinemaIntroState: CinemaIntroUiState? = null,
     val isMuted: Boolean = false,
+    val videoAutoplayNext: Boolean = false,
+    val autoPlayCountdownSec: Int = 10,
+    val autoplayCancelled: Boolean = false,
 ) {
 
     fun behaviorForType(type: MediaSegmentType): SegmentBehavior =
@@ -278,6 +281,7 @@ data class VideoPlayerUiState(
 
     val shouldShowUpNext: Boolean
         get() {
+            if (autoplayCancelled) return false
             if (isInSyncPlaySession) return false
             if (nextEpisode == null) return false
             if (seriesId == null) return false

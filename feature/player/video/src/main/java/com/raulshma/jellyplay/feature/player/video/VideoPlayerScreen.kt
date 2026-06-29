@@ -984,9 +984,10 @@ fun VideoPlayerScreen(
                     seasonNumber = nextEpisode.seasonNumber,
                     episodeNumber = nextEpisode.episodeNumber,
                     thumbnailUrl = nextEpisodeImageUrl,
-                    countdownSeconds = 10,
+                    countdownSeconds = uiState.autoPlayCountdownSec,
+                    autoplayEnabled = uiState.videoAutoplayNext,
                     onPlayNext = { viewModel.playNextEpisode() },
-                    onCancel = {},
+                    onCancel = { viewModel.cancelAutoplay() },
                     isPlaying = isPlaying,
                     focusRequester = tvNextEpisodeFocusRequester,
                     modifier = Modifier
