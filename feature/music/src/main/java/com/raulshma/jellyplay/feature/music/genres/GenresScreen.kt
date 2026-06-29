@@ -49,8 +49,6 @@ fun GenresScreen(
         networkStatus = networkStatus,
     )
 
-    var isRefreshing by remember { mutableStateOf(false) }
-
     JellyPlayScreenScaffold(
         title = "Genres",
         onBack = onBack,
@@ -62,11 +60,9 @@ fun GenresScreen(
         },
     ) { _ ->
         PullToRefreshBox(
-            isRefreshing = isRefreshing,
+            isRefreshing = isLoading && genres.isNotEmpty(),
             onRefresh = {
-                isRefreshing = true
                 viewModel.refresh()
-                isRefreshing = false
             },
             modifier = Modifier.fillMaxSize(),
         ) {

@@ -19,35 +19,44 @@ class AudioProgressReporter(
     private val playSessionIdSetter: (String) -> Unit,
 ) {
     private var progressJob: Job? = null
+    private var lastPausedPositionTicks: Long = -1L
 
     fun start() {
         progressJob?.cancel()
+        lastPausedPositionTicks = -1L
         if (remoteSessionActive()) return
         progressJob = scope.launch {
             while (true) {
                 delay(10_000)
                 val player = exoPlayerProvider() ?: continue
                 val itemId = itemIdProvider() ?: continue
+                val positionTicks = player.currentPosition * 10_000
+                val isPaused = !player.isPlaying
+                if (isPaused && positionTicks == lastPausedPositionTicks) continue
+                if (isPaused) lastPausedPositionTicks = positionTicks else lastPausedPositionTicks = -1L
                 playbackRepository.reportPlaybackProgress(
                     PlaybackProgress(
                         itemId = itemId,
                         sessionId = playSessionIdProvider(),
-                        positionTicks = player.currentPosition * 10_000,
-                        isPaused = !player.isPlaying,
+                        positionTicks = positionTicks,
+                        isPaused = isPaused,
                     )
                 )
             }
         }
     }
 
-    fun reportStopped() {
-        val player = exoPlayerProvider() ?: return
-        val itemId = itemIdProvider() ?: return
-        val sid = playSessionIdProvider()
-        val pos = player.currentPosition * 10_000
-        if (pos > 0) {
+    fun reportStopped(
+        itemId: String? = null,
+        sessionId: String? = null,
+        positionTicks: Long? = null
+    ) {
+        val finalItemId = itemId ?: itemIdProvider() ?: return
+        val finalSessionId = sessionId ?: playSessionIdProvider()
+        val finalPos = positionTicks ?: (exoPlayerProvider()?.currentPosition?.let { it * 10_000 } ?: 0L)
+        if (finalPos > 0) {
             scope.launch {
-                playbackRepository.reportPlaybackStopped(itemId, sid, pos)
+                playbackRepository.reportPlaybackStopped(finalItemId, finalSessionId, finalPos)
             }
         }
         playSessionIdSetter(UUID.randomUUID().toString())

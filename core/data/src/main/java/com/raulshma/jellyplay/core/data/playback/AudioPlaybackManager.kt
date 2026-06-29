@@ -1233,6 +1233,10 @@ class AudioPlaybackManager @Inject constructor(
         }
 
         if (targetIndex >= 0) {
+            val prevItemId = currentItemId
+            val prevSessionId = playSessionId
+            val prevPosTicks = if (_currentPosition.value > 0) _currentPosition.value * 10_000 else _duration.value * 10_000
+
             _currentIndex.value = targetIndex
             val nextItem = queueItems[targetIndex]
             currentItemId = nextItem.id
@@ -1245,7 +1249,11 @@ class AudioPlaybackManager @Inject constructor(
             effectsProcessor.applyReplayGain(nextItem.normalizationGain, _shuffleMode.value)
 
             scope.launch {
-                progressReporter.reportStopped()
+                progressReporter.reportStopped(
+                    itemId = prevItemId,
+                    sessionId = prevSessionId,
+                    positionTicks = prevPosTicks,
+                )
 
                 val detail = mediaRepository.getMediaDetail(nextItem.id)
                 detail.onSuccess { d ->
@@ -1269,6 +1277,16 @@ class AudioPlaybackManager @Inject constructor(
     }
 
     private suspend fun onCrossfadeTransition(secondary: ExoPlayer, nextIndex: Int, nextItem: AudioQueueItem) {
+        val prevItemId = currentItemId
+        val prevSessionId = playSessionId
+        val prevPosTicks = if (_currentPosition.value > 0) _currentPosition.value * 10_000 else _duration.value * 10_000
+
+        progressReporter.reportStopped(
+            itemId = prevItemId,
+            sessionId = prevSessionId,
+            positionTicks = prevPosTicks,
+        )
+
         exoPlayer = secondary
 
         _currentIndex.value = nextIndex

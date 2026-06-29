@@ -148,5 +148,7 @@ interface MediaRepository : LiveTvRepository, SyncPlayRepository, NewsletterRepo
      */
     suspend fun invalidateCaches()
 
+    fun invalidateDetailCache(itemId: String? = null)
+
     suspend fun getPhotoFolderChildImageUrls(folderId: String, limit: Int = 4): List<String>
 }

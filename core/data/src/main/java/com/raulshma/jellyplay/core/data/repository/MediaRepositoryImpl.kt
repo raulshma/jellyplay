@@ -68,7 +68,7 @@ class MediaRepositoryImpl @Inject constructor(
     private val studiosCache = TtlCache<List<Studio>>(maxSize = 64, ttlMs = FOLDERS_CACHE_TTL_MS)
     private val latestMediaCache = TtlCache<List<MediaItem>>(maxSize = 64, ttlMs = LATEST_CACHE_TTL_MS)
 
-    fun invalidateDetailCache(itemId: String? = null) {
+    override fun invalidateDetailCache(itemId: String?) {
         if (itemId != null) {
             detailCache.remove(itemId)
         } else {
