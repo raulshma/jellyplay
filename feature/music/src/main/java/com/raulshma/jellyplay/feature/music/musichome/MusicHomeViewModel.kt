@@ -165,6 +165,13 @@ class MusicHomeViewModel @Inject constructor(
         }
     }
 
+    fun refresh() {
+        launch {
+            mediaRepository.invalidateCaches()
+            loadSections()
+        }
+    }
+
     fun getImageUrl(itemId: String): String =
         playbackRepository.getImageUrl(itemId, maxWidth = 400)
 

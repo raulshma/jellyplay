@@ -316,6 +316,7 @@ class HomeViewModel @Inject constructor(
             resetHomeScrollPosition()
             resetHomeFocusPosition()
             _uiState.update { it.copy(sections = emptyList(), favorites = emptyList(), discoverSections = emptyMap(), error = null) }
+            mediaRepository.invalidateCaches()
             fetchAndUpdateSections()
             startPeriodicRefresh()
         }
@@ -324,6 +325,7 @@ class HomeViewModel @Inject constructor(
     private fun pullToRefresh() {
         launch {
             _uiState.update { it.copy(isRefreshing = true, error = null) }
+            mediaRepository.invalidateCaches()
             fetchAndUpdateSections()
             startPeriodicRefresh()
         }

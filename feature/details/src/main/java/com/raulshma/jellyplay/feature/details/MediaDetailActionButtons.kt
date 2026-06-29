@@ -34,7 +34,6 @@ import com.composables.icons.tabler.filled.Heart
 import com.composables.icons.tabler.outline.Eye
 import com.composables.icons.tabler.outline.EyeOff
 import com.composables.icons.tabler.outline.Heart
-import com.composables.icons.tabler.outline.InfoCircle
 import com.composables.icons.tabler.outline.PlayerPlay
 import com.raulshma.jellyplay.core.designsystem.theme.ShapeCache
 import com.raulshma.jellyplay.core.model.MediaDetail
@@ -63,7 +62,7 @@ internal fun DetailActionButtons(
     onToggleFavorite: () -> Unit,
     onMarkPlayed: () -> Unit,
     onMarkUnplayed: () -> Unit,
-    onMediaInfoClick: () -> Unit = {},
+
     modifier: Modifier = Modifier,
     vertical: Boolean = false,
     contentFocusRequester: FocusRequester? = null,
@@ -251,26 +250,6 @@ internal fun DetailActionButtons(
                         )
                     }
                 }
-                val infoVTvFocusState = rememberTvFocusState(focusedScale = 1.08f)
-                FadingItem(modifier = Modifier.weight(1f)) {
-                    Box(
-                        contentAlignment = Alignment.Center,
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .height(48.dp)
-                            .clip(ShapeCache.smooth12)
-                            .background(MaterialTheme.colorScheme.onSurface.copy(alpha = 0.15f))
-                            .then(infoVTvFocusState.focusModifier)
-                            .then(Modifier.tvFocusIndicator(infoVTvFocusState, ShapeCache.smooth12))
-                            .clickable { onMediaInfoClick() }
-                    ) {
-                        Icon(
-                            Tabler.Outline.InfoCircle,
-                            contentDescription = "Technical Info",
-                            tint = MaterialTheme.colorScheme.onSurface,
-                        )
-                    }
-                }
             }
         }
     } else {
@@ -388,25 +367,6 @@ internal fun DetailActionButtons(
                 }
             }
 
-            val infoHFocusState = rememberTvFocusState(focusedScale = 1.08f)
-            FadingItem {
-                Box(
-                    contentAlignment = Alignment.Center,
-                    modifier = Modifier
-                        .size(56.dp)
-                        .clip(ShapeCache.smooth16)
-                        .background(MaterialTheme.colorScheme.onSurface.copy(alpha = 0.15f))
-                        .then(infoHFocusState.focusModifier)
-                        .then(Modifier.tvFocusIndicator(infoHFocusState, ShapeCache.smooth16))
-                        .clickable { onMediaInfoClick() }
-                ) {
-                    Icon(
-                        Tabler.Outline.InfoCircle,
-                        contentDescription = "Technical Info",
-                        tint = MaterialTheme.colorScheme.onSurface,
-                    )
-                }
-            }
 
             }
     }
