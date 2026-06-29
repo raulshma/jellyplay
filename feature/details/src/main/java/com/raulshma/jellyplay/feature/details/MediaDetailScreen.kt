@@ -66,6 +66,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusProperties
 import androidx.compose.ui.graphics.Brush
@@ -603,7 +604,7 @@ private fun DetailContent(
             com.raulshma.jellyplay.core.designsystem.theme.synthwaveBackgroundBrush()
         )
     } else {
-        Modifier.background(backgroundColor)
+        Modifier.drawBehind { drawRect(backgroundColor) }
     }
 
     Box(
@@ -693,18 +694,20 @@ private fun DetailContent(
             Box(
                 modifier = Modifier
                     .fillMaxSize()
-                    .background(
-                        Brush.verticalGradient(
-                            colors = listOf(
-                                if (isLandscapeExpanded) backgroundColor.copy(alpha = 0.5f) else Color.Transparent,
-                                backgroundColor.copy(alpha = if (isLandscapeExpanded) 0.8f else 0.4f),
-                                backgroundColor.copy(alpha = 0.9f),
-                                backgroundColor,
-                            ),
-                            startY = if (isLandscapeExpanded) 0f else with(density) { (baseBackdropHeight - 200.dp).toPx() },
-                            endY = with(density) { backdropHeight.toPx() }
+                    .drawBehind {
+                        drawRect(
+                            Brush.verticalGradient(
+                                colors = listOf(
+                                    if (isLandscapeExpanded) backgroundColor.copy(alpha = 0.5f) else Color.Transparent,
+                                    backgroundColor.copy(alpha = if (isLandscapeExpanded) 0.8f else 0.4f),
+                                    backgroundColor.copy(alpha = 0.9f),
+                                    backgroundColor,
+                                ),
+                                startY = if (isLandscapeExpanded) 0f else (baseBackdropHeight - 200.dp).toPx(),
+                                endY = backdropHeight.toPx()
                             )
-                    )
+                        )
+                    }
             )
         }
 
@@ -720,17 +723,19 @@ private fun DetailContent(
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .background(
-                        Brush.verticalGradient(
-                            colors = listOf(
-                                Color.Transparent,
-                                backgroundColor.copy(alpha = 0.9f),
-                                backgroundColor,
-                            ),
-                            startY = 0f,
-                            endY = with(density) { 150.dp.toPx() }
+                    .drawBehind {
+                        drawRect(
+                            Brush.verticalGradient(
+                                colors = listOf(
+                                    Color.Transparent,
+                                    backgroundColor.copy(alpha = 0.9f),
+                                    backgroundColor,
+                                ),
+                                startY = 0f,
+                                endY = 150.dp.toPx()
+                            )
                         )
-                    )
+                    }
             ) {
                 if (isExpanded && adaptiveInfo.isLandscape) {
                     Row(
@@ -975,7 +980,7 @@ private fun DetailContent(
         Box(
             modifier = Modifier
                 .fillMaxWidth()
-                .background(animatedContainerColor)
+                .drawBehind { drawRect(animatedContainerColor) }
         ) {
             MediumTopAppBar(
                 title = {

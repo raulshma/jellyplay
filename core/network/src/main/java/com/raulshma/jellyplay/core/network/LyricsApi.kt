@@ -25,14 +25,11 @@ class LyricsApi @Inject constructor(
     }
 
     private fun LyricDto.toLyricsResult(): LyricsResult {
-        val lines = lyrics.mapNotNull { line ->
+        val lines = lyrics.mapIndexedNotNull { idx, line ->
             val startMs = line.start?.let { it / 10_000 } ?: 0L
-            val nextStartMs = run {
-                val idx = lyrics.indexOf(line)
-                if (idx >= 0 && idx + 1 < lyrics.size) {
-                    lyrics[idx + 1].start?.div(10_000) ?: startMs
-                } else startMs
-            }
+            val nextStartMs = if (idx + 1 < lyrics.size) {
+                lyrics[idx + 1].start?.div(10_000) ?: startMs
+            } else startMs
             val text = line.text
             val words = line.cues?.map { cue ->
                 LyricsWord(

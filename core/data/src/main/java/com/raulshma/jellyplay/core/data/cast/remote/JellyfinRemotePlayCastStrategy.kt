@@ -135,7 +135,6 @@ class JellyfinRemotePlayCastStrategy @Inject constructor(
         _isConnected.value = true
         _isConnecting.value = false
 
-        startStatusPollingLoop()
         Log.i(TAG, "Connected to Jellyfin remote session: ${session.userName} (${session.client})")
     }
 
@@ -149,16 +148,6 @@ class JellyfinRemotePlayCastStrategy @Inject constructor(
         _durationMs.value = 0L
         _isPlaying.value = false
         Log.i(TAG, "Disconnected from Jellyfin remote session")
-    }
-
-    private fun startStatusPollingLoop() {
-        statusPollingJob?.cancel()
-        statusPollingJob = scope.launch {
-            while (isConnected.value) {
-                refreshPlaybackState()
-                delay(2000L)
-            }
-        }
     }
 
     suspend fun refreshPlaybackState() {

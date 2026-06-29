@@ -1,8 +1,5 @@
 package com.raulshma.jellyplay.feature.home
 
-import androidx.compose.animation.core.Spring
-import androidx.compose.animation.core.animateFloatAsState
-import androidx.compose.animation.core.spring
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -19,7 +16,6 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -41,11 +37,7 @@ fun NewsletterBanner(
     onDismiss: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    val entranceAlpha by animateFloatAsState(
-        targetValue = 1f,
-        animationSpec = spring(stiffness = Spring.StiffnessMedium, dampingRatio = Spring.DampingRatioMediumBouncy),
-        label = "newsletterBannerEntrance",
-    )
+    val entranceAlpha = 1f
 
     val primaryContainer = MaterialTheme.colorScheme.primaryContainer
     val tertiaryContainer = MaterialTheme.colorScheme.tertiaryContainer
@@ -65,8 +57,8 @@ fun NewsletterBanner(
             .clickable(onClick = onClick)
             .graphicsLayer {
                 alpha = entranceAlpha
-                scaleX = 0.97f + (0.03f * entranceAlpha)
-                scaleY = 0.97f + (0.03f * entranceAlpha)
+                scaleX = entranceAlpha
+                scaleY = entranceAlpha
             }
             .padding(horizontal = 20.dp, vertical = 16.dp),
     ) {
