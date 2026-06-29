@@ -78,6 +78,14 @@ class EditorViewModel @Inject constructor(
 
     private var originalHash: Int = 0
 
+    init {
+        launch {
+            isAdminFlow.collect { user ->
+                _uiState.update { it.copy(isAdmin = user?.isAdmin == true) }
+            }
+        }
+    }
+
     fun loadEditorData(itemId: String) {
         launch {
             _uiState.update { it.copy(isLoading = true, error = null) }
@@ -147,11 +155,6 @@ class EditorViewModel @Inject constructor(
                 originalHash = computeDirtyHash(_uiState.value)
             } catch (e: Exception) {
                 _uiState.update { it.copy(isLoading = false, error = e.message) }
-            }
-        }
-        launch {
-            isAdminFlow.collect { user ->
-                _uiState.update { it.copy(isAdmin = user?.isAdmin == true) }
             }
         }
     }

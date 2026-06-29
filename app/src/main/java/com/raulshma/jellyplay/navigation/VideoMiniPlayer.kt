@@ -100,17 +100,20 @@ fun VideoMiniPlayer(
             label = "videoMiniPlayerColor",
         )
 
+        val primary = MaterialTheme.colorScheme.primary
+        val secondary = MaterialTheme.colorScheme.secondary
+        val synthwaveBorder = remember(primary, secondary) {
+            androidx.compose.foundation.BorderStroke(
+                width = 1.dp,
+                brush = androidx.compose.ui.graphics.Brush.linearGradient(
+                    colors = listOf(primary, secondary)
+                )
+            )
+        }
+
         val border = when {
             isSynthwave -> {
-                androidx.compose.foundation.BorderStroke(
-                    width = 1.dp,
-                    brush = androidx.compose.ui.graphics.Brush.linearGradient(
-                        colors = listOf(
-                            MaterialTheme.colorScheme.primary,
-                            MaterialTheme.colorScheme.secondary
-                        )
-                    )
-                )
+                synthwaveBorder
             }
             isSoothing -> {
                 androidx.compose.foundation.BorderStroke(

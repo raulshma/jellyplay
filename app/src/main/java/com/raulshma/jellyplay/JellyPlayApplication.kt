@@ -58,54 +58,54 @@ class JellyPlayApplication : Application(), SingletonImageLoader.Factory, Config
 
     override fun onCreate() {
         super.onCreate()
-        SentryAndroid.init(this) { options ->
-            // Strip query strings from HTTP breadcrumb URLs that may carry the
-            // Jellyfin access token (e.g. ".../stream?api_key=…"). The previous
-            // implementation was case-sensitive and only inspected the "url"
-            // data key, missing "ApiKey" variants and breadcrumbs whose message
-            // contained a logged request line.
-            options.setBeforeBreadcrumb { breadcrumb, _ ->
-                val data = breadcrumb.data
-                val url = data["url"] as? String
-                if (url != null && url.contains("?")) {
-                    val query = url.substringAfter("?")
-                    // Match token-bearing query params case-insensitively.
-                    val tokenParamNames = setOf(
-                        "api_key", "apikey", "token", "x-emby-token", "accesstoken",
-                    )
-                    val carriesToken = query.split("&").any { kv ->
-                        val key = kv.substringBefore("=").lowercase()
-                        key in tokenParamNames
-                    }
-                    if (carriesToken) {
-                        data["url"] = url.substringBefore("?")
-                    }
-                }
-                // Drop breadcrumbs whose message contains a literal token
-                // pattern (e.g. an OkHttp log line of
-                // "GET .../stream?api_key=abc123"). Returning null drops the
-                // breadcrumb entirely rather than redacting in place, which is
-                // safer because we can't know where in the message the token is.
-                val message = breadcrumb.message
-                if (message != null) {
-                    val lower = message.lowercase()
-                    val tokenPatterns = listOf(
-                        "api_key=", "apikey=", "x-emby-token:", "x-emby-token=",
-                        "accesstoken=",
-                    )
-                    if (tokenPatterns.any { lower.contains(it) }) {
-                        return@setBeforeBreadcrumb null
-                    }
-                }
-                breadcrumb
-            }
-            options.dsn?.let { dsn ->
-                if (dsn.isNotBlank()) {
-                    configureSentryUserContext()
-                }
-            }
-        }
         applicationScope.launch {
+            SentryAndroid.init(this@JellyPlayApplication) { options ->
+                // Strip query strings from HTTP breadcrumb URLs that may carry the
+                // Jellyfin access token (e.g. ".../stream?api_key=…"). The previous
+                // implementation was case-sensitive and only inspected the "url"
+                // data key, missing "ApiKey" variants and breadcrumbs whose message
+                // contained a logged request line.
+                options.setBeforeBreadcrumb { breadcrumb, _ ->
+                    val data = breadcrumb.data
+                    val url = data["url"] as? String
+                    if (url != null && url.contains("?")) {
+                        val query = url.substringAfter("?")
+                        // Match token-bearing query params case-insensitively.
+                        val tokenParamNames = setOf(
+                            "api_key", "apikey", "token", "x-emby-token", "accesstoken",
+                        )
+                        val carriesToken = query.split("&").any { kv ->
+                            val key = kv.substringBefore("=").lowercase()
+                            key in tokenParamNames
+                        }
+                        if (carriesToken) {
+                            data["url"] = url.substringBefore("?")
+                        }
+                    }
+                    // Drop breadcrumbs whose message contains a literal token
+                    // pattern (e.g. an OkHttp log line of
+                    // "GET .../stream?api_key=abc123"). Returning null drops the
+                    // breadcrumb entirely rather than redacting in place, which is
+                    // safer because we can't know where in the message the token is.
+                    val message = breadcrumb.message
+                    if (message != null) {
+                        val lower = message.lowercase()
+                        val tokenPatterns = listOf(
+                            "api_key=", "apikey=", "x-emby-token:", "x-emby-token=",
+                            "accesstoken=",
+                        )
+                        if (tokenPatterns.any { lower.contains(it) }) {
+                            return@setBeforeBreadcrumb null
+                        }
+                    }
+                    breadcrumb
+                }
+                options.dsn?.let { dsn ->
+                    if (dsn.isNotBlank()) {
+                        configureSentryUserContext()
+                    }
+                }
+            }
             audioPlaybackManager.start()
             nowPlayingWidgetUpdater.start()
             com.raulshma.jellyplay.widget.WidgetWorkScheduler.enqueuePeriodic(this@JellyPlayApplication)

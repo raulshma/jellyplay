@@ -175,6 +175,7 @@ class ExoPlayerEngine(
     private var videoDecoderCounters: DecoderCounters? = null
     private var audioEffectsAttached = false
     private var lastAudioEffectsConfig: AudioEffectsConfig? = null
+    private var lastAppliedReverbPreset: com.raulshma.jellyplay.core.model.ReverbPreset? = null
 
     private val _pollingIntervalMs = MutableStateFlow(1000L)
     override val pollingIntervalMs: StateFlow<Long> = _pollingIntervalMs.asStateFlow()
@@ -810,12 +811,15 @@ class ExoPlayerEngine(
         loudnessEnhancerHelper.setEnabled(config.volumeBoostEnabled)
 
         if (config.reverbPreset != com.raulshma.jellyplay.core.model.ReverbPreset.NONE) {
-            reverbHelper.detach()
-            reverbHelper.attach(sid)
+            if (lastAppliedReverbPreset != config.reverbPreset) {
+                reverbHelper.detach()
+                reverbHelper.attach(sid)
+            }
             reverbHelper.setPreset(config.reverbPreset)
         } else {
             reverbHelper.setEnabled(false)
         }
+        lastAppliedReverbPreset = config.reverbPreset
         
         lastAudioEffectsConfig = config
     }
@@ -832,6 +836,7 @@ class ExoPlayerEngine(
         loudnessEnhancerHelper.detach()
         audioEffectsAttached = false
         lastAudioEffectsConfig = null
+        lastAppliedReverbPreset = null
     }
 
     private fun buildTracks(): List<MediaTrack> {

@@ -22,6 +22,7 @@ class AudioVisualizerHelper {
     private var lastFft: ByteArray? = null
     private var lastWaveform: ByteArray? = null
     private var lastFftUpdateTime = 0L
+    private var lastWaveformUpdateTime = 0L
 
     var isEnabled: Boolean = false
         private set
@@ -43,9 +44,15 @@ class AudioVisualizerHelper {
                             waveform: ByteArray?,
                             samplingRate: Int,
                         ) {
-                            if (waveform != null && !waveform.contentEquals(lastWaveform)) {
-                                lastWaveform = waveform
-                                _waveformData.value = waveform
+                            if (waveform != null) {
+                                val now = SystemClock.elapsedRealtime()
+                                if (now - lastWaveformUpdateTime >= 33 &&
+                                    !waveform.contentEquals(lastWaveform)
+                                ) {
+                                    lastWaveformUpdateTime = now
+                                    lastWaveform = waveform
+                                    _waveformData.value = waveform
+                                }
                             }
                         }
 

@@ -8,6 +8,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.clipToBounds
+import androidx.compose.ui.draw.drawBehind
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import com.raulshma.jellyplay.core.ui.components.LocalFloatingNavVisibility
@@ -321,7 +322,9 @@ private fun MainHomeContent(
     )
 
     val navBarColor = LocalNavigationBarColor.current
-    LaunchedEffect(backgroundColor) { navBarColor.value = backgroundColor }
+    LaunchedEffect(Unit) {
+        snapshotFlow { backgroundColor }.collect { navBarColor.value = it }
+    }
 
     val transitionRangePx = remember(density) { with(density) { 140.dp.toPx() } }
     val scrollFraction by remember {
@@ -613,7 +616,7 @@ private fun MainHomeContent(
             enabled = !isTv && !isSearchFocused,
             modifier = Modifier.fillMaxSize(),
         ) {
-        Box(modifier = Modifier.fillMaxSize().background(backgroundColor)) {
+        Box(modifier = Modifier.fillMaxSize().drawBehind { drawRect(backgroundColor) }) {
             Box(
                 modifier = Modifier
                     .fillMaxSize()
@@ -943,7 +946,7 @@ private fun HomeContentList(
             contentPadding = PaddingValues(bottom = adaptiveInfo.bottomPadding(isTv)),
         ) {
             if (featuredItem != null && homeHeroEnabled) {
-                item {
+                item(key = "hero") {
                     AnimatedHeroHeader(
                         featuredItem = featuredItem,
                         getBackdropUrl = remember { { viewModel.getBackdropUrl(it) } },
@@ -959,7 +962,7 @@ private fun HomeContentList(
                     )
                 }
             } else {
-                item { Spacer(Modifier.height(100.dp)) }
+                item(key = "hero_spacer") { Spacer(Modifier.height(100.dp)) }
             }
 
             if (newsletterBannerVisible) {

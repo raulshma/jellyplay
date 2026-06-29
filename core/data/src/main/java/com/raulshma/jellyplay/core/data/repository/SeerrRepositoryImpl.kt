@@ -47,11 +47,11 @@ class SeerrRepositoryImpl @Inject constructor(
     private val detailCache = TtlCache<Any>(ttlMs = CACHE_TTL_MS)
 
     private fun <T> getCached(key: String): T? {
-        detailCache.evictExpired()
         return detailCache.get(key) as? T
     }
 
     private fun putCached(key: String, value: Any) {
+        detailCache.evictExpired()
         detailCache.put(key, value)
     }
 

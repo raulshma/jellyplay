@@ -312,12 +312,10 @@ class AudioPlayerViewModel @Inject constructor(
                 audioPlaybackManager.lrBalance,
                 audioPlaybackManager.pitchSemitones,
                 audioPlaybackManager.autoEqByGenre,
-                audioPlaybackManager.fftData,
-            ) { lr, pitch, autoEq, fft ->
+            ) { lr, pitch, autoEq ->
                 lrBalance = lr
                 pitchSemitones = pitch
                 autoEqByGenre = autoEq
-                _fftData.set(fft)
             }.collect {}
         }
         launch {
