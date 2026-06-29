@@ -463,6 +463,15 @@ class Migration24To25(
     }
 }
 
+val MIGRATION_25_26 = object : Migration(25, 26) {
+    override fun migrate(db: SupportSQLiteDatabase) {
+        db.execSQL("CREATE INDEX IF NOT EXISTS index_offline_media_mediaType_createdAt ON offline_media(mediaType, createdAt)")
+        db.execSQL("CREATE INDEX IF NOT EXISTS index_downloads_status_priority_createdAt ON downloads(status, priority, createdAt)")
+        db.execSQL("CREATE INDEX IF NOT EXISTS index_search_history_userId_searchedAt ON search_history(userId, searchedAt)")
+        db.execSQL("CREATE INDEX IF NOT EXISTS index_media_audit_log_actionType_timestamp ON media_audit_log(actionType, timestamp)")
+    }
+}
+
 val ALL_MIGRATIONS = listOf(
     MIGRATION_1_2,
     MIGRATION_2_3,
@@ -487,4 +496,5 @@ val ALL_MIGRATIONS = listOf(
     MIGRATION_21_22,
     MIGRATION_22_23,
     MIGRATION_23_24,
+    MIGRATION_25_26,
 )

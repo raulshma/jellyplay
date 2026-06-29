@@ -21,9 +21,7 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
-import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.runBlocking
 
 /**
  * Home-screen widget that surfaces personalized recommendations from
@@ -207,9 +205,8 @@ class LibraryRecommendationsWidget : AppWidgetProvider() {
                 context.applicationContext,
                 WidgetEntryPoint::class.java,
             )
-            runBlocking {
-                entryPoint.userPreferencesStore().getWidgetConfigForId(appWidgetId).first()
-            }.librarySource.displayName
+            entryPoint.userPreferencesStore().getWidgetConfigForIdSync(appWidgetId)
+                .librarySource.displayName
         }.getOrDefault(LibraryRecommendationsSource.SIMILAR_TO_RECENT.displayName)
     }
 }

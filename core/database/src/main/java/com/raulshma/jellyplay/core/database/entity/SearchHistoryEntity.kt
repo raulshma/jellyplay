@@ -11,6 +11,7 @@ import androidx.room.PrimaryKey
         Index(value = ["userId"]),
         Index(value = ["query", "userId"], unique = true),
         Index(value = ["searchedAt"]),
+        Index(value = ["userId", "searchedAt"]),
     ],
 )
 data class SearchHistoryEntity(

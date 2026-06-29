@@ -927,10 +927,11 @@ private fun PhoneContent(
                 navigationRailContainerColor = animatedNavBarColor,
             ),
         ) {
+            val synthwaveBrush = remember {
+                com.raulshma.jellyplay.core.designsystem.theme.synthwaveBackgroundBrush()
+            }
             val appBackgroundModifier = if (isSynthwave) {
-                Modifier.background(
-                    com.raulshma.jellyplay.core.designsystem.theme.synthwaveBackgroundBrush()
-                )
+                Modifier.background(synthwaveBrush)
             } else {
                 Modifier.background(MaterialTheme.colorScheme.background)
             }

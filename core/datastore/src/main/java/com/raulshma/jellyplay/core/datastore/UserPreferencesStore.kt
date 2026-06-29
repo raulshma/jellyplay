@@ -351,6 +351,7 @@ class UserPreferencesStore @Inject constructor(
             15 * 60_000L,
             60 * 60_000L,
         )
+        private val ENCODE_DEFAULTS_JSON = Json { encodeDefaults = true }
     }
 
     private val json = Json { ignoreUnknownKeys = true }
@@ -2130,6 +2131,23 @@ class UserPreferencesStore @Inject constructor(
      * Returns the [WidgetConfig] for a specific widget instance, falling back
      * to the global config if no per-widget config exists.
      */
+    private val widgetConfigSnapshot: StateFlow<Pair<Map<Int, WidgetConfig>, WidgetConfig?>> =
+        sharedPrefs.map { prefs ->
+            val perWidget = prefs[Keys.WIDGET_CONFIGS]?.let { configsJson ->
+                try { json.decodeFromString<Map<Int, WidgetConfig>>(configsJson) }
+                catch (_: Exception) { null }
+            } ?: emptyMap()
+            val legacy = prefs[Keys.WIDGET_CONFIG]?.let {
+                try { json.decodeFromString<WidgetConfig>(it) } catch (_: Exception) { null }
+            }
+            perWidget to legacy
+        }.stateIn(scope, SharingStarted.Eagerly, emptyMap<Int, WidgetConfig>() to null)
+
+    fun getWidgetConfigForIdSync(appWidgetId: Int): WidgetConfig {
+        val (perWidget, legacy) = widgetConfigSnapshot.value
+        return perWidget[appWidgetId] ?: legacy ?: WidgetConfig()
+    }
+
     fun getWidgetConfigForId(appWidgetId: Int): kotlinx.coroutines.flow.Flow<WidgetConfig> =
         sharedPrefs.map { prefs ->
             val perWidgetConfig = prefs[Keys.WIDGET_CONFIGS]?.let { configsJson ->
@@ -2224,7 +2242,7 @@ class UserPreferencesStore @Inject constructor(
     }
 
     suspend fun restorePreferences(prefs: UserPreferences) {
-        val json = Json { encodeDefaults = true }
+        val json = ENCODE_DEFAULTS_JSON
         context.dataStore.edit { settings ->
             settings[Keys.PREFERRED_PLAYER] = prefs.preferredPlayer.name
             prefs.preferredSubtitleLanguage?.let { settings[Keys.PREFERRED_SUBTITLE_LANG] = it }

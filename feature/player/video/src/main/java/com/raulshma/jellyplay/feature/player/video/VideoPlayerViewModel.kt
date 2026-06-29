@@ -69,6 +69,9 @@ import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.collectLatest
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.receiveAsFlow
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -533,19 +536,21 @@ class VideoPlayerViewModel @Inject constructor(
             }
         }
         launch {
-            while (isActive) {
-                kotlinx.coroutines.delay(60_000)
-                val hours = _uiState.value.passOutProtectionHours
-                if (hours <= 0) continue
-                val engine = playerSessionManager.engine ?: continue
-                if (!engine.isPlaying.value) continue
-                val elapsedMs = android.os.SystemClock.elapsedRealtime() - lastInteractionElapsedMs
-                val thresholdMs = hours * 3_600_000L
-                if (elapsedMs >= thresholdMs) {
-                    engine.pause()
-                    _passOutEvents.trySend("Playback paused — pass-out protection")
+            _uiState.flow.map { it.passOutProtectionHours }.distinctUntilChanged()
+                .collectLatest { hours ->
+                    if (hours <= 0) return@collectLatest
+                    while (isActive) {
+                        kotlinx.coroutines.delay(60_000)
+                        val engine = playerSessionManager.engine ?: continue
+                        if (!engine.isPlaying.value) continue
+                        val elapsedMs = android.os.SystemClock.elapsedRealtime() - lastInteractionElapsedMs
+                        val thresholdMs = hours * 3_600_000L
+                        if (elapsedMs >= thresholdMs) {
+                            engine.pause()
+                            _passOutEvents.trySend("Playback paused — pass-out protection")
+                        }
+                    }
                 }
-            }
         }
         syncPlayBridge.start()
 
