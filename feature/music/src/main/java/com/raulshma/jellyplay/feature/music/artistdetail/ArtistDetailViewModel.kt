@@ -58,6 +58,13 @@ class ArtistDetailViewModel @Inject constructor(
         }
     }
 
+    fun refreshArtist(artistId: String) {
+        launch {
+            mediaRepository.invalidateDetailCache(artistId)
+            loadArtist(artistId)
+        }
+    }
+
     fun getImageUrl(itemId: String): String =
         playbackRepository.getImageUrl(itemId, maxWidth = 400)
 
