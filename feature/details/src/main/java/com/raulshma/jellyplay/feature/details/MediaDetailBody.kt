@@ -409,7 +409,6 @@ internal fun DetailContentBody(
                 onToggleFavorite = onToggleFavorite,
                 onMarkPlayed = onMarkPlayed,
                 onMarkUnplayed = onMarkUnplayed,
-                onMediaInfoClick = { onNavigate(com.raulshma.jellyplay.core.ui.navigation.Route.MediaInfo(detail.item.id)) },
                 vertical = false,
                 contentFocusRequester = contentFocusRequester,
             )

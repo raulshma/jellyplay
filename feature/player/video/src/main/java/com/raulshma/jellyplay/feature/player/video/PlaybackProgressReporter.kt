@@ -116,7 +116,7 @@ internal class PlaybackProgressReporter(
                 delay(10_000)
                 if (getIncognitoModeEnabled()) continue
                 val engine = getMediaEngine() ?: continue
-                val itemId = getCurrentItemId() ?: break
+                val itemId = getCurrentItemId() ?: continue
                 val positionTicks = engine.currentPositionMs * 10_000
                 val isPaused = !engine.isPlaying.value
                 if (isPaused && positionTicks == lastPausedPositionTicks) continue

@@ -93,20 +93,10 @@ fun ArtistDetailScreen(
         }
     }
 
-    val scope = rememberCoroutineScope()
-    var isRefreshing by remember { mutableStateOf(false) }
-
     PullToRefreshBox(
-        isRefreshing = isRefreshing,
+        isRefreshing = viewModel.isLoading && viewModel.artistName.isNotEmpty(),
         onRefresh = {
-            scope.launch {
-                isRefreshing = true
-                try {
-                    viewModel.loadArtist(artistId)
-                } finally {
-                    isRefreshing = false
-                }
-            }
+            viewModel.refreshArtist(artistId)
         },
     ) {
     when {
@@ -116,7 +106,7 @@ fun ArtistDetailScreen(
         viewModel.error != null -> {
             ErrorScreen(
                 message = viewModel.error!!,
-                onRetry = { scope.launch { viewModel.loadArtist(artistId) } },
+                onRetry = { viewModel.loadArtist(artistId) },
             )
         }
         else -> {

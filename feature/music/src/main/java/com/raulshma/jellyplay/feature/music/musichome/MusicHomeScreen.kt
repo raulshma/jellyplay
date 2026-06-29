@@ -57,8 +57,6 @@ fun MusicHomeScreen(
     val adaptiveInfo = LocalAdaptiveInfo.current
     val isTv = LocalTvMode.current
 
-    var isRefreshing by remember { mutableStateOf(false) }
-
     val initialFocusRequester = remember { FocusRequester() }
 
     // Focus groups for each section to build a vertical chain
@@ -86,16 +84,9 @@ fun MusicHomeScreen(
     )
 
     PullToRefreshBox(
-        isRefreshing = isRefreshing,
+        isRefreshing = viewModel.isLoading && sections.isNotEmpty(),
         onRefresh = {
-            scope.launch {
-                isRefreshing = true
-                try {
-                    viewModel.loadSections()
-                } finally {
-                    isRefreshing = false
-                }
-            }
+            viewModel.refresh()
         },
         modifier = Modifier
             .fillMaxSize()

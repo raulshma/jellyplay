@@ -47,6 +47,10 @@ class NewsletterViewModel @Inject constructor(
                 )
             }
 
+            if (isPullToRefresh) {
+                mediaRepository.invalidateCaches()
+            }
+
             val sinceDate = LocalDate.now()
                 .minusDays(7)
                 .atStartOfDay()

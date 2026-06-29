@@ -193,6 +193,7 @@ class VideoPlayerViewModel @Inject constructor(
     private val currentPlaySessionId: String
         get() = playerSessionManager.sessionState.value.playSessionId ?: playSessionId
     private var autoplayNext: Boolean = false
+    private var autoplayCancelled: Boolean = false
     private var cachedPreferences: com.raulshma.jellyplay.core.model.UserPreferences = com.raulshma.jellyplay.core.model.UserPreferences()
 
     /**
@@ -500,6 +501,13 @@ class VideoPlayerViewModel @Inject constructor(
                 if (_uiState.value.passOutProtectionHours != prefs.videoPassOutProtectionHours) {
                     _uiState.update { it.copy(passOutProtectionHours = prefs.videoPassOutProtectionHours) }
                 }
+                if (_uiState.value.videoAutoplayNext != prefs.videoAutoplayNext) {
+                    _uiState.update { it.copy(videoAutoplayNext = prefs.videoAutoplayNext) }
+                    autoplayNext = prefs.videoAutoplayNext
+                }
+                if (_uiState.value.autoPlayCountdownSec != prefs.autoPlayCountdownSec) {
+                    _uiState.update { it.copy(autoPlayCountdownSec = prefs.autoPlayCountdownSec) }
+                }
                 if (oldPrefs.volumeBoostEnabled != prefs.volumeBoostEnabled ||
                     oldPrefs.volumeBoostGain != prefs.volumeBoostGain ||
                     oldPrefs.equalizerSettings != prefs.equalizerSettings ||
@@ -653,6 +661,9 @@ class VideoPlayerViewModel @Inject constructor(
                                 _uiState.update { s ->
                                     if (s.isBuffering == buffering) s else s.copy(isBuffering = buffering)
                                 }
+                                if (state == com.raulshma.jellyplay.feature.player.video.engine.EnginePlaybackState.ENDED) {
+                                    handlePlaybackEnded()
+                                }
                             } }
                             launch { engine.currentCues.collect { cues ->
                                 val filteredCues = cues.filter { it.isNotBlank() }
@@ -753,6 +764,8 @@ class VideoPlayerViewModel @Inject constructor(
         allowCinemaMode: Boolean,
     ) {
         released = false
+        autoplayCancelled = false
+        _uiState.update { it.copy(autoplayCancelled = false) }
         lastSeekPositionMs = null
         lastSeekTimestamp = 0L
         trackSelectionHelper.setPendingStreams(subtitleStreamIndex, audioStreamIndex)
@@ -883,6 +896,8 @@ class VideoPlayerViewModel @Inject constructor(
                 streamingQuality = prefs.streamingQuality,
                 adaptiveBitrateEnabled = prefs.adaptiveBitrateEnabled,
                 playbackMode = prefs.playbackMode,
+                videoAutoplayNext = prefs.videoAutoplayNext,
+                autoPlayCountdownSec = prefs.autoPlayCountdownSec,
             ) }
             autoplayNext = prefs.videoAutoplayNext
 
@@ -1464,6 +1479,24 @@ class VideoPlayerViewModel @Inject constructor(
             }
 
             initialize(next.id, null, 0L)
+        }
+    }
+
+    fun cancelAutoplay() {
+        autoplayCancelled = true
+        _uiState.update { it.copy(autoplayCancelled = true) }
+    }
+
+    private fun handlePlaybackEnded() {
+        val next = _uiState.value.nextEpisode
+        if (next != null && autoplayNext && !autoplayCancelled) {
+            playNextEpisode()
+        } else {
+            if (cinemaIntroContext != null) {
+                advanceCinemaIntro()
+            } else {
+                _closePlayer.trySend(Unit)
+            }
         }
     }
 

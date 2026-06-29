@@ -804,7 +804,6 @@ private fun DetailContent(
                                         onToggleFavorite = onToggleFavorite,
                                         onMarkPlayed = onMarkPlayed,
                                         onMarkUnplayed = onMarkUnplayed,
-                                        onMediaInfoClick = { onNavigate(com.raulshma.jellyplay.core.ui.navigation.Route.MediaInfo(item.id)) },
                                         vertical = true,
                                         contentFocusRequester = contentFocusRequester,
                                     )
@@ -1129,6 +1128,16 @@ private fun DetailContent(
                                         Icon(Tabler.Outline.EyeOff, contentDescription = null)
                                     }
                                 )
+                                DropdownMenuItem(
+                                    text = { Text("Technical Info") },
+                                    onClick = {
+                                        menuExpanded = false
+                                        onNavigate(com.raulshma.jellyplay.core.ui.navigation.Route.MediaInfo(itemId))
+                                    },
+                                    leadingIcon = {
+                                        Icon(Tabler.Outline.InfoCircle, contentDescription = null)
+                                    }
+                                )
                             }
                         }
                     }
@@ -1288,6 +1297,14 @@ private fun DetailContent(
                     onClick = {
                         showTvOptionsMenu = false
                         onHideFromContinueWatching()
+                    },
+                )
+                TvOptionItem(
+                    icon = Tabler.Outline.InfoCircle,
+                    label = "Technical Info",
+                    onClick = {
+                        showTvOptionsMenu = false
+                        onNavigate(com.raulshma.jellyplay.core.ui.navigation.Route.MediaInfo(itemId))
                     },
                 )
             }
