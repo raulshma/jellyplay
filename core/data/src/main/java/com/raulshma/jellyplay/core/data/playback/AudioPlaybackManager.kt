@@ -14,6 +14,7 @@ import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.exoplayer.audio.DefaultAudioSink
 import androidx.media3.session.MediaSession
 import androidx.media3.session.MediaLibraryService.MediaLibrarySession
+import androidx.compose.runtime.Immutable
 import com.raulshma.jellyplay.core.data.repository.DownloadRepository
 import com.raulshma.jellyplay.core.data.repository.MediaRepository
 import com.raulshma.jellyplay.core.data.repository.OfflineRepository
@@ -33,7 +34,6 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
-import androidx.compose.runtime.Immutable
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.MutableSharedFlow
@@ -43,6 +43,8 @@ import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.sync.Semaphore
+import kotlinx.coroutines.sync.withPermit
 import java.util.UUID
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -78,6 +80,8 @@ class AudioPlaybackManager @Inject constructor(
     private val effectsProcessor: AudioEffectsProcessor,
 ) : AudioEffectsManager, AudioQueueManager {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
+
+    private val queuePreWarmPermits = Semaphore(8)
 
     private var exoPlayer: ExoPlayer? = null
     private var currentPreferences = com.raulshma.jellyplay.core.model.UserPreferences()
@@ -571,7 +575,7 @@ class AudioPlaybackManager @Inject constructor(
                                 if (cached != null) {
                                     kotlinx.coroutines.CompletableDeferred<MediaItem?>(cached)
                                 } else {
-                                    async { buildMediaItemForQueueItem(qi) }
+                                    async { queuePreWarmPermits.withPermit { buildMediaItemForQueueItem(qi) } }
                                 }
                             }
                             val beforeJobs = (0 until playIndex).map { i ->
@@ -580,7 +584,7 @@ class AudioPlaybackManager @Inject constructor(
                                 if (cached != null) {
                                     kotlinx.coroutines.CompletableDeferred<MediaItem?>(cached)
                                 } else {
-                                    async { buildMediaItemForQueueItem(qi) }
+                                    async { queuePreWarmPermits.withPermit { buildMediaItemForQueueItem(qi) } }
                                 }
                             }
 
@@ -721,7 +725,7 @@ class AudioPlaybackManager @Inject constructor(
         val removed = q[index]
         pushUndoSnapshot(QueueUndoEvent.ItemRemoved(removed))
         val wasPlaying = index == _currentIndex.value
-        _queue.value = q.toMutableList().apply { removeAt(index) }.toList()
+        _queue.value = q.toMutableList().apply { removeAt(index) }
         if (wasPlaying) {
             if (_queue.value.isNotEmpty()) {
                 _currentIndex.value = _currentIndex.value.coerceAtMost(_queue.value.lastIndex)

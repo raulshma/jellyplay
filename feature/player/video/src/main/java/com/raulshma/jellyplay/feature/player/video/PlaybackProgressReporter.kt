@@ -106,8 +106,11 @@ internal class PlaybackProgressReporter(
         onAutoSkip(seg)
     }
 
+    private var lastPausedPositionTicks: Long = -1L
+
     fun startProgressReporting() {
         progressJob?.cancel()
+        lastPausedPositionTicks = -1L
         progressJob = viewModel.viewModelScope.launch {
             while (true) {
                 delay(10_000)
@@ -116,6 +119,8 @@ internal class PlaybackProgressReporter(
                 val itemId = getCurrentItemId() ?: break
                 val positionTicks = engine.currentPositionMs * 10_000
                 val isPaused = !engine.isPlaying.value
+                if (isPaused && positionTicks == lastPausedPositionTicks) continue
+                if (isPaused) lastPausedPositionTicks = positionTicks else lastPausedPositionTicks = -1L
                 playbackRepository.reportPlaybackProgress(
                     PlaybackProgress(
                         itemId = itemId,

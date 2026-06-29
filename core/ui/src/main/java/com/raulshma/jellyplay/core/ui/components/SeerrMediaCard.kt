@@ -334,8 +334,9 @@ fun SeerrMediaCard(
                                 style = MaterialTheme.typography.labelSmall,
                                 color = RatingColors.star,
                             )
+                            val ratingText = remember(item.voteAverage) { "%.1f".format(item.voteAverage) }
                             Text(
-                                text = "%.1f".format(item.voteAverage),
+                                text = ratingText,
                                 style = MaterialTheme.typography.labelSmall,
                                 color = MaterialTheme.colorScheme.onSurface,
                             )

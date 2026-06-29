@@ -57,29 +57,36 @@ fun rememberTvFocusState(
 
     val motionScheme = MaterialTheme.motionScheme
 
-    // Breathing fade alpha animation (TV only)
-    val infiniteTransition = rememberInfiniteTransition(label = "tvFocusBreathing")
-    val breathingAlpha = infiniteTransition.animateFloat(
-        initialValue = 1f,
-        targetValue = 0.65f,
-        animationSpec = infiniteRepeatable(
-            animation = tween(durationMillis = 1200, easing = FastOutSlowInEasing),
-            repeatMode = RepeatMode.Reverse
-        ),
-        label = "breathingAlpha"
-    )
+    // Breathing fade alpha animation (TV only). On non-TV devices the breathing
+    // fraction is always 0 so the effect is invisible; skip constructing the
+    // infinite transition entirely to avoid a continuous animation coroutine
+    // driving recomposition on every focusable item.
+    val alphaProvider = if (isTv) {
+        val infiniteTransition = rememberInfiniteTransition(label = "tvFocusBreathing")
+        val breathingAlpha = infiniteTransition.animateFloat(
+            initialValue = 1f,
+            targetValue = 0.65f,
+            animationSpec = infiniteRepeatable(
+                animation = tween(durationMillis = 1200, easing = FastOutSlowInEasing),
+                repeatMode = RepeatMode.Reverse
+            ),
+            label = "breathingAlpha"
+        )
 
-    val breathingFraction = animateFloatAsState(
-        targetValue = if (isFocused && isTv) 1f else 0f,
-        animationSpec = motionScheme.fastSpatialSpec(),
-        label = "breathingFraction"
-    )
+        val breathingFraction = animateFloatAsState(
+            targetValue = if (isFocused) 1f else 0f,
+            animationSpec = motionScheme.fastSpatialSpec(),
+            label = "breathingFraction"
+        )
 
-    // Wrap in lambda to avoid recomposition on every animation frame
-    val alphaProvider = remember(breathingAlpha, breathingFraction) {
-        {
-            1f - (1f - breathingAlpha.value) * breathingFraction.value
+        // Wrap in lambda to avoid recomposition on every animation frame
+        remember(breathingAlpha, breathingFraction) {
+            {
+                1f - (1f - breathingAlpha.value) * breathingFraction.value
+            }
         }
+    } else {
+        remember { { 1f } }
     }
 
     val animatedBorder by animateDpAsState(
@@ -119,28 +126,33 @@ fun rememberRowSharedFocusState(
     val focusTokens = LocalJellyPlayUi.current.focus
     var isFocused by remember { mutableStateOf(false) }
 
-    // Breathing fade alpha animation (TV only)
-    val infiniteTransition = rememberInfiniteTransition(label = "tvFocusBreathingShared")
-    val breathingAlpha = infiniteTransition.animateFloat(
-        initialValue = 1f,
-        targetValue = 0.65f,
-        animationSpec = infiniteRepeatable(
-            animation = tween(durationMillis = 1200, easing = FastOutSlowInEasing),
-            repeatMode = RepeatMode.Reverse
-        ),
-        label = "breathingAlphaShared"
-    )
+    // Breathing fade alpha animation (TV only). See rememberTvFocusState for
+    // rationale on gating behind isTv.
+    val alphaProvider = if (isTv) {
+        val infiniteTransition = rememberInfiniteTransition(label = "tvFocusBreathingShared")
+        val breathingAlpha = infiniteTransition.animateFloat(
+            initialValue = 1f,
+            targetValue = 0.65f,
+            animationSpec = infiniteRepeatable(
+                animation = tween(durationMillis = 1200, easing = FastOutSlowInEasing),
+                repeatMode = RepeatMode.Reverse
+            ),
+            label = "breathingAlphaShared"
+        )
 
-    val breathingFraction = animateFloatAsState(
-        targetValue = if (isFocused && isTv) 1f else 0f,
-        label = "breathingFractionShared"
-    )
+        val breathingFraction = animateFloatAsState(
+            targetValue = if (isFocused) 1f else 0f,
+            label = "breathingFractionShared"
+        )
 
-    // Wrap in lambda to avoid recomposition on every animation frame
-    val alphaProvider = remember(breathingAlpha, breathingFraction) {
-        {
-            1f - (1f - breathingAlpha.value) * breathingFraction.value
+        // Wrap in lambda to avoid recomposition on every animation frame
+        remember(breathingAlpha, breathingFraction) {
+            {
+                1f - (1f - breathingAlpha.value) * breathingFraction.value
+            }
         }
+    } else {
+        remember { { 1f } }
     }
 
     val animatedBorder by animateDpAsState(

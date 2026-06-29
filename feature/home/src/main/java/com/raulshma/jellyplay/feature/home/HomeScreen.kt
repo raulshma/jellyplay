@@ -8,6 +8,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.clipToBounds
+import androidx.compose.ui.draw.drawBehind
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import com.raulshma.jellyplay.core.ui.components.LocalFloatingNavVisibility
@@ -254,9 +255,15 @@ private fun MainHomeContent(
 
     // When the hero actually receives focus, snap the list back to the top so the full hero is
     // visible. This is keyed on real focus state (not a BringIntoViewResponder), so it cannot
-    // interfere with D-pad traversal between content rows.
+    // interfere with D-pad traversal between content rows. The first emission is skipped so a
+    // freshly (re)composed Home doesn't snap to the top before per-row focus restoration runs.
+    var heroFocusScrollSettled by remember { mutableStateOf(false) }
     LaunchedEffect(focusInHero) {
-        if (focusInHero && isTv) listState.scrollToItem(0, 0)
+        if (!heroFocusScrollSettled) {
+            heroFocusScrollSettled = true
+        } else if (focusInHero && isTv) {
+            listState.scrollToItem(0, 0)
+        }
     }
 
     val headerHeight = remember(isTv, adaptiveInfo.isLandscape, adaptiveInfo.windowSizeClass) {
@@ -315,7 +322,9 @@ private fun MainHomeContent(
     )
 
     val navBarColor = LocalNavigationBarColor.current
-    LaunchedEffect(backgroundColor) { navBarColor.value = backgroundColor }
+    LaunchedEffect(Unit) {
+        snapshotFlow { backgroundColor }.collect { navBarColor.value = it }
+    }
 
     val transitionRangePx = remember(density) { with(density) { 140.dp.toPx() } }
     val scrollFraction by remember {
@@ -607,7 +616,7 @@ private fun MainHomeContent(
             enabled = !isTv && !isSearchFocused,
             modifier = Modifier.fillMaxSize(),
         ) {
-        Box(modifier = Modifier.fillMaxSize().background(backgroundColor)) {
+        Box(modifier = Modifier.fillMaxSize().drawBehind { drawRect(backgroundColor) }) {
             Box(
                 modifier = Modifier
                     .fillMaxSize()
@@ -892,20 +901,22 @@ private fun HomeContentList(
 
     var askContinueItem by remember { mutableStateOf<com.raulshma.jellyplay.core.model.MediaItem?>(null) }
 
-    // Per-row focus requesters so D-pad navigation can target each content row. (TV no longer
-    // restores focus to the last-visited row on re-entry — the hero now anchors the top; see the
-    // scroll-to-top effect below.)
+    // Per-row focus requesters so D-pad navigation can target each content row. On TV we restore
+    // focus to the last-visited row (and the exact card within it, via the row's tvFocusRestorer)
+    // on back-stack pops; only when no row has been visited yet does the hero anchor the top.
     var homeFocusRow by com.raulshma.jellyplay.core.ui.tv.rememberInt(-1)
     val savedRowIsValid = homeFocusRow in 0..sections.lastIndex
     val rowFocusRequesters = remember(sections.size) { List(sections.size) { FocusRequester() } }
-    // On TV the hero must always anchor the top of the home screen on (re-)entry. Restoring focus to
-    // a previously-visited content row scrolled the LazyColumn just enough to reveal that row, which
-    // left the 420dp hero half-clipped at the top (only the title/buttons visible). Instead we scroll
-    // back to the very top; RequestOrRestoreFocus inside the hero re-grabs focus on back-stack pops.
+    // Restore focus to the last-visited row when returning to Home. The hero's
+    // requestInitialFocus = !savedRowIsValid keeps it from grabbing focus when a valid row exists;
+    // here we scroll the saved row fully into view (so its FocusRequester is attached, avoiding
+    // the half-clipped hero that a minimal bring-into-view caused previously) and re-request focus.
+    // LaunchedEffect(Unit) re-fires on back-stack pops via the saveable-state holder.
     LaunchedEffect(Unit) {
-        if (isTv) {
-            listState.scrollToItem(0, 0)
-            homeFocusRow = -1
+        if (isTv && savedRowIsValid && sections.isNotEmpty()) {
+            val headerOffset = 1 + (if (newsletterBannerVisible) 1 else 0)
+            listState.scrollToItem(homeFocusRow + headerOffset)
+            rowFocusRequesters.getOrNull(homeFocusRow)?.tryRequestFocus("home_row_restore")
         }
     }
 
@@ -935,7 +946,7 @@ private fun HomeContentList(
             contentPadding = PaddingValues(bottom = adaptiveInfo.bottomPadding(isTv)),
         ) {
             if (featuredItem != null && homeHeroEnabled) {
-                item {
+                item(key = "hero") {
                     AnimatedHeroHeader(
                         featuredItem = featuredItem,
                         getBackdropUrl = remember { { viewModel.getBackdropUrl(it) } },
@@ -951,7 +962,7 @@ private fun HomeContentList(
                     )
                 }
             } else {
-                item { Spacer(Modifier.height(100.dp)) }
+                item(key = "hero_spacer") { Spacer(Modifier.height(100.dp)) }
             }
 
             if (newsletterBannerVisible) {
