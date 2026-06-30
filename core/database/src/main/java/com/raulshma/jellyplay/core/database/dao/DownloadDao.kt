@@ -89,4 +89,7 @@ interface DownloadDao {
 
     @Query("SELECT * FROM downloads WHERE status IN ('PENDING', 'PAUSED') ORDER BY priority DESC, createdAt ASC")
     fun getPendingDownloads(): Flow<List<DownloadEntity>>
+
+    @Query("SELECT DISTINCT seriesId FROM downloads WHERE seriesId IS NOT NULL")
+    suspend fun getDownloadedSeriesIds(): List<String>
 }

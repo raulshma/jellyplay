@@ -2,7 +2,9 @@ package com.raulshma.jellyplay.feature.details
 
 import android.content.Context
 import com.raulshma.jellyplay.core.data.offline.OfflineModeManager
+import com.raulshma.jellyplay.core.data.playback.AdaptiveBitrateManager
 import com.raulshma.jellyplay.core.data.playback.AudioPlaybackManager
+import com.raulshma.jellyplay.core.data.playback.ThemeMusicPlayer
 import com.raulshma.jellyplay.core.data.repository.DownloadRepository
 import com.raulshma.jellyplay.core.data.repository.MediaRepository
 import com.raulshma.jellyplay.core.data.repository.PlaybackRepository
@@ -44,9 +46,11 @@ class DetailViewModelTest {
     private lateinit var downloadRepository: DownloadRepository
     private lateinit var preferencesStore: UserPreferencesStore
     private lateinit var offlineModeManager: OfflineModeManager
+    private lateinit var adaptiveBitrateManager: AdaptiveBitrateManager
     private lateinit var seerrRepository: SeerrRepository
     private lateinit var seerrRequestDelegate: SeerrRequestDelegate
     private lateinit var audioPlaybackManager: AudioPlaybackManager
+    private lateinit var themeMusicPlayer: ThemeMusicPlayer
     private lateinit var tmdbApiClient: TmdbApiClient
 
     private lateinit var viewModel: DetailViewModel
@@ -59,9 +63,11 @@ class DetailViewModelTest {
         downloadRepository = mockk(relaxed = true)
         preferencesStore = mockk(relaxed = true)
         offlineModeManager = mockk(relaxed = true)
+        adaptiveBitrateManager = mockk(relaxed = true)
         seerrRepository = mockk(relaxed = true)
         seerrRequestDelegate = mockk(relaxed = true)
         audioPlaybackManager = mockk(relaxed = true)
+        themeMusicPlayer = mockk(relaxed = true)
         tmdbApiClient = mockk(relaxed = true)
 
         every { preferencesStore.preferences } returns MutableStateFlow(UserPreferences())
@@ -75,9 +81,11 @@ class DetailViewModelTest {
             downloadRepository = downloadRepository,
             preferencesStore = preferencesStore,
             offlineModeManager = offlineModeManager,
+            adaptiveBitrateManager = adaptiveBitrateManager,
             seerrRepository = seerrRepository,
             seerrRequestDelegate = seerrRequestDelegate,
             audioPlaybackManager = audioPlaybackManager,
+            themeMusicPlayer = themeMusicPlayer,
             tmdbApiClient = tmdbApiClient,
         )
     }

@@ -211,9 +211,9 @@ fun LanguageSettingsScreen(
                 ) {
                     var subIdx = 0
                     val subTotal = when {
-                        !showAdvanced -> 2
-                        preferences.hdrSubtitleStyleEnabled -> 10
-                        else -> 9
+                        !showAdvanced -> 3
+                        preferences.hdrSubtitleStyleEnabled -> 11
+                        else -> 10
                     }
                     SettingListItem(
                         icon = Tabler.Outline.Typography,
@@ -232,6 +232,15 @@ fun LanguageSettingsScreen(
                         highlighted = highlightSettingId == "subtitle_forced_only",
                         index = subIdx++, count = subTotal,
                         onCheckedChange = { viewModel.setSubtitlesForcedOnly(it) },
+                    )
+                    SettingToggleItem(
+                        icon = Tabler.Outline.Eye,
+                        title = "High-Contrast Subtitles",
+                        subtitle = if (preferences.highContrastSubtitles) "Maximally legible subtitle style for accessibility" else "Use subtitle style as configured",
+                        checked = preferences.highContrastSubtitles,
+                        highlighted = highlightSettingId == "high_contrast_subtitles",
+                        index = subIdx++, count = subTotal,
+                        onCheckedChange = { viewModel.setHighContrastSubtitles(it) },
                     )
                     if (showAdvanced) {
                         SettingToggleItem(

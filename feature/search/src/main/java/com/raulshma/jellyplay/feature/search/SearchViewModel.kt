@@ -95,6 +95,10 @@ class SearchViewModel @Inject constructor(
     private val _searchHistory = stateFlow<List<SearchHistoryItem>>(emptyList())
     val searchHistory: StateFlow<List<SearchHistoryItem>> = _searchHistory.flow
 
+    private val hideSearchHistoryPref: StateFlow<Boolean> = preferencesStore.preferences
+        .map { it.hideSearchHistory }
+        .stateIn(scope, SharingStarted.Lazily, false)
+
     private val seerrPrefs: Flow<com.raulshma.jellyplay.core.model.seerr.SeerrPreferences> =
         seerrRepository.getPreferences()
 
@@ -188,6 +192,12 @@ class SearchViewModel @Inject constructor(
                     if (userId != null) searchHistoryRepository.getRecent(userId)
                     else flowOf(emptyList())
                 }
+                // Respect the user's "hide search history" preference: when
+                // enabled we expose an empty list to the UI while still
+                // keeping the underlying history intact for when they re-enable.
+                .combine(hideSearchHistoryPref) { history, hide ->
+                    if (hide) emptyList() else history
+                }
                 .collect { history -> _searchHistory.set(history) }
         }
     }
@@ -251,6 +261,9 @@ class SearchViewModel @Inject constructor(
 
     private suspend fun saveQueryIfNeeded(query: String, hasResults: Boolean) {
         if (query.trim().length < 2) return
+        // Skip persistence entirely when the user has hidden search history —
+        // avoids surfacing past queries the moment they re-enable the setting.
+        if (hideSearchHistoryPref.value) return
         val userId = preferencesStore.activeUserId.first() ?: return
         if (hasResults) {
             searchHistoryRepository.saveQuery(query, userId)

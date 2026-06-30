@@ -95,6 +95,7 @@ fun AppearanceSettingsScreen(
     }
 
     var showResetDialog by remember { mutableStateOf(false) }
+    var showBlueLightStrengthSheet by remember { mutableStateOf(false) }
 
     JellyPlayScreenScaffold(
         title = "Appearance",
@@ -622,7 +623,7 @@ fun AppearanceSettingsScreen(
                     modifier = Modifier.padding(vertical = 8.dp),
                     initiallyExpanded = highlightSettingId in listOf("show_unwatched_badge", "show_watched_checkmark", "hide_watched_items", "hide_episode_thumbnails", "skip_specials", "show_share_media", "show_external_ratings"),
                 ) {
-                    val cardTotal = 7
+                    val cardTotal = 8
                     var cardIdx = 0
 
                     SettingToggleItem(
@@ -696,6 +697,16 @@ fun AppearanceSettingsScreen(
                     )
 
                     SettingToggleItem(
+                        icon = Tabler.Outline.EyeOff,
+                        title = "Hide Search History",
+                        subtitle = "Don't show recent searches on the search screen",
+                        checked = preferences.hideSearchHistory,
+                        highlighted = highlightSettingId == "hide_search_history",
+                        index = cardIdx++, count = cardTotal,
+                        onCheckedChange = { viewModel.setHideSearchHistory(it) },
+                    )
+
+                    SettingToggleItem(
                         icon = Tabler.Outline.Star,
                         title = "Show External Ratings",
                         subtitle = "Display critic rating scores (IMDb/TMDB) on details pages",
@@ -738,6 +749,42 @@ fun AppearanceSettingsScreen(
                         highlighted = highlightSettingId == "reduce_motion",
                         index = 1, count = perfTotal,
                         onCheckedChange = { viewModel.setReduceMotionEnabled(it) },
+                    )
+                }
+            }
+
+            item {
+                SettingsGroup(
+                    icon = Tabler.Outline.Eye,
+                    title = "Comfort & Eye Care",
+                    summary = {
+                        if (preferences.blueLightFilterEnabled) {
+                            "Blue light filter · ${(preferences.blueLightFilterStrength * 100).toInt()}%"
+                        } else {
+                            "Off"
+                        }
+                    },
+                    modifier = Modifier.padding(vertical = 8.dp),
+                    initiallyExpanded = highlightSettingId in listOf("blue_light_filter", "blue_light_strength"),
+                ) {
+                    val eyeCareTotal = 2
+                    SettingToggleItem(
+                        icon = Tabler.Outline.Moon,
+                        title = "Blue Light Filter",
+                        subtitle = "Tint the screen amber to reduce eye strain at night",
+                        checked = preferences.blueLightFilterEnabled,
+                        highlighted = highlightSettingId == "blue_light_filter",
+                        index = 0, count = eyeCareTotal,
+                        onCheckedChange = { viewModel.setBlueLightFilterEnabled(it) },
+                    )
+                    SettingListItem(
+                        icon = Tabler.Outline.Adjustments,
+                        title = "Blue Light Filter Strength",
+                        subtitle = "Intensity of the amber overlay",
+                        trailingText = "${(preferences.blueLightFilterStrength * 100).toInt()}%",
+                        highlighted = highlightSettingId == "blue_light_strength",
+                        index = 1, count = eyeCareTotal,
+                        onClick = { showBlueLightStrengthSheet = true },
                     )
                 }
             }
@@ -1023,6 +1070,23 @@ fun AppearanceSettingsScreen(
                 }
             }
         }
+    }
+
+    if (showBlueLightStrengthSheet) {
+        SettingsSliderSheet(
+            title = "Blue Light Filter Strength",
+            value = preferences.blueLightFilterStrength,
+            valueRange = 0.1f..1f,
+            steps = 8,
+            valueLabel = { "${(it * 100).toInt()}%" },
+            rangeStartLabel = "10%",
+            rangeEndLabel = "100%",
+            onDismiss = { showBlueLightStrengthSheet = false },
+            onConfirm = {
+                viewModel.setBlueLightFilterStrength(it)
+                showBlueLightStrengthSheet = false
+            },
+        )
     }
 
     if (showResetDialog) {

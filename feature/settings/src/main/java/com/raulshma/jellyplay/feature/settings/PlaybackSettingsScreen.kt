@@ -95,6 +95,7 @@ sealed class PlaybackSettingsDialog {
     object OrientationPicker : PlaybackSettingsDialog()
     object AspectRatioPicker : PlaybackSettingsDialog()
     object VideoSpeedPicker : PlaybackSettingsDialog()
+    object VideoHoldSpeedMultiplierPicker : PlaybackSettingsDialog()
     object VideoSeekDurationPicker : PlaybackSettingsDialog()
     object ControlsTimeoutPicker : PlaybackSettingsDialog()
     object SkipBackOnResumePicker : PlaybackSettingsDialog()
@@ -129,6 +130,7 @@ sealed class PlaybackSettingsDialog {
     object DvrPostPaddingPicker : PlaybackSettingsDialog()
     object DvrRecordingQualityPicker : PlaybackSettingsDialog()
     object AutoPlayCountdownPicker : PlaybackSettingsDialog()
+    object TvZoomModePicker : PlaybackSettingsDialog()
 }
 
 @OptIn(ExperimentalMaterial3Api::class, androidx.compose.material3.ExperimentalMaterial3ExpressiveApi::class)
@@ -202,7 +204,7 @@ fun PlaybackSettingsScreen(
                     initiallyExpanded = true,
                 ) {
                     var idx = 0
-                    val total = if (showAdvanced) 28 else 9
+                    val total = if (showAdvanced) 30 else 11
 
                     SettingListItem(
                         icon = Tabler.Outline.PlayerPlay,
@@ -248,6 +250,24 @@ fun PlaybackSettingsScreen(
                         highlighted = highlightSettingId == "default_speed",
                         index = idx++, count = total,
                         onClick = { activeDialog = PlaybackSettingsDialog.VideoSpeedPicker },
+                    )
+                    SettingToggleItem(
+                        icon = Tabler.Outline.RewindForward30,
+                        title = "Hold-to-Seek",
+                        subtitle = if (preferences.videoHoldSpeedEnabled) "Long-press to fast-forward/rewind" else "Disabled",
+                        checked = preferences.videoHoldSpeedEnabled,
+                        highlighted = highlightSettingId == "hold_speed",
+                        index = idx++, count = total,
+                        onCheckedChange = { viewModel.setVideoHoldSpeedEnabled(it) },
+                    )
+                    SettingListItem(
+                        icon = Tabler.Outline.Rocket,
+                        title = "Hold-to-Seek Speed",
+                        subtitle = "Playback speed while holding",
+                        trailingText = "${preferences.videoHoldSpeedMultiplier}x",
+                        highlighted = highlightSettingId == "hold_speed_multiplier",
+                        index = idx++, count = total,
+                        onClick = { activeDialog = PlaybackSettingsDialog.VideoHoldSpeedMultiplierPicker },
                     )
                     SettingListItem(
                         icon = Tabler.Outline.ArrowAutofitHeight,
@@ -334,6 +354,15 @@ fun PlaybackSettingsScreen(
                                 highlighted = highlightSettingId == "android_tv_watch_next",
                                 index = idx++, count = total,
                                 onCheckedChange = { viewModel.setAndroidTvWatchNextEnabled(it) },
+                            )
+                            SettingListItem(
+                                icon = Tabler.Outline.Crop,
+                                title = "TV Zoom Mode",
+                                subtitle = "Crop/zoom video to fill screen (0% = off)",
+                                trailingText = if (preferences.tvZoomModePercent == 0f) "Off" else "${preferences.tvZoomModePercent.toInt()}%",
+                                highlighted = highlightSettingId == "tv_zoom_mode",
+                                index = idx++, count = total,
+                                onClick = { activeDialog = PlaybackSettingsDialog.TvZoomModePicker },
                             )
                         }
                         SettingToggleItem(
@@ -1054,6 +1083,20 @@ fun PlaybackSettingsScreen(
         )
     }
 
+    if (activeDialog is PlaybackSettingsDialog.VideoHoldSpeedMultiplierPicker) {
+        val multipliers = listOf(1.5f, 2.0f, 2.5f, 3.0f, 4.0f)
+        SettingsChipPickerSheet(
+            title = "Hold-to-Seek Speed",
+            options = multipliers.map { "${it}x" },
+            selectedIndex = multipliers.indexOf(preferences.videoHoldSpeedMultiplier).let { if (it < 0) 1 else it },
+            onDismiss = { activeDialog = PlaybackSettingsDialog.None },
+            onSelect = { index ->
+                viewModel.setVideoHoldSpeedMultiplier(multipliers[index])
+                activeDialog = PlaybackSettingsDialog.None
+            },
+        )
+    }
+
     if (activeDialog is PlaybackSettingsDialog.VideoSeekDurationPicker) {
         val durations = listOf(5_000L, 10_000L, 15_000L, 20_000L, 30_000L, 60_000L)
         SettingsChipPickerSheet(
@@ -1624,6 +1667,25 @@ fun PlaybackSettingsScreen(
             onDismiss = { activeDialog = PlaybackSettingsDialog.None },
             onSelect = {
                 viewModel.setAutoPlayCountdownSec(it)
+                activeDialog = PlaybackSettingsDialog.None
+            },
+        )
+    }
+
+    if (activeDialog is PlaybackSettingsDialog.TvZoomModePicker) {
+        val percents = listOf(0f, 5f, 10f, 15f, 20f, 25f, 33f, 50f)
+        SettingsListPickerSheet(
+            title = "TV Zoom Mode",
+            items = percents,
+            label = { if (it == 0f) "Off" else "${it.toInt()}%" },
+            subtitle = { percent ->
+                if (percent == 0f) "No zoom (original aspect ratio)"
+                else "Crop and zoom video by ${percent.toInt()}% to fill screen"
+            },
+            isSelected = { it == preferences.tvZoomModePercent },
+            onDismiss = { activeDialog = PlaybackSettingsDialog.None },
+            onSelect = {
+                viewModel.setTvZoomModePercent(it)
                 activeDialog = PlaybackSettingsDialog.None
             },
         )

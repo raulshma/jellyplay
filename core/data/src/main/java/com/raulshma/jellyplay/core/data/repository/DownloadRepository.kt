@@ -52,6 +52,8 @@ interface DownloadRepository {
 
     suspend fun getDownloadedEpisodeIdsForSeries(seriesId: String): Set<String>
 
+    suspend fun getDownloadedSeriesIds(): List<String>
+
     suspend fun downloadTrickplayData(
         itemId: String,
         trickplayInfo: TrickplayInfo,
