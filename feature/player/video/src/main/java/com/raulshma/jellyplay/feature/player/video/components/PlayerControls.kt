@@ -206,6 +206,7 @@ internal fun PlayerControls(
     audioTracks: List<TrackOption> = emptyList(),
     showPlaybackMetadata: Boolean = true,
     showClock: Boolean = false,
+    showTimeRemaining: Boolean = false,
     onToggleOrientation: () -> Unit = {},
     tvSkipSegmentFocusRequester: FocusRequester? = null,
     tvNextEpisodeFocusRequester: FocusRequester? = null,
@@ -491,6 +492,7 @@ internal fun PlayerControls(
                     bufferedPosition = bufferedPosition,
                     trickplayBitmap = tvTrickplayBitmap,
                     playbackSpeed = playbackSpeed,
+                    showTimeRemaining = showTimeRemaining,
                     onSeek = { fraction ->
                         onSeek(fraction)
                         onSeekPositionChange((fraction * duration).toLong())
@@ -789,6 +791,7 @@ private fun TvControllableSeekBar(
     bufferedPosition: Long = 0L,
     trickplayBitmap: Bitmap? = null,
     playbackSpeed: Float = 1.0f,
+    showTimeRemaining: Boolean = false,
     onSeek: (Float) -> Unit,
     onSeekStart: () -> Unit,
     onSeekEnd: () -> Unit,
@@ -1096,8 +1099,18 @@ private fun TvControllableSeekBar(
                     ),
                     color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f),
                 )
+                val endLabel = if (duration > 0) {
+                    if (showTimeRemaining) {
+                        val remainingMs = (duration - currentPosition).coerceAtLeast(0)
+                        "-" + formatDuration(remainingMs)
+                    } else {
+                        formatDuration(duration)
+                    }
+                } else {
+                    "--:--"
+                }
                 Text(
-                    if (duration > 0) formatDuration(duration) else "--:--",
+                    endLabel,
                     style = MaterialTheme.typography.labelSmall.copy(
                         fontFamily = FontFamily.Monospace,
                         fontWeight = FontWeight.Medium,

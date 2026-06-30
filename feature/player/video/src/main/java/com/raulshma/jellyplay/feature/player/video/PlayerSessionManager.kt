@@ -231,7 +231,7 @@ class PlayerSessionManager(
         // the user's PlaybackMode. Falls back to a static direct URL when
         // the server cannot resolve a playable method (preserving the
         // historical behaviour for non-conforming sources).
-        val maxBitrate = adaptiveBitrateManager.resolveMaxBitrate(prefs.streamingQuality)
+        val maxBitrate = adaptiveBitrateManager.resolveEffectiveMaxBitrate()
         val resolved = playbackRepository.resolvePlayback(
             itemId = itemId,
             mediaSourceId = sourceId,
@@ -292,7 +292,7 @@ class PlayerSessionManager(
             audioPassthrough = prefs.audioPassthrough,
             audioDelayMs = prefs.audioDelayMs,
             subtitleDelayMs = prefs.subtitleStyle.offsetMs,
-            subtitleStyle = prefs.subtitleStyle,
+            subtitleStyle = prefs.resolvedSubtitleStyle(isHdr = prefs.isHdrFromStreams(_sessionState.value.mediaStreams)),
             audioEffects = AudioEffectsConfig(
                 dialogueBoostEnabled = prefs.dialogueBoostEnabled,
                 dialogueBoostStrength = prefs.dialogueBoostStrength,
@@ -333,7 +333,7 @@ class PlayerSessionManager(
             preferredAudioLanguage = prefs.preferredAudioLanguage,
             preferredSubtitleLanguage = prefs.preferredSubtitleLanguage,
             maxVideoBitrate = if (prefs.playbackMode == PlaybackMode.AUTO)
-                adaptiveBitrateManager.resolveMaxBitrate(prefs.streamingQuality)?.toInt()
+                adaptiveBitrateManager.resolveEffectiveMaxBitrate()?.toInt()
                 else null,
             serverUrl = serverUrl,
             authToken = token,
@@ -448,7 +448,7 @@ class PlayerSessionManager(
             audioPassthrough = prefs.audioPassthrough,
             audioDelayMs = prefs.audioDelayMs,
             subtitleDelayMs = prefs.subtitleStyle.offsetMs,
-            subtitleStyle = prefs.subtitleStyle,
+            subtitleStyle = prefs.resolvedSubtitleStyle(isHdr = prefs.isHdrFromStreams(_sessionState.value.mediaStreams)),
             audioEffects = AudioEffectsConfig(
                 dialogueBoostEnabled = prefs.dialogueBoostEnabled,
                 dialogueBoostStrength = prefs.dialogueBoostStrength,

@@ -398,11 +398,20 @@ fun LibraryScreen(
                     }
                 }
 
+                var wasRefreshing by remember { mutableStateOf(false) }
+                LaunchedEffect(pagedItems.loadState.refresh) {
+                    val isNowRefreshing = pagedItems.loadState.refresh is LoadState.Loading
+                    if (wasRefreshing && !isNowRefreshing) {
+                        gridState.scrollToItem(0)
+                        listState.scrollToItem(0)
+                    }
+                    wasRefreshing = isNowRefreshing
+                }
+
                 PullToRefreshBox(
                     isRefreshing = pagedItems.loadState.refresh is LoadState.Loading || isLoading,
                     onRefresh = {
                         viewModel.refresh()
-                        pagedItems.refresh()
                     },
                     enabled = !isTv,
                     modifier = Modifier.fillMaxSize(),

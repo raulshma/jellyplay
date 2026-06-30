@@ -1,15 +1,20 @@
 package com.raulshma.jellyplay.feature.livetv.dvr
 
 import com.raulshma.jellyplay.core.data.repository.MediaRepository
+import com.raulshma.jellyplay.core.datastore.UserPreferencesStore
 import com.raulshma.jellyplay.core.model.DvrSeriesTimer
 import com.raulshma.jellyplay.core.model.DvrTimer
 import com.raulshma.jellyplay.core.ui.viewmodel.JellyPlayViewModel
 import dagger.hilt.android.lifecycle.HiltViewModel
+import java.time.OffsetDateTime
+import java.time.format.DateTimeFormatter
+import java.time.format.DateTimeParseException
 import javax.inject.Inject
 
 @HiltViewModel
 class DvrViewModel @Inject constructor(
     private val mediaRepository: MediaRepository,
+    private val preferencesStore: UserPreferencesStore,
 ) : JellyPlayViewModel() {
 
     private val _timers = composeState<List<DvrTimer>>(emptyList())
@@ -63,9 +68,29 @@ class DvrViewModel @Inject constructor(
 
     fun createTimer(programId: String, channelId: String, startDate: String?, endDate: String?) {
         launch {
-            mediaRepository.createTimer(programId, channelId, startDate, endDate)
+            val prefs = preferencesStore.preferences.value
+            val prePad = prefs.dvrPrePaddingMinutes.coerceAtLeast(0)
+            val postPad = prefs.dvrPostPaddingMinutes.coerceAtLeast(0)
+            val paddedStart = if (prePad > 0) startDate?.let { shiftIso(it, -prePad.toLong()) } else startDate
+            val paddedEnd = if (postPad > 0) endDate?.let { shiftIso(it, postPad.toLong()) } else endDate
+            mediaRepository.createTimer(programId, channelId, paddedStart, paddedEnd)
                 .onSuccess { load() }
                 .onFailure { _error.value = it.message }
         }
     }
+
+    /**
+     * Shifts an ISO-8601 date-time string by [minutes] (negative = earlier).
+     * Falls back to the original string if parsing fails so a bad format
+     * never blocks timer creation.
+     */
+    private fun shiftIso(iso: String, minutes: Long): String = runCatching {
+        OffsetDateTime.parse(iso)
+            .plusMinutes(minutes)
+            .format(DateTimeFormatter.ISO_OFFSET_DATE_TIME)
+    }.recoverCatching {
+        java.time.LocalDateTime.parse(
+            iso.replace("Z", "").replace("T", " ").substringBefore('+').trim()
+        ).plusMinutes(minutes).format(DateTimeFormatter.ISO_LOCAL_DATE_TIME)
+    }.getOrElse { iso }
 }

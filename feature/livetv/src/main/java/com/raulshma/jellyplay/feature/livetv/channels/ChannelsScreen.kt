@@ -58,6 +58,7 @@ import com.raulshma.jellyplay.core.ui.tv.tvFocusRestorer
 import com.raulshma.jellyplay.core.ui.tv.TvGrabInitialFocus
 import com.raulshma.jellyplay.core.ui.tv.tryRequestFocus
 import com.composables.icons.tabler.outline.*
+import com.composables.icons.tabler.filled.*
 import androidx.compose.ui.res.stringResource
 import com.raulshma.jellyplay.feature.livetv.R
 
@@ -89,6 +90,7 @@ fun ChannelsScreen(
     val focusRequester = remember { FocusRequester() }
     val channelsNotEmpty = uiState.channels.isNotEmpty()
     val nowPlayingChannelId by viewModel.nowPlayingChannelId.collectAsStateWithLifecycle()
+    val favoriteChannelIds by viewModel.favoriteChannelIds.collectAsStateWithLifecycle()
     TvGrabInitialFocus(
         focusRequester = focusRequester,
         itemCount = uiState.channels.size,
@@ -157,7 +159,9 @@ fun ChannelsScreen(
                             channel = channel,
                             imageUrl = viewModel.getImageUrl(channel.id, channel.imageTag),
                             isNowPlaying = channel.id == nowPlayingChannelId,
+                            isFavorite = channel.id in favoriteChannelIds,
                             onClick = { onChannelClick(channel.id, channel.name) },
+                            onFavoriteToggle = { viewModel.toggleFavorite(channel.id) },
                         )
                     }
                 }
@@ -171,7 +175,9 @@ private fun ChannelCard(
     channel: LiveTvChannel,
     imageUrl: String,
     isNowPlaying: Boolean = false,
+    isFavorite: Boolean = false,
     onClick: () -> Unit,
+    onFavoriteToggle: () -> Unit = {},
 ) {
     Row(
         modifier = Modifier
@@ -256,6 +262,27 @@ private fun ChannelCard(
                     color = MaterialTheme.colorScheme.primary,
                 )
             }
+        }
+
+        // ── Favorite toggle ──
+        IconButton(
+            onClick = onFavoriteToggle,
+            modifier = Modifier
+                .size(40.dp)
+                .focusIndicator(CircleShape),
+            colors = IconButtonDefaults.iconButtonColors(
+                contentColor = if (isFavorite) {
+                    MaterialTheme.colorScheme.primary
+                } else {
+                    MaterialTheme.colorScheme.onSurfaceVariant
+                },
+            ),
+        ) {
+            Icon(
+                imageVector = if (isFavorite) Tabler.Filled.Star else Tabler.Outline.Star,
+                contentDescription = if (isFavorite) "Unfavorite" else "Favorite",
+                modifier = Modifier.size(22.dp),
+            )
         }
 
         // ── Play button (glass style) ──

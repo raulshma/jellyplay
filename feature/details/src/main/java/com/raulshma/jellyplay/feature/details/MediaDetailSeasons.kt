@@ -361,7 +361,8 @@ internal fun EpisodeCard(
                         .background(MaterialTheme.colorScheme.primary)
                 )
             }
-            if (episode.isPlayed && (positionTicks == null || positionTicks <= 0)) {
+            val cardPrefs = com.raulshma.jellyplay.core.ui.components.LocalCardDisplayPreferences.current
+            if (episode.isPlayed && (positionTicks == null || positionTicks <= 0) && cardPrefs.showWatchedCheckmark) {
                 Box(
                     modifier = Modifier
                         .align(Alignment.BottomEnd)

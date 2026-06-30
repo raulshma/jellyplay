@@ -69,6 +69,7 @@ internal fun BaseItemDto.toMediaItem() = MediaItem(
     normalizationGain = normalizationGain,
     playCount = userData?.playCount ?: 0,
     lastPlayedDate = userData?.lastPlayedDate?.toString(),
+    unplayedItemCount = userData?.unplayedItemCount,
 )
 
 internal fun BaseItemKind.toMediaType(): MediaType = when (this) {
