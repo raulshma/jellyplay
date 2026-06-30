@@ -52,6 +52,35 @@ class AdaptiveBitrateManager @Inject constructor(
         }
     }
 
+    /**
+     * Resolves the effective max bitrate taking the active network type into
+     * account. On a metered (cellular) connection the user's
+     * [com.raulshma.jellyplay.core.model.UserPreferences.cellularStreamingQuality]
+     * is used instead of the WiFi [com.raulshma.jellyplay.core.model.UserPreferences.streamingQuality].
+     *
+     * When [com.raulshma.jellyplay.core.model.UserPreferences.dataSaverEnabled]
+     * is on, the result is additionally clamped to the data-saver ceiling
+     * ([MAX_BITRATE_DATASAVER]) so the player never exceeds a frugal bitrate
+     * regardless of the user-selected quality — this matches the "Data Saver"
+     * toggle description (reduce data usage on streaming).
+     */
+    fun resolveEffectiveMaxBitrate(): Long? {
+        val prefs = userPreferencesStore.preferences.value
+        val quality = if (isUnmeteredConnection()) {
+            prefs.streamingQuality
+        } else {
+            prefs.cellularStreamingQuality
+        }
+        val resolved = resolveMaxBitrate(quality)
+        // Data saver forces an upper bound independent of the selected quality.
+        return if (prefs.dataSaverEnabled) {
+            val capped = MAX_BITRATE_DATASAVER
+            if (resolved != null) kotlin.math.min(resolved, capped) else capped
+        } else {
+            resolved
+        }
+    }
+
     fun isUnmeteredConnection(): Boolean {
         val network = connectivityManager.activeNetwork ?: return false
         val caps = connectivityManager.getNetworkCapabilities(network) ?: return false
@@ -64,5 +93,8 @@ class AdaptiveBitrateManager @Inject constructor(
         private const val MAX_BITRATE_480P = 1_500_000L
         private const val MAX_BITRATE_720P = 3_000_000L
         private const val MAX_BITRATE_1080P = 8_000_000L
+        // Data-saver ceiling: targets ~480p to minimise mobile data usage
+        // while keeping the stream watchable. Aligned with MAX_BITRATE_480P.
+        private const val MAX_BITRATE_DATASAVER = 1_500_000L
     }
 }

@@ -1145,6 +1145,15 @@ object SettingsSearchRegistry {
             route = Route.SecuritySettings(),
             icon = Tabler.Outline.Bolt
         ),
+        SettingsSearchItem(
+            id = "remote_control_enabled",
+            title = "Allow Remote Control",
+            subtitle = "Let other sessions play, pause and seek on this device",
+            category = "Security",
+            keywords = listOf("remote", "control", "cast", "play to", "external control", "receive commands"),
+            route = Route.SecuritySettings(),
+            icon = Tabler.Outline.Cast
+        ),
 
         // Backup
         SettingsSearchItem(

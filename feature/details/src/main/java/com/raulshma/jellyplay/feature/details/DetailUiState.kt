@@ -57,6 +57,7 @@ data class DetailUiState(
     // Downloads
     val isDownloading: Boolean = false,
     val downloadError: String? = null,
+    val cellularDownloadWarningMb: Int? = null,
     val isDownloadingSeries: Boolean = false,
     val seriesDownloadResult: SeriesDownloadResult? = null,
     val downloadSheetEpisodes: Map<String, List<MediaItem>> = emptyMap(),

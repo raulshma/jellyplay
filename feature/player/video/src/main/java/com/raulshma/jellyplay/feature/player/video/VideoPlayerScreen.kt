@@ -312,7 +312,8 @@ fun VideoPlayerScreen(
 
         onDispose {
             val currentlyInPip = viewModel.playerLifecycleManager.isInPipMode.value
-            val isBgCasting = viewModel.isCastConnected && viewModel.castIsPlaying.value
+            val isBgCasting = viewModel.isCastConnected && viewModel.castIsPlaying.value &&
+                viewModel.backgroundCastingEnabled
             val restoreOrientation = if (isTv)
                 ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE
             else ActivityInfo.SCREEN_ORIENTATION_PORTRAIT
@@ -786,8 +787,16 @@ fun VideoPlayerScreen(
                         modifier = Modifier
                             .fillMaxSize()
                             .graphicsLayer {
-                                scaleX = videoZoom
-                                scaleY = videoZoom
+                                // TV zoom mode acts as a baseline crop/zoom for the
+                                // video surface (useful for overscan or to fill 4:3
+                                // content on 16:9 displays). The interactive pinch
+                                // zoom (videoZoom) multiplies on top of it.
+                                val tvBaselineZoom = if (isTv && uiState.tvZoomModePercent != 0f) {
+                                    1f + (uiState.tvZoomModePercent / 100f)
+                                } else 1f
+                                val effectiveZoom = videoZoom * tvBaselineZoom
+                                scaleX = effectiveZoom
+                                scaleY = effectiveZoom
                             },
                     )
                 }
@@ -1179,6 +1188,7 @@ fun VideoPlayerScreen(
                 audioTracks = uiState.audioTracks,
                 showPlaybackMetadata = uiState.showPlaybackMetadata,
                 showClock = uiState.showClock,
+                showTimeRemaining = uiState.showTimeRemaining,
                 currentAspectRatio = aspectRatio,
                 detectedAspectRatio = detectedAspectRatio,
                 isVisible = showControls && !isInPipMode && !isScreenLocked,

@@ -218,6 +218,29 @@ fun SecuritySettingsScreen(
                 }
             }
 
+            item {
+                SettingsGroup(
+                    icon = Tabler.Outline.Cast,
+                    title = "Remote Control",
+                    summary = {
+                        if (preferences.remoteControlEnabled) "This device can be controlled from other sessions"
+                        else "Only this device can control playback"
+                    },
+                    modifier = Modifier.padding(vertical = 8.dp),
+                    initiallyExpanded = true,
+                ) {
+                    SettingToggleItem(
+                        icon = Tabler.Outline.Cast,
+                        title = "Allow Remote Control",
+                        subtitle = "Let other sessions play, pause and seek on this device",
+                        checked = preferences.remoteControlEnabled,
+                        highlighted = highlightSettingId == "remote_control_enabled",
+                        index = 0, count = 1,
+                        onCheckedChange = { viewModel.setRemoteControlEnabled(it) },
+                    )
+                }
+            }
+
             if (!showAdvanced) {
                 item {
                     HiddenSettingsHint(

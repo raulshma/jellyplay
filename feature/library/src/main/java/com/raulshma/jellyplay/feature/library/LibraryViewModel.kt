@@ -97,8 +97,10 @@ class LibraryViewModel @Inject constructor(
     private val _photoFolderChildUrls = stateFlow<Map<String, List<String>>>(emptyMap())
     val photoFolderChildUrls = _photoFolderChildUrls.flow
 
+    private val _refreshTrigger = kotlinx.coroutines.flow.MutableStateFlow(0)
+
     @OptIn(ExperimentalCoroutinesApi::class)
-    val pagedItems: Flow<PagingData<MediaItem>> = combine(_selectedFolder.flow, _filters.flow) { folder, filters ->
+    val pagedItems: Flow<PagingData<MediaItem>> = combine(_selectedFolder.flow, _filters.flow, _refreshTrigger) { folder, filters, _ ->
         folder to filters
     }.flatMapLatest { (folder, filters) ->
         mediaRepository.getMediaItemsPaged(
@@ -246,6 +248,10 @@ class LibraryViewModel @Inject constructor(
             loadFolders()
             loadGenres()
             loadTags()
+            // Increment the trigger to force flatMapLatest to create a new Pager,
+            // which avoids the duplicate-key crash that occurs when pagedItems.refresh()
+            // is called concurrently on a cachedIn flow.
+            _refreshTrigger.value++
         }
     }
 

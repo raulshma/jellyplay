@@ -4,8 +4,10 @@ import androidx.compose.runtime.Immutable
 import com.raulshma.jellyplay.core.data.repository.MediaRepository
 import com.raulshma.jellyplay.core.data.syncplay.SyncPlayEvent
 import com.raulshma.jellyplay.core.data.syncplay.SyncPlayManager
+import com.raulshma.jellyplay.core.datastore.UserPreferencesStore
 import com.raulshma.jellyplay.core.model.SyncPlayGroup
 import com.raulshma.jellyplay.core.model.SyncPlayGroupInfo
+import com.raulshma.jellyplay.core.model.SyncPlayJoinBehavior
 import com.raulshma.jellyplay.core.model.SyncPlayRepeatMode
 import com.raulshma.jellyplay.core.model.SyncPlayShuffleMode
 import com.raulshma.jellyplay.core.ui.viewmodel.JellyPlayViewModel
@@ -33,12 +35,14 @@ data class SyncPlayUiState(
     val error: String? = null,
     val isInGroup: Boolean = false,
     val showCreateDialog: Boolean = false,
+    val pendingJoin: SyncPlayGroup? = null,
 )
 
 @HiltViewModel
 class SyncPlayViewModel @Inject constructor(
     private val mediaRepository: MediaRepository,
     private val syncPlayManager: SyncPlayManager,
+    private val preferencesStore: UserPreferencesStore,
 ) : JellyPlayViewModel() {
 
     private val _uiState = stateFlow(SyncPlayUiState())
@@ -74,12 +78,42 @@ class SyncPlayViewModel @Inject constructor(
                             joinGroup(target.groupId)
                         }
                     }
+                    if (autoJoinGroupId == null && result.isNotEmpty() && !_uiState.value.isInGroup) {
+                        val prefs = preferencesStore.preferences.value
+                        if (prefs.syncPlayAutoAcceptInvites) {
+                            joinGroup(result.first().groupId)
+                        }
+                    }
                 }
                 .onFailure {
                     _uiState.update { state -> state.copy(error = it.message ?: "Failed to load groups") }
                 }
             _uiState.update { it.copy(isLoading = false) }
         }
+    }
+
+    /**
+     * Initiates a join request honouring the [SyncPlayJoinBehavior] preference:
+     * - [SyncPlayJoinBehavior.ALWAYS_JOIN] joins immediately.
+     * - [SyncPlayJoinBehavior.ASK] surfaces a confirmation dialog via [SyncPlayUiState.pendingJoin].
+     * - [SyncPlayJoinBehavior.NEVER_JOIN] emits a notification instead of joining.
+     */
+    fun requestJoin(group: SyncPlayGroup) {
+        when (preferencesStore.preferences.value.syncPlayJoinBehavior) {
+            SyncPlayJoinBehavior.ALWAYS_JOIN -> joinGroup(group.groupId)
+            SyncPlayJoinBehavior.ASK -> _uiState.update { it.copy(pendingJoin = group) }
+            SyncPlayJoinBehavior.NEVER_JOIN -> _notifications.tryEmit("Joining SyncPlay groups is disabled in settings")
+        }
+    }
+
+    fun confirmJoin() {
+        val pending = _uiState.value.pendingJoin
+        _uiState.update { it.copy(pendingJoin = null) }
+        if (pending != null) joinGroup(pending.groupId)
+    }
+
+    fun cancelJoin() {
+        _uiState.update { it.copy(pendingJoin = null) }
     }
 
     fun joinGroup(groupId: String) {

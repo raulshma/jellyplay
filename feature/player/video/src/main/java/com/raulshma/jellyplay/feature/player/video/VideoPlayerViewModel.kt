@@ -473,8 +473,11 @@ class VideoPlayerViewModel @Inject constructor(
                         hasSubtitleOverride = stored?.subtitleStreamIndex != null,
                     )
                 }
-                if (_uiState.value.subtitleStyle != prefs.subtitleStyle) {
-                    _uiState.update { it.copy(subtitleStyle = prefs.subtitleStyle) }
+                val resolvedSubtitleStyle = prefs.resolvedSubtitleStyle(
+                    isHdr = prefs.isHdrFromStreams(_uiState.value.mediaStreams),
+                )
+                if (_uiState.value.subtitleStyle != resolvedSubtitleStyle) {
+                    _uiState.update { it.copy(subtitleStyle = resolvedSubtitleStyle) }
                     playerSessionManager.engine?.let {
                         updateConfigWithUiState()
                     }
@@ -487,6 +490,12 @@ class VideoPlayerViewModel @Inject constructor(
                 }
                 if (_uiState.value.showClock != prefs.showClockInPlayer) {
                     _uiState.update { it.copy(showClock = prefs.showClockInPlayer) }
+                }
+                if (_uiState.value.showTimeRemaining != prefs.showTimeRemaining) {
+                    _uiState.update { it.copy(showTimeRemaining = prefs.showTimeRemaining) }
+                }
+                if (_uiState.value.tvZoomModePercent != prefs.tvZoomModePercent) {
+                    _uiState.update { it.copy(tvZoomModePercent = prefs.tvZoomModePercent) }
                 }
                  if (_uiState.value.keepScreenOnDuringVideo != prefs.keepScreenOnDuringVideo) {
                     _uiState.update { it.copy(keepScreenOnDuringVideo = prefs.keepScreenOnDuringVideo) }
@@ -629,7 +638,9 @@ class VideoPlayerViewModel @Inject constructor(
                         audioDelayMs = prefs.audioDelayMs,
                         decoderMode = prefs.decoderMode,
                         audioPassthrough = prefs.audioPassthrough,
-                        subtitleStyle = prefs.subtitleStyle,
+                        subtitleStyle = prefs.resolvedSubtitleStyle(
+                            isHdr = prefs.isHdrFromStreams(playerSessionManager.sessionState.value.mediaStreams),
+                        ),
                         dialogueBoostEnabled = prefs.dialogueBoostEnabled,
                         dialogueBoostStrength = prefs.dialogueBoostStrength,
                         nightModeEnabled = prefs.nightModeEnabled,
@@ -892,6 +903,8 @@ class VideoPlayerViewModel @Inject constructor(
                 videoEpisodeBrowserEnabled = prefs.videoEpisodeBrowserEnabled,
                 showPlaybackMetadata = prefs.videoShowPlaybackMetadata,
                 showClock = prefs.showClockInPlayer,
+                showTimeRemaining = prefs.showTimeRemaining,
+                tvZoomModePercent = prefs.tvZoomModePercent,
                 keepScreenOnDuringVideo = prefs.keepScreenOnDuringVideo,
                 streamingQuality = prefs.streamingQuality,
                 adaptiveBitrateEnabled = prefs.adaptiveBitrateEnabled,
@@ -1879,7 +1892,7 @@ class VideoPlayerViewModel @Inject constructor(
         val maxBitrate = if (_uiState.value.playbackMode == PlaybackMode.FORCE_DIRECT_PLAY) {
             null
         } else {
-            adaptiveBitrateManager.resolveMaxBitrate(_uiState.value.streamingQuality)?.toInt()
+            adaptiveBitrateManager.resolveEffectiveMaxBitrate()?.toInt()
         }
         return CastMediaOptions(
             mediaSourceId = mediaSourceId.takeIf { it.isNotBlank() },
@@ -1991,6 +2004,9 @@ class VideoPlayerViewModel @Inject constructor(
     val isBackgroundCasting: Boolean
         get() = castManager.isBackgroundCasting
 
+    val backgroundCastingEnabled: Boolean
+        get() = preferencesStore.preferences.value.backgroundCastingEnabled
+
     fun toggleVideoStats() {
         val newValue = !_uiState.value.showVideoStats
         _uiState.update { it.copy(showVideoStats = newValue) }
@@ -2085,6 +2101,8 @@ class VideoPlayerViewModel @Inject constructor(
                 videoEpisodeBrowserEnabled = currentState.videoEpisodeBrowserEnabled,
                 showPlaybackMetadata = currentState.showPlaybackMetadata,
                 showClock = currentState.showClock,
+                showTimeRemaining = currentState.showTimeRemaining,
+                tvZoomModePercent = currentState.tvZoomModePercent,
                 keepScreenOnDuringVideo = currentState.keepScreenOnDuringVideo,
                 subtitleStyle = currentState.subtitleStyle,
                 dialogueBoostEnabled = currentState.dialogueBoostEnabled,
