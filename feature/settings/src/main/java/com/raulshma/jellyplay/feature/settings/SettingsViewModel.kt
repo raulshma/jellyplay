@@ -83,6 +83,7 @@ class SettingsViewModel @Inject constructor(
     private val mediaRepository: MediaRepository,
     private val apiClient: com.raulshma.jellyplay.core.network.JellyfinApiClient,
     private val notificationScheduler: NotificationScheduler,
+    private val autoDownloadScheduler: com.raulshma.jellyplay.core.data.worker.AutoDownloadScheduler,
 ) : JellyPlayViewModel() {
 
     private val editor = PreferencesEditor(scope, preferencesStore)
@@ -513,6 +514,14 @@ class SettingsViewModel @Inject constructor(
 
     fun setVideoDefaultSpeed(speed: Float) {
         launch { preferencesStore.setVideoDefaultSpeed(speed) }
+    }
+
+    fun setVideoHoldSpeedEnabled(enabled: Boolean) {
+        launch { preferencesStore.setVideoHoldSpeedEnabled(enabled) }
+    }
+
+    fun setVideoHoldSpeedMultiplier(multiplier: Float) {
+        launch { preferencesStore.setVideoHoldSpeedMultiplier(multiplier) }
     }
 
     fun setVideoDefaultAspectRatio(ratio: String) {
@@ -1068,7 +1077,10 @@ class SettingsViewModel @Inject constructor(
     }
 
     fun setAutoDownloadNewEpisodes(enabled: Boolean) {
-        launch { preferencesStore.setAutoDownloadNewEpisodes(enabled) }
+        launch {
+            preferencesStore.setAutoDownloadNewEpisodes(enabled)
+            autoDownloadScheduler.sync()
+        }
     }
 
     fun setIncognitoModeEnabled(enabled: Boolean) {
@@ -1165,6 +1177,8 @@ class SettingsViewModel @Inject constructor(
                 } else {
                     android.os.LocaleList.getEmptyLocaleList()
                 }
+            } else {
+                com.raulshma.jellyplay.core.ui.components.LocaleApplier.apply(context, language)
             }
         }
     }

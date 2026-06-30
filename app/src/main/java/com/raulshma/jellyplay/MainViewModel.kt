@@ -57,6 +57,7 @@ class MainViewModel @Inject constructor(
     private val offlineRepository: OfflineRepository,
     val userMessageBus: UserMessageBus,
     private val serverHealthMonitor: com.raulshma.jellyplay.core.data.network.ServerHealthMonitor,
+    val cacheManager: com.raulshma.jellyplay.core.data.cache.CacheManager,
 ) : JellyPlayViewModel() {
 
     val serverHealth = serverHealthMonitor.serverHealth

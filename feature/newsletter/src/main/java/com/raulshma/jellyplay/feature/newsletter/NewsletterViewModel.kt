@@ -3,6 +3,7 @@ package com.raulshma.jellyplay.feature.newsletter
 import com.raulshma.jellyplay.core.data.repository.MediaRepository
 import com.raulshma.jellyplay.core.data.repository.PlaybackRepository
 import com.raulshma.jellyplay.core.datastore.UserPreferencesStore
+import com.raulshma.jellyplay.core.model.NewsletterSectionType
 import com.raulshma.jellyplay.core.ui.viewmodel.JellyPlayViewModel
 import dagger.hilt.android.lifecycle.HiltViewModel
 import java.time.LocalDate
@@ -58,6 +59,10 @@ class NewsletterViewModel @Inject constructor(
 
             mediaRepository.getNewsletterData(sinceDate)
                 .onSuccess { data ->
+                    val prefs = preferencesStore.preferences.value
+                    val resolvedOrder = prefs.newsletterSectionOrder
+                        .filter { it in prefs.enabledNewsletterSections }
+                        .ifEmpty { NewsletterSectionType.DEFAULT_ORDER }
                     _uiState.update {
                         it.copy(
                             serverName = data.serverName,
@@ -67,6 +72,7 @@ class NewsletterViewModel @Inject constructor(
                             continueWatching = data.continueWatching,
                             nextUp = data.nextUp,
                             curatedPicks = data.curatedPicks,
+                            sectionOrder = resolvedOrder,
                             isLoading = false,
                             isRefreshing = false,
                             error = null,

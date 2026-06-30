@@ -477,6 +477,18 @@ fun StorageSettingsScreen(
                                 viewModel.setDownloadScheduleWindow(current.copy(endHour = nextEnd))
                             }
                         )
+
+                        SettingToggleItem(
+                            icon = Tabler.Outline.Wifi,
+                            title = "Wi-Fi Only During Schedule",
+                            subtitle = "Require unmetered (Wi-Fi) network during the schedule window",
+                            checked = preferences.downloadScheduleWindow.wifiOnly,
+                            index = downloadIdx++, count = downloadTotal,
+                            onCheckedChange = {
+                                val current = preferences.downloadScheduleWindow
+                                viewModel.setDownloadScheduleWindow(current.copy(wifiOnly = it))
+                            }
+                        )
                     }
 
                     SettingListItem(

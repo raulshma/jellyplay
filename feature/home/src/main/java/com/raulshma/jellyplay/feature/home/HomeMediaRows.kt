@@ -442,9 +442,15 @@ fun HomeMediaRow(
 ) {
     val adaptiveInfo = LocalAdaptiveInfo.current
     val isTv = LocalTvMode.current
+    val cardPrefs = com.raulshma.jellyplay.core.ui.components.LocalCardDisplayPreferences.current
     val cardWidth = adaptiveInfo.rowCardWidth(isTv)
     val contentPad = adaptiveInfo.contentPadding(isTv)
     val spacing = adaptiveInfo.itemSpacing(isTv)
+    // Apply "hide watched items" filter at the row wrapper so the entire card
+    // (and its slot in the scroller) disappears rather than leaving a gap.
+    val effectiveItems = remember(items, cardPrefs.hideWatchedItems) {
+        if (cardPrefs.hideWatchedItems) items.filterNot { it.isPlayed } else items
+    }
 
     Column(modifier = modifier) {
         Text(

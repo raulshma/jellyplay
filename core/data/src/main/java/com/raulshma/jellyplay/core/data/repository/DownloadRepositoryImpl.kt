@@ -19,6 +19,7 @@ import com.raulshma.jellyplay.core.database.entity.DownloadEntity
 import com.raulshma.jellyplay.core.database.entity.OfflineMediaEntity
 import com.raulshma.jellyplay.core.data.worker.DownloadWorker
 import com.raulshma.jellyplay.core.model.DownloadItem
+import com.raulshma.jellyplay.core.model.DownloadQuality
 import com.raulshma.jellyplay.core.model.DownloadStatus
 import com.raulshma.jellyplay.core.model.MediaSegment
 import com.raulshma.jellyplay.core.model.MediaStream
@@ -118,10 +119,30 @@ class DownloadRepositoryImpl @Inject constructor(
                 throw IllegalStateException("Download limit reached (${prefs.maxCacheSizeMb} MB). Free up space in Settings › Storage or increase the limit.")
             }
         }
+        // Enforce the user-facing download storage cap (in GB). 0 = unlimited.
+        if (prefs.maxDownloadStorageGb > 0) {
+            val maxBytesFromGb = prefs.maxDownloadStorageGb.toLong() * 1024L * 1024L * 1024L
+            val currentBytes = downloadDao.getTotalDownloadedBytes()
+            if (currentBytes >= maxBytesFromGb) {
+                throw IllegalStateException("Download storage limit reached (${prefs.maxDownloadStorageGb} GB). Free up space in Settings › Storage or increase the limit.")
+            }
+        }
 
         val isAudioType = mediaType == MediaType.AUDIO.name || mediaType == MediaType.MUSIC.name
         val dirType = if (isAudioType) Environment.DIRECTORY_MUSIC else Environment.DIRECTORY_MOVIES
-        val downloadDir = context.getExternalFilesDir(dirType) ?: File(context.filesDir, if (isAudioType) "downloads/music" else "downloads")
+        // downloadStorageLocation: "EXTERNAL" prefers the primary external storage
+        // mount (still app-private externalFilesDir, scoped to MEDIA_ROOT).
+        // "INTERNAL" falls back to filesDir which is never visible to other apps
+        // and survives media scan indexing. Both remain app-private post-uninstall.
+        val useInternalStorage = prefs.downloadStorageLocation.equals("INTERNAL", ignoreCase = true) &&
+            prefs.downloadStorageLocation != "EXTERNAL"
+        val baseDir = when {
+            useInternalStorage && !isAudioType -> File(context.filesDir, "downloads")
+            useInternalStorage && isAudioType -> File(context.filesDir, "downloads/music")
+            else -> context.getExternalFilesDir(dirType)
+                ?: File(context.filesDir, if (isAudioType) "downloads/music" else "downloads")
+        }
+        val downloadDir = baseDir
         val statFs = android.os.StatFs(downloadDir.absolutePath)
         val availableBytes = statFs.availableBlocksLong * statFs.blockSizeLong
         if (availableBytes < 100L * 1024 * 1024) {
@@ -129,8 +150,7 @@ class DownloadRepositoryImpl @Inject constructor(
         }
 
         val id = UUID.randomUUID().toString()
-        val dir = context.getExternalFilesDir(dirType)
-            ?: File(context.filesDir, if (isAudioType) "downloads/music" else "downloads")
+        val dir = baseDir
         if (!dir.exists()) dir.mkdirs()
         val safeName = name.replace(FILENAME_SANITIZE_REGEX, "_")
         val extension = if (isAudioType) "mp3" else "mp4"
@@ -258,11 +278,16 @@ class DownloadRepositoryImpl @Inject constructor(
         }
     }
 
+    override suspend fun getDownloadedSeriesIds(): List<String> = withContext(Dispatchers.IO) {
+        downloadDao.getDownloadedSeriesIds()
+    }
+
     override suspend fun downloadSeries(
         seriesId: String,
         episodeIds: Map<String, List<String>>?,
     ): Result<List<String>> = runCatching {
         withContext(Dispatchers.IO) {
+            val prefs = preferencesStore.preferences.first()
             val detail = mediaRepository.getMediaDetail(seriesId).getOrThrow()
             val seriesItem = detail.item
             val imageUrl = playbackRepository.getImageUrl(seriesId, maxWidth = 300)
@@ -298,10 +323,23 @@ class DownloadRepositoryImpl @Inject constructor(
                             try {
                                 val episodeDetail = mediaRepository.getMediaDetail(episode.id).getOrNull()
                                 val source = episodeDetail?.mediaSources?.firstOrNull()
+                                // Apply the user's download quality preference by passing the
+                                // corresponding max bitrate to the stream URL builder. ORIGINAL
+                                // leaves the stream unbounded so the server picks the best
+                                // direct-playable source.
+                                val qualityMaxBitrate = qualityToMaxBitrate(prefs.downloadQuality)
                                 val streamUrl = if (source != null) {
-                                    playbackRepository.getStreamUrl(episode.id, source.id)
+                                    playbackRepository.getStreamUrl(
+                                        itemId = episode.id,
+                                        mediaSourceId = source.id,
+                                        maxBitrate = qualityMaxBitrate,
+                                    )
                                 } else {
-                                    playbackRepository.getStreamUrl(episode.id, episode.id)
+                                    playbackRepository.getStreamUrl(
+                                        itemId = episode.id,
+                                        mediaSourceId = episode.id,
+                                        maxBitrate = qualityMaxBitrate,
+                                    )
                                 }
 
                                 if (streamUrl.isNotBlank()) {
@@ -680,6 +718,20 @@ class DownloadRepositoryImpl @Inject constructor(
         errorMessage = errorMessage,
         priority = priority,
     )
+
+    /**
+     * Maps a [DownloadQuality] preference to the max bitrate (bits/s) passed
+     * to the stream-URL builder. `null` means "no cap" → original quality.
+     * Values are aligned with [AdaptiveBitrateManager] streaming presets so
+     * the downloaded file matches what the user would see streamed at the
+     * equivalent quality.
+     */
+    private fun qualityToMaxBitrate(quality: DownloadQuality): Int? = when (quality) {
+        DownloadQuality.ORIGINAL -> null
+        DownloadQuality.HIGH_1080P -> 8_000_000
+        DownloadQuality.MEDIUM_720P -> 3_000_000
+        DownloadQuality.LOW_480P -> 1_500_000
+    }
 
     companion object {
         private const val TAG = "DownloadRepository"

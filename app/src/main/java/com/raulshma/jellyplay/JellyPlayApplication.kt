@@ -53,6 +53,7 @@ class JellyPlayApplication : Application(), SingletonImageLoader.Factory, Config
     @Inject lateinit var audioPlaybackManager: com.raulshma.jellyplay.core.data.playback.AudioPlaybackManager
     @Inject lateinit var nowPlayingWidgetUpdater: com.raulshma.jellyplay.widget.NowPlayingWidgetUpdater
     @Inject lateinit var notificationScheduler: NotificationScheduler
+    @Inject lateinit var autoDownloadScheduler: com.raulshma.jellyplay.core.data.worker.AutoDownloadScheduler
 
     private val applicationScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
 
@@ -110,6 +111,7 @@ class JellyPlayApplication : Application(), SingletonImageLoader.Factory, Config
             nowPlayingWidgetUpdater.start()
             com.raulshma.jellyplay.widget.WidgetWorkScheduler.enqueuePeriodic(this@JellyPlayApplication)
             com.raulshma.jellyplay.core.data.worker.UserDataSyncScheduler.enqueuePeriodic(this@JellyPlayApplication)
+            autoDownloadScheduler.sync()
             recoverPendingDownloads()
             cleanupStuckDownloads()
             notificationScheduler.scheduleOrUpdate()

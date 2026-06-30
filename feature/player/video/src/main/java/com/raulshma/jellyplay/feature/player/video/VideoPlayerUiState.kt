@@ -158,6 +158,8 @@ data class VideoPlayerUiState(
     val pinHash: String? = null,
     val showPlaybackMetadata: Boolean = true,
     val showClock: Boolean = false,
+    val showTimeRemaining: Boolean = false,
+    val tvZoomModePercent: Float = 0f,
     val keepScreenOnDuringVideo: Boolean = true,
     val cinemaIntroState: CinemaIntroUiState? = null,
     val isMuted: Boolean = false,

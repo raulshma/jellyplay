@@ -50,7 +50,11 @@ class PlaybackApiClientImplTest {
         engine.updateServer(testServer.copy(address = baseUrl))
         engine.updateUser(testUser.copy(serverAddress = baseUrl))
 
-        playbackClient = PlaybackApiClientImpl(engine, DeviceProfileProvider(DeviceCodecCapabilities()))
+        playbackClient = PlaybackApiClientImpl(
+            engine = engine,
+            deviceProfileProvider = DeviceProfileProvider(DeviceCodecCapabilities()),
+            preferencesStore = mockk(relaxed = true),
+        )
     }
 
     @After
