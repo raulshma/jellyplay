@@ -83,6 +83,7 @@ data class MediaItem(
     val normalizationPeak: Float? = null,
     val playCount: Int = 0,
     val lastPlayedDate: String? = null,
+    val unplayedItemCount: Int? = null,
 )
 
 @Immutable

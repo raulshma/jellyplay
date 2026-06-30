@@ -16,7 +16,6 @@ data class UserPreferences(
     val themeMode: ThemeMode = ThemeMode.SYSTEM,
     val contrastLevel: ContrastLevel = ContrastLevel.DEFAULT,
     val oledMode: Boolean = false,
-    val useBottomNav: Boolean = true,
     val subtitleStyle: SubtitleStyle = SubtitleStyle(),
     val streamingQuality: StreamingQuality = StreamingQuality.AUTO,
     val playbackMode: PlaybackMode = PlaybackMode.AUTO,
@@ -212,4 +211,48 @@ data class UserPreferences(
     val downloadScheduleEnabled: Boolean = false,
     val downloadScheduleWindow: DownloadScheduleWindow = DownloadScheduleWindow(),
     val enabledExperimentalFeatures: Set<ExperimentalFeature> = emptySet(),
-)
+) {
+    /**
+     * Returns the subtitle style actually applied to the player, honouring the
+     * [highContrastSubtitles] accessibility override and the optional HDR
+     * subtitle style. When high-contrast mode is enabled, the user's custom
+     * style is replaced with a maximally legible preset (large yellow text,
+     * opaque black background, thick black outline) regardless of their
+     * per-colour selections. The user's underlying style is preserved in
+     * [subtitleStyle] so disabling the toggle restores it.
+     *
+     * When [isHdr] is true (caller-derived from the active video stream),
+     * [hdrSubtitleStyleEnabled] is on and [highContrastSubtitles] is off,
+     * [hdrSubtitleStyle] is returned instead so HDR content can use a more
+     * legible colour configuration.
+     */
+    fun resolvedSubtitleStyle(isHdr: Boolean = false): SubtitleStyle = when {
+        highContrastSubtitles -> SubtitleStyle(
+            applyCustomStyle = true,
+            fontSize = (subtitleStyle.fontSize.coerceAtLeast(24) + 4).coerceAtMost(48),
+            fontColor = SubtitleColor.YELLOW,
+            backgroundColor = SubtitleColor.BLACK,
+            backgroundOpacity = 1.0f,
+            edgeType = SubtitleEdgeType.OUTLINE,
+            edgeColor = SubtitleColor.BLACK,
+            offsetMs = subtitleStyle.offsetMs,
+            verticalPosition = subtitleStyle.verticalPosition,
+        )
+        isHdr && hdrSubtitleStyleEnabled -> hdrSubtitleStyle
+        else -> subtitleStyle
+    }
+
+    /**
+     * Returns `true` when any of the supplied media streams represents HDR
+     * content (HDR10/HDR10+/HLG/Dolby Vision) — used by callers to decide
+     * whether to switch to the HDR subtitle style.
+     */
+    fun isHdrFromStreams(streams: List<com.raulshma.jellyplay.core.model.MediaStream>): Boolean {
+        return streams.any { stream ->
+            val range = stream.videoRange?.lowercase()
+            val rangeType = stream.videoRangeType?.lowercase()
+            val raw = (range ?: "") + " " + (rangeType ?: "")
+            raw.contains("hdr") || raw.contains("hlg") || raw.contains("dovi") || raw.contains("dolbyvision")
+        }
+    }
+}

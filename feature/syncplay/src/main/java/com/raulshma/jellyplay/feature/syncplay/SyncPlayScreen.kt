@@ -244,7 +244,7 @@ fun SyncPlayScreen(
                                 ) {
                                     SyncPlayGroupCard(
                                         group = group,
-                                        onJoin = { viewModel.joinGroup(group.groupId) },
+                                        onJoin = { viewModel.requestJoin(group) },
                                     )
                                 }
                             }
@@ -292,6 +292,26 @@ fun SyncPlayScreen(
         CreateGroupDialog(
             onDismiss = { viewModel.updateShowCreateDialog(false) },
             onCreate = { viewModel.createGroup(it) },
+        )
+    }
+
+    uiState.pendingJoin?.let { pending ->
+        AlertDialog(
+            onDismissRequest = { viewModel.cancelJoin() },
+            title = { Text("Join group?") },
+            text = { Text("Join \"${pending.groupName}\"?") },
+            confirmButton = {
+                FilledTonalButton(
+                    onClick = { viewModel.confirmJoin() },
+                    modifier = Modifier.focusIndicator(),
+                ) { Text("Join") }
+            },
+            dismissButton = {
+                OutlinedButton(
+                    onClick = { viewModel.cancelJoin() },
+                    modifier = Modifier.focusIndicator(),
+                ) { Text("Cancel") }
+            },
         )
     }
 }

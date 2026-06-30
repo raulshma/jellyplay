@@ -580,6 +580,11 @@ private fun MainContent(
         LocalPerformanceMode provides preferences.performanceMode,
         LocalFloatingNavVisibility provides isBottomNavVisibleState,
         LocalUserMessageBus provides userMessageBus,
+        com.raulshma.jellyplay.core.ui.components.LocalCardDisplayPreferences provides com.raulshma.jellyplay.core.ui.components.CardDisplayPreferences(
+            showUnwatchedBadge = preferences.showUnwatchedBadge,
+            showWatchedCheckmark = preferences.showWatchedCheckmark,
+            hideWatchedItems = preferences.hideWatchedItems,
+        ),
     ) {
         val isExpanded = adaptiveInfo.windowSizeClass != WindowSizeClass.Compact
         val pendingSearchQuery by viewModel.pendingSearchQuery.collectAsStateWithLifecycle()

@@ -287,6 +287,7 @@ fun JellyPlayTheme(
     contrastLevel: ContrastLevel = ContrastLevel.DEFAULT,
     isTv: Boolean = false,
     performanceMode: Boolean = false,
+    reduceMotion: Boolean = false,
     accentColorSwatch: String = "dynamic",
     colorStyle: ColorStyle = ColorStyle.TONAL_SPOT,
     synthwaveMode: Boolean = false,
@@ -439,7 +440,7 @@ fun JellyPlayTheme(
             colorScheme = colorScheme,
             typography = typography,
             shapes = shapes,
-            motionScheme = if (performanceMode) ReducedMotionScheme else ExpressiveMotionScheme,
+            motionScheme = if (performanceMode || reduceMotion) ReducedMotionScheme else ExpressiveMotionScheme,
             content = content,
         )
     }

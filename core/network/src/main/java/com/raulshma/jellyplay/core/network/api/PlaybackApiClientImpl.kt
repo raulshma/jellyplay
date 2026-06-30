@@ -22,6 +22,7 @@ import javax.inject.Singleton
 class PlaybackApiClientImpl @Inject constructor(
     private val engine: JellyfinApiEngine,
     private val deviceProfileProvider: DeviceProfileProvider,
+    private val preferencesStore: com.raulshma.jellyplay.core.datastore.UserPreferencesStore,
 ) : PlaybackApiClient {
 
     override suspend fun reportPlaybackStart(
@@ -163,7 +164,10 @@ class PlaybackApiClientImpl @Inject constructor(
             audioStreamIndex = audioStreamIndex,
             subtitleStreamIndex = subtitleStreamIndex,
             mediaSourceId = mediaSourceId.takeIf { it.isNotBlank() },
-            deviceProfile = deviceProfileProvider.forPlayer(playerType),
+            deviceProfile = deviceProfileProvider.forPlayer(
+                playerType = playerType,
+                pgsDirectPlay = preferencesStore.preferences.value.pgsSubtitleDirectPlay,
+            ),
             enableDirectPlay = enableDirectPlay,
             enableDirectStream = enableDirectStream,
             enableTranscoding = enableTranscoding,
