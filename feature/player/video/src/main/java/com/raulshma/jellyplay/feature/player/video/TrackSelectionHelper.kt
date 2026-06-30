@@ -204,7 +204,12 @@ internal class TrackSelectionHelper(
                         }
                     }
                 } else {
-                    val match = audioTracks.firstOrNull { it.index >= 0 && isLanguageMatch(it.language, prefAudioLang) }
+                    val match = pickPreferredAudioTrack(
+                        audioTracks = audioTracks,
+                        streams = streams,
+                        prefAudioLang = prefAudioLang,
+                        preferAudioDescription = currentPrefs.preferAudioDescription,
+                    )
                     if (match != null) {
                         selectAudioTrack(match, isUserOverride = false)
                     } else {
@@ -341,8 +346,7 @@ internal class TrackSelectionHelper(
         streams: List<MediaStream>,
         type: StreamType,
         trackOption: TrackOption,
-    ): Int? {
-        val typedStreams = streams.filter { it.type == type }
+    ): Int? {        val typedStreams = streams.filter { it.type == type }
         val trackLabel = trackOption.label
         val trackLanguage = trackOption.language
 
@@ -364,5 +368,52 @@ internal class TrackSelectionHelper(
         }
 
         return typedStreams.firstOrNull { it.index >= 0 }?.index
+    }
+
+    /**
+     * Picks the best audio [TrackOption] for automatic (no stored override)
+     * selection. When [preferAudioDescription] is enabled, descriptive tracks
+     * (matched via title/label keywords) are preferred over the default
+     * language match so visually-impaired users get narration by default.
+     */
+    private fun pickPreferredAudioTrack(
+        audioTracks: List<TrackOption>,
+        streams: List<MediaStream>,
+        prefAudioLang: String,
+        preferAudioDescription: Boolean,
+    ): TrackOption? {
+        val selectable = audioTracks.filter { it.index >= 0 }
+        if (selectable.isEmpty()) return null
+        if (preferAudioDescription) {
+            val descriptiveStreamIdx = streams
+                .firstOrNull { it.type == StreamType.AUDIO && isAudioDescriptionStream(it) }
+                ?.index
+            if (descriptiveStreamIdx != null) {
+                // Engine track indices are positional (0..n) while mediaStream
+                // indices come from the server. Match by label as a bridge.
+                val targetStream = streams.firstOrNull { it.index == descriptiveStreamIdx }
+                val targetLabel = targetStream?.displayTitle ?: targetStream?.title
+                val match = selectable.firstOrNull { opt ->
+                    opt.label == targetLabel || (targetLabel != null && opt.label.contains(targetLabel, ignoreCase = true))
+                } ?: selectable.firstOrNull { opt -> isAudioDescriptionLabel(opt.label) }
+                if (match != null) return match
+            }
+        }
+        return selectable.firstOrNull { isLanguageMatch(it.language, prefAudioLang) }
+    }
+
+    /** Heuristics for detecting audio-description tracks from titles/labels. */
+    private fun isAudioDescriptionStream(stream: MediaStream): Boolean {
+        val title = stream.displayTitle ?: stream.title ?: return false
+        return isAudioDescriptionLabel(title)
+    }
+
+    private fun isAudioDescriptionLabel(label: String): Boolean {
+        val lower = label.lowercase()
+        return lower.contains("description") ||
+            lower.contains("descriptive") ||
+            lower.contains("narration") ||
+            lower.contains(" dvs") ||
+            lower.endsWith(" ad")
     }
 }

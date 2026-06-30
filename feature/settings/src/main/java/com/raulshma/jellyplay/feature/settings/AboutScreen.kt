@@ -38,6 +38,7 @@ import com.composables.icons.tabler.outline.InfoCircle
 import com.composables.icons.tabler.outline.License
 import com.composables.icons.tabler.outline.Refresh
 import com.composables.icons.tabler.outline.Server
+import com.composables.icons.tabler.outline.Bell
 import com.raulshma.jellyplay.core.designsystem.theme.ShapeCache
 import com.raulshma.jellyplay.core.ui.adaptive.LocalAdaptiveInfo
 import com.raulshma.jellyplay.core.ui.adaptive.bottomPadding
@@ -216,36 +217,45 @@ fun AboutScreen(
                     }
                 },
             )
-            SettingsClickableRow(
-                icon = {
-                    Icon(
-                        if (viewModel.isCheckingUpdate) Tabler.Outline.Refresh else Tabler.Outline.Refresh,
-                        contentDescription = null,
-                        modifier = Modifier.size(20.dp),
-                    )
-                },
-                title = when {
-                    viewModel.isCheckingUpdate -> "Checking for updates..."
-                    viewModel.updateInfo?.isUpdateAvailable == true ->
-                        "Update available: v${viewModel.updateInfo!!.latestVersion}"
-                    viewModel.updateInfo != null -> "Up to date (v${viewModel.updateInfo!!.latestVersion})"
-                    else -> "Check for Updates"
-                },
-                onClick = {
-                    val info = viewModel.updateInfo
-                    if (info?.isUpdateAvailable == true && info.downloadUrl.isNotBlank()) {
-                        try {
-                            val intent = android.content.Intent(
-                                android.content.Intent.ACTION_VIEW,
-                                android.net.Uri.parse(info.downloadUrl),
-                            )
-                            context.startActivity(intent)
-                        } catch (_: Exception) {}
-                    } else if (!viewModel.isCheckingUpdate) {
-                        viewModel.checkForUpdate()
-                    }
-                },
+            SettingToggleItem(
+                icon = Tabler.Outline.Refresh,
+                title = "Check for Updates Automatically",
+                subtitle = "Periodically check GitHub for new releases",
+                checked = viewModel.selfUpdateCheckEnabled,
+                onCheckedChange = { viewModel.updateSelfUpdateCheckPref(it) },
             )
+            if (viewModel.selfUpdateCheckEnabled) {
+                SettingsClickableRow(
+                    icon = {
+                        Icon(
+                            if (viewModel.isCheckingUpdate) Tabler.Outline.Refresh else Tabler.Outline.Refresh,
+                            contentDescription = null,
+                            modifier = Modifier.size(20.dp),
+                        )
+                    },
+                    title = when {
+                        viewModel.isCheckingUpdate -> "Checking for updates..."
+                        viewModel.updateInfo?.isUpdateAvailable == true ->
+                            "Update available: v${viewModel.updateInfo!!.latestVersion}"
+                        viewModel.updateInfo != null -> "Up to date (v${viewModel.updateInfo!!.latestVersion})"
+                        else -> "Check for Updates"
+                    },
+                    onClick = {
+                        val info = viewModel.updateInfo
+                        if (info?.isUpdateAvailable == true && info.downloadUrl.isNotBlank()) {
+                            try {
+                                val intent = android.content.Intent(
+                                    android.content.Intent.ACTION_VIEW,
+                                    android.net.Uri.parse(info.downloadUrl),
+                                )
+                                context.startActivity(intent)
+                            } catch (_: Exception) {}
+                        } else if (!viewModel.isCheckingUpdate) {
+                            viewModel.checkForUpdate()
+                        }
+                    },
+                )
+            }
 
             Spacer(Modifier.height(16.dp))
 

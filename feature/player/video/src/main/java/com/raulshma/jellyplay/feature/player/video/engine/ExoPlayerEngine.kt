@@ -272,6 +272,19 @@ class ExoPlayerEngine(
                 selector.buildUponParameters().setPreferredVideoMimeTypes(*exoCfg.preferredVideoMimeTypes.toTypedArray())
             )
         }
+        if (exoCfg.audioOffloadMode != com.raulshma.jellyplay.core.model.ExoAudioOffloadMode.DISABLED) {
+            // Media3 surfaces audio offload through the track selector, not the
+            // ExoPlayer.Builder. Map the pref onto AudioOffloadPreferences and
+            // push it into the parameters so the selector prefers offload-decodable
+            // tracks when the user has enabled (or required) the mode.
+            selector.setParameters(
+                selector.buildUponParameters().setAudioOffloadPreferences(
+                    androidx.media3.common.TrackSelectionParameters.AudioOffloadPreferences.Builder()
+                        .setAudioOffloadMode(exoCfg.audioOffloadMode.value)
+                        .build(),
+                ),
+            )
+        }
         trackSelector = selector
 
         val rendererMode = when (currentConfig.decoderMode) {

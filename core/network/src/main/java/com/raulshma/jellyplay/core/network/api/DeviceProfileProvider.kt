@@ -35,8 +35,17 @@ class DeviceProfileProvider @Inject constructor(
     private val deviceCodecCapabilities: DeviceCodecCapabilities,
 ) {
 
-    fun forPlayer(playerType: PlayerType): org.jellyfin.sdk.model.api.DeviceProfile = when (playerType) {
-        PlayerType.MPV -> mpvProfile
+    /**
+     * @param pgsDirectPlay when `true`, PGS subtitles are advertised as a
+     * direct-play codec so the server will send them unmodified (MPV renders
+     * them natively). When `false` (default), PGS is omitted from the
+     * direct-play profile so the server burns them into the video track.
+     */
+    fun forPlayer(
+        playerType: PlayerType,
+        pgsDirectPlay: Boolean = false,
+    ): org.jellyfin.sdk.model.api.DeviceProfile = when (playerType) {
+        PlayerType.MPV -> mpvProfile(pgsDirectPlay)
         PlayerType.EXO_PLAYER, PlayerType.LIBVLC -> hardwareProfile
         PlayerType.EXTERNAL -> hardwareProfile
     }
@@ -57,7 +66,7 @@ class DeviceProfileProvider @Inject constructor(
         "ttml" to SubtitleDeliveryMethod.EXTERNAL,
     )
 
-    private val mpvProfile = buildDeviceProfile {
+    private fun mpvProfile(pgsDirectPlay: Boolean): org.jellyfin.sdk.model.api.DeviceProfile = buildDeviceProfile {
         name = "jellyplay-mpv"
 
         transcodingProfile {
@@ -89,6 +98,15 @@ class DeviceProfileProvider @Inject constructor(
         }
 
         subtitleFormats.forEach { (format, method) -> subtitleProfile(format, method) }
+        // PGS subtitles are image-based and only the MPV engine can render
+        // them locally. When the user opts into PGS direct play we advertise
+        // it as an external (deliver-as-is) subtitle profile; otherwise it is
+        // omitted, which causes the server to burn the subtitles into the
+        // video during transcoding.
+        if (pgsDirectPlay) {
+            subtitleProfile("pgssub", SubtitleDeliveryMethod.EXTERNAL)
+            subtitleProfile("pgs", SubtitleDeliveryMethod.EXTERNAL)
+        }
     }
 
     /**

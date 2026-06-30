@@ -160,6 +160,7 @@ fun MediaDetailScreen(
     val downloadedEpisodeIds = uiState.downloadedEpisodeIds
     val seriesDownloadResult = uiState.seriesDownloadResult
     val downloadError = uiState.downloadError
+    val cellularDownloadWarningMb = uiState.cellularDownloadWarningMb
     val seerrTvSeasons = uiState.seerrTvSeasons
     LaunchedEffect(detail) {
         detail?.let {
@@ -203,6 +204,29 @@ fun MediaDetailScreen(
             snackbarHostState.showSnackbar(error)
             viewModel.clearDownloadError()
         }
+    }
+
+    if (cellularDownloadWarningMb != null) {
+        AlertDialog(
+            onDismissRequest = { viewModel.dismissCellularDownloadWarning() },
+            title = { Text("Large download on cellular") },
+            text = {
+                Text(
+                    "You are on a metered network. This download is about " +
+                        "$cellularDownloadWarningMb MB and may use significant mobile data.",
+                )
+            },
+            confirmButton = {
+                TextButton(onClick = { viewModel.confirmCellularDownload() }) {
+                    Text("Download anyway")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { viewModel.dismissCellularDownloadWarning() }) {
+                    Text("Cancel")
+                }
+            },
+        )
     }
 
     Box(modifier = Modifier.fillMaxSize()) {
@@ -1039,21 +1063,23 @@ private fun DetailContent(
                                         Icon(Tabler.Outline.Pencil, contentDescription = null)
                                     }
                                 )
-                                DropdownMenuItem(
-                                    text = { Text("Share") },
-                                    onClick = {
-                                        menuExpanded = false
-                                        val shareIntent = Intent(Intent.ACTION_SEND).apply {
-                                            type = "text/plain"
-                                            putExtra(Intent.EXTRA_TEXT, "jellyplay://media/$itemId")
-                                            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                                if (preferences.showShareMediaOption) {
+                                    DropdownMenuItem(
+                                        text = { Text("Share") },
+                                        onClick = {
+                                            menuExpanded = false
+                                            val shareIntent = Intent(Intent.ACTION_SEND).apply {
+                                                type = "text/plain"
+                                                putExtra(Intent.EXTRA_TEXT, "jellyplay://media/$itemId")
+                                                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                                            }
+                                            context.startActivity(Intent.createChooser(shareIntent, "Share via"))
+                                        },
+                                        leadingIcon = {
+                                            Icon(Tabler.Outline.Share, contentDescription = null)
                                         }
-                                        context.startActivity(Intent.createChooser(shareIntent, "Share via"))
-                                    },
-                                    leadingIcon = {
-                                        Icon(Tabler.Outline.Share, contentDescription = null)
-                                    }
-                                )
+                                    )
+                                }
                                 val canDownload = item != null && detail != null && detail.mediaSources.isNotEmpty() &&
                                         (item.mediaType == MediaType.AUDIO || item.mediaType == MediaType.MUSIC || (!isAudio && !isSeries))
                                 if (canDownload) {
@@ -1226,19 +1252,21 @@ private fun DetailContent(
                         onEditClick()
                     },
                 )
-                TvOptionItem(
-                    icon = Tabler.Outline.Share,
-                    label = "Share",
-                    onClick = {
-                        showTvOptionsMenu = false
-                        val shareIntent = Intent(Intent.ACTION_SEND).apply {
-                            type = "text/plain"
-                            putExtra(Intent.EXTRA_TEXT, "jellyplay://media/$itemId")
-                            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-                        }
-                        context.startActivity(Intent.createChooser(shareIntent, "Share via"))
-                    },
-                )
+                if (preferences.showShareMediaOption) {
+                    TvOptionItem(
+                        icon = Tabler.Outline.Share,
+                        label = "Share",
+                        onClick = {
+                            showTvOptionsMenu = false
+                            val shareIntent = Intent(Intent.ACTION_SEND).apply {
+                                type = "text/plain"
+                                putExtra(Intent.EXTRA_TEXT, "jellyplay://media/$itemId")
+                                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                            }
+                            context.startActivity(Intent.createChooser(shareIntent, "Share via"))
+                        },
+                    )
+                }
                 val canDownload = item != null && detail != null && detail.mediaSources.isNotEmpty() &&
                         (item.mediaType == MediaType.AUDIO || item.mediaType == MediaType.MUSIC || (!isAudio && !isSeries))
                 if (canDownload) {

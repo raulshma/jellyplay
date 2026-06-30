@@ -45,6 +45,7 @@ import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.palette.graphics.Palette
@@ -265,6 +266,7 @@ fun PosterCard(
     clipToShape: Boolean = false,
 ) {
     val uiEnvironment = LocalJellyPlayUi.current
+    val cardPrefs = LocalCardDisplayPreferences.current
     val isTv = uiEnvironment.isTv
     val focusInteraction = rememberJellyFocusableInteraction()
     val interactionSource = remember { MutableInteractionSource() }
@@ -373,7 +375,7 @@ fun PosterCard(
                         .background(gradientBrush)
                 )
 
-                if (item.isPlayed) {
+                if (item.isPlayed && cardPrefs.showWatchedCheckmark) {
                     val playedBadgeColor = dominantColor
                     val playedBadgeText = remember(playedBadgeColor) {
                         if ((playedBadgeColor.red * 0.299f + playedBadgeColor.green * 0.587f + playedBadgeColor.blue * 0.114f) > 0.5f) Color.Black else Color.White
@@ -393,6 +395,30 @@ fun PosterCard(
                             style = MaterialTheme.typography.labelSmall,
                             color = playedBadgeText,
                         )
+                    }
+                } else if (!item.isPlayed && cardPrefs.showUnwatchedBadge) {
+                    val unplayedCount = item.unplayedItemCount
+                    // Unwatched-count badge for series/seasons/collections. Only
+                    // rendered when the user has enabled the unwatched badge
+                    // and the underlying MediaItem exposes a non-zero count.
+                    if (unplayedCount != null && unplayedCount > 0) {
+                        Box(
+                            modifier = Modifier
+                                .align(Alignment.TopEnd)
+                                .padding(6.dp)
+                                .background(
+                                    MaterialTheme.colorScheme.surface.copy(alpha = 0.85f),
+                                    ShapeCache.smooth4,
+                                )
+                                .padding(horizontal = 6.dp, vertical = 2.dp),
+                        ) {
+                            Text(
+                                text = "$unplayedCount",
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.onSurface,
+                                fontWeight = FontWeight.Bold,
+                            )
+                        }
                     }
                 }
 

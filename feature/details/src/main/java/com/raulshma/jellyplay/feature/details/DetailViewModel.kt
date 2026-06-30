@@ -9,6 +9,7 @@ import com.raulshma.jellyplay.core.data.repository.PlaybackRepository
 import com.raulshma.jellyplay.core.data.repository.SeerrRepository
 import com.raulshma.jellyplay.core.data.seerr.SeerrRequestDelegate
 import com.raulshma.jellyplay.core.datastore.UserPreferencesStore
+import com.raulshma.jellyplay.core.model.DownloadQuality
 import com.raulshma.jellyplay.core.model.MediaDetail
 import com.raulshma.jellyplay.core.model.MediaItem
 import com.raulshma.jellyplay.core.model.MediaType
@@ -19,6 +20,7 @@ import com.raulshma.jellyplay.core.model.seerr.SeerrRequestResult
 import com.raulshma.jellyplay.core.model.seerr.SeerrSearchItem
 import com.raulshma.jellyplay.core.model.seerr.SeerrSeason
 import com.raulshma.jellyplay.core.model.seerr.SeerrSonarrServiceDetail
+import com.raulshma.jellyplay.core.data.playback.AdaptiveBitrateManager
 import com.raulshma.jellyplay.core.data.playback.toAudioQueueItem
 import com.raulshma.jellyplay.core.network.seerr.buildPosterUrl
 import com.raulshma.jellyplay.core.network.api.TmdbApiClient
@@ -51,9 +53,11 @@ class DetailViewModel @Inject constructor(
     private val downloadRepository: DownloadRepository,
     private val preferencesStore: UserPreferencesStore,
     private val offlineModeManager: OfflineModeManager,
+    private val adaptiveBitrateManager: AdaptiveBitrateManager,
     private val seerrRepository: SeerrRepository,
     private val seerrRequestDelegate: SeerrRequestDelegate,
     private val audioPlaybackManager: com.raulshma.jellyplay.core.data.playback.AudioPlaybackManager,
+    private val themeMusicPlayer: com.raulshma.jellyplay.core.data.playback.ThemeMusicPlayer,
     private val tmdbApiClient: TmdbApiClient,
 ) : JellyPlayViewModel() {
 
@@ -258,6 +262,8 @@ class DetailViewModel @Inject constructor(
                     } else {
                         _uiState.update { state -> state.copy(smartPlayTarget = null) }
                     }
+                    val themeSourceId = detail.item.seriesId ?: itemId
+                    themeMusicPlayer.playThemeFor(themeSourceId)
                 }
                 .onFailure { err ->
                     _uiState.update { it.copy(error = err.message ?: "Failed to load details") }
@@ -551,16 +557,60 @@ class DetailViewModel @Inject constructor(
             _uiState.update { it.copy(downloadError = "Media details not loaded") }
             return
         }
-        val item = detail.item
         val source = detail.mediaSources.firstOrNull() ?: run {
             _uiState.update { it.copy(downloadError = "No media source available for download") }
             return
         }
 
+        // Cellular download size warning: when on a metered network and the
+        // user has configured a warning threshold (MB), surface a
+        // confirmation dialog instead of silently consuming data.
+        val prefs = preferencesStore.preferences.value
+        val thresholdMb = prefs.cellularDownloadSizeWarningMb
+        if (thresholdMb > 0 && !adaptiveBitrateManager.isUnmeteredConnection()) {
+            val sizeBytes = source.size ?: 0L
+            val sizeMb = (sizeBytes / (1024L * 1024L)).toInt()
+            if (sizeMb >= thresholdMb) {
+                _uiState.update { it.copy(cellularDownloadWarningMb = sizeMb) }
+                return
+            }
+        }
+
+        performDownload(detail.item, source)
+    }
+
+    /**
+     * Called from the UI after the user explicitly confirms a cellular
+     * download that exceeded the [com.raulshma.jellyplay.core.model.UserPreferences.cellularDownloadSizeWarningMb]
+     * threshold. Clears the warning state and proceeds with the download.
+     */
+    fun confirmCellularDownload() {
+        val detail = _uiState.value.detail ?: return
+        val source = detail.mediaSources.firstOrNull() ?: return
+        _uiState.update { it.copy(cellularDownloadWarningMb = null) }
+        performDownload(detail.item, source)
+    }
+
+    fun dismissCellularDownloadWarning() {
+        _uiState.update { it.copy(cellularDownloadWarningMb = null) }
+    }
+
+    private fun performDownload(
+        item: com.raulshma.jellyplay.core.model.MediaItem,
+        source: com.raulshma.jellyplay.core.model.MediaSource,
+    ) {
         launch {
             _uiState.update { it.copy(isDownloading = true, downloadError = null) }
             try {
-                val streamUrl = playbackRepository.getStreamUrl(item.id, source.id)
+                // Apply the user's download quality preference when building the
+                // stream URL so the server transcodes to the requested ceiling.
+                val prefs = preferencesStore.preferences.value
+                val maxBitrate = qualityToMaxBitrate(prefs.downloadQuality)
+                val streamUrl = playbackRepository.getStreamUrl(
+                    itemId = item.id,
+                    mediaSourceId = source.id,
+                    maxBitrate = maxBitrate,
+                )
                 if (streamUrl.isBlank()) {
                     _uiState.update { it.copy(downloadError = "Could not get stream URL", isDownloading = false) }
                     return@launch
@@ -817,6 +867,18 @@ class DetailViewModel @Inject constructor(
 
     fun prefetchSeerrDetails(tmdbId: Int, mediaType: String, onDone: () -> Unit) =
         seerrRequestState.prefetchDetails(tmdbId, mediaType, onDone)
+
+    private fun qualityToMaxBitrate(quality: DownloadQuality): Int? = when (quality) {
+        DownloadQuality.ORIGINAL -> null
+        DownloadQuality.HIGH_1080P -> 8_000_000
+        DownloadQuality.MEDIUM_720P -> 3_000_000
+        DownloadQuality.LOW_480P -> 1_500_000
+    }
+
+    override fun onCleared() {
+        super.onCleared()
+        themeMusicPlayer.stop()
+    }
 }
 
 @Immutable

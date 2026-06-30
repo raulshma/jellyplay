@@ -12,6 +12,8 @@ import com.google.android.gms.cast.framework.CastSession
 import com.google.android.gms.cast.framework.SessionManagerListener
 import com.raulshma.jellyplay.core.data.cast.dlna.DlnaCastStrategy
 import com.raulshma.jellyplay.core.data.cast.remote.JellyfinRemotePlayCastStrategy
+import com.raulshma.jellyplay.core.datastore.UserPreferencesStore
+import com.raulshma.jellyplay.core.model.CastingStrategy
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -45,6 +47,7 @@ class CastManager @Inject constructor(
     private val googleCastStrategy: GoogleCastStrategy,
     private val dlnaCastStrategy: DlnaCastStrategy,
     private val jellyfinRemotePlayCastStrategy: JellyfinRemotePlayCastStrategy,
+    private val userPreferencesStore: UserPreferencesStore,
 ) {
     companion object {
         private const val TAG = "CastManager"
@@ -67,6 +70,7 @@ class CastManager @Inject constructor(
     private var tickerJob: Job? = null
     private var strategyObserverJob: Job? = null
     private var deviceMergeJob: Job? = null
+    private var preferredRendererJob: Job? = null
 
     private val _sessionEvents = MutableSharedFlow<CastSessionEvent>(extraBufferCapacity = 1)
     val sessionEvents: SharedFlow<CastSessionEvent> = _sessionEvents.asSharedFlow()
@@ -229,8 +233,44 @@ class CastManager @Inject constructor(
         strategies[STRATEGY_GOOGLE] = googleCastStrategy
         strategies[STRATEGY_DLNA] = dlnaCastStrategy
         strategies[STRATEGY_JELLYFIN] = jellyfinRemotePlayCastStrategy
+        applyDefaultCastingStrategy()
         ensureGoogleSessionListener()
         startDeviceMerge()
+        startPreferredRendererWatcher()
+    }
+
+    /**
+     * Seeds the initial active strategy from the [CastingStrategy] preference.
+     * PREFER_DLNA selects the DLNA strategy; everything else defaults to
+     * Google Cast (the ASK variant surfaces a chooser in the UI but still
+     * needs a discovery-capable default strategy).
+     */
+    private fun applyDefaultCastingStrategy() {
+        val pref = userPreferencesStore.preferences.value.defaultCastingStrategy
+        activeStrategyName = when (pref) {
+            CastingStrategy.PREFER_DLNA -> STRATEGY_DLNA
+            CastingStrategy.PREFER_CAST, CastingStrategy.ASK -> STRATEGY_GOOGLE
+        }
+        observeStrategySession()
+    }
+
+    /**
+     * Watches discovered devices and auto-connects to the user's
+     * [com.raulshma.jellyplay.core.model.UserPreferences.preferredRenderer]
+     * when it appears, so frequently-used renderers are selected without
+     * manual intervention.
+     */
+    private fun startPreferredRendererWatcher() {
+        preferredRendererJob?.cancel()
+        preferredRendererJob = coroutineScope.launch {
+            _allDiscoveredDevices.combine(userPreferencesStore.preferences) { devices, prefs ->
+                devices to prefs.preferredRenderer
+            }            .collect { (devices, preferredName) ->
+                if (preferredName.isNullOrBlank() || isConnected) return@collect
+                val match = devices.firstOrNull { it.name == preferredName }
+                if (match != null) connect(context, match)
+            }
+        }
     }
 
     fun registerStrategy(name: String, strategy: CastStrategy) {
@@ -502,6 +542,8 @@ class CastManager @Inject constructor(
         strategyObserverJob = null
         deviceMergeJob?.cancel()
         deviceMergeJob = null
+        preferredRendererJob?.cancel()
+        preferredRendererJob = null
         castPlayer?.removeListener(castPlayerListener)
         externalListener?.let { castPlayer?.removeListener(it) }
         castPlayer?.release()
@@ -540,6 +582,8 @@ class CastManager @Inject constructor(
         strategyObserverJob = null
         deviceMergeJob?.cancel()
         deviceMergeJob = null
+        preferredRendererJob?.cancel()
+        preferredRendererJob = null
         strategies.values.forEach { it.stopDiscovery() }
     }
 

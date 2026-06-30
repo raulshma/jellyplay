@@ -5,6 +5,7 @@ import android.content.Intent
 import android.net.Uri
 import androidx.core.content.FileProvider
 import com.raulshma.jellyplay.core.data.repository.AuthRepository
+import com.raulshma.jellyplay.core.datastore.UserPreferencesStore
 import com.raulshma.jellyplay.core.network.JellyfinApiClient
 import com.raulshma.jellyplay.core.ui.viewmodel.JellyPlayViewModel
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -20,6 +21,7 @@ class AboutViewModel @Inject constructor(
     @ApplicationContext private val context: Context,
     private val apiClient: JellyfinApiClient,
     private val authRepository: AuthRepository,
+    private val preferencesStore: UserPreferencesStore,
 ) : JellyPlayViewModel() {
 
     val appVersion: String by lazy {
@@ -43,8 +45,22 @@ class AboutViewModel @Inject constructor(
     var isCollectingLogs by composeState(false)
         private set
 
+    var isCheckingUpdate by composeState(false)
+        private set
+
+    var updateInfo by composeState<UpdateInfo?>(null)
+        private set
+
+    var selfUpdateCheckEnabled by composeState(true)
+        private set
+
     init {
         loadServerInfo()
+        launch {
+            preferencesStore.preferences.collect { prefs ->
+                selfUpdateCheckEnabled = prefs.selfUpdateCheckEnabled
+            }
+        }
     }
 
     private fun loadServerInfo() {
@@ -75,13 +91,8 @@ class AboutViewModel @Inject constructor(
         }
     }
 
-    var isCheckingUpdate by composeState(false)
-        private set
-
-    var updateInfo by composeState<UpdateInfo?>(null)
-        private set
-
     fun checkForUpdate() {
+        if (!selfUpdateCheckEnabled) return
         launch {
             isCheckingUpdate = true
             try {
@@ -93,6 +104,10 @@ class AboutViewModel @Inject constructor(
                 isCheckingUpdate = false
             }
         }
+    }
+
+    fun updateSelfUpdateCheckPref(enabled: Boolean) {
+        launch { preferencesStore.setSelfUpdateCheckEnabled(enabled) }
     }
 
     private fun fetchLatestRelease(): UpdateInfo {
