@@ -98,4 +98,8 @@ class LiveTvApiClientImpl @Inject constructor(
     override suspend fun cancelTimer(timerId: String): Result<Unit> = engine.apiResultWithRetry {
         engine.requireApi().liveTvApi.cancelTimer(timerId = timerId)
     }
+
+    override suspend fun cancelSeriesTimer(seriesTimerId: String): Result<Unit> = engine.apiResultWithRetry {
+        engine.requireApi().liveTvApi.cancelSeriesTimer(timerId = seriesTimerId)
+    }
 }

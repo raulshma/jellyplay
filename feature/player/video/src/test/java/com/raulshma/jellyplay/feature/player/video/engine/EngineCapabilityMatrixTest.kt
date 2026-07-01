@@ -1,0 +1,124 @@
+package com.raulshma.jellyplay.feature.player.video.engine
+
+import com.raulshma.jellyplay.core.model.PlayerType
+import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNotEquals
+import org.junit.Assert.assertNotNull
+import org.junit.Assert.assertSame
+import org.junit.Assert.assertTrue
+import org.junit.Test
+
+/**
+ * Pins [EngineCapabilityMatrix] as the single, complete source of truth for
+ * per-engine [EngineCapabilities]. These tests fail loudly if a capability is
+ * accidentally flipped or a new [PlayerType] is added without a matrix entry.
+ */
+class EngineCapabilityMatrixTest {
+
+    @Test
+    fun forType_coversEveryPlayerType() {
+        PlayerType.entries.forEach { type ->
+            assertNotNull("Missing matrix entry for $type", EngineCapabilityMatrix.forType(type))
+        }
+    }
+
+    @Test
+    fun allByType_keysMatchPlayerTypeEntries() {
+        assertEquals(PlayerType.entries.toSet(), EngineCapabilityMatrix.allByType.keys)
+    }
+
+    @Test
+    fun forType_returnsSameConstantInstancePerType() {
+        // Delegation must hand out the canonical immutable constant, not a copy.
+        assertSame(EngineCapabilityMatrix.EXO_PLAYER, EngineCapabilityMatrix.forType(PlayerType.EXO_PLAYER))
+        assertSame(EngineCapabilityMatrix.MPV, EngineCapabilityMatrix.forType(PlayerType.MPV))
+        assertSame(EngineCapabilityMatrix.LIBVLC, EngineCapabilityMatrix.forType(PlayerType.LIBVLC))
+        assertSame(EngineCapabilityMatrix.EXTERNAL, EngineCapabilityMatrix.forType(PlayerType.EXTERNAL))
+    }
+
+    @Test
+    fun external_isAllFalse() {
+        val caps = EngineCapabilityMatrix.EXTERNAL
+        listOf(
+            caps.supportsPip, caps.supportsMiniMode, caps.supportsCues,
+            caps.supportsAudioDelay, caps.supportsSubtitleDelay, caps.supportsAudioPassthrough,
+            caps.supportsSubtitleStyle, caps.supportsSubtitleVerticalPosition,
+            caps.supportsDialogueBoost, caps.supportsNightMode, caps.supportsAudioNormalization,
+            caps.supportsChannelMixing, caps.supportsVideoFilters,
+            caps.supportsLiveQualitySwitch, caps.supportsBandwidthEstimate,
+        ).forEach { assertFalse("EXTERNAL must advertise no capabilities", it) }
+    }
+
+    // ── Documented per-engine contract (the differentiators) ──
+    // These mirror the no-op behaviour contract: a `false` here means the
+    // engine silently ignores the related call.
+
+    @Test
+    fun exoPlayer_contract() {
+        val c = EngineCapabilityMatrix.EXO_PLAYER
+        assertTrue(c.supportsPip)
+        assertTrue(c.supportsMiniMode)
+        assertTrue(c.supportsCues)
+        assertFalse(c.supportsAudioDelay)      // ExoPlayer has no audio-delay knob
+        assertTrue(c.supportsSubtitleDelay)
+        assertFalse(c.supportsAudioPassthrough)
+        assertTrue(c.supportsSubtitleStyle)
+        assertTrue(c.supportsSubtitleVerticalPosition)
+        assertTrue(c.supportsDialogueBoost)
+        assertTrue(c.supportsNightMode)
+        assertTrue(c.supportsAudioNormalization)
+        assertTrue(c.supportsChannelMixing)
+        assertFalse(c.supportsVideoFilters)    // ExoPlayer has no video-filter chain
+        assertTrue(c.supportsLiveQualitySwitch)
+        assertTrue(c.supportsBandwidthEstimate)
+    }
+
+    @Test
+    fun mpv_contract() {
+        val c = EngineCapabilityMatrix.MPV
+        assertTrue(c.supportsPip)
+        assertFalse(c.supportsMiniMode)
+        assertTrue(c.supportsCues)             // MPV publishes cue text via libass
+        assertTrue(c.supportsAudioDelay)
+        assertTrue(c.supportsSubtitleDelay)
+        assertTrue(c.supportsAudioPassthrough)
+        assertTrue(c.supportsSubtitleStyle)
+        assertTrue(c.supportsSubtitleVerticalPosition)
+        assertTrue(c.supportsDialogueBoost)
+        assertTrue(c.supportsNightMode)
+        assertTrue(c.supportsAudioNormalization)
+        assertTrue(c.supportsChannelMixing)
+        assertTrue(c.supportsVideoFilters)
+        assertFalse(c.supportsLiveQualitySwitch)
+        assertFalse(c.supportsBandwidthEstimate)
+    }
+
+    @Test
+    fun libvlc_contract() {
+        val c = EngineCapabilityMatrix.LIBVLC
+        assertTrue(c.supportsPip)
+        assertFalse(c.supportsMiniMode)
+        assertFalse(c.supportsCues)            // VLC does not surface cue text
+        assertTrue(c.supportsAudioDelay)
+        assertTrue(c.supportsSubtitleDelay)
+        assertTrue(c.supportsAudioPassthrough)
+        assertTrue(c.supportsSubtitleStyle)
+        assertTrue(c.supportsSubtitleVerticalPosition)
+        assertTrue(c.supportsDialogueBoost)
+        assertTrue(c.supportsNightMode)
+        assertTrue(c.supportsAudioNormalization)
+        assertTrue(c.supportsChannelMixing)
+        assertTrue(c.supportsVideoFilters)
+        assertFalse(c.supportsLiveQualitySwitch)
+        assertFalse(c.supportsBandwidthEstimate)
+    }
+
+    @Test
+    fun engines_areNotAllIdentical() {
+        // Guard against a refactor accidentally collapsing the matrices.
+        assertNotEquals(EngineCapabilityMatrix.EXO_PLAYER, EngineCapabilityMatrix.MPV)
+        assertNotEquals(EngineCapabilityMatrix.EXO_PLAYER, EngineCapabilityMatrix.LIBVLC)
+        assertNotEquals(EngineCapabilityMatrix.MPV, EngineCapabilityMatrix.LIBVLC)
+    }
+}

@@ -11,7 +11,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.shape.RoundedCornerShape
+import com.raulshma.jellyplay.core.designsystem.theme.ShapeCache
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
@@ -58,7 +58,7 @@ fun FloatingPlayerOverlay(
         modifier = Modifier
             .width(320.dp)
             .height(72.dp)
-            .clip(RoundedCornerShape(16.dp)),
+            .clip(ShapeCache.smooth16),
         color = MaterialTheme.colorScheme.surfaceContainerHigh,
         shadowElevation = 8.dp,
         tonalElevation = 3.dp,
@@ -72,7 +72,7 @@ fun FloatingPlayerOverlay(
             Box(
                 modifier = Modifier
                     .size(56.dp)
-                    .clip(RoundedCornerShape(10.dp))
+                    .clip(ShapeCache.smooth10)
                     .background(MaterialTheme.colorScheme.surfaceContainerHighest),
             ) {
                 if (artworkUrl != null) {

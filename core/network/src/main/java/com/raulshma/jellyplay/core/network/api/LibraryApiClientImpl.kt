@@ -474,6 +474,22 @@ class LibraryApiClientImpl @Inject constructor(
         )
     }
 
+    override suspend fun findItemByProviderId(provider: String, id: String): Result<String?> =
+        engine.apiResultWithRetry {
+            // The Jellyfin SDK's typed getItems() doesn't expose the AnyProviderId
+            // filter, so use the raw GET with a custom query parameter. Jellyfin's
+            // /Items endpoint accepts "AnyProviderId" in the "tmdb:123" format.
+            val response = engine.requireApi().get<org.jellyfin.sdk.model.api.BaseItemDtoQueryResult>(
+                pathTemplate = "/Items",
+                queryParameters = mapOf(
+                    "Recursive" to true,
+                    "Limit" to 1,
+                    "AnyProviderId" to "$provider:$id",
+                ),
+            ).content
+            response.items.firstOrNull()?.id?.toString()
+        }
+
     override suspend fun getGenres(parentId: String?, startIndex: Int, limit: Int): Result<List<Genre>> =
         engine.apiResultWithRetry {
             val userId = engine.currentUser.value?.id?.toUUID()

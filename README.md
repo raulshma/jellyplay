@@ -123,6 +123,7 @@ on every screen — phone, tablet, foldable, Android TV, and Amazon Fire TV.
 - Deep link support via `jellyplay://` and `https://raulshma.github.io/jellyplay/` URI schemes
 - **Settings search** — find any setting instantly by name
 - **New media notifications** — real-time per-library notifications when new content is added, with quiet hours, seen-media tracking, grouped notifications, and notification actions
+- **Accessibility** — blue light filter with strength control, reduce motion toggle, haptic feedback intensity, and font scaling
 
 ### Search
 
@@ -203,6 +204,13 @@ on every screen — phone, tablet, foldable, Android TV, and Amazon Fire TV.
 - Person detail pages with filmography browsing
 - Collection/box set browsing
 
+### Photo Albums & Viewer
+
+- Photo album browsing from Jellyfin libraries
+- Full-screen photo viewer with zoom and pan
+- Swipe navigation between photos
+- EXIF metadata display
+
 ### Seerr Integration
 
 - Jellyseerr and Overseerr connection support
@@ -270,6 +278,12 @@ on every screen — phone, tablet, foldable, Android TV, and Amazon Fire TV.
 - Stale Media Scanner: Detect unwatched/stale media with background scan worker
 - Watched Media Cleanup: Bulk cleanup of watched media with audit history log
 
+### Plugin Management
+
+- View installed server plugins with version and status info
+- Enable/disable plugins remotely
+- Plugin configuration viewer
+
 ### SyncPlay (Watch Parties)
 
 - Create and join synchronized watch groups
@@ -323,6 +337,8 @@ on every screen — phone, tablet, foldable, Android TV, and Amazon Fire TV.
 
 ### Settings
 
+Over 230 configurable options across 26 sections:
+
 - Player: engine selection, decoder mode, audio passthrough, orientation, seek duration, gesture toggles, autoplay, controls timeout, preload buffer
 - Audio: default speed, gapless playback, crossfade, night mode, dialogue boost, equalizer, audio normalization, channel mix, virtualizer, reverb
 - Subtitles: language, style, trickplay, intro/outro skip (manual and auto), tap-to-translate
@@ -335,6 +351,11 @@ on every screen — phone, tablet, foldable, Android TV, and Amazon Fire TV.
 - Screensaver: interval, Ken Burns effect, transition style, image categories, title overlay
 - Newsletter: enable/disable, delivery day, notification badge
 - Notifications: new media notifications, quiet hours, per-library channels
+- Live TV/DVR: channel sources, EPG refresh, recording defaults
+- Widget: per-widget source configuration, refresh interval
+- Accessibility: color blind modes, blue light filter, reduce motion, haptic intensity, font scaling
+- Experimental: feature flags for in-development capabilities
+- Seerr: server URL, API key, feature toggles, regions
 - Onboarding: re-run setup wizard anytime
 - Settings search: find any setting instantly by name
 
@@ -342,26 +363,29 @@ on every screen — phone, tablet, foldable, Android TV, and Amazon Fire TV.
 
 ## Tech Stack
 
-| Category         | Technologies                                             |
-| ---------------- | -------------------------------------------------------- |
-| Language         | Kotlin                                                   |
-| UI               | Jetpack Compose, Material 3, Material 3 Expressive       |
-| TV               | Android TV Material, Leanback                            |
-| Navigation       | Navigation 3                                             |
-| DI               | Hilt                                                     |
-| Storage          | Room, DataStore, AndroidX Security-Crypto                |
-| Background       | WorkManager, Coroutines, StateFlow                       |
-| Video Players    | Media3/ExoPlayer, libmpv, LibVLC                         |
-| Audio Effects    | Android Equalizer, LoudnessEnhancer, Virtualizer, Reverb |
-| Media Session    | Media3 Session, Media3 Cast                              |
-| Casting          | Google Play Services Cast Framework                      |
-| Networking       | OkHttp, Jellyfin SDK                                     |
-| Serialization    | kotlinx.serialization                                    |
-| Images           | Coil 3 (with BlurHash support)                           |
-| Text Recognition | ML Kit                                                   |
-| Biometrics       | AndroidX Biometric                                       |
-| Error Tracking   | Sentry                                                   |
-| Testing          | JUnit 4, Espresso, Compose UI Test, OkHttp MockWebServer |
+| Category         | Technologies                                                      |
+| ---------------- | ----------------------------------------------------------------- |
+| Language         | Kotlin 2.3, Java 17                                               |
+| UI               | Jetpack Compose (BOM 2026.05), Material 3, Material 3 Expressive |
+| TV               | Android TV Material, Leanback                                     |
+| Navigation       | Navigation 3                                                      |
+| DI               | Hilt (Dagger 2.59)                                                |
+| Storage          | Room, DataStore Preferences, AndroidX Security-Crypto             |
+| Background       | WorkManager, Coroutines, StateFlow                                 |
+| Video Players    | Media3/ExoPlayer, libmpv, LibVLC                                   |
+| Audio Effects    | Android Equalizer, LoudnessEnhancer, Virtualizer, Reverb          |
+| Media Session    | Media3 Session, Media3 Cast                                        |
+| Casting          | Google Play Services Cast, DLNA/UPnP                               |
+| Networking       | OkHttp 5, Jellyfin SDK 1.8, kotlinx.serialization                 |
+| Images           | Coil 3 (with BlurHash), Palette (color extraction)                |
+| Typography       | Google Fonts (Compose integration)                                |
+| Pagination       | Paging 3                                                           |
+| Text Recognition | ML Kit                                                             |
+| Biometrics       | AndroidX Biometric                                                 |
+| Error Tracking   | Sentry                                                             |
+| Testing          | JUnit 4, MockK, Espresso, Compose UI Test, Robolectric, UIAutomator, OkHttp MockWebServer, Room Testing |
+| Code Quality     | Kover (coverage), R8 Full Mode, KSP2                               |
+| Performance      | Baseline Profiles (Macro Benchmark)                                |
 
 ---
 
@@ -430,14 +454,15 @@ A GitHub Actions workflow (`.github/workflows/release.yml`) automates release bu
 
 ```
 app/                     Main Android application module (deep links, widgets, Cast, PiP, shortcuts)
-core/model/              Shared data models
-core/designsystem/       Shared theming, artwork colors, and UI primitives
-core/network/            Jellyfin API client, Seerr client, server discovery
-core/database/           Room database and persistence
-core/datastore/          DataStore preferences
+core/model/              Shared data models (55+ model files)
+core/designsystem/       Shared theming (4 variants), colors, shapes, typography, motion
+core/network/            Jellyfin API clients (12), Seerr client, LRCLIB API, server discovery
+core/database/           Room database (16 DAOs), migration schemas
+core/datastore/          DataStore preferences (~231 settings), encrypted credentials
 core/data/               Repositories, playback managers, audio effects, SyncPlay, Cast, downloads
 core/ui/                 Shared UI components, adaptive layouts, TV focus, animations, navigation
 core/notification/       New media notification system (worker, scheduler, dispatcher, channels)
+core/testing/            Shared test utilities
 feature/auth/            Server selection and authentication
 feature/onboarding/      First-run setup wizard (10-step preferences)
 feature/home/            Home screen, Kids home, newsletter banner, and discover sections
@@ -458,6 +483,8 @@ feature/insights/        Watch progress heatmap with streak tracking and share-a
 feature/requests/        Jellyseerr/Overseerr request management with filter/sort/admin actions
 feature/shortcuts/       App shortcuts (static + dynamic, e.g. Continue Listening)
 baselineprofile/         Baseline profile generator for startup optimization
+website/                 Landing page (GitHub Pages)
+docs/                    Documentation guides
 ```
 
 ---
@@ -468,11 +495,11 @@ Looking for setup, integration, or troubleshooting guides?
 
 - 📘 [Setup guide](./docs/setup.md) — install JellyPlay on any device
 - 🎬 [Android TV & Fire TV setup](./docs/android-tv-setup.md) — sideload & install on the big screen
-- 📡 [Jellyseerr/Seerr/Overseerr integration](./docs/seerr-integration.md) — request movies & shows from inside the app
+- 📡 [Jellyseerr/Seerr/Overseerr integration](./docs/jellyseerr-integration.md) — request movies & shows from inside the app
 - 👯 [SyncPlay watch parties](./docs/syncplay-guide.md) — synchronized group playback
 - ⬇️ [Offline downloads](./docs/offline-downloads.md) — download media for travel
 - 🎵 [Music player & synced lyrics](./docs/lyrics-music-player.md) — get the most out of your library
-
+- 🎬 [Player engines comparison](./docs/player-engines.md) — ExoPlayer vs libmpv vs LibVLC
 ---
 
 ## See Also
@@ -487,6 +514,24 @@ Other open-source projects in the Jellyfin ecosystem:
 - [MakD/AFinity](https://github.com/MakD/AFinity) — modern Compose + LibMPV client
 - [streamyfin/streamyfin](https://github.com/streamyfin/streamyfin) — cross-platform Expo client
 - [fallensword/awesome-jellyfin](https://github.com/awesome-jellyfin/awesome-jellyfin) — curated list of Jellyfin plugins, themes & clients
+
+---
+
+## At a Glance
+
+| Metric | Value |
+| --- | --- |
+| Gradle modules | 30 (app + 9 core + 19 feature + 1 baseline profile) |
+| Feature modules | 19 |
+| Configurable settings | ~231 |
+| Data models | 55+ |
+| API clients | 12 |
+| Room DAOs | 16 |
+| Supported languages | 9 (en, de, es, fr, it, pt, ja, ko, zh) |
+| External integrations | Jellyfin, Jellyseerr/Overseerr, LRCLIB, TMDB, Google Cast, Sentry |
+| Min SDK | 28 (Android 9.0) |
+| Target/Compile SDK | 37 |
+| Current version | v0.7.11 (Active Beta) |
 
 ---
 

@@ -106,6 +106,7 @@ class SeerrRecommendationsWidgetWorker @AssistedInject constructor(
         private const val TAG = "SeerrRecWidgetWorker"
         const val UNIQUE_PERIODIC_NAME = "seerr_recommendations_widget_periodic"
         const val UNIQUE_ONESHOT_NAME = "seerr_recommendations_widget_oneshot"
+        const val WORK_TAG = "widget"
         private const val MAX_ITEMS = 9
 
         private val ISO_DATE_FORMAT = SimpleDateFormat("yyyy-MM-dd", Locale.US)

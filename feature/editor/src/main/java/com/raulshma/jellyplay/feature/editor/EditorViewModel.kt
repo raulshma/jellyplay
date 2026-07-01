@@ -1,5 +1,7 @@
 package com.raulshma.jellyplay.feature.editor
 
+import android.content.Context
+import android.net.Uri
 import android.util.Base64
 import androidx.compose.runtime.Immutable
 import com.raulshma.jellyplay.core.model.EditorPerson
@@ -13,9 +15,13 @@ import com.raulshma.jellyplay.core.network.JellyfinApiClient
 import com.raulshma.jellyplay.core.data.repository.AuthRepository
 import com.raulshma.jellyplay.core.ui.viewmodel.JellyPlayViewModel
 import dagger.hilt.android.lifecycle.HiltViewModel
+import dagger.hilt.android.qualifiers.ApplicationContext
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.stateIn
+import kotlinx.coroutines.withContext
+import java.io.IOException
 import javax.inject.Inject
 
 @Immutable
@@ -68,6 +74,7 @@ data class EditorUiState(
 class EditorViewModel @Inject constructor(
     private val apiClient: JellyfinApiClient,
     authRepository: AuthRepository,
+    @ApplicationContext private val context: Context,
 ) : JellyPlayViewModel() {
 
     private val _uiState = stateFlow(EditorUiState())
@@ -221,7 +228,25 @@ class EditorViewModel @Inject constructor(
             val itemId = _uiState.value.mediaDetail?.item?.id ?: return@launch
             apiClient.setItemImage(itemId, imageType, imageBytes)
                 .onSuccess { reloadImageInfos(itemId) }
-                .onFailure { _uiState.update { it.copy(error = it.error) } }
+                .onFailure { e -> _uiState.update { it.copy(error = e.message) } }
+        }
+    }
+
+    /**
+     * Reads image bytes from a [uri] (picked via the SAF picker) on a background thread
+     * and uploads them. See [SettingsViewModel.importSettings] for the established
+     * contentResolver idiom used elsewhere in the app.
+     */
+    fun uploadImageFromUri(uri: Uri, imageType: String) {
+        launch {
+            val itemId = _uiState.value.mediaDetail?.item?.id ?: return@launch
+            runCatching {
+                withContext(Dispatchers.IO) {
+                    context.contentResolver.openInputStream(uri)?.use { it.readBytes() }
+                        ?: throw IOException("Cannot open input stream for selected image")
+                }
+            }.onSuccess { bytes -> uploadImage(bytes, imageType) }
+                .onFailure { e -> _uiState.update { it.copy(error = e.message) } }
         }
     }
 
@@ -258,6 +283,30 @@ class EditorViewModel @Inject constructor(
             val base64Data = Base64.encodeToString(fileBytes, Base64.NO_WRAP)
             apiClient.uploadSubtitle(itemId, base64Data, fileName, language, isForced, isHearingImpaired)
                 .onSuccess { loadEditorData(itemId) }
+                .onFailure { e -> _uiState.update { it.copy(error = e.message) } }
+        }
+    }
+
+    /**
+     * Reads subtitle bytes from a [uri] (picked via the SAF picker) on a background thread
+     * and uploads them. Falls back to the file name derived from the picker when [fileName]
+     * is blank.
+     */
+    fun uploadSubtitleFromUri(
+        uri: Uri,
+        fileName: String,
+        language: String?,
+        isForced: Boolean,
+        isHearingImpaired: Boolean,
+    ) {
+        launch {
+            val itemId = _uiState.value.mediaDetail?.item?.id ?: return@launch
+            runCatching {
+                withContext(Dispatchers.IO) {
+                    context.contentResolver.openInputStream(uri)?.use { it.readBytes() }
+                        ?: throw IOException("Cannot open input stream for selected subtitle")
+                }
+            }.onSuccess { bytes -> uploadSubtitle(bytes, fileName, language, isForced, isHearingImpaired) }
                 .onFailure { e -> _uiState.update { it.copy(error = e.message) } }
         }
     }

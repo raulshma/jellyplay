@@ -46,6 +46,7 @@ class LibraryRecommendationsWidget : AppWidgetProvider() {
     @InstallIn(SingletonComponent::class)
     interface WidgetEntryPoint {
         fun userPreferencesStore(): UserPreferencesStore
+        fun widgetWorkScheduler(): WidgetWorkScheduler
     }
 
     private val refreshScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
@@ -86,7 +87,7 @@ class LibraryRecommendationsWidget : AppWidgetProvider() {
         val pending = goAsync()
         refreshScope.launch {
             try {
-                WidgetWorkScheduler.refreshLibraryNow(context.applicationContext)
+                widgetScheduler(context).refreshLibraryNow()
             } finally {
                 pending.finish()
             }
@@ -103,13 +104,17 @@ class LibraryRecommendationsWidget : AppWidgetProvider() {
             val pending = goAsync()
             refreshScope.launch {
                 try {
-                    WidgetWorkScheduler.refreshLibraryNow(context.applicationContext)
+                    widgetScheduler(context).refreshLibraryNow()
                 } finally {
                     pending.finish()
                 }
             }
         }
     }
+
+    private fun widgetScheduler(context: Context): WidgetWorkScheduler =
+        EntryPointAccessors.fromApplication(context.applicationContext, WidgetEntryPoint::class.java)
+            .widgetWorkScheduler()
 
     companion object {
         const val ACTION_REFRESH = "com.raulshma.jellyplay.widget.ACTION_REFRESH_LIBRARY"

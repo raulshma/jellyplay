@@ -64,6 +64,7 @@ class PlayerSessionManager(
     private val preferencesStore: UserPreferencesStore,
     private val playerLifecycleManager: PlayerLifecycleManager,
     private val adaptiveBitrateManager: com.raulshma.jellyplay.core.data.playback.AdaptiveBitrateManager,
+    private val playerEngineFactory: PlayerEngineFactory,
 ) {
     private val _sessionState = MutableStateFlow(PlayerSessionState())
     val sessionState: StateFlow<PlayerSessionState> = _sessionState.asStateFlow()
@@ -280,7 +281,7 @@ class PlayerSessionManager(
         playMethod: PlayMethod = PlayMethod.DIRECT_PLAY,
     ) {
         _engine.value?.release()
-        val eng = PlayerEngineFactory.create(context, playerType)
+        val eng = playerEngineFactory.create(playerType)
         _engine.value = eng
         lastPlayerType = playerType
         
@@ -436,7 +437,7 @@ class PlayerSessionManager(
         _engine.value?.release()
         _engine.value = null
 
-        val eng = PlayerEngineFactory.create(context, playerType)
+        val eng = playerEngineFactory.create(playerType)
         _engine.value = eng
         lastPlayerType = playerType
 

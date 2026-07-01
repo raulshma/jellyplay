@@ -13,6 +13,18 @@ import javax.inject.Inject
 private const val REFRESH_INTERVAL_MS: Long = 5 * 60 * 1000L
 private const val NOW_TICK_INTERVAL_MS: Long = 30 * 1000L
 
+/** State of the "Record program" confirmation dialog driven from the EPG grid. */
+sealed interface RecordDialogState {
+    /** A program is selected and awaiting the user's confirm/cancel decision. */
+    data class Confirm(val program: LiveTvProgram) : RecordDialogState
+    /** Recording request is in flight. */
+    data object Requesting : RecordDialogState
+    /** The timer was created successfully. */
+    data class Success(val programName: String) : RecordDialogState
+    /** Creating the timer failed. */
+    data class Error(val message: String) : RecordDialogState
+}
+
 @HiltViewModel
 class EpgViewModel @Inject constructor(
     private val mediaRepository: MediaRepository,
@@ -39,6 +51,9 @@ class EpgViewModel @Inject constructor(
     val windowStart: Instant get() = _windowStart.value
     private val _windowEnd = composeState(Instant.now().plus(4, ChronoUnit.HOURS))
     val windowEnd: Instant get() = _windowEnd.value
+
+    private val _recordDialog = composeState<RecordDialogState?>(null)
+    val recordDialog: RecordDialogState? get() = _recordDialog.value
 
     /** Convenience: pre-built grid snapshot for the current data. */
     val gridData: EpgGridData
@@ -73,6 +88,29 @@ class EpgViewModel @Inject constructor(
             _isLoading.value = false
         }
     }
+
+    /** Open the record-confirmation dialog for the given program. */
+    fun requestRecord(program: LiveTvProgram) {
+        _recordDialog.value = RecordDialogState.Confirm(program)
+    }
+
+    /** Confirm creating a timer for the program currently awaiting confirmation. */
+    fun confirmRecord() {
+        val pending = (_recordDialog.value as? RecordDialogState.Confirm)?.program ?: return
+        _recordDialog.value = RecordDialogState.Requesting
+        launch {
+            mediaRepository.createTimer(pending.id, pending.channelId, pending.startDate, pending.endDate)
+                .onSuccess {
+                    _recordDialog.value = RecordDialogState.Success(pending.name)
+                    loadGuide()
+                }
+                .onFailure { e ->
+                    _recordDialog.value = RecordDialogState.Error(e.message ?: "Failed to create recording")
+                }
+        }
+    }
+
+    fun dismissRecordDialog() { _recordDialog.value = null }
 
     private fun startAutoRefresh() {
         launch {

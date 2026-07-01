@@ -58,26 +58,7 @@ class LibVlcPlayerEngine(
     // silently never emit). Recreated lazily, only when inactive.
     private var engineScope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
 
-    override val capabilities = EngineCapabilities(
-        supportsPip = true,
-        supportsMiniMode = false,
-        supportsCues = false,
-        supportsAudioDelay = true,
-        supportsSubtitleDelay = true,
-        supportsAudioPassthrough = true,
-        supportsSubtitleStyle = true,
-        // Honoured in `Media.applySubtitleStyle` via `:sub-margin`; surfacing
-        // the flag lets the SubtitleStyleSheet UI expose the slider for VLC
-        // (parity with ExoPlayer/MPV) instead of hiding it.
-        supportsSubtitleVerticalPosition = true,
-        supportsDialogueBoost = true,
-        supportsNightMode = true,
-        supportsAudioNormalization = true,
-        supportsChannelMixing = true,
-        supportsVideoFilters = true,
-        supportsLiveQualitySwitch = false,
-        supportsBandwidthEstimate = false,
-    )
+    override val capabilities = EngineCapabilityMatrix.LIBVLC
 
     private val _playbackState = MutableStateFlow(EnginePlaybackState.IDLE)
     override val playbackState: StateFlow<EnginePlaybackState> = _playbackState.asStateFlow()
@@ -711,6 +692,7 @@ class LibVlcPlayerEngine(
             addOption(":freetype-background-color=$backgroundColor")
             addOption(":freetype-background-opacity=${(style.backgroundOpacity * 255).toInt().coerceIn(0, 255)}")
             addOption(":freetype-outline-color=$edgeColor")
+            addOption(":freetype-bold=true")
 
             when (style.edgeType) {
                 com.raulshma.jellyplay.core.model.SubtitleEdgeType.NONE -> addOption(":freetype-outline-thickness=0")
@@ -726,7 +708,14 @@ class LibVlcPlayerEngine(
                 }
             }
         } else {
-            // Default size and no color/border overrides
+            // Default styling matching MPV (white text, transparent background, black outline and shadow)
+            addOption(":freetype-color=16777215") // White (0xFFFFFF)
+            addOption(":freetype-background-color=0") // Black/transparent
+            addOption(":freetype-background-opacity=0") // Transparent
+            addOption(":freetype-outline-color=0") // Black
+            addOption(":freetype-outline-thickness=2")
+            addOption(":freetype-shadow-opacity=255")
+            addOption(":freetype-bold=true")
             addOption(":freetype-rel-fontsize=${style.fontSize}")
         }
 

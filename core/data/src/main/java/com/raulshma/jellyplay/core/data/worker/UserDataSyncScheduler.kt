@@ -6,19 +6,27 @@ import androidx.work.ExistingPeriodicWorkPolicy
 import androidx.work.NetworkType
 import androidx.work.PeriodicWorkRequestBuilder
 import androidx.work.WorkManager
+import dagger.hilt.android.qualifiers.ApplicationContext
 import java.time.Duration
+import javax.inject.Inject
+import javax.inject.Singleton
 
 /**
- * Schedules the periodic background user-data sync. Mirrors the pattern used by
- * [com.raulshma.jellyplay.widget.WidgetWorkScheduler] — KEEP policy so app
- * restarts don't reset the existing cadence.
+ * Schedules the periodic background user-data sync. Defined as an interface
+ * (and consumed via that interface) so callers don't reach into the
+ * `core.data.worker` package's concrete [UserDataSyncWorker] class, mirroring
+ * the [TvWatchNextScheduler] DI-clean pattern. KEEP policy so app restarts
+ * don't reset the existing cadence.
  */
-object UserDataSyncScheduler {
+interface UserDataSyncScheduler {
+    fun enqueuePeriodic()
+}
 
-    private val SYNC_INTERVAL: Duration = Duration.ofHours(12)
-    private val SYNC_FLEX: Duration = Duration.ofHours(1)
-
-    fun enqueuePeriodic(context: Context) {
+@Singleton
+class UserDataSyncSchedulerImpl @Inject constructor(
+    @ApplicationContext private val context: Context,
+) : UserDataSyncScheduler {
+    override fun enqueuePeriodic() {
         val constraints = Constraints.Builder()
             .setRequiredNetworkType(NetworkType.CONNECTED)
             .setRequiresBatteryNotLow(true)
@@ -26,6 +34,7 @@ object UserDataSyncScheduler {
 
         val request = PeriodicWorkRequestBuilder<UserDataSyncWorker>(SYNC_INTERVAL, SYNC_FLEX)
             .setConstraints(constraints)
+            .addTag(UserDataSyncWorker.WORK_TAG)
             .build()
 
         WorkManager.getInstance(context).enqueueUniquePeriodicWork(
@@ -33,5 +42,10 @@ object UserDataSyncScheduler {
             ExistingPeriodicWorkPolicy.KEEP,
             request,
         )
+    }
+
+    companion object {
+        private val SYNC_INTERVAL: Duration = Duration.ofHours(12)
+        private val SYNC_FLEX: Duration = Duration.ofHours(1)
     }
 }

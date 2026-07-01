@@ -24,11 +24,14 @@ import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
+import com.raulshma.jellyplay.core.ui.components.JellyPlayLoadingIndicator
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
@@ -123,12 +126,81 @@ fun EpgScreen(
                         contentPadding = contentPad,
                         bottomPadding = bottomPad,
                         onProgramClick = onProgramClick,
-                        onRecordClick = onRecordClick,
+                        onRecordClick = onRecordClick ?: { program -> viewModel.requestRecord(program) },
                         focusRequester = focusRequester,
                     )
                 }
             }
         }
+    }
+
+    viewModel.recordDialog?.let { state ->
+        RecordDialog(
+            state = state,
+            onConfirm = { viewModel.confirmRecord() },
+            onDismiss = { viewModel.dismissRecordDialog() },
+        )
+    }
+}
+
+@Composable
+private fun RecordDialog(
+    state: RecordDialogState,
+    onConfirm: () -> Unit,
+    onDismiss: () -> Unit,
+) {
+    when (state) {
+        is RecordDialogState.Confirm -> AlertDialog(
+            onDismissRequest = onDismiss,
+            title = { Text("Record program?") },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                    Text(
+                        state.program.name,
+                        style = MaterialTheme.typography.bodyLarge,
+                    )
+                    state.program.episodeTitle?.takeIf { it.isNotBlank() }?.let {
+                        Text(it, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    }
+                    Text(
+                        "A single timer will be scheduled on the server.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+            },
+            confirmButton = {
+                TextButton(onClick = onConfirm) { Text("Record") }
+            },
+            dismissButton = {
+                TextButton(onClick = onDismiss) { Text("Cancel") }
+            },
+        )
+        is RecordDialogState.Requesting -> AlertDialog(
+            onDismissRequest = onDismiss,
+            title = { Text("Recording…") },
+            text = {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    JellyPlayLoadingIndicator()
+                    Spacer(Modifier.width(12.dp))
+                    Text("Scheduling timer")
+                }
+            },
+            confirmButton = {},
+            dismissButton = {},
+        )
+        is RecordDialogState.Success -> AlertDialog(
+            onDismissRequest = onDismiss,
+            title = { Text("Recording scheduled") },
+            text = { Text("\"${state.programName}\" will be recorded.") },
+            confirmButton = { TextButton(onClick = onDismiss) { Text("Done") } },
+        )
+        is RecordDialogState.Error -> AlertDialog(
+            onDismissRequest = onDismiss,
+            title = { Text("Couldn't schedule recording") },
+            text = { Text(state.message) },
+            confirmButton = { TextButton(onClick = onDismiss) { Text("OK") } },
+        )
     }
 }
 

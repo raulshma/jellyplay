@@ -46,6 +46,7 @@ class SeerrRecommendationsWidget : AppWidgetProvider() {
     interface WidgetEntryPoint {
         fun userPreferencesStore(): UserPreferencesStore
         fun seerrPreferencesStore(): com.raulshma.jellyplay.core.datastore.SeerrPreferencesStore
+        fun widgetWorkScheduler(): WidgetWorkScheduler
     }
 
     private val refreshScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
@@ -86,7 +87,7 @@ class SeerrRecommendationsWidget : AppWidgetProvider() {
         val pending = goAsync()
         refreshScope.launch {
             try {
-                WidgetWorkScheduler.refreshSeerrNow(context.applicationContext)
+                widgetScheduler(context).refreshSeerrNow()
             } finally {
                 pending.finish()
             }
@@ -103,13 +104,17 @@ class SeerrRecommendationsWidget : AppWidgetProvider() {
             val pending = goAsync()
             refreshScope.launch {
                 try {
-                    WidgetWorkScheduler.refreshSeerrNow(context.applicationContext)
+                    widgetScheduler(context).refreshSeerrNow()
                 } finally {
                     pending.finish()
                 }
             }
         }
     }
+
+    private fun widgetScheduler(context: Context): WidgetWorkScheduler =
+        EntryPointAccessors.fromApplication(context.applicationContext, WidgetEntryPoint::class.java)
+            .widgetWorkScheduler()
 
     companion object {
         const val ACTION_REFRESH = "com.raulshma.jellyplay.widget.ACTION_REFRESH_SEERR"

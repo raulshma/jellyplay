@@ -30,11 +30,9 @@ fun EntryProviderScope<NavKey>.liveTvSection(navigator: Navigator) {
                 )
             },
             onBack = { navigator.goBack() },
-            onRecordClick = { program ->
-                // Navigate to DVR and trigger recording creation
-                // For now we just navigate to DVR; a sheet could be added later
-                navigator.navigate(Route.Dvr)
-            },
+            // onRecordClick defaults to the EPG's local record-confirmation dialog
+            // (EpgViewModel.requestRecord), so recording is handled in-place instead
+            // of navigating away to the DVR list.
         )
     }
     entry<Route.Dvr> {

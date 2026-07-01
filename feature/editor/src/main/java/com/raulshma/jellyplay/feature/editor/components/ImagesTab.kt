@@ -162,8 +162,8 @@ fun ImagesTab(
     if (showUploadSheet) {
         ImageUploadSheet(
             onDismiss = { showUploadSheet = false },
-            onUploadFile = { bytes, imageType ->
-                viewModel.uploadImage(bytes, imageType)
+            onUploadFile = { uri, imageType ->
+                viewModel.uploadImageFromUri(uri, imageType)
                 showUploadSheet = false
             },
             onUploadUrl = { url, imageType ->
@@ -266,7 +266,7 @@ private fun ImageCard(
 @Composable
 private fun ImageUploadSheet(
     onDismiss: () -> Unit,
-    onUploadFile: (ByteArray, String) -> Unit,
+    onUploadFile: (Uri, String) -> Unit,
     onUploadUrl: (String, String) -> Unit,
 ) {
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
@@ -325,7 +325,7 @@ private fun ImageUploadSheet(
                 Button(
                     onClick = {
                         selectedUri?.let { uri ->
-                            TODO("Read bytes from URI in activity context - handled by parent")
+                            onUploadFile(uri, selectedImageType)
                         }
                     },
                     modifier = Modifier.fillMaxWidth(),
