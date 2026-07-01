@@ -58,26 +58,7 @@ class LibVlcPlayerEngine(
     // silently never emit). Recreated lazily, only when inactive.
     private var engineScope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
 
-    override val capabilities = EngineCapabilities(
-        supportsPip = true,
-        supportsMiniMode = false,
-        supportsCues = false,
-        supportsAudioDelay = true,
-        supportsSubtitleDelay = true,
-        supportsAudioPassthrough = true,
-        supportsSubtitleStyle = true,
-        // Honoured in `Media.applySubtitleStyle` via `:sub-margin`; surfacing
-        // the flag lets the SubtitleStyleSheet UI expose the slider for VLC
-        // (parity with ExoPlayer/MPV) instead of hiding it.
-        supportsSubtitleVerticalPosition = true,
-        supportsDialogueBoost = true,
-        supportsNightMode = true,
-        supportsAudioNormalization = true,
-        supportsChannelMixing = true,
-        supportsVideoFilters = true,
-        supportsLiveQualitySwitch = false,
-        supportsBandwidthEstimate = false,
-    )
+    override val capabilities = EngineCapabilityMatrix.LIBVLC
 
     private val _playbackState = MutableStateFlow(EnginePlaybackState.IDLE)
     override val playbackState: StateFlow<EnginePlaybackState> = _playbackState.asStateFlow()

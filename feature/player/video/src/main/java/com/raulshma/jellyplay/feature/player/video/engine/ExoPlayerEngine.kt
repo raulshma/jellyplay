@@ -101,22 +101,7 @@ class ExoPlayerEngine(
         }
     }
 
-    override val capabilities = EngineCapabilities(
-        supportsPip = true,
-        supportsMiniMode = true,
-        supportsCues = true,
-        supportsAudioDelay = false,
-        supportsSubtitleDelay = true,
-        supportsAudioPassthrough = false,
-        supportsSubtitleStyle = true,
-        supportsSubtitleVerticalPosition = true,
-        supportsDialogueBoost = true,
-        supportsNightMode = true,
-        supportsAudioNormalization = true,
-        supportsChannelMixing = true,
-        supportsLiveQualitySwitch = true,
-        supportsBandwidthEstimate = true,
-    )
+    override val capabilities = EngineCapabilityMatrix.EXO_PLAYER
 
     private val _playbackState = MutableStateFlow(EnginePlaybackState.IDLE)
     override val playbackState: StateFlow<EnginePlaybackState> = _playbackState.asStateFlow()
@@ -313,6 +298,15 @@ class ExoPlayerEngine(
 
         val dataSourceFactory = createAuthenticatedDataSourceFactory(request.serverUrl, request.authToken, request.headers)
         val msf = DefaultMediaSourceFactory(dataSourceFactory, extractorsFactory)
+
+        // DRM: attach a DrmSessionManager only when the caller supplied one via
+        // EngineConfig.drmSessionManagerProvider. This is the single extension
+        // point for content protection — the engine never hard-codes Widevine
+        // or any scheme, so it stays testable without a DRM framework. A `null`
+        // manager (clear content) leaves Media3's default no-DRM path in place.
+        currentConfig.drmSessionManagerProvider?.provide()?.let { drmManager ->
+            msf.setDrmSessionManagerProvider { drmManager }
+        }
 
         val audioAttrs = AudioAttributes.Builder()
             .setContentType(C.AUDIO_CONTENT_TYPE_MOVIE)

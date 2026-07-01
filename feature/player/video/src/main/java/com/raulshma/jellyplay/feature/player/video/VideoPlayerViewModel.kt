@@ -108,6 +108,7 @@ class VideoPlayerViewModel @Inject constructor(
     val videoMiniPlayerState: VideoMiniPlayerState,
     private val sleepTimerManager: SleepTimerManager,
     private val userMessageBus: UserMessageBus,
+    private val playerEngineFactory: com.raulshma.jellyplay.feature.player.video.engine.PlayerEngineFactory,
     private val savedStateHandle: SavedStateHandle,
 ) : JellyPlayViewModel() {
 
@@ -171,6 +172,7 @@ class VideoPlayerViewModel @Inject constructor(
         preferencesStore = preferencesStore,
         playerLifecycleManager = playerLifecycleManager,
         adaptiveBitrateManager = adaptiveBitrateManager,
+        playerEngineFactory = playerEngineFactory,
     )
 
     private var mediaDetail: MediaDetail? = null
@@ -192,8 +194,7 @@ class VideoPlayerViewModel @Inject constructor(
      */
     private val currentPlaySessionId: String
         get() = playerSessionManager.sessionState.value.playSessionId ?: playSessionId
-    private var autoplayNext: Boolean = false
-    private var autoplayCancelled: Boolean = false
+    private val autoplayController = AutoPlayController()
     private var cachedPreferences: com.raulshma.jellyplay.core.model.UserPreferences = com.raulshma.jellyplay.core.model.UserPreferences()
 
     /**
@@ -512,7 +513,7 @@ class VideoPlayerViewModel @Inject constructor(
                 }
                 if (_uiState.value.videoAutoplayNext != prefs.videoAutoplayNext) {
                     _uiState.update { it.copy(videoAutoplayNext = prefs.videoAutoplayNext) }
-                    autoplayNext = prefs.videoAutoplayNext
+                    autoplayController.setEnabled(prefs.videoAutoplayNext)
                 }
                 if (_uiState.value.autoPlayCountdownSec != prefs.autoPlayCountdownSec) {
                     _uiState.update { it.copy(autoPlayCountdownSec = prefs.autoPlayCountdownSec) }
@@ -775,7 +776,7 @@ class VideoPlayerViewModel @Inject constructor(
         allowCinemaMode: Boolean,
     ) {
         released = false
-        autoplayCancelled = false
+        autoplayController.resetForNewItem()
         _uiState.update { it.copy(autoplayCancelled = false) }
         lastSeekPositionMs = null
         lastSeekTimestamp = 0L
@@ -912,7 +913,7 @@ class VideoPlayerViewModel @Inject constructor(
                 videoAutoplayNext = prefs.videoAutoplayNext,
                 autoPlayCountdownSec = prefs.autoPlayCountdownSec,
             ) }
-            autoplayNext = prefs.videoAutoplayNext
+            autoplayController.setEnabled(prefs.videoAutoplayNext)
 
             if (allowCinemaMode && shouldAttemptCinemaMode(prefs, itemId, startPositionTicks)) {
                 val intros = mediaRepository.getIntros(itemId).getOrDefault(emptyList())
@@ -1419,35 +1420,7 @@ class VideoPlayerViewModel @Inject constructor(
     }
 
      private fun updateConfigWithUiState() {
-        val state = _uiState.value
-        val config = com.raulshma.jellyplay.feature.player.video.engine.EngineConfig(
-            decoderMode = state.decoderMode,
-            audioPassthrough = state.audioPassthrough,
-            audioDelayMs = state.audioDelayMs,
-            subtitleDelayMs = state.subtitleStyle.offsetMs,
-            subtitleStyle = state.subtitleStyle,
-            videoEffects = state.videoEffects,
-            audioEffects = com.raulshma.jellyplay.feature.player.video.engine.AudioEffectsConfig(
-                dialogueBoostEnabled = state.dialogueBoostEnabled,
-                dialogueBoostStrength = state.dialogueBoostStrength,
-                nightModeEnabled = state.nightModeEnabled,
-                nightModeStrength = state.nightModeStrength,
-                equalizerEnabled = equalizerEnabled,
-                equalizerSettings = cachedPreferences.equalizerSettings,
-                audioNormalizationMode = state.audioNormalizationMode,
-                audioNormalizationEnabled = state.audioNormalizationEnabled,
-                channelMixMode = state.channelMixMode,
-                channelMixEnabled = state.channelMixEnabled,
-                bassBoostEnabled = state.bassBoostEnabled,
-                bassBoostStrength = state.bassBoostStrength,
-                virtualizerEnabled = state.virtualizerEnabled,
-                virtualizerStrength = state.virtualizerStrength,
-                reverbPreset = state.reverbPreset,
-                volumeBoostEnabled = cachedPreferences.volumeBoostEnabled,
-                volumeBoostGain = cachedPreferences.volumeBoostGain,
-            ),
-            pauseOnAudioFocusLoss = cachedPreferences.pauseOnAudioFocusLoss
-        )
+        val config = EngineConfigBuilder.build(_uiState.value, equalizerEnabled, cachedPreferences)
         playerSessionManager.engine?.updateConfig(config)
     }
 
@@ -1496,13 +1469,13 @@ class VideoPlayerViewModel @Inject constructor(
     }
 
     fun cancelAutoplay() {
-        autoplayCancelled = true
+        autoplayController.cancel()
         _uiState.update { it.copy(autoplayCancelled = true) }
     }
 
     private fun handlePlaybackEnded() {
         val next = _uiState.value.nextEpisode
-        if (next != null && autoplayNext && !autoplayCancelled) {
+        if (autoplayController.shouldAutoPlayNext(next)) {
             playNextEpisode()
         } else {
             if (cinemaIntroContext != null) {
@@ -1665,7 +1638,7 @@ class VideoPlayerViewModel @Inject constructor(
     fun skipCredits() {
         val state = positionAwareState()
 
-        if (state.isOutroNearEnd && state.nextEpisode != null && autoplayNext) {
+        if (state.isOutroNearEnd && autoplayController.canSkipToNext(state.nextEpisode)) {
             playNextEpisode()
             return
         }
@@ -2080,7 +2053,7 @@ class VideoPlayerViewModel @Inject constructor(
         trickplayManager.clear()
         trackSelectionHelper.reset()
         mediaDetail = null
-        autoplayNext = false
+        autoplayController.setEnabled(false)
         equalizerEnabled = false
         lastSeekPositionMs = null
         lastSeekTimestamp = 0L

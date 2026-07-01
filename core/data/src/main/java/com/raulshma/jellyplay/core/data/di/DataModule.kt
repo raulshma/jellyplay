@@ -25,6 +25,8 @@ import com.raulshma.jellyplay.core.data.util.DownloadDelegate
 import com.raulshma.jellyplay.core.data.network.OkHttpConfigProviderImpl
 import com.raulshma.jellyplay.core.data.worker.TvWatchNextScheduler
 import com.raulshma.jellyplay.core.data.worker.TvWatchNextSchedulerImpl
+import com.raulshma.jellyplay.core.data.worker.UserDataSyncScheduler
+import com.raulshma.jellyplay.core.data.worker.UserDataSyncSchedulerImpl
 import com.raulshma.jellyplay.core.network.config.OkHttpConfigProvider
 import dagger.Binds
 import dagger.Module
@@ -104,6 +106,10 @@ abstract class DataModule {
     @Binds
     @Singleton
     abstract fun bindTvWatchNextScheduler(impl: TvWatchNextSchedulerImpl): TvWatchNextScheduler
+
+    @Binds
+    @Singleton
+    abstract fun bindUserDataSyncScheduler(impl: UserDataSyncSchedulerImpl): UserDataSyncScheduler
 
     @Binds
     @Singleton

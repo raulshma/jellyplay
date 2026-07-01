@@ -60,4 +60,8 @@ dependencies {
     testImplementation(libs.junit)
     testImplementation(libs.mockk)
     testImplementation(libs.coroutines.test)
+    testImplementation(libs.robolectric)
+    testImplementation(libs.work.testing)
+    testImplementation(libs.androidx.junit)
+    testImplementation(libs.androidx.test.core)
 }

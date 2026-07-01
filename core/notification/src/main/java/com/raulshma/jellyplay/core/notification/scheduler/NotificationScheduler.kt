@@ -46,6 +46,7 @@ class NotificationScheduler @Inject constructor(
                 androidx.work.BackoffPolicy.EXPONENTIAL,
                 java.time.Duration.ofMinutes(5),
             )
+            .addTag(NewMediaCheckWorker.WORK_TAG)
             .build()
 
         WorkManager.getInstance(context).enqueueUniquePeriodicWork(

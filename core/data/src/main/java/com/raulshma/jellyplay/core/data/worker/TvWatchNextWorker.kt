@@ -13,10 +13,19 @@ import dagger.assisted.AssistedInject
 import kotlinx.coroutines.flow.firstOrNull
 
 /**
- * Periodically refreshes the Android TV "Watch Next" OS row from the
- * Continue Watching + Next Up lists. The worker is TV-only — see
- * [TvWatchNextPublisher] for the publishing logic — and is a no-op when the
- * `androidTvWatchNextEnabled` preference is disabled.
+ * Refreshes the Android TV "Watch Next" OS row from the Continue Watching +
+ * Next Up lists. The worker is TV-only — see [TvWatchNextPublisher] for the
+ * publishing logic — and is a no-op when the `androidTvWatchNextEnabled`
+ * preference is disabled.
+ *
+ * Scheduling design (startup-and-workers-architecture §7.14): this worker is
+ * **one-shot only** — it is triggered on demand via [TvWatchNextScheduler] when
+ * the user toggles the Watch Next setting, rather than on a periodic cadence
+ * like UserDataSync/AutoDownload. This is intentional: the Watch Next row is
+ * an action-driven OS surface, and the Continue Watching / Next Up lists it is
+ * built from are already kept fresh by the periodic `UserDataSyncWorker`.
+ * Adding a dedicated periodic schedule would duplicate that freshness signal
+ * and add TV-specific background work for no user-visible benefit.
  */
 @HiltWorker
 class TvWatchNextWorker @AssistedInject constructor(
@@ -48,6 +57,7 @@ class TvWatchNextWorker @AssistedInject constructor(
 
     companion object {
         const val UNIQUE_WORK_NAME = "com.raulshma.jellyplay.work.tv_watch_next"
+        const val WORK_TAG = "tv_watch_next"
         private const val MAX_RETRIES = 3
     }
 }

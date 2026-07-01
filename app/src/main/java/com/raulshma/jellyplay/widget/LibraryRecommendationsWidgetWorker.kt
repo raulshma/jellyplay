@@ -147,6 +147,7 @@ class LibraryRecommendationsWidgetWorker @AssistedInject constructor(
         private const val TAG = "LibraryRecWidgetWorker"
         const val UNIQUE_PERIODIC_NAME = "library_recommendations_widget_periodic"
         const val UNIQUE_ONESHOT_NAME = "library_recommendations_widget_oneshot"
+        const val WORK_TAG = "widget"
         private const val MAX_ITEMS = 9
 
         private val VIDEO_MEDIA_TYPES = listOf(MediaType.MOVIE, MediaType.SERIES)
