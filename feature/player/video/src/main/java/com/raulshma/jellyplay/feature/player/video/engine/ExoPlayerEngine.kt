@@ -605,9 +605,9 @@ class ExoPlayerEngine(
                         Color.WHITE,
                         Color.TRANSPARENT,
                         Color.TRANSPARENT,
-                        CaptionStyleCompat.EDGE_TYPE_OUTLINE,
+                        CaptionStyleCompat.EDGE_TYPE_DROP_SHADOW,
                         Color.BLACK,
-                        null
+                        android.graphics.Typeface.SANS_SERIF
                     )
                 )
                 sv.setFractionalTextSize(0.0533f, false)
