@@ -13,7 +13,6 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.MaterialTheme
@@ -104,7 +103,7 @@ fun RequestListItem(
             Box(
                 modifier = Modifier
                     .size(width = 48.dp, height = 72.dp)
-                    .clip(RoundedCornerShape(8.dp))
+                    .clip(ShapeCache.smooth8)
                     .background(colorScheme.onSurface.copy(alpha = 0.1f)),
                 contentAlignment = Alignment.Center,
             ) {

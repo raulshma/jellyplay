@@ -121,6 +121,7 @@ fun SeerrDetailScreen(
     val selectedSeasonNumber by viewModel.selectedSeasonNumber
     val episodesBySeason by viewModel.episodesBySeason.collectAsStateWithLifecycle()
     val isLoadingEpisodes by viewModel.isLoadingEpisodes.collectAsStateWithLifecycle()
+    val jellyfinItemId by viewModel.jellyfinItemId
 
     val uriHandler = LocalUriHandler.current
 
@@ -179,6 +180,7 @@ fun SeerrDetailScreen(
                         similar = seerrSimilar,
                         onRequestClick = { showRequestDialog = true },
                         onNavigate = onNavigate,
+                        jellyfinItemId = jellyfinItemId,
                         onBack = onBack,
                         streamingRegion = seerrPrefs.streamingRegion,
                         discoverRegion = seerrPrefs.discoverRegion,
@@ -304,6 +306,7 @@ private fun SeerrDetailContent(
     similar: List<SeerrSearchItem>,
     onRequestClick: () -> Unit,
     onNavigate: (com.raulshma.jellyplay.core.ui.navigation.Route) -> Unit,
+    jellyfinItemId: String?,
     onBack: () -> Unit,
     streamingRegion: String = "US",
     discoverRegion: String = "US",
@@ -568,6 +571,10 @@ private fun SeerrDetailContent(
                                 movieDetail = movieDetail,
                                 tvDetail = tvDetail,
                                 onRequestClick = onRequestClick,
+                                jellyfinItemId = jellyfinItemId,
+                                onOpenInLibrary = { id ->
+                                    onNavigate(com.raulshma.jellyplay.core.ui.navigation.Route.MediaDetail(id))
+                                },
                                 modifier = Modifier.fillMaxWidth(),
                                 contentFocusRequester = contentFocusRequester,
                             )
@@ -677,6 +684,10 @@ private fun SeerrDetailContent(
                             movieDetail = movieDetail,
                             tvDetail = tvDetail,
                             onRequestClick = onRequestClick,
+                            jellyfinItemId = jellyfinItemId,
+                            onOpenInLibrary = { id ->
+                                onNavigate(com.raulshma.jellyplay.core.ui.navigation.Route.MediaDetail(id))
+                            },
                             modifier = Modifier.fillMaxWidth(),
                             contentFocusRequester = contentFocusRequester,
                         )
@@ -750,6 +761,8 @@ private fun SeerrActionButtons(
     movieDetail: SeerrMovieDetails?,
     tvDetail: SeerrTvDetails?,
     onRequestClick: () -> Unit,
+    jellyfinItemId: String?,
+    onOpenInLibrary: (String) -> Unit,
     modifier: Modifier = Modifier,
     contentFocusRequester: FocusRequester? = null,
 ) {
@@ -768,8 +781,10 @@ private fun SeerrActionButtons(
         horizontalArrangement = Arrangement.spacedBy(8.dp)
     ) {
         if (isAvailable) {
+            // When the Jellyfin library item has been resolved, the button opens it
+            // directly. Otherwise it stays disabled (still indicates availability).
             Button(
-                onClick = { /* Could navigate to the item in library if we had the ID mapping */ },
+                onClick = { jellyfinItemId?.let(onOpenInLibrary) },
                 modifier = Modifier
                     .weight(1f)
                     .then(
@@ -785,7 +800,7 @@ private fun SeerrActionButtons(
                     disabledContentColor = MaterialTheme.colorScheme.onSurface
                 ),
                 contentPadding = PaddingValues(vertical = 12.dp),
-                enabled = false
+                enabled = jellyfinItemId != null
             ) {
                 Icon(Tabler.Outline.Check, contentDescription = null)
                 Spacer(Modifier.width(8.dp))

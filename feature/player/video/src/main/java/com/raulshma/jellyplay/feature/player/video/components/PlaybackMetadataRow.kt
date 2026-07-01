@@ -96,9 +96,9 @@ internal fun PlaybackMetadataRow(
         }
     }
 
-    val directPlayGreen = Color(0xFF81C784)
-    val transcodeOrange = Color(0xFFFFB74D)
-    val hdrGold = Color(0xFFFFB74D)
+    val directPlayGreen = MaterialTheme.colorScheme.primary
+    val transcodeOrange = MaterialTheme.colorScheme.tertiary
+    val hdrGold = HdrColors.hdr10Gold
     val dolbyVisionGold = HdrColors.dolbyVisionGold
 
     val playMethodColor = when {
