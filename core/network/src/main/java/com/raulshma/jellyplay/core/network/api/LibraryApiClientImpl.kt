@@ -474,6 +474,33 @@ class LibraryApiClientImpl @Inject constructor(
         )
     }
 
+    override suspend fun getSearchSuggestions(limit: Int): Result<SearchResult> = engine.apiResultWithRetry {
+        // Mirrors jellyfin-web's useSearchSuggestions: getItems sorted by
+        // [IsFavoriteOrLiked, Random] over Movies, Series and MusicArtists.
+        // Unlike the web client (which disables images for the cheap empty
+        // state) we keep images on so we can render poster cards that match
+        // the rest of the app's design language.
+        val response = engine.requireApi().itemsApi.getItems(
+            sortBy = listOf(ItemSortBy.IS_FAVORITE_OR_LIKED, ItemSortBy.RANDOM),
+            includeItemTypes = listOf(
+                BaseItemKind.MOVIE,
+                BaseItemKind.SERIES,
+                BaseItemKind.MUSIC_ARTIST,
+            ),
+            limit = limit,
+            recursive = true,
+            fields = listOf(
+                ItemFields.PRIMARY_IMAGE_ASPECT_RATIO,
+                ItemFields.GENRES,
+            ),
+        ).content
+        SearchResult(
+            items = engine.run { response.items.map { it.toMediaItem() }.filterByParentalRating() },
+            totalRecordCount = response.totalRecordCount,
+            startIndex = 0,
+        )
+    }
+
     override suspend fun findItemByProviderId(provider: String, id: String): Result<String?> =
         engine.apiResultWithRetry {
             // The Jellyfin SDK's typed getItems() doesn't expose the AnyProviderId
