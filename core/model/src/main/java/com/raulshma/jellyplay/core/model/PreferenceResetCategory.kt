@@ -7,8 +7,7 @@ import kotlinx.serialization.Serializable
  * Identifies a logical category of user preferences that can be reset as a group via
  * `UserPreferencesStore.resetCategory`. Replaces the previous magic-string contract
  * (`resetCategory("appearance")`, `resetCategory("notifications")`, …) which was brittle to
- * typos and led to an incomplete notifications-reset list slipping through (§4.18 of the
- * architecture analysis).
+ * typos and led to an incomplete notifications-reset list slipping through.
  *
  * The enum is `@Serializable` so it round-trips through DataStore backup/restore payloads.
  */

@@ -98,7 +98,7 @@ class MediaRepositoryImpl @Inject constructor(
     private val lastStableIdentityKey = AtomicReference<String?>(null)
 
     init {
-        // §4.7: observe active server/user changes and self-invalidate caches. This closes a
+        // Observe active server/user changes and self-invalidate caches. This closes a
         // privacy + correctness gap where the previous user's home sections / detail data was
         // served for up to 10 minutes (the longest TTL) after `switchUser` or
         // `switchServerAddress`. Implemented as a self-collection so we don't introduce a
@@ -729,7 +729,7 @@ class MediaRepositoryImpl @Inject constructor(
         }
         // Also clear the secondary caches — they hold user-scoped data (library folders,
         // latest media, genres, studios) that would otherwise leak across user/server
-        // switches until their TTL expires (§4.7).
+        // switches until their TTL expires.
         libraryFoldersCache.clear()
         latestMediaCache.clear()
         genresCache.clear()

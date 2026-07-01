@@ -203,7 +203,7 @@ class ResilientSeerrApiClientTest {
 
     @Test
     fun `every SeerrApiClient method is overridden by ResilientSeerrApiClient`() {
-        // Regression guard for §4.2: ensures no method (including future additions) silently
+        // Regression guard: ensures no method (including future additions) silently
         // bypasses retry by falling through to interface delegation. The compiler now enforces
         // overrides because `by delegate` was removed, but this test catches the case where a
         // default method body is later added to the interface.

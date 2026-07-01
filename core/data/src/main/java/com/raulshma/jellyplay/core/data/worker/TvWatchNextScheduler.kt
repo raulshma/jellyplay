@@ -22,7 +22,7 @@ import javax.inject.Singleton
  * TV-only behaviour lives inside the worker itself: it's a no-op on
  * phones and respects the `androidTvWatchNextEnabled` preference.
  *
- * One-shot by design (startup-and-workers-architecture §7.14): there is no
+ * One-shot by design: there is no
  * periodic schedule; see [TvWatchNextWorker] for the rationale.
  */
 interface TvWatchNextScheduler {
@@ -51,7 +51,7 @@ class TvWatchNextSchedulerImpl @Inject constructor(
         } catch (e: Exception) {
             // WorkManager not initialised / unavailable — keep the no-throw
             // contract but surface the failure for diagnostics instead of
-            // swallowing silently (startup-and-workers-architecture §7.12).
+            // swallowing silently.
             Log.w(TAG, "Failed to schedule TvWatchNext refresh", e)
         }
     }

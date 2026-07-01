@@ -5,7 +5,7 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 
 /**
- * Regression tests for §4.15: [SyncPlayPlaybackCore.calculateSpeedCorrection] must clamp
+ * Regression tests: [SyncPlayPlaybackCore.calculateSpeedCorrection] must clamp
  * both ends so a large drift (e.g. 1500ms ahead) doesn't produce a speed that exceeds the
  * player's capability (e.g. 2.5×). Before the fix only `coerceAtLeast(MIN_SPEED)` was
  * applied, allowing unbounded speedup.

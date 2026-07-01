@@ -23,7 +23,7 @@ import com.raulshma.jellyplay.core.model.PlayerType
  * is `false`, the corresponding engine must silently no-op the related call
  * (e.g. an engine with `supportsAudioDelay = false` ignores `audioDelayMs`).
  * This is what lets the UI branch purely on [EngineCapabilities] instead of
- * scattering `when (engine)` checks — see §3 of the architecture review.
+ * scattering `when (engine)` checks across the UI.
  *
  * Adding a new capability: add the field to [EngineCapabilities], set it
  * explicitly on every constant below (do not rely on the `false` default — an

@@ -1,6 +1,5 @@
 package com.raulshma.jellyplay.feature.admin.plugins.components
 
-import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -14,14 +13,19 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -29,12 +33,14 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.composables.icons.tabler.Tabler
+import com.composables.icons.tabler.outline.AlertTriangle
 import com.composables.icons.tabler.outline.Download
 import com.composables.icons.tabler.outline.Puzzle
 import com.raulshma.jellyplay.core.designsystem.theme.ShapeCache
 import com.raulshma.jellyplay.core.model.PluginPackage
 import com.raulshma.jellyplay.core.ui.tv.rememberTvFocusState
 import com.raulshma.jellyplay.core.ui.tv.tvFocusIndicator
+import com.raulshma.jellyplay.feature.admin.plugins.isTrustedRepository
 
 @Composable
 fun PluginCatalogCard(
@@ -45,6 +51,43 @@ fun PluginCatalogCard(
 ) {
     val focusState = rememberTvFocusState()
     val installFocusState = rememberTvFocusState(focusedScale = 1.05f)
+    var showTrustDialog by remember { mutableStateOf(false) }
+
+    val latestVer = packageInfo.latestVersion
+    val needsTrustConfirm = latestVer != null && !isTrustedRepository(latestVer.repositoryUrl)
+
+    // Centralized install entry point: shows the third-party disclaimer first when
+    // the package isn't from the official repo (mirrors jellyfin-web `onInstall`).
+    fun requestInstall() {
+        if (needsTrustConfirm) showTrustDialog = true
+        else latestVer?.let {
+            onInstall(packageInfo.name, packageInfo.guid, it.version, it.repositoryUrl)
+        }
+    }
+
+    if (showTrustDialog && latestVer != null) {
+        AlertDialog(
+            onDismissRequest = { showTrustDialog = false },
+            icon = { Icon(Tabler.Outline.AlertTriangle, contentDescription = null) },
+            title = { Text("Install third-party plugin?") },
+            text = {
+                Text(
+                    "Plugins have the same system access as your Jellyfin server. " +
+                        "Only install plugins from sources you trust. Continue installing " +
+                        "\"${packageInfo.name}\"?",
+                )
+            },
+            confirmButton = {
+                TextButton(onClick = {
+                    showTrustDialog = false
+                    onInstall(packageInfo.name, packageInfo.guid, latestVer.version, latestVer.repositoryUrl)
+                }) { Text("Continue") }
+            },
+            dismissButton = {
+                TextButton(onClick = { showTrustDialog = false }) { Text("Cancel") }
+            },
+        )
+    }
 
     Card(
         modifier = modifier
@@ -64,24 +107,11 @@ fun PluginCatalogCard(
             Row(
                 verticalAlignment = Alignment.CenterVertically,
             ) {
-                Box(
-                    modifier = Modifier
-                        .size(40.dp)
-                        .clip(CircleShape)
-                        .background(
-                            if (isInstalled) MaterialTheme.colorScheme.secondaryContainer
-                            else MaterialTheme.colorScheme.tertiaryContainer
-                        ),
-                    contentAlignment = Alignment.Center,
-                ) {
-                    Icon(
-                        Tabler.Outline.Puzzle,
-                        contentDescription = null,
-                        modifier = Modifier.size(20.dp),
-                        tint = if (isInstalled) MaterialTheme.colorScheme.onSecondaryContainer
-                        else MaterialTheme.colorScheme.onTertiaryContainer,
-                    )
-                }
+                PluginImage(
+                    imageUrl = packageInfo.imageUrl,
+                    isInstalled = isInstalled,
+                    modifier = Modifier.size(40.dp),
+                )
                 Spacer(Modifier.width(12.dp))
                 Column(modifier = Modifier.weight(1f)) {
                     Text(
@@ -123,7 +153,6 @@ fun PluginCatalogCard(
                 )
             }
 
-            val latestVer = packageInfo.latestVersion
             if (latestVer != null) {
                 Spacer(Modifier.height(12.dp))
                 Row(
@@ -145,14 +174,7 @@ fun PluginCatalogCard(
                         )
                     } else {
                         FilledTonalButton(
-                            onClick = {
-                                onInstall(
-                                    packageInfo.name,
-                                    packageInfo.guid,
-                                    latestVer.version,
-                                    latestVer.repositoryUrl,
-                                )
-                            },
+                            onClick = { requestInstall() },
                             modifier = Modifier
                                 .then(installFocusState.focusModifier)
                                 .tvFocusIndicator(installFocusState, ShapeCache.smooth12),
@@ -171,6 +193,49 @@ fun PluginCatalogCard(
                         }
                     }
                 }
+            }
+        }
+    }
+}
+
+/**
+ * Renders the plugin's image (catalog package image) or a fallback puzzle icon.
+ * Uses Coil's AsyncImage with the app's standard image pipeline.
+ */
+@Composable
+internal fun PluginImage(
+    imageUrl: String?,
+    isInstalled: Boolean,
+    modifier: Modifier = Modifier,
+) {
+    Box(
+        modifier = modifier.clip(CircleShape),
+        contentAlignment = Alignment.Center,
+    ) {
+        if (!imageUrl.isNullOrBlank()) {
+            coil3.compose.AsyncImage(
+                model = imageUrl,
+                contentDescription = null,
+                modifier = Modifier.fillMaxWidth(),
+            )
+        } else {
+            Box(
+                modifier = Modifier
+                    .size(40.dp)
+                    .clip(CircleShape)
+                    .background(
+                        if (isInstalled) MaterialTheme.colorScheme.secondaryContainer
+                        else MaterialTheme.colorScheme.tertiaryContainer
+                    ),
+                contentAlignment = Alignment.Center,
+            ) {
+                Icon(
+                    Tabler.Outline.Puzzle,
+                    contentDescription = null,
+                    modifier = Modifier.size(20.dp),
+                    tint = if (isInstalled) MaterialTheme.colorScheme.onSecondaryContainer
+                    else MaterialTheme.colorScheme.onTertiaryContainer,
+                )
             }
         }
     }

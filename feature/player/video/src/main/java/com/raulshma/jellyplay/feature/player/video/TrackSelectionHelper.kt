@@ -24,6 +24,8 @@ internal class TrackSelectionHelper(
     private val getUiState: () -> VideoPlayerUiState,
     private val updateUiState: ((VideoPlayerUiState) -> VideoPlayerUiState) -> Unit,
     private val getCurrentItemId: () -> String?,
+    private val getCurrentSeriesId: () -> String?,
+    private val playbackPreferenceResolver: ItemPlaybackPreferenceResolver,
     private val scope: CoroutineScope,
 ) {
     private var selectedSubtitleTrackId: Pair<Int, Any?>? = null
@@ -36,6 +38,16 @@ internal class TrackSelectionHelper(
     fun setPendingStreams(subtitleIndex: Int?, audioIndex: Int?) {
         pendingSubtitleStreamIndex = subtitleIndex
         pendingAudioStreamIndex = audioIndex
+    }
+
+    /**
+     * Re-resolves the per-item / per-series language preference for the current
+     * item/series. Call when a new item loads or after a preference is
+     * saved/deleted, then [updateTracksFromEngine] to reapply. The read is
+     * async; [updateTracksFromEngine] reads the cached value.
+     */
+    fun refreshPlaybackPreferences() {
+        playbackPreferenceResolver.refresh()
     }
 
     fun selectAudioTrack(option: TrackOption, isUserOverride: Boolean = true) {
@@ -204,10 +216,14 @@ internal class TrackSelectionHelper(
                         }
                     }
                 } else {
+                    // Per-item then per-series language rule overrides the
+                    // global preferred audio language when set.
+                    val resolvedAudioLang = playbackPreferenceResolver.resolved.value?.audioLanguage
+                        ?: prefAudioLang
                     val match = pickPreferredAudioTrack(
                         audioTracks = audioTracks,
                         streams = streams,
-                        prefAudioLang = prefAudioLang,
+                        prefAudioLang = resolvedAudioLang,
                         preferAudioDescription = currentPrefs.preferAudioDescription,
                     )
                     if (match != null) {
@@ -255,10 +271,14 @@ internal class TrackSelectionHelper(
                         }
                     }
                 } else {
+                    // Per-item then per-series language rule overrides the
+                    // global preferred subtitle language when set.
+                    val resolvedSubLang = playbackPreferenceResolver.resolved.value?.subtitleLanguage
+                        ?: prefSubLang
                     val forcedOnly = currentPrefs.subtitlesForcedOnly
                     val match = if (forcedOnly) {
                         val forcedStream = streams
-                            .firstOrNull { it.type == StreamType.SUBTITLE && it.isForced && isLanguageMatch(it.language, prefSubLang) }
+                            .firstOrNull { it.type == StreamType.SUBTITLE && it.isForced && isLanguageMatch(it.language, resolvedSubLang) }
                             ?: streams.firstOrNull { it.type == StreamType.SUBTITLE && it.isForced }
                         if (forcedStream != null) {
                             val forcedLabel = forcedStream.displayTitle ?: forcedStream.title ?: forcedStream.language
@@ -267,7 +287,7 @@ internal class TrackSelectionHelper(
                             null
                         }
                     } else {
-                        subtitleTracks.firstOrNull { it.index >= 0 && isLanguageMatch(it.language, prefSubLang) }
+                        subtitleTracks.firstOrNull { it.index >= 0 && isLanguageMatch(it.language, resolvedSubLang) }
                     }
                     if (match != null) {
                         selectSubtitleTrack(match, isUserOverride = false)
@@ -312,6 +332,7 @@ internal class TrackSelectionHelper(
         selectedAudioTrackId = null
         pendingSubtitleStreamIndex = null
         pendingAudioStreamIndex = null
+        playbackPreferenceResolver.clear()
     }
 
     private fun persistStreamSelectionFromPlayer(

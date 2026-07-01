@@ -408,7 +408,7 @@ internal fun BoxScope.PlayerOverflowMenu(
             }
             OverflowMenuItem(
                 icon = Tabler.Outline.DotsVertical,
-                label = "Download Subs",
+                label = "Get Subtitles",
                 onClick = onSubtitleDownloadClick,
             )
             OverflowMenuItem(

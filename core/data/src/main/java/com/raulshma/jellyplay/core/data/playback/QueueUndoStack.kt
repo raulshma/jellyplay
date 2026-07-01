@@ -4,7 +4,7 @@ import androidx.compose.runtime.Immutable
 
 /**
  * Captured state of the audio queue at the moment just before a destructive
- * queue operation, used to restore it on undo (enhancements §5.2).
+ * queue operation, used to restore it on undo.
  */
 @Immutable
 data class QueueSnapshot(

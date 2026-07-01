@@ -424,7 +424,7 @@ class AudioPlayerViewModel @Inject constructor(
     val abLoopStartMs: StateFlow<Long?> get() = audioPlaybackManager.abLoopStartMs
     val abLoopEndMs: StateFlow<Long?> get() = audioPlaybackManager.abLoopEndMs
 
-    /** Cycles A→B loop: set A → set B → clear (enhancements §5.4). */
+    /** Cycles A→B loop: set A → set B → clear. */
     fun cycleAbLoop() = audioPlaybackManager.cycleAbLoop()
 
     fun skipToNext() {

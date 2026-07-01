@@ -11,7 +11,7 @@ import kotlin.coroutines.resumeWithException
 /**
  * Suspends until the OkHttp [Call] completes, yielding its [Response] — the
  * non-blocking equivalent of [Call.execute]. Used inside suspend workers so a
- * pending HTTP call doesn't tie up a worker thread (§7.11). The call is
+ * pending HTTP call doesn't tie up a worker thread. The call is
  * cancelled cooperatively when the suspending coroutine is cancelled.
  */
 internal suspend fun Call.awaitResponse(): Response = suspendCancellableCoroutine { continuation ->

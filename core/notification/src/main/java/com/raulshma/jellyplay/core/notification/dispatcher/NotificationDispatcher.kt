@@ -180,7 +180,7 @@ class NotificationDispatcher @Inject constructor(
          * `itemIndex == -1` selects the reserved summary slot for that library, which is
          * always distinct from any per-item slot.
          *
-         * `internal` so unit tests can assert the deterministic mapping (§4.11).
+         * `internal` so unit tests can assert the deterministic mapping.
          */
         internal fun notificationIdFor(libraryId: String, itemIndex: Int): Int {
             val libraryBucket = (libraryId.hashCode().toLong() and 0xFFFFFFFFL).toInt() % LIBRARY_BUCKETS

@@ -57,7 +57,7 @@ class JellyPlayApplication : Application(), SingletonImageLoader.Factory, Config
         }
         // Background schedulers — independent enqueue calls, all KEEP-safe.
         // Run concurrently with the critical path so cold start isn't gated on
-        // Sentry/audio init (startup-and-workers-architecture §7.6).
+        // Sentry/audio init.
         applicationScope.launch(Dispatchers.IO) {
             widgetWorkScheduler.enqueuePeriodic()
             userDataSyncScheduler.enqueuePeriodic()

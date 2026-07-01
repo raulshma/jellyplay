@@ -12,13 +12,11 @@ import javax.inject.Inject
 /**
  * Best-effort cache maintenance (lyrics cache pruning + offline orphan
  * cleanup). Extracted out of `JellyPlayApplication` so the Application class
- * *composes* startup steps rather than *containing* them
- * (see startup-and-workers-architecture §7.1).
+ * *composes* startup steps rather than *containing* them.
  *
  * These passes tidy up caches that accumulate over time; they are not on the
  * critical startup path. [cleanupOnce] is event-driven (triggered after the
- * first successful auth) instead of the previous fragile 10 s startup delay
- * (§7.5).
+ * first successful auth) instead of the previous fragile 10 s startup delay.
  */
 class CacheMaintenanceInitializer @Inject constructor(
     private val mediaRepository: MediaRepository,
