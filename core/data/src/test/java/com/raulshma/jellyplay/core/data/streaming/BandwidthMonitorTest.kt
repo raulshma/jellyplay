@@ -14,7 +14,7 @@ import java.util.concurrent.CountDownLatch
 import java.util.concurrent.atomic.AtomicInteger
 
 /**
- * Tests for [BandwidthMonitor] including the §4.16 fix: `reset()` must mutate `samples`,
+ * Tests for [BandwidthMonitor] including a fix: `reset()` must mutate `samples`,
  * `_totalBytes`, and `_totalElapsedMs` atomically so a concurrent `addSample` can't leave the
  * three fields out of sync.
  */

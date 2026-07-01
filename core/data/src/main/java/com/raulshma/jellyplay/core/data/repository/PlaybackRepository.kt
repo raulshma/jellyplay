@@ -1,6 +1,7 @@
 package com.raulshma.jellyplay.core.data.repository
 
 import com.raulshma.jellyplay.core.model.CreditTimestamps
+import com.raulshma.jellyplay.core.model.CultureInfo
 import com.raulshma.jellyplay.core.model.IntroTimestamps
 import com.raulshma.jellyplay.core.model.MediaSegment
 import com.raulshma.jellyplay.core.model.PlaybackInfoResult
@@ -88,6 +89,34 @@ interface PlaybackRepository {
     suspend fun getRemoteSubtitles(itemId: String): Result<List<RemoteSubtitleInfo>>
 
     suspend fun downloadSubtitle(itemId: String, subtitleId: String): Result<Unit>
+
+    /**
+     * Searches the server's configured remote subtitle providers for [itemId]
+     * in the given [language] (ISO 639-2/3 code, e.g. `"eng"`). Unlike
+     * [getRemoteSubtitles], which returns the server's default provider
+     * results, this delegates to the language-scoped OpenSubtitles search.
+     */
+    suspend fun searchRemoteSubtitles(itemId: String, language: String): Result<List<RemoteSubtitleInfo>>
+
+    /**
+     * Uploads a subtitle file (Base64-encoded [data]) to the item, making it
+     * available as a new embedded subtitle stream. Mirrors the editor's upload
+     * path so the player can contribute subtitles without leaving playback.
+     */
+    suspend fun uploadSubtitle(
+        itemId: String,
+        data: String,
+        fileName: String,
+        language: String?,
+        isForced: Boolean,
+        isHearingImpaired: Boolean,
+    ): Result<Unit>
+
+    /**
+     * Returns the list of language cultures the server understands for
+     * subtitle upload/search selection (driven by `MetadataEditorInfo`).
+     */
+    suspend fun getSubtitleCultures(itemId: String): Result<List<CultureInfo>>
 
     suspend fun getTrickplayTileImage(itemId: String, width: Int, index: Int): ByteArray?
 }

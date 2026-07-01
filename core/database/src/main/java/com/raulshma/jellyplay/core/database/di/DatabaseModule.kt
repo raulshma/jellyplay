@@ -68,4 +68,7 @@ object DatabaseModule {
 
     @Provides
     fun provideSeenMediaDao(database: JellyPlayDatabase) = database.seenMediaDao()
+
+    @Provides
+    fun provideItemPlaybackPreferenceDao(database: JellyPlayDatabase) = database.itemPlaybackPreferenceDao()
 }

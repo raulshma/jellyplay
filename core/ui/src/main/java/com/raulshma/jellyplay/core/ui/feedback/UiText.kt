@@ -12,7 +12,7 @@ import androidx.compose.ui.res.stringResource
  *
  * The app standardizes on this type so that every user-visible string can be
  * resolved from Android string resources — the prerequisite for real
- * localization (enhancements §2.2). Two variants:
+ * localization. Two variants:
  *
  * - [UiText.Resource] references a `strings.xml` entry (with optional format
  *   args) and is resolved lazily by the UI layer, so it stays correct under

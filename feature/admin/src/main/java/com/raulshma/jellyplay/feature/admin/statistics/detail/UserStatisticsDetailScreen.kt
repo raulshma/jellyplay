@@ -41,6 +41,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.compositeOver
 import java.util.Locale
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -56,6 +57,7 @@ import androidx.compose.ui.unit.dp
 import androidx.core.content.FileProvider
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.raulshma.jellyplay.core.designsystem.theme.ShapeCache
+import com.raulshma.jellyplay.core.designsystem.theme.isLightColor
 import com.raulshma.jellyplay.core.model.MusicStatistics
 import com.raulshma.jellyplay.core.model.PlaybackReportingStatus
 import com.raulshma.jellyplay.core.model.UserDetailPage
@@ -481,30 +483,34 @@ private fun TopItemWithRank(item: com.raulshma.jellyplay.core.model.UserTopItem,
             modifier = Modifier.padding(12.dp).fillMaxWidth(),
             verticalAlignment = Alignment.CenterVertically,
         ) {
+            // Medal tint is drawn at low alpha over the card surface, so the digit text must
+            // contrast with the *effective* composited color rather than the raw medal tone.
+            // Gold/silver are bright and fail against the pale tint they produce on light surfaces.
+            val cardSurface = MaterialTheme.colorScheme.surfaceContainerLow
+            val medalColor = when (rank) {
+                1 -> Color(0xFFFFD700)
+                2 -> Color(0xFFC0C0C0)
+                3 -> Color(0xFFCD7F32)
+                else -> MaterialTheme.colorScheme.surfaceVariant
+            }
+            val medalBackground = medalColor.copy(alpha = 0.2f).compositeOver(cardSurface)
+            val medalText = if (rank in 1..3) {
+                if (isLightColor(medalBackground)) Color.Black else Color.White
+            } else {
+                MaterialTheme.colorScheme.onSurfaceVariant
+            }
             Box(
                 modifier = Modifier
                     .size(32.dp)
                     .clip(CircleShape)
-                    .background(
-                        when (rank) {
-                            1 -> Color(0xFFFFD700).copy(alpha = 0.2f)
-                            2 -> Color(0xFFC0C0C0).copy(alpha = 0.2f)
-                            3 -> Color(0xFFCD7F32).copy(alpha = 0.2f)
-                            else -> MaterialTheme.colorScheme.surfaceVariant
-                        }
-                    ),
+                    .background(medalBackground),
                 contentAlignment = Alignment.Center,
             ) {
                 Text(
                     "$rank",
                     style = MaterialTheme.typography.labelMedium,
                     fontWeight = FontWeight.Bold,
-                    color = when (rank) {
-                        1 -> Color(0xFFFFD700)
-                        2 -> Color(0xFFC0C0C0)
-                        3 -> Color(0xFFCD7F32)
-                        else -> MaterialTheme.colorScheme.onSurfaceVariant
-                    },
+                    color = medalText,
                 )
             }
             Spacer(Modifier.width(12.dp))

@@ -22,11 +22,11 @@ import com.raulshma.jellyplay.core.model.formatSpeed
  * Builds and manages the download progress foreground notification (channel
  * creation, foreground info, progress/speed/ETA formatting). Extracted out of
  * [DownloadWorker] so the worker orchestrates transfer instead of owning
- * presentation (startup-and-workers-architecture §7.7).
+ * presentation.
  *
  * The channel is deduplicated solely via [NotificationManager.getNotificationChannel]
  * — the previous process-global `channelCreated` flag was redundant
- * (§7.9) and is intentionally not reproduced here.
+ * and is intentionally not reproduced here.
  */
 internal object DownloadNotificationHelper {
 

@@ -6,6 +6,7 @@ import com.raulshma.jellyplay.core.designsystem.theme.FancyTransitionEasing
 import com.raulshma.jellyplay.core.designsystem.theme.PointToPointEasing
 import com.raulshma.jellyplay.core.designsystem.theme.RatingColors
 import com.raulshma.jellyplay.core.designsystem.theme.ShapeCache
+import com.raulshma.jellyplay.core.designsystem.theme.isLightColor
 import com.raulshma.jellyplay.core.ui.animation.AnimationTokens
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
@@ -1777,16 +1778,23 @@ private fun RatingsRow(ratings: SeerrRatings?) {
     ratings.tmdb?.rating?.let { rating ->
         ratingItems.add {
             Row(verticalAlignment = Alignment.CenterVertically) {
+                // The badge background is a fixed mint-green (#90CEA1), which is light in
+                // every theme variant, so the onSurface token (light in dark theme) would be
+                // low-contrast. Derive the text color from the badge's own luminance instead.
+                val tmdbBadgeColor = BrandColors.tmdbBackground
+                val tmdbBadgeText = remember(tmdbBadgeColor) {
+                    if (isLightColor(tmdbBadgeColor)) Color.Black else Color.White
+                }
                 Box(
                     modifier = Modifier
-                        .background(Color(0xFF90CEA1), ShapeCache.smooth4)
+                        .background(tmdbBadgeColor, ShapeCache.smooth4)
                         .padding(horizontal = 4.dp, vertical = 2.dp)
                 ) {
                     Text(
                         text = "TMDB",
                         style = MaterialTheme.typography.labelSmall,
                             fontWeight = FontWeight.Black,
-                            color = MaterialTheme.colorScheme.onSurface
+                            color = tmdbBadgeText
                         )
                 }
                 Spacer(Modifier.width(6.dp))

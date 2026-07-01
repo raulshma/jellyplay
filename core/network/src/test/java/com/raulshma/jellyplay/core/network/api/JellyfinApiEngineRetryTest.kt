@@ -14,7 +14,7 @@ import org.junit.Test
 import java.net.SocketTimeoutException
 
 /**
- * Verifies the §4.1 fix: a transient failure thrown from a Jellyfin SDK call is wrapped into
+ * Verifies the fix: a transient failure thrown from a Jellyfin SDK call is wrapped into
  * an [ApiException] whose `isRetryable` flag is consulted by [RetryPolicy], so the pipeline
  * actually retries.
  *

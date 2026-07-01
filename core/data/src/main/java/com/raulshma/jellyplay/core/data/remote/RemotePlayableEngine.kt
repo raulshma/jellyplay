@@ -42,7 +42,7 @@ interface RemotePlayableEngine {
      * Releases all native resources held by this engine. After this call returns, the engine
      * is no longer usable. Added at the `core.data.remote` level (rather than only on the
      * video `MediaEngine` interface) so the cross-feature [VideoMiniPlayerState] holder can
-     * release the engine it captured without depending on `feature:player:video` (§4.6).
+     * release the engine it captured without depending on `feature:player:video`.
      */
     fun release()
 }

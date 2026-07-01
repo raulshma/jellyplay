@@ -19,8 +19,8 @@ import javax.inject.Singleton
  * outside the video feature (e.g. while browsing Live TV channels or libraries) without those
  * modules depending on `feature:player:video`.
  *
- * Originally declared inside `feature:player:video`, moved to `core:data` (§4.6 of the
- * architecture analysis) to break the only feature→feature dependency in the codebase:
+ * Originally declared inside `feature:player:video`, moved to `core:data`
+ * to break the only feature→feature dependency in the codebase:
  * `feature:livetv → feature:player:video`. The engine reference is typed as
  * [RemotePlayableEngine] (a `core.data.remote` interface) so no `feature:player:video` import
  * leaks in here. The video `MediaEngine` implements [RemotePlayableEngine] directly.
