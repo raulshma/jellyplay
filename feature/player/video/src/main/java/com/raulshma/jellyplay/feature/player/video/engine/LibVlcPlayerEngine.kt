@@ -692,6 +692,7 @@ class LibVlcPlayerEngine(
             addOption(":freetype-background-color=$backgroundColor")
             addOption(":freetype-background-opacity=${(style.backgroundOpacity * 255).toInt().coerceIn(0, 255)}")
             addOption(":freetype-outline-color=$edgeColor")
+            addOption(":freetype-bold=true")
 
             when (style.edgeType) {
                 com.raulshma.jellyplay.core.model.SubtitleEdgeType.NONE -> addOption(":freetype-outline-thickness=0")
@@ -707,7 +708,14 @@ class LibVlcPlayerEngine(
                 }
             }
         } else {
-            // Default size and no color/border overrides
+            // Default styling matching MPV (white text, transparent background, black outline and shadow)
+            addOption(":freetype-color=16777215") // White (0xFFFFFF)
+            addOption(":freetype-background-color=0") // Black/transparent
+            addOption(":freetype-background-opacity=0") // Transparent
+            addOption(":freetype-outline-color=0") // Black
+            addOption(":freetype-outline-thickness=2")
+            addOption(":freetype-shadow-opacity=255")
+            addOption(":freetype-bold=true")
             addOption(":freetype-rel-fontsize=${style.fontSize}")
         }
 
