@@ -5,8 +5,10 @@ import android.graphics.Bitmap
 import android.util.Log
 import android.webkit.WebResourceError
 import android.webkit.WebResourceRequest
+import android.webkit.WebResourceResponse
 import android.webkit.WebView
 import android.webkit.WebViewClient
+import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
@@ -20,6 +22,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -34,6 +37,8 @@ import com.composables.icons.tabler.Tabler
 import com.composables.icons.tabler.outline.Refresh
 import com.raulshma.jellyplay.core.ui.components.JellyPlayScreenScaffold
 import com.raulshma.jellyplay.core.ui.components.rememberScreenBackgroundColor
+import com.raulshma.jellyplay.core.ui.feedback.LocalUserMessageBus
+import com.raulshma.jellyplay.core.ui.feedback.UiText
 import com.raulshma.jellyplay.core.ui.tv.rememberTvFocusState
 import com.raulshma.jellyplay.core.ui.tv.tvFocusIndicator
 
@@ -49,6 +54,30 @@ fun PluginConfigScreen(
     val backgroundColor = rememberScreenBackgroundColor()
     val isDark = isSystemInDarkTheme()
     val colors = MaterialTheme.colorScheme
+    val userMessageBus = LocalUserMessageBus.current
+    val jsBridge = remember { PluginConfigJsBridge() }
+
+    // The bridge publishes events on the WebView's JavaBridge thread via Compose
+    // snapshot state (mutableStateOf). derivedStateOf re-snapshots here whenever
+    // pendingEvent changes, and the LaunchedEffect forwards each one to the
+    // user-message bus (rendered as a snackbar by the root host) and consumes it.
+    val latestEvent by remember(jsBridge) {
+        androidx.compose.runtime.derivedStateOf { jsBridge.pendingEvent }
+    }
+    LaunchedEffect(latestEvent) {
+        val event = latestEvent ?: return@LaunchedEffect
+        when (event) {
+            is PluginConfigJsBridge.JsBridgeEvent.Saved ->
+                userMessageBus.info(UiText.Raw("Settings saved"))
+            is PluginConfigJsBridge.JsBridgeEvent.Error ->
+                userMessageBus.error(UiText.Raw(event.message))
+            is PluginConfigJsBridge.JsBridgeEvent.Alert ->
+                userMessageBus.info(UiText.Raw(event.message))
+            is PluginConfigJsBridge.JsBridgeEvent.Confirm,
+            is PluginConfigJsBridge.JsBridgeEvent.Navigate -> Unit
+        }
+        jsBridge.consumeEvent()
+    }
 
     JellyPlayScreenScaffold(
         title = "$pluginName Settings",
@@ -86,12 +115,27 @@ fun PluginConfigScreen(
                 }
             }
             state.configPageHtml != null -> {
-                PicoWebView(
-                    htmlContent = state.configPageHtml,
-                    serverAddress = state.serverAddress,
-                    isDark = isDark,
-                    colors = colors,
-                )
+                Box(modifier = Modifier.fillMaxSize()) {
+                    PicoWebView(
+                        htmlContent = state.configPageHtml,
+                        bridgeScript = state.bridgeScript,
+                        serverAddress = state.serverAddress,
+                        accessToken = state.accessToken,
+                        okHttpClient = viewModel.okHttpClient,
+                        isDark = isDark,
+                        colors = colors,
+                        jsBridge = jsBridge,
+                    )
+                    // Native loading overlay driven by Dashboard.show/hideLoadingMsg().
+                    AnimatedVisibility(visible = jsBridge.isLoadingOverlay) {
+                        Box(
+                            modifier = Modifier.fillMaxSize(),
+                            contentAlignment = Alignment.Center,
+                        ) {
+                            CircularProgressIndicator()
+                        }
+                    }
+                }
             }
         }
     }
@@ -101,9 +145,13 @@ fun PluginConfigScreen(
 @Composable
 private fun PicoWebView(
     htmlContent: String,
+    bridgeScript: String,
     serverAddress: String,
+    accessToken: String,
+    okHttpClient: okhttp3.OkHttpClient,
     isDark: Boolean,
     colors: androidx.compose.material3.ColorScheme,
+    jsBridge: PluginConfigJsBridge,
 ) {
     var webView by remember { mutableStateOf<WebView?>(null) }
     var isLoading by remember { mutableStateOf(true) }
@@ -111,9 +159,12 @@ private fun PicoWebView(
     val picoTheme = if (isDark) "dark" else "light"
     val themeOverrides = remember(isDark, colors) { buildPicoOverrides(isDark, colors) }
 
-    val wrappedHtml = remember(htmlContent, picoTheme, themeOverrides) {
-        buildWrappedHtml(htmlContent, picoTheme, themeOverrides)
+    val wrappedHtml = remember(htmlContent, picoTheme, themeOverrides, bridgeScript) {
+        buildWrappedHtml(htmlContent, picoTheme, themeOverrides, bridgeScript)
     }
+
+    // Reset bridge state when the page content changes.
+    LaunchedEffect(htmlContent) { jsBridge.reset() }
 
     DisposableEffect(Unit) {
         onDispose {
@@ -129,6 +180,9 @@ private fun PicoWebView(
                     settings.domStorageEnabled = true
                     settings.loadWithOverviewMode = true
                     settings.useWideViewPort = true
+                    settings.mediaPlaybackRequiresUserGesture = false
+                    // Allow plugin pages to load authenticated same-origin resources.
+                    addJavascriptInterface(jsBridge, "NativeInterface")
                     setBackgroundColor(android.graphics.Color.TRANSPARENT)
                     webViewClient = object : WebViewClient() {
                         override fun onPageStarted(view: WebView?, url: String?, favicon: Bitmap?) {
@@ -139,14 +193,36 @@ private fun PicoWebView(
                         override fun onPageFinished(view: WebView?, url: String?) {
                             super.onPageFinished(view, url)
                             isLoading = false
+                            // Backstop pageshow dispatch in case the bridge's own
+                            // readyState hook didn't catch the page.
+                            view?.evaluateJavascript(
+                                "if(window.__jellyplayFirePageShow){try{window.__jellyplayFirePageShow();}catch(e){}}",
+                                null,
+                            )
                         }
 
                         override fun onReceivedError(view: WebView?, request: WebResourceRequest?, error: WebResourceError?) {
                             Log.e("PluginConfigWebView", "WebView error: ${error?.description}")
-                            isLoading = false
+                            // Only treat main-frame errors as "done loading".
+                            if (request?.isForMainFrame == true) isLoading = false
+                        }
+
+                        // Attach the X-Emby-Token header to every same-origin request so
+                        // in-page fetches (config load/save), images, and controller JS
+                        // authenticate against the Jellyfin server.
+                        override fun shouldInterceptRequest(view: WebView?, request: WebResourceRequest?): WebResourceResponse? {
+                            request ?: return null
+                            return interceptAuthedRequest(
+                                request = request,
+                                okHttpClient = okHttpClient,
+                                accessToken = accessToken,
+                                serverAddress = serverAddress,
+                            )
                         }
 
                         override fun shouldOverrideUrlLoading(view: WebView?, request: WebResourceRequest?): Boolean {
+                            // Plugin pages navigate via Dashboard.navigate(); let the bridge
+                            // handle internal links rather than the WebView itself.
                             return false
                         }
                     }
@@ -266,7 +342,23 @@ private fun buildPicoOverrides(isDark: Boolean, colors: androidx.compose.materia
     """.trimIndent()
 }
 
-private fun buildWrappedHtml(originalHtml: String, theme: String, overrides: String): String {
+/**
+ * Wraps the plugin's HTML so that the bridge script and Pico CSS theme load
+ * before the page's own scripts. The [bridgeScript] is injected at the very top
+ * of `<head>` so `window.ApiClient`/`window.Dashboard` are defined before any
+ * inline `<script>` runs (Pattern-A pages read these globals at load time).
+ */
+private fun buildWrappedHtml(
+    originalHtml: String,
+    theme: String,
+    overrides: String,
+    bridgeScript: String,
+): String {
+    val picoStylesheet = """
+        <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@picocss/pico@2/css/pico.min.css">
+        <style>$overrides</style>
+    """.trimIndent()
+
     val hasHead = originalHtml.contains("<head", ignoreCase = true)
     val hasBody = originalHtml.contains("<body", ignoreCase = true)
     val hasHtml = originalHtml.contains("<html", ignoreCase = true)
@@ -275,13 +367,15 @@ private fun buildWrappedHtml(originalHtml: String, theme: String, overrides: Str
         return originalHtml
             .replace(
                 Regex("(<html[^>]*?)>", RegexOption.IGNORE_CASE),
-                "$1 data-theme=\"$theme\">"
+                "$1 data-theme=\"$theme\">",
+            )
+            .replace(
+                Regex("(<head[^>]*?>)", RegexOption.IGNORE_CASE),
+                "$1<script>$bridgeScript</script>",
             )
             .replace(
                 Regex("(</head>)", RegexOption.IGNORE_CASE),
-                """<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@picocss/pico@2/css/pico.min.css">
-                |<style>$overrides</style>
-                |</head>""".trimMargin()
+                "$picoStylesheet\n</head>",
             )
     }
 
@@ -289,21 +383,21 @@ private fun buildWrappedHtml(originalHtml: String, theme: String, overrides: Str
         <meta charset="utf-8">
         <meta name="viewport" content="width=device-width, initial-scale=1">
         <meta name="color-scheme" content="light dark">
-        <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@picocss/pico@2/css/pico.min.css">
-        <style>$overrides</style>
+        <script>$bridgeScript</script>
+        $picoStylesheet
     """.trimIndent()
 
     if (hasHead && hasBody) {
         return originalHtml.replace(
-            Regex("(</head>)", RegexOption.IGNORE_CASE),
-            "$picoHead\n$1"
+            Regex("(<head[^>]*?>)", RegexOption.IGNORE_CASE),
+            "$1$picoHead\n",
         )
     }
 
     if (hasBody) {
         return originalHtml.replace(
             Regex("(<body[^>]*>)", RegexOption.IGNORE_CASE),
-            "$1\n$picoHead"
+            "$1\n$picoHead",
         )
     }
 

@@ -14,7 +14,7 @@ import javax.inject.Singleton
  *
  * Carries a [UiText] so messages are fully localizable: ViewModels emit a
  * [UiText.Resource] referencing a `strings.xml` entry and the host resolves
- * it at render time (enhancements §2.2). Dynamic/server-supplied text uses
+ * it at render time. Dynamic/server-supplied text uses
  * [UiText.Raw].
  */
 @Immutable
@@ -41,7 +41,7 @@ sealed interface UserMessage {
  * App-wide bus for one-shot user-facing messages. ViewModels and screens
  * post [UserMessage]s here; a single root collector renders them. Replaces
  * the ~15 scattered `Toast.makeText` call sites so feedback is consistent,
- * testable, and localizable (enhancements §2.1 / §2.3).
+ * testable, and localizable.
  *
  * Implemented as a buffered [Channel] exposed as a cold [Flow]: each message
  * is delivered to a single collector and never replayed (one-shot semantics),

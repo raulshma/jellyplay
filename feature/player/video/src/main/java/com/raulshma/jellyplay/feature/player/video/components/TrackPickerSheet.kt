@@ -54,6 +54,7 @@ internal fun TrackPickerSheet(
     onSelect: (TrackOption) -> Unit,
     onReset: (() -> Unit)? = null,
     onDismiss: () -> Unit,
+    footer: @Composable (() -> Unit)? = null,
 ) {
     val isTv = LocalTvMode.current
     val focusRequester = remember { FocusRequester() }
@@ -134,6 +135,10 @@ internal fun TrackPickerSheet(
                         modifier = Modifier.ifElse(isTarget, Modifier.focusRequester(focusRequester)),
                     )
                 }
+            }
+            if (footer != null) {
+                Spacer(Modifier.height(8.dp))
+                footer()
             }
         }
     }

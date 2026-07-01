@@ -27,7 +27,7 @@ import java.util.concurrent.atomic.AtomicLong
  * and transfers them concurrently via `Range` requests, scattering the bytes
  * into a single [RandomAccessFile]. Extracted out of [DownloadWorker] so the
  * worker orchestrates the overall flow instead of owning every transfer
- * strategy (startup-and-workers-architecture §7.7).
+ * strategy.
  *
  * Cancel/pause detection mirrors the original inline implementation: the
  * progress loop polls the DB row's status (PAUSED/CANCELLED) and signals the

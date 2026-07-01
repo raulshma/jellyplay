@@ -4,6 +4,7 @@ import androidx.compose.runtime.Immutable
 import com.raulshma.jellyplay.core.model.AudioNormalizationMode
 import com.raulshma.jellyplay.core.model.ChapterInfo
 import com.raulshma.jellyplay.core.model.ChannelMixMode
+import com.raulshma.jellyplay.core.model.CultureInfo
 import com.raulshma.jellyplay.core.model.DecoderMode
 import com.raulshma.jellyplay.core.model.MediaSegment
 import com.raulshma.jellyplay.core.model.MediaSegmentType
@@ -72,6 +73,10 @@ data class VideoPlayerUiState(
     val audioTracks: List<TrackOption> = emptyList(),
     val hasAudioOverride: Boolean = false,
     val hasSubtitleOverride: Boolean = false,
+    /** A per-series audio-language preference exists for the current series. */
+    val hasSeriesAudioPref: Boolean = false,
+    /** A per-series subtitle-language preference exists for the current series. */
+    val hasSeriesSubtitlePref: Boolean = false,
     val overview: String = "",
     val people: List<PersonInfo> = emptyList(),
     val artworkUrl: String? = null,
@@ -92,6 +97,19 @@ data class VideoPlayerUiState(
     val decoderMode: DecoderMode = DecoderMode.HW_PREFERRED,
     val remoteSubtitles: List<RemoteSubtitleInfo> = emptyList(),
     val isLoadingRemoteSubtitles: Boolean = false,
+    // Subtitle Manager: language cultures for the upload/search
+    // dropdowns, and the language-scoped search results. Kept separate from
+    // [remoteSubtitles] (Download tab) so the two lists never clobber each
+    // other across tab switches.
+    val subtitleCultures: List<CultureInfo> = emptyList(),
+    val searchedSubtitles: List<RemoteSubtitleInfo> = emptyList(),
+    val isSearchingSubtitles: Boolean = false,
+    val hasSearchedSubtitles: Boolean = false,
+    /** Non-null when the last subtitle search failed (network/server). Lets the
+     *  Search tab distinguish a failure from a genuine empty result. */
+    val subtitleSearchError: String? = null,
+    val isUploadingSubtitle: Boolean = false,
+    val defaultSearchLanguage: String = "eng",
     val syncPlayGroupName: String? = null,
     val syncPlayParticipantCount: Int = 0,
     val isSyncPlaySynced: Boolean = false,

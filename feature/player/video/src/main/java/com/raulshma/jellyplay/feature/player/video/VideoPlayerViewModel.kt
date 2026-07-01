@@ -21,6 +21,7 @@ import com.raulshma.jellyplay.core.data.cast.CastMediaOptions
 import com.raulshma.jellyplay.core.data.cast.CastSessionEvent
 import com.raulshma.jellyplay.core.data.playback.AdaptiveBitrateManager
 import com.raulshma.jellyplay.core.data.repository.DownloadRepository
+import com.raulshma.jellyplay.core.data.repository.ItemPlaybackPreferenceRepository
 import com.raulshma.jellyplay.core.data.repository.MediaRepository
 import com.raulshma.jellyplay.core.data.repository.OfflineRepository
 import com.raulshma.jellyplay.core.data.repository.PlaybackRepository
@@ -36,6 +37,7 @@ import com.raulshma.jellyplay.core.model.MediaDetail
 import com.raulshma.jellyplay.core.model.MediaSegment
 import com.raulshma.jellyplay.core.model.MediaStream
 import com.raulshma.jellyplay.core.model.PlaybackMode
+import com.raulshma.jellyplay.core.model.PlaybackPrefScope
 import com.raulshma.jellyplay.core.model.SegmentBehavior
 import com.raulshma.jellyplay.core.model.PlayerType
 import com.raulshma.jellyplay.core.model.ReverbPreset
@@ -97,6 +99,7 @@ class VideoPlayerViewModel @Inject constructor(
     private val playbackRepository: PlaybackRepository,
     private val downloadRepository: DownloadRepository,
     private val offlineRepository: OfflineRepository,
+    private val itemPlaybackPreferenceRepository: ItemPlaybackPreferenceRepository,
     private val preferencesStore: UserPreferencesStore,
     private val sessionManager: PlaybackSessionManager,
     private val castManager: CastManager,
@@ -451,12 +454,20 @@ class VideoPlayerViewModel @Inject constructor(
     // declaration after init would leave this field uninitialised at the moment
     // the collector callback is registered. The latent NPE has not fired only
     // because engine is null until loadMedia(); this removes the foot-gun.
+    private val playbackPreferenceResolver = ItemPlaybackPreferenceResolver(
+        repository = itemPlaybackPreferenceRepository,
+        getCurrentItemId = { playerSessionManager.sessionState.value.currentItemId },
+        getCurrentSeriesId = { playerSessionManager.sessionState.value.mediaDetail?.item?.seriesId },
+        scope = scope,
+    )
     private val trackSelectionHelper = TrackSelectionHelper(
         preferencesStore = preferencesStore,
         getEngine = { playerSessionManager.engine },
         getUiState = { _uiState.value },
         updateUiState = { transform -> _uiState.update(transform) },
         getCurrentItemId = { playerSessionManager.sessionState.value.currentItemId },
+        getCurrentSeriesId = { playerSessionManager.sessionState.value.mediaDetail?.item?.seriesId },
+        playbackPreferenceResolver = playbackPreferenceResolver,
         scope = scope,
     )
 
@@ -517,6 +528,12 @@ class VideoPlayerViewModel @Inject constructor(
                 }
                 if (_uiState.value.autoPlayCountdownSec != prefs.autoPlayCountdownSec) {
                     _uiState.update { it.copy(autoPlayCountdownSec = prefs.autoPlayCountdownSec) }
+                }
+                // Default the Subtitle Manager's Search-tab language to the
+                // user's preferred subtitle language (ISO 639-2/3, e.g. "eng").
+                val searchLang = prefs.preferredSubtitleLanguage ?: "eng"
+                if (_uiState.value.defaultSearchLanguage != searchLang) {
+                    _uiState.update { it.copy(defaultSearchLanguage = searchLang) }
                 }
                 if (oldPrefs.volumeBoostEnabled != prefs.volumeBoostEnabled ||
                     oldPrefs.volumeBoostGain != prefs.volumeBoostGain ||
@@ -607,8 +624,11 @@ class VideoPlayerViewModel @Inject constructor(
         }
 
         launch {
+            var lastItemId: String? = null
+            var lastSeriesId: String? = null
             playerSessionManager.sessionState.collect { session ->
                 val itemId = session.currentItemId
+                val seriesId = session.mediaDetail?.item?.seriesId
                 val prefs = cachedPreferences
                 val stored = itemId?.let { prefs.mediaStreamSelections[it] }
                     _uiState.update { state ->
@@ -623,6 +643,27 @@ class VideoPlayerViewModel @Inject constructor(
                             hasSubtitleOverride = stored?.subtitleStreamIndex != null,
                         )
                     }
+                // Re-resolve per-item/series language preference when the
+                // current item or series changes. The cached value feeds
+                // TrackSelectionHelper and the series-pref toggles.
+                if (itemId != lastItemId || seriesId != lastSeriesId) {
+                    lastItemId = itemId
+                    lastSeriesId = seriesId
+                    trackSelectionHelper.refreshPlaybackPreferences()
+                }
+            }
+        }
+
+        // Reflect the resolved per-item/series language preference into UI
+        // state so the track sheets can show the series-pref toggle state.
+        launch {
+            playbackPreferenceResolver.resolved.collect { pref ->
+                _uiState.update {
+                    it.copy(
+                        hasSeriesAudioPref = pref?.scope == PlaybackPrefScope.SERIES && pref.audioLanguage != null,
+                        hasSeriesSubtitlePref = pref?.scope == PlaybackPrefScope.SERIES && pref.subtitleLanguage != null,
+                    )
+                }
             }
         }
 
@@ -1084,6 +1125,48 @@ class VideoPlayerViewModel @Inject constructor(
         trackSelectionHelper.resetSubtitleSelection()
     }
 
+    // --- Per-series playback-language preferences -------------------------------
+    // The headline use case is "remember the audio/subtitle language for this
+    // series". Saving writes a SERIES-scope row, preserving the other language
+    // if already set; deleting clears just the relevant field. The resolver is
+    // refreshed afterwards so the cached value (read by TrackSelectionHelper)
+    // and the sheet toggle state stay in sync.
+
+    /**
+     * Saves/clears a per-series preferred audio language. Pass the language of
+     * the currently-selected audio track to remember it, or null to forget.
+     * No-op when the current item has no series (e.g. a standalone movie).
+     */
+    fun setSeriesAudioLanguagePreference(language: String?) {
+        val seriesId = playerSessionManager.sessionState.value.mediaDetail?.item?.seriesId ?: return
+        launch {
+            itemPlaybackPreferenceRepository.save(
+                scope = PlaybackPrefScope.SERIES,
+                key = seriesId,
+                audioLanguage = language,
+            )
+            trackSelectionHelper.refreshPlaybackPreferences()
+        }
+    }
+
+    /**
+     * Saves/clears a per-series preferred subtitle language. Pass the language
+     * of the currently-selected subtitle track to remember it, or null to
+     * forget. No-op when the current item has no series.
+     */
+    fun setSeriesSubtitleLanguagePreference(language: String?) {
+        val seriesId = playerSessionManager.sessionState.value.mediaDetail?.item?.seriesId ?: return
+        launch {
+            itemPlaybackPreferenceRepository.save(
+                scope = PlaybackPrefScope.SERIES,
+                key = seriesId,
+                subtitleLanguage = language,
+            )
+            trackSelectionHelper.refreshPlaybackPreferences()
+        }
+    }
+    // -----------------------------------------------------------------------
+
     fun setAspectRatio(ratio: AspectRatio) {
         _uiState.update { it.copy(aspectRatio = ratio) }
         if (ratio == AspectRatio.AUTO) {
@@ -1167,7 +1250,7 @@ class VideoPlayerViewModel @Inject constructor(
      * preference (set on mpv/LibVLC) but the active engine can't apply it
      * (e.g. ExoPlayer, see `EngineCapabilities.supportsAudioDelay`). Without
      * this the user gets out-of-sync audio with no explanation after switching
-     * engines (enhancements §4.4).
+     * engines.
      *
      * Only fires when a delay is actually configured, so the common case
      * (delay == 0) stays silent.
@@ -1750,6 +1833,157 @@ class VideoPlayerViewModel @Inject constructor(
         playerSessionManager.addExternalSubtitle(source)
     }
 
+    // region Subtitle Manager — search & upload without leaving playback
+
+    /**
+     * Resets the Subtitle Manager's search/cultures state. Called when the sheet
+     * opens (or the playback item changes) so results from a previous item don't
+     * leak into a new one (H4). Cultures are reloaded on demand since they may
+     * be item-scoped on some servers.
+     */
+    fun resetSubtitleManagerState() {
+        _uiState.update {
+            it.copy(
+                searchedSubtitles = emptyList(),
+                hasSearchedSubtitles = false,
+                isSearchingSubtitles = false,
+                subtitleSearchError = null,
+                subtitleCultures = emptyList(),
+            )
+        }
+    }
+
+    /**
+     * Loads the language cultures the server understands for subtitle
+     * upload/search selection. Idempotent: a no-op once cultures are already
+     * populated for the current item (e.g. across tab switches / reopens).
+     */
+    fun loadSubtitleCultures() {
+        if (_uiState.value.subtitleCultures.isNotEmpty()) return
+        val itemId = playerSessionManager.sessionState.value.currentItemId ?: return
+        launch {
+            playbackRepository.getSubtitleCultures(itemId).fold(
+                onSuccess = { cultures -> _uiState.update { it.copy(subtitleCultures = cultures) } },
+                onFailure = {
+                    // An empty cultures list just yields an empty dropdown;
+                    // users can still type a code manually, so no error toast.
+                    _uiState.update { it.copy(subtitleCultures = emptyList()) }
+                },
+            )
+        }
+    }
+
+    /**
+     * Language-scoped remote subtitle search (OpenSubtitles via the server).
+     * Results populate the Search tab and are kept separate from the Download
+     * tab's server-default list. A failure surfaces as [VideoPlayerUiState.subtitleSearchError]
+     * (distinct from an empty result) so the UI can invite retry rather than
+     * implying "no subtitles exist" (H3).
+     */
+    fun searchRemoteSubtitles(language: String) {
+        val itemId = playerSessionManager.sessionState.value.currentItemId ?: return
+        _uiState.update {
+            it.copy(isSearchingSubtitles = true, hasSearchedSubtitles = false, searchedSubtitles = emptyList(), subtitleSearchError = null)
+        }
+        launch {
+            playbackRepository.searchRemoteSubtitles(itemId, language).fold(
+                onSuccess = { subs ->
+                    _uiState.update {
+                        it.copy(searchedSubtitles = subs, isSearchingSubtitles = false, hasSearchedSubtitles = true, subtitleSearchError = null)
+                    }
+                },
+                onFailure = { e ->
+                    _uiState.update {
+                        it.copy(
+                            isSearchingSubtitles = false,
+                            hasSearchedSubtitles = false,
+                            subtitleSearchError = e.message ?: "Search failed",
+                        )
+                    }
+                },
+            )
+        }
+    }
+
+    /**
+     * Uploads a local subtitle file to the current item, then reloads the
+     * media detail so the new stream appears in the track list — mirroring
+     * [downloadSubtitle]'s refresh and the editor's upload path.
+     *
+     * The file size is checked up front against [MAX_SUBTITLE_UPLOAD_BYTES] (via
+     * OpenableColumns.SIZE) so an oversized pick is rejected before the whole
+     * file — and its ~1.33× Base64 expansion — are loaded into memory. This
+     * matters on low-RAM TV devices where a stray large pick could OOM.
+     */
+    fun uploadSubtitle(uri: Uri, fileName: String, language: String?, isForced: Boolean, isHearingImpaired: Boolean) {
+        val itemId = playerSessionManager.sessionState.value.currentItemId ?: return
+        _uiState.update { it.copy(isUploadingSubtitle = true) }
+        launch {
+            val result = runCatching {
+                withContext(Dispatchers.IO) {
+                    val size = queryFileSizeBytes(uri)
+                    if (size in 1..MAX_SUBTITLE_UPLOAD_BYTES) {
+                        // Expected path: a real subtitle file well under the cap.
+                        readAndEncode(uri)
+                    } else if (size > MAX_SUBTITLE_UPLOAD_BYTES) {
+                        throw java.io.IOException("Subtitle file is too large (${size / 1024} KB). Limit is ${MAX_SUBTITLE_UPLOAD_BYTES / 1024} KB.")
+                    } else {
+                        // SIZE unknown (some providers return 0 or null) — allow the
+                        // read but it will still be bounded by a real subtitle's size.
+                        readAndEncode(uri)
+                    }
+                }
+            }.mapCatching { base64 ->
+                playbackRepository.uploadSubtitle(itemId, base64, fileName, language, isForced, isHearingImpaired).getOrThrow()
+            }
+            _uiState.update { it.copy(isUploadingSubtitle = false) }
+            result.onSuccess {
+                // Refresh media detail so the uploaded track surfaces in the
+                // subtitle track list — same approach as downloadSubtitle().
+                mediaRepository.getMediaDetail(itemId).getOrNull()?.let { detail ->
+                    applyMediaDetail(detail)
+                    val source = detail.mediaSources.firstOrNull()
+                    val streams = source?.mediaStreams ?: emptyList()
+                    _uiState.update { it.copy(
+                        currentMediaSource = source,
+                        mediaStreams = streams,
+                        detectedAspectRatio = detectAspectRatio(streams),
+                    ) }
+                }
+                userMessageBus.info("Subtitle uploaded")
+            }.onFailure { e ->
+                userMessageBus.error(e.message ?: "Failed to upload subtitle")
+            }
+        }
+    }
+
+    /**
+     * Subtitle upload size cap (2 MB). Real subtitle files are tens of KB at
+     * most; this comfortably rejects a mis-selected large asset while not
+     * blocking any legitimate subtitle. See [uploadSubtitle].
+     */
+    private val MAX_SUBTITLE_UPLOAD_BYTES = 2L * 1024 * 1024
+
+    /** Returns the byte size of [uri] via OpenableColumns.SIZE, or 0 if unknown. */
+    private fun queryFileSizeBytes(uri: Uri): Long {
+        val cursor = context.contentResolver.query(uri, arrayOf(android.provider.OpenableColumns.SIZE), null, null, null)
+            ?: return 0
+        return cursor.use {
+            if (!it.moveToFirst()) return 0
+            val idx = it.getColumnIndex(android.provider.OpenableColumns.SIZE)
+            if (idx < 0) 0 else it.getLong(idx)
+        }
+    }
+
+    /** Reads [uri] fully and Base64-encodes it (NO_WRAP). Throws on read failure. */
+    private fun readAndEncode(uri: Uri): String {
+        val bytes = context.contentResolver.openInputStream(uri)?.use { it.readBytes() }
+            ?: throw java.io.IOException("Cannot open input stream for selected subtitle")
+        return android.util.Base64.encodeToString(bytes, android.util.Base64.NO_WRAP)
+    }
+
+    // endregion
+
     fun joinSyncPlay(groupId: String) {
         syncPlayBridge.joinGroup(groupId)
     }
@@ -1845,7 +2079,7 @@ class VideoPlayerViewModel @Inject constructor(
             .setSubtitleConfigurations(subtitleConfigs)
             .build()
         // Carry the active track + quality selections into the cast session so
-        // the handoff does not silently drop audio/subtitle/quality (§4.5).
+        // the handoff does not silently drop audio/subtitle/quality.
         castManager.loadMedia(mediaItem, positionMs, object : Player.Listener {}, buildCastOptions(sourceId))
         engine.pause()
     }
