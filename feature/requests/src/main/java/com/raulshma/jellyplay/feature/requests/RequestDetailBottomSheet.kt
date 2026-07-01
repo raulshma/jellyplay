@@ -12,7 +12,6 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -134,7 +133,7 @@ fun RequestDetailBottomSheet(
                 Box(
                     modifier = Modifier
                         .size(width = 72.dp, height = 108.dp)
-                        .clip(RoundedCornerShape(10.dp))
+                        .clip(ShapeCache.smooth10)
                         .background(colorScheme.onSurface.copy(alpha = 0.1f)),
                     contentAlignment = Alignment.Center,
                 ) {
@@ -258,12 +257,12 @@ fun RequestDetailBottomSheet(
                                 shape = ShapeCache.smooth12,
                                 colors = ButtonDefaults.buttonColors(
                                     containerColor = StatusColors.info,
-                                    contentColor = Color.White,
+                                    contentColor = MaterialTheme.colorScheme.onSecondaryContainer,
                                 ),
                             ) {
                                 Icon(Tabler.Outline.Refresh, contentDescription = null, modifier = Modifier.size(18.dp))
                                 Spacer(Modifier.width(6.dp))
-                                Text("Retry Request", fontWeight = FontWeight.Bold)
+                                Text("Retry Request", style = MaterialTheme.typography.labelLarge)
                             }
                         }
                         requestStatus == SeerrRequestStatus.PENDING -> {
@@ -279,12 +278,12 @@ fun RequestDetailBottomSheet(
                                     shape = ShapeCache.smooth12,
                                     colors = ButtonDefaults.buttonColors(
                                         containerColor = StatusColors.available,
-                                        contentColor = Color.White,
+                                        contentColor = MaterialTheme.colorScheme.onPrimary,
                                     ),
                                 ) {
                                     Icon(Tabler.Outline.Check, contentDescription = null, modifier = Modifier.size(18.dp))
                                     Spacer(Modifier.width(6.dp))
-                                    Text("Approve", fontWeight = FontWeight.Bold)
+                                    Text("Approve", style = MaterialTheme.typography.labelLarge)
                                 }
                                 Button(
                                     onClick = onDecline,
@@ -294,12 +293,12 @@ fun RequestDetailBottomSheet(
                                     shape = ShapeCache.smooth12,
                                     colors = ButtonDefaults.buttonColors(
                                         containerColor = StatusColors.error,
-                                        contentColor = Color.White,
+                                        contentColor = MaterialTheme.colorScheme.onError,
                                     ),
                                 ) {
                                     Icon(Tabler.Outline.X, contentDescription = null, modifier = Modifier.size(18.dp))
                                     Spacer(Modifier.width(6.dp))
-                                    Text("Decline", fontWeight = FontWeight.Bold)
+                                    Text("Decline", style = MaterialTheme.typography.labelLarge)
                                 }
                             }
                         }

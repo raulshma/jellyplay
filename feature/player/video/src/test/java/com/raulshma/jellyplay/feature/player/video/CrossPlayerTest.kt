@@ -2,6 +2,7 @@ package com.raulshma.jellyplay.feature.player.video
 
 import com.raulshma.jellyplay.core.model.PlayerType
 import com.raulshma.jellyplay.feature.player.video.engine.EngineCapabilities
+import com.raulshma.jellyplay.feature.player.video.engine.EngineCapabilityMatrix
 import com.raulshma.jellyplay.feature.player.video.engine.MediaTrack
 import com.raulshma.jellyplay.core.model.TrackType
 import org.junit.Assert.assertEquals
@@ -138,9 +139,9 @@ class EngineCapabilitiesCrossPlayerTest {
     }
 
     @Test
-    fun mpvCapabilities_cuesNotSupported() {
+    fun mpvCapabilities_cuesSupported() {
         val caps = getCapabilitiesForType(PlayerType.MPV)
-        assertFalse(caps.supportsCues)
+        assertTrue(caps.supportsCues)
     }
 
     @Test
@@ -189,7 +190,9 @@ class EngineCapabilitiesCrossPlayerTest {
         assertEquals(mpvCaps.supportsSubtitleStyle, vlcCaps.supportsSubtitleStyle)
         assertEquals(mpvCaps.supportsDialogueBoost, vlcCaps.supportsDialogueBoost)
         assertEquals(mpvCaps.supportsNightMode, vlcCaps.supportsNightMode)
-        assertEquals(mpvCaps.supportsCues, vlcCaps.supportsCues)
+        assertEquals(mpvCaps.supportsVideoFilters, vlcCaps.supportsVideoFilters)
+        // Note: cues intentionally differ — MPV publishes cue text, VLC does not.
+        assertFalse(mpvCaps.supportsCues == vlcCaps.supportsCues)
     }
 
     @Test
@@ -199,48 +202,12 @@ class EngineCapabilitiesCrossPlayerTest {
 
         assertFalse(exoCaps.supportsAudioDelay == mpvCaps.supportsAudioDelay)
         assertFalse(exoCaps.supportsAudioPassthrough == mpvCaps.supportsAudioPassthrough)
-        assertFalse(exoCaps.supportsCues == mpvCaps.supportsCues)
+        assertFalse(exoCaps.supportsVideoFilters == mpvCaps.supportsVideoFilters)
         assertTrue(exoCaps.supportsNightMode == mpvCaps.supportsNightMode)
     }
 
-    private fun getCapabilitiesForType(playerType: PlayerType): EngineCapabilities {
-        return when (playerType) {
-            PlayerType.EXO_PLAYER -> EngineCapabilities(
-                supportsPip = true,
-                supportsMiniMode = true,
-                supportsCues = true,
-                supportsAudioDelay = false,
-                supportsSubtitleDelay = true,
-                supportsAudioPassthrough = false,
-                supportsSubtitleStyle = true,
-                supportsDialogueBoost = true,
-                supportsNightMode = true,
-            )
-            PlayerType.MPV -> EngineCapabilities(
-                supportsPip = true,
-                supportsMiniMode = false,
-                supportsCues = false,
-                supportsAudioDelay = true,
-                supportsSubtitleDelay = true,
-                supportsAudioPassthrough = true,
-                supportsSubtitleStyle = true,
-                supportsDialogueBoost = true,
-                supportsNightMode = true,
-            )
-            PlayerType.LIBVLC -> EngineCapabilities(
-                supportsPip = true,
-                supportsMiniMode = false,
-                supportsCues = false,
-                supportsAudioDelay = true,
-                supportsSubtitleDelay = true,
-                supportsAudioPassthrough = true,
-                supportsSubtitleStyle = true,
-                supportsDialogueBoost = true,
-                supportsNightMode = true,
-            )
-            PlayerType.EXTERNAL -> EngineCapabilities()
-        }
-    }
+    private fun getCapabilitiesForType(playerType: PlayerType): EngineCapabilities =
+        EngineCapabilityMatrix.forType(playerType)
 }
 
 class MediaTrackContractTest {

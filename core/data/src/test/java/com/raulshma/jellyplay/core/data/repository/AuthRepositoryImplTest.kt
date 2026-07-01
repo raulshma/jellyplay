@@ -275,7 +275,7 @@ class AuthRepositoryImplTest {
     }
 
     // ------------------------------------------------------------------
-    // Multi-address management (feature #2)
+    // Multi-address management
     // ------------------------------------------------------------------
 
     private val altAddress = "https://192.168.1.100:8096"

@@ -7,10 +7,9 @@ import androidx.work.NetworkType
 import androidx.work.PeriodicWorkRequestBuilder
 import androidx.work.WorkManager
 import com.raulshma.jellyplay.core.datastore.UserPreferencesStore
+import com.raulshma.jellyplay.core.datastore.di.ApplicationScope
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import java.time.Duration
@@ -28,20 +27,24 @@ import javax.inject.Singleton
 class AutoDownloadScheduler @Inject constructor(
     @ApplicationContext private val context: Context,
     private val preferencesStore: UserPreferencesStore,
+    @ApplicationScope private val applicationScope: CoroutineScope,
 ) {
     companion object {
         private val CHECK_INTERVAL: Duration = Duration.ofHours(6)
         private val CHECK_FLEX: Duration = Duration.ofHours(1)
     }
 
-    private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
-
     /**
      * Reads the current preference and either enqueues or cancels the
      * periodic auto-download work. Safe to call repeatedly (KEEP policy).
+     *
+     * Runs on the injected [applicationScope]'s dispatcher: the preference
+     * read and WorkManager enqueue are non-blocking (DataStore manages its own
+     * IO internally), so no explicit dispatcher hop is needed. This keeps the
+     * scope fully replaceable for tests.
      */
     fun sync() {
-        scope.launch {
+        applicationScope.launch {
             val enabled = preferencesStore.preferences.first().autoDownloadNewEpisodes
             if (enabled) {
                 enqueue()
@@ -59,6 +62,7 @@ class AutoDownloadScheduler @Inject constructor(
 
         val request = PeriodicWorkRequestBuilder<AutoDownloadWorker>(CHECK_INTERVAL, CHECK_FLEX)
             .setConstraints(constraints)
+            .addTag(AutoDownloadWorker.WORK_TAG)
             .build()
 
         WorkManager.getInstance(context).enqueueUniquePeriodicWork(

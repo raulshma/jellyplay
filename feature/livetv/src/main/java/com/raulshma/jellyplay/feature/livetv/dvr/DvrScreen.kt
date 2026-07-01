@@ -22,6 +22,8 @@ import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.foundation.clickable
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.TextButton
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -54,6 +56,9 @@ import com.raulshma.jellyplay.core.ui.tv.tvFocusRestorer
 import com.raulshma.jellyplay.core.ui.tv.TvGrabInitialFocus
 import com.raulshma.jellyplay.core.ui.tv.tryRequestFocus
 import com.composables.icons.tabler.outline.*
+import java.time.OffsetDateTime
+import java.time.format.DateTimeFormatter
+import java.time.format.DateTimeParseException
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -138,6 +143,7 @@ fun DvrScreen(
                             SeriesTimerCard(
                                 timer = timer,
                                 onCancel = { viewModel.cancelSeriesTimer(it) },
+                                onClick = { viewModel.showSeriesTimerDetail(timer) },
                             )
                         }
                         item {
@@ -165,6 +171,7 @@ fun DvrScreen(
                             TimerCard(
                                 timer = timer,
                                 onCancel = { viewModel.cancelTimer(it) },
+                                onClick = { viewModel.showTimerDetail(timer) },
                             )
                         }
                     }
@@ -172,12 +179,134 @@ fun DvrScreen(
             }
         }
     }
+
+    viewModel.detail?.let { state ->
+        when (state) {
+            is DvrDetailState.Timer -> TimerDetailDialog(
+                timer = state.timer,
+                onDismiss = { viewModel.dismissDetail() },
+                onCancel = { viewModel.cancelTimer(state.timer.id) },
+            )
+            is DvrDetailState.SeriesTimer -> SeriesTimerDetailDialog(
+                timer = state.timer,
+                onDismiss = { viewModel.dismissDetail() },
+                onCancel = { viewModel.cancelSeriesTimer(state.timer.id) },
+            )
+        }
+    }
 }
+
+@Composable
+private fun TimerDetailDialog(
+    timer: DvrTimer,
+    onDismiss: () -> Unit,
+    onCancel: () -> Unit,
+) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text(timer.programName) },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                timer.channelName.takeIf { it.isNotBlank() }?.let {
+                    Text(it, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                }
+                val window = formatRecordingWindow(timer.startDate, timer.endDate)
+                if (window != null) {
+                    Text(window, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                }
+                Text(
+                    "Status: ${timer.status.name.lowercase().replaceFirstChar { it.uppercase() }}",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                if (timer.prePaddingSeconds > 0 || timer.postPaddingSeconds > 0) {
+                    Text(
+                        "Padding: ${timer.prePaddingSeconds / 60}m pre · ${timer.postPaddingSeconds / 60}m post",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+            }
+        },
+        confirmButton = {
+            TextButton(
+                onClick = onCancel,
+                enabled = timer.status !in setOf(DvrTimerStatus.COMPLETED, DvrTimerStatus.CANCELLED),
+            ) { Text("Cancel recording", color = MaterialTheme.colorScheme.error) }
+        },
+        dismissButton = { TextButton(onClick = onDismiss) { Text("Close") } },
+    )
+}
+
+@Composable
+private fun SeriesTimerDetailDialog(
+    timer: DvrSeriesTimer,
+    onDismiss: () -> Unit,
+    onCancel: () -> Unit,
+) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text(timer.name) },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                timer.channelName?.takeIf { it.isNotBlank() }?.let {
+                    Text(it, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                }
+                Text(
+                    "Channel: ${if (timer.recordAnyChannel) "Any" else (timer.channelName ?: "—")}",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                if (timer.days.isNotEmpty()) {
+                    Text(
+                        "Days: ${timer.days.joinToString()}",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+                if (timer.keepUpTo > 0) {
+                    Text(
+                        "Keep up to: ${timer.keepUpTo} episode${if (timer.keepUpTo == 1) "" else "s"}",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+            }
+        },
+        confirmButton = {
+            TextButton(onClick = onCancel) { Text("Cancel series", color = MaterialTheme.colorScheme.error) }
+        },
+        dismissButton = { TextButton(onClick = onDismiss) { Text("Close") } },
+    )
+}
+
+/**
+ * Formats a recording start–end window from ISO-8601 strings using a real date-time
+ * parser instead of fragile substring surgery. Returns null when neither date parses.
+ */
+private fun formatRecordingWindow(startDate: String?, endDate: String?): String? {
+    val fmt = DateTimeFormatter.ofPattern("MMM d, HH:mm")
+    val start = startDate?.let { parseIso(it) }
+    val end = endDate?.let { parseIso(it) }
+    return when {
+        start != null && end != null -> "${start.format(fmt)} – ${end.format(fmt)}"
+        start != null -> "Starts ${start.format(fmt)}"
+        end != null -> "Ends ${end.format(fmt)}"
+        else -> null
+    }
+}
+
+private fun parseIso(iso: String): OffsetDateTime? = runCatching { OffsetDateTime.parse(iso) }
+    .recoverCatching {
+        OffsetDateTime.parse(iso.replace(" ", "T"))
+    }
+    .getOrNull()
 
 @Composable
 private fun TimerCard(
     timer: DvrTimer,
     onCancel: (String) -> Unit,
+    onClick: () -> Unit,
 ) {
     Row(
         modifier = Modifier
@@ -185,7 +314,7 @@ private fun TimerCard(
             .clip(ShapeCache.smooth16)
             .background(MaterialTheme.colorScheme.onSurface.copy(alpha = 0.05f))
             .focusIndicator()
-            .clickable { }
+            .clickable(onClick = onClick)
             .padding(horizontal = 16.dp, vertical = 14.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
@@ -232,14 +361,8 @@ private fun TimerCard(
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
-            val timeText = buildString {
-                timer.startDate?.let { append(it.substringBefore('T')) }
-                timer.startDate?.let { append(" ") }
-                timer.startDate?.let { append(it.substringAfter('T', "").substringBefore('+').substringBefore('Z')) }
-                append(" - ")
-                timer.endDate?.let { append(it.substringAfter('T', "").substringBefore('+').substringBefore('Z')) }
-            }
-            if (timeText.length > 3) {
+            val timeText = formatRecordingWindow(timer.startDate, timer.endDate)
+            if (timeText != null) {
                 Spacer(Modifier.height(2.dp))
                 Text(
                     text = timeText,
@@ -278,6 +401,7 @@ private fun TimerCard(
 private fun SeriesTimerCard(
     timer: DvrSeriesTimer,
     onCancel: (String) -> Unit,
+    onClick: () -> Unit,
 ) {
     Row(
         modifier = Modifier
@@ -285,7 +409,7 @@ private fun SeriesTimerCard(
             .clip(ShapeCache.smooth16)
             .background(MaterialTheme.colorScheme.onSurface.copy(alpha = 0.05f))
             .focusIndicator()
-            .clickable { }
+            .clickable(onClick = onClick)
             .padding(horizontal = 16.dp, vertical = 14.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {

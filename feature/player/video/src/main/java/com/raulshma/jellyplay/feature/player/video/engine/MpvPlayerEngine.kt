@@ -75,23 +75,7 @@ class MpvPlayerEngine(
     // silently never emit). Recreated lazily, only when inactive.
     private var engineScope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
 
-    override val capabilities = EngineCapabilities(
-        supportsPip = true,
-        supportsMiniMode = false,
-        supportsCues = true,
-        supportsAudioDelay = true,
-        supportsSubtitleDelay = true,
-        supportsAudioPassthrough = true,
-        supportsSubtitleStyle = true,
-        supportsSubtitleVerticalPosition = true,
-        supportsDialogueBoost = true,
-        supportsNightMode = true,
-        supportsAudioNormalization = true,
-        supportsChannelMixing = true,
-        supportsVideoFilters = true,
-        supportsLiveQualitySwitch = false,
-        supportsBandwidthEstimate = false,
-    )
+    override val capabilities = EngineCapabilityMatrix.MPV
 
     private val _playbackState = MutableStateFlow(EnginePlaybackState.IDLE)
     override val playbackState: StateFlow<EnginePlaybackState> = _playbackState.asStateFlow()

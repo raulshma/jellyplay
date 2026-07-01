@@ -143,6 +143,9 @@ class DownloadRepositoryImpl @Inject constructor(
                 ?: File(context.filesDir, if (isAudioType) "downloads/music" else "downloads")
         }
         val downloadDir = baseDir
+        if (!downloadDir.exists()) {
+            downloadDir.mkdirs()
+        }
         val statFs = android.os.StatFs(downloadDir.absolutePath)
         val availableBytes = statFs.availableBlocksLong * statFs.blockSizeLong
         if (availableBytes < 100L * 1024 * 1024) {
@@ -151,7 +154,6 @@ class DownloadRepositoryImpl @Inject constructor(
 
         val id = UUID.randomUUID().toString()
         val dir = baseDir
-        if (!dir.exists()) dir.mkdirs()
         val safeName = name.replace(FILENAME_SANITIZE_REGEX, "_")
         val extension = if (isAudioType) "mp3" else "mp4"
         val filePath = File(dir, "${safeName}_${id.take(8)}.$extension").absolutePath
@@ -633,6 +635,7 @@ class DownloadRepositoryImpl @Inject constructor(
                     .putString(DownloadWorker.KEY_DOWNLOAD_ID, downloadId)
                     .build()
             )
+            .addTag(DownloadWorker.WORK_TAG)
         if (initialDelayMs > 0) {
             workRequestBuilder.setInitialDelay(initialDelayMs, java.util.concurrent.TimeUnit.MILLISECONDS)
         }

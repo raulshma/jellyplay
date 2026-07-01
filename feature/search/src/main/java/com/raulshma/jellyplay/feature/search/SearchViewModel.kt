@@ -134,7 +134,6 @@ class SearchViewModel @Inject constructor(
             } else {
                 seerrSearchJob = launch { searchSeerr(currentQuery) }
                 launch { searchOffline(currentQuery) }
-                launch { saveQueryIfNeeded(currentQuery, true) }
                 mediaRepository.searchPaged(
                     query = currentQuery,
                     mediaTypes = filters.mediaTypes.ifEmpty { null },
@@ -259,15 +258,24 @@ class SearchViewModel @Inject constructor(
         }
     }
 
-    private suspend fun saveQueryIfNeeded(query: String, hasResults: Boolean) {
+    /**
+     * Called by the UI once the paged search confirms a non-empty result set for
+     * [query] (refresh finished with ≥1 item). This defers persisting the query
+     * to "Recent Searches" until we know it actually matched something, so a
+     * typo with zero hits never pollutes history.
+     */
+    fun onSearchResultsShown(query: String) {
+        if (query.isBlank()) return
+        launch { saveQueryIfNeeded(query) }
+    }
+
+    private suspend fun saveQueryIfNeeded(query: String) {
         if (query.trim().length < 2) return
         // Skip persistence entirely when the user has hidden search history —
         // avoids surfacing past queries the moment they re-enable the setting.
         if (hideSearchHistoryPref.value) return
         val userId = preferencesStore.activeUserId.first() ?: return
-        if (hasResults) {
-            searchHistoryRepository.saveQuery(query, userId)
-        }
+        searchHistoryRepository.saveQuery(query, userId)
     }
 
     fun getImageUrl(itemId: String): String =

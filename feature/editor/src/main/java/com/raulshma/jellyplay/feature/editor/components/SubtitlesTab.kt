@@ -165,8 +165,8 @@ fun SubtitlesTab(
         SubtitleUploadSheet(
             cultures = state.editorInfo?.cultures ?: emptyList(),
             onDismiss = { showUploadSheet = false },
-            onUpload = { bytes, fileName, language, isForced, isHearingImpaired ->
-                viewModel.uploadSubtitle(bytes, fileName, language, isForced, isHearingImpaired)
+            onUploadUri = { uri, fileName, language, isForced, isHearingImpaired ->
+                viewModel.uploadSubtitleFromUri(uri, fileName, language, isForced, isHearingImpaired)
                 showUploadSheet = false
             },
         )
@@ -188,7 +188,7 @@ fun SubtitlesTab(
 private fun SubtitleUploadSheet(
     cultures: List<com.raulshma.jellyplay.core.model.CultureInfo>,
     onDismiss: () -> Unit,
-    onUpload: (ByteArray, String, String?, Boolean, Boolean) -> Unit,
+    onUploadUri: (Uri, String, String?, Boolean, Boolean) -> Unit,
 ) {
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
     var selectedLanguage by remember { mutableStateOf("") }
@@ -264,7 +264,7 @@ private fun SubtitleUploadSheet(
             androidx.compose.material3.Button(
                 onClick = {
                     selectedFile?.let { uri ->
-                        TODO("Read bytes from URI in activity context - handled by parent")
+                        onUploadUri(uri, selectedFileName, selectedLanguage, isForced, isHearingImpaired)
                     }
                 },
                 modifier = Modifier.fillMaxWidth(),

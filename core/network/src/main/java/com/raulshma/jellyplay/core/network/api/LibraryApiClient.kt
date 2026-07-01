@@ -61,6 +61,14 @@ interface LibraryApiClient {
         startIndex: Int = 0,
     ): Result<SearchResult>
 
+    /**
+     * Resolves a library item by a provider (external) id, e.g. `tmdb`, `tvdb`,
+     * or `imdb`. Uses Jellyfin's `AnyProviderId` filter ("tmdb:123"). Returns the
+     * first matching Jellyfin item id, or null when no match exists. Used to open
+     * a Seerr "Available" item directly in the library.
+     */
+    suspend fun findItemByProviderId(provider: String, id: String): Result<String?>
+
     suspend fun getGenres(
         parentId: String? = null,
         startIndex: Int = 0,

@@ -64,6 +64,13 @@ interface MediaRepository : LiveTvRepository, SyncPlayRepository, NewsletterRepo
         startIndex: Int = 0,
     ): Result<SearchResult>
 
+    /**
+     * Resolves a library item id by provider (external) id such as `tmdb`, `tvdb`,
+     * or `imdb`. Returns the matching Jellyfin item id, or null when no item has
+     * that provider id. Used to open a Seerr "Available" item in the library.
+     */
+    suspend fun findItemByProviderId(provider: String, id: String): Result<String?>
+
     fun getMediaItemsPaged(
         parentId: String? = null,
         mediaTypes: List<MediaType>? = null,

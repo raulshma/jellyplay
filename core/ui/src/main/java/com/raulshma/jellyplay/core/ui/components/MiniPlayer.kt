@@ -154,7 +154,7 @@ fun MiniPlayer(
 
         val shape = when (themeVariant) {
             com.raulshma.jellyplay.core.designsystem.theme.ThemeVariant.SOOTHING -> ShapeCache.smooth16
-            com.raulshma.jellyplay.core.designsystem.theme.ThemeVariant.MONOCHROME -> androidx.compose.foundation.shape.RoundedCornerShape(16.dp)
+            com.raulshma.jellyplay.core.designsystem.theme.ThemeVariant.MONOCHROME -> ShapeCache.smooth16
             else -> ShapeCache.smoothPill
         }
 

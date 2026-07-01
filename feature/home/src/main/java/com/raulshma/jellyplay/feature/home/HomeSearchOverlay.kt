@@ -20,7 +20,6 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
@@ -130,8 +129,8 @@ fun HomeSearchResultsOverlay(
                                 color = MaterialTheme.colorScheme.primary,
                                 modifier = Modifier
                                     .then(clearAllFocusState.focusModifier)
-                                    .tvFocusIndicator(clearAllFocusState, RoundedCornerShape(8.dp))
-                                    .clip(RoundedCornerShape(8.dp))
+                                    .tvFocusIndicator(clearAllFocusState, ShapeCache.smooth8)
+                                    .clip(ShapeCache.smooth8)
                                     .clickable { onClearHistory() }
                                     .padding(horizontal = 8.dp, vertical = 4.dp),
                             )
@@ -196,8 +195,8 @@ fun HomeSearchResultsOverlay(
                             Box(
                                 modifier = Modifier
                                     .then(deleteFocusState.focusModifier)
-                                    .tvFocusIndicator(deleteFocusState, RoundedCornerShape(8.dp))
-                                    .clip(RoundedCornerShape(8.dp))
+                                    .tvFocusIndicator(deleteFocusState, ShapeCache.smooth8)
+                                    .clip(ShapeCache.smooth8)
                                     .background(deleteBgColor)
                                     .clickable { onDeleteHistoryItem(historyItem.id) }
                                     .padding(8.dp),

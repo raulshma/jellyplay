@@ -81,6 +81,7 @@ import com.composables.icons.tabler.outline.PlayerPlay
 import com.composables.icons.tabler.outline.Share
 import com.raulshma.jellyplay.core.data.repository.DailyWatchActivity
 import com.raulshma.jellyplay.core.data.repository.HeatmapFilter
+import com.raulshma.jellyplay.core.designsystem.theme.ShapeCache
 import com.raulshma.jellyplay.core.designsystem.theme.isLightColor
 import com.raulshma.jellyplay.core.ui.adaptive.LocalAdaptiveInfo
 import com.raulshma.jellyplay.core.ui.adaptive.WindowSizeClass
@@ -233,7 +234,7 @@ fun WatchProgressHeatmapScreen(
                     if (!state.isPluginAvailable) {
                         Surface(
                             modifier = Modifier.fillMaxWidth(),
-                            shape = RoundedCornerShape(8.dp),
+                            shape = ShapeCache.smooth8,
                             color = MaterialTheme.colorScheme.errorContainer,
                         ) {
                             Text(
@@ -291,7 +292,7 @@ fun WatchProgressHeatmapScreen(
                         if (!state.isPluginAvailable) {
                             Surface(
                                 modifier = Modifier.fillMaxWidth(),
-                                shape = RoundedCornerShape(8.dp),
+                                shape = ShapeCache.smooth8,
                                 color = MaterialTheme.colorScheme.errorContainer,
                             ) {
                                 Text(
@@ -391,7 +392,7 @@ private fun StreakStats(
 ) {
     Surface(
         modifier = modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(12.dp),
+        shape = ShapeCache.smooth12,
         color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f),
         border = androidx.compose.foundation.BorderStroke(
             1.dp,
@@ -811,7 +812,7 @@ private fun DayDetailSheet(
                     verticalAlignment = Alignment.CenterVertically,
                     modifier = Modifier
                         .fillMaxWidth()
-                        .clip(RoundedCornerShape(8.dp))
+                        .clip(ShapeCache.smooth8)
                         .clickable { onItemClick(itemId) }
                         .padding(vertical = 6.dp),
                 ) {
@@ -824,13 +825,13 @@ private fun DayDetailSheet(
                             placeholderIcon = Tabler.Outline.Photo,
                             modifier = Modifier
                                 .size(40.dp)
-                                .clip(RoundedCornerShape(4.dp)),
+                                .clip(ShapeCache.smooth4),
                         )
                         Spacer(Modifier.width(12.dp))
                     } else {
                         Surface(
                             modifier = Modifier.size(40.dp),
-                            shape = RoundedCornerShape(4.dp),
+                            shape = ShapeCache.smooth4,
                             color = MaterialTheme.colorScheme.surfaceContainerHigh,
                         ) {
                             Box(contentAlignment = Alignment.Center) {

@@ -252,6 +252,9 @@ class MediaRepositoryImpl @Inject constructor(
         }
     }
 
+    override suspend fun findItemByProviderId(provider: String, id: String): Result<String?> =
+        apiClient.findItemByProviderId(provider, id)
+
     override fun getMediaItemsPaged(
         parentId: String?,
         mediaTypes: List<MediaType>?,
@@ -671,6 +674,9 @@ class MediaRepositoryImpl @Inject constructor(
 
     override suspend fun cancelTimer(timerId: String): Result<Unit> =
         apiClient.cancelTimer(timerId)
+
+    override suspend fun cancelSeriesTimer(seriesTimerId: String): Result<Unit> =
+        apiClient.cancelSeriesTimer(seriesTimerId)
 
     private suspend fun cacheLyrics(
         itemId: String,

@@ -152,6 +152,19 @@ fun SearchScreen(
     val isRefreshing = pagedResults.loadState.refresh is LoadState.Loading
     val networkStatus by com.raulshma.jellyplay.core.ui.components.LocalNetworkStatus.current.collectAsStateWithLifecycle()
 
+    // Only persist the query to "Recent Searches" once the pager confirms a
+    // non-empty result set for it. This prevents typo'd queries (zero matches)
+    // from polluting search history. Keys on refresh state + item count so it
+    // re-evaluates whenever a new search settles.
+    val refreshLoadState = pagedResults.loadState.refresh
+    val pagedItemCount = pagedResults.itemCount
+    androidx.compose.runtime.LaunchedEffect(refreshLoadState, pagedItemCount, query) {
+        val settled = refreshLoadState is LoadState.NotLoading && pagedItemCount > 0
+        if (settled && query.isNotBlank()) {
+            viewModel.onSearchResultsShown(query)
+        }
+    }
+
     val headerStatus = com.raulshma.jellyplay.core.ui.components.resolveHeaderStatus(
         isLoading = isRefreshing,
         hasError = false,
