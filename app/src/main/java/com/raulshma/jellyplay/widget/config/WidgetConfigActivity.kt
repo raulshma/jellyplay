@@ -45,6 +45,7 @@ import com.raulshma.jellyplay.widget.SeerrRecommendationsWidget
 import com.raulshma.jellyplay.widget.WidgetWorkScheduler
 import dagger.hilt.android.AndroidEntryPoint
 import kotlinx.coroutines.launch
+import javax.inject.Inject
 
 /**
  * Configuration activity for the Library Recommendations widget. The
@@ -54,6 +55,8 @@ import kotlinx.coroutines.launch
  */
 @AndroidEntryPoint
 class LibraryWidgetConfigActivity : ComponentActivity() {
+
+    @Inject lateinit var widgetWorkScheduler: WidgetWorkScheduler
 
     private val viewModel: WidgetConfigViewModel by viewModels()
     private var widgetId: Int = AppWidgetManager.INVALID_APPWIDGET_ID
@@ -90,7 +93,7 @@ class LibraryWidgetConfigActivity : ComponentActivity() {
             val manager = AppWidgetManager.getInstance(this@LibraryWidgetConfigActivity)
             LibraryRecommendationsWidget.updateAppWidget(this@LibraryWidgetConfigActivity, manager, widgetId)
             manager.notifyAppWidgetViewDataChanged(widgetId, R.id.lr_widget_grid)
-            WidgetWorkScheduler.refreshLibraryNow(applicationContext)
+            widgetWorkScheduler.refreshLibraryNow()
             finish()
         }
     }
@@ -101,6 +104,8 @@ class LibraryWidgetConfigActivity : ComponentActivity() {
  */
 @AndroidEntryPoint
 class SeerrWidgetConfigActivity : ComponentActivity() {
+
+    @Inject lateinit var widgetWorkScheduler: WidgetWorkScheduler
 
     private val viewModel: WidgetConfigViewModel by viewModels()
     private var widgetId: Int = AppWidgetManager.INVALID_APPWIDGET_ID
@@ -137,7 +142,7 @@ class SeerrWidgetConfigActivity : ComponentActivity() {
             val manager = AppWidgetManager.getInstance(this@SeerrWidgetConfigActivity)
             SeerrRecommendationsWidget.updateAppWidget(this@SeerrWidgetConfigActivity, manager, widgetId)
             manager.notifyAppWidgetViewDataChanged(widgetId, R.id.sr_widget_grid)
-            WidgetWorkScheduler.refreshSeerrNow(applicationContext)
+            widgetWorkScheduler.refreshSeerrNow()
             finish()
         }
     }

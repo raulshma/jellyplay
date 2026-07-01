@@ -55,7 +55,7 @@ class UserDataSyncWorker @AssistedInject constructor(
             onFailure = { error ->
                 // Report failure after exhausting retries so WorkManager
                 // observability surfaces persistent problems. The next
-                // periodic run (12 h, UserDataSyncScheduler.SYNC_INTERVAL)
+                // periodic run (12 h, UserDataSyncSchedulerImpl.SYNC_INTERVAL)
                 // still fires and will try again. Previously this returned
                 // Result.success() after MAX_RETRIES, hiding persistent
                 // failures from operators.
@@ -71,6 +71,7 @@ class UserDataSyncWorker @AssistedInject constructor(
 
     companion object {
         const val UNIQUE_PERIODIC_NAME = "com.raulshma.jellyplay.work.user_data_sync"
+        const val WORK_TAG = "sync"
         private const val TAG = "UserDataSyncWorker"
         private const val MAX_RETRIES = 3
     }

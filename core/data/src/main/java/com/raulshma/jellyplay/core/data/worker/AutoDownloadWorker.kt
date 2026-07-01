@@ -1,6 +1,7 @@
 package com.raulshma.jellyplay.core.data.worker
 
 import android.content.Context
+import android.util.Log
 import androidx.hilt.work.HiltWorker
 import androidx.work.CoroutineWorker
 import androidx.work.WorkerParameters
@@ -17,6 +18,12 @@ import kotlinx.coroutines.flow.firstOrNull
  * [com.raulshma.jellyplay.core.model.UserPreferences.autoDownloadNewEpisodes]
  * preference is enabled. The worker respects the WiFi-only and storage-limit
  * constraints enforced inside [DownloadRepository].
+ *
+ * Failures are observable: a per-series fetch error does not abort the run
+ * (partial success is preserved via `getOrElse`), but it is recorded so the
+ * worker can escalate retry → failure after [MAX_RETRIES]. Previously this
+ * worker returned `Result.success()` unconditionally, leaving a persistently
+ * broken server path invisible to operators (§7.8).
  */
 @HiltWorker
 class AutoDownloadWorker @AssistedInject constructor(
@@ -34,11 +41,20 @@ class AutoDownloadWorker @AssistedInject constructor(
         val seriesIds = downloadRepository.getDownloadedSeriesIds()
         if (seriesIds.isEmpty()) return Result.success()
 
+        var hadTransientFailure = false
         for (seriesId in seriesIds) {
+            if (isStopped) break
             val alreadyDownloaded = downloadRepository.getDownloadedEpisodeIdsForSeries(seriesId)
-            val seasons = mediaRepository.getSeasons(seriesId).getOrElse { emptyList() }
+            val seasons = mediaRepository.getSeasons(seriesId).getOrElse {
+                hadTransientFailure = true
+                emptyList()
+            }
             for (season in seasons) {
-                val episodes = mediaRepository.getEpisodes(seriesId, season.id).getOrElse { emptyList() }
+                if (isStopped) break
+                val episodes = mediaRepository.getEpisodes(seriesId, season.id).getOrElse {
+                    hadTransientFailure = true
+                    emptyList()
+                }
                 val newEpisodeIds = episodes
                     .filter { it.id !in alreadyDownloaded }
                     .map { it.id }
@@ -51,10 +67,22 @@ class AutoDownloadWorker @AssistedInject constructor(
             }
         }
 
-        return Result.success()
+        return if (hadTransientFailure) {
+            if (runAttemptCount < MAX_RETRIES) {
+                Result.retry()
+            } else {
+                Log.w(TAG, "AutoDownload exhausted $MAX_RETRIES retries")
+                Result.failure()
+            }
+        } else {
+            Result.success()
+        }
     }
 
     companion object {
         const val UNIQUE_PERIODIC_NAME = "com.raulshma.jellyplay.work.auto_download"
+        const val WORK_TAG = "auto_download"
+        private const val TAG = "AutoDownloadWorker"
+        private const val MAX_RETRIES = 3
     }
 }

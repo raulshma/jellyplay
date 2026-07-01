@@ -58,6 +58,8 @@ class MainViewModel @Inject constructor(
     val userMessageBus: UserMessageBus,
     private val serverHealthMonitor: com.raulshma.jellyplay.core.data.network.ServerHealthMonitor,
     val cacheManager: com.raulshma.jellyplay.core.data.cache.CacheManager,
+    private val widgetWorkScheduler: com.raulshma.jellyplay.widget.WidgetWorkScheduler,
+    private val cacheMaintenanceInitializer: com.raulshma.jellyplay.startup.CacheMaintenanceInitializer,
 ) : JellyPlayViewModel() {
 
     val serverHealth = serverHealthMonitor.serverHealth
@@ -128,10 +130,10 @@ class MainViewModel @Inject constructor(
                         }
                         remoteControlReceiver.start()
                         launch {
-                            com.raulshma.jellyplay.widget.WidgetWorkScheduler.refreshLibraryNow(context)
+                            widgetWorkScheduler.refreshLibraryNow()
                         }
                         launch {
-                            com.raulshma.jellyplay.widget.WidgetWorkScheduler.refreshSeerrNow(context)
+                            widgetWorkScheduler.refreshSeerrNow()
                         }
                         // Force every placed widget to re-read its cached data
                         // from the store. The Continue Watching widget has no
@@ -140,6 +142,10 @@ class MainViewModel @Inject constructor(
                         // state on cold start; for Library/Seerr it surfaces
                         // any cached items while the worker run completes.
                         com.raulshma.jellyplay.widget.ContinueWatchingWidget.triggerUpdate(context)
+                        // Best-effort cache maintenance — runs once after the
+                        // first successful auth instead of a fragile startup
+                        // delay (startup-and-workers-architecture §7.5).
+                        cacheMaintenanceInitializer.cleanupOnce()
                         // Fetch library folders for the TV navigation drawer
                         launch { refreshLibraryFolders() }
                     }
