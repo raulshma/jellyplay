@@ -33,7 +33,6 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.FilledIconButton
 import androidx.compose.material3.FilledTonalIconButton
@@ -228,6 +227,14 @@ internal fun PlayerControls(
     val tvSeekbarFocusRequester = remember { FocusRequester() }
     val tvBottomButtonsFocusRequester = remember { FocusRequester() }
     val tvBackFocusState = rememberTvFocusState(focusedScale = 1.08f)
+
+    // Overflow menu open/close state. Hoisted to the PlayerControls scope (rather
+    // than the local button Box) so the in-window panel can be hosted in the root
+    // Box below, where it has room for a full-size dismiss interceptor and can be
+    // anchored to TopEnd. Rendering it in-window (instead of a DropdownMenu popup)
+    // keeps it in the player's immersive window so the system bars never appear.
+    var showOverflow by remember { mutableStateOf(false) }
+    LaunchedEffect(showOverflow) { onOverflowMenuChange(showOverflow) }
 
     LaunchedEffect(isVisible, isTv) {
         if (isTv && isVisible) {
@@ -605,115 +612,22 @@ internal fun PlayerControls(
                             PipButton(onClick = onPipClick)
                         }
 
-                        var showOverflow by remember { mutableStateOf(false) }
-                        LaunchedEffect(showOverflow) { onOverflowMenuChange(showOverflow) }
-                        Box {
-                            PlayerIconButton(
-                                icon = Tabler.Outline.DotsVertical,
-                                contentDescription = "More options",
-                                onClick = { showOverflow = true },
-                                modifier = Modifier.then(
-                                    if (isTv) {
-                                        Modifier.focusProperties {
-                                            right = when {
-                                                isNextEpisodeVisible && tvNextEpisodeFocusRequester != null -> tvNextEpisodeFocusRequester
-                                                isSkipSegmentVisible && tvSkipSegmentFocusRequester != null -> tvSkipSegmentFocusRequester
-                                                else -> FocusRequester.Default
-                                            }
+                        PlayerIconButton(
+                            icon = Tabler.Outline.DotsVertical,
+                            contentDescription = "More options",
+                            onClick = { showOverflow = true },
+                            modifier = Modifier.then(
+                                if (isTv) {
+                                    Modifier.focusProperties {
+                                        right = when {
+                                            isNextEpisodeVisible && tvNextEpisodeFocusRequester != null -> tvNextEpisodeFocusRequester
+                                            isSkipSegmentVisible && tvSkipSegmentFocusRequester != null -> tvSkipSegmentFocusRequester
+                                            else -> FocusRequester.Default
                                         }
-                                    } else Modifier
-                                )
+                                    }
+                                } else Modifier
                             )
-                            PlayerOverflowMenu(
-                                expanded = showOverflow,
-                                onDismiss = { showOverflow = false },
-                                supportsSubtitleStyle = supportsSubtitleStyle,
-                                supportsDialogueBoost = supportsDialogueBoost,
-                                supportsNightMode = supportsNightMode,
-                                supportsAudioDelay = supportsAudioDelay,
-                                supportsAudioPassthrough = supportsAudioPassthrough,
-                                supportsAudioNormalization = supportsAudioNormalization,
-                                supportsChannelMixing = supportsChannelMixing,
-                                dialogueBoostEnabled = dialogueBoostEnabled,
-                                dialogueBoostStrength = dialogueBoostStrength,
-                                nightModeEnabled = nightModeEnabled,
-                                nightModeStrength = nightModeStrength,
-                                audioPassthrough = audioPassthrough,
-                                showVideoStats = showVideoStats,
-                                audioNormalizationMode = audioNormalizationMode,
-                                audioNormalizationEnabled = audioNormalizationEnabled,
-                                channelMixMode = channelMixMode,
-                                channelMixEnabled = channelMixEnabled,
-                                onSubtitleStyleClick = {
-                                    showOverflow = false
-                                    onSubtitleStyleClick()
-                                },
-                                
-                                onDialogueBoostClick = {
-                                    showOverflow = false
-                                    onDialogueBoostClick()
-                                },
-                                onDialogueBoostStrengthChange = onDialogueBoostStrengthChange,
-                                onNightModeClick = {
-                                    showOverflow = false
-                                    onNightModeClick()
-                                },
-                                onNightModeStrengthChange = onNightModeStrengthChange,
-                                onAVSyncClick = {
-                                    showOverflow = false
-                                    onAVSyncClick()
-                                },
-                                playbackMode = playbackMode,
-                                onPlaybackModeClick = {
-                                    showOverflow = false
-                                    onPlaybackModeClick()
-                                },
-                                onDecoderClick = {
-                                    showOverflow = false
-                                    onDecoderClick()
-                                },
-                                onPassthroughClick = {
-                                    showOverflow = false
-                                    onPassthroughClick()
-                                },
-                                onSubtitleDownloadClick = {
-                                    showOverflow = false
-                                    onSubtitleDownloadClick()
-                                },
-                                onVideoStatsClick = {
-                                    showOverflow = false
-                                    onVideoStatsClick()
-                                },
-                                onAudioNormalizationClick = {
-                                    showOverflow = false
-                                    onAudioNormalizationClick()
-                                },
-                                onAudioNormalizationModeChange = {
-                                    showOverflow = false
-                                    onAudioNormalizationModeChange(it)
-                                },
-                                onChannelMixClick = {
-                                    showOverflow = false
-                                    onChannelMixClick()
-                                },
-                                onChannelMixModeChange = {
-                                    showOverflow = false
-                                    onChannelMixModeChange(it)
-                                },
-                                sleepTimerActive = sleepTimerActive,
-                                sleepTimerDisplayText = sleepTimerDisplayText,
-                                onSleepTimerClick = {
-                                    showOverflow = false
-                                    onSleepTimerClick()
-                                },
-                                supportsVideoFilters = supportsVideoFilters,
-                                videoFiltersActive = videoFiltersActive,
-                                onVideoFilterClick = {
-                                    showOverflow = false
-                                    onVideoFilterClick()
-                                },
-                            )
-                        }
+                        )
 
                         if (castManager != null) {
                             CastButton(castManager = castManager)
@@ -722,6 +636,99 @@ internal fun PlayerControls(
                 }
             }
         }
+
+        // In-window overflow panel (hosted in the root Box so the dismiss
+        // interceptor can cover the full area and the panel anchors to TopEnd).
+        // Rendered in-window — not a DropdownMenu popup — so it inherits the
+        // player's immersive mode and the system bars never appear.
+        PlayerOverflowMenu(
+            expanded = showOverflow,
+            onDismiss = { showOverflow = false },
+            supportsSubtitleStyle = supportsSubtitleStyle,
+            supportsDialogueBoost = supportsDialogueBoost,
+            supportsNightMode = supportsNightMode,
+            supportsAudioDelay = supportsAudioDelay,
+            supportsAudioPassthrough = supportsAudioPassthrough,
+            supportsAudioNormalization = supportsAudioNormalization,
+            supportsChannelMixing = supportsChannelMixing,
+            dialogueBoostEnabled = dialogueBoostEnabled,
+            dialogueBoostStrength = dialogueBoostStrength,
+            nightModeEnabled = nightModeEnabled,
+            nightModeStrength = nightModeStrength,
+            audioPassthrough = audioPassthrough,
+            showVideoStats = showVideoStats,
+            audioNormalizationMode = audioNormalizationMode,
+            audioNormalizationEnabled = audioNormalizationEnabled,
+            channelMixMode = channelMixMode,
+            channelMixEnabled = channelMixEnabled,
+            onSubtitleStyleClick = {
+                showOverflow = false
+                onSubtitleStyleClick()
+            },
+            onDialogueBoostClick = {
+                showOverflow = false
+                onDialogueBoostClick()
+            },
+            onDialogueBoostStrengthChange = onDialogueBoostStrengthChange,
+            onNightModeClick = {
+                showOverflow = false
+                onNightModeClick()
+            },
+            onNightModeStrengthChange = onNightModeStrengthChange,
+            onAVSyncClick = {
+                showOverflow = false
+                onAVSyncClick()
+            },
+            playbackMode = playbackMode,
+            onPlaybackModeClick = {
+                showOverflow = false
+                onPlaybackModeClick()
+            },
+            onDecoderClick = {
+                showOverflow = false
+                onDecoderClick()
+            },
+            onPassthroughClick = {
+                showOverflow = false
+                onPassthroughClick()
+            },
+            onSubtitleDownloadClick = {
+                showOverflow = false
+                onSubtitleDownloadClick()
+            },
+            onVideoStatsClick = {
+                showOverflow = false
+                onVideoStatsClick()
+            },
+            onAudioNormalizationClick = {
+                showOverflow = false
+                onAudioNormalizationClick()
+            },
+            onAudioNormalizationModeChange = {
+                showOverflow = false
+                onAudioNormalizationModeChange(it)
+            },
+            onChannelMixClick = {
+                showOverflow = false
+                onChannelMixClick()
+            },
+            onChannelMixModeChange = {
+                showOverflow = false
+                onChannelMixModeChange(it)
+            },
+            sleepTimerActive = sleepTimerActive,
+            sleepTimerDisplayText = sleepTimerDisplayText,
+            onSleepTimerClick = {
+                showOverflow = false
+                onSleepTimerClick()
+            },
+            supportsVideoFilters = supportsVideoFilters,
+            videoFiltersActive = videoFiltersActive,
+            onVideoFilterClick = {
+                showOverflow = false
+                onVideoFilterClick()
+            },
+        )
     }
 }
 

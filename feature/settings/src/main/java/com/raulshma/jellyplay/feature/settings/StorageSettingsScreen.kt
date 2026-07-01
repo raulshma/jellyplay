@@ -15,7 +15,6 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.rememberLazyListState
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -32,6 +31,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.foundation.layout.Arrangement
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.raulshma.jellyplay.core.model.MeteredNetworkBehavior
+import com.raulshma.jellyplay.core.designsystem.theme.smoothCornerShape
 import com.raulshma.jellyplay.core.model.StreamingQuality
 import com.raulshma.jellyplay.core.ui.adaptive.LocalAdaptiveInfo
 import com.raulshma.jellyplay.core.ui.adaptive.bottomPadding
@@ -149,7 +149,7 @@ fun StorageSettingsScreen(
                                 modifier = Modifier
                                     .fillMaxWidth()
                                     .height(barHeight)
-                                    .clip(RoundedCornerShape(6.dp)),
+                                    .clip(smoothCornerShape(6.dp)),
                             ) {
                                 if (cacheFraction > 0f) {
                                     Box(
@@ -551,7 +551,7 @@ private fun LegendItem(color: androidx.compose.ui.graphics.Color, label: String)
         Box(
             modifier = Modifier
                 .size(10.dp)
-                .clip(RoundedCornerShape(2.dp))
+                .clip(smoothCornerShape(2.dp))
                 .background(color),
         )
         Spacer(modifier = Modifier.width(4.dp))

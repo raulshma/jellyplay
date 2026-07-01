@@ -348,6 +348,7 @@ fun PieChart(
         MaterialTheme.colorScheme.error,
         MaterialTheme.colorScheme.surfaceVariant,
     )
+    val trackColor = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.05f)
     val total = data.sumOf { it.value }.coerceAtLeast(1L)
     val animatedProgress = remember { Animatable(0f) }
 
@@ -373,7 +374,7 @@ fun PieChart(
                 val center = Offset(size.width / 2, size.height / 2)
 
                 drawCircle(
-                    color = Color.White.copy(alpha = 0.05f),
+                    color = trackColor,
                     radius = radius,
                     center = center,
                 )
@@ -741,7 +742,7 @@ fun ComparisonCard(
 
     val isPositive = percentageChange >= 0
     val changeColor = if (isPositive) {
-        Color(0xFF4CAF50)
+        MaterialTheme.colorScheme.primary
     } else {
         MaterialTheme.colorScheme.error
     }

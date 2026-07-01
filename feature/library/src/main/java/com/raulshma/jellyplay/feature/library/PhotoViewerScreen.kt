@@ -36,6 +36,7 @@ import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import com.raulshma.jellyplay.core.designsystem.theme.ShapeCache
+import com.raulshma.jellyplay.core.designsystem.theme.smoothCornerShape
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
@@ -414,7 +415,7 @@ fun PhotoViewerScreen(
                                     Spacer(modifier = Modifier.size(8.dp))
                                     Surface(
                                         color = MaterialTheme.colorScheme.primary.copy(alpha = 0.3f),
-                                        shape = RoundedCornerShape(4.dp),
+                                        shape = ShapeCache.smooth4,
                                     ) {
                                         Text(
                                             text = "Slideshow",
@@ -456,7 +457,7 @@ fun PhotoViewerScreen(
                             .navigationBarsPadding()
                             .padding(16.dp),
                         color = Color.Black.copy(alpha = 0.8f),
-                        shape = androidx.compose.foundation.shape.RoundedCornerShape(12.dp),
+                        shape = ShapeCache.smooth12,
                     ) {
                         Column(
                             modifier = Modifier.padding(16.dp),
@@ -687,7 +688,7 @@ private fun PhotoInfoOverlay(
             .navigationBarsPadding()
             .padding(16.dp),
         color = Color.Black.copy(alpha = 0.85f),
-        shape = RoundedCornerShape(12.dp),
+        shape = ShapeCache.smooth12,
     ) {
         Column(
             modifier = Modifier
@@ -830,7 +831,7 @@ private fun PhotoFilmstrip(
                 Box(
                     modifier = Modifier
                         .size(if (isHighlighted) 64.dp else 52.dp)
-                        .clip(RoundedCornerShape(6.dp))
+                        .clip(smoothCornerShape(6.dp))
                         .background(Color.DarkGray.copy(alpha = 0.5f))
                         .clickable(
                             interactionSource = interactionSource,
@@ -849,7 +850,7 @@ private fun PhotoFilmstrip(
                         Box(
                             modifier = Modifier
                                 .fillMaxSize()
-                                .clip(RoundedCornerShape(6.dp))
+                                .clip(smoothCornerShape(6.dp))
                                 .background(
                                     if (isFocused) MaterialTheme.colorScheme.primary.copy(alpha = 0.5f)
                                     else MaterialTheme.colorScheme.primary.copy(alpha = 0.35f)
