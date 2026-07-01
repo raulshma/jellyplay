@@ -52,6 +52,13 @@ data class EngineConfig(
     val videoEffects: VideoEffectsConfig = VideoEffectsConfig(),
     val engineSpecific: EngineSpecificConfig? = null,
     val pauseOnAudioFocusLoss: Boolean = true,
+    /**
+     * Optional DRM hook. When non-null, engines that support DRM (currently
+     * [ExoPlayerEngine]) attach the supplied [androidx.media3.exoplayer.drm.DrmSessionManager].
+     * Defaults to `null` so non-DRM playback — and the rest of the codebase —
+     * is unaffected. See [EngineDrmSessionManagerProvider].
+     */
+    val drmSessionManagerProvider: EngineDrmSessionManagerProvider? = null,
 )
 
 data class AudioEffectsConfig(
@@ -127,60 +134,129 @@ data class EngineVideoStats(
     val bufferSizeBytes: Long = 0,
 )
 
-interface MediaEngine : PlayerLifecycleCallbacks, com.raulshma.jellyplay.core.data.remote.RemotePlayableEngine {
-
-    // 1. Initialization
+/**
+ * Role interface: source loading & teardown.
+ *
+ * `release()` is inherited from [com.raulshma.jellyplay.core.data.remote.RemotePlayableEngine];
+ * this role owns the engine-specific [load] entry point.
+ */
+interface PlaybackLifecycle {
     fun load(request: PlaybackRequest)
-    override fun release()
+}
 
-    // 2. Core Controls
-    override fun play()
-    override fun pause()
-    override fun stop()
-    override fun seekTo(positionMs: Long)
+/**
+ * Role interface: speed control and the current playback-speed readback.
+ */
+interface PlaybackControl {
     fun setPlaybackSpeed(speed: Float)
+    val playbackSpeed: Float
+}
 
-    // 3. Reactive State
+/**
+ * Role interface: the reactive, hot state surface of an engine — playback
+ * state, duration, position/buffering/video-stats flows, and the adaptive
+ * polling knobs that drive the high-frequency tickers consumed by leaf UI.
+ *
+ * `isPlaying` / `currentPositionMs` are inherited from
+ * [com.raulshma.jellyplay.core.data.remote.RemotePlayableEngine]; this role
+ * owns the engine-specific additions.
+ */
+interface PlaybackState {
     val playbackState: StateFlow<EnginePlaybackState>
-    override val isPlaying: StateFlow<Boolean>
-    override val currentPositionMs: Long
     val durationMs: Long
     val positionFlow: Flow<Long>
-    val currentCues: StateFlow<List<String>>
     val errorFlow: Flow<String>
     val bufferedPositionMs: StateFlow<Long>
     val videoStats: StateFlow<EngineVideoStats>
 
-    // 3b. Adaptive polling
     val pollingIntervalMs: StateFlow<Long>
     val videoStatsEnabled: StateFlow<Boolean>
     fun setPollingIntervalMs(ms: Long)
     fun setVideoStatsEnabled(enabled: Boolean)
 
-    // 4. Configuration & Capabilities
+    val audioSessionId: Int
+}
+
+/**
+ * Role interface: capability advertisement and live configuration.
+ *
+ * [EngineCapabilities] remains the runtime query surface the UI reads to
+ * show/hide controls — see [EngineCapabilityMatrix].
+ */
+interface EngineConfigurable {
     val capabilities: EngineCapabilities
     fun updateConfig(config: EngineConfig)
+}
 
-    // 5. Track Selection
+/**
+ * Role interface: track enumeration and runtime subtitle-track addition.
+ *
+ * `selectTrack` / `setMaxVideoBitrate` are inherited from
+ * [com.raulshma.jellyplay.core.data.remote.RemotePlayableEngine]; this role
+ * owns the engine-specific track surface.
+ */
+interface TrackControl {
     val availableTracks: StateFlow<List<MediaTrack>>
-    override fun selectTrack(type: TrackType, index: Int, trackGroup: Any?)
-
-    // 5b. Quality
-    override fun setMaxVideoBitrate(bps: Int?)
-
-    // 5c. Runtime subtitle addition
     fun addExternalSubtitle(source: SubtitleSource) {}
+}
 
-    // 6. UI Binding
-    fun createSurfaceView(context: Context): View
+/**
+ * Role interface: subtitle cue text and per-engine subtitle styling.
+ */
+interface SubtitleStyling {
+    val currentCues: StateFlow<List<String>>
     fun applySubtitleStyleToView(view: View, style: SubtitleStyle)
+}
+
+/**
+ * Role interface: native surface creation and aspect-ratio control.
+ */
+interface VideoSurfaceBinding {
+    fun createSurfaceView(context: Context): View
     fun setAspectRatio(mode: Int, ratio: Float? = null)
+}
 
-    // Internal state access (needed for some specific features, but keep to a minimum)
-    val playbackSpeed: Float
-    val audioSessionId: Int
+/**
+ * The composite strategy interface every backend implements.
+ *
+ * Historically a single ~60-member "fat interface". It is now composed of
+ * cohesive role interfaces ([PlaybackLifecycle], [PlaybackControl],
+ * [PlaybackState], [EngineConfigurable], [TrackControl], [SubtitleStyling],
+ * [VideoSurfaceBinding]) so the surface is navigable and a consumer that only
+ * needs, say, [TrackControl] can depend on the narrow role. Concrete engines
+ * still declare `: MediaEngine` and `override` each member exactly as before —
+ * the split is purely a re-distribution of the same contract, so behaviour and
+ * all call sites are unchanged.
+ *
+ * Members declared directly here are either overrides of
+ * [com.raulshma.jellyplay.core.data.remote.RemotePlayableEngine] (which cannot
+ * move into a role) or special-case internal hooks kept on the composite type.
+ */
+interface MediaEngine :
+    PlayerLifecycleCallbacks,
+    com.raulshma.jellyplay.core.data.remote.RemotePlayableEngine,
+    PlaybackLifecycle,
+    PlaybackControl,
+    PlaybackState,
+    EngineConfigurable,
+    TrackControl,
+    SubtitleStyling,
+    VideoSurfaceBinding {
 
+    // ── RemotePlayableEngine overrides (re-declared here to carry the contract
+    //     and, for some, a default). They cannot move into a role because roles
+    //     do not themselves extend RemotePlayableEngine. ──
+    override fun release()
+    override fun play()
+    override fun pause()
+    override fun stop()
+    override fun seekTo(positionMs: Long)
+    override val isPlaying: StateFlow<Boolean>
+    override val currentPositionMs: Long
+    override fun selectTrack(type: TrackType, index: Int, trackGroup: Any?)
+    override fun setMaxVideoBitrate(bps: Int?)
     override val underlyingPlayer: androidx.media3.common.Player? get() = null
 
+    // ── Special-case internal hooks (kept on the composite; documented as such). ──
     fun setRenderer(renderer: Any?) {}
 }

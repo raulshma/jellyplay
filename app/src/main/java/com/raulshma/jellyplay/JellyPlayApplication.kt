@@ -2,11 +2,6 @@ package com.raulshma.jellyplay
 
 import android.app.Application
 import android.content.Context
-import android.util.Log
-import androidx.work.Data
-import androidx.work.ExistingWorkPolicy
-import androidx.work.OneTimeWorkRequestBuilder
-import androidx.work.WorkManager
 import coil3.ImageLoader
 import coil3.SingletonImageLoader
 import coil3.disk.DiskCache
@@ -14,9 +9,7 @@ import coil3.memory.MemoryCache
 import coil3.network.okhttp.OkHttpNetworkFetcherFactory
 import coil3.request.crossfade
 import coil3.size.Size
-import com.raulshma.jellyplay.core.database.dao.DownloadDao
-import com.raulshma.jellyplay.core.data.worker.DownloadWorker
-import com.raulshma.jellyplay.core.model.DownloadStatus
+import com.raulshma.jellyplay.core.datastore.di.ApplicationScope
 import com.raulshma.jellyplay.core.notification.scheduler.NotificationScheduler
 import androidx.hilt.work.HiltWorkerFactory
 import androidx.work.Configuration
@@ -27,16 +20,11 @@ import okhttp3.OkHttpClient
 import okio.Path.Companion.toPath
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.launch
 import javax.inject.Inject
 
 @HiltAndroidApp
 class JellyPlayApplication : Application(), SingletonImageLoader.Factory, Configuration.Provider {
-
-    companion object {
-        private const val TAG = "JellyPlayApp"
-    }
 
     @Inject lateinit var workerFactory: HiltWorkerFactory
 
@@ -46,80 +34,89 @@ class JellyPlayApplication : Application(), SingletonImageLoader.Factory, Config
             .build()
 
     @Inject lateinit var okHttpClient: OkHttpClient
-    @Inject lateinit var downloadDao: DownloadDao
     @Inject lateinit var userPreferencesStore: com.raulshma.jellyplay.core.datastore.UserPreferencesStore
-    @Inject lateinit var mediaRepository: com.raulshma.jellyplay.core.data.repository.MediaRepository
-    @Inject lateinit var offlineRepository: com.raulshma.jellyplay.core.data.repository.OfflineRepository
     @Inject lateinit var audioPlaybackManager: com.raulshma.jellyplay.core.data.playback.AudioPlaybackManager
     @Inject lateinit var nowPlayingWidgetUpdater: com.raulshma.jellyplay.widget.NowPlayingWidgetUpdater
     @Inject lateinit var notificationScheduler: NotificationScheduler
     @Inject lateinit var autoDownloadScheduler: com.raulshma.jellyplay.core.data.worker.AutoDownloadScheduler
+    @Inject lateinit var userDataSyncScheduler: com.raulshma.jellyplay.core.data.worker.UserDataSyncScheduler
+    @Inject lateinit var widgetWorkScheduler: com.raulshma.jellyplay.widget.WidgetWorkScheduler
+    @Inject lateinit var downloadRecoveryInitializer: com.raulshma.jellyplay.startup.DownloadRecoveryInitializer
 
-    private val applicationScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+    @Inject @ApplicationScope lateinit var applicationScope: CoroutineScope
 
     override fun onCreate() {
         super.onCreate()
-        applicationScope.launch {
-            SentryAndroid.init(this@JellyPlayApplication) { options ->
-                // Strip query strings from HTTP breadcrumb URLs that may carry the
-                // Jellyfin access token (e.g. ".../stream?api_key=…"). The previous
-                // implementation was case-sensitive and only inspected the "url"
-                // data key, missing "ApiKey" variants and breadcrumbs whose message
-                // contained a logged request line.
-                options.setBeforeBreadcrumb { breadcrumb, _ ->
-                    val data = breadcrumb.data
-                    val url = data["url"] as? String
-                    if (url != null && url.contains("?")) {
-                        val query = url.substringAfter("?")
-                        // Match token-bearing query params case-insensitively.
-                        val tokenParamNames = setOf(
-                            "api_key", "apikey", "token", "x-emby-token", "accesstoken",
-                        )
-                        val carriesToken = query.split("&").any { kv ->
-                            val key = kv.substringBefore("=").lowercase()
-                            key in tokenParamNames
-                        }
-                        if (carriesToken) {
-                            data["url"] = url.substringBefore("?")
-                        }
-                    }
-                    // Drop breadcrumbs whose message contains a literal token
-                    // pattern (e.g. an OkHttp log line of
-                    // "GET .../stream?api_key=abc123"). Returning null drops the
-                    // breadcrumb entirely rather than redacting in place, which is
-                    // safer because we can't know where in the message the token is.
-                    val message = breadcrumb.message
-                    if (message != null) {
-                        val lower = message.lowercase()
-                        val tokenPatterns = listOf(
-                            "api_key=", "apikey=", "x-emby-token:", "x-emby-token=",
-                            "accesstoken=",
-                        )
-                        if (tokenPatterns.any { lower.contains(it) }) {
-                            return@setBeforeBreadcrumb null
-                        }
-                    }
-                    breadcrumb
-                }
-                options.dsn?.let { dsn ->
-                    if (dsn.isNotBlank()) {
-                        configureSentryUserContext()
-                    }
-                }
-            }
+        // Critical path: Sentry must initialise before anything else so all
+        // subsequent work is crash-instrumented. Audio + widget updaters follow
+        // on the same coroutine (they have no dependency on the groups below).
+        applicationScope.launch(Dispatchers.IO) {
+            initSentry()
             audioPlaybackManager.start()
             nowPlayingWidgetUpdater.start()
-            com.raulshma.jellyplay.widget.WidgetWorkScheduler.enqueuePeriodic(this@JellyPlayApplication)
-            com.raulshma.jellyplay.core.data.worker.UserDataSyncScheduler.enqueuePeriodic(this@JellyPlayApplication)
+        }
+        // Background schedulers — independent enqueue calls, all KEEP-safe.
+        // Run concurrently with the critical path so cold start isn't gated on
+        // Sentry/audio init (startup-and-workers-architecture §7.6).
+        applicationScope.launch(Dispatchers.IO) {
+            widgetWorkScheduler.enqueuePeriodic()
+            userDataSyncScheduler.enqueuePeriodic()
             autoDownloadScheduler.sync()
-            recoverPendingDownloads()
-            cleanupStuckDownloads()
             notificationScheduler.scheduleOrUpdate()
         }
-        applicationScope.launch {
-            kotlinx.coroutines.delay(10_000)
-            mediaRepository.cleanupLyricsCache()
-            offlineRepository.cleanupOrphans()
+        // Best-effort download recovery — independent of the above groups.
+        applicationScope.launch(Dispatchers.IO) {
+            downloadRecoveryInitializer.recover()
+        }
+    }
+
+    private fun initSentry() {
+        SentryAndroid.init(this) { options ->
+            // Strip query strings from HTTP breadcrumb URLs that may carry the
+            // Jellyfin access token (e.g. ".../stream?api_key=…"). The previous
+            // implementation was case-sensitive and only inspected the "url"
+            // data key, missing "ApiKey" variants and breadcrumbs whose message
+            // contained a logged request line.
+            options.setBeforeBreadcrumb { breadcrumb, _ ->
+                val data = breadcrumb.data
+                val url = data["url"] as? String
+                if (url != null && url.contains("?")) {
+                    val query = url.substringAfter("?")
+                    // Match token-bearing query params case-insensitively.
+                    val tokenParamNames = setOf(
+                        "api_key", "apikey", "token", "x-emby-token", "accesstoken",
+                    )
+                    val carriesToken = query.split("&").any { kv ->
+                        val key = kv.substringBefore("=").lowercase()
+                        key in tokenParamNames
+                    }
+                    if (carriesToken) {
+                        data["url"] = url.substringBefore("?")
+                    }
+                }
+                // Drop breadcrumbs whose message contains a literal token
+                // pattern (e.g. an OkHttp log line of
+                // "GET .../stream?api_key=abc123"). Returning null drops the
+                // breadcrumb entirely rather than redacting in place, which is
+                // safer because we can't know where in the message the token is.
+                val message = breadcrumb.message
+                if (message != null) {
+                    val lower = message.lowercase()
+                    val tokenPatterns = listOf(
+                        "api_key=", "apikey=", "x-emby-token:", "x-emby-token=",
+                        "accesstoken=",
+                    )
+                    if (tokenPatterns.any { lower.contains(it) }) {
+                        return@setBeforeBreadcrumb null
+                    }
+                }
+                breadcrumb
+            }
+            options.dsn?.let { dsn ->
+                if (dsn.isNotBlank()) {
+                    configureSentryUserContext()
+                }
+            }
         }
     }
 
@@ -129,75 +126,6 @@ class JellyPlayApplication : Application(), SingletonImageLoader.Factory, Config
         }
         Sentry.setUser(user)
         Sentry.setTag("player.engine", userPreferencesStore.preferences.value.preferredPlayer.name)
-    }
-
-    private suspend fun recoverPendingDownloads() {
-        try {
-            // KEEP (not REPLACE): the unique-work name is stable across process
-            // restarts, so if the previous worker is still in-flight WorkManager
-            // will keep it. Replacing here would cancel an active download and
-            // risk orphaned partial bytes between the cancel and the new
-            // worker's setForeground call.
-            val pending = downloadDao.getDownloadsByStatus(DownloadStatus.PENDING.name)
-            for (download in pending) {
-                val workRequest = OneTimeWorkRequestBuilder<DownloadWorker>()
-                    .setInputData(
-                        Data.Builder()
-                            .putString(DownloadWorker.KEY_DOWNLOAD_ID, download.id)
-                            .build()
-                    )
-                    .build()
-                WorkManager.getInstance(this).enqueueUniqueWork(
-                    "${DownloadWorker.UNIQUE_WORK_PREFIX}${download.id}",
-                    ExistingWorkPolicy.KEEP,
-                    workRequest,
-                )
-            }
-            val stale = downloadDao.getDownloadsByStatus(DownloadStatus.DOWNLOADING.name)
-            for (download in stale) {
-                downloadDao.updateProgress(download.id, download.downloadedBytes, DownloadStatus.PENDING.name)
-                val workRequest = OneTimeWorkRequestBuilder<DownloadWorker>()
-                    .setInputData(
-                        Data.Builder()
-                            .putString(DownloadWorker.KEY_DOWNLOAD_ID, download.id)
-                            .build()
-                    )
-                    .build()
-                WorkManager.getInstance(this).enqueueUniqueWork(
-                    "${DownloadWorker.UNIQUE_WORK_PREFIX}${download.id}",
-                    ExistingWorkPolicy.KEEP,
-                    workRequest,
-                )
-            }
-        } catch (e: Exception) {
-            Log.w(TAG, "Failed to recover pending downloads", e)
-        }
-    }
-
-    private suspend fun cleanupStuckDownloads() {
-        try {
-            downloadDao.resetStuckDownloading()
-            val failed = downloadDao.getFailedDownloads()
-            for (download in failed) {
-                if (download.downloadPath.isNotBlank()) {
-                    val file = java.io.File(download.downloadPath)
-                    // Delete partial files unconditionally. Multi-connection
-                    // downloads use RandomAccessFile scattered writes that
-                    // cannot be resumed (DownloadWorker deletes the partial
-                    // file on cancel/failure for the same reason), so a non-
-                    // zero FAILED file is wasted storage. The DB row stays
-                    // FAILED so the user sees the failure in the UI and can
-                    // retry manually. Previously only 0-byte files were
-                    // deleted, which left e.g. a 50 MB file that failed at
-                    // 80 % sitting on disk forever.
-                    if (file.exists()) {
-                        file.delete()
-                    }
-                }
-            }
-        } catch (e: Exception) {
-            Log.w(TAG, "Failed to cleanup stuck downloads", e)
-        }
     }
 
     private val imageClient by lazy {
