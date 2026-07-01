@@ -12,7 +12,7 @@ import org.junit.Before
 import org.junit.Test
 
 /**
- * Regression tests for §4.8: [SyncPlayController] must rethrow [CancellationException] so
+ * Regression tests: [SyncPlayController] must rethrow [CancellationException] so
  * that scope/job cancellation (e.g. user leaving SyncPlay, logging out) propagates correctly
  * through the in-flight `apiClient` call instead of being silently swallowed.
  */

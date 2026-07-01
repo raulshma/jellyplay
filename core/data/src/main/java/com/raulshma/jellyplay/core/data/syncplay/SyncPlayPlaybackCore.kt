@@ -457,8 +457,8 @@ class SyncPlayPlaybackCore @Inject constructor(
 
         /**
          * Maps a drift (in ms) to a playback-rate correction clamped to
-         * [MIN_SPEED]..[MAX_SPEED]. See §4.15 of the architecture analysis for the rationale
-         * behind adding the upper clamp (without it, a 1500ms drift would yield speed=2.5).
+         * [MIN_SPEED]..[MAX_SPEED]. The upper clamp prevents a runaway correction
+         * (without it, a 1500ms drift would yield speed=2.5).
          */
         internal fun calculateSpeedCorrection(diffMs: Double, speedToSyncTime: Double): Float {
             return (1.0 + diffMs / speedToSyncTime).toFloat()

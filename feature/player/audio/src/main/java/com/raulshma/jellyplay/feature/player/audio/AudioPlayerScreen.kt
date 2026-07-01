@@ -160,8 +160,7 @@ fun AudioPlayerScreen(
     }
 
     // Surface an "Undo" affordance after destructive queue operations
-    // (clear / remove / skip / move) so an accidental action is recoverable
-    // (enhancements §5.2).
+    // (clear / remove / skip / move) so an accidental action is recoverable.
     val undoClearedMessage = stringResource(R.string.audio_undo_queue_cleared)
     val undoRemovedMessage = stringResource(R.string.audio_undo_track_removed)
     val undoMovedMessage = stringResource(R.string.audio_undo_track_moved)
@@ -979,7 +978,7 @@ private fun LyricsOverlay(
                         .padding(8.dp),
                     horizontalAlignment = Alignment.End,
                 ) {
-                    // Lyrics timing offset adjustment (enhancements §5.1). Only
+                    // Lyrics timing offset adjustment. Only
                     // meaningful for time-synced lyrics.
                     if (hasSyncedLyrics) {
                         AnimatedVisibility(
@@ -1619,7 +1618,7 @@ private fun PixelSecondaryControls(
                 )
             },
         )
-        // A→B repeat (enhancements §5.4): cycles set-A → set-B → clear.
+        // A→B repeat: cycles set-A → set-B → clear.
         IconButtonWithPressAnimation(
             onClick = onAbLoopClick,
             tint = if (abLoopStartMs != null) accentColor else MaterialTheme.colorScheme.onSurfaceVariant,

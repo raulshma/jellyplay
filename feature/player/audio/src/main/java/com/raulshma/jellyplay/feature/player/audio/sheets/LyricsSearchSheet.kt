@@ -131,7 +131,7 @@ internal fun LyricsSearchSheet(
                                     Text(
                                         "Synced",
                                         style = MaterialTheme.typography.labelSmall,
-                                        color = MaterialTheme.colorScheme.primary,
+                                        color = MaterialTheme.colorScheme.onPrimaryContainer,
                                         modifier = Modifier
                                             .background(
                                                 MaterialTheme.colorScheme.primaryContainer,

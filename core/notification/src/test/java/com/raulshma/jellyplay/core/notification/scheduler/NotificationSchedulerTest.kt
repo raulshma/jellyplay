@@ -21,8 +21,8 @@ import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.Config
 
 /**
- * Unit tests for [NotificationScheduler] covering the enable/disable branches
- * (startup-and-workers-architecture §7.13). Uses WorkManager's official test
+ * Unit tests for [NotificationScheduler] covering the enable/disable branches.
+ * Uses WorkManager's official test
  * helper so the KEEP-vs-cancel behaviour is verified against the real
  * (in-memory) scheduler.
  */

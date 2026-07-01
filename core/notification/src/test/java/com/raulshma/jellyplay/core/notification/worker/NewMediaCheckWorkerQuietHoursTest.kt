@@ -5,7 +5,7 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 
 /**
- * Regression tests for §4.11: the quiet-hours logic in [NewMediaCheckWorker] (now extracted to
+ * Regression tests: the quiet-hours logic in [NewMediaCheckWorker] (now extracted to
  * a pure companion helper) must correctly handle the overnight wraparound case (e.g.
  * 22:00 → 07:00) that previously lived inline and was untested.
  */

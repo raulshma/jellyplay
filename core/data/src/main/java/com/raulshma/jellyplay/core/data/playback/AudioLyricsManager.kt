@@ -35,7 +35,7 @@ class AudioLyricsManager @Inject constructor(
      * lyric line. A positive value makes lyrics advance earlier (useful when
      * an LRCLIB match lags behind the audio). Defaults to [DEFAULT_OFFSET_MS]
      * to preserve the historic fixed lead; adjustable per-item via
-     * [setLyricsOffset] (enhancements §5.1).
+     * [setLyricsOffset].
      */
     private val _lyricsOffsetMs = MutableStateFlow(DEFAULT_OFFSET_MS)
     val lyricsOffsetMs: StateFlow<Long> = _lyricsOffsetMs.asStateFlow()

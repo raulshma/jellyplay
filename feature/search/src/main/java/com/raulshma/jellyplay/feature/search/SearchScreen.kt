@@ -24,6 +24,8 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
@@ -40,9 +42,7 @@ import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
-import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.grid.GridCells
-import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.DockedSearchBar
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -147,6 +147,7 @@ fun SearchScreen(
     val tags by viewModel.tags.collectAsStateWithLifecycle()
     val showFilters by viewModel.showFilters.collectAsStateWithLifecycle()
     val searchHistory by viewModel.searchHistory.collectAsStateWithLifecycle()
+    val suggestions by viewModel.suggestions.collectAsStateWithLifecycle()
 
     val pagedResults = viewModel.pagedResults.collectAsLazyPagingItems()
     val isRefreshing = pagedResults.loadState.refresh is LoadState.Loading
@@ -404,67 +405,6 @@ fun SearchScreen(
                     ) { }
                 }
 
-                // ── Search suggestions dropdown ──
-                val suggestions by viewModel.suggestions.collectAsStateWithLifecycle()
-                AnimatedVisibility(
-                    visible = suggestions.isNotEmpty() && query.isNotBlank() && isSearchFocused,
-                    enter = fadeIn(tween(200, easing = AlphaEasing)) + expandVertically(),
-                    exit = fadeOut(tween(150, easing = AlphaEasing)) + shrinkVertically(),
-                ) {
-                    val topSuggestions = remember(suggestions) { suggestions.take(8) }
-                    androidx.compose.foundation.lazy.LazyColumn(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(horizontal = 24.dp)
-                            .padding(top = 4.dp)
-                            .clip(ShapeCache.smooth16)
-                            .background(MaterialTheme.colorScheme.surfaceContainerHigh.copy(alpha = 0.95f)),
-                    ) {
-                        items(topSuggestions, key = { it.id }) { item ->
-                            val suggestionFocusState = rememberTvFocusState(focusedScale = 1.0f)
-                            Row(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .then(suggestionFocusState.focusModifier)
-                                    .tvFocusIndicator(suggestionFocusState, ShapeCache.smooth8)
-                                    .clickable {
-                                        viewModel.search(item.name)
-                                    }
-                                    .padding(horizontal = 16.dp, vertical = 12.dp),
-                                verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.spacedBy(12.dp),
-                            ) {
-                                Icon(
-                                    imageVector = when (item.mediaType) {
-                                        MediaType.MOVIE -> Tabler.Outline.Movie
-                                        MediaType.SERIES -> Tabler.Outline.DeviceTv
-                                        MediaType.EPISODE -> Tabler.Outline.DeviceTv
-                                        MediaType.AUDIO, MediaType.MUSIC, MediaType.ALBUM -> Tabler.Outline.Music
-                                        else -> Tabler.Outline.File
-                                    },
-                                    contentDescription = null,
-                                    modifier = Modifier.size(18.dp),
-                                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                                )
-                                Column(modifier = Modifier.weight(1f)) {
-                                    Text(
-                                        item.name,
-                                        style = MaterialTheme.typography.bodyMedium,
-                                        maxLines = 1,
-                                        overflow = TextOverflow.Ellipsis,
-                                    )
-                                    val subtitle = item.year?.toString() ?: item.mediaType.name
-                                    Text(
-                                        subtitle,
-                                        style = MaterialTheme.typography.labelSmall,
-                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                    )
-                                }
-                            }
-                        }
-                    }
-                }
-
                 // ── Active filters bar (dismissible glass tags) ──
                 AnimatedVisibility(
                     visible = hasActiveFilters,
@@ -666,12 +606,34 @@ fun SearchScreen(
                             )
                         }
                         query.isBlank() && !showSeerr -> {
-                            if (searchHistory.isNotEmpty()) {
-                                Column(
-                                    modifier = Modifier
-                                        .fillMaxSize()
-                                        .padding(horizontal = 16.dp, vertical = 8.dp),
-                                ) {
+                            Column(
+                                modifier = Modifier
+                                    .fillMaxSize()
+                                    .verticalScroll(rememberScrollState()),
+                            ) {
+                                // ── Discovery suggestions (favorited/liked items) ──
+                                // Mirrors the official jellyfin-web empty state: a row of
+                                // suggestions the user has favorited/liked, surfaced in random
+                                // order. Clicking navigates to the item's detail page.
+                                if (suggestions.isNotEmpty()) {
+                                    SuggestionSection(
+                                        items = suggestions,
+                                        contentPadding = contentPad,
+                                        spacing = spacing,
+                                        cardWidth = seerrCardWidth,
+                                        getImageUrl = viewModel::getImageUrl,
+                                        onItemClick = { item ->
+                                            onItemClick(item.id, item.mediaType, item.parentId, item.name)
+                                        },
+                                    )
+                                }
+
+                                if (searchHistory.isNotEmpty()) {
+                                    Column(
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .padding(horizontal = 16.dp, vertical = 8.dp),
+                                    ) {
                                     Row(
                                         modifier = Modifier
                                             .fillMaxWidth()
@@ -698,15 +660,11 @@ fun SearchScreen(
                                                 .padding(horizontal = 8.dp, vertical = 4.dp),
                                         )
                                     }
-                                    LazyColumn(
-                                        modifier = Modifier.fillMaxSize(),
+                                    Column(
+                                        modifier = Modifier.fillMaxWidth(),
                                         verticalArrangement = Arrangement.spacedBy(4.dp),
                                     ) {
-                                        items(
-                                            count = searchHistory.size,
-                                            key = { searchHistory[it].id },
-                                        ) { index ->
-                                            val item = searchHistory[index]
+                                        searchHistory.forEach { item ->
                                             val historyRowFocusState = rememberTvFocusState()
                                             Row(
                                                 modifier = Modifier
@@ -765,6 +723,7 @@ fun SearchScreen(
                                     description = "Movies, shows, music, and more",
                                 )
                             }
+                            } // close verticalScroll Column
                         }
                         else -> {
                             // ── Library grid ──
@@ -959,6 +918,61 @@ private fun AnimatedSearchItem(
         },
     ) {
         content()
+    }
+}
+
+/**
+ * Discovery suggestions shown in the empty search state — a horizontal row of
+ * the user's favorited/liked items surfaced in random order (mirrors the
+ * official jellyfin-web behavior). Clicking a suggestion opens the item's
+ * detail page rather than filling the search box.
+ */
+@Composable
+private fun SuggestionSection(
+    items: List<com.raulshma.jellyplay.core.model.MediaItem>,
+    contentPadding: androidx.compose.ui.unit.Dp,
+    spacing: androidx.compose.ui.unit.Dp,
+    cardWidth: androidx.compose.ui.unit.Dp,
+    getImageUrl: (String) -> String,
+    onItemClick: (com.raulshma.jellyplay.core.model.MediaItem) -> Unit,
+) {
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(start = contentPadding, end = contentPadding, top = 12.dp, bottom = 4.dp),
+    ) {
+        Row(
+            modifier = Modifier.fillMaxWidth().padding(bottom = 8.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(6.dp),
+        ) {
+            Icon(
+                imageVector = Tabler.Outline.Star,
+                contentDescription = null,
+                modifier = Modifier.size(16.dp),
+                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            Text(
+                text = "Suggestions",
+                style = MaterialTheme.typography.titleSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                fontWeight = FontWeight.SemiBold,
+            )
+        }
+        TvFocusableItemRow(
+            items = items,
+            key = { it.id },
+            horizontalArrangement = Arrangement.spacedBy(spacing),
+            contentPadding = PaddingValues(end = contentPadding),
+        ) { _, item, itemModifier ->
+            PosterCard(
+                item = item,
+                imageUrl = getImageUrl(item.id),
+                onClick = { onItemClick(item) },
+                sharedElementKey = "suggestion_${item.id}",
+                modifier = itemModifier.width(cardWidth),
+            )
+        }
     }
 }
 

@@ -1,0 +1,46 @@
+package com.raulshma.jellyplay.core.model
+
+import androidx.compose.runtime.Immutable
+import kotlinx.serialization.Serializable
+
+/**
+ * The scope a [ItemPlaybackPreference] applies to.
+ *
+ * - [ITEM]: keyed by a single media-item id (e.g. one movie or one episode).
+ * - [SERIES]: keyed by a series id, applying to every episode of that series
+ *   (e.g. "always play Dark in German with English subs").
+ */
+@Immutable
+@Serializable
+enum class PlaybackPrefScope {
+    ITEM,
+    SERIES,
+}
+
+/**
+ * A per-item / per-series playback-language preference.
+ *
+ * Each language field is nullable: a `null` value means "not set / inherit",
+ * so a rule can pin only the audio language, only the subtitle language, or
+ * both. Resolution precedence at playback load (in `TrackSelectionHelper`) is:
+ *
+ * pending nav stream index → per-item stream-index override (DataStore) →
+ * **per-item language rule → per-series language rule (this model)** →
+ * global `preferredAudioLanguage` / `preferredSubtitleLanguage`.
+ *
+ * @param scope whether this rule is keyed by item id or series id.
+ * @param key the item id (when [PlaybackPrefScope.ITEM]) or series id
+ *   (when [PlaybackPrefScope.SERIES]).
+ * @param audioLanguage preferred audio language code (ISO-639), or null to inherit.
+ * @param subtitleLanguage preferred subtitle language code (ISO-639), or null to inherit.
+ * @param updatedAt epoch millis of the last write.
+ */
+@Immutable
+@Serializable
+data class ItemPlaybackPreference(
+    val scope: PlaybackPrefScope,
+    val key: String,
+    val audioLanguage: String? = null,
+    val subtitleLanguage: String? = null,
+    val updatedAt: Long = System.currentTimeMillis(),
+)

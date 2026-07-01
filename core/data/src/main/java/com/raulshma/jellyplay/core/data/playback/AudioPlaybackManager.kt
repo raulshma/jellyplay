@@ -138,7 +138,7 @@ class AudioPlaybackManager @Inject constructor(
 
     /**
      * Bounded history of pre-mutation queue snapshots enabling undo of
-     * destructive operations (enhancements §5.2). Accessed only on the main
+     * destructive operations. Accessed only on the main
      * thread per the [AudioQueueManager] contract.
      */
     private val queueUndoStack = QueueUndoStack()
@@ -148,7 +148,7 @@ class AudioPlaybackManager @Inject constructor(
     val undoEvents: SharedFlow<QueueUndoEvent> = _undoEvents.asSharedFlow()
 
     /**
-     * A→B loop markers (enhancements §5.4). When both are non-null, playback
+     * A→B loop markers. When both are non-null, playback
      * seeks back to [abLoopStartMs] whenever the position reaches
      * [abLoopEndMs]. Independent of [repeatMode] (off/all/one) so the two can
      * compose. Cleared on track change / fresh queue so a loop never bleeds
@@ -508,7 +508,7 @@ class AudioPlaybackManager @Inject constructor(
         crossfader.cancel()
         progressReporter.reportStopped()
         // A→B loop is track-specific; clear it when loading a new item so a
-        // marker pair never applies to a different song (enhancements §5.4).
+        // marker pair never applies to a different song.
         clearAbLoop()
         currentItemId = itemId
         _isLoadingItemFlag = true
@@ -813,7 +813,7 @@ class AudioPlaybackManager @Inject constructor(
 
     /**
      * Marks point A of an A→B loop at the current playback position. Clears B
-     * if it would now be at or before A (enhancements §5.4).
+     * if it would now be at or before A.
      */
     fun setAbLoopStart() {
         assertMainThread("setAbLoopStart")
@@ -1209,7 +1209,7 @@ class AudioPlaybackManager @Inject constructor(
      * [_repeatMode] in the collector at line 378). Under REPEAT_MODE_ALL or REPEAT_MODE_ONE
      * the player never reaches `STATE_ENDED`, so this callback only fires under mode 0
      * (RepeatNone). The branches that previously handled modes 1 and 2 here were therefore
-     * dead code (§4.13 of the architecture analysis) and have been removed.
+     * dead code and have been removed.
      *
      * Auto-advance under mode 0 is handled separately by `onMediaItemTransitioned` (see
      * [onTrackTransitioned]); this method just clears the local `_isPlaying` flag so the UI
@@ -1388,7 +1388,7 @@ class AudioPlaybackManager @Inject constructor(
                     val pos = player.currentPosition
                     val dur = player.duration.coerceAtLeast(0L)
                     // A→B loop: when both markers are set and we reach B while
-                    // playing, jump back to A (enhancements §5.4).
+                    // playing, jump back to A.
                     val abEnd = _abLoopEndMs.value
                     val abStart = _abLoopStartMs.value
                     if (abEnd != null && abStart != null && player.isPlaying && pos >= abEnd) {

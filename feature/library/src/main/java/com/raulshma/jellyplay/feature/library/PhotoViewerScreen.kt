@@ -1,6 +1,7 @@
 package com.raulshma.jellyplay.feature.library
 
 import android.content.Intent
+import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
@@ -153,6 +154,21 @@ fun PhotoViewerScreen(
                 viewModel.clearSaveResult()
             }
             else -> {}
+        }
+    }
+
+    // Register an OnBackInvokedCallback for the predictive-back gesture / system
+    // back button. Without this the photo viewer — a full-screen scene with a
+    // pointer-input layer that consumes edge events — has no back callback, and
+    // the predictive-back swipe crashes while the close button (which calls
+    // onBack directly) and the 3-button nav back work. This mirrors the TV
+    // remote's onBack layer-peeling (info -> filmstrip -> slideshow -> exit).
+    BackHandler {
+        when {
+            showInfo -> showInfo = false
+            showFilmstrip -> showFilmstrip = false
+            isSlideshowActive -> viewModel.stopSlideshow()
+            else -> onBack()
         }
     }
 

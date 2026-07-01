@@ -1,5 +1,6 @@
 package com.raulshma.jellyplay.feature.player.video
 
+import com.raulshma.jellyplay.core.data.repository.ItemPlaybackPreferenceRepository
 import com.raulshma.jellyplay.core.datastore.UserPreferencesStore
 import com.raulshma.jellyplay.core.model.MediaStream
 import com.raulshma.jellyplay.core.model.MediaStreamSelection
@@ -9,6 +10,7 @@ import com.raulshma.jellyplay.core.model.UserPreferences
 import com.raulshma.jellyplay.feature.player.video.engine.MediaEngine
 import com.raulshma.jellyplay.feature.player.video.engine.MediaTrack
 import io.mockk.every
+import io.mockk.coEvery
 import io.mockk.mockk
 import io.mockk.verify
 import kotlinx.coroutines.CoroutineScope
@@ -50,8 +52,17 @@ class TrackSelectionHelperTest {
             getUiState = { state.value },
             updateUiState = { transform -> state.value = transform(state.value) },
             getCurrentItemId = { "item1" },
+            getCurrentSeriesId = { null },
+            playbackPreferenceResolver = noOpResolver(),
             scope = scope,
         )
+    }
+
+    /** A resolver backed by a mock repo that always resolves to null (inherit global). */
+    private fun noOpResolver(): ItemPlaybackPreferenceResolver {
+        val repo = mockk<ItemPlaybackPreferenceRepository>(relaxed = true)
+        coEvery { repo.get(any(), any()) } returns null
+        return ItemPlaybackPreferenceResolver(repo, { null }, { null }, scope)
     }
 
     @Test
@@ -62,6 +73,8 @@ class TrackSelectionHelperTest {
             getUiState = { state.value },
             updateUiState = { transform -> state.value = transform(state.value) },
             getCurrentItemId = { "item1" },
+            getCurrentSeriesId = { null },
+            playbackPreferenceResolver = noOpResolver(),
             scope = scope,
         )
         helper.updateTracksFromEngine()
@@ -152,6 +165,8 @@ class TrackSelectionHelperTest {
             getUiState = { state.value },
             updateUiState = { transform -> state.value = transform(state.value) },
             getCurrentItemId = { "item1" },
+            getCurrentSeriesId = { null },
+            playbackPreferenceResolver = noOpResolver(),
             scope = scope,
         )
         helper.selectAudioTrack(TrackOption(1, "Spanish", "spa", false))
@@ -344,6 +359,8 @@ class TrackSelectionHelperTest {
             getUiState = { state.value },
             updateUiState = { transform -> state.value = transform(state.value) },
             getCurrentItemId = { null },
+            getCurrentSeriesId = { null },
+            playbackPreferenceResolver = noOpResolver(),
             scope = scope,
         )
         noItemId.resetAudioSelection() // should not throw

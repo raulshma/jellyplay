@@ -112,11 +112,12 @@ import com.raulshma.jellyplay.feature.player.video.components.IntroSkipOverlay
 import com.raulshma.jellyplay.feature.player.video.components.SegmentSkipOverlay
 import com.raulshma.jellyplay.feature.player.video.components.NextEpisodeOverlay
 import com.raulshma.jellyplay.feature.player.video.components.PlaybackInfoOverlay
+import com.raulshma.jellyplay.feature.player.video.components.RememberPreferenceToggle
 import com.raulshma.jellyplay.feature.player.video.components.PlaybackErrorDialog
 import com.raulshma.jellyplay.feature.player.video.components.QualityPickerSheet
 import com.raulshma.jellyplay.feature.player.video.components.PlaybackModeSheet
 import com.raulshma.jellyplay.feature.player.video.components.PlayerModalBottomSheet
-import com.raulshma.jellyplay.feature.player.video.components.SubtitleDownloadSheet
+import com.raulshma.jellyplay.feature.player.video.components.SubtitleManagerSheet
 import com.raulshma.jellyplay.feature.player.video.components.CastIndicatorOverlay
 import com.raulshma.jellyplay.feature.player.video.components.CompanionDashboard
 import com.raulshma.jellyplay.feature.player.video.components.ChapterPickerSheet
@@ -1132,7 +1133,11 @@ fun VideoPlayerScreen(
             // needed and the lambda never goes stale.
             val onPassthroughClick by remember { mutableStateOf({ viewModel.setAudioPassthrough(!uiState.audioPassthrough) }) }
             val onSubtitleDownloadClick by remember { mutableStateOf({
+                // Reset search/cultures state from any previous item before
+                // loading fresh data, so stale results don't leak across items.
+                viewModel.resetSubtitleManagerState()
                 viewModel.loadRemoteSubtitles()
+                viewModel.loadSubtitleCultures()
                 currentSheet = PlayerSheet.SubtitleDownload
             }) }
             val onEpisodesClick by remember { mutableStateOf({ currentSheet = PlayerSheet.Episodes }) }
@@ -1468,6 +1473,25 @@ private fun PlayerSheetRouter(
                 onSelect = { viewModel.selectAudioTrack(it) },
                 onReset = if (uiState.hasAudioOverride) { { viewModel.resetAudioTrack() } } else null,
                 onDismiss = dismissSheet,
+                footer = if (uiState.seriesId != null) {
+                    {
+                        // Per-series audio-language preference toggle. Saving
+                        // remembers the currently-selected track's language for
+                        // every episode of this series; toggling off forgets it.
+                        RememberPreferenceToggle(
+                            label = "Remember audio language for this series",
+                            checked = uiState.hasSeriesAudioPref,
+                            onToggle = { remember ->
+                                val lang = if (remember) {
+                                    uiState.audioTracks.firstOrNull { it.isSelected && it.index >= 0 }?.language
+                                } else {
+                                    null
+                                }
+                                viewModel.setSeriesAudioLanguagePreference(lang)
+                            },
+                        )
+                    }
+                } else null,
             )
         }
         is PlayerSheet.Subtitle -> {
@@ -1477,6 +1501,22 @@ private fun PlayerSheetRouter(
                 onSelect = { viewModel.selectSubtitleTrack(it) },
                 onReset = if (uiState.hasSubtitleOverride) { { viewModel.resetSubtitleTrack() } } else null,
                 onDismiss = dismissSheet,
+                footer = if (uiState.seriesId != null) {
+                    {
+                        RememberPreferenceToggle(
+                            label = "Remember subtitle language for this series",
+                            checked = uiState.hasSeriesSubtitlePref,
+                            onToggle = { remember ->
+                                val lang = if (remember) {
+                                    uiState.subtitleTracks.firstOrNull { it.isSelected && it.index >= 0 }?.language
+                                } else {
+                                    null
+                                }
+                                viewModel.setSeriesSubtitleLanguagePreference(lang)
+                            },
+                        )
+                    }
+                } else null,
             )
         }
         is PlayerSheet.Chapter -> {
@@ -1556,14 +1596,33 @@ private fun PlayerSheetRouter(
             )
         }
         is PlayerSheet.SubtitleDownload -> {
-            SubtitleDownloadSheet(
-                subtitles = uiState.remoteSubtitles,
-                isLoading = uiState.isLoadingRemoteSubtitles,
+            SubtitleManagerSheet(
+                // Download tab
+                downloadSubtitles = uiState.remoteSubtitles,
+                isDownloading = uiState.isLoadingRemoteSubtitles,
                 onDownload = {
                     viewModel.downloadSubtitle(it)
                     onSheetChange(PlayerSheet.None)
                 },
                 onLoadLocalFile = onLoadLocalSubtitle,
+                // Search tab
+                searchResults = uiState.searchedSubtitles,
+                isSearching = uiState.isSearchingSubtitles,
+                hasSearched = uiState.hasSearchedSubtitles,
+                searchError = uiState.subtitleSearchError,
+                cultures = uiState.subtitleCultures,
+                defaultLanguage = uiState.defaultSearchLanguage,
+                onSearch = { viewModel.searchRemoteSubtitles(it) },
+                onDownloadSearched = {
+                    viewModel.downloadSubtitle(it)
+                    onSheetChange(PlayerSheet.None)
+                },
+                // Upload tab
+                isUploading = uiState.isUploadingSubtitle,
+                onUpload = { uri, fileName, language, isForced, isHearingImpaired ->
+                    viewModel.uploadSubtitle(uri, fileName, language, isForced, isHearingImpaired)
+                    onSheetChange(PlayerSheet.None)
+                },
                 onDismiss = dismissSheet,
             )
         }

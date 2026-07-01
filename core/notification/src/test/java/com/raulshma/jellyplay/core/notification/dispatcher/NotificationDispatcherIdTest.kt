@@ -5,7 +5,7 @@ import org.junit.Assert.assertNotEquals
 import org.junit.Test
 
 /**
- * Regression tests for §4.11: [NotificationDispatcher.notificationIdFor] must produce
+ * Regression tests: [NotificationDispatcher.notificationIdFor] must produce
  * deterministic IDs per (library, item) pair so the system can coalesce notifications
  * instead of stacking duplicates on re-dispatch.
  */

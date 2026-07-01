@@ -393,7 +393,7 @@ val MIGRATION_23_24 = object : Migration(23, 24) {
 }
 
 /**
- * Migration v24 → v25 (§4.10 of the architecture analysis): encrypts plaintext Jellyfin
+ * Migration v24 → v25: encrypts plaintext Jellyfin
  * access tokens stored in the `users.accessToken` and `servers.accessToken` columns using
  * the Keystore-backed [TokenCipher]. Existing encrypted rows are left untouched (cipher is
  * idempotent), and rows with empty/null tokens are skipped.
@@ -472,6 +472,28 @@ val MIGRATION_25_26 = object : Migration(25, 26) {
     }
 }
 
+// Per-series / per-item playback-language preferences.
+// The table mirrors ItemPlaybackPreferenceEntity exactly; the (scope, key)
+// pair is unique so OnConflictStrategy.REPLACE acts as an upsert.
+val MIGRATION_26_27 = object : Migration(26, 27) {
+    override fun migrate(db: SupportSQLiteDatabase) {
+        db.execSQL(
+            """
+            CREATE TABLE IF NOT EXISTS item_playback_preferences (
+                id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
+                scope TEXT NOT NULL,
+                key TEXT NOT NULL,
+                audioLanguage TEXT,
+                subtitleLanguage TEXT,
+                updatedAt INTEGER NOT NULL
+            )
+            """.trimIndent()
+        )
+        db.execSQL("CREATE UNIQUE INDEX IF NOT EXISTS index_item_playback_preferences_scope_key ON item_playback_preferences(scope, key)")
+        db.execSQL("CREATE INDEX IF NOT EXISTS index_item_playback_preferences_updatedAt ON item_playback_preferences(updatedAt)")
+    }
+}
+
 val ALL_MIGRATIONS = listOf(
     MIGRATION_1_2,
     MIGRATION_2_3,
@@ -497,4 +519,5 @@ val ALL_MIGRATIONS = listOf(
     MIGRATION_22_23,
     MIGRATION_23_24,
     MIGRATION_25_26,
+    MIGRATION_26_27,
 )
