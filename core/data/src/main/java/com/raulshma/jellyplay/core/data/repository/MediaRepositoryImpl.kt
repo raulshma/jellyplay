@@ -255,6 +255,9 @@ class MediaRepositoryImpl @Inject constructor(
     override suspend fun findItemByProviderId(provider: String, id: String): Result<String?> =
         apiClient.findItemByProviderId(provider, id)
 
+    override suspend fun getSearchSuggestions(limit: Int): Result<SearchResult> =
+        apiClient.getSearchSuggestions(limit)
+
     override fun getMediaItemsPaged(
         parentId: String?,
         mediaTypes: List<MediaType>?,

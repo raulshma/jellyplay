@@ -36,7 +36,6 @@ import kotlinx.coroutines.flow.debounce
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flatMapLatest
-import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
@@ -115,6 +114,13 @@ class SearchViewModel @Inject constructor(
     private val _suggestions = stateFlow<List<MediaItem>>(emptyList())
     val suggestions: StateFlow<List<MediaItem>> = _suggestions.flow
 
+    /**
+     * Tracks whether discovery suggestions have been loaded for the current
+     * empty state. Avoids re-fetching on every recomposition-driven re-entry
+     * while still reloading once the user clears their query back to blank.
+     */
+    private var suggestionsLoaded: Boolean = false
+
     private val _offlineResults = stateFlow<List<OfflineMediaItem>>(emptyList())
     val offlineResults: StateFlow<List<OfflineMediaItem>> = _offlineResults.flow
 
@@ -152,22 +158,35 @@ class SearchViewModel @Inject constructor(
         loadSuggestions()
     }
 
+    /**
+     * Discovery suggestions for the empty search state — favorited/liked items
+     * surfaced in random order, matching the official jellyfin-web behavior.
+     * Unlike the previous while-typing autocomplete dropdown, suggestions only
+     * appear when the query is blank; typing clears them, and clearing the
+     * query reloads them. Clicking a suggestion navigates to its detail page.
+     */
     private fun loadSuggestions() {
         launch {
-            queryFlow.flow
-                .debounce(300)
-                .distinctUntilChanged()
-                .flatMapLatest { q ->
-                    if (q.isBlank() || q.length < 2) {
-                        flowOf(emptyList())
+            queryFlow.flow.collect { q ->
+                    if (q.isBlank()) {
+                        // Reload discovery suggestions each time we return to the
+                        // empty state so the random selection stays fresh.
+                        suggestionsLoaded = false
+                        loadDiscoverySuggestions()
                     } else {
-                        flow {
-                            val result = mediaRepository.search(query = q, limit = 8)
-                            emit(result.getOrElse { SearchResult(emptyList(), 0, 0) }.items)
-                        }
+                        // Any typed query hides suggestions (no autocomplete).
+                        _suggestions.set(emptyList())
                     }
                 }
-                .collect { items -> _suggestions.set(items) }
+        }
+    }
+
+    private fun loadDiscoverySuggestions() {
+        if (suggestionsLoaded) return
+        suggestionsLoaded = true
+        launch {
+            val result = mediaRepository.getSearchSuggestions(limit = 20)
+            _suggestions.set(result.getOrElse { SearchResult(emptyList(), 0, 0) }.items)
         }
     }
 
