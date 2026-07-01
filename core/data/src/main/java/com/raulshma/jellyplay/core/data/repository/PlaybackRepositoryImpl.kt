@@ -2,6 +2,7 @@ package com.raulshma.jellyplay.core.data.repository
 
 import com.raulshma.jellyplay.core.data.cache.TtlCache
 import com.raulshma.jellyplay.core.model.CreditTimestamps
+import com.raulshma.jellyplay.core.model.CultureInfo
 import com.raulshma.jellyplay.core.model.IntroTimestamps
 import com.raulshma.jellyplay.core.model.MediaSegment
 import com.raulshma.jellyplay.core.model.MediaSegmentType
@@ -224,6 +225,22 @@ class PlaybackRepositoryImpl @Inject constructor(
 
     override suspend fun downloadSubtitle(itemId: String, subtitleId: String): Result<Unit> =
         apiClient.downloadRemoteSubtitle(itemId, subtitleId)
+
+    override suspend fun searchRemoteSubtitles(itemId: String, language: String): Result<List<RemoteSubtitleInfo>> =
+        apiClient.searchRemoteSubtitles(itemId, language)
+
+    override suspend fun uploadSubtitle(
+        itemId: String,
+        data: String,
+        fileName: String,
+        language: String?,
+        isForced: Boolean,
+        isHearingImpaired: Boolean,
+    ): Result<Unit> =
+        apiClient.uploadSubtitle(itemId, data, fileName, language, isForced, isHearingImpaired)
+
+    override suspend fun getSubtitleCultures(itemId: String): Result<List<CultureInfo>> =
+        apiClient.getMetadataEditorInfo(itemId).map { it.cultures }
 
     override suspend fun getTrickplayTileImage(itemId: String, width: Int, index: Int): ByteArray? =
         apiClient.getTrickplayTileImage(itemId, width, index)

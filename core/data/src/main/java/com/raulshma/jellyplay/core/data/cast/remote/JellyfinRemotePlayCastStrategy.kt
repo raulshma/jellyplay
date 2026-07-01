@@ -229,7 +229,7 @@ class JellyfinRemotePlayCastStrategy @Inject constructor(
                 startPositionTicks = startTicks,
                 // Carry the user's active audio/subtitle selection and the
                 // targeted media source into the remote session so casting
-                // does not reset tracks to the server default (§4.5).
+                // does not reset tracks to the server default.
                 mediaSourceId = mediaSourceId,
                 audioStreamIndex = audioStreamIndex,
                 subtitleStreamIndex = subtitleStreamIndex,

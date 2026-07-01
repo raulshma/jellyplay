@@ -238,7 +238,12 @@ class MetadataApiClientImpl @Inject constructor(
             RemoteSubtitleInfo(
                 id = dto.id ?: "",
                 threeLetterISOLanguageName = dto.threeLetterIsoLanguageName ?: "",
-                language = dto.id,
+                // The SDK RemoteSubtitleInfo exposes no free-form `language`
+                // field — only `threeLetterIsoLanguageName`. Previously this
+                // was set to `dto.id`, which surfaced the subtitle's opaque ID
+                // wherever the language badge is rendered (editor + player
+                // search results). Use the ISO code instead.
+                language = dto.threeLetterIsoLanguageName,
                 name = dto.name,
                 format = dto.format,
                 comment = dto.comment,

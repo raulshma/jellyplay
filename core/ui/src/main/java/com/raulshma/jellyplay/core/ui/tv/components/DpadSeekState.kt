@@ -7,11 +7,11 @@ import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
-import com.raulshma.jellyplay.core.ui.tv.input.DpadRepeatAccelerator
+import com.raulshma.jellyplay.core.ui.tv.input.DpadSeekAcceleration
 
 @Stable
 class DpadSeekState(
-    private val accelerator: DpadRepeatAccelerator,
+    private val acceleration: DpadSeekAcceleration,
     private val getBaseStepMs: () -> Long,
     private val getCurrentPositionMs: () -> Long,
     private val getDurationMs: () -> Long,
@@ -66,7 +66,11 @@ class DpadSeekState(
     }
 
     private fun accumulate(targetDirection: Int, repeatCount: Int) {
-        val step = accelerator.calculateStep(getBaseStepMs(), repeatCount)
+        val step = acceleration.calculateStep(
+            baseStepMs = getBaseStepMs(),
+            repeatCount = repeatCount,
+            durationMs = getDurationMs().coerceAtLeast(0L),
+        )
         if (direction == targetDirection && offsetMs > 0L) {
             offsetMs += step
         } else {
@@ -84,10 +88,10 @@ fun rememberDpadSeekState(
     getCurrentPositionMs: () -> Long,
     getDurationMs: () -> Long,
     onCommit: (Long) -> Unit,
-    accelerator: DpadRepeatAccelerator = DpadRepeatAccelerator.Default,
+    accelerator: DpadSeekAcceleration = DpadSeekAcceleration.Default,
 ): DpadSeekState = remember(accelerator) {
     DpadSeekState(
-        accelerator = accelerator,
+        acceleration = accelerator,
         getBaseStepMs = getBaseStepMs,
         getCurrentPositionMs = getCurrentPositionMs,
         getDurationMs = getDurationMs,

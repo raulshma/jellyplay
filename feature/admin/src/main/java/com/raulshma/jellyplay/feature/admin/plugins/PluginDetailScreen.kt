@@ -48,6 +48,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.composables.icons.tabler.Tabler
+import com.composables.icons.tabler.outline.AlertTriangle
 import com.composables.icons.tabler.outline.ChevronRight
 import com.composables.icons.tabler.outline.Download
 import com.composables.icons.tabler.outline.Puzzle
@@ -83,6 +84,8 @@ fun PluginDetailScreen(
     val backgroundColor = rememberScreenBackgroundColor()
     val adaptiveInfo = LocalAdaptiveInfo.current
     var showUninstallDialog by remember { mutableStateOf(false) }
+    // Pending version install awaiting third-party trust confirmation.
+    var pendingTrustInstall by remember { mutableStateOf<PluginVersionInfo?>(null) }
 
     // TV focus-on-launch: focus the first card once content arrives so D-pad input lands on
     // content, not the navigation drawer.
@@ -117,10 +120,15 @@ fun PluginDetailScreen(
                 verticalArrangement = Arrangement.spacedBy(12.dp),
             ) {
                 state.plugin?.let { plugin ->
+                    if (state.error != null) {
+                        item { ErrorBanner(message = state.error, onDismiss = { viewModel.clearError() }) }
+                    }
+
                     item {
                         PluginHeaderCard(
                             plugin = plugin,
                             isToggling = state.isToggling,
+                            isEnabledOverride = state.isEnabledOverride,
                             onToggle = { viewModel.toggleEnabled() },
                             onUninstall = { showUninstallDialog = true },
                         )
@@ -162,6 +170,18 @@ fun PluginDetailScreen(
                         }
                     }
 
+                    // Metadata table (Status / Version / Developer / Repository),
+                    // mirroring jellyfin-web's PluginDetailsTable.
+                    item {
+                        PluginDetailsMetadataCard(
+                            plugin = plugin,
+                            packageName = state.pluginPackage?.name,
+                            owner = state.pluginPackage?.owner,
+                            repositoryUrl = state.pluginPackage?.versions
+                                ?.firstOrNull { it.version == plugin.version }?.repositoryUrl,
+                        )
+                    }
+
                     state.pluginPackage?.let { pkg ->
                         if (pkg.versions.isNotEmpty()) {
                             item {
@@ -178,7 +198,15 @@ fun PluginDetailScreen(
                                     version = version,
                                     isCurrentVersion = isCurrentVersion,
                                     isInstalling = state.installingVersion == version.version,
-                                    onInstall = { viewModel.installVersion(version) },
+                                    onInstall = {
+                                        // Gate third-party installs behind a trust disclaimer
+                                        // (jellyfin-web onInstall / TRUSTED_REPO_URL).
+                                        if (isTrustedRepository(version.repositoryUrl)) {
+                                            viewModel.installVersion(version)
+                                        } else {
+                                            pendingTrustInstall = version
+                                        }
+                                    },
                                 )
                             }
                         }
@@ -239,12 +267,39 @@ fun PluginDetailScreen(
             },
         )
     }
+
+    // Third-party install disclaimer (mirrors jellyfin-web MessagePluginInstallDisclaimer).
+    pendingTrustInstall?.let { version ->
+        AlertDialog(
+            onDismissRequest = { pendingTrustInstall = null },
+            icon = { Icon(Tabler.Outline.AlertTriangle, contentDescription = null) },
+            title = { Text("Install third-party plugin?") },
+            text = {
+                Text(
+                    "Plugins have the same system access as your Jellyfin server. " +
+                        "Only install plugins from sources you trust. Continue installing " +
+                        "version ${version.version}?",
+                )
+            },
+            confirmButton = {
+                TextButton(onClick = {
+                    val v = version
+                    pendingTrustInstall = null
+                    viewModel.installVersion(v)
+                }) { Text("Continue") }
+            },
+            dismissButton = {
+                TextButton(onClick = { pendingTrustInstall = null }) { Text("Cancel") }
+            },
+        )
+    }
 }
 
 @Composable
 private fun PluginHeaderCard(
     plugin: PluginInfo,
     isToggling: Boolean,
+    isEnabledOverride: Boolean?,
     onToggle: () -> Unit,
     onUninstall: () -> Unit,
 ) {
@@ -300,7 +355,10 @@ private fun PluginHeaderCard(
                     CircularProgressIndicator(modifier = Modifier.size(20.dp))
                     Spacer(Modifier.width(12.dp))
                 }
-                val isEnabled = plugin.status == PluginStatus.ACTIVE || plugin.status == PluginStatus.RESTART
+                val statusEnabled = plugin.status == PluginStatus.ACTIVE || plugin.status == PluginStatus.RESTART
+                // Use the optimistic override while a toggle is in flight so the
+                // label reflects the requested state immediately.
+                val isEnabled = isEnabledOverride ?: statusEnabled
                 FilledTonalButton(
                     onClick = onToggle,
                     enabled = !isToggling,
@@ -504,5 +562,106 @@ private fun VersionHistoryItem(
                 }
             }
         }
+    }
+}
+
+/** Inline error banner for failed enable/disable/install/uninstall operations. */
+@Composable
+private fun ErrorBanner(message: String, onDismiss: () -> Unit) {
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.errorContainer,
+        ),
+        shape = ShapeCache.smooth16,
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(16.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(12.dp),
+        ) {
+            Icon(
+                Tabler.Outline.AlertTriangle,
+                contentDescription = null,
+                modifier = Modifier.size(20.dp),
+                tint = MaterialTheme.colorScheme.onErrorContainer,
+            )
+            Text(
+                message,
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onErrorContainer,
+                modifier = Modifier.weight(1f),
+            )
+            TextButton(onClick = onDismiss) { Text("Dismiss") }
+        }
+    }
+}
+
+/**
+ * Status / Version / Developer / Repository details card, mirroring
+ * jellyfin-web's PluginDetailsTable component.
+ */
+@Composable
+private fun PluginDetailsMetadataCard(
+    plugin: PluginInfo,
+    packageName: String?,
+    owner: String?,
+    repositoryUrl: String?,
+) {
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.surfaceContainerLow,
+        ),
+        shape = ShapeCache.smooth16,
+    ) {
+        Column(modifier = Modifier.padding(16.dp)) {
+            Text(
+                "Details",
+                style = MaterialTheme.typography.titleSmall,
+                fontWeight = FontWeight.SemiBold,
+            )
+            Spacer(Modifier.height(8.dp))
+            val developer = when {
+                !plugin.canUninstall -> "Bundled"
+                !owner.isNullOrBlank() -> owner
+                else -> "Unknown"
+            }
+            val repository = when {
+                !plugin.canUninstall -> "Bundled"
+                !repositoryUrl.isNullOrBlank() -> repositoryUrl
+                else -> "Unknown"
+            }
+            MetadataRow("Status", plugin.status.name.lowercase().replaceFirstChar { it.uppercase() })
+            MetadataRow("Version", plugin.version.ifBlank { "—" })
+            MetadataRow("Developer", developer)
+            MetadataRow("Repository", repository)
+        }
+    }
+}
+
+@Composable
+private fun MetadataRow(label: String, value: String) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(vertical = 4.dp),
+        horizontalArrangement = Arrangement.SpaceBetween,
+    ) {
+        Text(
+            label,
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+        Text(
+            value,
+            style = MaterialTheme.typography.bodyMedium,
+            fontWeight = FontWeight.Medium,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+            modifier = Modifier.weight(1f, fill = false).padding(start = 16.dp),
+        )
     }
 }

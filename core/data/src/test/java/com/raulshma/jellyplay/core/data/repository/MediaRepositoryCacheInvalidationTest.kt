@@ -18,7 +18,7 @@ import kotlinx.coroutines.runBlocking
 import org.junit.Test
 
 /**
- * Regression tests for §4.7: [MediaRepositoryImpl] must invalidate its TTL caches when the
+ * Regression tests: [MediaRepositoryImpl] must invalidate its TTL caches when the
  * active server or user changes so that the next user doesn't see the previous user's data
  * (privacy + correctness).
  *

@@ -23,6 +23,9 @@ data class PluginDetailState(
     val isToggling: Boolean = false,
     val isUninstalling: Boolean = false,
     val installingVersion: String? = null,
+    /** Optimistic enable state set immediately while toggleEnabled() is in flight
+     *  (mirrors jellyfin-web's isEnabledOverride). Null = no override. */
+    val isEnabledOverride: Boolean? = null,
 )
 
 @HiltViewModel
@@ -43,7 +46,7 @@ class PluginDetailViewModel @Inject constructor(
 
     private fun loadPlugin(pluginId: String, pluginName: String) {
         launch {
-            _state.value = _state.value.copy(isLoading = true, error = null)
+            _state.value = _state.value.copy(isLoading = true, error = null, isEnabledOverride = null)
             apiClient.getInstalledPlugins().onSuccess { plugins ->
                 val plugin = plugins.find { it.id == pluginId }
                 if (plugin != null) {
@@ -104,7 +107,8 @@ class PluginDetailViewModel @Inject constructor(
     fun toggleEnabled() {
         val plugin = _state.value.plugin ?: return
         val isEnabled = plugin.status == PluginStatus.ACTIVE || plugin.status == PluginStatus.RESTART
-        _state.value = _state.value.copy(isToggling = true)
+        // Optimistically flip the UI immediately (jellyfin-web isEnabledOverride).
+        _state.value = _state.value.copy(isToggling = true, isEnabledOverride = !isEnabled)
         launch {
             val result = if (isEnabled) {
                 apiClient.disablePlugin(plugin.id, plugin.version)
@@ -118,7 +122,7 @@ class PluginDetailViewModel @Inject constructor(
                 Log.e("PluginDetail", "Failed to toggle plugin", e)
                 _state.value = _state.value.copy(error = e.message)
             }
-            _state.value = _state.value.copy(isToggling = false)
+            _state.value = _state.value.copy(isToggling = false, isEnabledOverride = null)
         }
     }
 

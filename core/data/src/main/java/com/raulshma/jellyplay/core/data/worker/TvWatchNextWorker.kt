@@ -18,7 +18,7 @@ import kotlinx.coroutines.flow.firstOrNull
  * publishing logic — and is a no-op when the `androidTvWatchNextEnabled`
  * preference is disabled.
  *
- * Scheduling design (startup-and-workers-architecture §7.14): this worker is
+ * Scheduling design: this worker is
  * **one-shot only** — it is triggered on demand via [TvWatchNextScheduler] when
  * the user toggles the Watch Next setting, rather than on a periodic cadence
  * like UserDataSync/AutoDownload. This is intentional: the Watch Next row is

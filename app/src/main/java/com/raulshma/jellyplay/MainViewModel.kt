@@ -144,7 +144,7 @@ class MainViewModel @Inject constructor(
                         com.raulshma.jellyplay.widget.ContinueWatchingWidget.triggerUpdate(context)
                         // Best-effort cache maintenance — runs once after the
                         // first successful auth instead of a fragile startup
-                        // delay (startup-and-workers-architecture §7.5).
+                        // delay.
                         cacheMaintenanceInitializer.cleanupOnce()
                         // Fetch library folders for the TV navigation drawer
                         launch { refreshLibraryFolders() }
@@ -281,7 +281,7 @@ class MainViewModel @Inject constructor(
      * The returned intent advertises `return_result`, so the app-level
      * `ActivityResultLauncher` in [com.raulshma.jellyplay.navigation.JellyPlayApp]
      * can read the external player's final position and credit watched progress
-     * via [reportExternalPlaybackStopped] (see enhancements §4.3).
+     * via [reportExternalPlaybackStopped].
      */
     suspend fun buildExternalPlayerLaunch(
         itemId: String,

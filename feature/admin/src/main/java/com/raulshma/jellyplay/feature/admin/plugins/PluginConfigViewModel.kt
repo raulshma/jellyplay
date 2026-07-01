@@ -1,9 +1,16 @@
 package com.raulshma.jellyplay.feature.admin.plugins
 
+import android.content.Context
 import android.util.Log
+import com.raulshma.jellyplay.core.datastore.UserPreferencesStore
 import com.raulshma.jellyplay.core.network.JellyfinApiClient
+import com.raulshma.jellyplay.core.network.api.JellyfinApiEngine
 import com.raulshma.jellyplay.core.ui.viewmodel.JellyPlayViewModel
 import dagger.hilt.android.lifecycle.HiltViewModel
+import dagger.hilt.android.qualifiers.ApplicationContext
+import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.withContext
+import okhttp3.OkHttpClient
 import javax.inject.Inject
 
 data class PluginConfigState(
@@ -13,11 +20,16 @@ data class PluginConfigState(
     val configPageName: String? = null,
     val serverAddress: String = "",
     val accessToken: String = "",
+    /** Parameterized bridge script (window.ApiClient/Dashboard globals) injected into the WebView. */
+    val bridgeScript: String = "",
 )
 
 @HiltViewModel
 class PluginConfigViewModel @Inject constructor(
+    @ApplicationContext private val context: Context,
     private val apiClient: JellyfinApiClient,
+    private val engine: JellyfinApiEngine,
+    private val preferencesStore: UserPreferencesStore,
 ) : JellyPlayViewModel() {
 
     private val _state = composeState(PluginConfigState())
@@ -31,9 +43,13 @@ class PluginConfigViewModel @Inject constructor(
         loadConfig(pluginId)
     }
 
+    /** The OkHttpClient used by [PluginConfigScreen] to auth same-origin WebView requests. */
+    val okHttpClient: OkHttpClient get() = engine.okHttpClient
+
     private fun loadConfig(pluginId: String) {
         launch {
             _state.value = _state.value.copy(isLoading = true, error = null)
+            prepareBridgeScript()
             apiClient.getConfigurationPages().onSuccess { pages ->
                 val configPage = pages.find { it.pluginId == pluginId }
                 if (configPage != null) {
@@ -53,6 +69,32 @@ class PluginConfigViewModel @Inject constructor(
             }
             _state.value = _state.value.copy(isLoading = false)
         }
+    }
+
+    /**
+     * Builds the parameterized `pluginBridge.js` once per load, substituting the
+     * current server address, user id, and access token. The token is injected
+     * so write requests (config save) self-authenticate; the host additionally
+     * authenticates same-origin GETs via shouldInterceptRequest.
+     */
+    private suspend fun prepareBridgeScript() {
+        val server = engine.currentServer.value?.address.orEmpty()
+        val token = engine.currentUser.value?.accessToken.orEmpty()
+        val userId = engine.currentUser.value?.id.orEmpty()
+        val rawJs = withContext(kotlinx.coroutines.Dispatchers.IO) {
+            runCatching {
+                context.assets.open("pluginBridge.js").bufferedReader().use { it.readText() }
+            }.getOrElse {
+                Log.e("PluginConfig", "pluginBridge.js asset not found", it)
+                ""
+            }
+        }
+        val script = buildBridgeScript(rawJs, server, userId, token)
+        _state.value = _state.value.copy(
+            serverAddress = server,
+            accessToken = token,
+            bridgeScript = script,
+        )
     }
 
     fun refresh() {

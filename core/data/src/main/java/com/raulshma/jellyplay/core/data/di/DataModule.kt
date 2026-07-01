@@ -6,6 +6,8 @@ import com.raulshma.jellyplay.core.data.repository.AuthRepository
 import com.raulshma.jellyplay.core.data.repository.AuthRepositoryImpl
 import com.raulshma.jellyplay.core.data.repository.DownloadRepository
 import com.raulshma.jellyplay.core.data.repository.DownloadRepositoryImpl
+import com.raulshma.jellyplay.core.data.repository.ItemPlaybackPreferenceRepository
+import com.raulshma.jellyplay.core.data.repository.ItemPlaybackPreferenceRepositoryImpl
 import com.raulshma.jellyplay.core.data.repository.LyricsRepository
 import com.raulshma.jellyplay.core.data.repository.MediaRepository
 import com.raulshma.jellyplay.core.data.repository.MediaRepositoryImpl
@@ -48,7 +50,7 @@ abstract class DataModule {
 
         // LyricsRepository is a narrow (ISP) view of the same MediaRepository singleton
         // (MediaRepository extends LyricsRepository). Providing it via delegation guarantees
-        // a single shared instance — no duplicate caches (§4.17).
+        // a single shared instance — no duplicate caches.
         @dagger.Provides
         @Singleton
         fun provideLyricsRepository(mediaRepository: MediaRepository): LyricsRepository =
@@ -102,6 +104,10 @@ abstract class DataModule {
     @Binds
     @Singleton
     abstract fun bindSeenMediaRepository(impl: SeenMediaRepositoryImpl): SeenMediaRepository
+
+    @Binds
+    @Singleton
+    abstract fun bindItemPlaybackPreferenceRepository(impl: ItemPlaybackPreferenceRepositoryImpl): ItemPlaybackPreferenceRepository
 
     @Binds
     @Singleton

@@ -14,7 +14,7 @@ import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.Config
 
 /**
- * Unit tests for the design-system's pure functions (§4.11 of the architecture analysis).
+ * Unit tests for the design-system's pure functions.
  * Verifies determinism, dark/light divergence, and basic contrast-ratio guarantees for
  * [ColorGenerator.generateColorScheme], [isLightColor], and [getSynthwaveColorScheme].
  *

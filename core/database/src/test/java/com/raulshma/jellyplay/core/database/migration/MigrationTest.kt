@@ -189,7 +189,44 @@ class MigrationTest {
     }
 
     /**
-     * §4.10: verifies the v24→v25 migration encrypts plaintext access tokens stored in the
+     * Verifies the full migration chain (which now ends at v27) creates the
+     * `item_playback_preferences` table with the expected (scope, key) unique
+     * index, queryable through the DAO. Reuses the v12 starting schema (the
+     * chain itself creates every later table, including this one via
+     * [MIGRATION_26_27]).
+     */
+    @Test
+    fun migrateAllFromV12_includesItemPlaybackPreferences() = runTest {
+        createDatabase(12) { db ->
+            createServersTable(db)
+            createDownloadsTableV11(db)
+            createUsersTableV10(db)
+            createLyricsCacheTable(db)
+            createOfflineMediaTable(db)
+        }
+
+        val db = openWithMigrations()
+        // DAO round-trip confirms the table + columns + unique index exist and
+        // that OnConflictStrategy.REPLACE upserts on the (scope, key) pair.
+        db.itemPlaybackPreferenceDao().upsert(
+            com.raulshma.jellyplay.core.database.entity.ItemPlaybackPreferenceEntity(
+                scope = "SERIES",
+                key = "series-1",
+                audioLanguage = "deu",
+                subtitleLanguage = "eng",
+                updatedAt = 1L,
+            )
+        )
+        val saved = db.itemPlaybackPreferenceDao().getByKey("SERIES", "series-1")
+        assertNotNull(saved)
+        assertEquals("deu", saved!!.audioLanguage)
+        assertEquals(1, db.itemPlaybackPreferenceDao().countByScope("SERIES"))
+        db.close()
+    }
+
+
+    /**
+     * Verifies the v24→v25 migration encrypts plaintext access tokens stored in the
      * `users` and `servers` tables. After the migration, the DB columns hold ciphertext that
      * round-trips through [TokenCipher.decrypt].
      *
@@ -271,7 +308,7 @@ class MigrationTest {
     }
 
     /**
-     * §4.10 regression: re-running the migration on already-encrypted rows must NOT change
+     * Regression: re-running the migration on already-encrypted rows must NOT change
      * them (cipher is idempotent) and must NOT corrupt the data.
      */
     @Test
