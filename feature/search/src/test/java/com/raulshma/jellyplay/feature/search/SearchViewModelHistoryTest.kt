@@ -55,9 +55,12 @@ class SearchViewModelHistoryTest {
             com.raulshma.jellyplay.core.model.seerr.SeerrPreferences()
         )
         // Stub the init-time repository calls so relaxed-mock defaults don't
-        // break the List casts in loadGenres()/loadTags().
+        // break the List casts in loadGenres()/loadTags()/loadSuggestions().
         coEvery { mediaRepository.getGenres(any()) } returns Result.success(emptyList())
         coEvery { mediaRepository.getTags(any(), any(), any()) } returns Result.success(emptyList())
+        coEvery { mediaRepository.getSearchSuggestions(any()) } returns Result.success(
+            com.raulshma.jellyplay.core.model.SearchResult(emptyList(), 0, 0)
+        )
         coEvery { searchHistoryRepository.getRecent(any(), any()) } returns flowOf(emptyList())
         coEvery { offlineRepository.searchOffline(any(), any()) } returns emptyList()
 

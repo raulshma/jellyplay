@@ -23,7 +23,7 @@ import kotlinx.coroutines.flow.firstOrNull
  * (partial success is preserved via `getOrElse`), but it is recorded so the
  * worker can escalate retry → failure after [MAX_RETRIES]. Previously this
  * worker returned `Result.success()` unconditionally, leaving a persistently
- * broken server path invisible to operators (§7.8).
+ * broken server path invisible to operators.
  */
 @HiltWorker
 class AutoDownloadWorker @AssistedInject constructor(

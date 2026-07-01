@@ -183,7 +183,7 @@ private fun InWindowPlayerSheet(
                     Modifier
                         .size(width = 40.dp, height = 4.dp)
                         .clip(CircleShape)
-                        .background(Color.White.copy(alpha = 0.25f)),
+                        .background(colorScheme.onSurfaceVariant.copy(alpha = 0.4f)),
                 )
             }
 

@@ -1,6 +1,7 @@
 package com.raulshma.jellyplay.core.ui.tv.components
 
-import com.raulshma.jellyplay.core.ui.tv.input.DpadRepeatAccelerator
+import com.raulshma.jellyplay.core.ui.tv.input.DurationAwareDpadSeekAcceleration
+import com.raulshma.jellyplay.core.ui.tv.input.LinearDpadSeekAcceleration
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -13,7 +14,7 @@ class DpadSeekStateTest {
     private val baseStepMs = 10_000L
 
     private fun createState(): DpadSeekState = DpadSeekState(
-        accelerator = DpadRepeatAccelerator.Default,
+        acceleration = LinearDpadSeekAcceleration.Default,
         getBaseStepMs = { baseStepMs },
         getCurrentPositionMs = { currentPosition },
         getDurationMs = { duration },
@@ -170,5 +171,33 @@ class DpadSeekStateTest {
         currentPosition = 70_000L
         state.commitForward()
         assertEquals(60_000L, committedPosition)
+    }
+
+    @Test
+    fun durationAwareAcceleration_scalesStepByDurationThroughState() {
+        // The same key-repeat count yields a larger step for a long film than for a short
+        // clip, proving the duration wired into the state reaches the acceleration strategy.
+        // Raw repeatCount = 120 -> scaled 40 (/3): long film tier = 6x, short clip tier = 2x.
+        val longFilm = DpadSeekState(
+            acceleration = DurationAwareDpadSeekAcceleration.Default,
+            getBaseStepMs = { baseStepMs },
+            getCurrentPositionMs = { currentPosition },
+            getDurationMs = { 3 * 60 * 60_000L }, // 3h (>= 150 min bucket)
+            onCommit = { committedPosition = it },
+        )
+        longFilm.seekForward(repeatCount = 120)
+        // 6x of 10s base = 60_000ms.
+        assertEquals(60_000L, longFilm.offsetMs)
+
+        val shortClip = DpadSeekState(
+            acceleration = DurationAwareDpadSeekAcceleration.Default,
+            getBaseStepMs = { baseStepMs },
+            getCurrentPositionMs = { currentPosition },
+            getDurationMs = { 20 * 60_000L }, // 20 min (< 30 min bucket)
+            onCommit = { committedPosition = it },
+        )
+        shortClip.seekForward(repeatCount = 120)
+        // Short content caps at 2x of the base step.
+        assertEquals(20_000L, shortClip.offsetMs)
     }
 }

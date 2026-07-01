@@ -32,7 +32,7 @@ import javax.inject.Singleton
  *
  * Defined as an interface (and consumed via that interface) so callers don't
  * reach into the concrete worker classes, mirroring the `TvWatchNextScheduler`
- * DI-clean pattern (startup-and-workers-architecture §7.2).
+ * DI-clean pattern.
  */
 interface WidgetWorkScheduler {
     fun enqueuePeriodic()

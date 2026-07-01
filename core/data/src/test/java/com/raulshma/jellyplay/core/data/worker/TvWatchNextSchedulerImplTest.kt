@@ -15,7 +15,7 @@ import org.robolectric.annotation.Config
 
 /**
  * Unit tests for [TvWatchNextSchedulerImpl] covering the enqueue + tag
- * association branches (startup-and-workers-architecture §7.13). Uses
+ * association branches. Uses
  * WorkManager's official test helper so the one-shot enqueue is verified
  * against the real (in-memory) scheduler.
  */

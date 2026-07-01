@@ -17,8 +17,7 @@ import javax.inject.Singleton
 
 /**
  * Encrypts and decrypts short strings (auth tokens) using an Android-Keystore-backed
- * AES-256-GCM key. Used to keep Jellyfin `accessToken` values opaque at rest in Room
- * (§4.10 of the architecture analysis).
+ * AES-256-GCM key. Used to keep Jellyfin `accessToken` values opaque at rest in Room.
  *
  * - Key material lives inside the Android Keystore (hardware-backed on devices that support
  *   it). The key is generated on first use with alias [KEY_ALIAS] and persists across app

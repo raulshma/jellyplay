@@ -15,8 +15,7 @@ import javax.inject.Inject
 
 /**
  * Cold-start download recovery. Extracted out of `JellyPlayApplication` so the
- * Application class *composes* startup steps rather than *containing* them
- * (see startup-and-workers-architecture §7.1).
+ * Application class *composes* startup steps rather than *containing* them.
  *
  * Re-enqueues `PENDING` downloads and resets `DOWNLOADING` rows back to
  * `PENDING` on every cold start, then deletes orphaned partial bytes for

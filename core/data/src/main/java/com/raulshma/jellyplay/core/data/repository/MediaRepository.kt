@@ -65,6 +65,14 @@ interface MediaRepository : LiveTvRepository, SyncPlayRepository, NewsletterRepo
     ): Result<SearchResult>
 
     /**
+     * Discovery suggestions for the empty search state — favorited/liked movies,
+     * shows and artists surfaced in random order (matches the official
+     * jellyfin-web behavior). Clicking a suggestion should navigate to the
+     * item's detail page.
+     */
+    suspend fun getSearchSuggestions(limit: Int = 20): Result<SearchResult>
+
+    /**
      * Resolves a library item id by provider (external) id such as `tmdb`, `tvdb`,
      * or `imdb`. Returns the matching Jellyfin item id, or null when no item has
      * that provider id. Used to open a Seerr "Available" item in the library.

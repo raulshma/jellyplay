@@ -323,7 +323,7 @@ private fun MainContent(
         // below. That launcher reads the external player's returned position
         // and credits watched progress via reportExternalPlaybackStopped — so
         // the Continue Watching row advances for both regular videos and Live
-        // TV channels (enhancements §4.3). Returning false prevents the
+        // TV channels. Returning false prevents the
         // in-app VideoPlayerScreen from composing for the external case.
         val isExternalPreferred = preferences.preferredPlayer ==
             com.raulshma.jellyplay.core.model.PlayerType.EXTERNAL
@@ -511,7 +511,7 @@ private fun MainContent(
 
     val isTv = context.isTv()
 
-    // Single root collector for app-wide one-shot messages (enhancements §2.1).
+    // Single root collector for app-wide one-shot messages.
     // Phone renders a Snackbar (accessible, dismissible, localizable); TV keeps
     // a system Toast since the TV layout has no root SnackbarHost. Either way,
     // emission is now centralized through UserMessageBus instead of scattered
@@ -1024,7 +1024,7 @@ private fun PhoneContent(
                         isVisible = true,
                         // The host app knows the engine is a video `MediaEngine` even though
                         // the cross-feature holder types it as the more general
-                        // `RemotePlayableEngine` (§4.6). Cast is safe because only the video
+                        // `RemotePlayableEngine`. Cast is safe because only the video
                         // engine ever enters mini mode.
                         engine = videoMiniPlayerState.engine as? com.raulshma.jellyplay.feature.player.video.engine.MediaEngine,
                         title = videoMiniTitle,
@@ -1147,7 +1147,7 @@ private fun FullScreenContent(
  * Resolved fields needed to build an [com.raulshma.jellyplay.ExternalPlayerLaunch]
  * from a navigable video route (regular video or Live TV channel). Used by the
  * `navigateFilter` to uniformly hand off to the app-level external-player
- * ActivityResultLauncher (enhancements §4.3).
+     * ActivityResultLauncher.
  */
 private data class ExternalLaunchTarget(
     val itemId: String,

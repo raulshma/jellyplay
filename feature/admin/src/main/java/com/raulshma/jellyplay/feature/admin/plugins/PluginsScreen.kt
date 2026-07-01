@@ -160,8 +160,12 @@ fun PluginsScreen(
                             allPackages = state.availablePackages,
                             installedPlugins = state.installedPlugins,
                             searchQuery = state.catalogSearchQuery,
+                            statusFilter = state.catalogStatusFilter,
+                            categoryFilter = state.catalogCategoryFilter,
                             isCatalogLoading = state.isCatalogLoading,
                             onSearchQueryChange = { viewModel.updateSearchQuery(it) },
+                            onStatusFilterChange = { viewModel.updateStatusFilter(it) },
+                            onCategoryFilterChange = { viewModel.updateCategoryFilter(it) },
                             onInstall = { name, guid, version, repoUrl ->
                                 viewModel.installPackage(name, guid, version, repoUrl)
                             },

@@ -24,18 +24,51 @@ data class PluginsState(
     val catalogSearchQuery: String = "",
     val isCatalogLoading: Boolean = false,
     val isReposLoading: Boolean = false,
+    /** Catalog status filter, mirroring jellyfin-web's status chips. */
+    val catalogStatusFilter: PluginStatusFilter = PluginStatusFilter.INSTALLED,
+    /** Catalog category filter, mirroring jellyfin-web's category chips. */
+    val catalogCategoryFilter: PluginCategory = PluginCategory.ALL,
 ) {
+    /** GUIDs of installed plugins, used by the Available/Installed status filter. */
+    val installedGuids: Set<String> get() = installedPlugins.map { it.id }.toSet()
+
     val filteredPackages: List<PluginPackage>
         get() {
-            if (catalogSearchQuery.isBlank()) return availablePackages
-            val query = catalogSearchQuery.lowercase()
-            return availablePackages.filter { pkg ->
-                pkg.name.lowercase().contains(query) ||
-                    pkg.description.lowercase().contains(query) ||
-                    pkg.category.lowercase().contains(query) ||
-                    pkg.owner.lowercase().contains(query)
+            var result: Iterable<PluginPackage> = availablePackages
+
+            // Status filter: All / Installed / Available (jellyfin-web default = Installed).
+            result = when (catalogStatusFilter) {
+                PluginStatusFilter.ALL -> result
+                PluginStatusFilter.INSTALLED -> result.filter { it.guid in installedGuids }
+                PluginStatusFilter.AVAILABLE -> result.filter { it.guid !in installedGuids }
             }
+
+            // Category filter.
+            if (catalogCategoryFilter != PluginCategory.ALL) {
+                result = result.filter {
+                    PluginCategory.fromServer(it.category) == catalogCategoryFilter
+                }
+            }
+
+            // Free-text search over name/description/category/owner.
+            if (catalogSearchQuery.isNotBlank()) {
+                val query = catalogSearchQuery.lowercase()
+                result = result.filter { pkg ->
+                    pkg.name.lowercase().contains(query) ||
+                        pkg.description.lowercase().contains(query) ||
+                        pkg.category.lowercase().contains(query) ||
+                        pkg.owner.lowercase().contains(query)
+                }
+            }
+            return result.toList()
         }
+}
+
+/** Catalog status filter options (mirror `pluginStatusOption.ts`). */
+enum class PluginStatusFilter(val displayName: String) {
+    ALL("All"),
+    INSTALLED("Installed"),
+    AVAILABLE("Available"),
 }
 
 @HiltViewModel
@@ -261,6 +294,14 @@ class PluginsViewModel @Inject constructor(
 
     fun updateSearchQuery(query: String) {
         _state.value = _state.value.copy(catalogSearchQuery = query)
+    }
+
+    fun updateStatusFilter(filter: PluginStatusFilter) {
+        _state.value = _state.value.copy(catalogStatusFilter = filter)
+    }
+
+    fun updateCategoryFilter(category: PluginCategory) {
+        _state.value = _state.value.copy(catalogCategoryFilter = category)
     }
 
     fun clearError() {

@@ -33,10 +33,12 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.compositeOver
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.raulshma.jellyplay.core.designsystem.theme.ShapeCache
 import com.raulshma.jellyplay.core.designsystem.theme.SyncStatusColors
+import com.raulshma.jellyplay.core.designsystem.theme.isLightColor
 import androidx.compose.foundation.layout.Box
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
@@ -135,16 +137,25 @@ fun SyncPlayPlayerSheet(
                             )
                         }
                     }
+                    // The status color (green/amber) is a fixed light value, so using it for
+                    // both the faint container tint and the label puts light text on a near-light
+                    // background — low contrast in dark mode and failing in light mode. Derive the
+                    // label color from the effective composited background instead.
+                    val pillBackground = statusColor.copy(alpha = 0.15f)
+                        .compositeOver(MaterialTheme.colorScheme.surface)
+                    val statusTextColor = remember(pillBackground) {
+                        if (isLightColor(pillBackground)) Color.Black else Color.White
+                    }
                     Surface(
                         shape = ShapeCache.smoothPill,
-                        color = statusColor.copy(alpha = 0.15f),
+                        color = pillBackground,
                     ) {
                         Text(
                             if (isSynced) "Synced" else "Buffering",
                             style = MaterialTheme.typography.labelMedium.copy(
                                 fontWeight = FontWeight.Bold,
                             ),
-                            color = statusColor,
+                            color = statusTextColor,
                             modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp),
                         )
                     }

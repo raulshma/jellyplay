@@ -445,8 +445,8 @@ class CastManager @Inject constructor(
         val player = ensureCastPlayer() ?: return
         player.addListener(listener)
         // Apply the user's track / quality selections to the stream URL so the
-        // receiving Chromecast requests the right variants from the server
-        // (enhancements §4.5). Subtitle sidecars configured on the MediaItem
+        // receiving Chromecast requests the right variants from the server.
+        // Subtitle sidecars configured on the MediaItem
         // are preserved as text tracks by CastPlayer.
         player.setMediaItem(mediaItem.withCastOptions(options), startPositionMs)
         player.prepare()
@@ -610,7 +610,7 @@ private data class CastPlayerSnapshot(
  * standard query params (`AudioStreamIndex`, `SubtitleStreamIndex`,
  * `MaxVideoBitrate`), used by the DLNA and Google Cast transports which both
  * consume a server URL. Existing params are preserved; only non-null options
- * are added. Used for the §4.5 cast-handoff fix.
+ * are added. Used for the cast-handoff fix.
  */
 internal fun String.withCastQueryParams(options: CastMediaOptions): String {
     if (options.audioStreamIndex == null &&

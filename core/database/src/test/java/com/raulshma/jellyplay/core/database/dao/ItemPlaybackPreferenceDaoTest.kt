@@ -1,0 +1,102 @@
+package com.raulshma.jellyplay.core.database.dao
+
+import android.content.Context
+import androidx.room.Room
+import androidx.test.core.app.ApplicationProvider
+import com.raulshma.jellyplay.core.database.JellyPlayDatabase
+import com.raulshma.jellyplay.core.database.entity.ItemPlaybackPreferenceEntity
+import kotlinx.coroutines.test.runTest
+import org.junit.After
+import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNotNull
+import org.junit.Assert.assertNull
+import org.junit.Before
+import org.junit.Test
+import org.junit.runner.RunWith
+import org.robolectric.RobolectricTestRunner
+import org.robolectric.annotation.Config
+
+@RunWith(RobolectricTestRunner::class)
+@Config(sdk = [28])
+class ItemPlaybackPreferenceDaoTest {
+
+    private lateinit var database: JellyPlayDatabase
+    private lateinit var dao: ItemPlaybackPreferenceDao
+
+    @Before
+    fun setup() {
+        val context = ApplicationProvider.getApplicationContext<Context>()
+        database = Room.inMemoryDatabaseBuilder(context, JellyPlayDatabase::class.java)
+            .allowMainThreadQueries()
+            .build()
+        dao = database.itemPlaybackPreferenceDao()
+    }
+
+    @After
+    fun teardown() {
+        database.close()
+    }
+
+    private fun pref(
+        scope: String = "SERIES",
+        key: String = "series-1",
+        audioLanguage: String? = "deu",
+        subtitleLanguage: String? = "eng",
+    ) = ItemPlaybackPreferenceEntity(
+        scope = scope,
+        key = key,
+        audioLanguage = audioLanguage,
+        subtitleLanguage = subtitleLanguage,
+        updatedAt = 1_000L,
+    )
+
+    @Test
+    fun `upsert and getByKey`() = runTest {
+        dao.upsert(pref())
+        val result = dao.getByKey("SERIES", "series-1")
+        assertNotNull(result)
+        assertEquals("deu", result!!.audioLanguage)
+        assertEquals("eng", result.subtitleLanguage)
+    }
+
+    @Test
+    fun `upsert replaces same scope and key`() = runTest {
+        dao.upsert(pref(audioLanguage = "deu", subtitleLanguage = "eng"))
+        // Second insert with the same (scope, key) must overwrite, not duplicate.
+        dao.upsert(pref(audioLanguage = "fra", subtitleLanguage = null))
+
+        val result = dao.getByKey("SERIES", "series-1")
+        assertNotNull(result)
+        assertEquals("fra", result!!.audioLanguage)
+        assertNull(result.subtitleLanguage)
+        assertEquals(1, dao.countByScope("SERIES"))
+    }
+
+    @Test
+    fun `item and series scopes are independent`() = runTest {
+        dao.upsert(pref(scope = "ITEM", key = "item-1", audioLanguage = "jpn"))
+        dao.upsert(pref(scope = "SERIES", key = "series-1", audioLanguage = "deu"))
+
+        assertEquals("jpn", dao.getByKey("ITEM", "item-1")!!.audioLanguage)
+        assertEquals("deu", dao.getByKey("SERIES", "series-1")!!.audioLanguage)
+        assertEquals(1, dao.countByScope("ITEM"))
+        assertEquals(1, dao.countByScope("SERIES"))
+    }
+
+    @Test
+    fun `getByKey returns null when absent`() = runTest {
+        assertNull(dao.getByKey("SERIES", "missing"))
+    }
+
+    @Test
+    fun `deleteByKey removes only the matching row`() = runTest {
+        dao.upsert(pref(scope = "SERIES", key = "series-1"))
+        dao.upsert(pref(scope = "SERIES", key = "series-2"))
+
+        dao.deleteByKey("SERIES", "series-1")
+
+        assertNull(dao.getByKey("SERIES", "series-1"))
+        assertNotNull(dao.getByKey("SERIES", "series-2"))
+        assertEquals(1, dao.countByScope("SERIES"))
+    }
+}

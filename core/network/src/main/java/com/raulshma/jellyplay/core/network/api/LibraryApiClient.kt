@@ -62,6 +62,15 @@ interface LibraryApiClient {
     ): Result<SearchResult>
 
     /**
+     * Discovery suggestions for the empty search state — favorited/liked items
+     * surfaced in random order. Mirrors the official jellyfin-web behavior
+     * (getItems sorted by `IsFavoriteOrLiked, Random`). Returned items are
+     * navigable: clicking opens the item's detail page rather than filling
+     * the search box.
+     */
+    suspend fun getSearchSuggestions(limit: Int = 20): Result<SearchResult>
+
+    /**
      * Resolves a library item by a provider (external) id, e.g. `tmdb`, `tvdb`,
      * or `imdb`. Uses Jellyfin's `AnyProviderId` filter ("tmdb:123"). Returns the
      * first matching Jellyfin item id, or null when no match exists. Used to open

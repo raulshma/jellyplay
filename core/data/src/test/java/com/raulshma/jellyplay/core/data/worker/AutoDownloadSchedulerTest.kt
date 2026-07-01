@@ -22,7 +22,7 @@ import org.robolectric.annotation.Config
 
 /**
  * Unit tests for [AutoDownloadScheduler] covering the enable/disable branches
- * and tag association (startup-and-workers-architecture §7.13). Uses
+ * and tag association. Uses
  * WorkManager's official test helper so the KEEP-vs-cancel behaviour is
  * verified against the real (in-memory) scheduler.
  */
