@@ -50,6 +50,14 @@ private const val SHEET_ANIM_MS = 280
 private const val SNAP_MS = 180
 private const val MAX_SCRIM_ALPHA = 0.5f
 private const val DISMISS_FRACTION = 0.18f
+/**
+ * The sheet panel never spans the whole screen: it keeps ~5% clear of each edge
+ * (5% left + 5% right via a centered 90% width, and 5% at the top via a 95%
+ * max height). The full-screen scrim behind it is unaffected, so taps on the
+ * margins still dismiss.
+ */
+private const val SHEET_WIDTH_FRACTION = 0.90f
+private const val SHEET_HEIGHT_FRACTION = 0.95f
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -135,8 +143,8 @@ private fun InWindowPlayerSheet(
         Column(
             modifier = Modifier
                 .align(Alignment.BottomCenter)
-                .fillMaxWidth()
-                .heightIn(max = maxHeight)
+                .fillMaxWidth(SHEET_WIDTH_FRACTION)
+                .heightIn(max = maxHeight * SHEET_HEIGHT_FRACTION)
                 .imePadding()
                 .offset { IntOffset(0, translationY.roundToInt()) }
                 .clip(SheetTopShape)

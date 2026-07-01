@@ -11,6 +11,15 @@ import java.time.format.DateTimeFormatter
 import java.time.format.DateTimeParseException
 import javax.inject.Inject
 
+/**
+ * Selection state for the recording detail sheet shown when a [DvrTimer] or
+ * [DvrSeriesTimer] card is tapped. Null means no sheet is shown.
+ */
+sealed interface DvrDetailState {
+    data class Timer(val timer: DvrTimer) : DvrDetailState
+    data class SeriesTimer(val timer: DvrSeriesTimer) : DvrDetailState
+}
+
 @HiltViewModel
 class DvrViewModel @Inject constructor(
     private val mediaRepository: MediaRepository,
@@ -28,6 +37,9 @@ class DvrViewModel @Inject constructor(
 
     private val _error = composeState<String?>(null)
     val error: String? get() = _error.value
+
+    private val _detail = composeState<DvrDetailState?>(null)
+    val detail: DvrDetailState? get() = _detail.value
 
     init {
         load()
@@ -50,18 +62,22 @@ class DvrViewModel @Inject constructor(
         }
     }
 
+    fun showTimerDetail(timer: DvrTimer) { _detail.value = DvrDetailState.Timer(timer) }
+    fun showSeriesTimerDetail(timer: DvrSeriesTimer) { _detail.value = DvrDetailState.SeriesTimer(timer) }
+    fun dismissDetail() { _detail.value = null }
+
     fun cancelTimer(timerId: String) {
         launch {
             mediaRepository.cancelTimer(timerId)
-                .onSuccess { load() }
+                .onSuccess { _detail.value = null; load() }
                 .onFailure { _error.value = it.message }
         }
     }
 
     fun cancelSeriesTimer(timerId: String) {
         launch {
-            mediaRepository.cancelTimer(timerId)
-                .onSuccess { load() }
+            mediaRepository.cancelSeriesTimer(timerId)
+                .onSuccess { _detail.value = null; load() }
                 .onFailure { _error.value = it.message }
         }
     }

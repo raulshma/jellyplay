@@ -2,6 +2,7 @@ package com.raulshma.jellyplay.feature.details
 
 import android.util.Log
 import androidx.compose.runtime.State
+import com.raulshma.jellyplay.core.data.repository.MediaRepository
 import com.raulshma.jellyplay.core.data.repository.SeerrRepository
 import com.raulshma.jellyplay.core.data.seerr.SeerrRequestDelegate
 import com.raulshma.jellyplay.core.datastore.SeerrPreferencesStore
@@ -9,6 +10,7 @@ import com.raulshma.jellyplay.core.datastore.UserPreferencesStore
 import com.raulshma.jellyplay.core.model.MediaType
 import com.raulshma.jellyplay.core.model.UserPreferences
 import com.raulshma.jellyplay.core.model.seerr.SeerrEpisode
+import com.raulshma.jellyplay.core.model.seerr.SeerrMediaStatus
 import com.raulshma.jellyplay.core.model.seerr.SeerrMovieDetails
 import com.raulshma.jellyplay.core.model.seerr.SeerrPreferences
 import com.raulshma.jellyplay.core.model.seerr.SeerrRadarrServiceDetail
@@ -38,6 +40,7 @@ class SeerrDetailViewModel @Inject constructor(
     private val seerrRequestDelegate: SeerrRequestDelegate,
     private val preferencesStore: UserPreferencesStore,
     private val seerrPreferencesStore: SeerrPreferencesStore,
+    private val mediaRepository: MediaRepository,
 ) : JellyPlayViewModel() {
 
     val preferences: StateFlow<UserPreferences> = preferencesStore.preferences
@@ -90,6 +93,14 @@ class SeerrDetailViewModel @Inject constructor(
     private val _episodesBySeason = stateFlow<Map<Int, List<SeerrEpisode>>>(emptyMap())
     val episodesBySeason = _episodesBySeason.flow
 
+    /**
+     * The Jellyfin library item id resolved for an "Available" Seerr item, or null
+     * when the item isn't in the library (or resolution hasn't run/failed). Used to
+     * enable the "Available" → "Open in library" action.
+     */
+    private val _jellyfinItemId = composeState<String?>(null)
+    val jellyfinItemId: State<String?> = _jellyfinItemId.asState()
+
     private val _isLoadingEpisodes = stateFlow(false)
     val isLoadingEpisodes = _isLoadingEpisodes.flow
 
@@ -100,6 +111,7 @@ class SeerrDetailViewModel @Inject constructor(
             _ratings.value = null
             _movieDetails.value = null
             _tvDetails.value = null
+            _jellyfinItemId.value = null
             _seerrRecommendations.set(emptyList())
             _seerrSimilar.set(emptyList())
             _selectedSeasonNumber.value = null
@@ -162,11 +174,50 @@ class SeerrDetailViewModel @Inject constructor(
                         _seerrSimilar.set(it.results)
                     }
                 }
+
+                // Once details are loaded, try to resolve the Jellyfin library item
+                // so the "Available" action can open it directly. Best-effort: a
+                // null result simply leaves the button disabled.
+                resolveJellyfinItemId(tmdbId, mediaType)
             } catch (e: Exception) {
                 Log.w(TAG, "Failed to fetch Seerr details: ${e.message}")
             }
 
             _isLoading.value = false
+        }
+    }
+
+    /**
+     * Resolves the Jellyfin item id for the loaded Seerr media by querying the
+     * library against provider ids (tmdb first, then tvdb/imdb as fallbacks).
+     * Only attempts resolution when the item is reported as available on the
+     * server. Updates [_jellyfinItemId] on success.
+     */
+    private suspend fun resolveJellyfinItemId(tmdbId: Int, mediaType: String) {
+        val movie = _movieDetails.value
+        val tv = _tvDetails.value
+        val mediaInfo = movie?.mediaInfo ?: tv?.mediaInfo
+        val status = mediaInfo?.status ?: 0
+        val mediaStatus = SeerrMediaStatus.fromValue(status)
+        if (mediaStatus != SeerrMediaStatus.AVAILABLE &&
+            mediaStatus != SeerrMediaStatus.PARTIALLY_AVAILABLE
+        ) return
+
+        // Provider candidates in priority order. tmdb is the primary id Seerr tracks;
+        // tvdb/imdb are fallbacks that may be present on the detail's externalIds.
+        val candidates = buildList {
+            add("tmdb" to tmdbId.toString())
+            val externalIds = if (mediaType == "movie") movie?.externalIds else tv?.externalIds
+            externalIds?.tvdbId?.let { add("tvdb" to it.toString()) }
+            externalIds?.imdbId?.let { add("imdb" to it) }
+        }
+
+        for ((provider, id) in candidates) {
+            val result = mediaRepository.findItemByProviderId(provider, id).getOrNull()
+            if (!result.isNullOrBlank()) {
+                _jellyfinItemId.value = result
+                return
+            }
         }
     }
 

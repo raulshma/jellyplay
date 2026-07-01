@@ -1,11 +1,20 @@
 package com.raulshma.jellyplay.feature.player.video.components
 
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxScope
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.material3.DropdownMenu
+import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -13,6 +22,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
@@ -39,8 +49,20 @@ import com.raulshma.jellyplay.core.ui.tv.tryRequestFocus
  * composables). All state is hoisted to the caller via explicit parameters;
  * only the per-submenu open/close state is local to this composable.
  */
+/**
+ * The three-dot overflow menu, rendered **in-window** rather than via a Material3
+ * [androidx.compose.material3.DropdownMenu]. A DropdownMenu opens a separate Popup
+ * window that does not inherit the player's immersive mode, so the status/navigation
+ * bars would flash on every open — the same problem solved for the bottom sheets
+ * (see [com.raulshma.jellyplay.feature.player.video.components.PlayerModalBottomSheet]).
+ * Anchoring the panel inside the controls overlay keeps it in the immersive window so
+ * the system bars never appear.
+ *
+ * Must be hosted inside a full-size [Box]: it emits a transparent full-size interceptor
+ * (taps outside dismiss) and the panel itself, anchored to [Alignment.TopEnd].
+ */
 @Composable
-internal fun PlayerOverflowMenu(
+internal fun BoxScope.PlayerOverflowMenu(
     expanded: Boolean,
     onDismiss: () -> Unit,
     supportsSubtitleStyle: Boolean,
@@ -83,6 +105,7 @@ internal fun PlayerOverflowMenu(
     videoFiltersActive: Boolean = false,
     onVideoFilterClick: () -> Unit = {},
 ) {
+    if (!expanded) return
     var showDialogueBoostSubmenu by remember { mutableStateOf(false) }
     var showNightModeSubmenu by remember { mutableStateOf(false) }
     var showAudioNormalizationSubmenu by remember { mutableStateOf(false) }
@@ -140,247 +163,274 @@ internal fun PlayerOverflowMenu(
         }
     }
 
-    DropdownMenu(
-        expanded = expanded,
-        onDismissRequest = onDismiss,
-        containerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
-        shape = MaterialTheme.shapes.extraLarge,
-        modifier = Modifier.then(if (isTv) Modifier.fillMaxWidth(fraction = 0.5f) else Modifier),
-    ) {
-        if (supportsSubtitleStyle) {
-            OverflowMenuItem(
-                icon = Tabler.Outline.Subtitles,
-                label = "Subtitle Style",
-                onClick = onSubtitleStyleClick,
-            )
-        }
+    if (!expanded) return
 
-        if (supportsDialogueBoost) {
-            if (showDialogueBoostSubmenu) {
+    // Rendered in-window (NOT via a Material3 DropdownMenu/Popup). A DropdownMenu
+    // opens a brand-new top-level window that does not inherit the player's
+    // immersive mode, so the status/navigation bars would flash on every open —
+    // the same problem solved for the bottom sheets (see PlayerModalBottomSheet).
+    // Anchoring the panel inside the controls overlay keeps it in the immersive
+    // window so the system bars never appear. The caller positions this content
+    // within a full-size Box; a transparent interceptor behind the panel dismisses
+    // on outside taps, matching the sheet behavior.
+    // Transparent full-size interceptor: taps outside the panel dismiss.
+    Box(
+        Modifier
+            .matchParentSize()
+            .clickable(
+                interactionSource = remember { MutableInteractionSource() },
+                indication = null,
+            ) { onDismiss() },
+    )
+    Surface(
+        color = MaterialTheme.colorScheme.surfaceContainerHigh,
+        shape = MaterialTheme.shapes.extraLarge,
+        modifier = Modifier
+            .align(Alignment.TopEnd)
+            .padding(top = 56.dp)
+            .then(if (isTv) Modifier.fillMaxWidth(fraction = 0.5f) else Modifier)
+            .widthIn(max = 320.dp),
+    ) {
+        Column(
+            modifier = Modifier
+                .verticalScroll(rememberScrollState())
+                .padding(vertical = 8.dp),
+        ) {
+            if (supportsSubtitleStyle) {
                 OverflowMenuItem(
-                    icon = Tabler.Outline.ArrowLeft,
-                    label = "Dialogue Boost",
-                    onClick = { showDialogueBoostSubmenu = false },
-                    modifier = Modifier.focusRequester(dialogueBoostFocusRequester),
-                )
-                EffectStrength.entries.forEach { strength ->
-                    DropdownMenuItem(
-                        text = {
-                            Text(
-                                strength.displayName,
-                                color = if (dialogueBoostEnabled && dialogueBoostStrength == strength)
-                                    MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface,
-                            )
-                        },
-                        onClick = {
-                            if (!dialogueBoostEnabled) onDialogueBoostClick()
-                            onDialogueBoostStrengthChange(strength)
-                            onDismiss()
-                        },
-                        leadingIcon = {
-                            if (dialogueBoostEnabled && dialogueBoostStrength == strength) {
-                                Icon(
-                                    Tabler.Outline.Check,
-                                    contentDescription = null,
-                                    tint = MaterialTheme.colorScheme.primary,
-                                    modifier = Modifier.size(20.dp),
-                                )
-                            }
-                        },
-                    )
-                }
-            } else {
-                OverflowMenuItem(
-                    icon = Tabler.Outline.Music,
-                    label = if (dialogueBoostEnabled) "Dialogue Boost \u00B7 ${dialogueBoostStrength.displayName}" else "Dialogue Boost",
-                    onClick = { showDialogueBoostSubmenu = true },
-                    tint = if (dialogueBoostEnabled) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface,
-                    modifier = Modifier.focusRequester(dialogueBoostFocusRequester),
+                    icon = Tabler.Outline.Subtitles,
+                    label = "Subtitle Style",
+                    onClick = onSubtitleStyleClick,
                 )
             }
-        }
-        if (supportsNightMode) {
-            if (showNightModeSubmenu) {
-                OverflowMenuItem(
-                    icon = Tabler.Outline.ArrowLeft,
-                    label = "Night Mode",
-                    onClick = { showNightModeSubmenu = false },
-                    modifier = Modifier.focusRequester(nightModeFocusRequester),
-                )
-                EffectStrength.entries.forEach { strength ->
-                    DropdownMenuItem(
-                        text = {
-                            Text(
-                                strength.displayName,
-                                color = if (nightModeEnabled && nightModeStrength == strength)
-                                    MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface,
-                            )
-                        },
-                        onClick = {
-                            if (!nightModeEnabled) onNightModeClick()
-                            onNightModeStrengthChange(strength)
-                            onDismiss()
-                        },
-                        leadingIcon = {
-                            if (nightModeEnabled && nightModeStrength == strength) {
-                                Icon(
-                                    Tabler.Outline.Check,
-                                    contentDescription = null,
-                                    tint = MaterialTheme.colorScheme.primary,
-                                    modifier = Modifier.size(20.dp),
+
+            if (supportsDialogueBoost) {
+                if (showDialogueBoostSubmenu) {
+                    OverflowMenuItem(
+                        icon = Tabler.Outline.ArrowLeft,
+                        label = "Dialogue Boost",
+                        onClick = { showDialogueBoostSubmenu = false },
+                        modifier = Modifier.focusRequester(dialogueBoostFocusRequester),
+                    )
+                    EffectStrength.entries.forEach { strength ->
+                        DropdownMenuItem(
+                            text = {
+                                Text(
+                                    strength.displayName,
+                                    color = if (dialogueBoostEnabled && dialogueBoostStrength == strength)
+                                        MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface,
                                 )
-                            }
-                        },
+                            },
+                            onClick = {
+                                if (!dialogueBoostEnabled) onDialogueBoostClick()
+                                onDialogueBoostStrengthChange(strength)
+                                onDismiss()
+                            },
+                            leadingIcon = {
+                                if (dialogueBoostEnabled && dialogueBoostStrength == strength) {
+                                    Icon(
+                                        Tabler.Outline.Check,
+                                        contentDescription = null,
+                                        tint = MaterialTheme.colorScheme.primary,
+                                        modifier = Modifier.size(20.dp),
+                                    )
+                                }
+                            },
+                        )
+                    }
+                } else {
+                    OverflowMenuItem(
+                        icon = Tabler.Outline.Music,
+                        label = if (dialogueBoostEnabled) "Dialogue Boost \u00B7 ${dialogueBoostStrength.displayName}" else "Dialogue Boost",
+                        onClick = { showDialogueBoostSubmenu = true },
+                        tint = if (dialogueBoostEnabled) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface,
+                        modifier = Modifier.focusRequester(dialogueBoostFocusRequester),
                     )
                 }
-            } else {
+            }
+            if (supportsNightMode) {
+                if (showNightModeSubmenu) {
+                    OverflowMenuItem(
+                        icon = Tabler.Outline.ArrowLeft,
+                        label = "Night Mode",
+                        onClick = { showNightModeSubmenu = false },
+                        modifier = Modifier.focusRequester(nightModeFocusRequester),
+                    )
+                    EffectStrength.entries.forEach { strength ->
+                        DropdownMenuItem(
+                            text = {
+                                Text(
+                                    strength.displayName,
+                                    color = if (nightModeEnabled && nightModeStrength == strength)
+                                        MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface,
+                                )
+                            },
+                            onClick = {
+                                if (!nightModeEnabled) onNightModeClick()
+                                onNightModeStrengthChange(strength)
+                                onDismiss()
+                            },
+                            leadingIcon = {
+                                if (nightModeEnabled && nightModeStrength == strength) {
+                                    Icon(
+                                        Tabler.Outline.Check,
+                                        contentDescription = null,
+                                        tint = MaterialTheme.colorScheme.primary,
+                                        modifier = Modifier.size(20.dp),
+                                    )
+                                }
+                            },
+                        )
+                    }
+                } else {
+                    OverflowMenuItem(
+                        icon = Tabler.Outline.DotsVertical,
+                        label = if (nightModeEnabled) "Night Mode \u00B7 ${nightModeStrength.displayName}" else "Night Mode",
+                        onClick = { showNightModeSubmenu = true },
+                        tint = if (nightModeEnabled) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface,
+                        modifier = Modifier.focusRequester(nightModeFocusRequester),
+                    )
+                }
+            }
+            if (supportsAudioNormalization) {
+                if (showAudioNormalizationSubmenu) {
+                    OverflowMenuItem(
+                        icon = Tabler.Outline.ArrowLeft,
+                        label = "Audio Normalization",
+                        onClick = { showAudioNormalizationSubmenu = false },
+                        modifier = Modifier.focusRequester(audioNormalizationFocusRequester),
+                    )
+                    AudioNormalizationMode.entries.forEach { mode ->
+                        DropdownMenuItem(
+                            text = {
+                                Text(
+                                    mode.displayName,
+                                    color = if (audioNormalizationEnabled && audioNormalizationMode == mode)
+                                        MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface,
+                                )
+                            },
+                            onClick = {
+                                onAudioNormalizationModeChange(mode)
+                                onDismiss()
+                            },
+                            leadingIcon = {
+                                if (audioNormalizationEnabled && audioNormalizationMode == mode) {
+                                    Icon(
+                                        Tabler.Outline.Check,
+                                        contentDescription = null,
+                                        tint = MaterialTheme.colorScheme.primary,
+                                        modifier = Modifier.size(20.dp),
+                                    )
+                                }
+                            },
+                        )
+                    }
+                } else {
+                    OverflowMenuItem(
+                        icon = Tabler.Outline.Volume,
+                        label = if (audioNormalizationEnabled) "Normalization \u00B7 ${audioNormalizationMode.displayName}" else "Audio Normalization",
+                        onClick = { showAudioNormalizationSubmenu = true },
+                        tint = if (audioNormalizationEnabled) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface,
+                        modifier = Modifier.focusRequester(audioNormalizationFocusRequester),
+                    )
+                }
+            }
+            if (supportsChannelMixing) {
+                if (showChannelMixSubmenu) {
+                    OverflowMenuItem(
+                        icon = Tabler.Outline.ArrowLeft,
+                        label = "Channel Mixing",
+                        onClick = { showChannelMixSubmenu = false },
+                        modifier = Modifier.focusRequester(channelMixFocusRequester),
+                    )
+                    ChannelMixMode.entries.forEach { mode ->
+                        DropdownMenuItem(
+                            text = {
+                                Text(
+                                    mode.displayName,
+                                    color = if (channelMixEnabled && channelMixMode == mode)
+                                        MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface,
+                                )
+                            },
+                            onClick = {
+                                onChannelMixModeChange(mode)
+                                onDismiss()
+                            },
+                            leadingIcon = {
+                                if (channelMixEnabled && channelMixMode == mode) {
+                                    Icon(
+                                        Tabler.Outline.Check,
+                                        contentDescription = null,
+                                        tint = MaterialTheme.colorScheme.primary,
+                                        modifier = Modifier.size(20.dp),
+                                    )
+                                }
+                            },
+                        )
+                    }
+                } else {
+                    OverflowMenuItem(
+                        icon = Tabler.Outline.Music,
+                        label = if (channelMixEnabled) "Channel Mix \u00B7 ${channelMixMode.displayName}" else "Channel Mixing",
+                        onClick = { showChannelMixSubmenu = true },
+                        tint = if (channelMixEnabled) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface,
+                        modifier = Modifier.focusRequester(channelMixFocusRequester),
+                    )
+                }
+            }
+            if (supportsAudioDelay) {
                 OverflowMenuItem(
-                    icon = Tabler.Outline.DotsVertical,
-                    label = if (nightModeEnabled) "Night Mode \u00B7 ${nightModeStrength.displayName}" else "Night Mode",
-                    onClick = { showNightModeSubmenu = true },
-                    tint = if (nightModeEnabled) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface,
-                    modifier = Modifier.focusRequester(nightModeFocusRequester),
+                    icon = Tabler.Outline.Adjustments,
+                    label = "A/V Sync",
+                    onClick = onAVSyncClick,
                 )
             }
-        }
-        if (supportsAudioNormalization) {
-            if (showAudioNormalizationSubmenu) {
-                OverflowMenuItem(
-                    icon = Tabler.Outline.ArrowLeft,
-                    label = "Audio Normalization",
-                    onClick = { showAudioNormalizationSubmenu = false },
-                    modifier = Modifier.focusRequester(audioNormalizationFocusRequester),
-                )
-                AudioNormalizationMode.entries.forEach { mode ->
-                    DropdownMenuItem(
-                        text = {
-                            Text(
-                                mode.displayName,
-                                color = if (audioNormalizationEnabled && audioNormalizationMode == mode)
-                                    MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface,
-                            )
-                        },
-                        onClick = {
-                            onAudioNormalizationModeChange(mode)
-                            onDismiss()
-                        },
-                        leadingIcon = {
-                            if (audioNormalizationEnabled && audioNormalizationMode == mode) {
-                                Icon(
-                                    Tabler.Outline.Check,
-                                    contentDescription = null,
-                                    tint = MaterialTheme.colorScheme.primary,
-                                    modifier = Modifier.size(20.dp),
-                                )
-                            }
-                        },
-                    )
-                }
-            } else {
+            OverflowMenuItem(
+                icon = Tabler.Outline.Bolt,
+                label = if (playbackMode == PlaybackMode.AUTO) "Playback Mode"
+                    else "${playbackMode.displayName} \u00B7 On",
+                onClick = onPlaybackModeClick,
+                tint = if (playbackMode != PlaybackMode.AUTO) MaterialTheme.colorScheme.primary
+                    else MaterialTheme.colorScheme.onSurface,
+            )
+            OverflowMenuItem(
+                icon = Tabler.Outline.InfoCircle,
+                label = "Decoder",
+                onClick = onDecoderClick,
+            )
+            if (supportsAudioPassthrough) {
                 OverflowMenuItem(
                     icon = Tabler.Outline.Volume,
-                    label = if (audioNormalizationEnabled) "Normalization \u00B7 ${audioNormalizationMode.displayName}" else "Audio Normalization",
-                    onClick = { showAudioNormalizationSubmenu = true },
-                    tint = if (audioNormalizationEnabled) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface,
-                    modifier = Modifier.focusRequester(audioNormalizationFocusRequester),
+                    label = "Passthrough",
+                    onClick = onPassthroughClick,
+                    tint = if (audioPassthrough) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface,
                 )
             }
-        }
-        if (supportsChannelMixing) {
-            if (showChannelMixSubmenu) {
+            OverflowMenuItem(
+                icon = Tabler.Outline.DotsVertical,
+                label = "Download Subs",
+                onClick = onSubtitleDownloadClick,
+            )
+            OverflowMenuItem(
+                icon = Tabler.Outline.InfoCircle,
+                label = if (showVideoStats) "Stats for Nerds \u00B7 On" else "Stats for Nerds",
+                onClick = onVideoStatsClick,
+                tint = if (showVideoStats) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface,
+            )
+            OverflowMenuItem(
+                icon = Tabler.Outline.Stopwatch,
+                label = if (sleepTimerActive) "Sleep Timer \u00B7 $sleepTimerDisplayText" else "Sleep Timer",
+                onClick = onSleepTimerClick,
+                tint = if (sleepTimerActive) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface,
+            )
+            if (supportsVideoFilters) {
                 OverflowMenuItem(
-                    icon = Tabler.Outline.ArrowLeft,
-                    label = "Channel Mixing",
-                    onClick = { showChannelMixSubmenu = false },
-                    modifier = Modifier.focusRequester(channelMixFocusRequester),
-                )
-                ChannelMixMode.entries.forEach { mode ->
-                    DropdownMenuItem(
-                        text = {
-                            Text(
-                                mode.displayName,
-                                color = if (channelMixEnabled && channelMixMode == mode)
-                                    MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface,
-                            )
-                        },
-                        onClick = {
-                            onChannelMixModeChange(mode)
-                            onDismiss()
-                        },
-                        leadingIcon = {
-                            if (channelMixEnabled && channelMixMode == mode) {
-                                Icon(
-                                    Tabler.Outline.Check,
-                                    contentDescription = null,
-                                    tint = MaterialTheme.colorScheme.primary,
-                                    modifier = Modifier.size(20.dp),
-                                )
-                            }
-                        },
-                    )
-                }
-            } else {
-                OverflowMenuItem(
-                    icon = Tabler.Outline.Music,
-                    label = if (channelMixEnabled) "Channel Mix \u00B7 ${channelMixMode.displayName}" else "Channel Mixing",
-                    onClick = { showChannelMixSubmenu = true },
-                    tint = if (channelMixEnabled) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface,
-                    modifier = Modifier.focusRequester(channelMixFocusRequester),
+                    icon = Tabler.Outline.ColorSwatch,
+                    label = if (videoFiltersActive) "Video Filters \u00B7 On" else "Video Filters",
+                    onClick = onVideoFilterClick,
+                    tint = if (videoFiltersActive) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface,
                 )
             }
-        }
-        if (supportsAudioDelay) {
-            OverflowMenuItem(
-                icon = Tabler.Outline.Adjustments,
-                label = "A/V Sync",
-                onClick = onAVSyncClick,
-            )
-        }
-        OverflowMenuItem(
-            icon = Tabler.Outline.Bolt,
-            label = if (playbackMode == PlaybackMode.AUTO) "Playback Mode"
-                else "${playbackMode.displayName} \u00B7 On",
-            onClick = onPlaybackModeClick,
-            tint = if (playbackMode != PlaybackMode.AUTO) MaterialTheme.colorScheme.primary
-                else MaterialTheme.colorScheme.onSurface,
-        )
-        OverflowMenuItem(
-            icon = Tabler.Outline.InfoCircle,
-            label = "Decoder",
-            onClick = onDecoderClick,
-        )
-        if (supportsAudioPassthrough) {
-            OverflowMenuItem(
-                icon = Tabler.Outline.Volume,
-                label = "Passthrough",
-                onClick = onPassthroughClick,
-                tint = if (audioPassthrough) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface,
-            )
-        }
-        OverflowMenuItem(
-            icon = Tabler.Outline.DotsVertical,
-            label = "Download Subs",
-            onClick = onSubtitleDownloadClick,
-        )
-        OverflowMenuItem(
-            icon = Tabler.Outline.InfoCircle,
-            label = if (showVideoStats) "Stats for Nerds \u00B7 On" else "Stats for Nerds",
-            onClick = onVideoStatsClick,
-            tint = if (showVideoStats) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface,
-        )
-        OverflowMenuItem(
-            icon = Tabler.Outline.Stopwatch,
-            label = if (sleepTimerActive) "Sleep Timer \u00B7 $sleepTimerDisplayText" else "Sleep Timer",
-            onClick = onSleepTimerClick,
-            tint = if (sleepTimerActive) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface,
-        )
-        if (supportsVideoFilters) {
-            OverflowMenuItem(
-                icon = Tabler.Outline.ColorSwatch,
-                label = if (videoFiltersActive) "Video Filters \u00B7 On" else "Video Filters",
-                onClick = onVideoFilterClick,
-                tint = if (videoFiltersActive) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface,
-            )
         }
     }
 }

@@ -21,4 +21,6 @@ interface LiveTvRepository {
     suspend fun createTimer(programId: String, channelId: String, startDate: String? = null, endDate: String? = null): Result<Unit>
 
     suspend fun cancelTimer(timerId: String): Result<Unit>
+
+    suspend fun cancelSeriesTimer(seriesTimerId: String): Result<Unit>
 }

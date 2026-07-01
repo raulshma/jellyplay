@@ -6,7 +6,6 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxScope
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
@@ -23,6 +22,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.raulshma.jellyplay.core.model.SubtitleEdgeType
+import com.raulshma.jellyplay.core.designsystem.theme.smoothCornerShape
 import com.raulshma.jellyplay.core.model.SubtitleStyle
 import com.raulshma.jellyplay.feature.player.video.subtitle.VttTagParser
 
@@ -96,7 +96,7 @@ private fun SubtitleCueBox(
         modifier = modifier
             .then(
                 if (backgroundOpacity > 0f) {
-                    Modifier.background(backgroundColor, RoundedCornerShape(6.dp))
+                    Modifier.background(backgroundColor, smoothCornerShape(6.dp))
                 } else {
                     Modifier
                 },

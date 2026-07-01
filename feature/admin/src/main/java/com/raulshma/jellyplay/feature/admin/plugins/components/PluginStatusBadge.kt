@@ -3,44 +3,49 @@ package com.raulshma.jellyplay.feature.admin.plugins.components
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import com.raulshma.jellyplay.core.designsystem.theme.ShapeCache
 import com.raulshma.jellyplay.core.model.PluginStatus
+
+private data class BadgeTint(val label: String, val color: Color)
+
+@Composable
+private fun badgeTint(status: PluginStatus): BadgeTint {
+    val cs = MaterialTheme.colorScheme
+    return when (status) {
+        PluginStatus.ACTIVE -> BadgeTint("Active", cs.primary)
+        PluginStatus.RESTART -> BadgeTint("Restart", cs.tertiary)
+        PluginStatus.MALFUNCTIONED -> BadgeTint("Error", cs.error)
+        PluginStatus.DELETED -> BadgeTint("Deleted", cs.outline)
+        PluginStatus.DISABLED -> BadgeTint("Disabled", cs.outline)
+        PluginStatus.SUPERSEDED -> BadgeTint("Superseded", cs.secondary)
+        PluginStatus.NOT_SUPPORTED -> BadgeTint("Unsupported", cs.secondary)
+    }
+}
 
 @Composable
 fun PluginStatusBadge(
     status: PluginStatus,
     modifier: Modifier = Modifier,
 ) {
-    val (label, bgColor, contentColor) = when (status) {
-        PluginStatus.ACTIVE -> Triple("Active", Color(0xFF4CAF50), Color.White)
-        PluginStatus.RESTART -> Triple("Restart", Color(0xFFFF9800), Color.White)
-        PluginStatus.DELETED -> Triple("Deleted", Color(0xFF9E9E9E), Color.White)
-        PluginStatus.SUPERSEDED -> Triple("Superseded", Color(0xFF607D8B), Color.White)
-        PluginStatus.MALFUNCTIONED -> Triple("Error", Color(0xFFF44336), Color.White)
-        PluginStatus.NOT_SUPPORTED -> Triple("Unsupported", Color(0xFF9C27B0), Color.White)
-        PluginStatus.DISABLED -> Triple("Disabled", Color(0xFF757575), Color.White)
-    }
-
+    val tint = badgeTint(status)
     Box(
         modifier = modifier
-            .clip(RoundedCornerShape(6.dp))
-            .background(bgColor.copy(alpha = 0.15f))
+            .clip(ShapeCache.smooth8)
+            .background(tint.color.copy(alpha = 0.15f))
             .padding(horizontal = 8.dp, vertical = 3.dp),
     ) {
         Text(
-            text = label,
-            style = MaterialTheme.typography.labelSmall,
-            fontWeight = FontWeight.SemiBold,
-            color = bgColor,
+            text = tint.label,
+            style = MaterialTheme.typography.labelMedium,
+            color = tint.color,
             maxLines = 1,
             overflow = TextOverflow.Ellipsis,
         )

@@ -184,14 +184,15 @@ fun ModeSwitch(
     val isLightTheme = com.raulshma.jellyplay.core.designsystem.theme.LocalIsLightTheme.current
 
     val primaryColor = MaterialTheme.colorScheme.primary
+    val tertiaryColor = MaterialTheme.colorScheme.tertiary
     val trackBgColor = if (isLightTheme) {
         MaterialTheme.colorScheme.surfaceContainerHighest
     } else {
         MaterialTheme.colorScheme.surfaceContainerHigh.copy(alpha = 0.5f)
     }
-    
+
     // Dynamic background glow/shadow tint
-    val glowColor = if (isMusic) primaryColor else Color(0xFFFFB74D)
+    val glowColor = if (isMusic) primaryColor else tertiaryColor
 
     val interactionSource = remember { MutableInteractionSource() }
     val isTv = LocalTvMode.current
@@ -271,7 +272,7 @@ fun ModeSwitch(
                         colors = if (isMusic) {
                             listOf(primaryColor, primaryColor.copy(alpha = 0.85f))
                         } else {
-                            listOf(Color(0xFFE65100), Color(0xFFFFB74D)) // Vibrant theater amber gradient
+                            listOf(tertiaryColor, tertiaryColor.copy(alpha = 0.85f))
                         }
                     ),
                     shape = CircleShape
