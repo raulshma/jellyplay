@@ -27,6 +27,8 @@ import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import com.raulshma.jellyplay.core.designsystem.theme.ShapeCache
+import com.raulshma.jellyplay.core.designsystem.theme.smoothCornerShape
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
@@ -398,7 +400,7 @@ private fun ShortcutFilterChip(
     val contentColor = if (isSelected) {
         when (filter) {
             ShortcutFilter.All -> MaterialTheme.colorScheme.onPrimary
-            is ShortcutFilter.Category -> Color.White
+            is ShortcutFilter.Category -> filter.category.onAccentColor()
         }
     } else {
         MaterialTheme.colorScheme.onSurfaceVariant
@@ -501,7 +503,7 @@ private fun ShortcutFeaturedCard(
     val isHovered by interactionSource.collectIsHoveredAsState()
     val isActive = focusState.isFocused || isHovered
     val accentColor = item.category.accentColor()
-    val shape = RoundedCornerShape(if (isTv) 22.dp else 20.dp)
+    val shape = smoothCornerShape(if (isTv) 22.dp else 20.dp)
 
     val arrowOffset by animateDpAsState(
         targetValue = if (isActive) 0.dp else (-6).dp,
@@ -535,7 +537,7 @@ private fun ShortcutFeaturedCard(
             Box(
                 modifier = Modifier
                     .size(if (isTv) 56.dp else 62.dp)
-                    .clip(RoundedCornerShape(16.dp))
+                    .clip(ShapeCache.smooth16)
                     .background(accentColor.copy(alpha = 0.15f)),
                 contentAlignment = Alignment.Center,
             ) {
@@ -608,7 +610,7 @@ private fun ShortcutCompactList(
     modifier: Modifier = Modifier,
 ) {
     Surface(
-        shape = RoundedCornerShape(if (isTv) 18.dp else 16.dp),
+        shape = smoothCornerShape(if (isTv) 18.dp else 16.dp),
         color = MaterialTheme.colorScheme.surfaceContainer.copy(alpha = 0.55f),
         modifier = modifier
             .fillMaxWidth()
@@ -643,7 +645,7 @@ private fun ShortcutCompactRow(
     val isHovered by interactionSource.collectIsHoveredAsState()
     val isActive = focusState.isFocused || isHovered
     val accentColor = item.category.accentColor()
-    val shape = RoundedCornerShape(if (isTv) 18.dp else 16.dp)
+    val shape = smoothCornerShape(if (isTv) 18.dp else 16.dp)
 
     val arrowAlpha by animateFloatAsState(
         targetValue = if (isActive) 1f else 0.3f,
@@ -679,7 +681,7 @@ private fun ShortcutCompactRow(
                 Box(
                     modifier = Modifier
                         .size(38.dp)
-                        .clip(RoundedCornerShape(11.dp))
+                        .clip(smoothCornerShape(11.dp))
                         .background(accentColor.copy(alpha = 0.14f)),
                     contentAlignment = Alignment.Center,
                 ) {
@@ -742,4 +744,11 @@ private fun ShortcutCategory.accentColor(): Color = when (this) {
     ShortcutCategory.LIBRARY -> MaterialTheme.colorScheme.primary
     ShortcutCategory.SERVICES -> MaterialTheme.colorScheme.secondary
     ShortcutCategory.SYSTEM -> MaterialTheme.colorScheme.tertiary
+}
+
+@Composable
+private fun ShortcutCategory.onAccentColor(): Color = when (this) {
+    ShortcutCategory.LIBRARY -> MaterialTheme.colorScheme.onPrimary
+    ShortcutCategory.SERVICES -> MaterialTheme.colorScheme.onSecondary
+    ShortcutCategory.SYSTEM -> MaterialTheme.colorScheme.onTertiary
 }

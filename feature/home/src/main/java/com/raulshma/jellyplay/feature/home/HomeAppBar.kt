@@ -21,7 +21,6 @@ import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.wrapContentWidth
 import androidx.compose.foundation.lazy.LazyListState
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Badge
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FloatingActionButtonMenu
@@ -135,7 +134,7 @@ fun HomeTopDock(
                 .animateContentSize(animationSpec = MaterialTheme.motionScheme.defaultSpatialSpec())
                 .graphicsLayer {
                     shadowElevation = if (isSearchFocused) 4f else 0f
-                    shape = RoundedCornerShape(24.dp)
+                    shape = ShapeCache.smooth24
                     clip = true
                 }
                 .background(
@@ -308,12 +307,12 @@ private fun CollapsedDockContent(
                 .padding(end = 12.dp)
                 .background(
                     color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.35f),
-                    shape = RoundedCornerShape(12.dp)
+                    shape = ShapeCache.smooth12
                 )
                 .border(
                     width = 0.5.dp,
                     color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.2f),
-                    shape = RoundedCornerShape(12.dp)
+                    shape = ShapeCache.smooth12
                 )
                 .padding(horizontal = 10.dp, vertical = 6.dp),
             verticalAlignment = Alignment.CenterVertically,

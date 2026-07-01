@@ -1,48 +1,24 @@
 package com.raulshma.jellyplay.core.data.worker
 
-import android.Manifest
 import android.app.ForegroundServiceStartNotAllowedException
-import android.app.NotificationChannel
-import android.app.NotificationManager
-import android.app.PendingIntent
 import android.content.Context
-import android.content.Intent
-import android.content.pm.PackageManager
-import android.util.Log
-import android.content.pm.ServiceInfo
 import android.os.Build
-import androidx.core.app.NotificationCompat
-import androidx.core.app.NotificationManagerCompat
-import androidx.core.content.ContextCompat
 import androidx.hilt.work.HiltWorker
 import androidx.work.CoroutineWorker
-import androidx.work.ForegroundInfo
 import androidx.work.WorkerParameters
 import com.raulshma.jellyplay.core.database.dao.DownloadDao
 import com.raulshma.jellyplay.core.database.dao.UserDao
 import com.raulshma.jellyplay.core.database.crypto.TokenCipher
 import com.raulshma.jellyplay.core.datastore.UserPreferencesStore
 import com.raulshma.jellyplay.core.model.DownloadStatus
-import com.raulshma.jellyplay.core.model.formatBytes
-import com.raulshma.jellyplay.core.model.formatSpeed
 import dagger.assisted.Assisted
 import dagger.assisted.AssistedInject
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.async
-import kotlinx.coroutines.awaitAll
-import kotlinx.coroutines.coroutineScope
-import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.firstOrNull
-import kotlinx.coroutines.isActive
-import kotlinx.coroutines.launch
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import java.io.File
-import java.io.RandomAccessFile
 import java.net.SocketTimeoutException
 import java.util.concurrent.TimeUnit
-import java.util.concurrent.atomic.AtomicBoolean
-import java.util.concurrent.atomic.AtomicLong
 
 @HiltWorker
 class DownloadWorker @AssistedInject constructor(
@@ -66,7 +42,11 @@ class DownloadWorker @AssistedInject constructor(
 
         val notificationId = downloadId.hashCode() and 0x7FFFFFFF
         try {
-            setForeground(createForegroundInfo(notificationId, entity.name, 0, 0L, entity.totalSizeBytes, 0L))
+            setForeground(
+                DownloadNotificationHelper.createForegroundInfo(
+                    applicationContext, notificationId, entity.name, 0, 0L, entity.totalSizeBytes, 0L,
+                )
+            )
         } catch (e: Exception) {
             // On Android 12+ a background-launched worker cannot promote itself
             // to a foreground service. Continuing would let the OS kill the
@@ -115,7 +95,8 @@ class DownloadWorker @AssistedInject constructor(
             } else {
                 val totalSize = probeContentSize(downloadClient, entity.downloadUrl, accessToken)
                 if (totalSize > MIN_MULTI_SIZE && numConnections > 1) {
-                    performMultiConnectionDownload(
+                    MultiConnectionDownloadStrategy.execute(
+                        context = applicationContext,
                         downloadClient = downloadClient,
                         dao = dao,
                         downloadId = downloadId,
@@ -124,6 +105,7 @@ class DownloadWorker @AssistedInject constructor(
                         numConnections = numConnections,
                         notificationId = notificationId,
                         accessToken = accessToken,
+                        setForegroundInfo = { info -> setForeground(info) },
                     )
                 } else {
                     performSingleConnectionDownload(
@@ -158,7 +140,7 @@ class DownloadWorker @AssistedInject constructor(
         }
     }
 
-    private fun probeContentSize(
+    private suspend fun probeContentSize(
         downloadClient: OkHttpClient,
         url: String,
         accessToken: String?,
@@ -171,7 +153,7 @@ class DownloadWorker @AssistedInject constructor(
             if (!accessToken.isNullOrBlank()) {
                 requestBuilder.header("X-Emby-Token", accessToken)
             }
-            val response = downloadClient.newCall(requestBuilder.build()).execute()
+            val response = downloadClient.newCall(requestBuilder.build()).awaitResponse()
             val size = if (response.isSuccessful) {
                 response.body?.contentLength()?.coerceAtLeast(0L) ?: 0L
             } else {
@@ -181,205 +163,6 @@ class DownloadWorker @AssistedInject constructor(
             size
         } catch (_: Exception) {
             0L
-        }
-    }
-
-    private suspend fun performMultiConnectionDownload(
-        downloadClient: OkHttpClient,
-        dao: DownloadDao,
-        downloadId: String,
-        entity: com.raulshma.jellyplay.core.database.entity.DownloadEntity,
-        totalSize: Long,
-        numConnections: Int,
-        notificationId: Int,
-        accessToken: String?,
-    ): Result {
-        dao.updateTotalSize(downloadId, totalSize)
-
-        val file = File(entity.downloadPath)
-        file.parentFile?.mkdirs()
-
-        val chunkSize = totalSize / numConnections
-        val chunks = (0 until numConnections).map { i ->
-            val start = i * chunkSize
-            val end = if (i == numConnections - 1) totalSize - 1 else (i + 1) * chunkSize - 1
-            ChunkInfo(i, start, end)
-        }
-
-        val totalDownloaded = AtomicLong(0L)
-        val cancelled = AtomicBoolean(false)
-
-        try {
-            setForeground(createForegroundInfo(notificationId, entity.name, 0, 0L, totalSize, 0L))
-        } catch (_: Exception) {
-        }
-
-        return try {
-            coroutineScope {
-                val progressJob = launch(Dispatchers.Default) {
-                    var lastProgressUpdate = System.currentTimeMillis()
-                    var lastSpeedBytes = 0L
-                    var speedBytesPerSec = 0L
-                    delay(PROGRESS_UPDATE_INTERVAL_MS)
-                    while (isActive && !cancelled.get()) {
-                        val now = System.currentTimeMillis()
-                        val currentDownloaded = totalDownloaded.get()
-                        val currentEntity = dao.getDownloadById(downloadId)
-                        if (currentEntity == null ||
-                            currentEntity.status == DownloadStatus.PAUSED.name ||
-                            currentEntity.status == DownloadStatus.CANCELLED.name
-                        ) {
-                            cancelled.set(true)
-                            break
-                        }
-                        val elapsed = now - lastProgressUpdate
-                        val bytesDelta = currentDownloaded - lastSpeedBytes
-                        speedBytesPerSec = if (elapsed > 0) (bytesDelta * 1000L) / elapsed else 0L
-                        lastSpeedBytes = currentDownloaded
-                        lastProgressUpdate = now
-
-                        dao.updateProgressWithSpeed(
-                            downloadId, currentDownloaded,
-                            DownloadStatus.DOWNLOADING.name, speedBytesPerSec,
-                        )
-
-                        val progress = if (totalSize > 0) {
-                            (currentDownloaded * 100 / totalSize).toInt()
-                        } else 0
-                        updateNotification(
-                            notificationId, entity.name, progress,
-                            currentDownloaded, totalSize, speedBytesPerSec,
-                        )
-
-                        delay(PROGRESS_UPDATE_INTERVAL_MS)
-                    }
-                }
-
-                try {
-                    val jobs = chunks.map { chunk ->
-                        async(Dispatchers.IO) {
-                            downloadChunk(
-                                downloadClient = downloadClient,
-                                url = entity.downloadUrl,
-                                chunk = chunk,
-                                file = file,
-                                totalDownloaded = totalDownloaded,
-                                cancelled = cancelled,
-                                accessToken = accessToken,
-                            )
-                        }
-                    }
-                    jobs.awaitAll()
-                } finally {
-                    progressJob.cancel()
-                }
-            }
-
-            if (cancelled.get()) {
-                val currentEntity = dao.getDownloadById(downloadId)
-                val cancelStatus = if (currentEntity == null || currentEntity.status == DownloadStatus.CANCELLED.name) {
-                    DownloadStatus.CANCELLED.name
-                } else {
-                    DownloadStatus.PAUSED.name
-                }
-                // Multi-connection writes bytes at scattered offsets via
-                // RandomAccessFile.seek(); the cumulative byte count is NOT a
-                // valid resumable prefix. Delete the partial and reset bytes
-                // to 0 so the next attempt starts fresh (a single-connection
-                // resume would otherwise append to a gapped file and corrupt it).
-                runCatching { if (file.exists()) file.delete() }
-                    .onFailure { Log.w("DownloadWorker", "Failed to delete corrupt partial", it) }
-                dao.updateProgressWithSpeed(downloadId, 0L, cancelStatus, 0L)
-                return Result.success()
-            }
-
-            val finalBytes = totalDownloaded.get()
-            if (totalSize > 0L && finalBytes < totalSize) {
-                runCatching { if (file.exists()) file.delete() }
-                    .onFailure { Log.w("DownloadWorker", "Failed to delete incomplete partial", it) }
-                dao.updateErrorMessage(downloadId, "Download incomplete")
-                dao.updateProgressWithSpeed(downloadId, 0L, DownloadStatus.FAILED.name, 0L)
-                return Result.retry()
-            }
-
-            dao.updateErrorMessage(downloadId, null)
-            dao.updateProgressWithSpeed(downloadId, finalBytes, DownloadStatus.COMPLETED.name, 0L)
-            dismissNotification(notificationId)
-            Result.success()
-        } catch (e: java.io.IOException) {
-            if (totalDownloaded.get() > 0) {
-                runCatching { if (file.exists()) file.delete() }
-                    .onFailure { Log.w("DownloadWorker", "Failed to delete partial after IO error", it) }
-                dao.updateProgressWithSpeed(downloadId, 0L, DownloadStatus.PAUSED.name, 0L)
-            }
-            Result.retry()
-        } catch (e: Exception) {
-            if (totalDownloaded.get() > 0) {
-                runCatching { if (file.exists()) file.delete() }
-                    .onFailure { Log.w("DownloadWorker", "Failed to delete partial after error", it) }
-                dao.updateErrorMessage(downloadId, failureMessage(e))
-                dao.updateProgressWithSpeed(downloadId, 0L, DownloadStatus.FAILED.name, 0L)
-            }
-            Result.failure()
-        }
-    }
-
-    private fun failureMessage(e: Throwable): String = when (e) {
-        is java.net.SocketTimeoutException -> "Network timed out"
-        is java.net.UnknownHostException -> "Cannot reach server"
-        is javax.net.ssl.SSLException -> "Network security error"
-        is java.io.IOException -> "Network error"
-        else -> "Download failed"
-    }
-
-    private fun downloadChunk(
-        downloadClient: OkHttpClient,
-        url: String,
-        chunk: ChunkInfo,
-        file: File,
-        totalDownloaded: AtomicLong,
-        cancelled: AtomicBoolean,
-        accessToken: String?,
-    ) {
-        val requestBuilder = Request.Builder()
-            .url(url)
-            .header("User-Agent", "JellyPlay/1.0.0")
-            .header("Range", "bytes=${chunk.start}-${chunk.end}")
-
-        if (!accessToken.isNullOrBlank()) {
-            requestBuilder.header("X-Emby-Token", accessToken)
-        }
-
-        val response = downloadClient.newCall(requestBuilder.build()).execute()
-
-        if (response.code != 206 && response.code != 200) {
-            response.close()
-            throw java.io.IOException("Chunk ${chunk.index} failed with code ${response.code}")
-        }
-
-        val body = response.body ?: run {
-            response.close()
-            throw java.io.IOException("Chunk ${chunk.index} has no body")
-        }
-
-        try {
-            RandomAccessFile(file, "rw").use { raf ->
-                raf.seek(chunk.start)
-                val buffer = ByteArray(BUFFER_SIZE)
-                var bytesRead: Int
-                body.byteStream().buffered().use { input ->
-                    while (input.read(buffer).also { bytesRead = it } != -1) {
-                        if (cancelled.get()) {
-                            response.close()
-                            return
-                        }
-                        raf.write(buffer, 0, bytesRead)
-                        totalDownloaded.addAndGet(bytesRead.toLong())
-                    }
-                }
-            }
-        } finally {
-            response.close()
         }
     }
 
@@ -404,7 +187,7 @@ class DownloadWorker @AssistedInject constructor(
             requestBuilder.header("Range", "bytes=$existingBytes-")
         }
 
-        val response = downloadClient.newCall(requestBuilder.build()).execute()
+        val response = downloadClient.newCall(requestBuilder.build()).awaitResponse()
 
         val responseCode = response.code
         if (responseCode == 416) {
@@ -417,7 +200,7 @@ class DownloadWorker @AssistedInject constructor(
                 if (!accessToken.isNullOrBlank()) {
                     retryRequest.header("X-Emby-Token", accessToken)
                 }
-                val retryResponse = downloadClient.newCall(retryRequest.build()).execute()
+                val retryResponse = downloadClient.newCall(retryRequest.build()).awaitResponse()
                 if (retryResponse.code != 200 && retryResponse.code != 206) {
                     dao.updateProgress(downloadId, 0L, DownloadStatus.FAILED.name)
                     retryResponse.close()
@@ -547,8 +330,8 @@ class DownloadWorker @AssistedInject constructor(
                             val progress = if (totalSize > 0) {
                                 (downloadedBytes * 100 / totalSize).toInt()
                             } else 0
-                            updateNotification(
-                                notificationId, entity.name, progress,
+                            DownloadNotificationHelper.updateNotification(
+                                applicationContext, notificationId, entity.name, progress,
                                 downloadedBytes, totalSize, speedBytesPerSec,
                             )
                         }
@@ -573,137 +356,15 @@ class DownloadWorker @AssistedInject constructor(
         }
 
         dao.updateProgressWithSpeed(downloadId, downloadedBytes, DownloadStatus.COMPLETED.name, 0L)
-        dismissNotification(notificationId)
+        DownloadNotificationHelper.dismissNotification(applicationContext, notificationId)
         return Result.success()
     }
-
-    private fun createForegroundInfo(
-        notificationId: Int,
-        name: String,
-        progress: Int,
-        downloadedBytes: Long,
-        totalBytes: Long,
-        speedBytesPerSec: Long,
-    ): ForegroundInfo {
-        createNotificationChannel()
-        val notification = buildNotification(
-            notificationId, name, progress, downloadedBytes, totalBytes, speedBytesPerSec,
-        )
-        return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
-            ForegroundInfo(notificationId, notification, ServiceInfo.FOREGROUND_SERVICE_TYPE_DATA_SYNC)
-        } else {
-            ForegroundInfo(notificationId, notification)
-        }
-    }
-
-    private fun updateNotification(
-        notificationId: Int,
-        name: String,
-        progress: Int,
-        downloadedBytes: Long,
-        totalBytes: Long,
-        speedBytesPerSec: Long,
-    ) {
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-            if (ContextCompat.checkSelfPermission(
-                    applicationContext, Manifest.permission.POST_NOTIFICATIONS,
-                ) != PackageManager.PERMISSION_GRANTED
-            ) return
-        }
-        val notification = buildNotification(
-            notificationId, name, progress, downloadedBytes, totalBytes, speedBytesPerSec,
-        )
-        NotificationManagerCompat.from(applicationContext)
-            .notify(notificationId, notification)
-    }
-
-    private fun buildNotification(
-        notificationId: Int,
-        name: String,
-        progress: Int,
-        downloadedBytes: Long,
-        totalBytes: Long,
-        speedBytesPerSec: Long,
-    ): android.app.Notification {
-        val intent = Intent().apply {
-            setClassName(applicationContext.packageName, "com.raulshma.jellyplay.MainActivity")
-            action = "com.raulshma.jellyplay.action.DOWNLOADS"
-            flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP
-        }
-        val pendingIntent = PendingIntent.getActivity(
-            applicationContext,
-            0,
-            intent,
-            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
-        )
-        return NotificationCompat.Builder(applicationContext, CHANNEL_ID)
-            .setContentTitle(name)
-            .setContentText(formatProgressText(downloadedBytes, totalBytes, speedBytesPerSec))
-            .setSmallIcon(android.R.drawable.stat_sys_download)
-            .setOngoing(true)
-            .setOnlyAlertOnce(true)
-            .setProgress(100, progress, false)
-            .setSubText(formatSpeed(speedBytesPerSec))
-            .setContentIntent(pendingIntent)
-            .setPriority(NotificationCompat.PRIORITY_LOW)
-            .build()
-    }
-
-    private fun dismissNotification(notificationId: Int) {
-        NotificationManagerCompat.from(applicationContext).cancel(notificationId)
-    }
-
-    private fun formatProgressText(
-        downloadedBytes: Long,
-        totalBytes: Long,
-        speedBytesPerSec: Long,
-    ): String {
-        val downloaded = formatBytes(downloadedBytes)
-        val total = if (totalBytes > 0) formatBytes(totalBytes) else "..."
-        val speed = formatSpeed(speedBytesPerSec)
-        val eta = formatEta(downloadedBytes, totalBytes, speedBytesPerSec)
-        return if (eta.isNotEmpty()) "$downloaded / $total · $speed · $eta" else "$downloaded / $total · $speed"
-    }
-
-    private fun formatSpeed(speedBytesPerSec: Long): String = speedBytesPerSec.formatSpeed()
-
-    private fun formatEta(downloadedBytes: Long, totalBytes: Long, speedBytesPerSec: Long): String =
-        com.raulshma.jellyplay.core.model.formatEta(downloadedBytes, totalBytes, speedBytesPerSec)
-
-    private fun formatBytes(bytes: Long): String = bytes.formatBytes()
-
-    private fun createNotificationChannel() {
-        if (channelCreated) return
-        val manager = applicationContext.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
-        if (manager.getNotificationChannel(CHANNEL_ID) == null) {
-            val channel = NotificationChannel(
-                CHANNEL_ID,
-                "Downloads",
-                NotificationManager.IMPORTANCE_LOW,
-            ).apply {
-                description = "Download progress notifications"
-                setShowBadge(false)
-            }
-            manager.createNotificationChannel(channel)
-        }
-        channelCreated = true
-    }
-
-    private data class ChunkInfo(
-        val index: Int,
-        val start: Long,
-        val end: Long,
-    )
 
     companion object {
         const val KEY_DOWNLOAD_ID = "download_id"
         const val UNIQUE_WORK_PREFIX = "download_"
-        private const val CHANNEL_ID = "downloads"
+        const val WORK_TAG = "download"
         private const val BUFFER_SIZE = 65536
         private const val MIN_MULTI_SIZE = 2L * 1024 * 1024
-        private const val PROGRESS_UPDATE_INTERVAL_MS = 2000L
-
-        @Volatile
-        private var channelCreated = false
     }
 }

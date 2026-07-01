@@ -17,7 +17,6 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Card
@@ -238,7 +237,7 @@ private fun AddRepositoryDialog(
                     label = { Text("Name") },
                     singleLine = true,
                     modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(16.dp),
+                    shape = ShapeCache.smooth16,
                 )
                 OutlinedTextField(
                     value = url,
@@ -246,7 +245,7 @@ private fun AddRepositoryDialog(
                     label = { Text("URL") },
                     singleLine = true,
                     modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(16.dp),
+                    shape = ShapeCache.smooth16,
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Uri),
                 )
             }

@@ -11,7 +11,6 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -192,7 +191,7 @@ fun WaveformSeekBar(
                         .offset(x = with(density) { (tooltipOffsetFraction * 100f).dp - 25.dp })
                         .background(
                             MaterialTheme.colorScheme.surfaceContainerHigh,
-                            RoundedCornerShape(4.dp),
+                            ShapeCache.smooth4,
                         )
                         .padding(horizontal = 6.dp, vertical = 2.dp),
                 )

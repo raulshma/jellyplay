@@ -142,6 +142,7 @@ class NewMediaCheckWorker @AssistedInject constructor(
     }
 
     companion object {
+        const val WORK_TAG = "notification"
         private const val THIRTY_DAYS_MS = 30L * 24 * 60 * 60 * 1000
 
         /**

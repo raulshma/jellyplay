@@ -1,6 +1,7 @@
 package com.raulshma.jellyplay.core.data.worker
 
 import android.content.Context
+import android.util.Log
 import androidx.work.Constraints
 import androidx.work.ExistingWorkPolicy
 import androidx.work.NetworkType
@@ -20,6 +21,9 @@ import javax.inject.Singleton
  *
  * TV-only behaviour lives inside the worker itself: it's a no-op on
  * phones and respects the `androidTvWatchNextEnabled` preference.
+ *
+ * One-shot by design (startup-and-workers-architecture §7.14): there is no
+ * periodic schedule; see [TvWatchNextWorker] for the rationale.
  */
 interface TvWatchNextScheduler {
     fun scheduleRefresh()
@@ -37,16 +41,22 @@ class TvWatchNextSchedulerImpl @Inject constructor(
                         .setRequiredNetworkType(NetworkType.CONNECTED)
                         .build(),
                 )
+                .addTag(TvWatchNextWorker.WORK_TAG)
                 .build()
             WorkManager.getInstance(context).enqueueUniqueWork(
                 TvWatchNextWorker.UNIQUE_WORK_NAME,
                 ExistingWorkPolicy.REPLACE,
                 request,
             )
-        } catch (_: Exception) {
-            // WorkManager not initialised / unavailable — ignore. This mirrors
-            // the previous inline try/catch in HomeViewModel so behaviour is
-            // preserved exactly.
+        } catch (e: Exception) {
+            // WorkManager not initialised / unavailable — keep the no-throw
+            // contract but surface the failure for diagnostics instead of
+            // swallowing silently (startup-and-workers-architecture §7.12).
+            Log.w(TAG, "Failed to schedule TvWatchNext refresh", e)
         }
+    }
+
+    companion object {
+        private const val TAG = "TvWatchNextScheduler"
     }
 }

@@ -18,7 +18,6 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -33,6 +32,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+import com.raulshma.jellyplay.core.designsystem.theme.ShapeCache
 import com.raulshma.jellyplay.core.model.DownloadStatus
 import com.raulshma.jellyplay.core.model.OfflineMediaItem
 import com.raulshma.jellyplay.core.ui.components.focusIndicator
@@ -111,7 +111,7 @@ fun OfflineHomeContent(
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .clip(RoundedCornerShape(12.dp))
+                        .clip(ShapeCache.smooth12)
                         .background(MaterialTheme.colorScheme.surfaceContainer)
                         .focusIndicator()
                         .clickable { onItemClick() }
@@ -121,7 +121,7 @@ fun OfflineHomeContent(
                     val posterModifier = Modifier
                         .width(60.dp)
                         .aspectRatio(2f / 3f)
-                        .clip(RoundedCornerShape(8.dp))
+                        .clip(ShapeCache.smooth8)
 
                     if (!offlineItem.posterPath.isNullOrBlank()) {
                         MediaImage(
@@ -288,7 +288,7 @@ fun DownloadedSection(
                 val posterModifier = Modifier
                     .fillMaxWidth()
                     .aspectRatio(2f / 3f)
-                    .clip(RoundedCornerShape(8.dp))
+                    .clip(ShapeCache.smooth8)
 
                 if (!offlineItem.posterPath.isNullOrBlank()) {
                     MediaImage(

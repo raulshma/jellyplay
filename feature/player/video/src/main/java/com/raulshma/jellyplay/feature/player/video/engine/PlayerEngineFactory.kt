@@ -3,15 +3,35 @@ package com.raulshma.jellyplay.feature.player.video.engine
 import android.content.Context
 import androidx.media3.exoplayer.upstream.DefaultBandwidthMeter
 import com.raulshma.jellyplay.core.model.PlayerType
+import dagger.hilt.android.qualifiers.ApplicationContext
+import javax.inject.Inject
+import javax.inject.Singleton
 
-object PlayerEngineFactory {
+/**
+ * Maps a [PlayerType] to a concrete [MediaEngine].
+ *
+ * Process-wide [Singleton]: owns the shared [DefaultBandwidthMeter] so adaptive
+ * bitrate learning carries across streams. Previously a plain `object` (kept
+ * that way deliberately so the shared meter stayed testable); it is now a
+ * Hilt-provided [Singleton] for consistency with the rest of the playback DI
+ * layer — the [resetBandwidthMeter] escape hatch is retained for test
+ * isolation and an optional user-triggered "reset playback diagnostics" action.
+ */
+@Singleton
+class PlayerEngineFactory @Inject constructor(
+    @ApplicationContext private val context: Context,
+) {
 
     @Volatile
     private var sharedBandwidthMeter: DefaultBandwidthMeter? = null
 
-    fun getSharedBandwidthMeter(context: Context): DefaultBandwidthMeter {
+    /**
+     * The process-wide [DefaultBandwidthMeter], lazily created from the
+     * injected application [Context].
+     */
+    fun getSharedBandwidthMeter(): DefaultBandwidthMeter {
         return sharedBandwidthMeter ?: synchronized(this) {
-            sharedBandwidthMeter ?: DefaultBandwidthMeter.Builder(context.applicationContext).build().also {
+            sharedBandwidthMeter ?: DefaultBandwidthMeter.Builder(context).build().also {
                 sharedBandwidthMeter = it
             }
         }
@@ -23,12 +43,11 @@ object PlayerEngineFactory {
      *
      * The meter is intentionally shared across streams: ABR adaptation learns
      * network conditions from every observation, so cross-stream retention is
-     * a feature, not a leak. However, the previous design offered no escape
-     * hatch — a single pathological stream's observations would pollute every
-     * subsequent item, and the singleton was invisible to tests. Resetting
-     * between unrelated test cases (or, optionally, on a user-triggered
-     * "reset playback diagnostics" action) restores a clean baseline without
-     * forcing a full Hilt migration of this `object`.
+     * a feature, not a leak. However, a single pathological stream's
+     * observations would otherwise pollute every subsequent item. Resetting
+     * between unrelated test cases (or on a user-triggered "reset playback
+     * diagnostics" action) restores a clean baseline without re-instantiating
+     * the factory itself.
      */
     fun resetBandwidthMeter() {
         synchronized(this) {
@@ -36,12 +55,15 @@ object PlayerEngineFactory {
         }
     }
 
-    fun create(context: Context, playerType: PlayerType): MediaEngine {
+    fun create(playerType: PlayerType): MediaEngine {
         return when (playerType) {
-            PlayerType.EXO_PLAYER -> ExoPlayerEngine(context, getSharedBandwidthMeter(context))
+            PlayerType.EXO_PLAYER -> ExoPlayerEngine(context, getSharedBandwidthMeter())
             PlayerType.MPV -> MpvPlayerEngine(context)
             PlayerType.LIBVLC -> LibVlcPlayerEngine(context)
-            PlayerType.EXTERNAL -> ExoPlayerEngine(context, getSharedBandwidthMeter(context))
+            // External playback is launched in a third-party app; progress is
+            // reported out-of-band. A NoOpEngine expresses that intent far more
+            // clearly than aliasing to a fully wired ExoPlayerEngine.
+            PlayerType.EXTERNAL -> NoOpEngine()
         }
     }
 }

@@ -86,6 +86,7 @@ class VideoPlayerViewModelTest {
             videoMiniPlayerState = videoMiniPlayerState,
             sleepTimerManager = sleepTimerManager,
             userMessageBus = UserMessageBus(),
+            playerEngineFactory = com.raulshma.jellyplay.feature.player.video.engine.PlayerEngineFactory(context),
             savedStateHandle = androidx.lifecycle.SavedStateHandle(),
         )
     }
