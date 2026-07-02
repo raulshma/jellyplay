@@ -225,6 +225,18 @@ class VideoPlayerViewModel @Inject constructor(
             am?.let { it.isLowRamDevice || it.memoryClass <= 256 } ?: false
         },
     )
+    private val subtitleManager = SubtitleManager(
+        context = context,
+        playbackRepository = playbackRepository,
+        mediaRepository = mediaRepository,
+        userMessageBus = userMessageBus,
+        scope = scope,
+        addExternalSubtitle = { playerSessionManager.addExternalSubtitle(it) },
+        getUiState = { _uiState.value },
+        updateUiState = { transform -> _uiState.update(transform) },
+        getCurrentItemId = { playerSessionManager.sessionState.value.currentItemId },
+        onMediaDetailRefreshed = { detail -> applyMediaDetailAndSourceState(detail) },
+    )
     private var videoMediaSession: MediaSession? = null
     private var becomingNoisyReceiver: android.content.BroadcastReceiver? = null
     private var transientAudioFocusRequest: android.media.AudioFocusRequest? = null
@@ -1811,59 +1823,14 @@ class VideoPlayerViewModel @Inject constructor(
     fun getImageUrl(itemId: String, maxWidth: Int = 400): String =
         playbackRepository.getImageUrl(itemId, "Primary", maxWidth)
 
-    fun loadRemoteSubtitles() {
-        val itemId = playerSessionManager.sessionState.value.currentItemId ?: return
-        _uiState.update { it.copy(isLoadingRemoteSubtitles = true) }
-        launch {
-            val subs = playbackRepository.getRemoteSubtitles(itemId).getOrElse { emptyList() }
-            _uiState.update { it.copy(remoteSubtitles = subs, isLoadingRemoteSubtitles = false) }
-        }
-    }
+    // region Subtitle Manager — delegates to [subtitleManager] (extracted collaborator)
 
-    fun downloadSubtitle(subtitleInfo: com.raulshma.jellyplay.core.model.RemoteSubtitleInfo) {
-        val itemId = playerSessionManager.sessionState.value.currentItemId ?: return
-        launch {
-            playbackRepository.downloadSubtitle(itemId, subtitleInfo.id)
-            val detailResult = mediaRepository.getMediaDetail(itemId)
-            detailResult.getOrNull()?.let { detail ->
-                applyMediaDetail(detail)
-                val source = detail.mediaSources.firstOrNull()
-                val streams = source?.mediaStreams ?: emptyList()
-                _uiState.update { it.copy(
-                    currentMediaSource = source,
-                    mediaStreams = streams,
-                    detectedAspectRatio = detectAspectRatio(streams),
-                ) }
-            }
-        }
-    }
+    fun loadRemoteSubtitles() = subtitleManager.loadRemoteSubtitles()
 
-    fun addLocalSubtitle(uri: Uri, fileName: String) {
-        val engine = playerSessionManager.engine ?: return
-        val ext = fileName.substringAfterLast('.', "").lowercase()
-        val codec = when (ext) {
-            "srt" -> "srt"
-            "ass", "ssa" -> "ass"
-            "vtt" -> "vtt"
-            "ttml", "dfxp" -> "ttml"
-            else -> null
-        }
+    fun downloadSubtitle(subtitleInfo: com.raulshma.jellyplay.core.model.RemoteSubtitleInfo) =
+        subtitleManager.downloadSubtitle(subtitleInfo)
 
-        val label = fileName.substringBeforeLast('.').ifBlank { "Local subtitle" }
-        val source = SubtitleSource(
-            url = uri.toString(),
-            label = label,
-            language = null,
-            mimeType = null,
-            codec = codec,
-            isDefault = false,
-            isForced = false,
-            id = "local:${System.currentTimeMillis()}",
-        )
-        playerSessionManager.addExternalSubtitle(source)
-    }
-
-    // region Subtitle Manager — search & upload without leaving playback
+    fun addLocalSubtitle(uri: Uri, fileName: String) = subtitleManager.addLocalSubtitle(uri, fileName)
 
     /**
      * Resets the Subtitle Manager's search/cultures state. Called when the sheet
@@ -1871,37 +1838,14 @@ class VideoPlayerViewModel @Inject constructor(
      * leak into a new one (H4). Cultures are reloaded on demand since they may
      * be item-scoped on some servers.
      */
-    fun resetSubtitleManagerState() {
-        _uiState.update {
-            it.copy(
-                searchedSubtitles = emptyList(),
-                hasSearchedSubtitles = false,
-                isSearchingSubtitles = false,
-                subtitleSearchError = null,
-                subtitleCultures = emptyList(),
-            )
-        }
-    }
+    fun resetSubtitleManagerState() = subtitleManager.resetSubtitleManagerState()
 
     /**
      * Loads the language cultures the server understands for subtitle
      * upload/search selection. Idempotent: a no-op once cultures are already
      * populated for the current item (e.g. across tab switches / reopens).
      */
-    fun loadSubtitleCultures() {
-        if (_uiState.value.subtitleCultures.isNotEmpty()) return
-        val itemId = playerSessionManager.sessionState.value.currentItemId ?: return
-        launch {
-            playbackRepository.getSubtitleCultures(itemId).fold(
-                onSuccess = { cultures -> _uiState.update { it.copy(subtitleCultures = cultures) } },
-                onFailure = {
-                    // An empty cultures list just yields an empty dropdown;
-                    // users can still type a code manually, so no error toast.
-                    _uiState.update { it.copy(subtitleCultures = emptyList()) }
-                },
-            )
-        }
-    }
+    fun loadSubtitleCultures() = subtitleManager.loadSubtitleCultures()
 
     /**
      * Language-scoped remote subtitle search (OpenSubtitles via the server).
@@ -1910,106 +1854,34 @@ class VideoPlayerViewModel @Inject constructor(
      * (distinct from an empty result) so the UI can invite retry rather than
      * implying "no subtitles exist" (H3).
      */
-    fun searchRemoteSubtitles(language: String) {
-        val itemId = playerSessionManager.sessionState.value.currentItemId ?: return
-        _uiState.update {
-            it.copy(isSearchingSubtitles = true, hasSearchedSubtitles = false, searchedSubtitles = emptyList(), subtitleSearchError = null)
-        }
-        launch {
-            playbackRepository.searchRemoteSubtitles(itemId, language).fold(
-                onSuccess = { subs ->
-                    _uiState.update {
-                        it.copy(searchedSubtitles = subs, isSearchingSubtitles = false, hasSearchedSubtitles = true, subtitleSearchError = null)
-                    }
-                },
-                onFailure = { e ->
-                    _uiState.update {
-                        it.copy(
-                            isSearchingSubtitles = false,
-                            hasSearchedSubtitles = false,
-                            subtitleSearchError = e.message ?: "Search failed",
-                        )
-                    }
-                },
-            )
-        }
-    }
+    fun searchRemoteSubtitles(language: String) = subtitleManager.searchRemoteSubtitles(language)
 
     /**
      * Uploads a local subtitle file to the current item, then reloads the
      * media detail so the new stream appears in the track list — mirroring
-     * [downloadSubtitle]'s refresh and the editor's upload path.
-     *
-     * The file size is checked up front against [MAX_SUBTITLE_UPLOAD_BYTES] (via
-     * OpenableColumns.SIZE) so an oversized pick is rejected before the whole
-     * file — and its ~1.33× Base64 expansion — are loaded into memory. This
-     * matters on low-RAM TV devices where a stray large pick could OOM.
+     * [downloadSubtitle]'s refresh and the editor's upload path. See
+     * [SubtitleManager.uploadSubtitle] for the size-cap rationale.
      */
-    fun uploadSubtitle(uri: Uri, fileName: String, language: String?, isForced: Boolean, isHearingImpaired: Boolean) {
-        val itemId = playerSessionManager.sessionState.value.currentItemId ?: return
-        _uiState.update { it.copy(isUploadingSubtitle = true) }
-        launch {
-            val result = runCatching {
-                withContext(Dispatchers.IO) {
-                    val size = queryFileSizeBytes(uri)
-                    if (size in 1..MAX_SUBTITLE_UPLOAD_BYTES) {
-                        // Expected path: a real subtitle file well under the cap.
-                        readAndEncode(uri)
-                    } else if (size > MAX_SUBTITLE_UPLOAD_BYTES) {
-                        throw java.io.IOException("Subtitle file is too large (${size / 1024} KB). Limit is ${MAX_SUBTITLE_UPLOAD_BYTES / 1024} KB.")
-                    } else {
-                        // SIZE unknown (some providers return 0 or null) — allow the
-                        // read but it will still be bounded by a real subtitle's size.
-                        readAndEncode(uri)
-                    }
-                }
-            }.mapCatching { base64 ->
-                playbackRepository.uploadSubtitle(itemId, base64, fileName, language, isForced, isHearingImpaired).getOrThrow()
-            }
-            _uiState.update { it.copy(isUploadingSubtitle = false) }
-            result.onSuccess {
-                // Refresh media detail so the uploaded track surfaces in the
-                // subtitle track list — same approach as downloadSubtitle().
-                mediaRepository.getMediaDetail(itemId).getOrNull()?.let { detail ->
-                    applyMediaDetail(detail)
-                    val source = detail.mediaSources.firstOrNull()
-                    val streams = source?.mediaStreams ?: emptyList()
-                    _uiState.update { it.copy(
-                        currentMediaSource = source,
-                        mediaStreams = streams,
-                        detectedAspectRatio = detectAspectRatio(streams),
-                    ) }
-                }
-                userMessageBus.info("Subtitle uploaded")
-            }.onFailure { e ->
-                userMessageBus.error(e.message ?: "Failed to upload subtitle")
-            }
-        }
-    }
+    fun uploadSubtitle(uri: Uri, fileName: String, language: String?, isForced: Boolean, isHearingImpaired: Boolean) =
+        subtitleManager.uploadSubtitle(uri, fileName, language, isForced, isHearingImpaired)
 
     /**
-     * Subtitle upload size cap (2 MB). Real subtitle files are tens of KB at
-     * most; this comfortably rejects a mis-selected large asset while not
-     * blocking any legitimate subtitle. See [uploadSubtitle].
+     * Re-applies [mediaDetail] and refreshes the shared source/stream/aspect-ratio
+     * UiState fields after a subtitle download/upload adds a new stream. The
+     * duplicated inline block previously lived separately in [downloadSubtitle]
+     * and [uploadSubtitle]; folding it here lets [SubtitleManager] trigger the
+     * refresh via its [onMediaDetailRefreshed] callback without a hard VM
+     * reference.
      */
-    private val MAX_SUBTITLE_UPLOAD_BYTES = 2L * 1024 * 1024
-
-    /** Returns the byte size of [uri] via OpenableColumns.SIZE, or 0 if unknown. */
-    private fun queryFileSizeBytes(uri: Uri): Long {
-        val cursor = context.contentResolver.query(uri, arrayOf(android.provider.OpenableColumns.SIZE), null, null, null)
-            ?: return 0
-        return cursor.use {
-            if (!it.moveToFirst()) return 0
-            val idx = it.getColumnIndex(android.provider.OpenableColumns.SIZE)
-            if (idx < 0) 0 else it.getLong(idx)
-        }
-    }
-
-    /** Reads [uri] fully and Base64-encodes it (NO_WRAP). Throws on read failure. */
-    private fun readAndEncode(uri: Uri): String {
-        val bytes = context.contentResolver.openInputStream(uri)?.use { it.readBytes() }
-            ?: throw java.io.IOException("Cannot open input stream for selected subtitle")
-        return android.util.Base64.encodeToString(bytes, android.util.Base64.NO_WRAP)
+    private fun applyMediaDetailAndSourceState(detail: com.raulshma.jellyplay.core.model.MediaDetail) {
+        applyMediaDetail(detail)
+        val source = detail.mediaSources.firstOrNull()
+        val streams = source?.mediaStreams ?: emptyList()
+        _uiState.update { it.copy(
+            currentMediaSource = source,
+            mediaStreams = streams,
+            detectedAspectRatio = detectAspectRatio(streams),
+        ) }
     }
 
     // endregion
