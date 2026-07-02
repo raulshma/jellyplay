@@ -136,7 +136,7 @@ class TrackSelectionHelperTest {
         )
         helper.selectAudioTrack(TrackOption(1, "Spanish", "spa", false))
 
-        verify { engine.selectTrack(TrackType.AUDIO, 1, null) }
+        verify { engine.selectTrack(TrackType.AUDIO, 1) }
         assertFalse(state.value.audioTracks[0].isSelected) // Default
         assertFalse(state.value.audioTracks[1].isSelected) // English
         assertTrue(state.value.audioTracks[2].isSelected)   // Spanish
@@ -152,7 +152,7 @@ class TrackSelectionHelperTest {
         )
         helper.selectAudioTrack(TrackOption(-1, "Default", null, true))
 
-        verify { engine.selectTrack(TrackType.AUDIO, -1, null) }
+        verify { engine.selectTrack(TrackType.AUDIO, -1) }
         assertTrue(state.value.audioTracks[0].isSelected)
         assertFalse(state.value.audioTracks[1].isSelected)
     }
@@ -184,7 +184,7 @@ class TrackSelectionHelperTest {
         )
         helper.selectSubtitleTrack(TrackOption(0, "English", "eng", false))
 
-        verify { engine.selectTrack(TrackType.SUBTITLE, 0, null) }
+        verify { engine.selectTrack(TrackType.SUBTITLE, 0) }
         assertFalse(state.value.subtitleTracks[0].isSelected)
         assertTrue(state.value.subtitleTracks[1].isSelected)
     }
@@ -199,7 +199,7 @@ class TrackSelectionHelperTest {
         )
         helper.selectSubtitleTrack(TrackOption(-1, "Off", null, true))
 
-        verify { engine.selectTrack(TrackType.SUBTITLE, -1, null) }
+        verify { engine.selectTrack(TrackType.SUBTITLE, -1) }
         assertTrue(state.value.subtitleTracks[0].isSelected)
         assertFalse(state.value.subtitleTracks[1].isSelected)
     }
@@ -215,7 +215,7 @@ class TrackSelectionHelperTest {
         )
         helper.updateTracksFromEngine()
 
-        verify { engine.selectTrack(TrackType.AUDIO, 1, null) }
+        verify { engine.selectTrack(TrackType.AUDIO, 1) }
     }
 
     @Test
@@ -228,7 +228,7 @@ class TrackSelectionHelperTest {
         )
         helper.updateTracksFromEngine()
 
-        verify { engine.selectTrack(TrackType.AUDIO, -1, null) }
+        verify { engine.selectTrack(TrackType.AUDIO, -1) }
     }
 
     @Test
@@ -245,7 +245,7 @@ class TrackSelectionHelperTest {
         helper.setPendingStreams(subtitleIndex = null, audioIndex = 1)
         helper.updateTracksFromEngine()
 
-        verify { engine.selectTrack(TrackType.AUDIO, 1, null) }
+        verify { engine.selectTrack(TrackType.AUDIO, 1) }
     }
 
     @Test
@@ -256,7 +256,7 @@ class TrackSelectionHelperTest {
         )
         helper.updateTracksFromEngine()
 
-        verify { engine.selectTrack(TrackType.AUDIO, -1, null) }
+        verify { engine.selectTrack(TrackType.AUDIO, -1) }
     }
 
     @Test
@@ -277,7 +277,7 @@ class TrackSelectionHelperTest {
         )
         helper.updateTracksFromEngine()
 
-        verify { engine.selectTrack(TrackType.AUDIO, 1, null) }
+        verify { engine.selectTrack(TrackType.AUDIO, 1) }
     }
 
     @Test
@@ -298,7 +298,7 @@ class TrackSelectionHelperTest {
         )
         helper.updateTracksFromEngine()
 
-        verify { engine.selectTrack(TrackType.SUBTITLE, 0, null) }
+        verify { engine.selectTrack(TrackType.SUBTITLE, 0) }
     }
 
     @Test
@@ -319,7 +319,7 @@ class TrackSelectionHelperTest {
         helper.updateTracksFromEngine()
 
         // selectTrack(AUDIO, 1) must have been invoked at least once (initial select + reselect)
-        verify(atLeast = 1) { engine.selectTrack(TrackType.AUDIO, 1, null) }
+        verify(atLeast = 1) { engine.selectTrack(TrackType.AUDIO, 1) }
     }
 
     @Test
@@ -379,6 +379,5 @@ class TrackSelectionHelperTest {
         language = language,
         isSelected = isSelected,
         type = type,
-        trackGroup = null,
     )
 }

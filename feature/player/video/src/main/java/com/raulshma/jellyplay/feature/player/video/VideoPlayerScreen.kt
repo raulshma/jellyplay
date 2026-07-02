@@ -135,7 +135,6 @@ import com.raulshma.jellyplay.feature.player.video.components.TrackPickerSheet
 import com.raulshma.jellyplay.feature.player.video.components.TrickplayOverlay
 import com.raulshma.jellyplay.feature.player.video.components.VideoFilterSheet
 import com.raulshma.jellyplay.feature.player.video.findActivity
-import com.raulshma.jellyplay.feature.player.video.subtitle.VttTagParser
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import androidx.compose.animation.core.tween
@@ -221,9 +220,6 @@ fun VideoPlayerScreen(
     var seekTrickplayBitmap by remember { mutableStateOf<android.graphics.Bitmap?>(null) }
     var gestureTrickplayBitmap by remember { mutableStateOf<android.graphics.Bitmap?>(null) }
     var tvTrickplayBitmap by remember { mutableStateOf<android.graphics.Bitmap?>(null) }
-    val mpvSubtitleCues = uiState.currentSubtitleCues
-        .takeIf { uiState.usesSubtitleOverlay && it.isNotEmpty() }
-        ?: emptyList()
 
     LaunchedEffect(itemId) {
         if (viewModel.isBackgroundCasting) {
@@ -791,12 +787,6 @@ fun VideoPlayerScreen(
                     )
                 }
             }
-
-            MpvSubtitleOverlay(
-                cues = mpvSubtitleCues,
-                style = uiState.subtitleStyle,
-                visible = !isInPipMode,
-            )
 
             GestureOverlay(
                 seekDirection = seekState.direction,

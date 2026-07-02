@@ -111,7 +111,6 @@ data class MediaTrack(
     val language: String?,
     val isSelected: Boolean,
     val type: TrackType,
-    val trackGroup: Any? = null,
 )
 
 data class EngineVideoStats(
@@ -201,10 +200,14 @@ interface TrackControl {
 }
 
 /**
- * Role interface: subtitle cue text and per-engine subtitle styling.
+ * Role interface: per-engine subtitle styling applied to the engine's native
+ * subtitle surface (Media3 `SubtitleView` / libass / VLC freetype).
+ *
+ * Subtitles are rendered by each engine's own native renderer; there is no
+ * in-app Compose cue overlay (the previous `currentCues`/`MpvSubtitleOverlay`
+ * path was reserved and never enabled, and has been removed).
  */
 interface SubtitleStyling {
-    val currentCues: StateFlow<List<String>>
     fun applySubtitleStyleToView(view: View, style: SubtitleStyle)
 }
 
@@ -253,7 +256,7 @@ interface MediaEngine :
     override fun seekTo(positionMs: Long)
     override val isPlaying: StateFlow<Boolean>
     override val currentPositionMs: Long
-    override fun selectTrack(type: TrackType, index: Int, trackGroup: Any?)
+    override fun selectTrack(type: TrackType, index: Int)
     override fun setMaxVideoBitrate(bps: Int?)
     override val underlyingPlayer: androidx.media3.common.Player? get() = null
 

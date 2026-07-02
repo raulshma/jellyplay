@@ -21,6 +21,7 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -48,6 +49,7 @@ import com.raulshma.jellyplay.core.ui.components.TvSafeSheet
 import com.raulshma.jellyplay.core.ui.tv.LocalTvMode
 import com.raulshma.jellyplay.core.ui.tv.rememberTvFocusState
 import com.raulshma.jellyplay.core.ui.tv.tvFocusIndicator
+import kotlinx.coroutines.delay
 
 @Composable
 internal fun StaggeredDetailSection(
@@ -55,9 +57,33 @@ internal fun StaggeredDetailSection(
     delayIndex: Int,
     content: @Composable () -> Unit,
 ) {
-    if (visible) {
+    if (!visible) return
+    // Stagger the entrance of each section by its index so the detail body
+    // reveals top-to-bottom rather than all at once. Per-index delay is applied
+    // here (not at call sites) so callers only pass an ordinal.
+    val progress = rememberStaggerProgress(delayIndex)
+    Box(modifier = Modifier.graphicsLayer {
+        alpha = progress
+        translationY = (1f - progress) * 24f
+    }) {
         content()
     }
+}
+
+@Composable
+private fun rememberStaggerProgress(delayIndex: Int): Float {
+    // Each section starts ~45ms after the previous one; the whole reveal fits
+    // within ~300ms so it never delays interaction.
+    var revealed by remember { mutableStateOf(false) }
+    LaunchedEffect(Unit) {
+        delay(delayIndex * 45L)
+        revealed = true
+    }
+    return animateFloatAsState(
+        targetValue = if (revealed) 1f else 0f,
+        animationSpec = MaterialTheme.motionScheme.defaultEffectsSpec(),
+        label = "staggerSection$delayIndex",
+    ).value
 }
 
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalMaterial3ExpressiveApi::class)

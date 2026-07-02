@@ -675,8 +675,6 @@ class VideoPlayerViewModel @Inject constructor(
                     val prefs = cachedPreferences
                     _uiState.update { it.copy(
                         engineCapabilities = engine.capabilities,
-                        usesSubtitleOverlay = false,
-                        currentSubtitleCues = emptyList(),
                         audioDelayMs = prefs.audioDelayMs,
                         decoderMode = prefs.decoderMode,
                         audioPassthrough = prefs.audioPassthrough,
@@ -716,12 +714,6 @@ class VideoPlayerViewModel @Inject constructor(
                                 }
                                 if (state == com.raulshma.jellyplay.feature.player.video.engine.EnginePlaybackState.ENDED) {
                                     handlePlaybackEnded()
-                                }
-                            } }
-                            launch { engine.currentCues.collect { cues ->
-                                val filteredCues = cues.filter { it.isNotBlank() }
-                                _uiState.update { s ->
-                                    if (s.currentSubtitleCues == filteredCues) s else s.copy(currentSubtitleCues = filteredCues)
                                 }
                             } }
                             launch { engine.availableTracks.collect { trackSelectionHelper.updateTracksFromEngine() } }
@@ -1140,11 +1132,17 @@ class VideoPlayerViewModel @Inject constructor(
     fun setSeriesAudioLanguagePreference(language: String?) {
         val seriesId = playerSessionManager.sessionState.value.mediaDetail?.item?.seriesId ?: return
         launch {
-            itemPlaybackPreferenceRepository.save(
-                scope = PlaybackPrefScope.SERIES,
-                key = seriesId,
-                audioLanguage = language,
-            )
+            // null = "forget": use the explicit clear so save()'s "null ⇒ preserve"
+            // semantics don't silently keep the old language forever.
+            if (language == null) {
+                itemPlaybackPreferenceRepository.clearAudioLanguage(PlaybackPrefScope.SERIES, seriesId)
+            } else {
+                itemPlaybackPreferenceRepository.save(
+                    scope = PlaybackPrefScope.SERIES,
+                    key = seriesId,
+                    audioLanguage = language,
+                )
+            }
             trackSelectionHelper.refreshPlaybackPreferences()
         }
     }
@@ -1157,11 +1155,15 @@ class VideoPlayerViewModel @Inject constructor(
     fun setSeriesSubtitleLanguagePreference(language: String?) {
         val seriesId = playerSessionManager.sessionState.value.mediaDetail?.item?.seriesId ?: return
         launch {
-            itemPlaybackPreferenceRepository.save(
-                scope = PlaybackPrefScope.SERIES,
-                key = seriesId,
-                subtitleLanguage = language,
-            )
+            if (language == null) {
+                itemPlaybackPreferenceRepository.clearSubtitleLanguage(PlaybackPrefScope.SERIES, seriesId)
+            } else {
+                itemPlaybackPreferenceRepository.save(
+                    scope = PlaybackPrefScope.SERIES,
+                    key = seriesId,
+                    subtitleLanguage = language,
+                )
+            }
             trackSelectionHelper.refreshPlaybackPreferences()
         }
     }
@@ -1323,7 +1325,18 @@ class VideoPlayerViewModel @Inject constructor(
         val mode = _uiState.value.playbackMode
         val quality = _uiState.value.streamingQuality
         val pos = playerSessionManager.engine?.currentPositionMs ?: 0L
+
+        // Stop-report the *current* server session before the swap: reloadPlayback
+        // overwrites sessionState.playSessionId with the new server id, so without
+        // this the previous session is never reported stopped (the server would
+        // see start(idA) → progress(idB) → stop(idB), orphaning idA — the same
+        // desync class the M19 currentPlaySessionId resolver prevents elsewhere).
+        reportCurrentPlaybackStopped()
+        progressReporter.cancelJobs()
+
         val resolved = playerSessionManager.reloadPlayback(mode, quality, pos) ?: return
+        afterEngineReloadRebuildSessionAndTracking()
+
         if (resolved.playMethod == com.raulshma.jellyplay.core.model.PlayMethod.TRANSCODE) {
             userMessageBus.info("Switched to transcoded stream — re-buffering")
         }
@@ -1334,12 +1347,36 @@ class VideoPlayerViewModel @Inject constructor(
             _uiState.update { it.copy(playbackMode = PlaybackMode.FORCE_TRANSCODE) }
             launch {
                 preferencesStore.setPlaybackMode(PlaybackMode.FORCE_TRANSCODE)
+                reportCurrentPlaybackStopped()
+                progressReporter.cancelJobs()
                 playerSessionManager.reloadPlayback(
                     PlaybackMode.FORCE_TRANSCODE, quality,
                     playerSessionManager.engine?.currentPositionMs ?: pos,
                 )
+                afterEngineReloadRebuildSessionAndTracking()
             }
         }
+    }
+
+    /**
+     * After a same-item engine reload ([reloadPlaybackForMode], [retryWithEngine])
+     * the previous engine — whose [MediaEngine.positionFlow] the position-tracking
+     * job was collecting — has been released, so the job goes silent. The media
+     * session was also bound to the released engine's player. Rebuild both so the
+     * seek bar, buffer bar, stats overlay, segment auto-skip and the system media
+     * notification track the new engine. (Every other reload path — initialize /
+     * cinema / retry — already does this; consolidating it here keeps any future
+     * engine swap covered the same way.)
+     */
+    private fun afterEngineReloadRebuildSessionAndTracking() {
+        val sessionState = playerSessionManager.sessionState.value
+        createVideoMediaSession(
+            sessionState.currentItemId ?: "",
+            sessionState.title,
+            sessionState.subtitle,
+        )
+        progressReporter.startPositionTracking()
+        progressReporter.startProgressReporting()
     }
 
     fun setDecoderMode(mode: DecoderMode) {
@@ -1367,14 +1404,7 @@ class VideoPlayerViewModel @Inject constructor(
         launch {
             preferencesStore.setPreferredPlayer(playerType)
             playerSessionManager.reloadWithEngine(playerType, currentPos, currentSpeed, maxBitrate)
-            val sessionState = playerSessionManager.sessionState.value
-            createVideoMediaSession(
-                sessionState.currentItemId ?: "",
-                sessionState.title,
-                sessionState.subtitle,
-            )
-            progressReporter.startPositionTracking()
-            progressReporter.startProgressReporting()
+            afterEngineReloadRebuildSessionAndTracking()
         }
     }
 

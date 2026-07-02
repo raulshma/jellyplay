@@ -8,6 +8,7 @@ import com.raulshma.jellyplay.core.model.TrackType
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotNull
+import org.junit.Assert.assertNotEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
@@ -163,15 +164,20 @@ class EngineCapabilitiesCrossPlayerTest {
     }
 
     @Test
-    fun libvlcCapabilities_dialogueBoostSupported() {
+    fun libvlcCapabilities_dialogueBoostNotSupported() {
+        // LibVLC exposes no audio session id, so the Android-AudioEffect-based
+        // dialogue boost cannot bind at runtime. The effect is configurable only
+        // as a startup filter, so the live-toggle capability is advertised false.
         val caps = getCapabilitiesForType(PlayerType.LIBVLC)
-        assertTrue(caps.supportsDialogueBoost)
+        assertFalse(caps.supportsDialogueBoost)
     }
 
     @Test
-    fun libvlcCapabilities_nightModeSupported() {
+    fun libvlcCapabilities_nightModeNotSupported() {
+        // See libvlcCapabilities_dialogueBoostNotSupported: same audio-session
+        // limitation applies to night mode.
         val caps = getCapabilitiesForType(PlayerType.LIBVLC)
-        assertTrue(caps.supportsNightMode)
+        assertFalse(caps.supportsNightMode)
     }
 
     @Test
@@ -188,9 +194,13 @@ class EngineCapabilitiesCrossPlayerTest {
         assertEquals(mpvCaps.supportsAudioDelay, vlcCaps.supportsAudioDelay)
         assertEquals(mpvCaps.supportsAudioPassthrough, vlcCaps.supportsAudioPassthrough)
         assertEquals(mpvCaps.supportsSubtitleStyle, vlcCaps.supportsSubtitleStyle)
-        assertEquals(mpvCaps.supportsDialogueBoost, vlcCaps.supportsDialogueBoost)
-        assertEquals(mpvCaps.supportsNightMode, vlcCaps.supportsNightMode)
         assertEquals(mpvCaps.supportsVideoFilters, vlcCaps.supportsVideoFilters)
+        // Audio-effect toggles (dialogue boost / night mode / normalization /
+        // channel mix) intentionally differ: MPV exposes a real audio session id
+        // so the Android-AudioEffect helpers work at runtime, while LibVLC does
+        // not, so it advertises these as unsupported (applies-on-next-load only).
+        assertNotEquals(mpvCaps.supportsDialogueBoost, vlcCaps.supportsDialogueBoost)
+        assertNotEquals(mpvCaps.supportsNightMode, vlcCaps.supportsNightMode)
         // Note: cues intentionally differ — MPV publishes cue text, VLC does not.
         assertFalse(mpvCaps.supportsCues == vlcCaps.supportsCues)
     }
@@ -228,19 +238,6 @@ class MediaTrackContractTest {
         assertEquals("eng", track.language)
         assertTrue(track.isSelected)
         assertEquals(TrackType.AUDIO, track.type)
-    }
-
-    @Test
-    fun mediaTrack_defaultTrackGroupIsNull() {
-        val track = MediaTrack(
-            id = "0",
-            index = 0,
-            label = "Test",
-            language = null,
-            isSelected = false,
-            type = TrackType.SUBTITLE,
-        )
-        assertEquals(null, track.trackGroup)
     }
 
     @Test

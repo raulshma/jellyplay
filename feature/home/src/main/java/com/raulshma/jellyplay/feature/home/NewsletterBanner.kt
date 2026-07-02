@@ -22,7 +22,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.composables.icons.tabler.Tabler
@@ -37,8 +36,6 @@ fun NewsletterBanner(
     onDismiss: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    val entranceAlpha = 1f
-
     val primaryContainer = MaterialTheme.colorScheme.primaryContainer
     val tertiaryContainer = MaterialTheme.colorScheme.tertiaryContainer
     val bannerBrush = remember(primaryContainer, tertiaryContainer) {
@@ -55,11 +52,6 @@ fun NewsletterBanner(
             .background(bannerBrush)
             .focusIndicator()
             .clickable(onClick = onClick)
-            .graphicsLayer {
-                alpha = entranceAlpha
-                scaleX = entranceAlpha
-                scaleY = entranceAlpha
-            }
             .padding(horizontal = 20.dp, vertical = 16.dp),
     ) {
         Row(

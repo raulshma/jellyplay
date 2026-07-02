@@ -162,7 +162,6 @@ internal fun SeasonsSection(
         AnimatedContent(
             targetState = selectedSeasonIndex to (seasonEpisodes?.size ?: 0),
             transitionSpec = {
-                val direction = if (targetState.first >= initialState.first) 1 else -1
                 fadeIn(
                     animationSpec = tween(400),
                 ) togetherWith fadeOut(
