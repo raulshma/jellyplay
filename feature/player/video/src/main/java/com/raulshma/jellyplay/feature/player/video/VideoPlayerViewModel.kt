@@ -13,6 +13,8 @@ import androidx.media3.common.Player
 import androidx.media3.common.util.UnstableApi
 import androidx.media3.session.MediaSession
 import com.raulshma.jellyplay.core.data.playback.PlaybackSessionManager
+import com.raulshma.jellyplay.core.data.playback.PipAction
+import com.raulshma.jellyplay.core.data.playback.PipTransport
 import com.raulshma.jellyplay.core.data.playback.PlayerLifecycleManager
 import com.raulshma.jellyplay.core.data.playback.SleepTimerManager
 import com.raulshma.jellyplay.core.data.playback.VideoMiniPlayerState
@@ -485,6 +487,25 @@ class VideoPlayerViewModel @Inject constructor(
 
     init {
         castManager.acquireConsumer()
+        // Register the PiP transport bridge so the Activity can dispatch PiP
+        // remote-action intents (play/pause/skip/next) to the active engine
+        // (issue #66-E). Cleared on reset() when playback ends.
+        playerLifecycleManager.pipTransport = PipTransport { action ->
+            val engine = playerSessionManager.engine ?: return@PipTransport
+            when (action) {
+                PipAction.PLAY -> engine.play()
+                PipAction.PAUSE -> engine.pause()
+                PipAction.SKIP_FORWARD -> {
+                    val skip = _uiState.value.seekDurationMs
+                    seekTo((engine.currentPositionMs + skip).coerceAtLeast(0L))
+                }
+                PipAction.SKIP_BACKWARD -> {
+                    val skip = _uiState.value.seekDurationMs
+                    seekTo((engine.currentPositionMs - skip).coerceAtLeast(0L))
+                }
+                PipAction.NEXT -> playNextEpisode()
+            }
+        }
         launch {
             preferencesStore.preferences.collect { prefs ->
                 val oldPrefs = cachedPreferences
@@ -568,6 +589,8 @@ class VideoPlayerViewModel @Inject constructor(
             playerSessionManager.engineFlow.collect { engine ->
                 engineJob?.cancel()
                 if (engine != null) {
+                    // Expose whether a "next" action is available for the PiP window.
+                    playerLifecycleManager.pipHasNext = mediaDetail?.item?.seriesId != null
                     engineJob = launch {
                         val wasPlaying = booleanArrayOf(false)
                         engine.isPlaying.collect { playing ->
@@ -670,12 +693,22 @@ class VideoPlayerViewModel @Inject constructor(
         // state so the track sheets can show the series-pref toggle state.
         launch {
             playbackPreferenceResolver.resolved.collect { pref ->
+                // Dialogue Boost is resolved per-item (issue #66-B): a stored rule
+                // pins the strength; otherwise the effective default is OFF (NONE),
+                // so the effect never silently carries across items. The global
+                // setting is intentionally NOT used as the auto fallback here.
+                val resolvedBoost = pref?.dialogueBoostStrength
+                    ?: com.raulshma.jellyplay.core.model.EffectStrength.NONE
                 _uiState.update {
                     it.copy(
                         hasSeriesAudioPref = pref?.scope == PlaybackPrefScope.SERIES && pref.audioLanguage != null,
                         hasSeriesSubtitlePref = pref?.scope == PlaybackPrefScope.SERIES && pref.subtitleLanguage != null,
+                        hasSeriesDialogueBoostPref = pref?.scope == PlaybackPrefScope.SERIES && pref.dialogueBoostStrength != null,
+                        dialogueBoostStrength = resolvedBoost,
+                        dialogueBoostEnabled = resolvedBoost != com.raulshma.jellyplay.core.model.EffectStrength.NONE,
                     )
                 }
+                updateConfigWithUiState()
             }
         }
 
@@ -693,8 +726,11 @@ class VideoPlayerViewModel @Inject constructor(
                         subtitleStyle = prefs.resolvedSubtitleStyle(
                             isHdr = prefs.isHdrFromStreams(playerSessionManager.sessionState.value.mediaStreams),
                         ),
-                        dialogueBoostEnabled = prefs.dialogueBoostEnabled,
-                        dialogueBoostStrength = prefs.dialogueBoostStrength,
+                        // Dialogue Boost defaults to OFF until the per-item resolver
+                        // applies a stored rule (issue #66-B). It does not inherit the
+                        // global default, preventing cross-item bleed.
+                        dialogueBoostEnabled = false,
+                        dialogueBoostStrength = com.raulshma.jellyplay.core.model.EffectStrength.NONE,
                         nightModeEnabled = prefs.nightModeEnabled,
                         nightModeStrength = prefs.nightModeStrength,
                         audioNormalizationMode = prefs.audioNormalizationMode,
@@ -710,6 +746,9 @@ class VideoPlayerViewModel @Inject constructor(
                             launch { engine.isPlaying.collect { isPlaying ->
                                 _uiState.update { s -> s.copy(isPlaying = isPlaying) }
                                 syncPlayBridge.onIsPlayingChanged(isPlaying)
+                                // Mirror play state so the Activity can render the correct
+                                // play/pause icon on the PiP window (issue #66-E).
+                                playerLifecycleManager.setPlaying(isPlaying)
                             } }
                             launch { engine.playbackState.collect { state ->
                                 val stateInt = when (state) {
@@ -1218,19 +1257,40 @@ class VideoPlayerViewModel @Inject constructor(
     }
 
     fun toggleDialogueBoost() {
+        // Dialogue Boost is persisted per-item/series (issue #66-B): toggling on
+        // pins MODERATE for this item/series, toggling off clears it (resolves to
+        // NONE). It does not touch the global setting, so it never bleeds across
+        // unrelated items.
         val newVal = !_uiState.value.dialogueBoostEnabled
-        _uiState.update { it.copy(dialogueBoostEnabled = newVal) }
-        updateConfigWithUiState()
-        launch {
-            preferencesStore.setDialogueBoostEnabled(newVal)
-        }
+        val target = if (newVal) com.raulshma.jellyplay.core.model.EffectStrength.MODERATE
+            else com.raulshma.jellyplay.core.model.EffectStrength.NONE
+        setDialogueBoostStrength(target)
     }
 
     fun setDialogueBoostStrength(strength: com.raulshma.jellyplay.core.model.EffectStrength) {
-        _uiState.update { it.copy(dialogueBoostStrength = strength) }
+        _uiState.update {
+            it.copy(
+                dialogueBoostStrength = strength,
+                dialogueBoostEnabled = strength != com.raulshma.jellyplay.core.model.EffectStrength.NONE,
+            )
+        }
         updateConfigWithUiState()
         launch {
-            preferencesStore.setDialogueBoostStrength(strength)
+            val seriesId = playerSessionManager.sessionState.value.mediaDetail?.item?.seriesId
+            val itemId = playerSessionManager.sessionState.value.currentItemId
+            // Prefer SERIES scope (applies to all episodes), fall back to ITEM.
+            val scopeKey = seriesId ?: itemId ?: return@launch
+            val prefScope = if (seriesId != null) PlaybackPrefScope.SERIES else PlaybackPrefScope.ITEM
+            if (strength == com.raulshma.jellyplay.core.model.EffectStrength.NONE) {
+                itemPlaybackPreferenceRepository.clearDialogueBoostStrength(prefScope, scopeKey)
+            } else {
+                itemPlaybackPreferenceRepository.save(
+                    scope = prefScope,
+                    key = scopeKey,
+                    dialogueBoostStrength = strength,
+                )
+            }
+            trackSelectionHelper.refreshPlaybackPreferences()
         }
     }
 
@@ -2214,8 +2274,10 @@ class VideoPlayerViewModel @Inject constructor(
                 tvZoomModePercent = currentState.tvZoomModePercent,
                 keepScreenOnDuringVideo = currentState.keepScreenOnDuringVideo,
                 subtitleStyle = currentState.subtitleStyle,
-                dialogueBoostEnabled = currentState.dialogueBoostEnabled,
-                dialogueBoostStrength = currentState.dialogueBoostStrength,
+                // Reset per-item dialogue boost so it doesn't bleed into the next
+                // item before the resolver re-applies the per-item rule (issue #66-B).
+                dialogueBoostEnabled = false,
+                dialogueBoostStrength = com.raulshma.jellyplay.core.model.EffectStrength.NONE,
                 nightModeEnabled = currentState.nightModeEnabled,
                 nightModeStrength = currentState.nightModeStrength,
                 audioPassthrough = currentState.audioPassthrough,

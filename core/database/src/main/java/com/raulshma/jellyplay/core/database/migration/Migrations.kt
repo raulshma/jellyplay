@@ -494,6 +494,14 @@ val MIGRATION_26_27 = object : Migration(26, 27) {
     }
 }
 
+// Per-item / per-series dialogue-boost strength (issue #66-B).
+// Nullable column: NULL means "no per-item rule" (resolve to the effective default).
+val MIGRATION_27_28 = object : Migration(27, 28) {
+    override fun migrate(db: SupportSQLiteDatabase) {
+        db.execSQL("ALTER TABLE item_playback_preferences ADD COLUMN dialogueBoostStrength TEXT")
+    }
+}
+
 val ALL_MIGRATIONS = listOf(
     MIGRATION_1_2,
     MIGRATION_2_3,
@@ -520,4 +528,5 @@ val ALL_MIGRATIONS = listOf(
     MIGRATION_23_24,
     MIGRATION_25_26,
     MIGRATION_26_27,
+    MIGRATION_27_28,
 )
