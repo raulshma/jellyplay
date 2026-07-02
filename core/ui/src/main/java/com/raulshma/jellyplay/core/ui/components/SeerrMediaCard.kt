@@ -93,8 +93,9 @@ fun SeerrMediaCard(
     // bounds so the overlay can morph out of it. No-op when no controller is
     // wired or on TV.
     val previewController = LocalMediaPreviewController.current
+    val peekEnabled = com.raulshma.jellyplay.core.ui.preview.LocalMediaPeekEnabled.current
     val boundsState = remember { mutableStateOf(Rect.Zero) }
-    val previewBoundsModifier = if (previewController != null && !isTv) {
+    val previewBoundsModifier = if (previewController != null && !isTv && peekEnabled) {
         Modifier.onGloballyPositioned { coords ->
             val pos = coords.positionInWindow()
             boundsState.value = Rect(
@@ -105,7 +106,7 @@ fun SeerrMediaCard(
             )
         }
     } else Modifier
-    val onPreviewLongClick = if (previewController != null && !isTv) {
+    val onPreviewLongClick = if (previewController != null && !isTv && peekEnabled) {
         remember(item, imageUrl) {
             {
                 previewController.show(
