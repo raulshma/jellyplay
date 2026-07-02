@@ -22,6 +22,10 @@ class ItemPlaybackPreferenceRepositoryImpl @Inject constructor(
         subtitleLanguage: String?,
     ) {
         val existing = dao.getByKey(scope.name, key)
+        // `save` treats a null argument as "leave untouched" (preserve the
+        // existing value for that field). Explicit single-field clearing goes
+        // through [clearAudioLanguage]/[clearSubtitleLanguage] so "clear" and
+        // "not provided" remain distinguishable.
         val mergedAudio = audioLanguage ?: existing?.audioLanguage
         val mergedSub = subtitleLanguage ?: existing?.subtitleLanguage
         // A row with nothing set carries no preference — drop it so the table
@@ -40,6 +44,25 @@ class ItemPlaybackPreferenceRepositoryImpl @Inject constructor(
                 updatedAt = System.currentTimeMillis(),
             )
         )
+    }
+
+    override suspend fun clearAudioLanguage(scope: PlaybackPrefScope, key: String) {
+        val existing = dao.getByKey(scope.name, key) ?: return
+        if (existing.subtitleLanguage == null) {
+            // Nothing left to remember — remove the row entirely.
+            dao.deleteByKey(scope.name, key)
+        } else {
+            dao.upsert(existing.copy(audioLanguage = null, updatedAt = System.currentTimeMillis()))
+        }
+    }
+
+    override suspend fun clearSubtitleLanguage(scope: PlaybackPrefScope, key: String) {
+        val existing = dao.getByKey(scope.name, key) ?: return
+        if (existing.audioLanguage == null) {
+            dao.deleteByKey(scope.name, key)
+        } else {
+            dao.upsert(existing.copy(subtitleLanguage = null, updatedAt = System.currentTimeMillis()))
+        }
     }
 
     override suspend fun delete(scope: PlaybackPrefScope, key: String) {

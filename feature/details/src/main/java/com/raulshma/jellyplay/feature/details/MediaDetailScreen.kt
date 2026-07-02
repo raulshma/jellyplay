@@ -175,7 +175,9 @@ fun MediaDetailScreen(
         ?.takeIf { it.mediaType == MediaType.EPISODE }?.seriesId
         ?: currentItem?.id
         ?: itemId
-    val backdropUrl = viewModel.getBackdropUrl(targetBackdropId)
+    // Memoized so the URL isn't rebuilt on every recomposition (e.g. on each
+    // scroll-derived state change funnelling through ArtworkThemeWrapper).
+    val backdropUrl = remember(targetBackdropId) { viewModel.getBackdropUrl(targetBackdropId) }
 
     val outerIsLightTheme = rememberIsLightTheme()
 
@@ -533,6 +535,39 @@ private fun DetailContent(
     val isExpanded = adaptiveInfo.windowSizeClass != WindowSizeClass.Compact
     val isTv = LocalTvMode.current
     val context = LocalContext.current
+
+    // Single resolved options list shared by the touch DropdownMenu and the TV
+    // TvSafeSheet so the two menus can never drift apart.
+    val shareMedia = remember(itemId, context) {
+        {
+            val shareIntent = Intent(Intent.ACTION_SEND).apply {
+                type = "text/plain"
+                putExtra(Intent.EXTRA_TEXT, "jellyplay://media/$itemId")
+                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            }
+            context.startActivity(Intent.createChooser(shareIntent, "Share via"))
+        }
+    }
+    val mediaOptions = rememberMediaOptions(
+        item = item,
+        detail = detail,
+        itemId = itemId,
+        isAudio = isAudio,
+        isSeries = isSeries,
+        seasons = seasons,
+        preferences = preferences,
+        activeDownload = activeDownload,
+        isDownloading = isDownloading,
+        isDownloadingSeries = isDownloadingSeries,
+        onClose = { /* menus close themselves */ },
+        onEditClick = onEditClick,
+        onShare = shareMedia,
+        onDownload = { showDownloadDialog = true },
+        onDownloadSeries = onDownloadSeriesClick,
+        onHideFromNextUp = onHideFromNextUp,
+        onHideFromContinueWatching = onHideFromContinueWatching,
+        onTechnicalInfo = { onNavigate(com.raulshma.jellyplay.core.ui.navigation.Route.MediaInfo(itemId)) },
+    )
 
     val density = LocalDensity.current
     val backdropHeight = when {
@@ -1053,117 +1088,16 @@ private fun DetailContent(
                                 expanded = menuExpanded,
                                 onDismissRequest = { menuExpanded = false },
                             ) {
-                                DropdownMenuItem(
-                                    text = { Text("Edit") },
-                                    onClick = {
-                                        menuExpanded = false
-                                        onEditClick()
-                                    },
-                                    leadingIcon = {
-                                        Icon(Tabler.Outline.Pencil, contentDescription = null)
-                                    }
-                                )
-                                if (preferences.showShareMediaOption) {
+                                mediaOptions.forEach { option ->
                                     DropdownMenuItem(
-                                        text = { Text("Share") },
-                                        onClick = {
-                                            menuExpanded = false
-                                            val shareIntent = Intent(Intent.ACTION_SEND).apply {
-                                                type = "text/plain"
-                                                putExtra(Intent.EXTRA_TEXT, "jellyplay://media/$itemId")
-                                                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-                                            }
-                                            context.startActivity(Intent.createChooser(shareIntent, "Share via"))
-                                        },
+                                        text = { Text(option.label) },
+                                        onClick = { menuExpanded = false; option.onClick() },
+                                        enabled = option.enabled,
                                         leadingIcon = {
-                                            Icon(Tabler.Outline.Share, contentDescription = null)
+                                            Icon(option.icon, contentDescription = null)
                                         }
                                     )
                                 }
-                                val canDownload = item != null && detail != null && detail.mediaSources.isNotEmpty() &&
-                                        (item.mediaType == MediaType.AUDIO || item.mediaType == MediaType.MUSIC || (!isAudio && !isSeries))
-                                if (canDownload) {
-                                    val downloadStatus = activeDownload?.status
-                                    val isDownloadActive = downloadStatus == DownloadStatus.PENDING ||
-                                            downloadStatus == DownloadStatus.DOWNLOADING ||
-                                            downloadStatus == DownloadStatus.PAUSED
-                                    val isDownloadCompleted = downloadStatus == DownloadStatus.COMPLETED
-                                    val downloadProgress = if (activeDownload != null && activeDownload.totalSizeBytes > 0) {
-                                        activeDownload.downloadedBytes.toFloat() / activeDownload.totalSizeBytes
-                                    } else 0f
-
-                                    DropdownMenuItem(
-                                        text = {
-                                            val text = when {
-                                                isDownloadCompleted -> "Downloaded"
-                                                isDownloading || isDownloadActive -> {
-                                                    if (downloadProgress > 0f && downloadStatus == DownloadStatus.DOWNLOADING) {
-                                                        "Downloading (${(downloadProgress * 100).toInt()}%)"
-                                                    } else {
-                                                        "Downloading..."
-                                                    }
-                                                }
-                                                else -> "Download"
-                                            }
-                                            Text(text)
-                                        },
-                                        onClick = {
-                                            menuExpanded = false
-                                            showDownloadDialog = true
-                                        },
-                                        enabled = !isDownloading && !isDownloadActive && !isDownloadCompleted,
-                                        leadingIcon = {
-                                            val icon = if (isDownloadCompleted) Tabler.Outline.Check else Tabler.Outline.Download
-                                            Icon(icon, contentDescription = null)
-                                        }
-                                    )
-                                } else if (!isAudio && item != null && isSeries && seasons.isNotEmpty()) {
-                                    DropdownMenuItem(
-                                        text = {
-                                            Text(if (isDownloadingSeries) "Downloading Series..." else "Download Series")
-                                        },
-                                        onClick = {
-                                            menuExpanded = false
-                                            onDownloadSeriesClick()
-                                        },
-                                        enabled = !isDownloadingSeries,
-                                        leadingIcon = {
-                                            Icon(Tabler.Outline.Download, contentDescription = null)
-                                        }
-                                    )
-                                }
-                                if (isSeries || item?.seriesId != null) {
-                                    DropdownMenuItem(
-                                        text = { Text("Hide from Next Up") },
-                                        onClick = {
-                                            menuExpanded = false
-                                            onHideFromNextUp()
-                                        },
-                                        leadingIcon = {
-                                            Icon(Tabler.Outline.EyeOff, contentDescription = null)
-                                        }
-                                    )
-                                }
-                                DropdownMenuItem(
-                                    text = { Text("Hide from Continue Watching") },
-                                    onClick = {
-                                        menuExpanded = false
-                                        onHideFromContinueWatching()
-                                    },
-                                    leadingIcon = {
-                                        Icon(Tabler.Outline.EyeOff, contentDescription = null)
-                                    }
-                                )
-                                DropdownMenuItem(
-                                    text = { Text("Technical Info") },
-                                    onClick = {
-                                        menuExpanded = false
-                                        onNavigate(com.raulshma.jellyplay.core.ui.navigation.Route.MediaInfo(itemId))
-                                    },
-                                    leadingIcon = {
-                                        Icon(Tabler.Outline.InfoCircle, contentDescription = null)
-                                    }
-                                )
                             }
                         }
                     }
@@ -1244,97 +1178,17 @@ private fun DetailContent(
             title = "Options",
         ) {
             Column(modifier = Modifier.verticalWrapAround()) {
-                TvOptionItem(
-                    icon = Tabler.Outline.Pencil,
-                    label = "Edit",
-                    onClick = {
-                        showTvOptionsMenu = false
-                        onEditClick()
-                    },
-                )
-                if (preferences.showShareMediaOption) {
+                mediaOptions.forEach { option ->
                     TvOptionItem(
-                        icon = Tabler.Outline.Share,
-                        label = "Share",
+                        icon = option.icon,
+                        label = option.label,
+                        enabled = option.enabled,
                         onClick = {
                             showTvOptionsMenu = false
-                            val shareIntent = Intent(Intent.ACTION_SEND).apply {
-                                type = "text/plain"
-                                putExtra(Intent.EXTRA_TEXT, "jellyplay://media/$itemId")
-                                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-                            }
-                            context.startActivity(Intent.createChooser(shareIntent, "Share via"))
+                            option.onClick()
                         },
                     )
                 }
-                val canDownload = item != null && detail != null && detail.mediaSources.isNotEmpty() &&
-                        (item.mediaType == MediaType.AUDIO || item.mediaType == MediaType.MUSIC || (!isAudio && !isSeries))
-                if (canDownload) {
-                    val downloadStatus = activeDownload?.status
-                    val isDownloadActive = downloadStatus == DownloadStatus.PENDING ||
-                            downloadStatus == DownloadStatus.DOWNLOADING ||
-                            downloadStatus == DownloadStatus.PAUSED
-                    val isDownloadCompleted = downloadStatus == DownloadStatus.COMPLETED
-                    val downloadProgress = if (activeDownload != null && activeDownload.totalSizeBytes > 0) {
-                        activeDownload.downloadedBytes.toFloat() / activeDownload.totalSizeBytes
-                    } else 0f
-
-                    TvOptionItem(
-                        icon = if (isDownloadCompleted) Tabler.Outline.Check else Tabler.Outline.Download,
-                        label = when {
-                            isDownloadCompleted -> "Downloaded"
-                            isDownloading || isDownloadActive -> {
-                                if (downloadProgress > 0f && downloadStatus == DownloadStatus.DOWNLOADING) {
-                                    "Downloading (${(downloadProgress * 100).toInt()}%)"
-                                } else {
-                                    "Downloading..."
-                                }
-                            }
-                            else -> "Download"
-                        },
-                        enabled = !isDownloading && !isDownloadActive && !isDownloadCompleted,
-                        onClick = {
-                            showTvOptionsMenu = false
-                            showDownloadDialog = true
-                        },
-                    )
-                } else if (!isAudio && item != null && isSeries && seasons.isNotEmpty()) {
-                    TvOptionItem(
-                        icon = Tabler.Outline.Download,
-                        label = if (isDownloadingSeries) "Downloading Series..." else "Download Series",
-                        enabled = !isDownloadingSeries,
-                        onClick = {
-                            showTvOptionsMenu = false
-                            onDownloadSeriesClick()
-                        },
-                    )
-                }
-                if (isSeries || item?.seriesId != null) {
-                    TvOptionItem(
-                        icon = Tabler.Outline.EyeOff,
-                        label = "Hide from Next Up",
-                        onClick = {
-                            showTvOptionsMenu = false
-                            onHideFromNextUp()
-                        },
-                    )
-                }
-                TvOptionItem(
-                    icon = Tabler.Outline.EyeOff,
-                    label = "Hide from Continue Watching",
-                    onClick = {
-                        showTvOptionsMenu = false
-                        onHideFromContinueWatching()
-                    },
-                )
-                TvOptionItem(
-                    icon = Tabler.Outline.InfoCircle,
-                    label = "Technical Info",
-                    onClick = {
-                        showTvOptionsMenu = false
-                        onNavigate(com.raulshma.jellyplay.core.ui.navigation.Route.MediaInfo(itemId))
-                    },
-                )
             }
         }
     }

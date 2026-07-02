@@ -1,6 +1,5 @@
 package com.raulshma.jellyplay.feature.player.video
 
-import androidx.media3.common.TrackGroup
 import com.raulshma.jellyplay.core.datastore.UserPreferencesStore
 import com.raulshma.jellyplay.core.model.MediaStream
 import com.raulshma.jellyplay.core.model.StreamType
@@ -15,7 +14,6 @@ data class TrackOption(
     val label: String,
     val language: String?,
     val isSelected: Boolean,
-    val trackGroup: TrackGroup? = null,
 )
 
 internal class TrackSelectionHelper(
@@ -28,8 +26,8 @@ internal class TrackSelectionHelper(
     private val playbackPreferenceResolver: ItemPlaybackPreferenceResolver,
     private val scope: CoroutineScope,
 ) {
-    private var selectedSubtitleTrackId: Pair<Int, Any?>? = null
-    private var selectedAudioTrackId: Pair<Int, Any?>? = null
+    private var selectedSubtitleTrackIndex: Int? = null
+    private var selectedAudioTrackIndex: Int? = null
 
     @Suppress("DEPRECATION")
     private var pendingSubtitleStreamIndex: Int? = null
@@ -52,16 +50,12 @@ internal class TrackSelectionHelper(
 
     fun selectAudioTrack(option: TrackOption, isUserOverride: Boolean = true) {
         val engine = getEngine() ?: return
-        engine.selectTrack(TrackType.AUDIO, option.index, option.trackGroup)
-        if (option.index < 0) {
-            selectedAudioTrackId = null
-        } else {
-            selectedAudioTrackId = option.index to option.trackGroup
-        }
+        engine.selectTrack(TrackType.AUDIO, option.index)
+        selectedAudioTrackIndex = if (option.index < 0) null else option.index
         updateUiState { state ->
             val isDefault = option.index < 0
             state.copy(audioTracks = state.audioTracks.map { track ->
-                val matches = track.index == option.index && track.trackGroup == option.trackGroup
+                val matches = track.index == option.index
                 val isDefaultTrack = track.index < 0
                 track.copy(isSelected = if (isDefault) isDefaultTrack else matches)
             })
@@ -77,18 +71,14 @@ internal class TrackSelectionHelper(
     fun selectSubtitleTrack(option: TrackOption, isUserOverride: Boolean = true) {
         val engine = getEngine() ?: return
 
-        engine.selectTrack(TrackType.SUBTITLE, option.index, option.trackGroup)
+        engine.selectTrack(TrackType.SUBTITLE, option.index)
 
-        if (option.index < 0) {
-            selectedSubtitleTrackId = null
-        } else {
-            selectedSubtitleTrackId = option.index to option.trackGroup
-        }
+        selectedSubtitleTrackIndex = if (option.index < 0) null else option.index
 
         updateUiState { state ->
             val isOff = option.index < 0
             state.copy(subtitleTracks = state.subtitleTracks.map { track ->
-                val matches = track.index == option.index && track.trackGroup == option.trackGroup
+                val matches = track.index == option.index
                 val isOffTrack = track.index < 0
                 track.copy(isSelected = if (isOff) isOffTrack else matches)
             })
@@ -106,74 +96,71 @@ internal class TrackSelectionHelper(
         val streams = getUiState().mediaStreams
         val rawTracks = engine.availableTracks.value
 
+        // If a previously-selected track has lost its "selected" flag (e.g. the
+        // engine re-published its track list after a bitrate/mode change), re-
+        // assert the selection — but do NOT return early. Returning here used to
+        // skip the track-list rebuild below and the pending/preference selection
+        // logic, leaving the picker UI stale and (if no follow-up availableTracks
+        // emission arrived) failing to apply the navigation/per-item/series/global
+        // language preference at all for that load.
         val rawAudioTracks = rawTracks.filter { it.type == TrackType.AUDIO }
-        val prevAudioSel = selectedAudioTrackId
+        val prevAudioSel = selectedAudioTrackIndex
         if (prevAudioSel != null) {
-            val targetTrack = rawAudioTracks.find { it.index == prevAudioSel.first && it.trackGroup == prevAudioSel.second }
+            val targetTrack = rawAudioTracks.find { it.index == prevAudioSel }
             if (targetTrack != null && !targetTrack.isSelected) {
-                engine.selectTrack(TrackType.AUDIO, targetTrack.index, targetTrack.trackGroup)
-                return
+                engine.selectTrack(TrackType.AUDIO, targetTrack.index)
             }
         }
 
         val rawSubTracks = rawTracks.filter { it.type == TrackType.SUBTITLE }
-        val prevSubSel = selectedSubtitleTrackId
+        val prevSubSel = selectedSubtitleTrackIndex
         if (prevSubSel != null) {
-            val targetTrack = rawSubTracks.find { it.index == prevSubSel.first && it.trackGroup == prevSubSel.second }
+            val targetTrack = rawSubTracks.find { it.index == prevSubSel }
             if (targetTrack != null && !targetTrack.isSelected) {
-                engine.selectTrack(TrackType.SUBTITLE, targetTrack.index, targetTrack.trackGroup)
-                return
+                engine.selectTrack(TrackType.SUBTITLE, targetTrack.index)
             }
         }
 
         val audioOptions = rawAudioTracks.map { t ->
-            TrackOption(t.index, t.label, t.language, t.isSelected, trackGroup = t.trackGroup as? TrackGroup)
+            TrackOption(t.index, t.label, t.language, t.isSelected)
         }
 
         val audioTracks = if (audioOptions.isEmpty()) {
             listOf(TrackOption(-1, "Default", null, true))
         } else {
-            val sel = selectedAudioTrackId
-            val hasSelectionMatch = audioOptions.any { sel != null && sel.first == it.index && sel.second == it.trackGroup }
+            val sel = selectedAudioTrackIndex
+            val hasSelectionMatch = audioOptions.any { it.index == sel }
             val resolvedSel = if (hasSelectionMatch) sel else {
                 val engineAutoSelected = audioOptions.find { it.isSelected }
                 if (engineAutoSelected != null) {
-                    selectedAudioTrackId = engineAutoSelected.index to engineAutoSelected.trackGroup
-                    selectedAudioTrackId
+                    selectedAudioTrackIndex = engineAutoSelected.index
+                    selectedAudioTrackIndex
                 } else null
             }
             listOf(TrackOption(-1, "Default", null, resolvedSel == null)) + audioOptions.map { t ->
-                val isSel = if (resolvedSel != null) {
-                    resolvedSel.first == t.index && resolvedSel.second == t.trackGroup
-                } else {
-                    t.isSelected
-                }
+                val isSel = if (resolvedSel != null) resolvedSel == t.index else t.isSelected
                 t.copy(isSelected = isSel)
             }
         }
 
         val engineSubOptions = rawSubTracks.map { t ->
-            TrackOption(t.index, t.label, t.language, t.isSelected, trackGroup = t.trackGroup as? TrackGroup)
+            TrackOption(t.index, t.label, t.language, t.isSelected)
         }
 
         val subtitleTracks = if (engineSubOptions.isEmpty()) {
             listOf(TrackOption(-1, "None", null, true))
         } else {
-            val sel = selectedSubtitleTrackId
-            val hasSelectionMatch = engineSubOptions.any { sel != null && sel.first == it.index && sel.second == it.trackGroup }
+            val sel = selectedSubtitleTrackIndex
+            val hasSelectionMatch = engineSubOptions.any { it.index == sel }
             val resolvedSel = if (hasSelectionMatch) sel else {
                 val engineAutoSelected = engineSubOptions.find { it.isSelected }
                 if (engineAutoSelected != null) {
-                    selectedSubtitleTrackId = engineAutoSelected.index to engineAutoSelected.trackGroup
-                    selectedSubtitleTrackId
+                    selectedSubtitleTrackIndex = engineAutoSelected.index
+                    selectedSubtitleTrackIndex
                 } else null
             }
             listOf(TrackOption(-1, "Off", null, resolvedSel == null)) + engineSubOptions.map { t ->
-                val isSel = if (resolvedSel != null) {
-                    resolvedSel.first == t.index && resolvedSel.second == t.trackGroup
-                } else {
-                    t.isSelected
-                }
+                val isSel = if (resolvedSel != null) resolvedSel == t.index else t.isSelected
                 t.copy(isSelected = isSel)
             }
         }
@@ -301,7 +288,7 @@ internal class TrackSelectionHelper(
 
     fun resetAudioSelection() {
         val itemId = getCurrentItemId() ?: return
-        selectedAudioTrackId = null
+        selectedAudioTrackIndex = null
         scope.launch {
             val currentSelection = preferencesStore.preferences.value.mediaStreamSelections[itemId]
             preferencesStore.setMediaStreamSelection(
@@ -315,7 +302,7 @@ internal class TrackSelectionHelper(
 
     fun resetSubtitleSelection() {
         val itemId = getCurrentItemId() ?: return
-        selectedSubtitleTrackId = null
+        selectedSubtitleTrackIndex = null
         scope.launch {
             val currentSelection = preferencesStore.preferences.value.mediaStreamSelections[itemId]
             preferencesStore.setMediaStreamSelection(
@@ -328,8 +315,8 @@ internal class TrackSelectionHelper(
     }
 
     fun reset() {
-        selectedSubtitleTrackId = null
-        selectedAudioTrackId = null
+        selectedSubtitleTrackIndex = null
+        selectedAudioTrackIndex = null
         pendingSubtitleStreamIndex = null
         pendingAudioStreamIndex = null
         playbackPreferenceResolver.clear()

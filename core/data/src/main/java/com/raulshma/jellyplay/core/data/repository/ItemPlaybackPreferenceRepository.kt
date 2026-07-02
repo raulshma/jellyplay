@@ -21,11 +21,12 @@ interface ItemPlaybackPreferenceRepository {
     suspend fun get(scope: PlaybackPrefScope, key: String): ItemPlaybackPreference?
 
     /**
-     * Upserts a preference row. Only the supplied (non-null) language is
-     * written; any pre-existing value for the other language is preserved.
-     * If both languages end up null the row is removed.
-     *
-     * Pass `null` for a language to explicitly clear it.
+     * Upserts a preference row. A language argument has three states:
+     *  - a value: remember it;
+     *  - null: leave any existing value for that language untouched;
+     * Use [clearAudioLanguage]/[clearSubtitleLanguage] to *explicitly* clear a
+     * single field (passing `null` here does NOT clear — it means "not provided").
+     * If both languages end up null the row is removed to keep the table tidy.
      */
     suspend fun save(
         scope: PlaybackPrefScope,
@@ -33,6 +34,12 @@ interface ItemPlaybackPreferenceRepository {
         audioLanguage: String? = null,
         subtitleLanguage: String? = null,
     )
+
+    /** Clears the audio-language field for [scope]/[key] (the subtitle field is preserved). */
+    suspend fun clearAudioLanguage(scope: PlaybackPrefScope, key: String)
+
+    /** Clears the subtitle-language field for [scope]/[key] (the audio field is preserved). */
+    suspend fun clearSubtitleLanguage(scope: PlaybackPrefScope, key: String)
 
     /** Removes the preference row for [scope]/[key], if any. */
     suspend fun delete(scope: PlaybackPrefScope, key: String)
