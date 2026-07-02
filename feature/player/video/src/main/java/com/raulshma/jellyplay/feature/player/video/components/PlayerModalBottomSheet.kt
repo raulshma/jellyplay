@@ -21,6 +21,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.darkColorScheme
 import androidx.compose.material3.SheetState
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
@@ -101,7 +102,10 @@ private fun InWindowPlayerSheet(
     content: @Composable ColumnScope.() -> Unit,
 ) {
     val density = LocalDensity.current
-    val colorScheme = MaterialTheme.colorScheme
+    // Force a dark color scheme for the in-window sheet chrome. The player surface
+    // is always the dark video, and the ambient app theme may be light/dynamic-light,
+    // which would render sheet titles unreadable (issue #66-C).
+    val colorScheme = darkColorScheme()
     val typography = MaterialTheme.typography
     val focusManager = LocalFocusManager.current
     val keyboardController = LocalSoftwareKeyboardController.current

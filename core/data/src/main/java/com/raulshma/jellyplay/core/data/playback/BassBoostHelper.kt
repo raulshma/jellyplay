@@ -18,6 +18,7 @@ class BassBoostHelper {
 
     private val strengthValue: Short
         get() = when (strength) {
+            EffectStrength.NONE -> 0
             EffectStrength.LOW -> 400
             EffectStrength.MODERATE -> 700
             EffectStrength.HIGH -> 1000

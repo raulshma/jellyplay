@@ -583,13 +583,6 @@ internal fun PlayerControls(
                             onClick = onAspectRatioClick,
                             tint = if (currentAspectRatio != AspectRatio.FIT) MaterialTheme.colorScheme.primary else Color.Unspecified,
                         )
-                        if (!isTv) {
-                            PlayerIconButton(
-                                icon = Tabler.Outline.Rotate,
-                                contentDescription = "Rotate Screen",
-                                onClick = onToggleOrientation,
-                            )
-                        }
                         PlayerIconButton(
                             icon = Tabler.Outline.InfoCircle,
                             contentDescription = "Info",
@@ -610,6 +603,16 @@ internal fun PlayerControls(
                         }
                         if (!isTv) {
                             PipButton(onClick = onPipClick)
+                        }
+                        if (!isTv) {
+                            // Rotate lives in the always-visible right cluster (not the
+                            // horizontalScroll top row) so it can't scroll out of view in
+                            // portrait and strand the user (issue #66-A).
+                            PlayerIconButton(
+                                icon = Tabler.Outline.Rotate,
+                                contentDescription = "Rotate Screen",
+                                onClick = onToggleOrientation,
+                            )
                         }
 
                         if (castManager != null) {

@@ -68,6 +68,13 @@ import kotlinx.coroutines.cancel
 
 // The position-polling bounded paused-wait (M2) now lives in [EnginePositionTicker].
 
+/**
+ * Default subtitle text size for the embedded-style path. A fixed SP value keeps
+ * captions stable across orientation changes (a height-fraction scales against the
+ * view height, which grows dramatically in portrait). See issue #66-A.
+ */
+private const val DEFAULT_SUBTITLE_SIZE_SP = 18f
+
 class ExoPlayerEngine(
     private val context: Context,
     bandwidthMeter: DefaultBandwidthMeter? = null,
@@ -593,7 +600,10 @@ class ExoPlayerEngine(
                         android.graphics.Typeface.SANS_SERIF
                     )
                 )
-                sv.setFractionalTextSize(0.0533f, false)
+                // Fixed SP size keeps captions stable across orientation changes:
+                // a height-fraction (setFractionalTextSize) recomputes against the
+                // new (much taller, narrower) portrait view, making captions huge.
+                sv.setFixedTextSize(android.util.TypedValue.COMPLEX_UNIT_SP, DEFAULT_SUBTITLE_SIZE_SP)
             }
             sv.setBottomPaddingFraction(style.verticalPosition)
         }
