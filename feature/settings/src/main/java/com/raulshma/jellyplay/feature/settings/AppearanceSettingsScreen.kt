@@ -605,7 +605,7 @@ fun AppearanceSettingsScreen(
                 }
             }
 
-            if (showAdvanced) {
+            // Library & Cards: commonly-used display toggles, shown regardless of Advanced mode (issue #62-E).
             item {
                 SettingsGroup(
                     icon = Tabler.Outline.LayoutGrid,
@@ -718,6 +718,8 @@ fun AppearanceSettingsScreen(
                 }
             }
 
+            // Remaining groups are expert-level; keep them behind the Advanced gate (issue #62-E).
+            if (showAdvanced) {
             item {
                 SettingsGroup(
                     icon = Tabler.Outline.Bolt,
