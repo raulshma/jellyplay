@@ -27,14 +27,27 @@ import com.composables.icons.tabler.Tabler
 import com.composables.icons.tabler.outline.*
 import com.raulshma.jellyplay.core.model.EffectStrength
 import com.raulshma.jellyplay.core.model.ReverbPreset
-import com.raulshma.jellyplay.feature.player.audio.AudioPlayerViewModel
+import com.raulshma.jellyplay.feature.player.audio.AudioEffectsState
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 internal fun AudioEffectsSheet(
-    viewModel: AudioPlayerViewModel,
+    state: AudioEffectsState,
     onDismiss: () -> Unit,
     onOpenEqualizer: () -> Unit,
+    onToggleEqualizer: () -> Unit,
+    onToggleBassBoost: () -> Unit,
+    onBassBoostStrength: (EffectStrength) -> Unit,
+    onToggleVirtualizer: () -> Unit,
+    onVirtualizerStrength: (Int) -> Unit,
+    onReverbPreset: (ReverbPreset) -> Unit,
+    onToggleDialogueBoost: () -> Unit,
+    onDialogueBoostStrength: (EffectStrength) -> Unit,
+    onToggleNightMode: () -> Unit,
+    onNightModeStrength: (EffectStrength) -> Unit,
+    onLrBalance: (Float) -> Unit,
+    onPitchSemitones: (Float) -> Unit,
+    onAutoEqByGenre: (Boolean) -> Unit,
 ) {
     ModalBottomSheet(
         onDismissRequest = onDismiss,
@@ -70,8 +83,8 @@ internal fun AudioEffectsSheet(
                         TextButton(onClick = onOpenEqualizer) { Text("Open") }
                         Spacer(Modifier.width(4.dp))
                         androidx.compose.material3.Switch(
-                            checked = viewModel.equalizerEnabled,
-                            onCheckedChange = { viewModel.toggleEqualizer() },
+                            checked = state.equalizerEnabled,
+                            onCheckedChange = { onToggleEqualizer() },
                         )
                     }
                 }
@@ -88,24 +101,24 @@ internal fun AudioEffectsSheet(
                             Tabler.Outline.WaveSine,
                             null,
                             modifier = Modifier.size(20.dp),
-                            tint = if (viewModel.bassBoostEnabled) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
+                            tint = if (state.bassBoostEnabled) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
                         )
                         Spacer(Modifier.width(8.dp))
                         Column {
                             Text("Bass Boost", style = MaterialTheme.typography.bodyLarge)
                             Text(
-                                viewModel.bassBoostStrength.displayName,
+                                state.bassBoostStrength.displayName,
                                 style = MaterialTheme.typography.labelSmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                             )
                         }
                     }
                     Row(verticalAlignment = Alignment.CenterVertically) {
-                        if (viewModel.bassBoostEnabled) {
+                        if (state.bassBoostEnabled) {
                             EffectStrength.entries.forEach { strength ->
                                 androidx.compose.material3.FilterChip(
-                                    selected = viewModel.bassBoostStrength == strength,
-                                    onClick = { viewModel.setBassBoostStrength(strength) },
+                                    selected = state.bassBoostStrength == strength,
+                                    onClick = { onBassBoostStrength(strength) },
                                     label = { Text(strength.displayName, style = MaterialTheme.typography.labelSmall) },
                                     modifier = Modifier.height(28.dp),
                                 )
@@ -113,8 +126,8 @@ internal fun AudioEffectsSheet(
                             }
                         }
                         androidx.compose.material3.Switch(
-                            checked = viewModel.bassBoostEnabled,
-                            onCheckedChange = { viewModel.toggleBassBoost() },
+                            checked = state.bassBoostEnabled,
+                            onCheckedChange = { onToggleBassBoost() },
                         )
                     }
                 }
@@ -131,29 +144,29 @@ internal fun AudioEffectsSheet(
                             Tabler.Outline.Speakerphone,
                             null,
                             modifier = Modifier.size(20.dp),
-                            tint = if (viewModel.virtualizerEnabled) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
+                            tint = if (state.virtualizerEnabled) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
                         )
                         Spacer(Modifier.width(8.dp))
                         Column {
                             Text("Virtualizer / Spatial", style = MaterialTheme.typography.bodyLarge)
                             Text(
-                                "${(viewModel.virtualizerStrength / 10)}%",
+                                "${(state.virtualizerStrength / 10)}%",
                                 style = MaterialTheme.typography.labelSmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                             )
                         }
                     }
-                    if (viewModel.virtualizerEnabled) {
+                    if (state.virtualizerEnabled) {
                         Slider(
-                            value = viewModel.virtualizerStrength.toFloat(),
-                            onValueChange = { viewModel.applyVirtualizerStrength(it.toInt()) },
+                            value = state.virtualizerStrength.toFloat(),
+                            onValueChange = { onVirtualizerStrength(it.toInt()) },
                             valueRange = 0f..1000f,
                             modifier = Modifier.width(120.dp),
                         )
                     }
                     androidx.compose.material3.Switch(
-                        checked = viewModel.virtualizerEnabled,
-                        onCheckedChange = { viewModel.toggleVirtualizer() },
+                        checked = state.virtualizerEnabled,
+                        onCheckedChange = { onToggleVirtualizer() },
                     )
                 }
             }
@@ -169,7 +182,7 @@ internal fun AudioEffectsSheet(
                             Tabler.Outline.WaveSine,
                             null,
                             modifier = Modifier.size(20.dp),
-                            tint = if (viewModel.reverbPreset != ReverbPreset.NONE) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
+                            tint = if (state.reverbPreset != ReverbPreset.NONE) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
                         )
                         Spacer(Modifier.width(8.dp))
                         Text("Reverb", style = MaterialTheme.typography.bodyLarge)
@@ -183,8 +196,8 @@ internal fun AudioEffectsSheet(
                     items(reverbPresets.size, key = { reverbPresets[it].name }) { index ->
                         val preset = reverbPresets[index]
                         androidx.compose.material3.FilterChip(
-                            selected = viewModel.reverbPreset == preset,
-                            onClick = { viewModel.applyReverbPreset(preset) },
+                            selected = state.reverbPreset == preset,
+                            onClick = { onReverbPreset(preset) },
                             label = { Text(preset.displayName, style = MaterialTheme.typography.labelSmall) },
                         )
                     }
@@ -202,24 +215,24 @@ internal fun AudioEffectsSheet(
                             Tabler.Outline.Microphone2,
                             null,
                             modifier = Modifier.size(20.dp),
-                            tint = if (viewModel.dialogueBoostEnabled) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
+                            tint = if (state.dialogueBoostEnabled) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
                         )
                         Spacer(Modifier.width(8.dp))
                         Column {
                             Text("Dialogue Boost", style = MaterialTheme.typography.bodyLarge)
                             Text(
-                                viewModel.dialogueBoostStrength.displayName,
+                                state.dialogueBoostStrength.displayName,
                                 style = MaterialTheme.typography.labelSmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                             )
                         }
                     }
                     Row(verticalAlignment = Alignment.CenterVertically) {
-                        if (viewModel.dialogueBoostEnabled) {
+                        if (state.dialogueBoostEnabled) {
                             EffectStrength.entries.forEach { strength ->
                                 androidx.compose.material3.FilterChip(
-                                    selected = viewModel.dialogueBoostStrength == strength,
-                                    onClick = { viewModel.setDialogueBoostStrength(strength) },
+                                    selected = state.dialogueBoostStrength == strength,
+                                    onClick = { onDialogueBoostStrength(strength) },
                                     label = { Text(strength.displayName, style = MaterialTheme.typography.labelSmall) },
                                     modifier = Modifier.height(28.dp),
                                 )
@@ -227,8 +240,8 @@ internal fun AudioEffectsSheet(
                             }
                         }
                         androidx.compose.material3.Switch(
-                            checked = viewModel.dialogueBoostEnabled,
-                            onCheckedChange = { viewModel.toggleDialogueBoost() },
+                            checked = state.dialogueBoostEnabled,
+                            onCheckedChange = { onToggleDialogueBoost() },
                         )
                     }
                 }
@@ -245,24 +258,24 @@ internal fun AudioEffectsSheet(
                             Tabler.Outline.Moon,
                             null,
                             modifier = Modifier.size(20.dp),
-                            tint = if (viewModel.nightModeEnabled) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
+                            tint = if (state.nightModeEnabled) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
                         )
                         Spacer(Modifier.width(8.dp))
                         Column {
                             Text("Night Mode", style = MaterialTheme.typography.bodyLarge)
                             Text(
-                                viewModel.nightModeStrength.displayName,
+                                state.nightModeStrength.displayName,
                                 style = MaterialTheme.typography.labelSmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                             )
                         }
                     }
                     Row(verticalAlignment = Alignment.CenterVertically) {
-                        if (viewModel.nightModeEnabled) {
+                        if (state.nightModeEnabled) {
                             EffectStrength.entries.forEach { strength ->
                                 androidx.compose.material3.FilterChip(
-                                    selected = viewModel.nightModeStrength == strength,
-                                    onClick = { viewModel.setNightModeStrength(strength) },
+                                    selected = state.nightModeStrength == strength,
+                                    onClick = { onNightModeStrength(strength) },
                                     label = { Text(strength.displayName, style = MaterialTheme.typography.labelSmall) },
                                     modifier = Modifier.height(28.dp),
                                 )
@@ -270,8 +283,8 @@ internal fun AudioEffectsSheet(
                             }
                         }
                         androidx.compose.material3.Switch(
-                            checked = viewModel.nightModeEnabled,
-                            onCheckedChange = { viewModel.toggleNightMode() },
+                            checked = state.nightModeEnabled,
+                            onCheckedChange = { onToggleNightMode() },
                         )
                     }
                 }
@@ -288,15 +301,15 @@ internal fun AudioEffectsSheet(
                             Tabler.Outline.Scale,
                             null,
                             modifier = Modifier.size(20.dp),
-                            tint = if (viewModel.lrBalance != 0f) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
+                            tint = if (state.lrBalance != 0f) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
                         )
                         Spacer(Modifier.width(8.dp))
                         Column {
                             Text("L/R Balance", style = MaterialTheme.typography.bodyLarge)
                             Text(
                                 when {
-                                    viewModel.lrBalance < 0f -> "Left ${kotlin.math.abs((viewModel.lrBalance * 100).toInt())}%"
-                                    viewModel.lrBalance > 0f -> "Right ${(viewModel.lrBalance * 100).toInt()}%"
+                                    state.lrBalance < 0f -> "Left ${kotlin.math.abs((state.lrBalance * 100).toInt())}%"
+                                    state.lrBalance > 0f -> "Right ${(state.lrBalance * 100).toInt()}%"
                                     else -> "Center"
                                 },
                                 style = MaterialTheme.typography.labelSmall,
@@ -305,8 +318,8 @@ internal fun AudioEffectsSheet(
                         }
                     }
                     Slider(
-                        value = viewModel.lrBalance,
-                        onValueChange = { viewModel.applyLrBalance(it) },
+                        value = state.lrBalance,
+                        onValueChange = { onLrBalance(it) },
                         valueRange = -1f..1f,
                         modifier = Modifier.width(140.dp),
                     )
@@ -324,22 +337,22 @@ internal fun AudioEffectsSheet(
                             Tabler.Outline.Piano,
                             null,
                             modifier = Modifier.size(20.dp),
-                            tint = if (viewModel.pitchSemitones != 0f) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
+                            tint = if (state.pitchSemitones != 0f) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
                         )
                         Spacer(Modifier.width(8.dp))
                         Column {
                             Text("Pitch", style = MaterialTheme.typography.bodyLarge)
                             Text(
-                                if (viewModel.pitchSemitones == 0f) "Original"
-                                else "${if (viewModel.pitchSemitones > 0) "+" else ""}${String.format("%.1f", viewModel.pitchSemitones)} semitones",
+                                if (state.pitchSemitones == 0f) "Original"
+                                else "${if (state.pitchSemitones > 0) "+" else ""}${String.format("%.1f", state.pitchSemitones)} semitones",
                                 style = MaterialTheme.typography.labelSmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                             )
                         }
                     }
                     Slider(
-                        value = viewModel.pitchSemitones,
-                        onValueChange = { viewModel.applyPitchSemitones(it) },
+                        value = state.pitchSemitones,
+                        onValueChange = { onPitchSemitones(it) },
                         valueRange = -12f..12f,
                         steps = 23,
                         modifier = Modifier.width(140.dp),
@@ -358,7 +371,7 @@ internal fun AudioEffectsSheet(
                             Tabler.Outline.Wand,
                             null,
                             modifier = Modifier.size(20.dp),
-                            tint = if (viewModel.autoEqByGenre) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
+                            tint = if (state.autoEqByGenre) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
                         )
                         Spacer(Modifier.width(8.dp))
                         Column {
@@ -371,8 +384,8 @@ internal fun AudioEffectsSheet(
                         }
                     }
                     androidx.compose.material3.Switch(
-                        checked = viewModel.autoEqByGenre,
-                        onCheckedChange = { viewModel.applyAutoEqByGenre(it) },
+                        checked = state.autoEqByGenre,
+                        onCheckedChange = { onAutoEqByGenre(it) },
                     )
                 }
             }
