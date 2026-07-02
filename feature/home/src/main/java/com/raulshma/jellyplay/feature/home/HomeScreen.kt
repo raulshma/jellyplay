@@ -1,4 +1,4 @@
-@file:OptIn(androidx.compose.ui.ExperimentalComposeUiApi::class)
+@file:OptIn(androidx.compose.ui.ExperimentalComposeUiApi::class, kotlinx.coroutines.FlowPreview::class)
 package com.raulshma.jellyplay.feature.home
 
 import androidx.activity.compose.BackHandler
@@ -9,8 +9,6 @@ import androidx.compose.foundation.clickable
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.draw.drawBehind
-import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.verticalScroll
 import com.raulshma.jellyplay.core.ui.components.LocalFloatingNavVisibility
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -39,13 +37,9 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.lerp
 import androidx.compose.material3.ModalNavigationDrawer
-import androidx.compose.material3.ModalDrawerSheet
 import androidx.compose.material3.rememberDrawerState
 import androidx.compose.material3.DrawerValue
-import androidx.compose.material3.NavigationDrawerItem
-import androidx.compose.material3.NavigationDrawerItemDefaults
 import androidx.compose.material3.Icon
-import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Surface
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.TextButton
@@ -120,6 +114,8 @@ import com.raulshma.jellyplay.core.ui.tv.tvFocusIndicator
 import com.raulshma.jellyplay.core.ui.tv.tryRequestFocus
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.collectLatest
+import kotlinx.coroutines.flow.debounce
+import kotlinx.coroutines.flow.distinctUntilChanged
 
 private val COMPACT_DISCOVER_PATTERN = listOf(3, 2, 3)
 private val EXPANDED_DISCOVER_PATTERN = listOf(5, 4, 6, 5)
@@ -207,7 +203,7 @@ private fun MainHomeContent(
     val seerrCardLoadingState = rememberSeerrCardLoadingState()
     val seerrPrefetch: (Int, String, () -> Unit) -> Unit = remember(viewModel) {
         { tmdbId, mediaType, onDone ->
-            viewModel.onEvent(HomeUiEvent.PrefetchSeerrDetails(tmdbId, mediaType, onDone))
+            viewModel.prefetchSeerrDetails(tmdbId, mediaType, onDone)
         }
     }
 
@@ -275,16 +271,22 @@ private fun MainHomeContent(
         }
     }
 
-    LaunchedEffect(state.sections) {
-        if (state.sections.isNotEmpty()) {
-            viewModel.saveHomeScrollPosition(
-                listState.firstVisibleItemIndex,
-                listState.firstVisibleItemScrollOffset,
-            )
-        }
+    // Persist the scroll position as the user scrolls (debounced) so it survives
+    // process death. Previously this only ran on `sections` emission, which
+    // captured the wrong moment and lost the user's real position.
+    LaunchedEffect(listState) {
+        snapshotFlow { listState.firstVisibleItemIndex to listState.firstVisibleItemScrollOffset }
+            .debounce(500)
+            .distinctUntilChanged()
+            .collect { (index, offset) ->
+                viewModel.saveHomeScrollPosition(index, offset)
+            }
     }
 
-    LaunchedEffect(featuredCandidates, listState) {
+    // Keyed on `autoRotateEnabled` so the effect restarts when "Surprise Me"
+    // toggles rotation off then back on; otherwise it would terminate on the
+    // first toggle and never resume.
+    LaunchedEffect(featuredCandidates, listState, autoRotateEnabled) {
         if (featuredCandidates.isEmpty() || !autoRotateEnabled || !focusInHero) return@LaunchedEffect
         snapshotFlow { listState.isScrollInProgress }
             .collectLatest { isScrolling ->
@@ -413,203 +415,16 @@ private fun MainHomeContent(
         HomeScreenDrawer(
             showDrawer = !isTv,
             drawerState = drawerState,
-            drawerContent = @Composable {
-                ModalDrawerSheet(
-                drawerContainerColor = backgroundColor.copy(alpha = 0.98f),
-                modifier = Modifier
-                    .width(320.dp)
-                    .fillMaxHeight(),
-            ) {
-                Column(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .verticalScroll(rememberScrollState())
-                        .padding(horizontal = 16.dp, vertical = 24.dp),
-                    verticalArrangement = Arrangement.spacedBy(8.dp)
-                ) {
-                    val user = state.currentUser
-                    if (user != null) {
-                        Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(vertical = 12.dp, horizontal = 8.dp),
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Box(
-                                modifier = Modifier
-                                    .size(48.dp)
-                                    .background(
-                                        MaterialTheme.colorScheme.primaryContainer,
-                                        shape = androidx.compose.foundation.shape.CircleShape
-                                    ),
-                                contentAlignment = Alignment.Center
-                            ) {
-                                Icon(
-                                    imageVector = Tabler.Outline.User,
-                                    contentDescription = null,
-                                    tint = MaterialTheme.colorScheme.onPrimaryContainer,
-                                    modifier = Modifier.size(24.dp)
-                                )
-                            }
-                            Spacer(modifier = Modifier.width(16.dp))
-                            Column {
-                                Text(
-                                    text = "Welcome back,",
-                                    style = MaterialTheme.typography.bodySmall,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                                )
-                                Text(
-                                    text = user.name,
-                                    style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
-                                    color = MaterialTheme.colorScheme.onSurface
-                                )
-                            }
-                        }
-                        HorizontalDivider(
-                            modifier = Modifier.padding(bottom = 12.dp),
-                            color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)
-                        )
-                    }
-
-                    Text(
-                        text = "ACCOUNT",
-                        style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold),
-                        color = MaterialTheme.colorScheme.primary.copy(alpha = 0.8f),
-                        modifier = Modifier.padding(start = 8.dp, bottom = 4.dp)
-                    )
-                    NavigationDrawerItem(
-                        icon = { Icon(Tabler.Outline.Server, contentDescription = null, modifier = Modifier.size(20.dp)) },
-                        label = { Text("Server Management") },
-                        selected = false,
-                        onClick = {
-                            scope.launch { drawerState.close() }
-                            callbacks.onServerManagementClick()
-                        },
-                        colors = NavigationDrawerItemDefaults.colors(
-                            unselectedContainerColor = Color.Transparent
-                        )
-                    )
-                    NavigationDrawerItem(
-                        icon = { Icon(Tabler.Outline.Users, contentDescription = null, modifier = Modifier.size(20.dp)) },
-                        label = { Text("Switch User") },
-                        selected = false,
-                        onClick = {
-                            scope.launch { drawerState.close() }
-                            callbacks.onUserManagementClick()
-                        },
-                        colors = NavigationDrawerItemDefaults.colors(
-                            unselectedContainerColor = Color.Transparent
-                        )
-                    )
-
-                    Spacer(modifier = Modifier.height(8.dp))
-
-                    Text(
-                        text = "ACTIVITY & INSIGHTS",
-                        style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold),
-                        color = MaterialTheme.colorScheme.primary.copy(alpha = 0.8f),
-                        modifier = Modifier.padding(start = 8.dp, bottom = 4.dp)
-                    )
-                    NavigationDrawerItem(
-                        icon = { Icon(Tabler.Outline.Heart, contentDescription = null, modifier = Modifier.size(20.dp)) },
-                        label = { Text("Browse Favorites") },
-                        selected = false,
-                        onClick = {
-                            scope.launch { drawerState.close() }
-                            callbacks.onFavoritesClick()
-                        },
-                        colors = NavigationDrawerItemDefaults.colors(
-                            unselectedContainerColor = Color.Transparent
-                        )
-                    )
-                    NavigationDrawerItem(
-                        icon = { Icon(Tabler.Outline.ChartBar, contentDescription = null, modifier = Modifier.size(20.dp)) },
-                        label = { Text("Watch History Heatmap") },
-                        selected = false,
-                        onClick = {
-                            scope.launch { drawerState.close() }
-                            callbacks.onWatchProgressHeatmapClick()
-                        },
-                        colors = NavigationDrawerItemDefaults.colors(
-                            unselectedContainerColor = Color.Transparent
-                        )
-                    )
-
-                    NavigationDrawerItem(
-                        icon = { Icon(Tabler.Outline.Inbox, contentDescription = null, modifier = Modifier.size(20.dp)) },
-                        label = { Text("Seerr Requests") },
-                        selected = false,
-                        onClick = {
-                            scope.launch { drawerState.close() }
-                            callbacks.onRequestsClick()
-                        },
-                        colors = NavigationDrawerItemDefaults.colors(
-                            unselectedContainerColor = Color.Transparent
-                        )
-                    )
-
-                    Spacer(modifier = Modifier.height(8.dp))
-
-                    Text(
-                        text = "SYSTEM",
-                        style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold),
-                        color = MaterialTheme.colorScheme.primary.copy(alpha = 0.8f),
-                        modifier = Modifier.padding(start = 8.dp, bottom = 4.dp)
-                    )
-                    if (user?.isAdmin == true) {
-                        NavigationDrawerItem(
-                            icon = { Icon(Tabler.Outline.Shield, contentDescription = null, modifier = Modifier.size(20.dp)) },
-                            label = { Text("Admin Dashboard") },
-                            selected = false,
-                            onClick = {
-                                scope.launch { drawerState.close() }
-                                callbacks.onAdminDashboardClick()
-                            },
-                            colors = NavigationDrawerItemDefaults.colors(
-                                unselectedContainerColor = Color.Transparent
-                            )
-                        )
-                    }
-                    NavigationDrawerItem(
-                        icon = { Icon(Tabler.Outline.Puzzle, contentDescription = null, modifier = Modifier.size(20.dp)) },
-                        label = { Text("Seerr Integration") },
-                        selected = false,
-                        onClick = {
-                            scope.launch { drawerState.close() }
-                            callbacks.onSeerrSettingsClick()
-                        },
-                        colors = NavigationDrawerItemDefaults.colors(
-                            unselectedContainerColor = Color.Transparent
-                        )
-                    )
-                    NavigationDrawerItem(
-                        icon = { Icon(Tabler.Outline.Wand, contentDescription = null, modifier = Modifier.size(20.dp)) },
-                        label = { Text("Setup Wizard") },
-                        selected = false,
-                        onClick = {
-                            scope.launch { drawerState.close() }
-                            callbacks.onSetupWizardClick()
-                        },
-                        colors = NavigationDrawerItemDefaults.colors(
-                            unselectedContainerColor = Color.Transparent
-                        )
-                    )
-                    NavigationDrawerItem(
-                        icon = { Icon(Tabler.Outline.InfoCircle, contentDescription = null, modifier = Modifier.size(20.dp)) },
-                        label = { Text("About JellyPlay") },
-                        selected = false,
-                        onClick = {
-                            scope.launch { drawerState.close() }
-                            callbacks.onAboutClick()
-                        },
-                        colors = NavigationDrawerItemDefaults.colors(
-                            unselectedContainerColor = Color.Transparent
-                        )
-                    )
-                }
+            drawerContent = {
+                HomeDrawerBody(
+                    currentUser = state.currentUser,
+                    backgroundColor = backgroundColor,
+                    drawerState = drawerState,
+                    scope = scope,
+                    callbacks = callbacks,
+                )
             }
-        }
-    ) {
+        ) {
         PullToRefreshBox(
             isRefreshing = state.isRefreshing,
             onRefresh = { viewModel.onEvent(HomeUiEvent.PullToRefresh) },
@@ -680,7 +495,6 @@ private fun MainHomeContent(
                             offlineLibrary = state.offlineLibrary,
                             sections = state.sections,
                             featuredItem = featuredItem,
-                            viewModel = viewModel,
                             listState = listState,
                             backgroundColor = backgroundColor,
                             contentPad = contentPad,
@@ -689,6 +503,9 @@ private fun MainHomeContent(
                             density = density,
                             mediaImageUrlBuilder = mediaImageUrlBuilder,
                             mediaBackdropUrlBuilder = mediaBackdropUrlBuilder,
+                            getImageUrl = remember { { id: String -> viewModel.getImageUrl(id) } },
+                            getBackdropUrl = remember { { id: String -> viewModel.getBackdropUrl(id) } },
+                            onDismissNewsletterBanner = { viewModel.onEvent(HomeUiEvent.DismissNewsletterBanner) },
                             mediaOnItemClick = mediaOnItemClick,
                             mediaOnPlayClick = mediaOnPlayClick,
                             continueWatchingClickBehavior = state.continueWatchingClickBehavior,
@@ -870,7 +687,6 @@ private fun HomeContentList(
     offlineLibrary: List<com.raulshma.jellyplay.core.model.OfflineMediaItem>,
     sections: List<com.raulshma.jellyplay.core.model.HomeSection>,
     featuredItem: com.raulshma.jellyplay.core.model.MediaItem?,
-    viewModel: HomeViewModel,
     listState: LazyListState,
     backgroundColor: Color,
     contentPad: Dp,
@@ -879,6 +695,9 @@ private fun HomeContentList(
     density: androidx.compose.ui.unit.Density,
     mediaImageUrlBuilder: (com.raulshma.jellyplay.core.model.MediaItem) -> String,
     mediaBackdropUrlBuilder: (com.raulshma.jellyplay.core.model.MediaItem) -> String,
+    getImageUrl: (String) -> String,
+    getBackdropUrl: (String) -> String,
+    onDismissNewsletterBanner: () -> Unit,
     mediaOnItemClick: (com.raulshma.jellyplay.core.model.MediaItem) -> Unit,
     mediaOnPlayClick: (com.raulshma.jellyplay.core.model.MediaItem) -> Unit,
     continueWatchingClickBehavior: com.raulshma.jellyplay.core.model.ContinueWatchingClickBehavior,
@@ -949,7 +768,7 @@ private fun HomeContentList(
                 item(key = "hero") {
                     AnimatedHeroHeader(
                         featuredItem = featuredItem,
-                        getBackdropUrl = remember { { viewModel.getBackdropUrl(it) } },
+                        getBackdropUrl = remember { { getBackdropUrl(it) } },
                         height = headerHeight,
                         backgroundColor = backgroundColor,
                         contentPadding = contentPad,
@@ -969,7 +788,7 @@ private fun HomeContentList(
                 item(key = "newsletter_banner") {
                     NewsletterBanner(
                         onClick = onNewsletterClick,
-                        onDismiss = { viewModel.onEvent(HomeUiEvent.DismissNewsletterBanner) },
+                        onDismiss = onDismissNewsletterBanner,
                     )
                 }
             }
@@ -1133,19 +952,9 @@ private fun HomeContentList(
             }
 
             if (offlineLibrary.isNotEmpty()) {
-                item(key = "downloaded_header") {
-                    Text(
-                        text = "Downloaded",
-                        style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Bold),
-                        color = MaterialTheme.colorScheme.onSurface,
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .background(backgroundColor)
-                            .padding(start = contentPad, top = 24.dp, bottom = 8.dp),
-                    )
-                }
-
                 item(key = "downloaded_row") {
+                    // DownloadedSection renders its own "Downloaded" header, so we
+                    // intentionally don't emit a separate header item here.
                     DownloadedSection(
                         offlineLibrary = offlineLibrary,
                         onOfflineLibraryClick = onOfflineLibraryClick,

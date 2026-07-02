@@ -460,9 +460,10 @@ fun HomeMediaRow(
             color = MaterialTheme.colorScheme.onSurface,
             modifier = Modifier.padding(horizontal = contentPad, vertical = 8.dp),
         )
+        if (effectiveItems.isEmpty()) return@Column
         if (isTv) {
             TvFocusableItemRow(
-                items = items,
+                items = effectiveItems,
                 key = { it.id },
                 contentPadding = PaddingValues(horizontal = contentPad),
                 horizontalArrangement = Arrangement.spacedBy(spacing),
@@ -491,14 +492,14 @@ fun HomeMediaRow(
             }
         } else {
             HorizontalMediaScroller(
-                itemCount = items.size,
+                itemCount = effectiveItems.size,
                 itemWidth = cardWidth,
                 spacing = spacing,
                 contentPad = contentPad,
                 clippingEnabled = clippingEnabled,
                 modifier = Modifier.tvFocusRestorer(),
             ) { index ->
-                val item = items[index]
+                val item = effectiveItems[index]
                 val memoizedClick = remember(item) { { onItemClick(item) } }
                 val memoizedPlayClick = onPlayClick?.let { click -> remember(item, click) { { click(item) } } }
                 PosterCard(

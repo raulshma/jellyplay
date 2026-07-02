@@ -251,7 +251,6 @@ class HomeViewModel @Inject constructor(
             is HomeUiEvent.ClearRequestResult -> clearRequestResult()
             is HomeUiEvent.LoadSeerrServiceDetails -> loadSeerrServiceDetails(event.mediaType)
             is HomeUiEvent.LoadTvSeasons -> loadTvSeasons(event.tmdbId)
-            is HomeUiEvent.PrefetchSeerrDetails -> prefetchSeerrDetails(event.tmdbId, event.mediaType, event.onDone)
             is HomeUiEvent.DismissNewsletterBanner -> _uiState.update { it.copy(newsletterBannerVisible = false) }
         }
     }
@@ -392,7 +391,7 @@ class HomeViewModel @Inject constructor(
         }
     }
 
-    private fun prefetchSeerrDetails(tmdbId: Int, mediaType: String, onDone: () -> Unit) {
+    fun prefetchSeerrDetails(tmdbId: Int, mediaType: String, onDone: () -> Unit) {
         launch {
             seerrRequestDelegate.prefetchDetails(tmdbId, mediaType)
             onDone()

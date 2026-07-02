@@ -73,57 +73,58 @@ class TrackSelectionLogicTest {
 
     @Test
     fun selectAudioTrack_negativeIndex_clearsSelectedTrackId() {
-        var selectedAudioTrackId: Pair<Int, Any?>? = Pair(0, null)
+        // The helper now stores just an index (Int?) instead of Pair<Int, Any?>.
+        var selectedAudioTrackIndex: Int? = 0
         val option = TrackOption(-1, "Default", null, true)
         if (option.index < 0) {
-            selectedAudioTrackId = null
+            selectedAudioTrackIndex = null
         } else {
-            selectedAudioTrackId = option.index to option.trackGroup
+            selectedAudioTrackIndex = option.index
         }
-        assertNull(selectedAudioTrackId)
+        assertNull(selectedAudioTrackIndex)
     }
 
     @Test
     fun selectAudioTrack_positiveIndex_storesTrackId() {
-        var selectedAudioTrackId: Pair<Int, Any?>? = null
+        var selectedAudioTrackIndex: Int? = null
         val option = TrackOption(1, "English", "eng", false)
         if (option.index < 0) {
-            selectedAudioTrackId = null
+            selectedAudioTrackIndex = null
         } else {
-            selectedAudioTrackId = option.index to option.trackGroup
+            selectedAudioTrackIndex = option.index
         }
-        assertEquals(1, selectedAudioTrackId?.first)
+        assertEquals(1, selectedAudioTrackIndex)
     }
 
     @Test
     fun selectSubtitleTrack_negativeIndex_clearsSelectedTrackId() {
-        var selectedSubtitleTrackId: Pair<Int, Any?>? = Pair(0, null)
+        var selectedSubtitleTrackIndex: Int? = 0
         val option = TrackOption(-1, "Off", null, true)
         if (option.index < 0) {
-            selectedSubtitleTrackId = null
+            selectedSubtitleTrackIndex = null
         } else {
-            selectedSubtitleTrackId = option.index to option.trackGroup
+            selectedSubtitleTrackIndex = option.index
         }
-        assertNull(selectedSubtitleTrackId)
+        assertNull(selectedSubtitleTrackIndex)
     }
 
     // ─── reset() behaviour ────────────────────────────────────────────────────
 
     @Test
     fun reset_clearsAllPendingAndSelected() {
-        var selectedSubtitleTrackId: Pair<Int, Any?>? = Pair(0, null)
-        var selectedAudioTrackId: Pair<Int, Any?>? = Pair(1, null)
+        var selectedSubtitleTrackIndex: Int? = 0
+        var selectedAudioTrackIndex: Int? = 1
         var pendingSubtitleStreamIndex: Int? = 2
         var pendingAudioStreamIndex: Int? = 3
 
         // Simulating reset()
-        selectedSubtitleTrackId = null
-        selectedAudioTrackId = null
+        selectedSubtitleTrackIndex = null
+        selectedAudioTrackIndex = null
         pendingSubtitleStreamIndex = null
         pendingAudioStreamIndex = null
 
-        assertNull(selectedSubtitleTrackId)
-        assertNull(selectedAudioTrackId)
+        assertNull(selectedSubtitleTrackIndex)
+        assertNull(selectedAudioTrackIndex)
         assertNull(pendingSubtitleStreamIndex)
         assertNull(pendingAudioStreamIndex)
     }
@@ -196,7 +197,8 @@ class TrackSelectionLogicTest {
         )
         val selectedOption = TrackOption(1, "Spanish", "spa", false)
         val updated = tracks.map { track ->
-            val matches = track.index == selectedOption.index && track.trackGroup == selectedOption.trackGroup
+            // trackGroup identity removed; index is now the sole track identity.
+            val matches = track.index == selectedOption.index
             track.copy(isSelected = matches)
         }
         assertFalse(updated[0].isSelected) // Default
