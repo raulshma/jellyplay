@@ -10,10 +10,10 @@ import com.raulshma.jellyplay.core.model.PlaybackPrefScope
  * interface rather than `core:database`'s DAOs/entities directly — mirroring
  * the [SeenMediaRepository] boundary. Backed by `ItemPlaybackPreferenceDao`.
  *
- * A preference row stores an optional audio and/or subtitle language. Either
- * may be `null` ("inherit"); [save] therefore upserts a row preserving the
- * field that is not being updated, and a row whose languages are both null
- * is deleted to keep the table tidy.
+ * A preference row stores an optional audio and/or subtitle language plus an
+ * optional dialogue-boost strength. Any field may be `null` ("inherit");
+ * [save] therefore upserts a row preserving the fields that are not being
+ * updated, and a row with every field null is deleted to keep the table tidy.
  */
 interface ItemPlaybackPreferenceRepository {
 
@@ -21,25 +21,30 @@ interface ItemPlaybackPreferenceRepository {
     suspend fun get(scope: PlaybackPrefScope, key: String): ItemPlaybackPreference?
 
     /**
-     * Upserts a preference row. A language argument has three states:
+     * Upserts a preference row. Each nullable argument follows the convention:
      *  - a value: remember it;
-     *  - null: leave any existing value for that language untouched;
-     * Use [clearAudioLanguage]/[clearSubtitleLanguage] to *explicitly* clear a
-     * single field (passing `null` here does NOT clear — it means "not provided").
-     * If both languages end up null the row is removed to keep the table tidy.
+     *  - null: leave any existing value for that field untouched.
+     * Use [clearAudioLanguage]/[clearSubtitleLanguage]/
+     * [clearDialogueBoostStrength] to *explicitly* clear a single field
+     * (passing `null` here does NOT clear — it means "not provided").
+     * If all fields end up null the row is removed to keep the table tidy.
      */
     suspend fun save(
         scope: PlaybackPrefScope,
         key: String,
         audioLanguage: String? = null,
         subtitleLanguage: String? = null,
+        dialogueBoostStrength: com.raulshma.jellyplay.core.model.EffectStrength? = null,
     )
 
-    /** Clears the audio-language field for [scope]/[key] (the subtitle field is preserved). */
+    /** Clears the audio-language field for [scope]/[key] (other fields are preserved). */
     suspend fun clearAudioLanguage(scope: PlaybackPrefScope, key: String)
 
     /** Clears the subtitle-language field for [scope]/[key] (the audio field is preserved). */
     suspend fun clearSubtitleLanguage(scope: PlaybackPrefScope, key: String)
+
+    /** Clears the dialogue-boost field for [scope]/[key] (other fields are preserved). */
+    suspend fun clearDialogueBoostStrength(scope: PlaybackPrefScope, key: String)
 
     /** Removes the preference row for [scope]/[key], if any. */
     suspend fun delete(scope: PlaybackPrefScope, key: String)

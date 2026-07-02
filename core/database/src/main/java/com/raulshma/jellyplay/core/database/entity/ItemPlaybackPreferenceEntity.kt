@@ -12,6 +12,9 @@ import androidx.room.PrimaryKey
  * Mapped to/from the domain [com.raulshma.jellyplay.core.model.ItemPlaybackPreference]
  * by the repository layer. `scope`/`updatedAt` are stored as the enum/text +
  * epoch-millis conventions used elsewhere in this database.
+ *
+ * `dialogueBoostStrength` stores the [com.raulshma.jellyplay.core.model.EffectStrength]
+ * name (or null) — added in migration 27→28 (issue #66-B).
  */
 @Entity(
     tableName = "item_playback_preferences",
@@ -26,5 +29,6 @@ data class ItemPlaybackPreferenceEntity(
     val key: String,
     val audioLanguage: String?,
     val subtitleLanguage: String?,
+    val dialogueBoostStrength: String? = null,
     val updatedAt: Long,
 )
