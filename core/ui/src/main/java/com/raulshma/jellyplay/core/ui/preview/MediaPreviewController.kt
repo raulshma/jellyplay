@@ -85,6 +85,15 @@ class MediaPreviewController {
 val LocalMediaPreviewController = staticCompositionLocalOf<MediaPreviewController?> { null }
 
 /**
+ * Whether the press-and-hold "peek" preview is enabled. Bound at the root from
+ * `UserPreferences.isExperimentalEnabled(ExperimentalFeature.MEDIA_CARD_PEEK)`
+ * (off by default — it is an experimental opt-in). Cards and the overlay both
+ * read this so the feature is fully dormant (no gesture wiring, no overlay, no
+ * backdrop blur) when the user hasn't turned it on.
+ */
+val LocalMediaPeekEnabled = staticCompositionLocalOf<Boolean> { false }
+
+/**
  * Bundle returned by [rememberMediaPeek] so a card gets everything the peek
  * feature needs in one call:
  *  - [onLongClick]: a **stable** lambda for `combinedClickable(onLongClick = …)`,
@@ -122,12 +131,14 @@ fun rememberMediaPeek(
 ): MediaPeekHandle {
     val controller = LocalMediaPreviewController.current
     val isTv = LocalJellyPlayUi.current.isTv
+    // Fully dormant unless the user has opted in (experimental, off by default).
+    val enabled = LocalMediaPeekEnabled.current
 
     // Track the card's bounds in window coordinates. Held in a state object so
     // the launcher lambda (keyed below) always reads the latest rect at the
     // instant of the long-press without needing to re-key on position changes.
     val boundsState = remember { mutableStateOf(Rect.Zero) }
-    val boundsModifier = if (controller != null && !isTv) {
+    val boundsModifier = if (controller != null && !isTv && enabled) {
         Modifier.onGloballyPositioned { coords ->
             val pos = coords.positionInWindow()
             boundsState.value = Rect(
@@ -141,7 +152,7 @@ fun rememberMediaPeek(
         Modifier
     }
 
-    val onLongClick: (() -> Unit)? = if (controller != null && !isTv) {
+    val onLongClick: (() -> Unit)? = if (controller != null && !isTv && enabled) {
         remember(controller, item, posterUrl, backdropUrl, blurHash) {
             {
                 controller.show(
