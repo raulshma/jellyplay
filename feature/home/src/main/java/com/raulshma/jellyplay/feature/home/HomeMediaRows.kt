@@ -3,6 +3,7 @@ package com.raulshma.jellyplay.feature.home
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.Arrangement
@@ -56,6 +57,8 @@ import com.raulshma.jellyplay.core.ui.components.formatDurationFromTicks
 import com.raulshma.jellyplay.core.ui.components.progressFraction
 import com.raulshma.jellyplay.core.ui.components.formatRemainingTimeFromTicks
 import com.raulshma.jellyplay.core.ui.components.rememberDominantColor
+import com.raulshma.jellyplay.core.ui.preview.rememberMediaPeek
+import com.raulshma.jellyplay.core.ui.preview.rememberReleaseDismiss
 import com.raulshma.jellyplay.core.ui.image.MediaImage
 import com.raulshma.jellyplay.core.ui.tv.LocalTvMode
 import com.raulshma.jellyplay.core.ui.tv.TvFocusableItemRow
@@ -224,6 +227,15 @@ fun WideMediaCard(
     val progressPercent = item.progressFraction() ?: 0f
     val playButtonSize = if (isTv) 44.dp else 36.dp
 
+    // Press-and-hold "peek" preview; no-op on TV / when no controller is wired.
+    val peek = rememberMediaPeek(
+        item = item,
+        posterUrl = imageUrl,
+        backdropUrl = backdropUrl,
+        blurHash = item.blurHashes.backdrop,
+    )
+    rememberReleaseDismiss(isPressed)
+
     val imageModifier = Modifier
         .fillMaxWidth()
         .aspectRatio(16f / 9f)
@@ -233,6 +245,7 @@ fun WideMediaCard(
             modifier = Modifier
                 .fillMaxWidth()
                 .then(tvFocusState.focusModifier)
+                .then(peek.boundsModifier)
                 .graphicsLayer {
                     scaleX = scale
                     scaleY = scale
@@ -241,10 +254,11 @@ fun WideMediaCard(
                     shape = ShapeCache.smooth12
                 }
                 .tvFocusIndicator(tvFocusState, ShapeCache.smooth12)
-                .clickable(
+                .combinedClickable(
                     interactionSource = interactionSource,
                     indication = null,
                     onClick = onClick,
+                    onLongClick = peek.onLongClick,
                 ),
             shape = ShapeCache.smooth12,
             elevation = CardDefaults.cardElevation(defaultElevation = 0.dp),

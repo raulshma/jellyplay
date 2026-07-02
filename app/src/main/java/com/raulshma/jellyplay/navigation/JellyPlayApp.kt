@@ -99,6 +99,7 @@ import androidx.compose.ui.unit.IntOffset
 import androidx.compose.foundation.layout.offset
 import androidx.compose.ui.draw.scale
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.blur
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.NavigationBarItem
 import androidx.compose.material3.NavigationBarItemDefaults
@@ -511,6 +512,24 @@ private fun MainContent(
 
     val isTv = context.isTv()
 
+    // Press-and-hold "peek" preview (Instagram-style). Remembered once at the
+    // root and provided via LocalMediaPreviewController; the overlay collects it
+    // below. Purely ephemeral UI state, so no DI/ViewModel involvement.
+    val mediaPreviewController = remember {
+        com.raulshma.jellyplay.core.ui.preview.MediaPreviewController()
+    }
+    val mediaPreviewState by mediaPreviewController.state.collectAsStateWithLifecycle()
+    // Blur the live content behind the peek overlay. Skipped on TV (no peek) and
+    // in performance mode (Modifier.blur over the full tree is GPU-costly), where
+    // the overlay's plain dark scrim still conveys depth on its own.
+    val previewBlur by androidx.compose.animation.core.animateFloatAsState(
+        targetValue = if (!isTv && !preferences.performanceMode && mediaPreviewState != null) 14f else 0f,
+        animationSpec = androidx.compose.animation.core.tween(durationMillis = 220),
+        label = "previewBackdropBlur",
+    )
+    val previewBlurModifier =
+        if (previewBlur > 0.5f) Modifier.blur(previewBlur.dp) else Modifier
+
     // Single root collector for app-wide one-shot messages.
     // Phone renders a Snackbar (accessible, dismissible, localizable); TV keeps
     // a system Toast since the TV layout has no root SnackbarHost. Either way,
@@ -580,6 +599,7 @@ private fun MainContent(
         LocalPerformanceMode provides preferences.performanceMode,
         LocalFloatingNavVisibility provides isBottomNavVisibleState,
         LocalUserMessageBus provides userMessageBus,
+        com.raulshma.jellyplay.core.ui.preview.LocalMediaPreviewController provides mediaPreviewController,
         com.raulshma.jellyplay.core.ui.components.LocalCardDisplayPreferences provides com.raulshma.jellyplay.core.ui.components.CardDisplayPreferences(
             showUnwatchedBadge = preferences.showUnwatchedBadge,
             showWatchedCheckmark = preferences.showWatchedCheckmark,
@@ -622,6 +642,10 @@ private fun MainContent(
             }
 
             Box(Modifier.fillMaxSize()) {
+            // Wrap the live content (TV / Phone / FullScreen) in its own Box so
+            // the peek overlay's backdrop blur applies to it only, leaving the
+            // SnackbarHost and the overlay itself sharp.
+            Box(Modifier.fillMaxSize().then(previewBlurModifier)) {
             // Hoist the TV drawer state above the isFullScreenRoute branch so it survives visiting a
             // full-screen route (e.g. the player) and back, instead of being recreated when
             // TvNavigationDrawer leaves and re-enters composition. Fully-qualified to avoid clashing with the mobile
@@ -711,11 +735,19 @@ private fun MainContent(
                     )
                 }
                 }
+            } // end inner blur Box
                 androidx.compose.material3.SnackbarHost(
                     hostState = snackbarHostState,
                     modifier = Modifier
                         .align(androidx.compose.ui.Alignment.BottomCenter)
                         .padding(bottom = if (isFullScreenRoute) 16.dp else 96.dp)
+                )
+            }
+            // Press-and-hold peek overlay — topmost. Phone-only; on TV the
+            // controller is never triggered, so this renders nothing.
+            if (!isTv) {
+                com.raulshma.jellyplay.core.ui.preview.MediaPreviewOverlay(
+                    controller = mediaPreviewController,
                 )
             }
             }
