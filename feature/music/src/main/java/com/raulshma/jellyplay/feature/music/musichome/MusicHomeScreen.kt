@@ -8,13 +8,11 @@ import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.rememberCoroutineScope
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.raulshma.jellyplay.core.ui.components.ErrorScreen
 import com.raulshma.jellyplay.core.ui.components.ScreenEmptyState
 import com.raulshma.jellyplay.core.ui.components.ScreenLoadingState
@@ -33,6 +31,7 @@ import com.raulshma.jellyplay.feature.music.components.NewReleasesSection
 import com.composables.icons.tabler.Tabler
 import com.composables.icons.tabler.outline.*
 import kotlinx.coroutines.launch
+import androidx.compose.runtime.rememberCoroutineScope
 
 @OptIn(ExperimentalMaterial3Api::class, androidx.compose.ui.ExperimentalComposeUiApi::class)
 @Composable
@@ -48,9 +47,10 @@ fun MusicHomeScreen(
     onAmbientClick: () -> Unit = {},
     viewModel: MusicHomeViewModel = hiltViewModel(),
 ) {
-    val sections = viewModel.sections
-    val isLoading = viewModel.isLoading
-    val error = viewModel.error
+    val uiState by viewModel.uiState.collectAsStateWithLifecycle()
+    val sections = uiState.sections
+    val isLoading = uiState.isLoading
+    val error = uiState.error
     val backgroundColor = rememberScreenBackgroundColor()
     val scope = rememberCoroutineScope()
 
@@ -61,19 +61,19 @@ fun MusicHomeScreen(
 
     // Focus groups for each section to build a vertical chain
     val playerScreensRow = remember { FocusRequester() }
-    
+
     val artistsHeader = remember { FocusRequester() }
     val artistsRow = remember { FocusRequester() }
-    
+
     val latestAlbumsHeader = remember { FocusRequester() }
     val latestAlbumsRow = remember { FocusRequester() }
-    
+
     val topRatedAlbumsHeader = remember { FocusRequester() }
     val topRatedAlbumsRow = remember { FocusRequester() }
-    
+
     val recentlyPlayedHeader = remember { FocusRequester() }
     val recentlyPlayedRow = remember { FocusRequester() }
-    
+
     val favoriteTracksHeader = remember { FocusRequester() }
     val favoriteTracksRow = remember { FocusRequester() }
 
@@ -84,7 +84,7 @@ fun MusicHomeScreen(
     )
 
     PullToRefreshBox(
-        isRefreshing = viewModel.isLoading && sections.isNotEmpty(),
+        isRefreshing = isLoading && sections.isNotEmpty(),
         onRefresh = {
             viewModel.refresh()
         },
@@ -107,33 +107,28 @@ fun MusicHomeScreen(
                         description = "Check your Jellyfin libraries.",
                     )
                 } else {
-                    val recentlyPlayedSection = sections.find { it.title == "Recently Played" }
-                    val artistsSection = sections.find { it.title == "Favorite Artists" }
-                    val latestAlbumsSection = sections.find { it.title == "Latest Albums" }
-                    val topRatedAlbumsSection = sections.find { it.title == "Top Rated Albums" }
-                    val favoriteTracksSection = sections.find { it.title == "Favorite Tracks" }
+                    // Look up each section by typed identity (exhaustive over MusicHomeSectionType),
+                    // so a renamed label can never silently hide a section.
+                    fun section(type: MusicHomeSectionType): MusicHomeSection? =
+                        sections.firstOrNull { it.type == type }
 
-                    // Dynamic list of active sections/cards to build the vertical chain
+                    val artistsSection = section(MusicHomeSectionType.FAVORITE_ARTISTS)
+                    val latestAlbumsSection = section(MusicHomeSectionType.LATEST_ALBUMS)
+                    val topRatedAlbumsSection = section(MusicHomeSectionType.TOP_RATED_ALBUMS)
+                    val recentlyPlayedSection = section(MusicHomeSectionType.RECENTLY_PLAYED)
+                    val favoriteTracksSection = section(MusicHomeSectionType.FAVORITE_TRACKS)
+
+                    // Dynamic list of active sections/cards to build the vertical chain.
+                    // Each entry is (headerFocusRequester?, rowFocusRequester); the Player Screens
+                    // row has no header so its header slot is null.
                     val activeChain = remember(sections) {
                         buildList {
-                            // First item is always Player Screens row
                             add(Pair(null as FocusRequester?, playerScreensRow))
-                            
-                            if (artistsSection != null && artistsSection.items.isNotEmpty()) {
-                                add(Pair(artistsHeader, artistsRow))
-                            }
-                            if (latestAlbumsSection != null && latestAlbumsSection.items.isNotEmpty()) {
-                                add(Pair(latestAlbumsHeader, latestAlbumsRow))
-                            }
-                            if (topRatedAlbumsSection != null && topRatedAlbumsSection.items.isNotEmpty()) {
-                                add(Pair(topRatedAlbumsHeader, topRatedAlbumsRow))
-                            }
-                            if (recentlyPlayedSection != null && recentlyPlayedSection.items.isNotEmpty()) {
-                                add(Pair(recentlyPlayedHeader, recentlyPlayedRow))
-                            }
-                            if (favoriteTracksSection != null && favoriteTracksSection.items.isNotEmpty()) {
-                                add(Pair(favoriteTracksHeader, favoriteTracksRow))
-                            }
+                            if (artistsSection != null) add(Pair(artistsHeader, artistsRow))
+                            if (latestAlbumsSection != null) add(Pair(latestAlbumsHeader, latestAlbumsRow))
+                            if (topRatedAlbumsSection != null) add(Pair(topRatedAlbumsHeader, topRatedAlbumsRow))
+                            if (recentlyPlayedSection != null) add(Pair(recentlyPlayedHeader, recentlyPlayedRow))
+                            if (favoriteTracksSection != null) add(Pair(favoriteTracksHeader, favoriteTracksRow))
                         }
                     }
 
@@ -195,7 +190,7 @@ fun MusicHomeScreen(
                             )
                         }
 
-                        if (artistsSection != null && artistsSection.items.isNotEmpty()) {
+                        artistsSection?.let { section ->
                             item {
                                 val index = activeChain.indexOfFirst { it.second == artistsRow }
                                 val (headerUp, _) = getHeaderFocusLinks(index)
@@ -203,7 +198,7 @@ fun MusicHomeScreen(
 
                                 Spacer(modifier = Modifier.height(24.dp))
                                 ArtistsSection(
-                                    artists = artistsSection.items,
+                                    artists = section.items,
                                     onArtistClick = { artistId ->
                                         onItemClick(artistId)
                                     },
@@ -220,7 +215,7 @@ fun MusicHomeScreen(
                             }
                         }
 
-                        if (latestAlbumsSection != null && latestAlbumsSection.items.isNotEmpty()) {
+                        latestAlbumsSection?.let { section ->
                             item {
                                 val index = activeChain.indexOfFirst { it.second == latestAlbumsRow }
                                 val (headerUp, _) = getHeaderFocusLinks(index)
@@ -228,16 +223,16 @@ fun MusicHomeScreen(
 
                                 Spacer(modifier = Modifier.height(24.dp))
                                 NewReleasesSection(
-                                    albums = latestAlbumsSection.items,
+                                    albums = section.items,
                                     onAlbumClick = onAlbumClick,
                                     onAlbumPlayClick = { albumId ->
                                         viewModel.playAlbum(albumId)
                                     },
                                     onPlayAllClick = {
-                                        viewModel.playAlbums(latestAlbumsSection.items)
+                                        viewModel.playAlbums(section.items)
                                     },
                                     onShuffleClick = {
-                                        viewModel.shuffleAlbums(latestAlbumsSection.items)
+                                        viewModel.shuffleAlbums(section.items)
                                     },
                                     imageUrlBuilder = { viewModel.getImageUrl(it) },
                                     headerFocusRequester = latestAlbumsHeader,
@@ -248,7 +243,7 @@ fun MusicHomeScreen(
                             }
                         }
 
-                        if (topRatedAlbumsSection != null && topRatedAlbumsSection.items.isNotEmpty()) {
+                        topRatedAlbumsSection?.let { section ->
                             item {
                                 val index = activeChain.indexOfFirst { it.second == topRatedAlbumsRow }
                                 val (headerUp, _) = getHeaderFocusLinks(index)
@@ -256,20 +251,20 @@ fun MusicHomeScreen(
 
                                 Spacer(modifier = Modifier.height(24.dp))
                                 NewReleasesSection(
-                                    albums = topRatedAlbumsSection.items,
+                                    albums = section.items,
                                     onAlbumClick = onAlbumClick,
                                     onAlbumPlayClick = { albumId ->
                                         viewModel.playAlbum(albumId)
                                     },
                                     onPlayAllClick = {
-                                        viewModel.playAlbums(topRatedAlbumsSection.items)
+                                        viewModel.playAlbums(section.items)
                                     },
                                     onShuffleClick = {
-                                        viewModel.shuffleAlbums(topRatedAlbumsSection.items)
+                                        viewModel.shuffleAlbums(section.items)
                                     },
                                     imageUrlBuilder = { viewModel.getImageUrl(it) },
-                                    title = "Top Rated Albums",
-                                    subtitle = "Highest rated by the community",
+                                    title = section.type.displayName,
+                                    subtitle = section.type.subtitle,
                                     headerFocusRequester = topRatedAlbumsHeader,
                                     rowFocusRequester = topRatedAlbumsRow,
                                     upFocusRequester = headerUp,
@@ -278,7 +273,7 @@ fun MusicHomeScreen(
                             }
                         }
 
-                        if (recentlyPlayedSection != null && recentlyPlayedSection.items.isNotEmpty()) {
+                        recentlyPlayedSection?.let { section ->
                             item {
                                 val index = activeChain.indexOfFirst { it.second == recentlyPlayedRow }
                                 val (headerUp, _) = getHeaderFocusLinks(index)
@@ -286,16 +281,16 @@ fun MusicHomeScreen(
 
                                 Spacer(modifier = Modifier.height(24.dp))
                                 RecentlyPlayedSection(
-                                    tracks = recentlyPlayedSection.items,
+                                    tracks = section.items,
                                     onTrackClick = onItemClick,
                                     onTrackPlayClick = { idx ->
-                                        viewModel.playAll(recentlyPlayedSection.items, idx)
+                                        viewModel.playAll(section.items, idx)
                                     },
                                     onPlayAllClick = {
-                                        viewModel.playAll(recentlyPlayedSection.items)
+                                        viewModel.playAll(section.items)
                                     },
                                     onShuffleClick = {
-                                        viewModel.shufflePlay(recentlyPlayedSection.items)
+                                        viewModel.shufflePlay(section.items)
                                     },
                                     imageUrlBuilder = { viewModel.getImageUrl(it) },
                                     headerFocusRequester = recentlyPlayedHeader,
@@ -306,7 +301,7 @@ fun MusicHomeScreen(
                             }
                         }
 
-                        if (favoriteTracksSection != null && favoriteTracksSection.items.isNotEmpty()) {
+                        favoriteTracksSection?.let { section ->
                             item {
                                 val index = activeChain.indexOfFirst { it.second == favoriteTracksRow }
                                 val (headerUp, _) = getHeaderFocusLinks(index)
@@ -314,20 +309,20 @@ fun MusicHomeScreen(
 
                                 Spacer(modifier = Modifier.height(24.dp))
                                 RecentlyPlayedSection(
-                                    tracks = favoriteTracksSection.items,
+                                    tracks = section.items,
                                     onTrackClick = onItemClick,
                                     onTrackPlayClick = { idx ->
-                                        viewModel.playAll(favoriteTracksSection.items, idx)
+                                        viewModel.playAll(section.items, idx)
                                     },
                                     onPlayAllClick = {
-                                        viewModel.playAll(favoriteTracksSection.items)
+                                        viewModel.playAll(section.items)
                                     },
                                     onShuffleClick = {
-                                        viewModel.shufflePlay(favoriteTracksSection.items)
+                                        viewModel.shufflePlay(section.items)
                                     },
                                     imageUrlBuilder = { viewModel.getImageUrl(it) },
-                                    title = "Favorite Tracks",
-                                    subtitle = "Songs you love the most",
+                                    title = section.type.displayName,
+                                    subtitle = section.type.subtitle,
                                     headerFocusRequester = favoriteTracksHeader,
                                     rowFocusRequester = favoriteTracksRow,
                                     upFocusRequester = headerUp,
