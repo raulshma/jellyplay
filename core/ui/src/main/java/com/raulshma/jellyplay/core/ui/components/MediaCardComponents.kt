@@ -6,6 +6,7 @@ import androidx.compose.animation.core.spring
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.Arrangement
@@ -69,6 +70,8 @@ import com.raulshma.jellyplay.core.ui.animation.fastEffectsSpec
 import com.raulshma.jellyplay.core.ui.adaptive.LocalJellyPlayUi
 import com.raulshma.jellyplay.core.ui.image.MediaImage
 import com.raulshma.jellyplay.core.ui.image.PhotoFolderPoster
+import com.raulshma.jellyplay.core.ui.preview.rememberMediaPeek
+import com.raulshma.jellyplay.core.ui.preview.rememberReleaseDismiss
 import com.raulshma.jellyplay.core.ui.tv.TvFocusableItemRow
 import com.raulshma.jellyplay.core.ui.tv.enableMarqueeOnFocus
 import kotlinx.coroutines.Dispatchers
@@ -291,6 +294,19 @@ fun PosterCard(
     val dominantColor = rememberDominantColor(imageUrl, itemId = item.id)
     val playButtonSize = if (isTv) 44.dp else 36.dp
 
+    // Press-and-hold "peek" preview (Instagram-style). The handle's onLongClick
+    // opens the overlay; boundsModifier tracks the card's rect for the morph;
+    // rememberReleaseDismiss closes it when the finger lifts — all driven by
+    // this card's existing interactionSource. No-ops on TV and when no
+    // controller is provided (see LocalMediaPreviewController).
+    val peek = rememberMediaPeek(
+        item = item,
+        posterUrl = imageUrl,
+        backdropUrl = fallbackUrls.firstOrNull(),
+        blurHash = blurHash,
+    )
+    rememberReleaseDismiss(isPressed)
+
     val sharedTransitionScope = LocalSharedTransitionScope.current
     val animatedVisibilityScope = LocalAnimatedVisibilityScope.current
 
@@ -331,6 +347,7 @@ fun PosterCard(
             modifier = Modifier
                 .fillMaxWidth()
                 .then(focusInteraction.modifier)
+                .then(peek.boundsModifier)
                 .graphicsLayer {
                     scaleX = scale
                     scaleY = scale
@@ -339,10 +356,11 @@ fun PosterCard(
                     shape = cardShape
                 }
                 .jellyFocusIndicator(focusInteraction, cardShape)
-                .clickable(
+                .combinedClickable(
                     interactionSource = interactionSource,
                     indication = null,
                     onClick = onClick,
+                    onLongClick = peek.onLongClick,
                 ),
             shape = cardShape,
             border = border,
