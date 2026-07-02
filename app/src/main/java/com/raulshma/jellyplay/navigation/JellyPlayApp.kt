@@ -110,7 +110,9 @@ import kotlin.math.roundToInt
 import com.raulshma.jellyplay.MainActivity
 import com.raulshma.jellyplay.MainViewModel
 import com.raulshma.jellyplay.core.data.playback.AudioPlaybackManager
+import com.raulshma.jellyplay.core.model.ExperimentalFeature
 import com.raulshma.jellyplay.core.model.HomeMode
+import com.raulshma.jellyplay.core.model.isExperimentalEnabled
 import com.raulshma.jellyplay.core.ui.adaptive.LocalAdaptiveInfo
 import com.raulshma.jellyplay.core.ui.adaptive.LocalJellyPlayUi
 import com.raulshma.jellyplay.core.ui.adaptive.WindowSizeClass
@@ -514,16 +516,19 @@ private fun MainContent(
 
     // Press-and-hold "peek" preview (Instagram-style). Remembered once at the
     // root and provided via LocalMediaPreviewController; the overlay collects it
-    // below. Purely ephemeral UI state, so no DI/ViewModel involvement.
+    // below. Purely ephemeral UI state, so no DI/ViewModel involvement. The
+    // whole feature is dormant unless the user opts in under Experimental
+    // settings (off by default).
+    val peekEnabled = preferences.isExperimentalEnabled(ExperimentalFeature.MEDIA_CARD_PEEK)
     val mediaPreviewController = remember {
         com.raulshma.jellyplay.core.ui.preview.MediaPreviewController()
     }
     val mediaPreviewState by mediaPreviewController.state.collectAsStateWithLifecycle()
-    // Blur the live content behind the peek overlay. Skipped on TV (no peek) and
-    // in performance mode (Modifier.blur over the full tree is GPU-costly), where
-    // the overlay's plain dark scrim still conveys depth on its own.
+    // Blur the live content behind the peek overlay. Skipped on TV (no peek), in
+    // performance mode (Modifier.blur over the full tree is GPU-costly), and when
+    // the feature is disabled — in which case mediaPreviewState is always null.
     val previewBlur by androidx.compose.animation.core.animateFloatAsState(
-        targetValue = if (!isTv && !preferences.performanceMode && mediaPreviewState != null) 14f else 0f,
+        targetValue = if (peekEnabled && !isTv && !preferences.performanceMode && mediaPreviewState != null) 14f else 0f,
         animationSpec = androidx.compose.animation.core.tween(durationMillis = 220),
         label = "previewBackdropBlur",
     )
@@ -600,6 +605,8 @@ private fun MainContent(
         LocalFloatingNavVisibility provides isBottomNavVisibleState,
         LocalUserMessageBus provides userMessageBus,
         com.raulshma.jellyplay.core.ui.preview.LocalMediaPreviewController provides mediaPreviewController,
+        com.raulshma.jellyplay.core.ui.preview.LocalMediaPeekEnabled provides
+            preferences.isExperimentalEnabled(ExperimentalFeature.MEDIA_CARD_PEEK),
         com.raulshma.jellyplay.core.ui.components.LocalCardDisplayPreferences provides com.raulshma.jellyplay.core.ui.components.CardDisplayPreferences(
             showUnwatchedBadge = preferences.showUnwatchedBadge,
             showWatchedCheckmark = preferences.showWatchedCheckmark,
@@ -743,9 +750,10 @@ private fun MainContent(
                         .padding(bottom = if (isFullScreenRoute) 16.dp else 96.dp)
                 )
             }
-            // Press-and-hold peek overlay — topmost. Phone-only; on TV the
-            // controller is never triggered, so this renders nothing.
-            if (!isTv) {
+            // Press-and-hold peek overlay — topmost. Only composed when the user
+            // has enabled the experimental feature and on phone; on TV the
+            // controller is never triggered, so this would render nothing anyway.
+            if (peekEnabled && !isTv) {
                 com.raulshma.jellyplay.core.ui.preview.MediaPreviewOverlay(
                     controller = mediaPreviewController,
                 )

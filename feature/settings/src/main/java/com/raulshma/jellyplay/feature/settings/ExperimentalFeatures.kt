@@ -29,6 +29,12 @@ object ExperimentalFeatures {
             subtitle = "Clip home-screen cards to their row edges (and rounded shape) while scrolling",
             icon = Tabler.Outline.Crop,
         ),
+        ExperimentalFeatureInfo(
+            feature = ExperimentalFeature.MEDIA_CARD_PEEK,
+            title = "Press-and-Hold Preview",
+            subtitle = "Long-press a media card to peek a blurred detail preview; release to dismiss",
+            icon = Tabler.Outline.Eye,
+        ),
     )
 
     /**
