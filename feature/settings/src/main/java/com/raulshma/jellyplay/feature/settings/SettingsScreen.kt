@@ -503,8 +503,6 @@ fun SettingsScreen(
                                                     viewModel.setShowAdvancedSettings(true)
                                                     userMessageBus.info(uiTextOf(R.string.settings_advanced_enabled))
                                                 }
-                                                isSearchActive = false
-                                                searchQuery = ""
                                                  if (item.id == "logout") {
                                                      onLogout(false)
                                                  } else {
@@ -555,6 +553,10 @@ fun SettingsScreen(
                                                         else -> {}
                                                     }
                                                 }
+                                                // Dismiss search after navigation has been dispatched so the
+                                                // main settings list doesn't briefly reveal during the transition.
+                                                isSearchActive = false
+                                                searchQuery = ""
                                             }
                                     )
                                 }

@@ -1197,7 +1197,7 @@ private data class ExternalLaunchTarget(
 
 private fun routeToIcon(route: Route): ImageVector = when (route) {
     Route.Home -> Tabler.Outline.Home
-    Route.Library -> Tabler.Outline.Music
+    Route.Library -> Tabler.Outline.Stack2
     Route.Search -> Tabler.Outline.Search
     Route.LiveTv -> Tabler.Outline.DeviceTv
     Route.MusicBrowse -> Tabler.Outline.Disc

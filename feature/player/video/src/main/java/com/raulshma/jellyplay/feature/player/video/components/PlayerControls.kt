@@ -612,6 +612,10 @@ internal fun PlayerControls(
                             PipButton(onClick = onPipClick)
                         }
 
+                        if (castManager != null) {
+                            CastButton(castManager = castManager)
+                        }
+
                         PlayerIconButton(
                             icon = Tabler.Outline.DotsVertical,
                             contentDescription = "More options",
@@ -628,10 +632,6 @@ internal fun PlayerControls(
                                 } else Modifier
                             )
                         )
-
-                        if (castManager != null) {
-                            CastButton(castManager = castManager)
-                        }
                     }
                 }
             }
