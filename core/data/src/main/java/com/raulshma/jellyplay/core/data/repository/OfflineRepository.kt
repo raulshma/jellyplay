@@ -15,6 +15,26 @@ interface OfflineRepository {
     suspend fun cleanupOrphans()
 
     /**
+     * Records playback progress for a downloaded item so it can be shown on the
+     * downloads UI and resumed while offline (issue #65-A). Independent of the
+     * server sync path (which continues when online). No-op if the item isn't
+     * in the offline store.
+     *
+     * @param itemId the downloaded media item id.
+     * @param positionTicks the current playback position in Jellyfin ticks, or
+     *   null to leave the existing position untouched.
+     * @param percentage 0–100 played fraction. When `>=` the watched threshold
+     *   the item is marked played.
+     * @param isPlayed when true, marks the item as fully watched.
+     */
+    suspend fun updatePlaybackProgress(
+        itemId: String,
+        positionTicks: Long?,
+        percentage: Double,
+        isPlayed: Boolean,
+    )
+
+    /**
      * Search the on-device downloaded library by free-text query. Matches
      * against [OfflineMediaItem.name], [OfflineMediaItem.seriesName] and
      * [OfflineMediaItem.seasonName] (case-insensitive substring). Returns

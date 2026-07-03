@@ -150,8 +150,22 @@ class LibraryViewModel @Inject constructor(
         launch {
             _isLoading.set(true)
             mediaRepository.getLibraryFolders()
-                .onSuccess { _folders.set(it) }
-                .onFailure { _error.set(it.message ?: "${it::class.simpleName}") }
+                .onSuccess { folders ->
+                    _folders.set(folders)
+                    // Clear any stale error once folders load successfully.
+                    _error.set(null)
+                }
+                .onFailure { error ->
+                    // Don't blank the whole library: keep any previously-loaded
+                    // folders so the user can still browse, and surface the error
+                    // as a non-blocking status (the screen shows ErrorScreen only
+                    // when there are also zero items). This stops a single failed
+                    // fetch — e.g. a transient 403 — from making the app unusable
+                    // (issue #62-B).
+                    if (_folders.value.isNullOrEmpty()) {
+                        _error.set(error.message ?: "${error::class.simpleName}")
+                    }
+                }
             _isLoading.set(false)
         }
     }

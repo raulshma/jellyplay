@@ -95,7 +95,7 @@ fun StorageSettingsScreen(
     )
 
     JellyPlayScreenScaffold(
-        title = "Storage",
+        title = "Downloads & Storage",
         onBack = onBack,
         backgroundColor = backgroundColor,
         actions = {
@@ -188,7 +188,7 @@ fun StorageSettingsScreen(
                         }
                     }
 
-                    val storageTotal = if (showAdvanced) 6 else 2
+                    val storageTotal = if (showAdvanced) 7 else 2
                     var storageIdx = 0
                     SettingInfoItem(
                         icon = Tabler.Outline.Database,
@@ -216,8 +216,8 @@ fun StorageSettingsScreen(
                         )
                         SettingListItem(
                             icon = Tabler.Outline.Download,
-                            title = "Download Connection Count",
-                            subtitle = "Number of parallel download streams",
+                            title = "Connections per download",
+                            subtitle = "Parallel streams for a single file",
                             trailingText = "${preferences.downloadConnections}",
                             index = storageIdx++, count = storageTotal,
                             onClick = {
@@ -225,6 +225,19 @@ fun StorageSettingsScreen(
                                 val currentIndex = options.indexOf(preferences.downloadConnections)
                                 val nextIndex = if (currentIndex == -1) 2 else (currentIndex + 1) % options.size
                                 viewModel.setDownloadConnections(options[nextIndex])
+                            },
+                        )
+                        SettingListItem(
+                            icon = Tabler.Outline.ArrowBarToDown,
+                            title = "Max simultaneous downloads",
+                            subtitle = "How many downloads may transfer at once",
+                            trailingText = "${preferences.maxConcurrentDownloads}",
+                            index = storageIdx++, count = storageTotal,
+                            onClick = {
+                                val options = listOf(1, 2, 3, 4, 5, 6)
+                                val currentIndex = options.indexOf(preferences.maxConcurrentDownloads)
+                                val nextIndex = if (currentIndex == -1) 2 else (currentIndex + 1) % options.size
+                                viewModel.setMaxConcurrentDownloads(options[nextIndex])
                             },
                         )
                         SettingToggleItem(

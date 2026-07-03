@@ -26,6 +26,29 @@ interface OfflineMediaDao {
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun upsert(entity: OfflineMediaEntity)
 
+    /**
+     * Updates only the playback-progress columns for a row (issue #65-A). A
+     * targeted UPDATE avoids clobbering metadata fields and is cheaper than a
+     * full upsert. `lastPlayedDate` is set to the supplied ISO timestamp.
+     */
+    @Query(
+        """
+        UPDATE offline_media
+        SET playbackPositionTicks = :positionTicks,
+            playedPercentage = :percentage,
+            isPlayed = :isPlayed,
+            lastPlayedDate = :lastPlayedDate
+        WHERE id = :itemId
+        """
+    )
+    suspend fun updatePlaybackProgress(
+        itemId: String,
+        positionTicks: Long?,
+        percentage: Double,
+        isPlayed: Boolean,
+        lastPlayedDate: String?,
+    )
+
     @Transaction
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun upsertAll(entities: List<OfflineMediaEntity>)

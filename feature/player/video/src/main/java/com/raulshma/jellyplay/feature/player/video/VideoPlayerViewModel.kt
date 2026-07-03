@@ -401,6 +401,11 @@ class VideoPlayerViewModel @Inject constructor(
         },
         onWatchedThresholdReached = { itemId ->
             handleSmartDownloadCleanup(itemId)
+            // Mark the offline copy as fully watched so its row shows the
+            // watched state (issue #65-A/B). No-op for non-downloaded items.
+            launch {
+                offlineRepository.updatePlaybackProgress(itemId, positionTicks = null, percentage = 100.0, isPlayed = true)
+            }
         },
         onPositionPersisted = { positionMs -> persistPlaybackPosition(positionMs, force = false) },
         onEnginePositionUpdate = { positionMs, durationMs, bufferedPositionMs, videoStats ->
@@ -849,6 +854,16 @@ class VideoPlayerViewModel @Inject constructor(
         savedStateHandle[SAVED_KEY_ITEM_ID] = itemId
         savedStateHandle[SAVED_KEY_POSITION_MS] = positionMs
         savedStateHandle[SAVED_KEY_PLAY_SESSION_ID] = currentPlaySessionId
+        // Mirror progress into the offline store so downloads render watched /
+        // resume state while offline (issue #65-A). No-op for non-downloaded items.
+        val durationMs = playerSessionManager.engine?.durationMs ?: 0L
+        val positionTicks = positionMs * 10_000L // ms → ticks
+        val percentage = if (durationMs > 0L) {
+            (positionMs.toDouble() / durationMs.toDouble() * 100.0).coerceIn(0.0, 100.0)
+        } else 0.0
+        launch {
+            offlineRepository.updatePlaybackProgress(itemId, positionTicks, percentage, isPlayed = false)
+        }
     }
 
     private fun initializeInternal(

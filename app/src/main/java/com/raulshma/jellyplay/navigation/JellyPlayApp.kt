@@ -1,6 +1,7 @@
 package com.raulshma.jellyplay.navigation
 
 import android.content.Intent
+import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.ActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
@@ -682,6 +683,13 @@ private fun MainContent(
                 )
             } else {
                 if (!isFullScreenRoute) {
+                    // Wire the system/gesture back button to in-app navigation so back
+                    // from a deep screen returns to the tab root before exiting the app
+                    // (issue #62-I). At a tab root, fall through to the OS (exit). The
+                    // full-screen player is excluded — it owns its own BackHandler.
+                    BackHandler(enabled = !navigator.isAtTabRoot()) {
+                        navigator.goBack()
+                    }
                     PhoneContent(
                         navigationState = navigationState,
                         currentTopLevel = currentTopLevel,
@@ -702,6 +710,7 @@ private fun MainContent(
                         isSynthwave = isSynthwave,
                         isExpanded = isExpanded,
                         isBottomNavVisibleState = isBottomNavVisibleState,
+                        hideBottomNavOnScroll = preferences.hideBottomNavOnScroll,
                         bottomNavOffsetHeightPx = bottomNavOffsetHeightPx,
                         showMiniPlayer = showMiniPlayer,
                         audioPlaybackManager = audioPlaybackManager,
@@ -872,6 +881,7 @@ private fun PhoneContent(
     isSynthwave: Boolean,
     isExpanded: Boolean,
     isBottomNavVisibleState: androidx.compose.runtime.MutableState<Boolean>,
+    hideBottomNavOnScroll: Boolean,
     bottomNavOffsetHeightPx: androidx.compose.runtime.MutableFloatState,
     showMiniPlayer: Boolean,
     audioPlaybackManager: AudioPlaybackManager,
@@ -941,6 +951,13 @@ private fun PhoneContent(
             }
         },
     ) {
+        // When hide-on-scroll is disabled, keep the nav bar permanently visible
+        // (issue #62-I). The nestedScrollConnection is still constructed so its
+        // identity stays stable, but it is only attached to the tree when the
+        // setting is on.
+        androidx.compose.runtime.LaunchedEffect(hideBottomNavOnScroll) {
+            if (!hideBottomNavOnScroll) isBottomNavVisible = true
+        }
         val nestedScrollConnection = remember {
             object : NestedScrollConnection {
                 override fun onPreScroll(available: Offset, source: NestedScrollSource): Offset {
@@ -985,7 +1002,7 @@ private fun PhoneContent(
                 modifier = Modifier
                     .fillMaxSize()
                     .then(appBackgroundModifier)
-                    .then(if (!isExpanded) Modifier.nestedScroll(nestedScrollConnection) else Modifier)
+                    .then(if (!isExpanded && hideBottomNavOnScroll) Modifier.nestedScroll(nestedScrollConnection) else Modifier)
             ) {
                 Box(modifier = Modifier.fillMaxSize()) {
                     MainNavDisplay(

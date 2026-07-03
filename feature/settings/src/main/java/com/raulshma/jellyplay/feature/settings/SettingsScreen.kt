@@ -741,7 +741,7 @@ fun SettingsScreen(
                     AnimatedSettingsEntrance(7) {
                         SettingListItem(
                             icon = Tabler.Outline.Database,
-                            title = "Storage",
+                            title = "Downloads & Storage",
                             subtitle = "Cache: ${viewModel.cacheSizeMb} MB",
                             index = 0, count = 1,
                             highlighted = lastClickedSettingId == "storage",
