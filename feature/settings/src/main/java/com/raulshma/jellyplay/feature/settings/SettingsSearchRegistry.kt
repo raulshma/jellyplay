@@ -64,8 +64,7 @@ object SettingsSearchRegistry {
             category = "Appearance",
             keywords = listOf("pinned", "home", "collection", "playlist", "favorites", "genre", "studio", "shelf", "row"),
             route = Route.PinnedHomeSections(),
-            icon = Tabler.Outline.Pinned,
-            isAdvanced = true
+            icon = Tabler.Outline.Pinned
         ),
         SettingsSearchItem(
             id = "home_layout_presets",
@@ -74,8 +73,7 @@ object SettingsSearchRegistry {
             category = "Appearance",
             keywords = listOf("preset", "layout", "home", "save", "load", "import", "export", "share", "reset", "backup", "configuration"),
             route = Route.HomeLayoutPresets(),
-            icon = Tabler.Outline.Bookmarks,
-            isAdvanced = true
+            icon = Tabler.Outline.Bookmarks
         ),
         SettingsSearchItem(
             id = "date_format",

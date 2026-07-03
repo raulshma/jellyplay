@@ -248,6 +248,56 @@ fun LibraryScreen(
                                 errorMessage = error,
                                 modifier = Modifier.padding(start = 12.dp),
                             )
+                            if (isTv) {
+                                Spacer(modifier = Modifier.weight(1f))
+                                val filterFocusState = rememberTvFocusState(focusedScale = 1.05f)
+                                val filterInteractionSource = remember { MutableInteractionSource() }
+                                val isFilterPressed by filterInteractionSource.collectIsPressedAsState()
+                                val filterScale by animateFloatAsState(
+                                    targetValue = if (isFilterPressed) 0.95f else 1f,
+                                    animationSpec = spring(
+                                        dampingRatio = Spring.DampingRatioMediumBouncy,
+                                        stiffness = Spring.StiffnessMedium,
+                                    ),
+                                    label = "filterPressedScale"
+                                )
+                                val filterShape = ShapeCache.smooth12
+                                val isLight = LocalIsLightTheme.current
+                                val filterBg = if (isLight) Color.Black.copy(alpha = 0.06f) else Color.White.copy(alpha = 0.12f)
+                                
+                                Row(
+                                    modifier = Modifier
+                                        .graphicsLayer {
+                                            scaleX = filterScale * filterFocusState.scale
+                                            scaleY = filterScale * filterFocusState.scale
+                                        }
+                                        .clip(filterShape)
+                                        .background(filterBg)
+                                        .then(filterFocusState.focusModifier)
+                                        .tvFocusIndicator(filterFocusState, filterShape)
+                                        .clickable(
+                                            interactionSource = filterInteractionSource,
+                                            indication = null,
+                                            onClick = { viewModel.toggleShowFilters() }
+                                        )
+                                        .padding(horizontal = 14.dp, vertical = 8.dp),
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.spacedBy(6.dp)
+                                ) {
+                                    Icon(
+                                        Tabler.Outline.Filter,
+                                        contentDescription = "Filters",
+                                        modifier = Modifier.size(18.dp),
+                                        tint = MaterialTheme.colorScheme.onBackground
+                                    )
+                                    Text(
+                                        text = "Filters",
+                                        style = MaterialTheme.typography.labelLarge,
+                                        color = MaterialTheme.colorScheme.onBackground,
+                                        fontWeight = FontWeight.SemiBold
+                                    )
+                                }
+                            }
                         }
                     }
 
