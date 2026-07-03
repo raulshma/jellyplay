@@ -7,6 +7,20 @@ interface OfflineRepository {
     fun getOfflineLibrary(): Flow<List<OfflineMediaItem>>
     fun getSeasonsForSeries(seriesId: String): Flow<List<OfflineMediaItem>>
     fun getEpisodesForSeason(seasonId: String): Flow<List<OfflineMediaItem>>
+
+    /**
+     * Returns the single offline item for [id] as a reactive flow, with the
+     * matching download row joined (status/bytes/size/path). Used by the
+     * offline detail screen so it reflects download progress live.
+     */
+    fun getOfflineDetail(id: String): Flow<OfflineMediaItem?>
+
+    /**
+     * Returns the direct children of [parentId] (e.g. album tracks), with the
+     * matching download rows joined. Ordered by `indexNumber` ascending.
+     */
+    fun getChildren(parentId: String): Flow<List<OfflineMediaItem>>
+
     suspend fun getOfflineItem(id: String): OfflineMediaItem?
     fun getOfflineItemCount(): Flow<Int>
     suspend fun deleteOfflineItem(id: String)

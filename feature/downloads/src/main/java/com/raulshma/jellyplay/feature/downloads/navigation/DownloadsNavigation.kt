@@ -6,6 +6,7 @@ import com.raulshma.jellyplay.core.ui.navigation.Navigator
 import com.raulshma.jellyplay.core.ui.navigation.Route
 import com.raulshma.jellyplay.core.model.MediaType
 import com.raulshma.jellyplay.feature.downloads.DownloadsScreen
+import com.raulshma.jellyplay.feature.downloads.OfflineDetailScreen
 import com.raulshma.jellyplay.feature.downloads.OfflineLibraryScreen
 import com.raulshma.jellyplay.feature.downloads.OfflineSeriesScreen
 
@@ -28,16 +29,11 @@ fun EntryProviderScope<NavKey>.downloadsSection(
     }
     entry<Route.OfflineLibrary> {
         OfflineLibraryScreen(
-            onItemClick = { seriesId ->
+            onSeriesClick = { seriesId ->
                 navigator.navigate(Route.OfflineSeries(seriesId))
             },
-            onPlayOffline = { itemId, mediaType ->
-                val isAudio = mediaType == MediaType.AUDIO || mediaType == MediaType.MUSIC
-                if (isAudio) {
-                    navigator.navigate(Route.AudioPlayer(itemId))
-                } else {
-                    navigator.navigate(Route.VideoPlayer(itemId))
-                }
+            onItemClick = { itemId ->
+                navigator.navigate(Route.OfflineDetail(itemId))
             },
             onBack = { navigator.goBack() },
         )
@@ -47,6 +43,20 @@ fun EntryProviderScope<NavKey>.downloadsSection(
             seriesId = key.seriesId,
             onPlayOffline = { itemId ->
                 navigator.navigate(Route.VideoPlayer(itemId))
+            },
+            onBack = { navigator.goBack() },
+        )
+    }
+    entry<Route.OfflineDetail> { key ->
+        OfflineDetailScreen(
+            itemId = key.itemId,
+            onPlayOffline = { itemId, mediaType ->
+                val isAudio = mediaType == MediaType.AUDIO || mediaType == MediaType.MUSIC
+                if (isAudio) {
+                    navigator.navigate(Route.AudioPlayer(itemId))
+                } else {
+                    navigator.navigate(Route.VideoPlayer(itemId))
+                }
             },
             onBack = { navigator.goBack() },
         )

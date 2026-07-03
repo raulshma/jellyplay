@@ -1,6 +1,7 @@
 package com.raulshma.jellyplay.core.data.repository
 
 import com.raulshma.jellyplay.core.model.DownloadItem
+import com.raulshma.jellyplay.core.model.MediaDetail
 import com.raulshma.jellyplay.core.model.MediaItem
 import com.raulshma.jellyplay.core.model.TrickplayInfo
 import kotlinx.coroutines.flow.Flow
@@ -44,6 +45,14 @@ interface DownloadRepository {
     suspend fun getTotalDownloadedBytes(): Long
 
     suspend fun saveOfflineMediaItem(item: com.raulshma.jellyplay.core.model.MediaItem, imageUrl: String?, backdropUrl: String?)
+
+    /**
+     * Persist full metadata (overview, genres, ratings, cast, studios, …) for
+     * a downloaded item from a [MediaDetail]. Prefer this over
+     * [saveOfflineMediaItem] when rich metadata is available so the offline
+     * detail screens can show the same information as the online ones.
+     */
+    suspend fun saveOfflineMediaDetail(detail: MediaDetail, imageUrl: String?, backdropUrl: String?)
 
     suspend fun downloadSeries(
         seriesId: String,

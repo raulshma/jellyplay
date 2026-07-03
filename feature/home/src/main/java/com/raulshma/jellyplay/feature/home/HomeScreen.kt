@@ -140,6 +140,9 @@ data class HomeCallbacks(
     val onSyncPlayClick: () -> Unit = {},
     val onDownloadsClick: () -> Unit = {},
     val onOfflineLibraryClick: () -> Unit = {},
+    /** Open a specific downloaded item: series go to the offline series
+     *  browser, everything else to the offline detail screen. */
+    val onOfflineItemClick: (itemId: String, mediaType: com.raulshma.jellyplay.core.model.MediaType) -> Unit = { _, _ -> },
     val onSeerrItemClick: (tmdbId: Int, mediaType: String) -> Unit = { _, _ -> },
     val onModeChange: (HomeMode) -> Unit = {},
     val onSearchItemClick: (String) -> Unit = {},
@@ -485,6 +488,7 @@ private fun MainHomeContent(
                         OfflineHomeContent(
                             offlineLibrary = filteredOfflineLibrary,
                             onItemClick = callbacks.onOfflineLibraryClick,
+                            onOfflineItemClick = callbacks.onOfflineItemClick,
                             contentPadding = contentPad,
                             backgroundColor = backgroundColor,
                             onGoOnline = { viewModel.onEvent(HomeUiEvent.Refresh) },
@@ -511,6 +515,7 @@ private fun MainHomeContent(
                         OfflineHomeContent(
                             offlineLibrary = filteredOfflineLibrary,
                             onItemClick = callbacks.onOfflineLibraryClick,
+                            onOfflineItemClick = callbacks.onOfflineItemClick,
                             contentPadding = contentPad,
                             backgroundColor = backgroundColor,
                             onGoOnline = { viewModel.onEvent(HomeUiEvent.ToggleOfflineMode) },

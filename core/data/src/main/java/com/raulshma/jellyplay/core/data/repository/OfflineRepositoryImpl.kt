@@ -8,12 +8,14 @@ import com.raulshma.jellyplay.core.database.entity.OfflineMediaEntity
 import com.raulshma.jellyplay.core.model.DownloadStatus
 import com.raulshma.jellyplay.core.model.MediaType
 import com.raulshma.jellyplay.core.model.OfflineMediaItem
+import com.raulshma.jellyplay.core.model.OfflinePersonInfo
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.map
+import kotlinx.serialization.json.Json
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -30,6 +32,43 @@ class OfflineRepositoryImpl @Inject constructor(
     private val downloadDao: DownloadDao,
     private val database: JellyPlayDatabase,
 ) : OfflineRepository {
+
+    override fun getOfflineDetail(id: String): Flow<OfflineMediaItem?> =
+        offlineMediaDao.getByIdFlow(id).flatMapLatest { entity ->
+            if (entity == null) {
+                flowOf(null)
+            } else {
+                downloadDao.getDownloadByMediaItemIdFlow(id).map { download ->
+                    entity.toOfflineMediaItem().copy(
+                        downloadPath = download?.downloadPath,
+                        downloadStatus = download?.status?.let { safeDownloadStatusOf(it) },
+                        downloadedBytes = download?.downloadedBytes ?: 0L,
+                        totalSizeBytes = download?.totalSizeBytes ?: 0L,
+                    )
+                }
+            }
+        }.distinctUntilChanged()
+
+    override fun getChildren(parentId: String): Flow<List<OfflineMediaItem>> =
+        offlineMediaDao.getChildrenByParent(parentId).flatMapLatest { children ->
+            val ids = children.map { it.id }
+            if (ids.isEmpty()) {
+                flowOf(emptyList())
+            } else {
+                downloadDao.getDownloadsByMediaItemIdsFlow(ids).map { downloads ->
+                    val downloadMap = downloads.associateBy { it.mediaItemId }
+                    children.map { entity ->
+                        val download = downloadMap[entity.id]
+                        entity.toOfflineMediaItem().copy(
+                            downloadPath = download?.downloadPath,
+                            downloadStatus = download?.status?.let { safeDownloadStatusOf(it) },
+                            downloadedBytes = download?.downloadedBytes ?: 0L,
+                            totalSizeBytes = download?.totalSizeBytes ?: 0L,
+                        )
+                    }
+                }
+            }
+        }.distinctUntilChanged()
 
     override fun getOfflineLibrary(): Flow<List<OfflineMediaItem>> =
         offlineMediaDao.getTopLevelItems().flatMapLatest { entities ->
@@ -203,5 +242,32 @@ class OfflineRepositoryImpl @Inject constructor(
         playedPercentage = playedPercentage,
         isPlayed = isPlayed,
         lastPlayedDate = lastPlayedDate,
+        originalTitle = originalTitle,
+        criticRating = criticRating,
+        studios = studios?.split(",")
+            ?.map { it.trim() }
+            ?.filter { it.isNotEmpty() } ?: emptyList(),
+        tagline = tagline,
+        cast = decodeCast(peopleJson),
+        createdAt = createdAt,
     )
 }
+
+/** Reusable lenient Json for (de)serializing the offline cast JSON column. */
+internal val offlineJson: Json = Json {
+    ignoreUnknownKeys = true
+    encodeDefaults = true
+}
+
+/** Decodes a [peopleJson] blob into a cast list, tolerating null/garbage rows. */
+private fun decodeCast(peopleJson: String?): List<OfflinePersonInfo> {
+    if (peopleJson.isNullOrBlank()) return emptyList()
+    return runCatching {
+        offlineJson.decodeFromString<List<OfflinePersonInfo>>(peopleJson)
+    }.getOrDefault(emptyList())
+}
+
+/** Encodes a cast list into the persisted JSON column form. */
+internal fun encodeCast(people: List<OfflinePersonInfo>): String =
+    offlineJson.encodeToString(people)
+
