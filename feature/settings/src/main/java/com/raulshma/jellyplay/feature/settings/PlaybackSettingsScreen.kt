@@ -133,7 +133,7 @@ sealed class PlaybackSettingsDialog {
     object TvZoomModePicker : PlaybackSettingsDialog()
 }
 
-@OptIn(ExperimentalMaterial3Api::class, androidx.compose.material3.ExperimentalMaterial3ExpressiveApi::class)
+@OptIn(ExperimentalMaterial3Api::class, androidx.compose.material3.ExperimentalMaterial3ExpressiveApi::class, androidx.compose.foundation.ExperimentalFoundationApi::class)
 @Composable
 fun PlaybackSettingsScreen(
     onBack: () -> Unit,
@@ -155,14 +155,46 @@ fun PlaybackSettingsScreen(
     )
 
     val scrollState = rememberLazyListState()
-    val scrollIndex = remember(highlightSettingId) {
+    val scrollIndex = remember(highlightSettingId, showAdvanced) {
+        val playerGroup = listOf(
+            "player_engine", "seek_duration", "orientation", "gestures", "default_speed", "hold_speed",
+            "hold_speed_multiplier", "default_aspect", "video_autoplay_next", "autoplay_countdown",
+            "controls_timeout", "skip_back_on_resume", "pass_out_protection", "autoplay_trailers",
+            "cinema_mode", "android_tv_watch_next", "tv_zoom_mode", "episode_browser", "playback_metadata",
+            "swipe_seek_range", "remember_brightness", "default_brightness_level", "trickplay_preview",
+            "trickplay_on_gestures", "preload_buffer", "background_audio", "keep_screen_on", "incognito_mode",
+            "show_time_remaining", "show_clock_player", "pause_on_focus_loss", "duck_on_transient_focus_loss",
+        )
+        val advancedVideo = listOf(
+            "dialogue_boost", "decoder", "audio_passthrough", "frame_rate_matching",
+            "streaming_quality", "audio_delay",
+        )
+        val engineConfig = listOf(
+            "mpv_video_output", "mpv_scaler", "mpv_debanding", "mpv_interpolation", "mpv_audio_output",
+            "mpv_audio_fallback", "mpv_buffer_size", "mpv_hwdec_override", "mpv_skip_loop_filter", "mpv_frame_drop",
+            "vlc_audio_output", "vlc_audio_time_stretch", "vlc_video_output", "vlc_network_caching",
+            "vlc_skip_loop_filter", "vlc_skip_frames", "vlc_decoder_threads", "vlc_drop_late_frames",
+            "exo_video_scaling", "exo_frame_rate_strategy", "exo_skip_silence", "exo_audio_offload",
+            "exo_decoder_fallback", "exo_back_buffer", "exo_preferred_codecs",
+        )
+        val syncPlay = listOf("syncplay_join_behavior", "syncplay_tolerance", "syncplay_auto_accept_invites")
+        val casting = listOf("casting_strategy", "background_casting", "preferred_renderer")
+        val dvr = listOf("dvr_pre_padding", "dvr_post_padding", "dvr_recording_quality")
         when (highlightSettingId) {
-            in listOf("player_engine", "seek_duration", "orientation", "gestures", "default_speed", "default_aspect", "video_autoplay_next", "autoplay_countdown") -> 0
-            in listOf("dialogue_boost", "decoder", "audio_passthrough", "frame_rate_matching", "streaming_quality", "audio_delay") -> 1
+            in playerGroup -> 0
+            in advancedVideo -> if (showAdvanced) 1 else -1
+            in engineConfig -> if (showAdvanced) 2 else 1
+            in syncPlay -> if (showAdvanced) 4 else 3
+            in casting -> if (showAdvanced) 5 else 4
+            in dvr -> if (showAdvanced) 6 else 5
             else -> -1
         }
     }
 
+    // Phase 1 (coarse): scroll the containing group into the LazyColumn's composition window so the
+    // target item is actually composed — items in off-screen groups (later sections) are otherwise
+    // never mounted and their bringIntoViewRequester has no target. Phase 2 (centering) is then
+    // performed by the highlighted item itself via CenterBringIntoViewSpec.
     LaunchedEffect(scrollIndex) {
         if (scrollIndex >= 0) {
             try {
@@ -182,6 +214,12 @@ fun PlaybackSettingsScreen(
             )
         },
     ) { innerPadding ->
+        // Center a highlighted (search-navigated) setting in the viewport instead of parking it
+        // at the bottom edge, which is the default BringIntoViewSpec behaviour.
+        androidx.compose.runtime.CompositionLocalProvider(
+            androidx.compose.foundation.gestures.LocalBringIntoViewSpec provides
+                com.raulshma.jellyplay.core.ui.tv.CenterBringIntoViewSpec
+        ) {
         LazyColumn(
             state = scrollState,
             modifier = Modifier
@@ -408,6 +446,7 @@ fun PlaybackSettingsScreen(
                             title = "Default Brightness Level",
                             subtitle = "Default screen brightness for video playback",
                             trailingText = "${(preferences.videoBrightnessLevel * 100).toInt()}%",
+                            highlighted = highlightSettingId == "default_brightness_level",
                             index = idx++, count = total,
                             onClick = { activeDialog = PlaybackSettingsDialog.BrightnessPicker },
                         )
@@ -425,6 +464,7 @@ fun PlaybackSettingsScreen(
                             title = "Trickplay on Gestures",
                             subtitle = if (preferences.trickplayOnSeekGesture) "Show thumbnails during swipe seek" else "No thumbnails during seek",
                             checked = preferences.trickplayOnSeekGesture,
+                            highlighted = highlightSettingId == "trickplay_on_gestures",
                             index = idx++, count = total,
                             onCheckedChange = { viewModel.setTrickplayOnSeekGesture(it) },
                         )
@@ -469,6 +509,7 @@ fun PlaybackSettingsScreen(
                             title = "Show Time Remaining",
                             subtitle = if (preferences.showTimeRemaining) "Display remaining time instead of elapsed time" else "Display elapsed time",
                             checked = preferences.showTimeRemaining,
+                            highlighted = highlightSettingId == "show_time_remaining",
                             index = idx++, count = total,
                             onCheckedChange = { viewModel.setShowTimeRemaining(it) },
                         )
@@ -486,6 +527,7 @@ fun PlaybackSettingsScreen(
                             title = "Pause on Focus Loss",
                             subtitle = if (preferences.pauseOnAudioFocusLoss) "Pause playback when system reports focus loss" else "Continue playback on focus loss",
                             checked = preferences.pauseOnAudioFocusLoss,
+                            highlighted = highlightSettingId == "pause_on_focus_loss",
                             index = idx, count = total,
                             onCheckedChange = { viewModel.setPauseOnAudioFocusLoss(it) },
                         )
@@ -494,6 +536,7 @@ fun PlaybackSettingsScreen(
                             title = "Duck on Phone Call",
                             subtitle = if (preferences.duckOnTransientFocusLoss) "Lower volume + rewind on phone call" else "No action on phone call",
                             checked = preferences.duckOnTransientFocusLoss,
+                            highlighted = highlightSettingId == "duck_on_transient_focus_loss",
                             index = idx++, count = total,
                             onCheckedChange = { viewModel.setDuckOnTransientFocusLoss(it) },
                         )
@@ -611,6 +654,14 @@ fun PlaybackSettingsScreen(
                     title = "Engine Config",
                     summary = { preferences.preferredPlayer.displayName },
                     modifier = Modifier.padding(vertical = 8.dp),
+                    initiallyExpanded = highlightSettingId in listOf(
+                        "mpv_video_output", "mpv_scaler", "mpv_debanding", "mpv_interpolation", "mpv_audio_output",
+                        "mpv_audio_fallback", "mpv_buffer_size", "mpv_hwdec_override", "mpv_skip_loop_filter", "mpv_frame_drop",
+                        "vlc_audio_output", "vlc_audio_time_stretch", "vlc_video_output", "vlc_network_caching",
+                        "vlc_skip_loop_filter", "vlc_skip_frames", "vlc_decoder_threads", "vlc_drop_late_frames",
+                        "exo_video_scaling", "exo_frame_rate_strategy", "exo_skip_silence", "exo_audio_offload",
+                        "exo_decoder_fallback", "exo_back_buffer", "exo_preferred_codecs",
+                    ),
                 ) {
                     when (preferences.preferredPlayer) {
                         PlayerType.MPV -> {
@@ -624,6 +675,7 @@ fun PlaybackSettingsScreen(
                                 title = "Video Output",
                                 subtitle = "${mpvCfg.videoOutput.displayName} (${mpvCfg.videoOutput.key})",
                                 trailingText = mpvCfg.videoOutput.key,
+                                highlighted = highlightSettingId == "mpv_video_output",
                                 index = mpvIdx++, count = mpvTotal,
                                 onClick = { activeDialog = PlaybackSettingsDialog.MpvVideoOutputPicker },
                             )
@@ -632,6 +684,7 @@ fun PlaybackSettingsScreen(
                                 title = "Scaler",
                                 subtitle = "${mpvCfg.scaler.displayName} (${mpvCfg.scaler.key})",
                                 trailingText = mpvCfg.scaler.key,
+                                highlighted = highlightSettingId == "mpv_scaler",
                                 index = mpvIdx++, count = mpvTotal,
                                 onClick = { activeDialog = PlaybackSettingsDialog.MpvScalerPicker },
                             )
@@ -640,6 +693,7 @@ fun PlaybackSettingsScreen(
                                 title = "Debanding",
                                 subtitle = if (mpvCfg.deband) "GPU debanding enabled" else "No debanding",
                                 checked = mpvCfg.deband,
+                                highlighted = highlightSettingId == "mpv_debanding",
                                 index = mpvIdx++, count = mpvTotal,
                                 onCheckedChange = { viewModel.setMpvConfig(mpvCfg.copy(deband = it)) },
                             )
@@ -648,6 +702,7 @@ fun PlaybackSettingsScreen(
                                 title = "Interpolation",
                                 subtitle = if (mpvCfg.interpolation) "Smooth motion for mixed FPS" else "No frame interpolation",
                                 checked = mpvCfg.interpolation,
+                                highlighted = highlightSettingId == "mpv_interpolation",
                                 index = mpvIdx++, count = mpvTotal,
                                 onCheckedChange = { viewModel.setMpvConfig(mpvCfg.copy(interpolation = it)) },
                             )
@@ -656,6 +711,7 @@ fun PlaybackSettingsScreen(
                                 title = "Audio Output",
                                 subtitle = "${mpvCfg.audioOutput.displayName} (${mpvCfg.audioOutput.key})",
                                 trailingText = mpvCfg.audioOutput.key,
+                                highlighted = highlightSettingId == "mpv_audio_output",
                                 index = mpvIdx++, count = mpvTotal,
                                 onClick = { activeDialog = PlaybackSettingsDialog.MpvAudioOutputPicker },
                             )
@@ -664,6 +720,7 @@ fun PlaybackSettingsScreen(
                                 title = "Audio Fallback",
                                 subtitle = mpvCfg.audioFallback?.displayName ?: "None",
                                 trailingText = mpvCfg.audioFallback?.key ?: "None",
+                                highlighted = highlightSettingId == "mpv_audio_fallback",
                                 index = mpvIdx++, count = mpvTotal,
                                 onClick = { activeDialog = PlaybackSettingsDialog.MpvAudioFallbackPicker },
                             )
@@ -672,6 +729,7 @@ fun PlaybackSettingsScreen(
                                 title = "Buffer Size",
                                 subtitle = "${mpvCfg.demuxerMaxBytes.displayName} (${mpvCfg.demuxerMaxBytes.key})",
                                 trailingText = mpvCfg.demuxerMaxBytes.key,
+                                highlighted = highlightSettingId == "mpv_buffer_size",
                                 index = mpvIdx++, count = mpvTotal,
                                 onClick = { activeDialog = PlaybackSettingsDialog.MpvDemuxerPicker },
                             )
@@ -680,6 +738,7 @@ fun PlaybackSettingsScreen(
                                 title = "HW Dec Override",
                                 subtitle = mpvCfg.hwdecOverride?.displayName ?: "Use universal setting",
                                 trailingText = mpvCfg.hwdecOverride?.key ?: "Auto",
+                                highlighted = highlightSettingId == "mpv_hwdec_override",
                                 index = mpvIdx++, count = mpvTotal,
                                 onClick = { activeDialog = PlaybackSettingsDialog.MpvHwdecPicker },
                             )
@@ -688,6 +747,7 @@ fun PlaybackSettingsScreen(
                                 title = "Skip Loop Filter",
                                 subtitle = "${mpvCfg.skipLoopFilter.displayName} (${mpvCfg.skipLoopFilter.key})",
                                 trailingText = mpvCfg.skipLoopFilter.key,
+                                highlighted = highlightSettingId == "mpv_skip_loop_filter",
                                 index = mpvIdx++, count = mpvTotal,
                                 onClick = { activeDialog = PlaybackSettingsDialog.MpvSkipLoopFilterPicker },
                             )
@@ -696,6 +756,7 @@ fun PlaybackSettingsScreen(
                                 title = "Frame Drop",
                                 subtitle = "${mpvCfg.frameDrop.displayName} (${mpvCfg.frameDrop.key})",
                                 trailingText = mpvCfg.frameDrop.key,
+                                highlighted = highlightSettingId == "mpv_frame_drop",
                                 index = mpvIdx++, count = mpvTotal,
                                 onClick = { activeDialog = PlaybackSettingsDialog.MpvFrameDropPicker },
                             )
@@ -718,6 +779,7 @@ fun PlaybackSettingsScreen(
                                 title = "Audio Output",
                                 subtitle = "${vlcCfg.audioOutput.displayName} (${vlcCfg.audioOutput.key})",
                                 trailingText = vlcCfg.audioOutput.key,
+                                highlighted = highlightSettingId == "vlc_audio_output",
                                 index = vlcIdx++, count = vlcTotal,
                                 onClick = { activeDialog = PlaybackSettingsDialog.VlcAudioOutputPicker },
                             )
@@ -726,6 +788,7 @@ fun PlaybackSettingsScreen(
                                 title = "Audio Time Stretch",
                                 subtitle = if (vlcCfg.audioTimeStretch) "Pitch-corrected speed change" else "Speed changes affect pitch",
                                 checked = vlcCfg.audioTimeStretch,
+                                highlighted = highlightSettingId == "vlc_audio_time_stretch",
                                 index = vlcIdx++, count = vlcTotal,
                                 onCheckedChange = { viewModel.setLibVlcConfig(vlcCfg.copy(audioTimeStretch = it)) },
                             )
@@ -734,6 +797,7 @@ fun PlaybackSettingsScreen(
                                 title = "Video Output",
                                 subtitle = "${vlcCfg.videoOutput.displayName} (${vlcCfg.videoOutput.key})",
                                 trailingText = vlcCfg.videoOutput.key,
+                                highlighted = highlightSettingId == "vlc_video_output",
                                 index = vlcIdx++, count = vlcTotal,
                                 onClick = { activeDialog = PlaybackSettingsDialog.VlcVideoOutputPicker },
                             )
@@ -742,6 +806,7 @@ fun PlaybackSettingsScreen(
                                 title = "Network Caching",
                                 subtitle = if (vlcCfg.networkCaching == 0) "Auto (device-based)" else "${vlcCfg.networkCaching}ms",
                                 trailingText = if (vlcCfg.networkCaching == 0) "Auto" else "${vlcCfg.networkCaching}ms",
+                                highlighted = highlightSettingId == "vlc_network_caching",
                                 index = vlcIdx++, count = vlcTotal,
                                 onClick = { activeDialog = PlaybackSettingsDialog.VlcNetworkCachingPicker },
                             )
@@ -750,6 +815,7 @@ fun PlaybackSettingsScreen(
                                 title = "Skip Loop Filter",
                                 subtitle = vlcSkipLoopFilterLabel(vlcCfg.skipLoopFilter),
                                 trailingText = "Level ${vlcCfg.skipLoopFilter}",
+                                highlighted = highlightSettingId == "vlc_skip_loop_filter",
                                 index = vlcIdx++, count = vlcTotal,
                                 onClick = { activeDialog = PlaybackSettingsDialog.VlcSkipLoopFilterPicker },
                             )
@@ -758,6 +824,7 @@ fun PlaybackSettingsScreen(
                                 title = "Skip Frames",
                                 subtitle = if (vlcCfg.skipFrames) "Enable frame skipping" else "No frame skipping",
                                 checked = vlcCfg.skipFrames,
+                                highlighted = highlightSettingId == "vlc_skip_frames",
                                 index = vlcIdx++, count = vlcTotal,
                                 onCheckedChange = { viewModel.setLibVlcConfig(vlcCfg.copy(skipFrames = it)) },
                                 onClick = { activeDialog = PlaybackSettingsDialog.VlcSkipFramePicker },
@@ -767,6 +834,7 @@ fun PlaybackSettingsScreen(
                                 title = "Decoder Threads",
                                 subtitle = if (vlcCfg.decoderThreads == 0) "Auto" else "${vlcCfg.decoderThreads} threads",
                                 trailingText = if (vlcCfg.decoderThreads == 0) "Auto" else "${vlcCfg.decoderThreads}",
+                                highlighted = highlightSettingId == "vlc_decoder_threads",
                                 index = vlcIdx++, count = vlcTotal,
                                 onClick = { activeDialog = PlaybackSettingsDialog.VlcDecoderThreadsPicker },
                             )
@@ -775,6 +843,7 @@ fun PlaybackSettingsScreen(
                                 title = "Drop Late Frames",
                                 subtitle = if (vlcCfg.dropLateFrames) "Discard delayed frames" else "Display all frames",
                                 checked = vlcCfg.dropLateFrames,
+                                highlighted = highlightSettingId == "vlc_drop_late_frames",
                                 index = vlcIdx++, count = vlcTotal,
                                 onCheckedChange = { viewModel.setLibVlcConfig(vlcCfg.copy(dropLateFrames = it)) },
                             )
@@ -797,6 +866,7 @@ fun PlaybackSettingsScreen(
                                 title = "Video Scaling",
                                 subtitle = "${exoCfg.videoScalingMode.displayName} (${exoCfg.videoScalingMode.key})",
                                 trailingText = exoCfg.videoScalingMode.key,
+                                highlighted = highlightSettingId == "exo_video_scaling",
                                 index = exoIdx++, count = exoTotal,
                                 onClick = { activeDialog = PlaybackSettingsDialog.ExoScalingPicker },
                             )
@@ -805,6 +875,7 @@ fun PlaybackSettingsScreen(
                                 title = "Frame Rate Strategy",
                                 subtitle = "${exoCfg.frameRateStrategy.displayName} (${exoCfg.frameRateStrategy.key})",
                                 trailingText = exoCfg.frameRateStrategy.key,
+                                highlighted = highlightSettingId == "exo_frame_rate_strategy",
                                 index = exoIdx++, count = exoTotal,
                                 onClick = { activeDialog = PlaybackSettingsDialog.ExoFrameRatePicker },
                             )
@@ -813,6 +884,7 @@ fun PlaybackSettingsScreen(
                                 title = "Skip Silence",
                                 subtitle = if (exoCfg.skipSilence) "Skip silent sections" else "Play all audio",
                                 checked = exoCfg.skipSilence,
+                                highlighted = highlightSettingId == "exo_skip_silence",
                                 index = exoIdx++, count = exoTotal,
                                 onCheckedChange = { viewModel.setExoPlayerConfig(exoCfg.copy(skipSilence = it)) },
                             )
@@ -821,6 +893,7 @@ fun PlaybackSettingsScreen(
                                 title = "Audio Offload",
                                 subtitle = "${exoCfg.audioOffloadMode.displayName} (${exoCfg.audioOffloadMode.key})",
                                 trailingText = exoCfg.audioOffloadMode.key,
+                                highlighted = highlightSettingId == "exo_audio_offload",
                                 index = exoIdx++, count = exoTotal,
                                 onClick = { activeDialog = PlaybackSettingsDialog.ExoAudioOffloadPicker },
                             )
@@ -829,6 +902,7 @@ fun PlaybackSettingsScreen(
                                 title = "Decoder Fallback",
                                 subtitle = if (exoCfg.enableDecoderFallback) "Fallback to secondary decoders" else "Primary decoder only",
                                 checked = exoCfg.enableDecoderFallback,
+                                highlighted = highlightSettingId == "exo_decoder_fallback",
                                 index = exoIdx++, count = exoTotal,
                                 onCheckedChange = { viewModel.setExoPlayerConfig(exoCfg.copy(enableDecoderFallback = it)) },
                             )
@@ -837,6 +911,7 @@ fun PlaybackSettingsScreen(
                                 title = "Back Buffer",
                                 subtitle = if (exoCfg.backBufferDurationMs == 0) "Disabled" else "${exoCfg.backBufferDurationMs / 1000}s buffer",
                                 trailingText = if (exoCfg.backBufferDurationMs == 0) "Off" else "${exoCfg.backBufferDurationMs / 1000}s",
+                                highlighted = highlightSettingId == "exo_back_buffer",
                                 index = exoIdx++, count = exoTotal,
                                 onClick = { activeDialog = PlaybackSettingsDialog.ExoBackBufferPicker },
                             )
@@ -845,6 +920,7 @@ fun PlaybackSettingsScreen(
                                 title = "Preferred Codecs",
                                 subtitle = if (exoCfg.preferredVideoMimeTypes.isEmpty()) "All codecs" else exoCfg.preferredVideoMimeTypes.joinToString(", "),
                                 trailingText = if (exoCfg.preferredVideoMimeTypes.isEmpty()) "All" else "Custom",
+                                highlighted = highlightSettingId == "exo_preferred_codecs",
                                 index = exoIdx++, count = exoTotal,
                                 onClick = { activeDialog = PlaybackSettingsDialog.ExoCodecPicker },
                             )
@@ -901,6 +977,7 @@ fun PlaybackSettingsScreen(
                     title = "SyncPlay",
                     summary = { "Join behavior: ${preferences.syncPlayJoinBehavior.displayName}" },
                     modifier = Modifier.padding(vertical = 8.dp),
+                    initiallyExpanded = highlightSettingId in listOf("syncplay_join_behavior", "syncplay_tolerance", "syncplay_auto_accept_invites"),
                 ) {
                     val syncTotal = 3
                     var syncIdx = 0
@@ -910,6 +987,7 @@ fun PlaybackSettingsScreen(
                         title = "Join Behavior",
                         subtitle = "Action when joining a SyncPlay group",
                         trailingText = preferences.syncPlayJoinBehavior.displayName,
+                        highlighted = highlightSettingId == "syncplay_join_behavior",
                         index = syncIdx++, count = syncTotal,
                         onClick = { activeDialog = PlaybackSettingsDialog.SyncPlayJoinBehaviorPicker },
                     )
@@ -919,6 +997,7 @@ fun PlaybackSettingsScreen(
                         title = "Sync Tolerance",
                         subtitle = "Allowed drift before correcting playback",
                         trailingText = "${preferences.syncPlayToleranceMs}ms",
+                        highlighted = highlightSettingId == "syncplay_tolerance",
                         index = syncIdx++, count = syncTotal,
                         onClick = { activeDialog = PlaybackSettingsDialog.SyncPlayTolerancePicker },
                     )
@@ -928,6 +1007,7 @@ fun PlaybackSettingsScreen(
                         title = "Auto-Accept Invites",
                         subtitle = "Automatically accept SyncPlay invites from friends",
                         checked = preferences.syncPlayAutoAcceptInvites,
+                        highlighted = highlightSettingId == "syncplay_auto_accept_invites",
                         index = syncIdx++, count = syncTotal,
                         onCheckedChange = { viewModel.setSyncPlayAutoAcceptInvites(it) },
                     )
@@ -940,6 +1020,7 @@ fun PlaybackSettingsScreen(
                     title = "Casting & DLNA",
                     summary = { "Strategy: ${preferences.defaultCastingStrategy.displayName}" },
                     modifier = Modifier.padding(vertical = 8.dp),
+                    initiallyExpanded = highlightSettingId in listOf("casting_strategy", "background_casting", "preferred_renderer"),
                 ) {
                     val castTotal = 3
                     var castIdx = 0
@@ -949,6 +1030,7 @@ fun PlaybackSettingsScreen(
                         title = "Casting Strategy",
                         subtitle = "Preferred method for big screen streaming",
                         trailingText = preferences.defaultCastingStrategy.displayName,
+                        highlighted = highlightSettingId == "casting_strategy",
                         index = castIdx++, count = castTotal,
                         onClick = { activeDialog = PlaybackSettingsDialog.CastingStrategyPicker },
                     )
@@ -958,6 +1040,7 @@ fun PlaybackSettingsScreen(
                         title = "Background Casting",
                         subtitle = "Keep casting active when app is closed",
                         checked = preferences.backgroundCastingEnabled,
+                        highlighted = highlightSettingId == "background_casting",
                         index = castIdx++, count = castTotal,
                         onCheckedChange = { viewModel.setBackgroundCastingEnabled(it) },
                     )
@@ -968,6 +1051,7 @@ fun PlaybackSettingsScreen(
                         title = "Preferred Renderer",
                         subtitle = "Device to target by default when casting (click to toggle)",
                         trailingText = rendererText,
+                        highlighted = highlightSettingId == "preferred_renderer",
                         index = castIdx++, count = castTotal,
                         onClick = {
                             if (preferences.preferredRenderer != null) {
@@ -986,6 +1070,7 @@ fun PlaybackSettingsScreen(
                     title = "Live TV & DVR",
                     summary = { "Padding: +${preferences.dvrPrePaddingMinutes}m / -${preferences.dvrPostPaddingMinutes}m" },
                     modifier = Modifier.padding(vertical = 8.dp),
+                    initiallyExpanded = highlightSettingId in listOf("dvr_pre_padding", "dvr_post_padding", "dvr_recording_quality"),
                 ) {
                     val dvrTotal = 3
                     var dvrIdx = 0
@@ -995,6 +1080,7 @@ fun PlaybackSettingsScreen(
                         title = "DVR Pre-Padding",
                         subtitle = "Start recording before scheduled time",
                         trailingText = "${preferences.dvrPrePaddingMinutes} min",
+                        highlighted = highlightSettingId == "dvr_pre_padding",
                         index = dvrIdx++, count = dvrTotal,
                         onClick = { activeDialog = PlaybackSettingsDialog.DvrPrePaddingPicker },
                     )
@@ -1004,6 +1090,7 @@ fun PlaybackSettingsScreen(
                         title = "DVR Post-Padding",
                         subtitle = "Extend recording after scheduled end time",
                         trailingText = "${preferences.dvrPostPaddingMinutes} min",
+                        highlighted = highlightSettingId == "dvr_post_padding",
                         index = dvrIdx++, count = dvrTotal,
                         onClick = { activeDialog = PlaybackSettingsDialog.DvrPostPaddingPicker },
                     )
@@ -1013,6 +1100,7 @@ fun PlaybackSettingsScreen(
                         title = "DVR Recording Quality",
                         subtitle = "Default video quality for DVR recordings",
                         trailingText = preferences.dvrRecordingQuality,
+                        highlighted = highlightSettingId == "dvr_recording_quality",
                         index = dvrIdx++, count = dvrTotal,
                         onClick = { activeDialog = PlaybackSettingsDialog.DvrRecordingQualityPicker },
                     )
@@ -1027,6 +1115,7 @@ fun PlaybackSettingsScreen(
                     )
                 }
             }
+        }
         }
     }
 

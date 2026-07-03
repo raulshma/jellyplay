@@ -70,7 +70,7 @@ import androidx.compose.ui.res.stringResource
 import com.raulshma.jellyplay.feature.settings.R
 import java.util.Date
 
-@OptIn(ExperimentalMaterial3Api::class)
+@OptIn(ExperimentalMaterial3Api::class, androidx.compose.foundation.ExperimentalFoundationApi::class)
 @Composable
 fun HomeLayoutPresetsScreen(
     onBack: () -> Unit,
@@ -100,6 +100,12 @@ fun HomeLayoutPresetsScreen(
         onBack = onBack,
         backgroundColor = backgroundColor,
     ) { innerPadding ->
+        // Center a highlighted (search-navigated) setting in the viewport instead of parking it
+        // at the bottom edge, which is the default BringIntoViewSpec behaviour.
+        androidx.compose.runtime.CompositionLocalProvider(
+            androidx.compose.foundation.gestures.LocalBringIntoViewSpec provides
+                com.raulshma.jellyplay.core.ui.tv.CenterBringIntoViewSpec
+        ) {
         LazyColumn(
             state = scrollState,
             modifier = Modifier
@@ -189,6 +195,7 @@ fun HomeLayoutPresetsScreen(
                     }
                 }
             }
+        }
         }
     }
 

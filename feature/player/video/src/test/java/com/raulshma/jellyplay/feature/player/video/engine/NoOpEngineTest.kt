@@ -37,7 +37,6 @@ class NoOpEngineTest {
         assertEquals(0L, engine.currentPositionMs)
         assertEquals(0L, engine.durationMs)
         assertTrue(engine.availableTracks.value.isEmpty())
-        assertTrue(engine.currentCues.value.isEmpty())
         assertEquals(0L, engine.bufferedPositionMs.value)
     }
 
@@ -79,7 +78,7 @@ class NoOpEngineTest {
         engine.seekTo(1_000L)
         engine.setPlaybackSpeed(2f)
         engine.updateConfig(EngineConfig())
-        engine.selectTrack(TrackType.AUDIO, 0, null)
+        engine.selectTrack(TrackType.AUDIO, 0)
         engine.setMaxVideoBitrate(1_000)
         engine.setPollingIntervalMs(500L)
         engine.setVideoStatsEnabled(true)

@@ -13,6 +13,8 @@ import androidx.media3.common.Player
 import androidx.media3.common.util.UnstableApi
 import androidx.media3.session.MediaSession
 import com.raulshma.jellyplay.core.data.playback.PlaybackSessionManager
+import com.raulshma.jellyplay.core.data.playback.PipAction
+import com.raulshma.jellyplay.core.data.playback.PipTransport
 import com.raulshma.jellyplay.core.data.playback.PlayerLifecycleManager
 import com.raulshma.jellyplay.core.data.playback.SleepTimerManager
 import com.raulshma.jellyplay.core.data.playback.VideoMiniPlayerState
@@ -225,6 +227,18 @@ class VideoPlayerViewModel @Inject constructor(
             am?.let { it.isLowRamDevice || it.memoryClass <= 256 } ?: false
         },
     )
+    private val subtitleManager = SubtitleManager(
+        context = context,
+        playbackRepository = playbackRepository,
+        mediaRepository = mediaRepository,
+        userMessageBus = userMessageBus,
+        scope = scope,
+        addExternalSubtitle = { playerSessionManager.addExternalSubtitle(it) },
+        getUiState = { _uiState.value },
+        updateUiState = { transform -> _uiState.update(transform) },
+        getCurrentItemId = { playerSessionManager.sessionState.value.currentItemId },
+        onMediaDetailRefreshed = { detail -> applyMediaDetailAndSourceState(detail) },
+    )
     private var videoMediaSession: MediaSession? = null
     private var becomingNoisyReceiver: android.content.BroadcastReceiver? = null
     private var transientAudioFocusRequest: android.media.AudioFocusRequest? = null
@@ -387,6 +401,11 @@ class VideoPlayerViewModel @Inject constructor(
         },
         onWatchedThresholdReached = { itemId ->
             handleSmartDownloadCleanup(itemId)
+            // Mark the offline copy as fully watched so its row shows the
+            // watched state. No-op for non-downloaded items.
+            launch {
+                offlineRepository.updatePlaybackProgress(itemId, positionTicks = null, percentage = 100.0, isPlayed = true)
+            }
         },
         onPositionPersisted = { positionMs -> persistPlaybackPosition(positionMs, force = false) },
         onEnginePositionUpdate = { positionMs, durationMs, bufferedPositionMs, videoStats ->
@@ -473,6 +492,25 @@ class VideoPlayerViewModel @Inject constructor(
 
     init {
         castManager.acquireConsumer()
+        // Register the PiP transport bridge so the Activity can dispatch PiP
+        // remote-action intents (play/pause/skip/next) to the active engine
+        //. Cleared on reset() when playback ends.
+        playerLifecycleManager.pipTransport = PipTransport { action ->
+            val engine = playerSessionManager.engine ?: return@PipTransport
+            when (action) {
+                PipAction.PLAY -> engine.play()
+                PipAction.PAUSE -> engine.pause()
+                PipAction.SKIP_FORWARD -> {
+                    val skip = _uiState.value.seekDurationMs
+                    seekTo((engine.currentPositionMs + skip).coerceAtLeast(0L))
+                }
+                PipAction.SKIP_BACKWARD -> {
+                    val skip = _uiState.value.seekDurationMs
+                    seekTo((engine.currentPositionMs - skip).coerceAtLeast(0L))
+                }
+                PipAction.NEXT -> playNextEpisode()
+            }
+        }
         launch {
             preferencesStore.preferences.collect { prefs ->
                 val oldPrefs = cachedPreferences
@@ -556,6 +594,8 @@ class VideoPlayerViewModel @Inject constructor(
             playerSessionManager.engineFlow.collect { engine ->
                 engineJob?.cancel()
                 if (engine != null) {
+                    // Expose whether a "next" action is available for the PiP window.
+                    playerLifecycleManager.pipHasNext = mediaDetail?.item?.seriesId != null
                     engineJob = launch {
                         val wasPlaying = booleanArrayOf(false)
                         engine.isPlaying.collect { playing ->
@@ -658,12 +698,22 @@ class VideoPlayerViewModel @Inject constructor(
         // state so the track sheets can show the series-pref toggle state.
         launch {
             playbackPreferenceResolver.resolved.collect { pref ->
+                // Dialogue Boost is resolved per-item: a stored rule
+                // pins the strength; otherwise the effective default is OFF (NONE),
+                // so the effect never silently carries across items. The global
+                // setting is intentionally NOT used as the auto fallback here.
+                val resolvedBoost = pref?.dialogueBoostStrength
+                    ?: com.raulshma.jellyplay.core.model.EffectStrength.NONE
                 _uiState.update {
                     it.copy(
                         hasSeriesAudioPref = pref?.scope == PlaybackPrefScope.SERIES && pref.audioLanguage != null,
                         hasSeriesSubtitlePref = pref?.scope == PlaybackPrefScope.SERIES && pref.subtitleLanguage != null,
+                        hasSeriesDialogueBoostPref = pref?.scope == PlaybackPrefScope.SERIES && pref.dialogueBoostStrength != null,
+                        dialogueBoostStrength = resolvedBoost,
+                        dialogueBoostEnabled = resolvedBoost != com.raulshma.jellyplay.core.model.EffectStrength.NONE,
                     )
                 }
+                updateConfigWithUiState()
             }
         }
 
@@ -675,16 +725,17 @@ class VideoPlayerViewModel @Inject constructor(
                     val prefs = cachedPreferences
                     _uiState.update { it.copy(
                         engineCapabilities = engine.capabilities,
-                        usesSubtitleOverlay = false,
-                        currentSubtitleCues = emptyList(),
                         audioDelayMs = prefs.audioDelayMs,
                         decoderMode = prefs.decoderMode,
                         audioPassthrough = prefs.audioPassthrough,
                         subtitleStyle = prefs.resolvedSubtitleStyle(
                             isHdr = prefs.isHdrFromStreams(playerSessionManager.sessionState.value.mediaStreams),
                         ),
-                        dialogueBoostEnabled = prefs.dialogueBoostEnabled,
-                        dialogueBoostStrength = prefs.dialogueBoostStrength,
+                        // Dialogue Boost defaults to OFF until the per-item resolver
+                        // applies a stored rule. It does not inherit the
+                        // global default, preventing cross-item bleed.
+                        dialogueBoostEnabled = false,
+                        dialogueBoostStrength = com.raulshma.jellyplay.core.model.EffectStrength.NONE,
                         nightModeEnabled = prefs.nightModeEnabled,
                         nightModeStrength = prefs.nightModeStrength,
                         audioNormalizationMode = prefs.audioNormalizationMode,
@@ -700,6 +751,9 @@ class VideoPlayerViewModel @Inject constructor(
                             launch { engine.isPlaying.collect { isPlaying ->
                                 _uiState.update { s -> s.copy(isPlaying = isPlaying) }
                                 syncPlayBridge.onIsPlayingChanged(isPlaying)
+                                // Mirror play state so the Activity can render the correct
+                                // play/pause icon on the PiP window.
+                                playerLifecycleManager.setPlaying(isPlaying)
                             } }
                             launch { engine.playbackState.collect { state ->
                                 val stateInt = when (state) {
@@ -716,12 +770,6 @@ class VideoPlayerViewModel @Inject constructor(
                                 }
                                 if (state == com.raulshma.jellyplay.feature.player.video.engine.EnginePlaybackState.ENDED) {
                                     handlePlaybackEnded()
-                                }
-                            } }
-                            launch { engine.currentCues.collect { cues ->
-                                val filteredCues = cues.filter { it.isNotBlank() }
-                                _uiState.update { s ->
-                                    if (s.currentSubtitleCues == filteredCues) s else s.copy(currentSubtitleCues = filteredCues)
                                 }
                             } }
                             launch { engine.availableTracks.collect { trackSelectionHelper.updateTracksFromEngine() } }
@@ -794,6 +842,25 @@ class VideoPlayerViewModel @Inject constructor(
     }
 
     /**
+     * Offline resume: the offline entry points (Downloads, OfflineLibrary,
+     * OfflineSeries, deep links, remote control, mini-player) all navigate with
+     * `startPositionTicks = 0`. When no explicit position was requested and the
+     * item is a completed download, fall back to the last-known position stored
+     * on the downloaded item (seeded from server UserData and updated while
+     * watching offline). Streaming keeps the caller-provided value.
+     *
+     * Extracted and `suspend` so it is unit-testable in isolation; in
+     * [initializeInternal] it runs inside the load coroutine.
+     */
+    internal suspend fun resolveOfflineResumeTicks(itemId: String, startPositionTicks: Long): Long {
+        if (startPositionTicks != 0L) return startPositionTicks
+        val download = downloadRepository.getDownloadByMediaItemId(itemId)
+        if (download?.status != com.raulshma.jellyplay.core.model.DownloadStatus.COMPLETED) return 0L
+        return offlineRepository.getOfflineItem(itemId)?.playbackPositionTicks
+            ?.takeIf { it > 0L } ?: 0L
+    }
+
+    /**
      * Persists the current playback position so it survives process death.
      * Throttled to at most one write per [POSITION_PERSIST_MIN_INTERVAL_MS]
      * unless [force] (e.g. an explicit seek). Also stashes the server session
@@ -806,6 +873,16 @@ class VideoPlayerViewModel @Inject constructor(
         savedStateHandle[SAVED_KEY_ITEM_ID] = itemId
         savedStateHandle[SAVED_KEY_POSITION_MS] = positionMs
         savedStateHandle[SAVED_KEY_PLAY_SESSION_ID] = currentPlaySessionId
+        // Mirror progress into the offline store so downloads render watched /
+        // resume state while offline. No-op for non-downloaded items.
+        val durationMs = playerSessionManager.engine?.durationMs ?: 0L
+        val positionTicks = positionMs * 10_000L // ms → ticks
+        val percentage = if (durationMs > 0L) {
+            (positionMs.toDouble() / durationMs.toDouble() * 100.0).coerceIn(0.0, 100.0)
+        } else 0.0
+        launch {
+            offlineRepository.updatePlaybackProgress(itemId, positionTicks, percentage, isPlayed = false)
+        }
     }
 
     private fun initializeInternal(
@@ -973,7 +1050,16 @@ class VideoPlayerViewModel @Inject constructor(
                 }
             }
 
-            playerSessionManager.loadMedia(itemId, mediaSourceId, startPositionTicks)
+            // Offline resume: the offline entry points (Downloads, OfflineLibrary,
+            // OfflineSeries, deep links, remote control, mini-player) all navigate with
+            // startPositionTicks = 0. When no explicit position was requested and the item
+            // is a completed download, fall back to the last-known position stored on the
+            // downloaded item (seeded from server UserData and updated while watching
+            // offline). Streaming keeps the caller-provided value. Composes with
+            // resolveStartTicksAfterProcessDeath, which only ever advances the position.
+            val resolvedStartTicks = resolveOfflineResumeTicks(itemId, startPositionTicks)
+
+            playerSessionManager.loadMedia(itemId, mediaSourceId, resolvedStartTicks)
 
             val sessionState = playerSessionManager.sessionState.value
             val source = sessionState.currentMediaSource
@@ -1020,6 +1106,24 @@ class VideoPlayerViewModel @Inject constructor(
                         if (cacheDir != null) {
                             trickplayManager.initializeLocal(itemId, localInfo, cacheDir)
                             _uiState.update { it.copy(trickplayInfo = localInfo) }
+                        }
+                    } else {
+                        // No local trickplay bundled with the download (the
+                        // detached trickplay fetch failed or the server didn't
+                        // have it at download time). Fall back to the server's
+                        // trickplay manifest and cache fetched tiles into the
+                        // download's trickplay dir, so the next offline session
+                        // reads them locally via [initializeLocal] above.
+                        val cacheDir = java.io.File(java.io.File(downloadPath).parentFile, "trickplay")
+                        val serverInfo = mediaRepository.getMediaDetail(itemId)
+                            .getOrNull()
+                            ?.mediaSources
+                            ?.firstOrNull()
+                            ?.trickplayInfo
+                        if (serverInfo != null) {
+                            cacheDir.mkdirs()
+                            trickplayManager.initializeWithCache(itemId, serverInfo, cacheDir)
+                            _uiState.update { it.copy(trickplayInfo = serverInfo) }
                         }
                     }
                 }
@@ -1140,11 +1244,17 @@ class VideoPlayerViewModel @Inject constructor(
     fun setSeriesAudioLanguagePreference(language: String?) {
         val seriesId = playerSessionManager.sessionState.value.mediaDetail?.item?.seriesId ?: return
         launch {
-            itemPlaybackPreferenceRepository.save(
-                scope = PlaybackPrefScope.SERIES,
-                key = seriesId,
-                audioLanguage = language,
-            )
+            // null = "forget": use the explicit clear so save()'s "null ⇒ preserve"
+            // semantics don't silently keep the old language forever.
+            if (language == null) {
+                itemPlaybackPreferenceRepository.clearAudioLanguage(PlaybackPrefScope.SERIES, seriesId)
+            } else {
+                itemPlaybackPreferenceRepository.save(
+                    scope = PlaybackPrefScope.SERIES,
+                    key = seriesId,
+                    audioLanguage = language,
+                )
+            }
             trackSelectionHelper.refreshPlaybackPreferences()
         }
     }
@@ -1157,11 +1267,15 @@ class VideoPlayerViewModel @Inject constructor(
     fun setSeriesSubtitleLanguagePreference(language: String?) {
         val seriesId = playerSessionManager.sessionState.value.mediaDetail?.item?.seriesId ?: return
         launch {
-            itemPlaybackPreferenceRepository.save(
-                scope = PlaybackPrefScope.SERIES,
-                key = seriesId,
-                subtitleLanguage = language,
-            )
+            if (language == null) {
+                itemPlaybackPreferenceRepository.clearSubtitleLanguage(PlaybackPrefScope.SERIES, seriesId)
+            } else {
+                itemPlaybackPreferenceRepository.save(
+                    scope = PlaybackPrefScope.SERIES,
+                    key = seriesId,
+                    subtitleLanguage = language,
+                )
+            }
             trackSelectionHelper.refreshPlaybackPreferences()
         }
     }
@@ -1204,19 +1318,40 @@ class VideoPlayerViewModel @Inject constructor(
     }
 
     fun toggleDialogueBoost() {
+        // Dialogue Boost is persisted per-item/series: toggling on
+        // pins MODERATE for this item/series, toggling off clears it (resolves to
+        // NONE). It does not touch the global setting, so it never bleeds across
+        // unrelated items.
         val newVal = !_uiState.value.dialogueBoostEnabled
-        _uiState.update { it.copy(dialogueBoostEnabled = newVal) }
-        updateConfigWithUiState()
-        launch {
-            preferencesStore.setDialogueBoostEnabled(newVal)
-        }
+        val target = if (newVal) com.raulshma.jellyplay.core.model.EffectStrength.MODERATE
+            else com.raulshma.jellyplay.core.model.EffectStrength.NONE
+        setDialogueBoostStrength(target)
     }
 
     fun setDialogueBoostStrength(strength: com.raulshma.jellyplay.core.model.EffectStrength) {
-        _uiState.update { it.copy(dialogueBoostStrength = strength) }
+        _uiState.update {
+            it.copy(
+                dialogueBoostStrength = strength,
+                dialogueBoostEnabled = strength != com.raulshma.jellyplay.core.model.EffectStrength.NONE,
+            )
+        }
         updateConfigWithUiState()
         launch {
-            preferencesStore.setDialogueBoostStrength(strength)
+            val seriesId = playerSessionManager.sessionState.value.mediaDetail?.item?.seriesId
+            val itemId = playerSessionManager.sessionState.value.currentItemId
+            // Prefer SERIES scope (applies to all episodes), fall back to ITEM.
+            val scopeKey = seriesId ?: itemId ?: return@launch
+            val prefScope = if (seriesId != null) PlaybackPrefScope.SERIES else PlaybackPrefScope.ITEM
+            if (strength == com.raulshma.jellyplay.core.model.EffectStrength.NONE) {
+                itemPlaybackPreferenceRepository.clearDialogueBoostStrength(prefScope, scopeKey)
+            } else {
+                itemPlaybackPreferenceRepository.save(
+                    scope = prefScope,
+                    key = scopeKey,
+                    dialogueBoostStrength = strength,
+                )
+            }
+            trackSelectionHelper.refreshPlaybackPreferences()
         }
     }
 
@@ -1323,7 +1458,18 @@ class VideoPlayerViewModel @Inject constructor(
         val mode = _uiState.value.playbackMode
         val quality = _uiState.value.streamingQuality
         val pos = playerSessionManager.engine?.currentPositionMs ?: 0L
+
+        // Stop-report the *current* server session before the swap: reloadPlayback
+        // overwrites sessionState.playSessionId with the new server id, so without
+        // this the previous session is never reported stopped (the server would
+        // see start(idA) → progress(idB) → stop(idB), orphaning idA — the same
+        // desync class the M19 currentPlaySessionId resolver prevents elsewhere).
+        reportCurrentPlaybackStopped()
+        progressReporter.cancelJobs()
+
         val resolved = playerSessionManager.reloadPlayback(mode, quality, pos) ?: return
+        afterEngineReloadRebuildSessionAndTracking()
+
         if (resolved.playMethod == com.raulshma.jellyplay.core.model.PlayMethod.TRANSCODE) {
             userMessageBus.info("Switched to transcoded stream — re-buffering")
         }
@@ -1334,12 +1480,36 @@ class VideoPlayerViewModel @Inject constructor(
             _uiState.update { it.copy(playbackMode = PlaybackMode.FORCE_TRANSCODE) }
             launch {
                 preferencesStore.setPlaybackMode(PlaybackMode.FORCE_TRANSCODE)
+                reportCurrentPlaybackStopped()
+                progressReporter.cancelJobs()
                 playerSessionManager.reloadPlayback(
                     PlaybackMode.FORCE_TRANSCODE, quality,
                     playerSessionManager.engine?.currentPositionMs ?: pos,
                 )
+                afterEngineReloadRebuildSessionAndTracking()
             }
         }
+    }
+
+    /**
+     * After a same-item engine reload ([reloadPlaybackForMode], [retryWithEngine])
+     * the previous engine — whose [MediaEngine.positionFlow] the position-tracking
+     * job was collecting — has been released, so the job goes silent. The media
+     * session was also bound to the released engine's player. Rebuild both so the
+     * seek bar, buffer bar, stats overlay, segment auto-skip and the system media
+     * notification track the new engine. (Every other reload path — initialize /
+     * cinema / retry — already does this; consolidating it here keeps any future
+     * engine swap covered the same way.)
+     */
+    private fun afterEngineReloadRebuildSessionAndTracking() {
+        val sessionState = playerSessionManager.sessionState.value
+        createVideoMediaSession(
+            sessionState.currentItemId ?: "",
+            sessionState.title,
+            sessionState.subtitle,
+        )
+        progressReporter.startPositionTracking()
+        progressReporter.startProgressReporting()
     }
 
     fun setDecoderMode(mode: DecoderMode) {
@@ -1367,14 +1537,7 @@ class VideoPlayerViewModel @Inject constructor(
         launch {
             preferencesStore.setPreferredPlayer(playerType)
             playerSessionManager.reloadWithEngine(playerType, currentPos, currentSpeed, maxBitrate)
-            val sessionState = playerSessionManager.sessionState.value
-            createVideoMediaSession(
-                sessionState.currentItemId ?: "",
-                sessionState.title,
-                sessionState.subtitle,
-            )
-            progressReporter.startPositionTracking()
-            progressReporter.startProgressReporting()
+            afterEngineReloadRebuildSessionAndTracking()
         }
     }
 
@@ -1781,59 +1944,14 @@ class VideoPlayerViewModel @Inject constructor(
     fun getImageUrl(itemId: String, maxWidth: Int = 400): String =
         playbackRepository.getImageUrl(itemId, "Primary", maxWidth)
 
-    fun loadRemoteSubtitles() {
-        val itemId = playerSessionManager.sessionState.value.currentItemId ?: return
-        _uiState.update { it.copy(isLoadingRemoteSubtitles = true) }
-        launch {
-            val subs = playbackRepository.getRemoteSubtitles(itemId).getOrElse { emptyList() }
-            _uiState.update { it.copy(remoteSubtitles = subs, isLoadingRemoteSubtitles = false) }
-        }
-    }
+    // region Subtitle Manager — delegates to [subtitleManager] (extracted collaborator)
 
-    fun downloadSubtitle(subtitleInfo: com.raulshma.jellyplay.core.model.RemoteSubtitleInfo) {
-        val itemId = playerSessionManager.sessionState.value.currentItemId ?: return
-        launch {
-            playbackRepository.downloadSubtitle(itemId, subtitleInfo.id)
-            val detailResult = mediaRepository.getMediaDetail(itemId)
-            detailResult.getOrNull()?.let { detail ->
-                applyMediaDetail(detail)
-                val source = detail.mediaSources.firstOrNull()
-                val streams = source?.mediaStreams ?: emptyList()
-                _uiState.update { it.copy(
-                    currentMediaSource = source,
-                    mediaStreams = streams,
-                    detectedAspectRatio = detectAspectRatio(streams),
-                ) }
-            }
-        }
-    }
+    fun loadRemoteSubtitles() = subtitleManager.loadRemoteSubtitles()
 
-    fun addLocalSubtitle(uri: Uri, fileName: String) {
-        val engine = playerSessionManager.engine ?: return
-        val ext = fileName.substringAfterLast('.', "").lowercase()
-        val codec = when (ext) {
-            "srt" -> "srt"
-            "ass", "ssa" -> "ass"
-            "vtt" -> "vtt"
-            "ttml", "dfxp" -> "ttml"
-            else -> null
-        }
+    fun downloadSubtitle(subtitleInfo: com.raulshma.jellyplay.core.model.RemoteSubtitleInfo) =
+        subtitleManager.downloadSubtitle(subtitleInfo)
 
-        val label = fileName.substringBeforeLast('.').ifBlank { "Local subtitle" }
-        val source = SubtitleSource(
-            url = uri.toString(),
-            label = label,
-            language = null,
-            mimeType = null,
-            codec = codec,
-            isDefault = false,
-            isForced = false,
-            id = "local:${System.currentTimeMillis()}",
-        )
-        playerSessionManager.addExternalSubtitle(source)
-    }
-
-    // region Subtitle Manager — search & upload without leaving playback
+    fun addLocalSubtitle(uri: Uri, fileName: String) = subtitleManager.addLocalSubtitle(uri, fileName)
 
     /**
      * Resets the Subtitle Manager's search/cultures state. Called when the sheet
@@ -1841,37 +1959,14 @@ class VideoPlayerViewModel @Inject constructor(
      * leak into a new one (H4). Cultures are reloaded on demand since they may
      * be item-scoped on some servers.
      */
-    fun resetSubtitleManagerState() {
-        _uiState.update {
-            it.copy(
-                searchedSubtitles = emptyList(),
-                hasSearchedSubtitles = false,
-                isSearchingSubtitles = false,
-                subtitleSearchError = null,
-                subtitleCultures = emptyList(),
-            )
-        }
-    }
+    fun resetSubtitleManagerState() = subtitleManager.resetSubtitleManagerState()
 
     /**
      * Loads the language cultures the server understands for subtitle
      * upload/search selection. Idempotent: a no-op once cultures are already
      * populated for the current item (e.g. across tab switches / reopens).
      */
-    fun loadSubtitleCultures() {
-        if (_uiState.value.subtitleCultures.isNotEmpty()) return
-        val itemId = playerSessionManager.sessionState.value.currentItemId ?: return
-        launch {
-            playbackRepository.getSubtitleCultures(itemId).fold(
-                onSuccess = { cultures -> _uiState.update { it.copy(subtitleCultures = cultures) } },
-                onFailure = {
-                    // An empty cultures list just yields an empty dropdown;
-                    // users can still type a code manually, so no error toast.
-                    _uiState.update { it.copy(subtitleCultures = emptyList()) }
-                },
-            )
-        }
-    }
+    fun loadSubtitleCultures() = subtitleManager.loadSubtitleCultures()
 
     /**
      * Language-scoped remote subtitle search (OpenSubtitles via the server).
@@ -1880,106 +1975,34 @@ class VideoPlayerViewModel @Inject constructor(
      * (distinct from an empty result) so the UI can invite retry rather than
      * implying "no subtitles exist" (H3).
      */
-    fun searchRemoteSubtitles(language: String) {
-        val itemId = playerSessionManager.sessionState.value.currentItemId ?: return
-        _uiState.update {
-            it.copy(isSearchingSubtitles = true, hasSearchedSubtitles = false, searchedSubtitles = emptyList(), subtitleSearchError = null)
-        }
-        launch {
-            playbackRepository.searchRemoteSubtitles(itemId, language).fold(
-                onSuccess = { subs ->
-                    _uiState.update {
-                        it.copy(searchedSubtitles = subs, isSearchingSubtitles = false, hasSearchedSubtitles = true, subtitleSearchError = null)
-                    }
-                },
-                onFailure = { e ->
-                    _uiState.update {
-                        it.copy(
-                            isSearchingSubtitles = false,
-                            hasSearchedSubtitles = false,
-                            subtitleSearchError = e.message ?: "Search failed",
-                        )
-                    }
-                },
-            )
-        }
-    }
+    fun searchRemoteSubtitles(language: String) = subtitleManager.searchRemoteSubtitles(language)
 
     /**
      * Uploads a local subtitle file to the current item, then reloads the
      * media detail so the new stream appears in the track list — mirroring
-     * [downloadSubtitle]'s refresh and the editor's upload path.
-     *
-     * The file size is checked up front against [MAX_SUBTITLE_UPLOAD_BYTES] (via
-     * OpenableColumns.SIZE) so an oversized pick is rejected before the whole
-     * file — and its ~1.33× Base64 expansion — are loaded into memory. This
-     * matters on low-RAM TV devices where a stray large pick could OOM.
+     * [downloadSubtitle]'s refresh and the editor's upload path. See
+     * [SubtitleManager.uploadSubtitle] for the size-cap rationale.
      */
-    fun uploadSubtitle(uri: Uri, fileName: String, language: String?, isForced: Boolean, isHearingImpaired: Boolean) {
-        val itemId = playerSessionManager.sessionState.value.currentItemId ?: return
-        _uiState.update { it.copy(isUploadingSubtitle = true) }
-        launch {
-            val result = runCatching {
-                withContext(Dispatchers.IO) {
-                    val size = queryFileSizeBytes(uri)
-                    if (size in 1..MAX_SUBTITLE_UPLOAD_BYTES) {
-                        // Expected path: a real subtitle file well under the cap.
-                        readAndEncode(uri)
-                    } else if (size > MAX_SUBTITLE_UPLOAD_BYTES) {
-                        throw java.io.IOException("Subtitle file is too large (${size / 1024} KB). Limit is ${MAX_SUBTITLE_UPLOAD_BYTES / 1024} KB.")
-                    } else {
-                        // SIZE unknown (some providers return 0 or null) — allow the
-                        // read but it will still be bounded by a real subtitle's size.
-                        readAndEncode(uri)
-                    }
-                }
-            }.mapCatching { base64 ->
-                playbackRepository.uploadSubtitle(itemId, base64, fileName, language, isForced, isHearingImpaired).getOrThrow()
-            }
-            _uiState.update { it.copy(isUploadingSubtitle = false) }
-            result.onSuccess {
-                // Refresh media detail so the uploaded track surfaces in the
-                // subtitle track list — same approach as downloadSubtitle().
-                mediaRepository.getMediaDetail(itemId).getOrNull()?.let { detail ->
-                    applyMediaDetail(detail)
-                    val source = detail.mediaSources.firstOrNull()
-                    val streams = source?.mediaStreams ?: emptyList()
-                    _uiState.update { it.copy(
-                        currentMediaSource = source,
-                        mediaStreams = streams,
-                        detectedAspectRatio = detectAspectRatio(streams),
-                    ) }
-                }
-                userMessageBus.info("Subtitle uploaded")
-            }.onFailure { e ->
-                userMessageBus.error(e.message ?: "Failed to upload subtitle")
-            }
-        }
-    }
+    fun uploadSubtitle(uri: Uri, fileName: String, language: String?, isForced: Boolean, isHearingImpaired: Boolean) =
+        subtitleManager.uploadSubtitle(uri, fileName, language, isForced, isHearingImpaired)
 
     /**
-     * Subtitle upload size cap (2 MB). Real subtitle files are tens of KB at
-     * most; this comfortably rejects a mis-selected large asset while not
-     * blocking any legitimate subtitle. See [uploadSubtitle].
+     * Re-applies [mediaDetail] and refreshes the shared source/stream/aspect-ratio
+     * UiState fields after a subtitle download/upload adds a new stream. The
+     * duplicated inline block previously lived separately in [downloadSubtitle]
+     * and [uploadSubtitle]; folding it here lets [SubtitleManager] trigger the
+     * refresh via its [onMediaDetailRefreshed] callback without a hard VM
+     * reference.
      */
-    private val MAX_SUBTITLE_UPLOAD_BYTES = 2L * 1024 * 1024
-
-    /** Returns the byte size of [uri] via OpenableColumns.SIZE, or 0 if unknown. */
-    private fun queryFileSizeBytes(uri: Uri): Long {
-        val cursor = context.contentResolver.query(uri, arrayOf(android.provider.OpenableColumns.SIZE), null, null, null)
-            ?: return 0
-        return cursor.use {
-            if (!it.moveToFirst()) return 0
-            val idx = it.getColumnIndex(android.provider.OpenableColumns.SIZE)
-            if (idx < 0) 0 else it.getLong(idx)
-        }
-    }
-
-    /** Reads [uri] fully and Base64-encodes it (NO_WRAP). Throws on read failure. */
-    private fun readAndEncode(uri: Uri): String {
-        val bytes = context.contentResolver.openInputStream(uri)?.use { it.readBytes() }
-            ?: throw java.io.IOException("Cannot open input stream for selected subtitle")
-        return android.util.Base64.encodeToString(bytes, android.util.Base64.NO_WRAP)
+    private fun applyMediaDetailAndSourceState(detail: com.raulshma.jellyplay.core.model.MediaDetail) {
+        applyMediaDetail(detail)
+        val source = detail.mediaSources.firstOrNull()
+        val streams = source?.mediaStreams ?: emptyList()
+        _uiState.update { it.copy(
+            currentMediaSource = source,
+            mediaStreams = streams,
+            detectedAspectRatio = detectAspectRatio(streams),
+        ) }
     }
 
     // endregion
@@ -2312,8 +2335,10 @@ class VideoPlayerViewModel @Inject constructor(
                 tvZoomModePercent = currentState.tvZoomModePercent,
                 keepScreenOnDuringVideo = currentState.keepScreenOnDuringVideo,
                 subtitleStyle = currentState.subtitleStyle,
-                dialogueBoostEnabled = currentState.dialogueBoostEnabled,
-                dialogueBoostStrength = currentState.dialogueBoostStrength,
+                // Reset per-item dialogue boost so it doesn't bleed into the next
+                // item before the resolver re-applies the per-item rule.
+                dialogueBoostEnabled = false,
+                dialogueBoostStrength = com.raulshma.jellyplay.core.model.EffectStrength.NONE,
                 nightModeEnabled = currentState.nightModeEnabled,
                 nightModeStrength = currentState.nightModeStrength,
                 audioPassthrough = currentState.audioPassthrough,

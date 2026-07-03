@@ -213,21 +213,27 @@ internal fun BoxScope.PlayerOverflowMenu(
                         modifier = Modifier.focusRequester(dialogueBoostFocusRequester),
                     )
                     EffectStrength.entries.forEach { strength ->
+                        val isActive = if (strength == EffectStrength.NONE) {
+                            !dialogueBoostEnabled
+                        } else {
+                            dialogueBoostEnabled && dialogueBoostStrength == strength
+                        }
                         DropdownMenuItem(
                             text = {
                                 Text(
                                     strength.displayName,
-                                    color = if (dialogueBoostEnabled && dialogueBoostStrength == strength)
+                                    color = if (isActive)
                                         MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface,
                                 )
                             },
+                            // Selecting a strength (including NONE/off) routes through the
+                            // per-item strength setter, which clears the pref for NONE.
                             onClick = {
-                                if (!dialogueBoostEnabled) onDialogueBoostClick()
                                 onDialogueBoostStrengthChange(strength)
                                 onDismiss()
                             },
                             leadingIcon = {
-                                if (dialogueBoostEnabled && dialogueBoostStrength == strength) {
+                                if (isActive) {
                                     Icon(
                                         Tabler.Outline.Check,
                                         contentDescription = null,

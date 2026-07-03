@@ -1,5 +1,6 @@
 package com.raulshma.jellyplay.feature.player.video.engine
 
+import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
@@ -32,9 +33,14 @@ class MediaEngineRoleInterfacesTest {
     }
 
     @Test
-    fun subtitleStylingRole_exposesCuesAndStyling() {
+    fun subtitleStylingRole_exposesStyling() {
+        // SubtitleStyling exposes applySubtitleStyleToView (per-engine native
+        // subtitle surface styling). Subtitles are rendered by each engine's own
+        // native renderer; there is no in-app cue overlay.
         val styling: SubtitleStyling = engine
-        assertTrue(styling.currentCues.value.isEmpty())
+        // The narrow role is assignable — exercising it requires an Android View,
+        // which isn't available on JVM, so we only assert the cast here.
+        assertNotNull(styling)
     }
 
     @Test

@@ -138,7 +138,6 @@ fun AnimatedHeroHeader(
         modifier = Modifier
             .fillMaxWidth()
             .height(height)
-            .clip(RoundedCornerShape(topStart = 0.dp, topEnd = 0.dp, bottomStart = 0.dp, bottomEnd = 0.dp))
             .ifElse(isTv, Modifier.bringIntoViewResponder(bringIntoViewResponder)),
     ) { currentFeatured ->
         HeroHeader(

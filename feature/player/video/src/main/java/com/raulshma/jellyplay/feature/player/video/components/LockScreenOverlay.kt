@@ -38,6 +38,7 @@ import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
+import com.raulshma.jellyplay.core.designsystem.theme.playerOnScrim
 import com.raulshma.jellyplay.core.ui.tv.input.onDpadKey
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalDensity
@@ -182,7 +183,7 @@ internal fun SlideToUnlockOverlay(
                         modifier = Modifier
                             .size(56.dp)
                             .clip(CircleShape)
-                            .background(Color.White.copy(alpha = 0.15f + progress * 0.15f))
+                            .background(playerOnScrim().copy(alpha = 0.15f + progress * 0.15f))
                             .alpha(1f - progress * 0.7f),
                         contentAlignment = Alignment.Center,
                     ) {
@@ -194,7 +195,7 @@ internal fun SlideToUnlockOverlay(
                             Icon(
                                 imageVector = if (unlocked) Tabler.Outline.LockOpen else Tabler.Outline.Lock,
                                 contentDescription = if (unlocked) "Unlocked" else if (isTv) "Press OK to unlock" else "Drag up to unlock",
-                                tint = Color.White,
+                                tint = playerOnScrim(),
                                 modifier = Modifier.size(28.dp),
                             )
                         }
@@ -202,7 +203,7 @@ internal fun SlideToUnlockOverlay(
 
                     Text(
                         text = if (isTv) "Press OK to unlock" else "Slide up to unlock",
-                        color = Color.White.copy(alpha = 0.6f * (1f - progress)),
+                        color = playerOnScrim().copy(alpha = 0.6f * (1f - progress)),
                         fontSize = 12.sp,
                         fontWeight = FontWeight.Medium,
                         modifier = Modifier

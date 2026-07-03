@@ -106,6 +106,9 @@ class SeerrDetailViewModel @Inject constructor(
 
     fun loadDetails(tmdbId: Int, mediaType: String) {
         launch {
+            // Normalize once so every downstream comparison is case-insensitive
+            // and consistent (callers may pass "movie", "Movie", "tv", "TV", …).
+            val isMovie = mediaType.equals("movie", ignoreCase = true)
             _isLoading.value = true
             _error.value = null
             _ratings.value = null
@@ -121,7 +124,7 @@ class SeerrDetailViewModel @Inject constructor(
             var hasRatings = false
 
             try {
-                if (mediaType == "movie") {
+                if (isMovie) {
                     seerrRepository.getMovieDetails(tmdbId).onSuccess {
                         _movieDetails.value = it
                         val ratings = it.ratings
@@ -145,7 +148,7 @@ class SeerrDetailViewModel @Inject constructor(
                     }
                 }
 
-                val type = if (mediaType == "movie") MediaType.MOVIE else MediaType.SERIES
+                val type = if (isMovie) MediaType.MOVIE else MediaType.SERIES
 
                 coroutineScope {
                     val ratingsDeferred = if (hasRatings) {
@@ -194,6 +197,7 @@ class SeerrDetailViewModel @Inject constructor(
      * server. Updates [_jellyfinItemId] on success.
      */
     private suspend fun resolveJellyfinItemId(tmdbId: Int, mediaType: String) {
+        val isMovie = mediaType.equals("movie", ignoreCase = true)
         val movie = _movieDetails.value
         val tv = _tvDetails.value
         val mediaInfo = movie?.mediaInfo ?: tv?.mediaInfo
@@ -207,7 +211,7 @@ class SeerrDetailViewModel @Inject constructor(
         // tvdb/imdb are fallbacks that may be present on the detail's externalIds.
         val candidates = buildList {
             add("tmdb" to tmdbId.toString())
-            val externalIds = if (mediaType == "movie") movie?.externalIds else tv?.externalIds
+            val externalIds = if (isMovie) movie?.externalIds else tv?.externalIds
             externalIds?.tvdbId?.let { add("tvdb" to it.toString()) }
             externalIds?.imdbId?.let { add("imdb" to it) }
         }

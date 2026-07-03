@@ -1,0 +1,177 @@
+package com.raulshma.jellyplay.feature.player.audio
+
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Text
+import androidx.compose.runtime.Composable
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
+import com.composables.icons.tabler.Tabler
+import com.composables.icons.tabler.outline.*
+import com.raulshma.jellyplay.core.ui.tv.rememberTvFocusState
+import com.raulshma.jellyplay.core.ui.tv.tvFocusIndicator
+
+@Composable
+internal fun PixelPlayerTopBar(
+    onBack: () -> Unit,
+    hasLyrics: Boolean,
+    lyricsVisible: Boolean,
+    onLyricsClick: () -> Unit,
+    onQueueClick: () -> Unit,
+    showMenu: Boolean,
+    onMenuToggle: (Boolean) -> Unit,
+    speed: Float,
+    dialogueBoostEnabled: Boolean,
+    dialogueBoostStrength: com.raulshma.jellyplay.core.model.EffectStrength,
+    nightModeEnabled: Boolean,
+    nightModeStrength: com.raulshma.jellyplay.core.model.EffectStrength,
+    onSpeedClick: () -> Unit,
+    onEqualizerClick: () -> Unit,
+    onEffectsClick: () -> Unit,
+    onDialogueBoostClick: () -> Unit,
+    onDialogueBoostStrengthChange: (com.raulshma.jellyplay.core.model.EffectStrength) -> Unit,
+    onNightModeClick: () -> Unit,
+    onNightModeStrengthChange: (com.raulshma.jellyplay.core.model.EffectStrength) -> Unit,
+    onAmbientClick: () -> Unit,
+    sleepTimerActive: Boolean = false,
+    sleepTimerDisplayText: String = "",
+    onSleepTimerClick: () -> Unit = {},
+    karaokeMode: Boolean = false,
+    onKaraokeToggle: (Boolean) -> Unit = {},
+    hasKaraokeLyrics: Boolean = false,
+) {
+    val minimizeFocusState = rememberTvFocusState()
+    val lyricsFocusState = rememberTvFocusState()
+    val queueFocusState = rememberTvFocusState()
+    val moreFocusState = rememberTvFocusState()
+
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 8.dp, vertical = 4.dp),
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        IconButton(
+            onClick = onBack,
+            modifier = Modifier
+                .then(minimizeFocusState.focusModifier)
+                .tvFocusIndicator(minimizeFocusState, CircleShape)
+        ) {
+            Icon(
+                Tabler.Outline.ChevronDown, "Minimize",
+                tint = MaterialTheme.colorScheme.onBackground,
+                modifier = Modifier.size(28.dp),
+            )
+        }
+        Text(
+            "Now Playing",
+            style = MaterialTheme.typography.titleSmall,
+            color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.8f),
+            letterSpacing = 1.sp,
+        )
+        Row {
+            if (hasLyrics) {
+                IconButton(
+                    onClick = onLyricsClick,
+                    modifier = Modifier
+                        .then(lyricsFocusState.focusModifier)
+                        .tvFocusIndicator(lyricsFocusState, CircleShape)
+                ) {
+                    Icon(
+                        if (lyricsVisible) Tabler.Outline.Microphone2 else Tabler.Outline.Microphone,
+                        "Lyrics",
+                        tint = if (lyricsVisible) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onBackground,
+                        modifier = Modifier.size(22.dp),
+                    )
+                }
+            }
+            IconButton(
+                onClick = onQueueClick,
+                modifier = Modifier
+                    .then(queueFocusState.focusModifier)
+                    .tvFocusIndicator(queueFocusState, CircleShape)
+            ) {
+                Icon(Tabler.Outline.Playlist, "Queue", tint = MaterialTheme.colorScheme.onBackground, modifier = Modifier.size(22.dp))
+            }
+            Box {
+                IconButton(
+                    onClick = { onMenuToggle(true) },
+                    modifier = Modifier
+                        .then(moreFocusState.focusModifier)
+                        .tvFocusIndicator(moreFocusState, CircleShape)
+                ) {
+                    Icon(Tabler.Outline.DotsVertical, "More", tint = MaterialTheme.colorScheme.onBackground, modifier = Modifier.size(22.dp))
+                }
+                val itemColors = androidx.compose.material3.MenuDefaults.itemColors(
+                    textColor = MaterialTheme.colorScheme.onSurface,
+                    leadingIconColor = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                DropdownMenu(expanded = showMenu, onDismissRequest = { onMenuToggle(false) }) {
+                    DropdownMenuItem(
+                        text = { Text("Speed (${if (speed == 1.0f) "1x" else "${speed}x"})") },
+                        onClick = onSpeedClick,
+                        leadingIcon = { Icon(Tabler.Outline.Gauge, null) },
+                        colors = itemColors,
+                    )
+                    DropdownMenuItem(
+                        text = { Text("Equalizer") },
+                        onClick = onEqualizerClick,
+                        leadingIcon = { Icon(Tabler.Outline.Adjustments, null) },
+                        colors = itemColors,
+                    )
+                    DropdownMenuItem(
+                        text = { Text("Audio Effects") },
+                        onClick = onEffectsClick,
+                        leadingIcon = { Icon(Tabler.Outline.Ear, null) },
+                        colors = itemColors,
+                    )
+                    DropdownMenuItem(
+                        text = { Text(if (dialogueBoostEnabled) "Dialogue Boost · ${dialogueBoostStrength.displayName}" else "Dialogue Boost") },
+                        onClick = { onDialogueBoostClick(); onMenuToggle(false) },
+                        leadingIcon = { Icon(Tabler.Outline.Microphone2, null) },
+                        colors = itemColors,
+                    )
+                    DropdownMenuItem(
+                        text = { Text(if (nightModeEnabled) "Night Mode · ${nightModeStrength.displayName}" else "Night Mode") },
+                        onClick = { onNightModeClick(); onMenuToggle(false) },
+                        leadingIcon = { Icon(Tabler.Outline.Moon, null) },
+                        colors = itemColors,
+                    )
+                    DropdownMenuItem(
+                        text = { Text("Ambient Mode") },
+                        onClick = onAmbientClick,
+                        leadingIcon = { Icon(Tabler.Outline.MoonStars, null) },
+                        colors = itemColors,
+                    )
+                    DropdownMenuItem(
+                        text = { Text(if (sleepTimerActive) "Sleep Timer · $sleepTimerDisplayText" else "Sleep Timer") },
+                        onClick = onSleepTimerClick,
+                        leadingIcon = { Icon(Tabler.Outline.Stopwatch, null) },
+                        colors = itemColors,
+                    )
+                    if (hasKaraokeLyrics) {
+                        DropdownMenuItem(
+                            text = { Text(if (karaokeMode) "Karaoke Mode · On" else "Karaoke Mode") },
+                            onClick = { onKaraokeToggle(!karaokeMode); onMenuToggle(false) },
+                            leadingIcon = { Icon(Tabler.Outline.Microphone2, null) },
+                            colors = itemColors,
+                        )
+                    }
+                }
+            }
+        }
+    }
+}

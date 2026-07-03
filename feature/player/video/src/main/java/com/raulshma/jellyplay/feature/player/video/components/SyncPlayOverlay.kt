@@ -26,6 +26,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import com.raulshma.jellyplay.core.designsystem.theme.playerOnScrim
 import com.raulshma.jellyplay.core.designsystem.theme.ShapeCache
 import com.raulshma.jellyplay.core.designsystem.theme.SyncStatusColors
 import com.raulshma.jellyplay.core.ui.tv.rememberTvFocusState
@@ -56,7 +57,7 @@ fun SyncPlayOverlay(
     ) {
         Surface(
             shape = ShapeCache.smoothPill,
-            color = Color.White.copy(alpha = 0.12f),
+            color = playerOnScrim().copy(alpha = 0.12f),
             border = androidx.compose.foundation.BorderStroke(1.dp, statusColor.copy(alpha = 0.25f)),
             modifier = Modifier
                 .then(focusState.focusModifier)
@@ -87,13 +88,13 @@ fun SyncPlayOverlay(
                 Spacer(Modifier.width(2.dp))
                 Text(
                     text = groupName,
-                    color = Color.White,
+                    color = playerOnScrim(),
                     style = MaterialTheme.typography.labelMedium,
                 )
                 Spacer(Modifier.width(2.dp))
                 Text(
                     text = "$participantCount",
-                    color = Color.White.copy(alpha = 0.85f),
+                    color = playerOnScrim().copy(alpha = 0.85f),
                     style = MaterialTheme.typography.labelMedium,
                 )
             }

@@ -52,10 +52,32 @@ class PlayerLifecycleManager @Inject constructor(
     @Volatile
     var activeCallbacks: PlayerLifecycleCallbacks? = null
 
+    // ── PiP transport bridge ──
+    // Lets the Activity dispatch PiP remote-action intents (play/pause/skip/next)
+    // to the active engine without a core→feature dependency. The ViewModel wires
+    // these to the live MediaEngine when playback starts and clears them on stop.
+    //
+
+    @Volatile
+    var pipTransport: PipTransport? = null
+
+    /** The current play state, mirrored so PiP can toggle its play/pause icon. */
+    private val _isPlaying = MutableStateFlow(false)
+    val isPlaying: StateFlow<Boolean> = _isPlaying.asStateFlow()
+
+    /** Whether a "next" action is available (e.g. next episode in a series). */
+    @Volatile
+    var pipHasNext: Boolean = false
+
     // ── PiP methods ──
 
     fun setPipMode(inPip: Boolean) {
         _isInPipMode.value = inPip
+    }
+
+    /** Mirrors the engine play state so PiP can reflect it in its action icons. */
+    fun setPlaying(playing: Boolean) {
+        _isPlaying.value = playing
     }
 
     fun requestAutoEnterPip(shouldEnter: Boolean) {
@@ -72,6 +94,9 @@ class PlayerLifecycleManager @Inject constructor(
 
     fun reset() {
         activeCallbacks = null
+        pipTransport = null
+        _isPlaying.value = false
+        pipHasNext = false
         _isInPipMode.value = false
         _shouldAutoEnterPip.value = false
         _pipDismissed.value = false
@@ -94,3 +119,23 @@ class PlayerLifecycleManager @Inject constructor(
         activeCallbacks?.onActivityResume()
     }
 }
+
+/**
+ * Transport bridge used by PiP remote actions. Implemented by the player
+ * ViewModel and registered on [PlayerLifecycleManager] so the Activity can
+ * dispatch play/pause/skip/next without a core→feature dependency.
+ */
+fun interface PipTransport {
+    /** Dispatched when the user taps a PiP remote action. */
+    fun handle(action: PipAction)
+}
+
+/** The set of PiP remote actions exposed on the PiP window. */
+enum class PipAction {
+    PLAY,
+    PAUSE,
+    SKIP_FORWARD,
+    SKIP_BACKWARD,
+    NEXT,
+}
+

@@ -33,7 +33,6 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalFocusManager
@@ -101,6 +100,9 @@ private fun InWindowPlayerSheet(
     content: @Composable ColumnScope.() -> Unit,
 ) {
     val density = LocalDensity.current
+    // The sheet chrome follows the ambient theme: it is a full UI panel (not an overlay on the
+    // video), so light/dynamic-light sheets render with light surfaces in light mode. The
+    // container/handle colors below are read from MaterialTheme.colorScheme so they flip correctly.
     val colorScheme = MaterialTheme.colorScheme
     val typography = MaterialTheme.typography
     val focusManager = LocalFocusManager.current
@@ -136,7 +138,7 @@ private fun InWindowPlayerSheet(
         Box(
             Modifier
                 .fillMaxSize()
-                .background(Color.Black.copy(alpha = scrimAlpha))
+                .background(colorScheme.scrim.copy(alpha = scrimAlpha))
                 .pointerInput(Unit) { detectTapGestures(onTap = { dismiss() }) },
         )
 
@@ -191,7 +193,15 @@ private fun InWindowPlayerSheet(
                 colorScheme = colorScheme,
                 typography = typography,
             ) {
-                content()
+                // MaterialTheme overrides the color scheme but does NOT set LocalContentColor, so a
+                // Text/Icon without an explicit color would fall back to the default (black) and
+                // render dark-on-dark in dark mode. Mirror what a Surface does and pin the content
+                // color to the sheet's onSurface so uncolored titles/labels stay legible.
+                androidx.compose.runtime.CompositionLocalProvider(
+                    androidx.compose.material3.LocalContentColor provides colorScheme.onSurface,
+                ) {
+                    content()
+                }
             }
         }
     }

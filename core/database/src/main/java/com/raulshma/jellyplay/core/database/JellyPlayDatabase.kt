@@ -50,7 +50,7 @@ import com.raulshma.jellyplay.core.database.entity.UserEntity
         SeenMediaEntity::class,
         ItemPlaybackPreferenceEntity::class,
     ],
-    version = 27,
+    version = 30,
     exportSchema = true,
 )
 @TypeConverters(Converters::class)

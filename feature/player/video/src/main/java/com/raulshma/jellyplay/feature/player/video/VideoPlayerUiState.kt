@@ -77,12 +77,13 @@ data class VideoPlayerUiState(
     val hasSeriesAudioPref: Boolean = false,
     /** A per-series subtitle-language preference exists for the current series. */
     val hasSeriesSubtitlePref: Boolean = false,
+    /** A per-series dialogue-boost preference exists for the current series. */
+    val hasSeriesDialogueBoostPref: Boolean = false,
     val overview: String = "",
     val people: List<PersonInfo> = emptyList(),
     val artworkUrl: String? = null,
     val lyricsLines: List<LyricsLine> = emptyList(),
     val subtitleTracks: List<TrackOption> = emptyList(),
-    val currentSubtitleCues: List<String> = emptyList(),
     val chapters: List<ChapterInfo> = emptyList(),
     val aspectRatio: AspectRatio = AspectRatio.AUTO,
     val detectedAspectRatio: AspectRatio? = null,
@@ -140,7 +141,6 @@ data class VideoPlayerUiState(
     val seriesId: String? = null,
     val isInSyncPlaySession: Boolean = false,
     val engineCapabilities: EngineCapabilities = EngineCapabilities(),
-    val usesSubtitleOverlay: Boolean = false,
     val playerError: String? = null,
     val trickplayEnabled: Boolean = true,
     val trickplayOnSeekGesture: Boolean = true,

@@ -169,6 +169,22 @@ class LibraryApiClientImpl @Inject constructor(
                                 result.items,
                                 seedItem = result.seedItem,
                             ))
+                        } else {
+                            // Fallback "For You" source when there are no similarity
+                            // seeds yet (new user, no watch history): surface favorited
+                            // / liked items so the home page still has discovery content
+                            //. Mirrors the search "Suggestions" data source.
+                            getSearchSuggestions(limit = 20)
+                                .onSuccess { search ->
+                                    if (search.items.isNotEmpty()) {
+                                        sections.add(HomeSection(
+                                            "recommendations",
+                                            "Recommended For You",
+                                            HomeSectionType.RECOMMENDATIONS,
+                                            search.items,
+                                        ))
+                                    }
+                                }
                         }
                     }
                     .onFailure { if (firstError == null) firstError = it }

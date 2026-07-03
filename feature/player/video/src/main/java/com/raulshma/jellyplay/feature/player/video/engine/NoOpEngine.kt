@@ -46,9 +46,6 @@ internal class NoOpEngine : MediaEngine {
     private val _videoStats = MutableStateFlow(EngineVideoStats())
     override val videoStats: StateFlow<EngineVideoStats> = _videoStats.asStateFlow()
 
-    private val _currentCues = MutableStateFlow(emptyList<String>())
-    override val currentCues: StateFlow<List<String>> = _currentCues.asStateFlow()
-
     private val _availableTracks = MutableStateFlow(emptyList<MediaTrack>())
     override val availableTracks: StateFlow<List<MediaTrack>> = _availableTracks.asStateFlow()
 
@@ -88,7 +85,7 @@ internal class NoOpEngine : MediaEngine {
     override fun updateConfig(config: EngineConfig) { /* no-op */ }
 
     // 5. Track selection
-    override fun selectTrack(type: TrackType, index: Int, trackGroup: Any?) { /* no-op */ }
+    override fun selectTrack(type: TrackType, index: Int) { /* no-op */ }
     override fun setMaxVideoBitrate(bps: Int?) { /* no-op */ }
 
     // Volume (RemotePlayableEngine)

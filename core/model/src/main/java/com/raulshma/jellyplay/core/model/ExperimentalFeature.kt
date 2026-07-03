@@ -25,6 +25,14 @@ enum class ExperimentalFeature {
      * (the historical rendering without the carousel container effect).
      */
     HOME_CARD_CLIPPING,
+
+    /**
+     * Press-and-hold "peek" preview: long-pressing a media card morphs a rich
+     * detail card out of it (with the screen sides blurred); lift the finger to
+     * dismiss. Off by default while the gesture/animation is still settling.
+     * Phone-only regardless of this setting.
+     */
+    MEDIA_CARD_PEEK,
 }
 
 /**

@@ -10,6 +10,7 @@ import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.Arrangement
@@ -59,6 +60,8 @@ import com.raulshma.jellyplay.core.ui.components.formatDurationFromTicks
 import com.raulshma.jellyplay.core.ui.components.formatRemainingTimeFromTicks
 import com.raulshma.jellyplay.core.ui.components.progressFraction
 import com.raulshma.jellyplay.core.ui.image.MediaImage
+import com.raulshma.jellyplay.core.ui.preview.rememberMediaPeek
+import com.raulshma.jellyplay.core.ui.preview.rememberReleaseDismiss
 import com.raulshma.jellyplay.core.ui.tv.TvFocusableItemRow
 import com.raulshma.jellyplay.core.ui.tv.rememberTvFocusState
 import com.raulshma.jellyplay.core.ui.tv.tvFocusIndicator
@@ -162,7 +165,6 @@ internal fun SeasonsSection(
         AnimatedContent(
             targetState = selectedSeasonIndex to (seasonEpisodes?.size ?: 0),
             transitionSpec = {
-                val direction = if (targetState.first >= initialState.first) 1 else -1
                 fadeIn(
                     animationSpec = tween(400),
                 ) togetherWith fadeOut(
@@ -258,6 +260,15 @@ internal fun EpisodeCard(
 
     val cardFocusState = rememberTvFocusState(focusedScale = 1.03f)
 
+    // Press-and-hold "peek" preview; no-op on TV / when no controller is wired.
+    val peek = rememberMediaPeek(
+        item = episode,
+        posterUrl = getImageUrl(episode.id),
+        backdropUrl = getImageUrl(episode.id),
+        blurHash = episode.blurHashes.primary,
+    )
+    rememberReleaseDismiss(isCardPressed)
+
     val isSynthwave = LocalIsSynthwave.current
     val isSoothing = LocalIsSoothingTheme.current
     val borderModifier = when {
@@ -294,11 +305,13 @@ internal fun EpisodeCard(
             )
             .graphicsLayer { scaleX = cardScale; scaleY = cardScale }
             .then(cardFocusState.focusModifier)
+            .then(peek.boundsModifier)
             .then(Modifier.tvFocusIndicator(cardFocusState, ShapeCache.smooth16))
-            .clickable(
+            .combinedClickable(
                 interactionSource = cardInteractionSource,
                 indication = null,
                 onClick = onDetailClick,
+                onLongClick = peek.onLongClick,
             )
     ) {
         Box(

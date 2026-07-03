@@ -38,12 +38,6 @@ class TrackOptionTest {
         val option = TrackOption(-1, "Default", null, true)
         assertEquals(-1, option.index)
     }
-
-    @Test
-    fun trackOption_nullTrackGroup_byDefault() {
-        val option = TrackOption(0, "Test", null, false)
-        assertEquals(null, option.trackGroup)
-    }
 }
 
 class SeekClampingTest {

@@ -95,6 +95,7 @@ class DialogueBoostHelper(private val equalizerHelper: EqualizerHelper) {
     internal fun computeOffsets(centerFreqsHz: List<Int>): Map<Int, Int> {
         val result = mutableMapOf<Int, Int>()
         val (coreVocal, upperHarmonics, lowMidWarmth) = when (strength) {
+            EffectStrength.NONE -> Triple(0, 0, 0)
             EffectStrength.LOW -> Triple(300, 150, 100)
             EffectStrength.MODERATE -> Triple(600, 300, 200)
             EffectStrength.HIGH -> Triple(900, 450, 300)

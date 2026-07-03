@@ -139,7 +139,7 @@ private fun ChapterItem(
             .clip(shape)
             .background(
                 if (isCurrentChapter) MaterialTheme.colorScheme.primary.copy(alpha = 0.1f)
-                else Color.White.copy(alpha = 0.04f)
+                else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.04f)
             )
             .then(focusState.focusModifier)
             .tvFocusIndicator(focusState, shape)

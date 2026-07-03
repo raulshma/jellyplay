@@ -307,6 +307,10 @@ class SettingsViewModel @Inject constructor(
         launch { preferencesStore.setDownloadConnections(count) }
     }
 
+    fun setMaxConcurrentDownloads(count: Int) {
+        launch { preferencesStore.setMaxConcurrentDownloads(count) }
+    }
+
     fun setMaxCacheSize(sizeMb: Int) {
         launch { preferencesStore.setMaxCacheSize(sizeMb) }
     }
@@ -875,6 +879,10 @@ class SettingsViewModel @Inject constructor(
     }
 
     fun setNavBarShowLabels(show: Boolean) = editor.setNavBarShowLabels(show)
+
+    fun setHideBottomNavOnScroll(hide: Boolean) {
+        launch { preferencesStore.setHideBottomNavOnScroll(hide) }
+    }
 
     fun setHomeHeroEnabled(enabled: Boolean) = editor.setHomeHeroEnabled(enabled)
 

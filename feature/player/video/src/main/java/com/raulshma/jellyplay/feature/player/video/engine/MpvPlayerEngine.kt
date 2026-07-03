@@ -30,8 +30,6 @@ import com.raulshma.jellyplay.core.model.SubtitleStyle
 import com.raulshma.jellyplay.core.model.TrackType
 import com.raulshma.jellyplay.core.model.VideoEffectsConfig
 import kotlinx.coroutines.channels.awaitClose
-import kotlinx.coroutines.delay
-import kotlinx.coroutines.withTimeoutOrNull
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -39,7 +37,6 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.callbackFlow
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.asSharedFlow
-import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.CoroutineScope
@@ -53,10 +50,6 @@ class MpvPlayerEngine(
 
     companion object {
         private const val TAG = "MpvPlayerEngine"
-        // Max time the position-polling loop will wait for playback to resume
-        // before re-checking config (M2). Prevents the ticker from suspending
-        // forever while paused.
-        private const val POSITION_PAUSED_RECHECK_MS = 2_500L
         private const val DEMUXER_MAX_BYTES_LOW = 32 * 1024 * 1024L
         private const val DEMUXER_MAX_BYTES_NORMAL = 64 * 1024 * 1024L
         private const val DEMUXER_MAX_BACK_BYTES_LOW = 16 * 1024 * 1024L
@@ -82,9 +75,6 @@ class MpvPlayerEngine(
 
     private val _isPlaying = MutableStateFlow(false)
     override val isPlaying: StateFlow<Boolean> = _isPlaying.asStateFlow()
-
-    private val _currentCues = MutableStateFlow<List<String>>(emptyList())
-    override val currentCues: StateFlow<List<String>> = _currentCues.asStateFlow()
 
     private val _availableTracks = MutableStateFlow<List<MediaTrack>>(emptyList())
     override val availableTracks: StateFlow<List<MediaTrack>> = _availableTracks.asStateFlow()
@@ -166,7 +156,6 @@ class MpvPlayerEngine(
                 }
                 if (property == "sub-text" && value != lastLoggedSubtitleText) {
                     lastLoggedSubtitleText = value
-                    _currentCues.value = value.takeIf { it.isNotBlank() }?.let { listOf(it) } ?: emptyList()
                     if (value.isNotBlank()) {
                         Log.v(TAG, "MPV active subtitle text: ${value.take(120)}")
                     }
@@ -229,7 +218,14 @@ class MpvPlayerEngine(
             mpv.setOptionString("ao", aoValue)
             mpv.setOptionString("gpu-context", "android")
             mpv.setOptionString("opengl-es", "yes")
-            mpv.setOptionString("sub-scale-with-window", "yes")
+            // Size subtitles against the video frame, not the OS window. With
+            // "yes" (window-relative), rotating to portrait grows the window
+            // height ~2x and blows the captions up, while the video itself is
+            // letterboxed; "no" keeps captions proportional to the video, so
+            // they stay correct and consistent across rotation — matching how
+            // ExoPlayer (fixed SP) and VLC (video-relative freetype) behave.
+            //
+            mpv.setOptionString("sub-scale-with-window", "no")
             mpv.setOptionString("sub-auto", "fuzzy")
             mpv.setOptionString("sub-visibility", "yes")
             mpv.setOptionString("secondary-sub-visibility", "yes")
@@ -378,7 +374,6 @@ class MpvPlayerEngine(
         pendingSubtitles = emptyList()
         lastLoggedSubtitleText = null
         generatedAudioSessionId = 0
-        _currentCues.value = emptyList()
         mainHandler.removeCallbacksAndMessages(null)
         dialogueBoost.detach()
         equalizerHelper.detach()
@@ -592,7 +587,7 @@ class MpvPlayerEngine(
         } catch (_: Exception) {}
     }
 
-    override fun selectTrack(type: TrackType, index: Int, trackGroup: Any?) {
+    override fun selectTrack(type: TrackType, index: Int) {
         try {
             val m = mpvView?.mpv ?: return
             if (type == TrackType.AUDIO) {
@@ -609,7 +604,6 @@ class MpvPlayerEngine(
             } else {
                 Log.d(TAG, "Selecting MPV subtitle track id=$index")
                 if (index < 0) {
-                    _currentCues.value = emptyList()
                     lastLoggedSubtitleText = null
                     m.setPropertyString("sid", "no")
                 } else {
@@ -790,30 +784,21 @@ class MpvPlayerEngine(
 
     override val positionFlow: Flow<Long> = callbackFlow {
         trySend(currentPositionMs)
-        var lastPlayingState = _isPlaying.value
-        val ticker = engineScope.launch {
-            while (isActive) {
-                if (!_isPlaying.value) {
-                    // Bounded wait (M2): previously `_isPlaying.first { it }`
-                    // suspended forever while paused, freezing buffer/stats
-                    // updates and ignoring polling-interval changes. Re-check
-                    // every few seconds so config is honoured even while paused.
-                    withTimeoutOrNull(POSITION_PAUSED_RECHECK_MS) {
-                        _isPlaying.first { it }
-                    }
-                }
-                delay(_pollingIntervalMs.value)
+        // The polling loop (bounded paused-wait, play↔pause edge detection) is
+        // shared via [EnginePositionTicker].
+        val ticker = EnginePositionTicker(
+            scope = engineScope,
+            pollingIntervalMs = _pollingIntervalMs,
+            isPlayingFlow = _isPlaying,
+            isCurrentlyPlaying = { _isPlaying.value },
+            onActive = {
                 trySend(currentPositionMs)
-                val currentlyPlaying = _isPlaying.value
-                if (currentlyPlaying || currentlyPlaying != lastPlayingState) {
-                    updateBufferPosition()
-                    if (_videoStatsEnabled.value) {
-                        updateVideoStatsOnly()
-                    }
+                updateBufferPosition()
+                if (_videoStatsEnabled.value) {
+                    updateVideoStatsOnly()
                 }
-                lastPlayingState = currentlyPlaying
-            }
-        }
+            },
+        ).launch()
         awaitClose { ticker.cancel() }
     }
 

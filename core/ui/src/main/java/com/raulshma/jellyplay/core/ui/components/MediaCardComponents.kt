@@ -6,6 +6,7 @@ import androidx.compose.animation.core.spring
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.Arrangement
@@ -69,6 +70,8 @@ import com.raulshma.jellyplay.core.ui.animation.fastEffectsSpec
 import com.raulshma.jellyplay.core.ui.adaptive.LocalJellyPlayUi
 import com.raulshma.jellyplay.core.ui.image.MediaImage
 import com.raulshma.jellyplay.core.ui.image.PhotoFolderPoster
+import com.raulshma.jellyplay.core.ui.preview.rememberMediaPeek
+import com.raulshma.jellyplay.core.ui.preview.rememberReleaseDismiss
 import com.raulshma.jellyplay.core.ui.tv.TvFocusableItemRow
 import com.raulshma.jellyplay.core.ui.tv.enableMarqueeOnFocus
 import kotlinx.coroutines.Dispatchers
@@ -264,6 +267,7 @@ fun PosterCard(
     sharedElementKey: String? = null,
     photoFolderChildImageUrls: List<String> = emptyList(),
     clipToShape: Boolean = false,
+    showEpisodeSeriesBadge: Boolean = false,
 ) {
     val uiEnvironment = LocalJellyPlayUi.current
     val cardPrefs = LocalCardDisplayPreferences.current
@@ -290,6 +294,19 @@ fun PosterCard(
 
     val dominantColor = rememberDominantColor(imageUrl, itemId = item.id)
     val playButtonSize = if (isTv) 44.dp else 36.dp
+
+    // Press-and-hold "peek" preview (Instagram-style). The handle's onLongClick
+    // opens the overlay; boundsModifier tracks the card's rect for the morph;
+    // rememberReleaseDismiss closes it when the finger lifts — all driven by
+    // this card's existing interactionSource. No-ops on TV and when no
+    // controller is provided (see LocalMediaPreviewController).
+    val peek = rememberMediaPeek(
+        item = item,
+        posterUrl = imageUrl,
+        backdropUrl = fallbackUrls.firstOrNull(),
+        blurHash = blurHash,
+    )
+    rememberReleaseDismiss(isPressed)
 
     val sharedTransitionScope = LocalSharedTransitionScope.current
     val animatedVisibilityScope = LocalAnimatedVisibilityScope.current
@@ -331,6 +348,7 @@ fun PosterCard(
             modifier = Modifier
                 .fillMaxWidth()
                 .then(focusInteraction.modifier)
+                .then(peek.boundsModifier)
                 .graphicsLayer {
                     scaleX = scale
                     scaleY = scale
@@ -339,10 +357,11 @@ fun PosterCard(
                     shape = cardShape
                 }
                 .jellyFocusIndicator(focusInteraction, cardShape)
-                .clickable(
+                .combinedClickable(
                     interactionSource = interactionSource,
                     indication = null,
                     onClick = onClick,
+                    onLongClick = peek.onLongClick,
                 ),
             shape = cardShape,
             border = border,
@@ -452,6 +471,39 @@ fun PosterCard(
                     }
                 }
 
+                // Bottom-left season/episode chip for episode cards surfaced in
+                // Latest Media rows. The series name is shown as the card title
+                // (see below) so the chip only needs to carry the S# E# context.
+                if (showEpisodeSeriesBadge && item.mediaType == MediaType.EPISODE) {
+                    val seasonNumber = item.seasonNumber
+                    val episodeNumber = item.episodeNumber
+                    val episodeChip = remember(seasonNumber, episodeNumber) {
+                        when {
+                            seasonNumber != null && episodeNumber != null ->
+                                "S${seasonNumber} E${episodeNumber.toString().padStart(2, '0')}"
+                            episodeNumber != null -> "E${episodeNumber.toString().padStart(2, '0')}"
+                            seasonNumber != null -> "S$seasonNumber"
+                            else -> null
+                        }
+                    }
+                    if (episodeChip != null) {
+                        Text(
+                            text = episodeChip,
+                            style = MaterialTheme.typography.labelSmall,
+                            color = Color.White,
+                            fontWeight = FontWeight.SemiBold,
+                            modifier = Modifier
+                                .align(Alignment.BottomStart)
+                                .padding(start = 6.dp, bottom = 6.dp)
+                                .background(
+                                    MaterialTheme.colorScheme.primary,
+                                    ShapeCache.smooth4,
+                                )
+                                .padding(horizontal = 6.dp, vertical = 2.dp),
+                        )
+                    }
+                }
+
                 if (onPlayClick != null) {
                     PlayButtonWithProgress(
                         progressPercent = if (showProgress) progressPercent else 0f,
@@ -490,8 +542,18 @@ fun PosterCard(
                 top = if (isTv) 8.dp else 6.dp,
             ),
         ) {
+            // For episode cards in Latest Media rows, show the series name as the
+            // title (the episode title alone doesn't identify the show); the
+            // season/episode chip below the image carries the S# E# context.
+            val titleText = remember(item, showEpisodeSeriesBadge) {
+                if (showEpisodeSeriesBadge && item.mediaType == MediaType.EPISODE) {
+                    item.seriesName?.takeIf { it.isNotBlank() } ?: item.name
+                } else {
+                    item.name
+                }
+            }
             Text(
-                text = item.name,
+                text = titleText,
                 style = if (isTv) MaterialTheme.typography.bodyMedium else MaterialTheme.typography.bodySmall,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,

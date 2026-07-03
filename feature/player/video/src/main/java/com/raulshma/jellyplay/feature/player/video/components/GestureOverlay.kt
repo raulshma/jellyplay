@@ -9,6 +9,7 @@ import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.core.animateFloat
+import com.raulshma.jellyplay.core.designsystem.theme.playerOnScrim
 import com.raulshma.jellyplay.core.designsystem.theme.ShapeCache
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
@@ -278,14 +279,14 @@ private fun SeekCircleOverlay(
                         Spacer(modifier = Modifier.width(6.dp))
                         Text(
                             text = "-${seekOffsetMs / 1000}s",
-                            color = Color.White,
+                            color = playerOnScrim(),
                             fontSize = 15.sp,
                             fontWeight = FontWeight.Bold,
                         )
                     } else {
                         Text(
                             text = "+${seekOffsetMs / 1000}s",
-                            color = Color.White,
+                            color = playerOnScrim(),
                             fontSize = 15.sp,
                             fontWeight = FontWeight.Bold,
                         )
@@ -341,7 +342,7 @@ private fun EdgeBarOverlay(
                 modifier = Modifier
                     .size(32.dp)
                     .clip(CircleShape)
-                    .background(Color.White.copy(alpha = 0.1f))
+                    .background(playerOnScrim().copy(alpha = 0.1f))
                     .then(
                         if (boundGlowAlpha.value > 0.01f) Modifier.drawBehind {
                             drawCircle(
@@ -356,7 +357,7 @@ private fun EdgeBarOverlay(
                 Icon(
                     icon,
                     contentDescription = null,
-                    tint = if (isAtBound) primaryColor else Color.White,
+                    tint = if (isAtBound) primaryColor else playerOnScrim(),
                     modifier = Modifier.size(18.dp),
                 )
             }
@@ -365,7 +366,7 @@ private fun EdgeBarOverlay(
                     .width(5.dp)
                     .height(160.dp)
                     .clip(ShapeCache.smoothPill)
-                    .background(Color.White.copy(alpha = 0.15f))
+                    .background(playerOnScrim().copy(alpha = 0.15f))
                     .then(
                         if (boundGlowAlpha.value > 0.01f) Modifier.drawBehind {
                             drawRoundRect(
@@ -393,7 +394,7 @@ private fun EdgeBarOverlay(
             }
             Text(
                 label,
-                color = if (isAtBound) primaryColor else Color.White,
+                color = if (isAtBound) primaryColor else playerOnScrim(),
                 style = MaterialTheme.typography.labelSmall.copy(
                     fontWeight = if (isAtBound) FontWeight.Bold else FontWeight.Medium,
                     fontFamily = FontFamily.Monospace,

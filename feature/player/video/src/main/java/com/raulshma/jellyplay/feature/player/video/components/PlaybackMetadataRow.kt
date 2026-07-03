@@ -18,6 +18,8 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.raulshma.jellyplay.core.designsystem.theme.HdrColors
+import com.raulshma.jellyplay.core.designsystem.theme.playerOnScrim
+import com.raulshma.jellyplay.core.designsystem.theme.playerScrimColor
 import com.raulshma.jellyplay.core.model.MediaStream
 import com.raulshma.jellyplay.core.model.StreamType
 import com.raulshma.jellyplay.feature.player.video.TrackOption
@@ -101,24 +103,25 @@ internal fun PlaybackMetadataRow(
     val hdrGold = HdrColors.hdr10Gold
     val dolbyVisionGold = HdrColors.dolbyVisionGold
 
+    val onScrim = playerOnScrim()
     val playMethodColor = when {
         isDirectPlayForced -> transcodeOrange
         playMethod.equals("Direct Play", ignoreCase = true) -> directPlayGreen
         playMethod.lowercase().contains("transcod") -> transcodeOrange
-        else -> Color.White
+        else -> onScrim
     }
     val playMethodLabel = if (isDirectPlayForced) "Direct Play \u26A0" else playMethod
 
     val hdrColor = if (isDolbyVision) dolbyVisionGold else hdrGold
-    val audioColor = if (isAtmos || isDtsX) dolbyVisionGold else Color.White
+    val audioColor = if (isAtmos || isDtsX) dolbyVisionGold else onScrim
 
     val items = remember(playMethodLabel, videoCodec, hdrLabel, audioLabel, channelsLabel, playMethodColor, hdrColor, audioColor) {
         listOfNotNull(
             MetadataItem(playMethodLabel, playMethodColor),
-            videoCodec?.let { MetadataItem(it, Color.White) },
+            videoCodec?.let { MetadataItem(it, onScrim) },
             hdrLabel?.let { MetadataItem(it, hdrColor) },
             if (audioLabel.isNotBlank()) MetadataItem(audioLabel, audioColor) else null,
-            channelsLabel?.let { MetadataItem(it, Color.White.copy(alpha = 0.9f)) }
+            channelsLabel?.let { MetadataItem(it, onScrim.copy(alpha = 0.9f)) }
         )
     }
 
@@ -135,7 +138,7 @@ internal fun PlaybackMetadataRow(
             if (index > 0) {
                 OutlinedText(
                     text = "•",
-                    textColor = Color.White.copy(alpha = 0.4f)
+                    textColor = onScrim.copy(alpha = 0.4f)
                 )
             }
             OutlinedText(
@@ -157,7 +160,7 @@ private fun OutlinedText(
     ),
 ) {
     Box(modifier = modifier, contentAlignment = Alignment.Center) {
-        val outlineColor = Color.Black.copy(alpha = 0.8f)
+        val outlineColor = playerScrimColor().copy(alpha = 0.8f)
         val offsets = listOf(
             -0.8.dp to -0.8.dp,
             0.8.dp to -0.8.dp,

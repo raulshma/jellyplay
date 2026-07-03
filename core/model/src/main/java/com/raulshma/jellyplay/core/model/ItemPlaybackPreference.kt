@@ -28,11 +28,19 @@ enum class PlaybackPrefScope {
  * **per-item language rule → per-series language rule (this model)** →
  * global `preferredAudioLanguage` / `preferredSubtitleLanguage`.
  *
+ * The [dialogueBoostStrength] field extends the per-item model to audio effects
+ *: a `null` value means "no per-item rule" (resolve to the
+ * effective default of [EffectStrength.NONE] — dialogue boost does NOT carry
+ * across items unless explicitly pinned per-item or per-series). A non-null
+ * value pins the effect for this item/series.
+ *
  * @param scope whether this rule is keyed by item id or series id.
  * @param key the item id (when [PlaybackPrefScope.ITEM]) or series id
  *   (when [PlaybackPrefScope.SERIES]).
  * @param audioLanguage preferred audio language code (ISO-639), or null to inherit.
  * @param subtitleLanguage preferred subtitle language code (ISO-639), or null to inherit.
+ * @param dialogueBoostStrength per-item dialogue-boost strength, or null to use the
+ *   effective default ([EffectStrength.NONE]).
  * @param updatedAt epoch millis of the last write.
  */
 @Immutable
@@ -42,5 +50,6 @@ data class ItemPlaybackPreference(
     val key: String,
     val audioLanguage: String? = null,
     val subtitleLanguage: String? = null,
+    val dialogueBoostStrength: EffectStrength? = null,
     val updatedAt: Long = System.currentTimeMillis(),
 )

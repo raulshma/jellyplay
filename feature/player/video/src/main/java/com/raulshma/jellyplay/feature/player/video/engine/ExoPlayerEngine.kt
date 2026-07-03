@@ -53,7 +53,6 @@ import com.raulshma.jellyplay.core.model.TrackType
 import com.raulshma.jellyplay.feature.player.video.subtitle.OffsettingSubtitleParserFactory
 import com.raulshma.jellyplay.feature.player.video.subtitle.SubtitleMimeMapper
 import kotlinx.coroutines.channels.awaitClose
-import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -61,19 +60,20 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.callbackFlow
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.asSharedFlow
-import kotlinx.coroutines.flow.first
-import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.withTimeoutOrNull
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
 
-// Max time the position-polling loop will wait for playback to resume before
-// re-checking config (M2). Prevents the ticker from suspending forever while
-// paused.
-private const val POSITION_PAUSED_RECHECK_MS = 2_500L
+// The position-polling bounded paused-wait (M2) now lives in [EnginePositionTicker].
+
+/**
+ * Default subtitle text size for the embedded-style path. A fixed SP value keeps
+ * captions stable across orientation changes (a height-fraction scales against the
+ * view height, which grows dramatically in portrait).
+ */
+private const val DEFAULT_SUBTITLE_SIZE_SP = 18f
 
 class ExoPlayerEngine(
     private val context: Context,
@@ -108,9 +108,6 @@ class ExoPlayerEngine(
 
     private val _isPlaying = MutableStateFlow(false)
     override val isPlaying: StateFlow<Boolean> = _isPlaying.asStateFlow()
-
-    private val _currentCues = MutableStateFlow<List<String>>(emptyList())
-    override val currentCues: StateFlow<List<String>> = _currentCues.asStateFlow()
 
     private val _availableTracks = MutableStateFlow<List<MediaTrack>>(emptyList())
     override val availableTracks: StateFlow<List<MediaTrack>> = _availableTracks.asStateFlow()
@@ -189,10 +186,6 @@ class ExoPlayerEngine(
         override fun onPlayerError(error: PlaybackException) {
             _playbackState.value = EnginePlaybackState.ERROR
             _errorFlow.tryEmit(error.message ?: "Unknown playback error")
-        }
-
-        override fun onCues(cueGroup: androidx.media3.common.text.CueGroup) {
-            _currentCues.value = cueGroup.cues.mapNotNull { it.text?.toString() }
         }
 
         override fun onAudioSessionIdChanged(audioSessionId: Int) {
@@ -497,7 +490,7 @@ class ExoPlayerEngine(
         }
     }
 
-    override fun selectTrack(type: TrackType, index: Int, trackGroup: Any?) = runOnPlayerThread {
+    override fun selectTrack(type: TrackType, index: Int) = runOnPlayerThread {
         val selector = trackSelector ?: return@runOnPlayerThread
         val p = player ?: return@runOnPlayerThread
         val params = selector.buildUponParameters()
@@ -512,24 +505,21 @@ class ExoPlayerEngine(
             if (type == TrackType.SUBTITLE) {
                 params.setTrackTypeDisabled(exoType, false)
             }
-            val group = trackGroup as? TrackGroup
-            if (group != null) {
-                 params.setOverrideForType(
+            // Resolve the TrackGroup by type-filtered positional index — the same
+            // indexing [buildTracks] uses to publish [MediaTrack.index], so the
+            // two stay in sync without the engine-agnostic contract having to
+            // carry the opaque (ExoPlayer-specific) TrackGroup reference.
+            val groups = p.currentTracks.groups.filter { it.type == exoType }
+            if (groups.isEmpty()) {
+                selector.setParameters(params)
+                return@runOnPlayerThread
+            }
+            val groupIndex = index.coerceIn(groups.indices)
+            if (groupIndex in groups.indices) {
+                val group = groups[groupIndex].mediaTrackGroup
+                params.setOverrideForType(
                     TrackSelectionOverride(group, (0 until group.length).toList())
                 )
-            } else {
-                val groups = p.currentTracks.groups.filter { it.type == exoType }
-                if (groups.isEmpty()) {
-                    selector.setParameters(params)
-                    return@runOnPlayerThread
-                }
-                val groupIndex = index.coerceIn(groups.indices)
-                if (groupIndex in groups.indices) {
-                    val fallbackGroup = groups[groupIndex].mediaTrackGroup
-                    params.setOverrideForType(
-                        TrackSelectionOverride(fallbackGroup, (0 until fallbackGroup.length).toList())
-                    )
-                }
             }
         }
         selector.setParameters(params)
@@ -555,23 +545,49 @@ class ExoPlayerEngine(
                 android.view.ViewGroup.LayoutParams.MATCH_PARENT,
             )
         }
-        pv.post {
-            val subtitleView = pv.subtitleView ?: return@post
-            val parent = subtitleView.parent as? android.view.ViewGroup ?: return@post
-            if (parent !== pv) {
-                parent.removeView(subtitleView)
-                pv.addView(
-                    subtitleView,
-                    android.widget.FrameLayout.LayoutParams(
-                        android.view.ViewGroup.LayoutParams.MATCH_PARENT,
-                        android.view.ViewGroup.LayoutParams.MATCH_PARENT,
-                    ),
-                )
-            }
+        pv.post { reparentSubtitleViewIntoVideoFrame(pv) }
+        // Re-parent the SubtitleView into the (re-laid-out) content frame after
+        // every layout pass. In portrait the PlayerView letterboxes the video
+        // into the AspectRatioFrameLayout content frame; the SubtitleView must
+        // live inside that frame (not the full-screen PlayerView) so captions
+        // sit at the bottom of the *video*, and setBottomPaddingFraction /
+        // fractional text sizes compute against the video height, not the much
+        // taller screen height.
+        pv.addOnLayoutChangeListener { _, _, _, _, _, _, _, _, _ ->
+            pv.post { reparentSubtitleViewIntoVideoFrame(pv) }
         }
         playerView = pv
         applySubtitleStyleToView(pv, currentConfig.subtitleStyle)
         return pv
+    }
+
+    /**
+     * Moves PlayerView's SubtitleView from the full-screen PlayerView into the
+     * [AspectRatioFrameLayout] content frame (the letterboxed video rectangle).
+     * While the SubtitleView is a direct child of the PlayerView its layout
+     * fractions (bottom padding, fractional text size) are computed against the
+     * whole screen height, so in portrait — where the video is letterboxed —
+     * captions land in the bottom black bar instead of on the video. Inside the
+     * content frame they are measured against the video dimensions, keeping them
+     * correct and consistent with mpv / VLC across rotation.
+     */
+    private fun reparentSubtitleViewIntoVideoFrame(pv: PlayerView) {
+        val subtitleView = pv.subtitleView ?: return
+        val contentFrame = pv.findViewById<android.view.ViewGroup>(
+            androidx.media3.ui.R.id.exo_content_frame
+        ) ?: return
+        val currentParent = subtitleView.parent as? android.view.ViewGroup
+        if (currentParent === contentFrame) return
+        currentParent?.removeView(subtitleView)
+        // Append (not index 0): the video surface is the first child of the
+        // content frame, so a 0-index insert would render captions behind it.
+        contentFrame.addView(
+            subtitleView,
+            android.widget.FrameLayout.LayoutParams(
+                android.view.ViewGroup.LayoutParams.MATCH_PARENT,
+                android.view.ViewGroup.LayoutParams.MATCH_PARENT,
+            ),
+        )
     }
 
     override fun applySubtitleStyleToView(view: View, style: SubtitleStyle) {
@@ -599,7 +615,14 @@ class ExoPlayerEngine(
                 )
                 sv.setFixedTextSize(android.util.TypedValue.COMPLEX_UNIT_SP, style.fontSize.toFloat())
             } else {
+                // Keep embedded colors/positioning but force a stable font size.
                 sv.setApplyEmbeddedStyles(true)
+                // Without this, cues that carry an embedded font size make Media3
+                // size text as a fraction of the (full-screen) SubtitleView height.
+                // On rotation to portrait that height grows dramatically and the
+                // captions become huge, while mpv (libass, sizes against the video
+                // frame) stays correct.
+                sv.setApplyEmbeddedFontSizes(false)
                 sv.setStyle(
                     CaptionStyleCompat(
                         Color.WHITE,
@@ -610,7 +633,7 @@ class ExoPlayerEngine(
                         android.graphics.Typeface.SANS_SERIF
                     )
                 )
-                sv.setFractionalTextSize(0.0533f, false)
+                sv.setFixedTextSize(android.util.TypedValue.COMPLEX_UNIT_SP, DEFAULT_SUBTITLE_SIZE_SP)
             }
             sv.setBottomPaddingFraction(style.verticalPosition)
         }
@@ -646,36 +669,22 @@ class ExoPlayerEngine(
         p.addListener(posListener)
         trySend(p.currentPosition)
 
-        var lastPlayingState = p.isPlaying
-        val ticker = engineScope.launch {
-            while (isActive) {
-                if (!p.isPlaying) {
-                    // Bounded wait (M2): a previous `_isPlaying.first { it }`
-                    // suspended forever while paused, so polling-interval and
-                    // video-stats-config changes were ignored until playback
-                    // resumed and buffer/stats froze. Re-check every few
-                    // seconds so config is honoured even while paused.
-                    withTimeoutOrNull(POSITION_PAUSED_RECHECK_MS) {
-                        _isPlaying.first { it }
-                    }
+        // The polling loop (bounded paused-wait, play↔pause edge detection) is
+        // shared via [EnginePositionTicker]; this engine keeps its own
+        // `Player.Listener` above for immediate discontinuity notifications.
+        val ticker = EnginePositionTicker(
+            scope = engineScope,
+            pollingIntervalMs = _pollingIntervalMs,
+            isPlayingFlow = _isPlaying,
+            isCurrentlyPlaying = { p.isPlaying },
+            onActive = {
+                trySend(p.currentPosition)
+                _bufferedPositionMs.value = p.bufferedPosition.coerceAtLeast(0L)
+                if (_videoStatsEnabled.value) {
+                    updateVideoStats()
                 }
-                delay(_pollingIntervalMs.value)
-                runCatching {
-                    val currentlyPlaying = p.isPlaying
-                    if (currentlyPlaying) {
-                        trySend(p.currentPosition)
-                        _bufferedPositionMs.value = p.bufferedPosition.coerceAtLeast(0L)
-                        if (_videoStatsEnabled.value) {
-                            updateVideoStats()
-                        }
-                    } else if (currentlyPlaying != lastPlayingState) {
-                        trySend(p.currentPosition)
-                        _bufferedPositionMs.value = p.bufferedPosition.coerceAtLeast(0L)
-                    }
-                    lastPlayingState = currentlyPlaying
-                }
-            }
-        }
+            },
+        ).launch()
 
         awaitClose {
             ticker.cancel()
@@ -867,7 +876,6 @@ class ExoPlayerEngine(
                         language = format.language,
                         isSelected = isSelected,
                         type = trackType,
-                        trackGroup = group.mediaTrackGroup,
                     )
                 )
                 groupIndex++

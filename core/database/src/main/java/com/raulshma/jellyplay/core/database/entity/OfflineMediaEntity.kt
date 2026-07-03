@@ -43,4 +43,21 @@ data class OfflineMediaEntity(
     val genres: String? = null,
     @ColumnInfo(defaultValue = "0")
     val createdAt: Long = System.currentTimeMillis(),
+    // Playback progress. Nullable/defaulted so existing rows
+    // (no recorded progress) resolve to "not started". Added in migration 28→29.
+    val playbackPositionTicks: Long? = null,
+    @ColumnInfo(defaultValue = "0.0")
+    val playedPercentage: Double = 0.0,
+    @ColumnInfo(defaultValue = "0")
+    val isPlayed: Boolean = false,
+    val lastPlayedDate: String? = null,
+    // Rich metadata persisted at download time so offline detail screens can
+    // show the same information as the online detail screen. Added in
+    // migration 29→30; all columns are nullable so existing rows degrade
+    // gracefully until re-download.
+    val originalTitle: String? = null,
+    val criticRating: Float? = null,
+    val studios: String? = null,
+    val tagline: String? = null,
+    val peopleJson: String? = null,
 )
