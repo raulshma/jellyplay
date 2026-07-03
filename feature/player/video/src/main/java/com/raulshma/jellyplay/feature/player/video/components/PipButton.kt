@@ -8,8 +8,8 @@ import androidx.compose.material3.IconButtonDefaults
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
+import com.raulshma.jellyplay.core.designsystem.theme.playerOnScrim
 import com.raulshma.jellyplay.core.ui.tv.rememberTvFocusState
 import com.raulshma.jellyplay.core.ui.tv.tvFocusIndicator
 import com.composables.icons.tabler.Tabler
@@ -28,7 +28,7 @@ internal fun PipButton(
             .tvFocusIndicator(tvFocusState, IconButtonDefaults.smallRoundShape),
         shape = IconButtonDefaults.smallRoundShape,
         colors = IconButtonDefaults.filledTonalIconButtonColors(
-            containerColor = Color.White.copy(alpha = 0.1f),
+            containerColor = playerOnScrim().copy(alpha = 0.1f),
             contentColor = MaterialTheme.colorScheme.onSurface,
         ),
     ) {

@@ -140,6 +140,8 @@ import kotlinx.coroutines.launch
 import androidx.compose.animation.core.tween
 import com.raulshma.jellyplay.core.designsystem.theme.AlphaEasing
 import com.raulshma.jellyplay.core.designsystem.theme.PlayerDarkTheme
+import com.raulshma.jellyplay.core.designsystem.theme.playerOnScrim
+import com.raulshma.jellyplay.core.designsystem.theme.playerScrimColor
 import com.raulshma.jellyplay.core.ui.animation.AnimationTokens
 import androidx.media3.ui.AspectRatioFrameLayout
 
@@ -600,13 +602,6 @@ fun VideoPlayerScreen(
             modifier = Modifier.fillMaxSize()
         )
     } else {
-        // Force a dark color scheme for the entire player subtree. The player chrome (controls,
-        // overlays, drawers, gesture indicators) is always rendered on the dark video surface and
-        // assumes light foregrounds. Without this, a light ambient theme resolves `onSurface` to
-        // dark colors → invisible dark-on-dark text/controls (issue: player light-mode contrast).
-        // PlayerDarkTheme also sets LocalContentColor so uncolored Text/Icons fall back to a light
-        // foreground (MaterialTheme alone does not). The accent (primary) is preserved.
-        PlayerDarkTheme {
         Box(
             modifier = Modifier
                 .fillMaxSize()
@@ -916,7 +911,7 @@ fun VideoPlayerScreen(
                     Box(
                         modifier = Modifier
                             .clip(ShapeCache.smoothPill)
-                            .background(Color.Black.copy(alpha = 0.7f))
+                            .background(playerScrimColor().copy(alpha = 0.7f))
                             .padding(horizontal = 16.dp, vertical = 8.dp),
                         contentAlignment = Alignment.Center,
                     ) {
@@ -1005,7 +1000,7 @@ fun VideoPlayerScreen(
                     modifier = Modifier.align(Alignment.Center),
                     contentAlignment = Alignment.Center,
                 ) {
-                    JellyPlayLoadingIndicator(color = Color.White)
+                    JellyPlayLoadingIndicator(color = playerOnScrim())
                 }
             }
 
@@ -1082,8 +1077,8 @@ fun VideoPlayerScreen(
                 Snackbar(
                     snackbarData = data,
                     shape = ShapeCache.smoothPill,
-                    containerColor = Color.White.copy(alpha = 0.15f),
-                    contentColor = Color.White,
+                    containerColor = playerOnScrim().copy(alpha = 0.15f),
+                    contentColor = playerOnScrim(),
                 )
             }
 
@@ -1158,6 +1153,10 @@ fun VideoPlayerScreen(
             val onControlsFocusChange by remember { mutableStateOf({ hasFocus: Boolean -> controlsHasFocus = hasFocus }) }
             val onOverflowMenuChange by remember { mutableStateOf({ open: Boolean -> isOverflowMenuOpen = open }) }
 
+            // Control bars always render as a dark "chrome zone" (dark scrim + light text/icons)
+            // because they float over arbitrary video content, regardless of the app theme.
+            // Drawers and other surfaces outside this wrapper still respect the ambient theme.
+            PlayerDarkTheme {
             PlayerControls(
                 title = title,
                 subtitle = subtitle,
@@ -1259,6 +1258,7 @@ fun VideoPlayerScreen(
                 castManager = viewModel.castManagerField,
                 modifier = Modifier.fillMaxSize(),
             )
+            } // end PlayerDarkTheme (control bars)
 
             AnimatedVisibility(
                 visible = !isTv && uiState.trickplayEnabled && showControls && isSeeking,
@@ -1365,13 +1365,7 @@ fun VideoPlayerScreen(
             }
         }
     }
-    } // end PlayerDarkTheme
 
-    // Sheets render outside the player Box above, so they must be wrapped in the player dark
-    // theme too — otherwise their titles/labels inherit the ambient (light) content color and
-    // LocalContentColor, rendering dark-on-dark. PlayerDarkTheme forces the dark scheme + a
-    // light LocalContentColor, so every sheet's uncolored Text/Icon is high-contrast.
-    PlayerDarkTheme {
     PlayerSheetRouter(
         currentSheet = currentSheet,
         onSheetChange = { sheet -> currentSheet = sheet },
@@ -1394,7 +1388,6 @@ fun VideoPlayerScreen(
             )
         },
     )
-    } // end PlayerDarkTheme (sheets)
 
     val playerError = uiState.playerError
     if (uiState.showPlaybackErrorDialog && playerError != null) {
@@ -1433,7 +1426,7 @@ private fun BoxScope.AutoAspectRatioBadge(
     ) {
         Surface(
             shape = ShapeCache.smoothPill,
-            color = Color.White.copy(alpha = 0.12f),
+            color = playerOnScrim().copy(alpha = 0.12f),
         ) {
             Text(
                 text = "Auto: ${detectedAspectRatio?.displayName ?: ""}",

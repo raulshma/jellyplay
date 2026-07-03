@@ -27,7 +27,7 @@ interface OfflineMediaDao {
     suspend fun upsert(entity: OfflineMediaEntity)
 
     /**
-     * Updates only the playback-progress columns for a row (issue #65-A). A
+     * Updates only the playback-progress columns for a row. A
      * targeted UPDATE avoids clobbering metadata fields and is cheaper than a
      * full upsert. `lastPlayedDate` is set to the supplied ISO timestamp.
      */

@@ -494,7 +494,7 @@ val MIGRATION_26_27 = object : Migration(26, 27) {
     }
 }
 
-// Per-item / per-series dialogue-boost strength (issue #66-B).
+// Per-item / per-series dialogue-boost strength.
 // Nullable column: NULL means "no per-item rule" (resolve to the effective default).
 val MIGRATION_27_28 = object : Migration(27, 28) {
     override fun migrate(db: SupportSQLiteDatabase) {
@@ -503,7 +503,7 @@ val MIGRATION_27_28 = object : Migration(27, 28) {
 }
 
 // Offline playback progress: position ticks, played percentage, isPlayed, and
-// last-played date (issue #65-A/B). Lets downloads render watched state and
+// last-played date. Lets downloads render watched state and
 // resume positions while offline, seeded from server UserData at download time.
 val MIGRATION_28_29 = object : Migration(28, 29) {
     override fun migrate(db: SupportSQLiteDatabase) {

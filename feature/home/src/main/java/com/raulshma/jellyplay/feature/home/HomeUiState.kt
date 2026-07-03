@@ -22,7 +22,7 @@ data class HomeUiState(
     val isLoading: Boolean = true,
     val isRefreshing: Boolean = false,
     val error: String? = null,
-    /** Non-blocking notice shown when some (not all) home sections failed to load (issue #62-A). */
+    /** Non-blocking notice shown when some (not all) home sections failed to load. */
     val partialLoadError: Boolean = false,
     val homeMode: HomeMode = HomeMode.VIDEO,
     val dynamicTheming: Boolean = true,

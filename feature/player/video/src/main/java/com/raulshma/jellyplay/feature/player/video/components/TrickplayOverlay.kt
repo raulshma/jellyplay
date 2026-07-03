@@ -14,6 +14,8 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import com.raulshma.jellyplay.core.designsystem.theme.playerOnScrim
+import com.raulshma.jellyplay.core.designsystem.theme.playerScrimColor
 import com.raulshma.jellyplay.core.designsystem.theme.ShapeCache
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
@@ -58,11 +60,11 @@ fun TrickplayOverlay(
             .shadow(20.dp, shape = ShapeCache.smooth20)
             .border(
                 width = 0.5.dp,
-                color = Color.White.copy(alpha = 0.1f),
+                color = playerOnScrim().copy(alpha = 0.1f),
                 shape = ShapeCache.smooth20,
             ),
         shape = ShapeCache.smooth20,
-        color = Color.Black.copy(alpha = 0.6f),
+        color = playerScrimColor().copy(alpha = 0.6f),
     ) {
         Column(
             horizontalAlignment = Alignment.CenterHorizontally,
@@ -71,15 +73,16 @@ fun TrickplayOverlay(
                 modifier = Modifier
                     .fillMaxWidth()
                     .height(135.dp)
-                    .background(Color.Black),
+                    .background(playerScrimColor()),
                 contentAlignment = Alignment.Center,
             ) {
                 val imageBitmap = remember(bitmap) { bitmap?.asImageBitmap() }
-                val thumbnailOverlayGradient = remember {
+                val scrimBase = playerScrimColor()
+                val thumbnailOverlayGradient = remember(scrimBase) {
                     Brush.verticalGradient(
                         colors = listOf(
                             Color.Transparent,
-                            Color.Black.copy(alpha = 0.75f),
+                            scrimBase.copy(alpha = 0.75f),
                         ),
                     )
                 }
@@ -107,8 +110,8 @@ fun TrickplayOverlay(
                             .background(
                                 Brush.verticalGradient(
                                     colors = listOf(
-                                        Color.White.copy(alpha = 0.05f),
-                                        Color.White.copy(alpha = 0.02f),
+                                        playerOnScrim().copy(alpha = 0.05f),
+                                        playerOnScrim().copy(alpha = 0.02f),
                                     ),
                                 ),
                             ),
@@ -116,7 +119,7 @@ fun TrickplayOverlay(
                     ) {
                         Text(
                             text = formatTime(positionMs),
-                            color = Color.White.copy(alpha = 0.7f),
+                            color = playerOnScrim().copy(alpha = 0.7f),
                             style = MaterialTheme.typography.bodyMedium,
                             fontWeight = FontWeight.Medium,
                             letterSpacing = 2.sp,
@@ -128,7 +131,7 @@ fun TrickplayOverlay(
             Column(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .background(Color.Black.copy(alpha = 0.25f))
+                    .background(playerScrimColor().copy(alpha = 0.25f))
                     .padding(horizontal = 16.dp, vertical = 12.dp),
                 horizontalAlignment = Alignment.CenterHorizontally,
                 verticalArrangement = Arrangement.spacedBy(6.dp),
@@ -167,7 +170,7 @@ fun TrickplayOverlay(
                 Text(
                     text = formatTime(positionMs),
                     style = MaterialTheme.typography.labelMedium,
-                    color = Color.White.copy(alpha = 0.85f),
+                    color = playerOnScrim().copy(alpha = 0.85f),
                     fontWeight = FontWeight.Medium,
                     fontFamily = FontFamily.Monospace,
                 )

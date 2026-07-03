@@ -26,6 +26,8 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.raulshma.jellyplay.core.designsystem.theme.ShapeCache
 import com.raulshma.jellyplay.core.designsystem.theme.extendedColors
+import com.raulshma.jellyplay.core.designsystem.theme.playerOnScrim
+import com.raulshma.jellyplay.core.designsystem.theme.playerScrimColor
 import com.raulshma.jellyplay.feature.player.video.engine.EngineVideoStats
 import java.text.SimpleDateFormat
 import java.util.Date
@@ -54,7 +56,7 @@ fun VideoStatsOverlay(
     Column(
         modifier = modifier
             .clip(ShapeCache.smooth12)
-            .background(Color.Black.copy(alpha = 0.78f))
+            .background(playerScrimColor().copy(alpha = 0.78f))
             .padding(12.dp),
         verticalArrangement = Arrangement.spacedBy(6.dp),
     ) {
@@ -64,7 +66,7 @@ fun VideoStatsOverlay(
                 fontWeight = FontWeight.Bold,
                 letterSpacing = 0.5.sp,
             ),
-            color = Color.White,
+            color = playerOnScrim(),
         )
 
         StatsSection("Playback") {
@@ -180,7 +182,7 @@ private fun StatsRow(
                 fontFamily = FontFamily.Monospace,
                 fontSize = 10.sp,
             ),
-            color = Color.White.copy(alpha = 0.85f),
+            color = playerOnScrim().copy(alpha = 0.85f),
         )
         Text(
             text = value,
@@ -189,7 +191,7 @@ private fun StatsRow(
                 fontWeight = FontWeight.Medium,
                 fontSize = 10.sp,
             ),
-            color = Color.White,
+            color = playerOnScrim(),
         )
     }
 }

@@ -144,7 +144,7 @@ class MainActivity : FragmentActivity() {
                     }
                 }
             }
-            // Keep the PiP play/pause action icon in sync with playback state (issue #66-E).
+            // Keep the PiP play/pause action icon in sync with playback state.
             lifecycleScope.launch {
                 repeatOnLifecycle(Lifecycle.State.STARTED) {
                     playerLifecycleManager.isPlaying.collect {
@@ -400,7 +400,7 @@ class MainActivity : FragmentActivity() {
         }
     }
 
-    // Reliability fallback for PiP auto-entry (issue #66-E): onUserLeaveHint is not
+    // Reliability fallback for PiP auto-entry: onUserLeaveHint is not
     // reliably fired on all OEMs/API levels for gesture "slide up to home". When this
     // activity loses the top-resumed position during active playback (i.e. the user
     // navigated away), enter PiP using the same guard predicate. Guarded so it never
@@ -419,7 +419,7 @@ class MainActivity : FragmentActivity() {
 
     private var justExitedPip = false
 
-    // ── PiP remote actions (issue #66-E) ──
+    // ── PiP remote actions ──
     // A BroadcastReceiver registered while in PiP, fed by RemoteAction PendingIntents
     // so the PiP window exposes play/pause, skip ±, and next controls.
     private var pipActionReceiver: BroadcastReceiver? = null
@@ -498,7 +498,7 @@ class MainActivity : FragmentActivity() {
             }
             // PiP remote actions require API 26+ (RemoteAction itself); the actions
             // list is accepted on all PiP-capable versions but only rendered by the
-            // system on API 26+. See issue #66-E.
+            // system on API 26+.
             setActions(buildPipActions())
         }.build()
 

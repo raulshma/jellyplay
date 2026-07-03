@@ -671,7 +671,7 @@ class DownloadRepositoryImpl @Inject constructor(
         seriesId = seriesId,
         seasonId = seasonId,
         // Clear the series subtitle for top-level entities where it would just
-        // duplicate the title (issue #64-B); only episodes carry a meaningful
+        // duplicate the title; only episodes carry a meaningful
         // series name distinct from their own.
         seriesName = if (mediaType == MediaType.EPISODE || mediaType == MediaType.SEASON) seriesName else null,
         seasonName = if (mediaType == MediaType.EPISODE) seasonName else null,
@@ -686,7 +686,7 @@ class DownloadRepositoryImpl @Inject constructor(
         premiereDate = premiereDate,
         genres = genres.joinToString(","),
         // Seed playback progress from server UserData so the download shows its
-        // watched/resume state immediately (issue #65-A).
+        // watched/resume state immediately.
         playbackPositionTicks = playbackPositionTicks,
         playedPercentage = computePlayedPercentage(playbackPositionTicks, runTimeTicks, isPlayed),
         isPlayed = isPlayed,

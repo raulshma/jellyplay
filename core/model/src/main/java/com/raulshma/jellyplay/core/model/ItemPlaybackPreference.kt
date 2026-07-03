@@ -29,7 +29,7 @@ enum class PlaybackPrefScope {
  * global `preferredAudioLanguage` / `preferredSubtitleLanguage`.
  *
  * The [dialogueBoostStrength] field extends the per-item model to audio effects
- * (issue #66-B): a `null` value means "no per-item rule" (resolve to the
+ *: a `null` value means "no per-item rule" (resolve to the
  * effective default of [EffectStrength.NONE] — dialogue boost does NOT carry
  * across items unless explicitly pinned per-item or per-series). A non-null
  * value pins the effect for this item/series.
@@ -40,7 +40,7 @@ enum class PlaybackPrefScope {
  * @param audioLanguage preferred audio language code (ISO-639), or null to inherit.
  * @param subtitleLanguage preferred subtitle language code (ISO-639), or null to inherit.
  * @param dialogueBoostStrength per-item dialogue-boost strength, or null to use the
- *   effective default ([EffectStrength.NONE]). See issue #66-B.
+ *   effective default ([EffectStrength.NONE]).
  * @param updatedAt epoch millis of the last write.
  */
 @Immutable

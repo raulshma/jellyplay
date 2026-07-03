@@ -173,7 +173,7 @@ class LibraryApiClientImpl @Inject constructor(
                             // Fallback "For You" source when there are no similarity
                             // seeds yet (new user, no watch history): surface favorited
                             // / liked items so the home page still has discovery content
-                            // (issue #62-H). Mirrors the search "Suggestions" data source.
+                            //. Mirrors the search "Suggestions" data source.
                             getSearchSuggestions(limit = 20)
                                 .onSuccess { search ->
                                     if (search.items.isNotEmpty()) {

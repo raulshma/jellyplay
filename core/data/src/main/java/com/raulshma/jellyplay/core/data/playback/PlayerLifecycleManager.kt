@@ -56,7 +56,7 @@ class PlayerLifecycleManager @Inject constructor(
     // Lets the Activity dispatch PiP remote-action intents (play/pause/skip/next)
     // to the active engine without a core→feature dependency. The ViewModel wires
     // these to the live MediaEngine when playback starts and clears them on stop.
-    // See issue #66-E.
+    //
 
     @Volatile
     var pipTransport: PipTransport? = null
@@ -123,7 +123,7 @@ class PlayerLifecycleManager @Inject constructor(
 /**
  * Transport bridge used by PiP remote actions. Implemented by the player
  * ViewModel and registered on [PlayerLifecycleManager] so the Activity can
- * dispatch play/pause/skip/next without a core→feature dependency (issue #66-E).
+ * dispatch play/pause/skip/next without a core→feature dependency.
  */
 fun interface PipTransport {
     /** Dispatched when the user taps a PiP remote action. */

@@ -18,6 +18,7 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.raulshma.jellyplay.core.data.cast.CastManager
 import com.raulshma.jellyplay.core.designsystem.theme.CastColors
+import com.raulshma.jellyplay.core.designsystem.theme.playerOnScrim
 import com.raulshma.jellyplay.core.ui.tv.rememberTvFocusState
 import com.raulshma.jellyplay.core.ui.tv.tvFocusIndicator
 import com.composables.icons.tabler.Tabler
@@ -67,7 +68,7 @@ internal fun CastButton(
         Icon(
             imageVector = Tabler.Outline.Cast,
             contentDescription = if (isConnected) "Cast connected" else "Cast",
-            tint = if (isConnected) CastColors.connected else Color.White,
+            tint = if (isConnected) CastColors.connected else playerOnScrim(),
         )
     }
 }
