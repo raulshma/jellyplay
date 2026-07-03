@@ -6,6 +6,7 @@ import racra.compose.smooth_corner_rect_library.AbsoluteSmoothCornerShape
 import androidx.compose.material3.ColorScheme
 import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
 import androidx.compose.material3.MaterialExpressiveTheme
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Shapes
 import androidx.compose.material3.darkColorScheme
 import androidx.compose.material3.dynamicDarkColorScheme
@@ -455,6 +456,46 @@ private fun ColorScheme.withOledSurfaces(): ColorScheme = copy(
     surfaceContainerHigh = Color(0xFF1A1A1A),
     surfaceContainerHighest = Color(0xFF222222),
 )
+
+/**
+ * Wraps [content] so it renders as a dark "chrome zone" while preserving the user's accent.
+ *
+ * On-video control bars float over arbitrary video content, so they always need a dark scrim with
+ * light text/icons — regardless of the app theme. Without this, a light ambient theme resolves
+ * `onSurface` to dark colors, producing invisible dark-on-dark text against the dark scrim. This
+ * wrapper forces the dark [ColorScheme] (so `onSurface`/`onSurfaceVariant` become light), sets
+ * [androidx.compose.material3.LocalContentColor] to a light foreground (MaterialTheme alone does
+ * not), and reports `LocalIsLightTheme = false` so helpers like [playerScrimColor] resolve to the
+ * dark variant. The accent (`primary`/`secondary`/`tertiary`) is copied from the ambient scheme so
+ * play buttons and sliders stay on-brand.
+ *
+ * Scope this to the control-bar subtree only — drawers and other surfaces that should respect the
+ * app theme must sit outside it.
+ */
+@Composable
+fun PlayerDarkTheme(content: @Composable () -> Unit) {
+    val ambient = MaterialTheme.colorScheme
+    val darkScheme = remember(ambient.primary, ambient.secondary, ambient.tertiary) {
+        darkColorScheme(
+            primary = ambient.primary,
+            onPrimary = ambient.onPrimary,
+            primaryContainer = ambient.primaryContainer,
+            onPrimaryContainer = ambient.onPrimaryContainer,
+            secondary = ambient.secondary,
+            onSecondary = ambient.onSecondary,
+            tertiary = ambient.tertiary,
+            onTertiary = ambient.onTertiary,
+        )
+    }
+    MaterialTheme(colorScheme = darkScheme) {
+        androidx.compose.runtime.CompositionLocalProvider(
+            androidx.compose.material3.LocalContentColor provides darkScheme.onSurface,
+            LocalIsLightTheme provides false,
+        ) {
+            content()
+        }
+    }
+}
 
 fun getSynthwaveColorScheme(accent: String): ColorScheme {
     val primaryColor = when (accent.lowercase()) {

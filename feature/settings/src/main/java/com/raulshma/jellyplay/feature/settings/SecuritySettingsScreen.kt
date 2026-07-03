@@ -52,7 +52,7 @@ sealed class SecuritySettingsDialog {
     object QuickConnectAuthorize : SecuritySettingsDialog()
 }
 
-@OptIn(ExperimentalMaterial3Api::class, androidx.compose.material3.ExperimentalMaterial3ExpressiveApi::class)
+@OptIn(ExperimentalMaterial3Api::class, androidx.compose.material3.ExperimentalMaterial3ExpressiveApi::class, androidx.compose.foundation.ExperimentalFoundationApi::class)
 @Composable
 fun SecuritySettingsScreen(
     onBack: () -> Unit,
@@ -82,6 +82,29 @@ fun SecuritySettingsScreen(
         tag = "security_init",
     )
 
+    val scrollState = androidx.compose.foundation.lazy.rememberLazyListState()
+    val scrollIndex = remember(highlightSettingId) {
+        // 0 = Security (PIN/Biometric/Auto-lock), 1 = Quick Connect Authorizer, 2 = Remote Control.
+        when (highlightSettingId) {
+            in listOf("pin_lock", "biometric_lock", "pin_for_player_lock", "auto_lock_timer") -> 0
+            "quick_connect_authorize" -> 1
+            "remote_control_enabled" -> 2
+            else -> -1
+        }
+    }
+
+    // Phase 1 (coarse): scroll the containing group into the LazyColumn's composition window so the
+    // target item is actually composed — items in off-screen groups (later sections) are otherwise
+    // never mounted and their bringIntoViewRequester has no target. Phase 2 (centering) is then
+    // performed by the highlighted item itself via CenterBringIntoViewSpec.
+    LaunchedEffect(scrollIndex) {
+        if (scrollIndex >= 0) {
+            try {
+                scrollState.animateScrollToItem(scrollIndex)
+            } catch (_: Exception) {}
+        }
+    }
+
     JellyPlayScreenScaffold(
         title = "Security",
         onBack = onBack,
@@ -93,7 +116,14 @@ fun SecuritySettingsScreen(
             )
         },
     ) { innerPadding ->
+        // Center a highlighted (search-navigated) setting in the viewport instead of parking it
+        // at the bottom edge, which is the default BringIntoViewSpec behaviour.
+        androidx.compose.runtime.CompositionLocalProvider(
+            androidx.compose.foundation.gestures.LocalBringIntoViewSpec provides
+                com.raulshma.jellyplay.core.ui.tv.CenterBringIntoViewSpec
+        ) {
         LazyColumn(
+            state = scrollState,
             modifier = Modifier
                 .fillMaxSize()
                 .padding(innerPadding)
@@ -184,6 +214,7 @@ fun SecuritySettingsScreen(
                             title = "Auto-Lock Timer",
                             subtitle = "Time before app locks after leaving",
                             trailingText = lockTimerLabels[lockTimerOptions.indexOf(preferences.autoLockTimerMs).coerceAtMost(lockTimerOptions.lastIndex)],
+                            highlighted = highlightSettingId == "auto_lock_timer",
                             index = secIdx, count = secTotal,
                             onClick = {
                                 val currentIdx = lockTimerOptions.indexOf(preferences.autoLockTimerMs).coerceAtMost(lockTimerOptions.lastIndex)
@@ -208,6 +239,7 @@ fun SecuritySettingsScreen(
                         title = "Authorize Device",
                         subtitle = "Enter a Quick Connect code to approve another device",
                         trailingText = "",
+                        highlighted = highlightSettingId == "quick_connect_authorize",
                         index = 0, count = 1,
                         onClick = {
                             qcCode = ""
@@ -249,6 +281,7 @@ fun SecuritySettingsScreen(
                     )
                 }
             }
+        }
         }
     }
 

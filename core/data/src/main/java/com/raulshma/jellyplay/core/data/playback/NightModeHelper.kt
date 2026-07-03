@@ -18,6 +18,7 @@ class NightModeHelper {
 
     private val targetGainForStrength: Int
         get() = when (strength) {
+            EffectStrength.NONE -> 0
             EffectStrength.LOW -> 1500
             EffectStrength.MODERATE -> 3000
             EffectStrength.HIGH -> 4500

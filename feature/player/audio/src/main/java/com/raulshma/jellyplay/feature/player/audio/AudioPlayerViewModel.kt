@@ -23,6 +23,7 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.stateIn
+import kotlinx.coroutines.flow.update
 import javax.inject.Inject
 
 @HiltViewModel
@@ -38,30 +39,30 @@ class AudioPlayerViewModel @Inject constructor(
     val preferences = preferencesStore.preferences
         .stateIn(scope, SharingStarted.WhileSubscribed(5_000), UserPreferences())
 
-    var title by composeState("")
-        private set
-    var artist by composeState("")
-        private set
-    var artistId by composeState<String?>(null)
-        private set
-    var album by composeState("")
-        private set
-    var albumArtUrl by composeState("")
-        private set
-    var albumArtBlurHash by composeState<String?>(null)
-        private set
-    var isPlaying by composeState(false)
-        private set
+    private val _uiState = MutableStateFlow(AudioPlayerUiState())
+    val uiState: StateFlow<AudioPlayerUiState> = _uiState.asStateFlow()
+
+    /**
+     * High-frequency playback position, kept OUTSIDE [uiState] so the 250ms tick only
+     * recomposes consumers that read position, rather than copying the whole UiState.
+     */
     var currentPosition by composeLongState(0L)
         private set
-    var duration by composeLongState(0L)
-        private set
-    var speed by composeFloatState(1.0f)
-        private set
-    var shuffleMode by composeState(false)
-        private set
-    var repeatMode by composeIntState(0)
-        private set
+
+    /** Mirrors [AudioEffectsState.dialogueBoostStrength] for callers that read it directly. */
+    val dialogueBoostStrength: EffectStrength
+        get() = _uiState.value.effects.dialogueBoostStrength
+
+    /** Mirrors [AudioEffectsState.nightModeStrength] for callers that read it directly. */
+    val nightModeStrength: EffectStrength
+        get() = _uiState.value.effects.nightModeStrength
+
+    /** Mirrors [AudioEffectsState.bassBoostStrength] for callers that read it directly. */
+    val bassBoostStrength: EffectStrength
+        get() = _uiState.value.effects.bassBoostStrength
+
+    val hasKaraokeLyrics: Boolean
+        get() = _uiState.value.lyrics.hasKaraokeLyrics
 
     var nightModeVolume by composeFloatState(0.4f)
         private set
@@ -70,125 +71,14 @@ class AudioPlayerViewModel @Inject constructor(
     var skipPreviousThresholdMs by composeLongState(3_000L)
         private set
 
-    var crossfadeDurationMs by composeLongState(0L)
-        private set
-
-    var queue by composeState<List<AudioQueueItem>>(emptyList())
-        private set
-    var currentIndex by composeIntState(-1)
-        private set
-
-    var nightModeEnabled by composeState(false)
-        private set
-
-    var dialogueBoostEnabled by composeState(false)
-        private set
-
-    private var _dialogueBoostStrength = composeState(EffectStrength.MODERATE)
-    val dialogueBoostStrength: EffectStrength by _dialogueBoostStrength
-
-    private var _nightModeStrength = composeState(EffectStrength.MODERATE)
-    val nightModeStrength: EffectStrength by _nightModeStrength
-
-    var equalizerEnabled by composeState(false)
-        private set
-
-    var equalizerSettings by composeState(com.raulshma.jellyplay.core.model.EqualizerSettings())
-        private set
-
-    var equalizerPreset by composeState(EqualizerPreset.FLAT)
-        private set
-
-    var bassBoostEnabled by composeState(false)
-        private set
-
-    private var _bassBoostStrength = composeState(EffectStrength.MODERATE)
-    val bassBoostStrength: EffectStrength by _bassBoostStrength
-
-    var virtualizerEnabled by composeState(false)
-        private set
-
-    var virtualizerStrength by composeState(500)
-        private set
-
-    var reverbPreset by composeState(ReverbPreset.NONE)
-        private set
-
-    var lrBalance by composeFloatState(0f)
-        private set
-
-    var pitchSemitones by composeFloatState(0f)
-        private set
-
-    var autoEqByGenre by composeState(false)
-        private set
-
-    private val _fftData = stateFlow(ByteArray(0))
-    val fftData: StateFlow<ByteArray> = _fftData.flow
-
-    var normalizationMode by composeState(AudioNormalizationMode.NONE)
-        private set
-
-    var preAmpDb by composeFloatState(0f)
-        private set
-
-    var isFavorite by composeState(false)
-        private set
-
-    var playbackError by composeState<String?>(null)
-        private set
-
-    var isLoading by composeState(false)
-        private set
-
-    var lyrics by composeState<List<com.raulshma.jellyplay.core.model.LyricsLine>>(emptyList())
-        private set
-
-    var currentLyricIndex by composeIntState(-1)
-        private set
-
-    var lyricsSource by composeState(LyricsSource.UNKNOWN)
-        private set
-
-    var isFetchingLyrics by composeState(false)
-        private set
-
-    var lyricsOffsetMs by composeLongState(com.raulshma.jellyplay.core.data.playback.AudioLyricsManager.DEFAULT_OFFSET_MS)
-        private set
-
-    var lyricsSearchResults by composeState<List<LrcLibTrack>>(emptyList())
-        private set
-
-    var isSearchingLyrics by composeState(false)
-        private set
-
+    /** Karaoke toggle — the only lyrics field the UI mutates directly (not engine-driven). */
     var karaokeMode by composeState(false)
         private set
 
-    fun setKaraokeModeEnabled(enabled: Boolean) {
-        karaokeMode = enabled
-    }
-
-    fun toggleKaraokeMode() {
-        karaokeMode = !karaokeMode
-    }
-
-    val hasKaraokeLyrics: Boolean
-        get() = lyrics.any { it.words.isNotEmpty() }
-
-    var sleepTimerActive by composeState(false)
-        private set
-    var sleepTimerEndOfEpisode by composeState(false)
-        private set
-    var sleepTimerRemainingMs by composeLongState(0L)
-        private set
-    var sleepTimerLastUsedDurationMs by composeLongState(0L)
-        private set
+    private var downloadJob: Job? = null
 
     private val _currentDownloadItem = stateFlow<com.raulshma.jellyplay.core.model.DownloadItem?>(null)
     val currentDownloadItem: StateFlow<com.raulshma.jellyplay.core.model.DownloadItem?> = _currentDownloadItem.flow
-
-    private var downloadJob: Job? = null
 
     init {
         launch {
@@ -207,38 +97,52 @@ class AudioPlayerViewModel @Inject constructor(
         }
 
         launch {
-            audioPlaybackManager.title.collect { title = it }
+            audioPlaybackManager.title.collect { value ->
+                _uiState.update { it.copy(title = value) }
+            }
         }
         launch {
-            audioPlaybackManager.playbackError.collect { playbackError = it }
+            audioPlaybackManager.playbackError.collect { value ->
+                _uiState.update { it.copy(playbackError = value) }
+            }
         }
         launch {
-            audioPlaybackManager.isLoadingItem.collect { isLoading = it }
+            audioPlaybackManager.isLoadingItem.collect { value ->
+                _uiState.update { it.copy(isLoading = value) }
+            }
         }
         launch {
-            audioPlaybackManager.artist.collect { artist = it }
+            audioPlaybackManager.artist.collect { value ->
+                _uiState.update { it.copy(artist = value) }
+            }
         }
         launch {
-            audioPlaybackManager.artistId.collect { artistId = it }
+            audioPlaybackManager.artistId.collect { value ->
+                _uiState.update { it.copy(artistId = value) }
+            }
         }
         launch {
-            audioPlaybackManager.album.collect { album = it }
+            audioPlaybackManager.album.collect { value ->
+                _uiState.update { it.copy(album = value) }
+            }
         }
         launch {
-            audioPlaybackManager.albumArtUrl.collect { albumArtUrl = it }
+            audioPlaybackManager.albumArtUrl.collect { value ->
+                _uiState.update { it.copy(albumArtUrl = value) }
+            }
         }
         launch {
             combine(
                 audioPlaybackManager.isPlaying,
-                audioPlaybackManager.currentPosition,
                 audioPlaybackManager.duration,
                 audioPlaybackManager.speed,
-            ) { playing, pos, dur, spd ->
-                isPlaying = playing
-                currentPosition = pos
-                duration = dur
-                speed = spd
+            ) { playing, dur, spd ->
+                _uiState.update { it.copy(isPlaying = playing, duration = dur, speed = spd) }
             }.collect {}
+        }
+        // Position is high-frequency; keep it in its own state holder (not in uiState).
+        launch {
+            audioPlaybackManager.currentPosition.collect { currentPosition = it }
         }
         launch {
             combine(
@@ -247,19 +151,18 @@ class AudioPlayerViewModel @Inject constructor(
                 audioPlaybackManager.queue,
                 audioPlaybackManager.currentIndex,
             ) { shuf, rep, q, idx ->
-                shuffleMode = shuf
-                repeatMode = rep
-                queue = q
-                currentIndex = idx
+                _uiState.update {
+                    it.copy(queue = QueueState(queue = q, currentIndex = idx, shuffleMode = shuf, repeatMode = rep))
+                }
             }.collect {}
         }
         launch {
             audioPlaybackManager.currentPlayingItemId.collect { itemId ->
                 if (itemId != null) {
                     mediaRepository.getMediaDetail(itemId)
-                        .onSuccess { isFavorite = it.item.isFavorite }
+                        .onSuccess { d -> _uiState.update { it.copy(isFavorite = d.item.isFavorite) } }
                 } else {
-                    isFavorite = false
+                    _uiState.update { it.copy(isFavorite = false) }
                 }
             }
         }
@@ -270,14 +173,22 @@ class AudioPlayerViewModel @Inject constructor(
                 audioPlaybackManager.lyricsSource,
                 audioPlaybackManager.isFetchingLyrics,
             ) { ly, idx, src, fetching ->
-                lyrics = ly
-                currentLyricIndex = idx
-                lyricsSource = src
-                isFetchingLyrics = fetching
+                _uiState.update {
+                    it.copy(
+                        lyrics = it.lyrics.copy(
+                            lyrics = ly,
+                            currentLyricIndex = idx,
+                            lyricsSource = src,
+                            isFetchingLyrics = fetching,
+                        ),
+                    )
+                }
             }.collect {}
         }
         launch {
-            audioPlaybackManager.lyricsOffsetMs.collect { lyricsOffsetMs = it }
+            audioPlaybackManager.lyricsOffsetMs.collect { value ->
+                _uiState.update { it.copy(lyrics = it.lyrics.copy(lyricsOffsetMs = value)) }
+            }
         }
         launch {
             combine(
@@ -287,11 +198,17 @@ class AudioPlayerViewModel @Inject constructor(
                 audioPlaybackManager.equalizerSettings,
                 audioPlaybackManager.equalizerPreset,
             ) { night, dialogue, eqEn, eqSet, eqPre ->
-                nightModeEnabled = night
-                dialogueBoostEnabled = dialogue
-                equalizerEnabled = eqEn
-                equalizerSettings = eqSet
-                equalizerPreset = eqPre
+                _uiState.update {
+                    it.copy(
+                        effects = it.effects.copy(
+                            nightModeEnabled = night,
+                            dialogueBoostEnabled = dialogue,
+                            equalizerEnabled = eqEn,
+                            equalizerSettings = eqSet,
+                            equalizerPreset = eqPre,
+                        ),
+                    )
+                }
             }.collect {}
         }
         launch {
@@ -301,10 +218,16 @@ class AudioPlayerViewModel @Inject constructor(
                 audioPlaybackManager.virtualizerStrength,
                 audioPlaybackManager.reverbPresetState,
             ) { bass, virtEn, virtStr, rev ->
-                bassBoostEnabled = bass
-                virtualizerEnabled = virtEn
-                virtualizerStrength = virtStr
-                reverbPreset = rev
+                _uiState.update {
+                    it.copy(
+                        effects = it.effects.copy(
+                            bassBoostEnabled = bass,
+                            virtualizerEnabled = virtEn,
+                            virtualizerStrength = virtStr,
+                            reverbPreset = rev,
+                        ),
+                    )
+                }
             }.collect {}
         }
         launch {
@@ -313,9 +236,9 @@ class AudioPlayerViewModel @Inject constructor(
                 audioPlaybackManager.pitchSemitones,
                 audioPlaybackManager.autoEqByGenre,
             ) { lr, pitch, autoEq ->
-                lrBalance = lr
-                pitchSemitones = pitch
-                autoEqByGenre = autoEq
+                _uiState.update {
+                    it.copy(effects = it.effects.copy(lrBalance = lr, pitchSemitones = pitch, autoEqByGenre = autoEq))
+                }
             }.collect {}
         }
         launch {
@@ -324,14 +247,17 @@ class AudioPlayerViewModel @Inject constructor(
                 audioPlaybackManager.replayGainMode,
                 audioPlaybackManager.replayGainPreAmpDb,
             ) { cross, rg, pre ->
-                crossfadeDurationMs = cross
-                normalizationMode = rg
-                preAmpDb = pre
+                _uiState.update {
+                    it.copy(
+                        crossfadeDurationMs = cross,
+                        effects = it.effects.copy(normalizationMode = rg, preAmpDb = pre),
+                    )
+                }
             }.collect {}
         }
         launch {
             sleepTimerManager.remainingMs.collect { remaining ->
-                sleepTimerRemainingMs = remaining
+                _uiState.update { it.copy(sleepTimer = it.sleepTimer.copy(remainingMs = remaining)) }
             }
         }
         launch {
@@ -339,13 +265,12 @@ class AudioPlayerViewModel @Inject constructor(
                 sleepTimerManager.isActive,
                 sleepTimerManager.isEndOfEpisodeMode,
             ) { active, endOfEpisode ->
-                sleepTimerActive = active
-                sleepTimerEndOfEpisode = endOfEpisode
+                _uiState.update { it.copy(sleepTimer = it.sleepTimer.copy(active = active, endOfEpisode = endOfEpisode)) }
             }.collect {}
         }
         launch {
             preferencesStore.preferences.collect { prefs ->
-                sleepTimerLastUsedDurationMs = prefs.sleepTimerDurationMs
+                _uiState.update { it.copy(sleepTimer = it.sleepTimer.copy(lastUsedDurationMs = prefs.sleepTimerDurationMs)) }
             }
         }
     }
@@ -363,20 +288,27 @@ class AudioPlayerViewModel @Inject constructor(
             skipPreviousThresholdMs = prefs.audioSkipPreviousThresholdMs
             audioPlaybackManager.setNightModeParams(prefs.audioNightModeVolume, prefs.audioNightModeGain)
             audioPlaybackManager.setSkipPreviousThreshold(prefs.audioSkipPreviousThresholdMs)
-            _dialogueBoostStrength.value = prefs.dialogueBoostStrength
-            _nightModeStrength.value = prefs.nightModeStrength
             audioPlaybackManager.setDialogueBoostStrength(prefs.dialogueBoostStrength)
             audioPlaybackManager.setNightModeStrength(prefs.nightModeStrength)
             audioPlaybackManager.setCrossfadeDurationMs(prefs.audioCrossfadeDurationMs)
             audioPlaybackManager.setGaplessEnabled(prefs.audioGaplessEnabled)
             audioPlaybackManager.setReplayGainMode(prefs.audioNormalizationMode)
             audioPlaybackManager.setReplayGainPreAmpDb(prefs.replayGainPreAmpDb)
-            _bassBoostStrength.value = prefs.bassBoostStrength
             audioPlaybackManager.setBassBoostStrength(prefs.bassBoostStrength)
             audioPlaybackManager.setVirtualizerStrength(prefs.virtualizerStrength)
             audioPlaybackManager.setLrBalance(prefs.lrBalance)
             audioPlaybackManager.setPitchSemitones(prefs.pitchSemitones)
             audioPlaybackManager.setAutoEqByGenre(prefs.autoEqByGenre)
+            // Strength fields are not flow-exposed by the manager; seed them into uiState from prefs.
+            _uiState.update {
+                it.copy(
+                    effects = it.effects.copy(
+                        dialogueBoostStrength = prefs.dialogueBoostStrength,
+                        nightModeStrength = prefs.nightModeStrength,
+                        bassBoostStrength = prefs.bassBoostStrength,
+                    ),
+                )
+            }
         }
 
         fetchBlurHash(itemId)
@@ -386,7 +318,7 @@ class AudioPlayerViewModel @Inject constructor(
 
     private fun fetchBlurHash(itemId: String) {
         if (blurHashCache.get(itemId) != null || blurHashCache[keySentinel(itemId)] != null) {
-            albumArtBlurHash = blurHashCache.get(itemId)
+            _uiState.update { it.copy(albumArtBlurHash = blurHashCache.get(itemId)) }
             return
         }
         launch {
@@ -395,7 +327,7 @@ class AudioPlayerViewModel @Inject constructor(
                     val hash = detail.item.blurHashes.primary
                     if (hash != null) blurHashCache.put(itemId, hash)
                     else blurHashCache.put(keySentinel(itemId), "")
-                    albumArtBlurHash = hash
+                    _uiState.update { it.copy(albumArtBlurHash = hash) }
                 }
         }
     }
@@ -462,13 +394,15 @@ class AudioPlayerViewModel @Inject constructor(
     fun toggleDialogueBoost() {
         audioPlaybackManager.toggleDialogueBoost()
         launch {
-            preferencesStore.setDialogueBoostEnabled(dialogueBoostEnabled)
+            preferencesStore.setDialogueBoostEnabled(_uiState.value.effects.dialogueBoostEnabled)
         }
     }
 
     fun setDialogueBoostStrength(strength: EffectStrength) {
-        _dialogueBoostStrength.value = strength
         audioPlaybackManager.setDialogueBoostStrength(strength)
+        _uiState.update {
+            it.copy(effects = it.effects.copy(dialogueBoostStrength = strength))
+        }
         launch {
             preferencesStore.setDialogueBoostStrength(strength)
         }
@@ -477,13 +411,15 @@ class AudioPlayerViewModel @Inject constructor(
     fun toggleNightMode() {
         audioPlaybackManager.toggleNightMode()
         launch {
-            preferencesStore.setNightModeEnabled(nightModeEnabled)
+            preferencesStore.setNightModeEnabled(_uiState.value.effects.nightModeEnabled)
         }
     }
 
     fun setNightModeStrength(strength: EffectStrength) {
-        _nightModeStrength.value = strength
         audioPlaybackManager.setNightModeStrength(strength)
+        _uiState.update {
+            it.copy(effects = it.effects.copy(nightModeStrength = strength))
+        }
         launch {
             preferencesStore.setNightModeStrength(strength)
         }
@@ -506,22 +442,22 @@ class AudioPlayerViewModel @Inject constructor(
     fun toggleEqualizer() {
         audioPlaybackManager.toggleEqualizer()
         launch {
-            preferencesStore.setEqualizerEnabled(equalizerEnabled)
+            preferencesStore.setEqualizerEnabled(_uiState.value.effects.equalizerEnabled)
         }
     }
 
     fun setEqualizerBand(bandIndex: Int, levelDb: Int) {
         audioPlaybackManager.setEqualizerBand(bandIndex, levelDb)
         launch {
-            preferencesStore.setEqualizerSettings(equalizerSettings)
+            preferencesStore.setEqualizerSettings(_uiState.value.effects.equalizerSettings)
         }
     }
 
     fun resetEqualizer() {
         audioPlaybackManager.resetEqualizer()
         launch {
-            preferencesStore.setEqualizerSettings(equalizerSettings)
-            preferencesStore.setEqualizerPreset(equalizerPreset)
+            preferencesStore.setEqualizerSettings(_uiState.value.effects.equalizerSettings)
+            preferencesStore.setEqualizerPreset(_uiState.value.effects.equalizerPreset)
         }
     }
 
@@ -529,20 +465,22 @@ class AudioPlayerViewModel @Inject constructor(
         audioPlaybackManager.setEqualizerPreset(preset)
         launch {
             preferencesStore.setEqualizerPreset(preset)
-            preferencesStore.setEqualizerSettings(equalizerSettings)
+            preferencesStore.setEqualizerSettings(_uiState.value.effects.equalizerSettings)
         }
     }
 
     fun toggleBassBoost() {
         audioPlaybackManager.toggleBassBoost()
         launch {
-            preferencesStore.setBassBoostEnabled(bassBoostEnabled)
+            preferencesStore.setBassBoostEnabled(_uiState.value.effects.bassBoostEnabled)
         }
     }
 
     fun setBassBoostStrength(strength: EffectStrength) {
-        _bassBoostStrength.value = strength
         audioPlaybackManager.setBassBoostStrength(strength)
+        _uiState.update {
+            it.copy(effects = it.effects.copy(bassBoostStrength = strength))
+        }
         launch {
             preferencesStore.setBassBoostStrength(strength)
         }
@@ -551,7 +489,7 @@ class AudioPlayerViewModel @Inject constructor(
     fun toggleVirtualizer() {
         audioPlaybackManager.toggleVirtualizer()
         launch {
-            preferencesStore.setVirtualizerEnabled(virtualizerEnabled)
+            preferencesStore.setVirtualizerEnabled(_uiState.value.effects.virtualizerEnabled)
         }
     }
 
@@ -594,20 +532,26 @@ class AudioPlayerViewModel @Inject constructor(
         audioPlaybackManager.getImageUrl(itemId)
 
     fun searchLyrics(query: String) {
-        isSearchingLyrics = true
+        _uiState.update { it.copy(lyrics = it.lyrics.copy(isSearching = true)) }
         audioPlaybackManager.searchLyrics(query) { result ->
-            lyricsSearchResults = result.getOrElse { emptyList() }
-            isSearchingLyrics = false
+            _uiState.update {
+                it.copy(
+                    lyrics = it.lyrics.copy(
+                        searchResults = result.getOrElse { emptyList() },
+                        isSearching = false,
+                    ),
+                )
+            }
         }
     }
 
     fun applyLyrics(track: LrcLibTrack) {
         audioPlaybackManager.applyLyrics(track.id)
-        lyricsSearchResults = emptyList()
+        _uiState.update { it.copy(lyrics = it.lyrics.copy(searchResults = emptyList())) }
     }
 
     fun clearLyricsSearch() {
-        lyricsSearchResults = emptyList()
+        _uiState.update { it.copy(lyrics = it.lyrics.copy(searchResults = emptyList())) }
     }
 
     fun setLyricsOffset(offsetMs: Long) {
@@ -637,9 +581,15 @@ class AudioPlayerViewModel @Inject constructor(
             audioPlaybackManager.togglePlayPause()
         }
         sleepTimerManager.start(durationMs)
-        sleepTimerActive = true
-        sleepTimerEndOfEpisode = false
-        sleepTimerLastUsedDurationMs = durationMs
+        _uiState.update {
+            it.copy(
+                sleepTimer = it.sleepTimer.copy(
+                    active = true,
+                    endOfEpisode = false,
+                    lastUsedDurationMs = durationMs,
+                ),
+            )
+        }
     }
 
     fun startSleepTimerEndOfEpisode() {
@@ -650,15 +600,16 @@ class AudioPlayerViewModel @Inject constructor(
             audioPlaybackManager.togglePlayPause()
         }
         sleepTimerManager.startEndOfEpisode()
-        sleepTimerActive = true
-        sleepTimerEndOfEpisode = true
+        _uiState.update {
+            it.copy(sleepTimer = it.sleepTimer.copy(active = true, endOfEpisode = true))
+        }
     }
 
     fun cancelSleepTimer() {
         sleepTimerManager.cancel()
-        sleepTimerActive = false
-        sleepTimerEndOfEpisode = false
-        sleepTimerRemainingMs = 0
+        _uiState.update {
+            it.copy(sleepTimer = it.sleepTimer.copy(active = false, endOfEpisode = false, remainingMs = 0))
+        }
     }
 
     fun triggerSleepTimerEndOfEpisode() {
@@ -673,12 +624,21 @@ class AudioPlayerViewModel @Inject constructor(
         val itemId = audioPlaybackManager.currentPlayingItemId.value ?: return
         launch {
             mediaRepository.toggleFavorite(itemId)
-                .onSuccess { isFavorite = it }
+                .onSuccess { fav -> _uiState.update { it.copy(isFavorite = fav) } }
         }
     }
 
     val currentPlayingItemId: String?
         get() = audioPlaybackManager.currentPlayingItemId.value
+
+    fun setKaraokeModeEnabled(enabled: Boolean) {
+        karaokeMode = enabled
+        _uiState.update { it.copy(lyrics = it.lyrics.copy(karaokeMode = enabled)) }
+    }
+
+    fun toggleKaraokeMode() {
+        setKaraokeModeEnabled(!karaokeMode)
+    }
 
     private fun keySentinel(id: String) = "§null§$id"
 
@@ -720,9 +680,5 @@ class AudioPlayerViewModel @Inject constructor(
                 }
             } catch (_: Exception) {}
         }
-    }
-
-    override fun onCleared() {
-        super.onCleared()
     }
 }

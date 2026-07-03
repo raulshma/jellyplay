@@ -7,6 +7,7 @@ import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.Arrangement
@@ -27,17 +28,22 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.layout.positionInWindow
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -55,6 +61,9 @@ import com.raulshma.jellyplay.core.designsystem.theme.ShapeCache
 import com.raulshma.jellyplay.core.designsystem.theme.LocalIsSynthwave
 import com.raulshma.jellyplay.core.designsystem.theme.LocalIsSoothingTheme
 import com.raulshma.jellyplay.core.ui.image.MediaImage
+import com.raulshma.jellyplay.core.ui.preview.LocalMediaPreviewController
+import com.raulshma.jellyplay.core.ui.preview.rememberReleaseDismiss
+import com.raulshma.jellyplay.core.ui.preview.toMediaPreview
 import com.raulshma.jellyplay.core.ui.tv.LocalTvMode
 import com.raulshma.jellyplay.core.ui.tv.enableMarqueeOnFocus
 import com.raulshma.jellyplay.core.ui.tv.rememberTvFocusState
@@ -77,6 +86,40 @@ fun SeerrMediaCard(
     val tvFocusState = rememberTvFocusState()
     val interactionSource = remember { MutableInteractionSource() }
     val isPressed by interactionSource.collectIsPressedAsState()
+
+    // Press-and-hold "peek" preview. Seerr items aren't MediaItems, so we map
+    // via toMediaPreview() and call the controller directly (the
+    // rememberMediaPeek helper is MediaItem-typed). We still capture the card's
+    // bounds so the overlay can morph out of it. No-op when no controller is
+    // wired or on TV.
+    val previewController = LocalMediaPreviewController.current
+    val peekEnabled = com.raulshma.jellyplay.core.ui.preview.LocalMediaPeekEnabled.current
+    val boundsState = remember { mutableStateOf(Rect.Zero) }
+    val previewBoundsModifier = if (previewController != null && !isTv && peekEnabled) {
+        Modifier.onGloballyPositioned { coords ->
+            val pos = coords.positionInWindow()
+            boundsState.value = Rect(
+                left = pos.x,
+                top = pos.y,
+                right = pos.x + coords.size.width,
+                bottom = pos.y + coords.size.height,
+            )
+        }
+    } else Modifier
+    val onPreviewLongClick = if (previewController != null && !isTv && peekEnabled) {
+        remember(item, imageUrl) {
+            {
+                previewController.show(
+                    item.toMediaPreview(
+                        posterUrl = imageUrl,
+                        backdropUrl = item.backdropUrl,
+                        sourceBounds = boundsState.value.takeIf { it.width > 0 },
+                    )
+                )
+            }
+        }
+    } else null
+    rememberReleaseDismiss(isPressed)
 
     val pulseScale = remember { Animatable(1f) }
     val pulseSpec = MaterialTheme.motionScheme.defaultEffectsSpec<Float>()
@@ -206,6 +249,7 @@ fun SeerrMediaCard(
             modifier = Modifier
                 .fillMaxWidth()
                 .then(tvFocusState.focusModifier)
+                .then(previewBoundsModifier)
                 .graphicsLayer {
                     scaleX = scale
                     scaleY = scale
@@ -232,10 +276,11 @@ fun SeerrMediaCard(
                     }
                 )
                 .tvFocusIndicator(tvFocusState, cardShape)
-                .clickable(
+                .combinedClickable(
                     interactionSource = interactionSource,
                     indication = null,
                     onClick = onClick,
+                    onLongClick = onPreviewLongClick,
                     enabled = !isLoading,
                 ),
             shape = cardShape,

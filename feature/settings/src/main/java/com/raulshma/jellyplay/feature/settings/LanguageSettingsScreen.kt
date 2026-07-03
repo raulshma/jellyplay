@@ -90,7 +90,7 @@ internal val appLanguages = listOf(
     "nb" to "Norsk Bokmål",
 )
 
-@OptIn(ExperimentalMaterial3Api::class, androidx.compose.material3.ExperimentalMaterial3ExpressiveApi::class)
+@OptIn(ExperimentalMaterial3Api::class, androidx.compose.material3.ExperimentalMaterial3ExpressiveApi::class, androidx.compose.foundation.ExperimentalFoundationApi::class)
 @Composable
 fun LanguageSettingsScreen(
     onBack: () -> Unit,
@@ -117,11 +117,15 @@ fun LanguageSettingsScreen(
     val scrollIndex = remember(highlightSettingId) {
         when (highlightSettingId) {
             in listOf("app_language", "audio_language", "subtitle_language") -> 0
-            in listOf("subtitle_font_size", "subtitle_forced_only", "pgs_direct_play", "hdr_subtitle_style", "hdr_subtitle_font_size", "subtitle_color", "subtitle_background", "subtitle_edge_style", "subtitle_sync_offset", "subtitle_vertical_position") -> 1
+            in listOf("subtitle_font_size", "subtitle_forced_only", "high_contrast_subtitles", "pgs_direct_play", "hdr_subtitle_style", "hdr_subtitle_font_size", "subtitle_color", "subtitle_background", "subtitle_edge_style", "subtitle_sync_offset", "subtitle_vertical_position") -> 1
             else -> -1
         }
     }
 
+    // Phase 1 (coarse): scroll the containing group into the LazyColumn's composition window so the
+    // target item is actually composed — items in off-screen groups (later sections) are otherwise
+    // never mounted and their bringIntoViewRequester has no target. Phase 2 (centering) is then
+    // performed by the highlighted item itself via CenterBringIntoViewSpec.
     LaunchedEffect(scrollIndex) {
         if (scrollIndex >= 0) {
             try {
@@ -141,6 +145,12 @@ fun LanguageSettingsScreen(
             )
         },
     ) { innerPadding ->
+        // Center a highlighted (search-navigated) setting in the viewport instead of parking it
+        // at the bottom edge, which is the default BringIntoViewSpec behaviour.
+        androidx.compose.runtime.CompositionLocalProvider(
+            androidx.compose.foundation.gestures.LocalBringIntoViewSpec provides
+                com.raulshma.jellyplay.core.ui.tv.CenterBringIntoViewSpec
+        ) {
         LazyColumn(
             state = scrollState,
             modifier = Modifier
@@ -207,7 +217,7 @@ fun LanguageSettingsScreen(
                     title = "Subtitles",
                     summary = { "Font size: ${preferences.subtitleStyle.fontSize}sp" },
                     modifier = Modifier.padding(vertical = 8.dp),
-                    initiallyExpanded = highlightSettingId in listOf("subtitle_font_size", "subtitle_color", "subtitle_background", "subtitle_edge_style", "subtitle_sync_offset", "subtitle_vertical_position"),
+                    initiallyExpanded = highlightSettingId in listOf("subtitle_font_size", "subtitle_forced_only", "high_contrast_subtitles", "pgs_direct_play", "hdr_subtitle_style", "hdr_subtitle_font_size", "subtitle_color", "subtitle_background", "subtitle_edge_style", "subtitle_sync_offset", "subtitle_vertical_position"),
                 ) {
                     var subIdx = 0
                     val subTotal = when {
@@ -333,6 +343,7 @@ fun LanguageSettingsScreen(
                     )
                 }
             }
+        }
         }
     }
 

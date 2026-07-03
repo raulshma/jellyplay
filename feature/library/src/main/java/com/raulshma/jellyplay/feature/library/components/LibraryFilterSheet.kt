@@ -4,6 +4,7 @@ import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.spring
 import androidx.compose.foundation.background
+import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsPressedAsState
@@ -17,6 +18,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
@@ -24,6 +26,7 @@ import androidx.compose.material3.ButtonGroup
 import androidx.compose.material3.ButtonGroupDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
+import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.Text
@@ -263,75 +266,78 @@ fun LibraryFilterSheet(
                 }
             }
 
-            // ── Year Range ──
+            // ── Year Range (collapsed by default) ──
             Spacer(modifier = Modifier.height(20.dp))
-            SectionLabel("Year Range")
-            val presets = remember { com.raulshma.jellyplay.core.ui.components.yearRangePresets() }
-            FlowRow(
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-                verticalArrangement = Arrangement.spacedBy(8.dp),
-            ) {
-                GlassFilterChip(
-                    label = "Any",
-                    selected = selectedYears.isEmpty(),
-                    onClick = { selectedYears = emptySet() },
-                )
-                presets.forEach { preset ->
-                    val selection = com.raulshma.jellyplay.core.ui.components.yearPresetSelection(
-                        preset,
-                        selectedYears,
-                    )
-                    GlassFilterChip(
-                        label = preset.label,
-                        selected = selection == com.raulshma.jellyplay.core.ui.components.YearPresetSelection.Full,
-                        onClick = {
-                            selectedYears = com.raulshma.jellyplay.core.ui.components.toggleYearPreset(
-                                preset,
-                                selectedYears,
-                            )
-                        },
-                    )
-                }
-            }
-
-            // ── Tags ──
-            if (availableTags.isNotEmpty()) {
-                Spacer(modifier = Modifier.height(20.dp))
-                SectionLabel("Tags")
+            CollapsibleSection(title = "Year Range") {
+                val presets = remember { com.raulshma.jellyplay.core.ui.components.yearRangePresets() }
                 FlowRow(
                     horizontalArrangement = Arrangement.spacedBy(8.dp),
                     verticalArrangement = Arrangement.spacedBy(8.dp),
                 ) {
-                    availableTags.take(20).forEach { tag ->
+                    GlassFilterChip(
+                        label = "Any",
+                        selected = selectedYears.isEmpty(),
+                        onClick = { selectedYears = emptySet() },
+                    )
+                    presets.forEach { preset ->
+                        val selection = com.raulshma.jellyplay.core.ui.components.yearPresetSelection(
+                            preset,
+                            selectedYears,
+                        )
                         GlassFilterChip(
-                            label = tag,
-                            selected = tag in selectedTags,
+                            label = preset.label,
+                            selected = selection == com.raulshma.jellyplay.core.ui.components.YearPresetSelection.Full,
                             onClick = {
-                                selectedTags = if (tag in selectedTags) {
-                                    selectedTags - tag
-                                } else {
-                                    selectedTags + tag
-                                }
+                                selectedYears = com.raulshma.jellyplay.core.ui.components.toggleYearPreset(
+                                    preset,
+                                    selectedYears,
+                                )
                             },
                         )
                     }
                 }
             }
 
-            // ── Minimum Rating ──
+            // ── Tags (collapsed by default) ──
+            if (availableTags.isNotEmpty()) {
+                Spacer(modifier = Modifier.height(20.dp))
+                CollapsibleSection(title = "Tags") {
+                    FlowRow(
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        verticalArrangement = Arrangement.spacedBy(8.dp),
+                    ) {
+                        availableTags.take(20).forEach { tag ->
+                            GlassFilterChip(
+                                label = tag,
+                                selected = tag in selectedTags,
+                                onClick = {
+                                    selectedTags = if (tag in selectedTags) {
+                                        selectedTags - tag
+                                    } else {
+                                        selectedTags + tag
+                                    }
+                                },
+                            )
+                        }
+                    }
+                }
+            }
+
+            // ── Minimum Rating (collapsed by default) ──
             Spacer(modifier = Modifier.height(20.dp))
-            SectionLabel("Minimum Rating")
-            val ratingOptions = listOf(0f, 3f, 3.5f, 4f, 4.5f)
-            FlowRow(
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-                verticalArrangement = Arrangement.spacedBy(8.dp),
-            ) {
-                ratingOptions.forEach { rating ->
-                    GlassFilterChip(
-                        label = if (rating == 0f) "Any" else "${rating}+",
-                        selected = selectedMinRating == rating,
-                        onClick = { selectedMinRating = rating },
-                    )
+            CollapsibleSection(title = "Minimum Rating") {
+                val ratingOptions = listOf(0f, 3f, 3.5f, 4f, 4.5f)
+                FlowRow(
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
+                    ratingOptions.forEach { rating ->
+                        GlassFilterChip(
+                            label = if (rating == 0f) "Any" else "${rating}+",
+                            selected = selectedMinRating == rating,
+                            onClick = { selectedMinRating = rating },
+                        )
+                    }
                 }
             }
 
@@ -401,6 +407,48 @@ private fun SectionLabel(text: String) {
         fontWeight = FontWeight.SemiBold,
         modifier = Modifier.padding(bottom = 10.dp),
     )
+}
+
+/**
+ * A section whose header can be tapped to expand/collapse its content. Used for
+ * the less-frequently-used filter sections (Year, Tags, Rating) to reduce visual
+ * clutter — progressive disclosure. `startExpanded` controls the
+ * initial state.
+ */
+@Composable
+private fun CollapsibleSection(
+    title: String,
+    startExpanded: Boolean = false,
+    content: @Composable () -> Unit,
+) {
+    var expanded by remember { mutableStateOf(startExpanded) }
+    Column {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .clip(MaterialTheme.shapes.small)
+                .clickable { expanded = !expanded }
+                .padding(vertical = 6.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Text(
+                text = title,
+                style = MaterialTheme.typography.titleSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                fontWeight = FontWeight.SemiBold,
+                modifier = Modifier.weight(1f),
+            )
+            Icon(
+                imageVector = if (expanded) Tabler.Outline.ChevronUp else Tabler.Outline.ChevronDown,
+                contentDescription = if (expanded) "Collapse" else "Expand",
+                modifier = Modifier.size(18.dp),
+                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+        AnimatedVisibility(visible = expanded) {
+            Column(modifier = Modifier.padding(top = 8.dp)) { content() }
+        }
+    }
 }
 
 private fun MediaType.displayName(): String = when (this) {

@@ -4,9 +4,15 @@ import android.Manifest
 import android.animation.Animator
 import android.animation.ObjectAnimator
 import android.animation.PropertyValuesHolder
+import android.app.PendingIntent
 import android.app.PictureInPictureParams
+import android.app.RemoteAction
+import android.content.BroadcastReceiver
+import android.content.Context
 import android.content.Intent
+import android.content.IntentFilter
 import android.content.pm.PackageManager
+import android.graphics.drawable.Icon
 import android.os.Build
 import android.os.Bundle
 import android.view.View
@@ -37,7 +43,9 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.lifecycleScope
 import androidx.lifecycle.repeatOnLifecycle
 import android.util.Rational
+import androidx.core.content.ContextCompat
 import androidx.core.view.WindowCompat
+import com.raulshma.jellyplay.core.data.playback.PipAction
 import com.raulshma.jellyplay.core.data.playback.PlayerLifecycleManager
 import com.raulshma.jellyplay.core.designsystem.theme.JellyPlayTheme
 import com.raulshma.jellyplay.core.model.ThemeMode
@@ -133,6 +141,14 @@ class MainActivity : FragmentActivity() {
                             .setAutoEnterEnabled(shouldAutoEnter)
                             .build()
                         setPictureInPictureParams(params)
+                    }
+                }
+            }
+            // Keep the PiP play/pause action icon in sync with playback state.
+            lifecycleScope.launch {
+                repeatOnLifecycle(Lifecycle.State.STARTED) {
+                    playerLifecycleManager.isPlaying.collect {
+                        refreshPipActions()
                     }
                 }
             }
@@ -384,7 +400,29 @@ class MainActivity : FragmentActivity() {
         }
     }
 
+    // Reliability fallback for PiP auto-entry: onUserLeaveHint is not
+    // reliably fired on all OEMs/API levels for gesture "slide up to home". When this
+    // activity loses the top-resumed position during active playback (i.e. the user
+    // navigated away), enter PiP using the same guard predicate. Guarded so it never
+    // triggers when paused/stopped.
+    override fun onTopResumedActivityChanged(isTopResumed: Boolean) {
+        super.onTopResumedActivityChanged(isTopResumed)
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S &&
+            !isTopResumed &&
+            !isInPictureInPictureMode &&
+            playerLifecycleManager.shouldAutoEnterPip.value &&
+            playerLifecycleManager.isPlaying.value
+        ) {
+            enterPipMode()
+        }
+    }
+
     private var justExitedPip = false
+
+    // ── PiP remote actions ──
+    // A BroadcastReceiver registered while in PiP, fed by RemoteAction PendingIntents
+    // so the PiP window exposes play/pause, skip ±, and next controls.
+    private var pipActionReceiver: BroadcastReceiver? = null
 
     @Deprecated("Deprecated in Java")
     override fun onPictureInPictureModeChanged(isInPictureInPictureMode: Boolean) {
@@ -404,6 +442,7 @@ class MainActivity : FragmentActivity() {
     private fun onPipModeChanged(isInPictureInPictureMode: Boolean) {
         if (!isInPictureInPictureMode) {
             justExitedPip = true
+            unregisterPipActionReceiver()
         }
         playerLifecycleManager.setPipMode(isInPictureInPictureMode)
     }
@@ -447,6 +486,8 @@ class MainActivity : FragmentActivity() {
 
         val shouldAutoEnter = playerLifecycleManager.shouldAutoEnterPip.value
 
+        registerPipActionReceiver()
+
         val params = PictureInPictureParams.Builder().apply {
             val ratio = aspectRatio ?: Rational(16, 9)
             val clamped = clampAspectRatio(ratio)
@@ -455,9 +496,109 @@ class MainActivity : FragmentActivity() {
                 setAutoEnterEnabled(shouldAutoEnter)
                 setSeamlessResizeEnabled(shouldAutoEnter)
             }
+            // PiP remote actions require API 26+ (RemoteAction itself); the actions
+            // list is accepted on all PiP-capable versions but only rendered by the
+            // system on API 26+.
+            setActions(buildPipActions())
         }.build()
 
         enterPictureInPictureMode(params)
+    }
+
+    /**
+     * Builds the [RemoteAction] list shown in the PiP window. The play/pause icon
+     * reflects the current playback state so the toggle stays in sync.
+     */
+    private fun buildPipActions(): List<RemoteAction> {
+        val isPlaying = playerLifecycleManager.isPlaying.value
+        val hasNext = playerLifecycleManager.pipHasNext
+        val actions = mutableListOf<RemoteAction>()
+
+        actions += pipRemoteAction(
+            id = PIP_ACTION_SKIP_BACK,
+            icon = android.R.drawable.ic_media_rew,
+            title = "Rewind",
+        )
+        actions += pipRemoteAction(
+            id = if (isPlaying) PIP_ACTION_PAUSE else PIP_ACTION_PLAY,
+            icon = if (isPlaying) android.R.drawable.ic_media_pause else android.R.drawable.ic_media_play,
+            title = if (isPlaying) "Pause" else "Play",
+        )
+        actions += pipRemoteAction(
+            id = PIP_ACTION_SKIP_FORWARD,
+            icon = android.R.drawable.ic_media_ff,
+            title = "Forward",
+        )
+        if (hasNext) {
+            actions += pipRemoteAction(
+                id = PIP_ACTION_NEXT,
+                icon = android.R.drawable.ic_media_next,
+                title = "Next",
+            )
+        }
+        return actions
+    }
+
+    private fun pipRemoteAction(id: Int, icon: Int, title: String): RemoteAction {
+        val intent = Intent(PIP_ACTION_BROADCAST).putExtra(PIP_ACTION_EXTRA, id)
+        val pi = PendingIntent.getBroadcast(
+            this,
+            id,
+            intent.setPackage(packageName),
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
+        )
+        return RemoteAction(
+            Icon.createWithResource(this, icon),
+            title,
+            title,
+            pi,
+        )
+    }
+
+    /**
+     * Refreshes the PiP action icons (notably the play/pause toggle) when the
+     * playback state changes while in PiP. No-op outside PiP.
+     */
+    fun refreshPipActions() {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) return
+        if (!isInPictureInPictureMode) return
+        val params = PictureInPictureParams.Builder()
+            .setActions(buildPipActions())
+            .build()
+        runCatching { setPictureInPictureParams(params) }
+    }
+
+    private fun registerPipActionReceiver() {
+        if (pipActionReceiver != null) return
+        val receiver = object : BroadcastReceiver() {
+            override fun onReceive(context: Context?, intent: Intent?) {
+                if (intent?.action != PIP_ACTION_BROADCAST) return
+                val id = intent.getIntExtra(PIP_ACTION_EXTRA, -1)
+                val action = when (id) {
+                    PIP_ACTION_PLAY -> PipAction.PLAY
+                    PIP_ACTION_PAUSE -> PipAction.PAUSE
+                    PIP_ACTION_SKIP_FORWARD -> PipAction.SKIP_FORWARD
+                    PIP_ACTION_SKIP_BACK -> PipAction.SKIP_BACKWARD
+                    PIP_ACTION_NEXT -> PipAction.NEXT
+                    else -> return
+                }
+                playerLifecycleManager.pipTransport?.handle(action)
+                // The play/pause toggle changes the icon — refresh immediately.
+                refreshPipActions()
+            }
+        }
+        ContextCompat.registerReceiver(
+            this,
+            receiver,
+            IntentFilter(PIP_ACTION_BROADCAST),
+            ContextCompat.RECEIVER_NOT_EXPORTED,
+        )
+        pipActionReceiver = receiver
+    }
+
+    private fun unregisterPipActionReceiver() {
+        pipActionReceiver?.let { runCatching { unregisterReceiver(it) } }
+        pipActionReceiver = null
     }
 
     private fun clampAspectRatio(ratio: Rational): Rational {
@@ -468,6 +609,16 @@ class MainActivity : FragmentActivity() {
             ratio > max -> max
             else -> ratio
         }
+    }
+
+    private companion object {
+        const val PIP_ACTION_BROADCAST = "com.raulshma.jellyplay.PIP_ACTION"
+        const val PIP_ACTION_EXTRA = "pip_action_id"
+        const val PIP_ACTION_PLAY = 1
+        const val PIP_ACTION_PAUSE = 2
+        const val PIP_ACTION_SKIP_FORWARD = 3
+        const val PIP_ACTION_SKIP_BACK = 4
+        const val PIP_ACTION_NEXT = 5
     }
 }
 

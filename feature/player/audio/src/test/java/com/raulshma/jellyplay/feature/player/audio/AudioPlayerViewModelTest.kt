@@ -70,8 +70,10 @@ class AudioPlayerViewModelTest {
     fun setKaraokeModeEnabled_setsState() {
         viewModel.setKaraokeModeEnabled(true)
         assertTrue(viewModel.karaokeMode)
+        assertTrue(viewModel.uiState.value.lyrics.karaokeMode)
         viewModel.setKaraokeModeEnabled(false)
         assertFalse(viewModel.karaokeMode)
+        assertFalse(viewModel.uiState.value.lyrics.karaokeMode)
     }
 
     @Test
@@ -85,7 +87,7 @@ class AudioPlayerViewModelTest {
 
     @Test
     fun hasKaraokeLyrics_falseWhenEmpty() {
-        assertFalse(viewModel.hasKaraokeLyrics)
+        assertFalse(viewModel.uiState.value.lyrics.hasKaraokeLyrics)
     }
 
     @Test
@@ -139,14 +141,14 @@ class AudioPlayerViewModelTest {
     @Test
     fun setDialogueBoostStrength_updatesStateAndDelegates() {
         viewModel.setDialogueBoostStrength(EffectStrength.HIGH)
-        assertEquals(EffectStrength.HIGH, viewModel.dialogueBoostStrength)
+        assertEquals(EffectStrength.HIGH, viewModel.uiState.value.effects.dialogueBoostStrength)
         verify { audioPlaybackManager.setDialogueBoostStrength(EffectStrength.HIGH) }
     }
 
     @Test
     fun setNightModeStrength_updatesStateAndDelegates() {
         viewModel.setNightModeStrength(EffectStrength.LOW)
-        assertEquals(EffectStrength.LOW, viewModel.nightModeStrength)
+        assertEquals(EffectStrength.LOW, viewModel.uiState.value.effects.nightModeStrength)
         verify { audioPlaybackManager.setNightModeStrength(EffectStrength.LOW) }
     }
 

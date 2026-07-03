@@ -20,11 +20,40 @@ interface OfflineMediaDao {
     @Query("SELECT * FROM offline_media WHERE seasonId = :seasonId AND mediaType = 'EPISODE' ORDER BY episodeNumber ASC")
     fun getEpisodesForSeason(seasonId: String): Flow<List<OfflineMediaEntity>>
 
+    @Query("SELECT * FROM offline_media WHERE parentId = :parentId ORDER BY indexNumber ASC")
+    fun getChildrenByParent(parentId: String): Flow<List<OfflineMediaEntity>>
+
     @Query("SELECT * FROM offline_media WHERE id = :id")
     suspend fun getById(id: String): OfflineMediaEntity?
 
+    @Query("SELECT * FROM offline_media WHERE id = :id")
+    fun getByIdFlow(id: String): Flow<OfflineMediaEntity?>
+
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun upsert(entity: OfflineMediaEntity)
+
+    /**
+     * Updates only the playback-progress columns for a row. A
+     * targeted UPDATE avoids clobbering metadata fields and is cheaper than a
+     * full upsert. `lastPlayedDate` is set to the supplied ISO timestamp.
+     */
+    @Query(
+        """
+        UPDATE offline_media
+        SET playbackPositionTicks = :positionTicks,
+            playedPercentage = :percentage,
+            isPlayed = :isPlayed,
+            lastPlayedDate = :lastPlayedDate
+        WHERE id = :itemId
+        """
+    )
+    suspend fun updatePlaybackProgress(
+        itemId: String,
+        positionTicks: Long?,
+        percentage: Double,
+        isPlayed: Boolean,
+        lastPlayedDate: String?,
+    )
 
     @Transaction
     @Insert(onConflict = OnConflictStrategy.REPLACE)

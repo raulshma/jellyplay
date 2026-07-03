@@ -91,7 +91,7 @@ internal fun SpeedPickerSheet(
                                 .clip(shape)
                                 .background(
                                     if (isSelected) MaterialTheme.colorScheme.primary.copy(alpha = 0.1f)
-                                    else Color.White.copy(alpha = 0.04f)
+                                    else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.04f)
                                 )
                                 .then(speedFocusState.focusModifier)
                                 .ifElse(isFirstOrSelected, Modifier.focusRequester(focusRequester))

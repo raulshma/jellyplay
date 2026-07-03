@@ -62,6 +62,7 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import com.raulshma.jellyplay.core.ui.tv.input.onDpadKey
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.setProgress
@@ -80,10 +81,13 @@ import com.raulshma.jellyplay.core.model.StreamingQuality
 import com.raulshma.jellyplay.core.model.PlaybackMode
 import com.raulshma.jellyplay.core.designsystem.theme.AlphaEasing
 import com.raulshma.jellyplay.core.designsystem.theme.FancyTransitionEasing
+import com.raulshma.jellyplay.core.designsystem.theme.playerOnScrim
+import com.raulshma.jellyplay.core.designsystem.theme.playerScrimColor
 import com.raulshma.jellyplay.core.designsystem.theme.ShapeCache
 import com.raulshma.jellyplay.core.designsystem.theme.PointToPointEasing
 import com.raulshma.jellyplay.core.designsystem.theme.SyncStatusColors
 import com.raulshma.jellyplay.core.ui.animation.AnimationTokens
+import com.raulshma.jellyplay.core.ui.animation.horizontalFadingEdges
 import com.raulshma.jellyplay.core.ui.tv.LocalTvMode
 import com.raulshma.jellyplay.core.ui.tv.ifElse
 import com.raulshma.jellyplay.core.ui.tv.tryRequestFocus
@@ -222,6 +226,15 @@ internal fun PlayerControls(
     val videoStats by videoStatsFlow.collectAsStateWithLifecycle()
 
     val isTv = LocalTvMode.current
+    val isPortrait = LocalConfiguration.current.orientation ==
+        android.content.res.Configuration.ORIENTATION_PORTRAIT
+    // In portrait every control lives in one horizontally scrollable row, with
+    // PiP, Rotate and the More (⋮) menu pinned at the right edge. Landscape/TV
+    // keep the asymmetric layout: a scrolling primary row + fixed right cluster.
+    val splitBottomControlsEvenly = !isTv && isPortrait
+    // Hoisted scroll state so the fade indicator and horizontalScroll share
+    // the same position and stay in sync.
+    val bottomLeftScrollState = rememberScrollState()
     val tvPlayPauseFocusRequester = remember { FocusRequester() }
     val tvBackFocusRequester = remember { FocusRequester() }
     val tvSeekbarFocusRequester = remember { FocusRequester() }
@@ -274,9 +287,9 @@ internal fun PlayerControls(
                     .background(
                         Brush.verticalGradient(
                             colors = listOf(
-                                MaterialTheme.colorScheme.scrim.copy(alpha = 0.6f),
-                                MaterialTheme.colorScheme.scrim.copy(alpha = 0.3f),
-                                MaterialTheme.colorScheme.scrim.copy(alpha = 0.08f),
+                                playerScrimColor().copy(alpha = 0.6f),
+                                playerScrimColor().copy(alpha = 0.3f),
+                                playerScrimColor().copy(alpha = 0.08f),
                                 Color.Transparent,
                             )
                         )
@@ -470,9 +483,9 @@ internal fun PlayerControls(
                         Brush.verticalGradient(
                             colors = listOf(
                                 Color.Transparent,
-                                MaterialTheme.colorScheme.scrim.copy(alpha = 0.1f),
-                                MaterialTheme.colorScheme.scrim.copy(alpha = 0.5f),
-                                MaterialTheme.colorScheme.scrim.copy(alpha = 0.7f),
+                                playerScrimColor().copy(alpha = 0.1f),
+                                playerScrimColor().copy(alpha = 0.5f),
+                                playerScrimColor().copy(alpha = 0.7f),
                             )
                         )
                     )
@@ -531,106 +544,142 @@ internal fun PlayerControls(
                     horizontalArrangement = Arrangement.SpaceBetween,
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
-                    Row(
-                        modifier = Modifier
-                            .weight(1f)
-                            .then(if (!isTv) Modifier.horizontalScroll(rememberScrollState()) else Modifier),
-                        horizontalArrangement = if (isTv) Arrangement.spacedBy(2.dp) else Arrangement.Start,
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        if (supportsLiveQualitySwitch) {
-                            PlayerQualityButton(
-                                quality = streamingQuality,
-                                onClick = onQualityClick,
+                    if (splitBottomControlsEvenly) {
+                        // PORTRAIT: one horizontally scrollable row holds every
+                        // control; PiP, Rotate and the More (⋮) menu stay pinned at
+                        // the right edge so the "exit portrait" and overflow actions
+                        // can never scroll out of view.
+                        Row(
+                            modifier = Modifier
+                                .weight(1f)
+                                .horizontalScroll(bottomLeftScrollState)
+                                .horizontalFadingEdges(bottomLeftScrollState, 12.dp),
+                            horizontalArrangement = Arrangement.spacedBy(0.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
+                            PrimaryMediaControls(
+                                supportsLiveQualitySwitch = supportsLiveQualitySwitch,
+                                streamingQuality = streamingQuality,
+                                onQualityClick = onQualityClick,
+                                playbackSpeed = playbackSpeed,
+                                onSpeedClick = onSpeedClick,
+                                onAudioClick = onAudioClick,
+                                onSubtitleClick = onSubtitleClick,
+                                chapters = chapters,
+                                onChapterClick = onChapterClick,
+                                hasEpisodes = hasEpisodes,
+                                episodeBrowserEnabled = episodeBrowserEnabled,
+                                onEpisodesClick = onEpisodesClick,
+                                isInSyncPlaySession = isInSyncPlaySession,
+                                onSyncPlayClick = onSyncPlayClick,
+                                currentAspectRatio = currentAspectRatio,
+                                onAspectRatioClick = onAspectRatioClick,
+                                onInfoClick = onInfoClick,
                             )
-                        }
-                        PlayerSpeedButton(speed = playbackSpeed, onClick = onSpeedClick)
-                        PlayerIconButton(
-                            icon = Tabler.Outline.Music,
-                            contentDescription = "Audio",
-                            onClick = onAudioClick,
-                        )
-                        PlayerIconButton(
-                            icon = Tabler.Outline.Subtitles,
-                            contentDescription = "Subtitles",
-                            onClick = onSubtitleClick,
-                        )
-                        if (chapters.isNotEmpty()) {
-                            PlayerIconButton(
-                                icon = Tabler.Outline.List,
-                                contentDescription = "Chapters",
-                                onClick = onChapterClick,
-                            )
-                        }
-                        if (hasEpisodes && episodeBrowserEnabled) {
-                            PlayerIconButton(
-                                icon = Tabler.Outline.Video,
-                                contentDescription = "Episodes",
-                                onClick = onEpisodesClick,
-                            )
-                        }
-                        if (isInSyncPlaySession) {
-                            PlayerIconButton(
-                                icon = Tabler.Outline.Users,
-                                contentDescription = "SyncPlay",
-                                onClick = onSyncPlayClick,
-                                tint = MaterialTheme.colorScheme.primary,
-                            )
-                        }
-                        PlayerIconButton(
-                            icon = Tabler.Outline.AspectRatio,
-                            contentDescription = "Aspect Ratio",
-                            onClick = onAspectRatioClick,
-                            tint = if (currentAspectRatio != AspectRatio.FIT) MaterialTheme.colorScheme.primary else Color.Unspecified,
-                        )
-                        if (!isTv) {
-                            PlayerIconButton(
-                                icon = Tabler.Outline.Rotate,
-                                contentDescription = "Rotate Screen",
-                                onClick = onToggleOrientation,
-                            )
-                        }
-                        PlayerIconButton(
-                            icon = Tabler.Outline.InfoCircle,
-                            contentDescription = "Info",
-                            onClick = onInfoClick,
-                        )
-                    }
-
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        if (!isTv) {
                             PlayerIconButton(
                                 icon = Tabler.Outline.Lock,
                                 contentDescription = "Lock screen",
                                 onClick = onLockClick,
                             )
-                        }
-                        if (!isTv) {
                             MuteButton(isMuted = isMuted, onClick = onMuteClick)
+                            if (castManager != null) {
+                                CastButton(castManager = castManager)
+                            }
                         }
-                        if (!isTv) {
+
+                        Row(verticalAlignment = Alignment.CenterVertically) {
                             PipButton(onClick = onPipClick)
+                            PlayerIconButton(
+                                icon = Tabler.Outline.Rotate,
+                                contentDescription = "Rotate Screen",
+                                onClick = onToggleOrientation,
+                            )
+                            PlayerIconButton(
+                                icon = Tabler.Outline.DotsVertical,
+                                contentDescription = "More options",
+                                onClick = { showOverflow = true },
+                            )
+                        }
+                    } else {
+                        // LANDSCAPE / TV: asymmetric layout — a scrolling primary
+                        // row on the left and a fixed cluster (Lock, Mute, PiP,
+                        // Rotate, Cast, More) on the right.
+                        Row(
+                            modifier = Modifier
+                                .weight(1f)
+                                .then(
+                                    if (!isTv) {
+                                        Modifier
+                                            .horizontalScroll(bottomLeftScrollState)
+                                            .horizontalFadingEdges(bottomLeftScrollState, 12.dp)
+                                    } else Modifier
+                                ),
+                            horizontalArrangement = if (isTv) Arrangement.spacedBy(2.dp) else Arrangement.Start,
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
+                            PrimaryMediaControls(
+                                supportsLiveQualitySwitch = supportsLiveQualitySwitch,
+                                streamingQuality = streamingQuality,
+                                onQualityClick = onQualityClick,
+                                playbackSpeed = playbackSpeed,
+                                onSpeedClick = onSpeedClick,
+                                onAudioClick = onAudioClick,
+                                onSubtitleClick = onSubtitleClick,
+                                chapters = chapters,
+                                onChapterClick = onChapterClick,
+                                hasEpisodes = hasEpisodes,
+                                episodeBrowserEnabled = episodeBrowserEnabled,
+                                onEpisodesClick = onEpisodesClick,
+                                isInSyncPlaySession = isInSyncPlaySession,
+                                onSyncPlayClick = onSyncPlayClick,
+                                currentAspectRatio = currentAspectRatio,
+                                onAspectRatioClick = onAspectRatioClick,
+                                onInfoClick = onInfoClick,
+                            )
                         }
 
-                        PlayerIconButton(
-                            icon = Tabler.Outline.DotsVertical,
-                            contentDescription = "More options",
-                            onClick = { showOverflow = true },
-                            modifier = Modifier.then(
-                                if (isTv) {
-                                    Modifier.focusProperties {
-                                        right = when {
-                                            isNextEpisodeVisible && tvNextEpisodeFocusRequester != null -> tvNextEpisodeFocusRequester
-                                            isSkipSegmentVisible && tvSkipSegmentFocusRequester != null -> tvSkipSegmentFocusRequester
-                                            else -> FocusRequester.Default
-                                        }
-                                    }
-                                } else Modifier
-                            )
-                        )
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            if (!isTv) {
+                                PlayerIconButton(
+                                    icon = Tabler.Outline.Lock,
+                                    contentDescription = "Lock screen",
+                                    onClick = onLockClick,
+                                )
+                            }
+                            if (!isTv) {
+                                MuteButton(isMuted = isMuted, onClick = onMuteClick)
+                            }
+                            if (!isTv) {
+                                PipButton(onClick = onPipClick)
+                            }
+                            if (!isTv) {
+                                PlayerIconButton(
+                                    icon = Tabler.Outline.Rotate,
+                                    contentDescription = "Rotate Screen",
+                                    onClick = onToggleOrientation,
+                                )
+                            }
 
-                        if (castManager != null) {
-                            CastButton(castManager = castManager)
+                            if (castManager != null) {
+                                CastButton(castManager = castManager)
+                            }
+
+                            PlayerIconButton(
+                                icon = Tabler.Outline.DotsVertical,
+                                contentDescription = "More options",
+                                onClick = { showOverflow = true },
+                                modifier = Modifier.then(
+                                    if (isTv) {
+                                        Modifier.focusProperties {
+                                            right = when {
+                                                isNextEpisodeVisible && tvNextEpisodeFocusRequester != null -> tvNextEpisodeFocusRequester
+                                                isSkipSegmentVisible && tvSkipSegmentFocusRequester != null -> tvSkipSegmentFocusRequester
+                                                else -> FocusRequester.Default
+                                            }
+                                        }
+                                    } else Modifier
+                                )
+                            )
                         }
                     }
                 }
@@ -730,6 +779,84 @@ internal fun PlayerControls(
             },
         )
     }
+}
+
+/**
+ * The primary media controls that appear in the bottom control bar: quality,
+ * speed, audio, subtitles, chapters, episodes, SyncPlay, aspect ratio and info.
+ * Extracted so the portrait (single scrolling row) and landscape/TV (scrolling
+ * left + fixed right) layouts can host the same set without duplicating it.
+ */
+@Composable
+private fun PrimaryMediaControls(
+    supportsLiveQualitySwitch: Boolean,
+    streamingQuality: StreamingQuality,
+    onQualityClick: () -> Unit,
+    playbackSpeed: Float,
+    onSpeedClick: () -> Unit,
+    onAudioClick: () -> Unit,
+    onSubtitleClick: () -> Unit,
+    chapters: List<ChapterInfo>,
+    onChapterClick: () -> Unit,
+    hasEpisodes: Boolean,
+    episodeBrowserEnabled: Boolean,
+    onEpisodesClick: () -> Unit,
+    isInSyncPlaySession: Boolean,
+    onSyncPlayClick: () -> Unit,
+    currentAspectRatio: AspectRatio,
+    onAspectRatioClick: () -> Unit,
+    onInfoClick: () -> Unit,
+) {
+    if (supportsLiveQualitySwitch) {
+        PlayerQualityButton(
+            quality = streamingQuality,
+            onClick = onQualityClick,
+        )
+    }
+    PlayerSpeedButton(speed = playbackSpeed, onClick = onSpeedClick)
+    PlayerIconButton(
+        icon = Tabler.Outline.Music,
+        contentDescription = "Audio",
+        onClick = onAudioClick,
+    )
+    PlayerIconButton(
+        icon = Tabler.Outline.Subtitles,
+        contentDescription = "Subtitles",
+        onClick = onSubtitleClick,
+    )
+    if (chapters.isNotEmpty()) {
+        PlayerIconButton(
+            icon = Tabler.Outline.List,
+            contentDescription = "Chapters",
+            onClick = onChapterClick,
+        )
+    }
+    if (hasEpisodes && episodeBrowserEnabled) {
+        PlayerIconButton(
+            icon = Tabler.Outline.Video,
+            contentDescription = "Episodes",
+            onClick = onEpisodesClick,
+        )
+    }
+    if (isInSyncPlaySession) {
+        PlayerIconButton(
+            icon = Tabler.Outline.Users,
+            contentDescription = "SyncPlay",
+            onClick = onSyncPlayClick,
+            tint = MaterialTheme.colorScheme.primary,
+        )
+    }
+    PlayerIconButton(
+        icon = Tabler.Outline.AspectRatio,
+        contentDescription = "Aspect Ratio",
+        onClick = onAspectRatioClick,
+        tint = if (currentAspectRatio != AspectRatio.FIT) MaterialTheme.colorScheme.primary else Color.Unspecified,
+    )
+    PlayerIconButton(
+        icon = Tabler.Outline.InfoCircle,
+        contentDescription = "Info",
+        onClick = onInfoClick,
+    )
 }
 
 @Composable

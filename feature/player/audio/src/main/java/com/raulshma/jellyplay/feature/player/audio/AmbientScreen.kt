@@ -61,13 +61,14 @@ fun AmbientScreen(
     onTap: () -> Unit,
     viewModel: AudioPlayerViewModel = hiltViewModel(),
 ) {
+    val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     AmbientScreenContent(
         imageUrl = imageUrl,
         title = title,
         artist = artist,
-        isPlaying = viewModel.isPlaying,
+        isPlaying = uiState.isPlaying,
         currentPosition = viewModel.currentPosition,
-        duration = viewModel.duration,
+        duration = uiState.duration,
         onTap = onTap,
         onPlayPause = { viewModel.togglePlayPause() },
         onSkipNext = { viewModel.skipToNext() },

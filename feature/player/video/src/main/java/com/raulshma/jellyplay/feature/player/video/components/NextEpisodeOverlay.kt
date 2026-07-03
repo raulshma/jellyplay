@@ -9,6 +9,8 @@ import com.raulshma.jellyplay.core.ui.tv.tvFocusIndicator
 import androidx.compose.animation.core.tween
 import com.raulshma.jellyplay.core.designsystem.theme.AlphaEasing
 import com.raulshma.jellyplay.core.designsystem.theme.FancyTransitionEasing
+import com.raulshma.jellyplay.core.designsystem.theme.playerOnScrim
+import com.raulshma.jellyplay.core.designsystem.theme.playerScrimColor
 import com.raulshma.jellyplay.core.designsystem.theme.ShapeCache
 import com.raulshma.jellyplay.core.ui.animation.AnimationTokens
 import androidx.compose.animation.fadeIn
@@ -119,8 +121,8 @@ fun NextEpisodeOverlay(
         Surface(
             modifier = Modifier.width(300.dp),
             shape = ShapeCache.smooth24,
-            color = Color.Black.copy(alpha = 0.8f),
-            border = BorderStroke(1.dp, Color.White.copy(alpha = 0.1f))
+            color = playerScrimColor().copy(alpha = 0.8f),
+            border = BorderStroke(1.dp, playerOnScrim().copy(alpha = 0.1f))
         ) {
             Column {
                 if (!thumbnailUrl.isNullOrBlank()) {
@@ -147,7 +149,7 @@ fun NextEpisodeOverlay(
                                     Brush.verticalGradient(
                                         colors = listOf(
                                             Color.Transparent,
-                                            Color.Black.copy(alpha = 0.4f),
+                                            playerScrimColor().copy(alpha = 0.4f),
                                         )
                                     )
                                 )
@@ -169,7 +171,7 @@ fun NextEpisodeOverlay(
                             Icon(
                                 imageVector = Tabler.Outline.PlayerPlay,
                                 contentDescription = "Play Next",
-                                tint = Color.White,
+                                tint = playerOnScrim(),
                                 modifier = Modifier.size(30.dp),
                             )
                         }
@@ -181,7 +183,7 @@ fun NextEpisodeOverlay(
                                 .padding(10.dp)
                                 .size(28.dp)
                                 .clip(CircleShape)
-                                .background(Color.White.copy(alpha = 0.12f))
+                                .background(playerOnScrim().copy(alpha = 0.12f))
                                 .then(closeFocusState.focusModifier)
                                 .tvFocusIndicator(closeFocusState, CircleShape)
                                 .clickable(onClick = {
@@ -193,7 +195,7 @@ fun NextEpisodeOverlay(
                             Icon(
                                 imageVector = Tabler.Outline.X,
                                 contentDescription = "Cancel",
-                                tint = Color.White,
+                                tint = playerOnScrim(),
                                 modifier = Modifier.size(16.dp),
                             )
                         }
@@ -221,7 +223,7 @@ fun NextEpisodeOverlay(
                         style = MaterialTheme.typography.titleMedium.copy(
                             fontWeight = FontWeight.Bold,
                         ),
-                        color = Color.White,
+                        color = playerOnScrim(),
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis,
                     )
@@ -238,7 +240,7 @@ fun NextEpisodeOverlay(
                             style = MaterialTheme.typography.bodySmall.copy(
                                 fontWeight = FontWeight.Medium,
                             ),
-                            color = Color.White.copy(alpha = 0.85f),
+                            color = playerOnScrim().copy(alpha = 0.85f),
                             maxLines = 1,
                             overflow = TextOverflow.Ellipsis,
                         )
@@ -263,7 +265,7 @@ fun NextEpisodeOverlay(
                                 style = MaterialTheme.typography.labelSmall.copy(
                                     fontWeight = FontWeight.SemiBold,
                                 ),
-                                color = Color.White.copy(alpha = 0.85f),
+                                color = playerOnScrim().copy(alpha = 0.85f),
                             )
                         }
                     }

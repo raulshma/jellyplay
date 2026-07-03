@@ -41,6 +41,8 @@ fun EntryProviderScope<NavKey>.settingsSection(
             onAboutClick = { navigator.navigate(Route.About) },
             onWatchProgressHeatmapClick = { navigator.navigate(Route.WatchProgressHeatmap) },
             onAppearanceSettings = { id -> navigator.navigate(Route.AppearanceSettings(id)) },
+            onPinnedHomeSections = { id -> navigator.navigate(Route.PinnedHomeSections(id)) },
+            onHomeLayoutPresets = { id -> navigator.navigate(Route.HomeLayoutPresets(id)) },
             onPlaybackSettings = { id -> navigator.navigate(Route.PlaybackSettings(id)) },
             onAudioSettings = { id -> navigator.navigate(Route.AudioSettings(id)) },
             onLanguageSettings = { id -> navigator.navigate(Route.LanguageSettings(id)) },

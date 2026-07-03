@@ -13,7 +13,7 @@ import com.raulshma.jellyplay.core.model.HomeMode
 import com.raulshma.jellyplay.core.model.MediaItem
 import com.raulshma.jellyplay.core.model.MediaType
 import com.raulshma.jellyplay.core.model.OfflineMode
-import com.raulshma.jellyplay.core.model.OfflineMediaItem
+import com.raulshma.jellyplay.core.ui.feedback.UserMessageBus
 import com.raulshma.jellyplay.core.ui.viewmodel.JellyPlayViewModel
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.async
@@ -23,12 +23,8 @@ import kotlinx.coroutines.sync.Semaphore
 import kotlinx.coroutines.sync.withPermit
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.stateIn
+import kotlinx.coroutines.flow.update
 import javax.inject.Inject
-
-data class MusicHomeSection(
-    val title: String,
-    val items: List<MediaItem>,
-)
 
 @HiltViewModel
 class MusicHomeViewModel @Inject constructor(
@@ -39,25 +35,11 @@ class MusicHomeViewModel @Inject constructor(
     private val preferencesStore: UserPreferencesStore,
     private val offlineRepository: OfflineRepository,
     private val offlineModeManager: OfflineModeManager,
+    private val userMessageBus: UserMessageBus,
 ) : JellyPlayViewModel() {
 
-    private val _sections = composeState<List<MusicHomeSection>>(emptyList())
-    val sections: List<MusicHomeSection> get() = _sections.value
-
-    private val _isLoading = composeState(true)
-    val isLoading: Boolean get() = _isLoading.value
-
-    private val _error = composeState<String?>(null)
-    val error: String? get() = _error.value
-
-    private val _homeMode = composeState(HomeMode.VIDEO)
-    val homeMode: HomeMode get() = _homeMode.value
-
-    private val _offlineMode = composeState(OfflineMode.ONLINE)
-    val offlineMode: OfflineMode get() = _offlineMode.value
-
-    private val _offlineLibrary = composeState<List<OfflineMediaItem>>(emptyList())
-    val offlineLibrary: List<OfflineMediaItem> get() = _offlineLibrary.value
+    private val _uiState = stateFlow(MusicHomeUiState())
+    val uiState = _uiState.flow
 
     val activeDownloadCount = downloadRepository.getActiveDownloadCount()
         .stateIn(scope, SharingStarted.WhileSubscribed(5_000), 0)
@@ -65,14 +47,14 @@ class MusicHomeViewModel @Inject constructor(
     init {
         launch {
             preferencesStore.preferences.collect { prefs ->
-                _homeMode.value = prefs.homeMode
+                _uiState.update { it.copy(homeMode = prefs.homeMode) }
             }
         }
         launch {
             offlineModeManager.offlineMode.collect { mode ->
-                _offlineMode.value = mode
+                _uiState.update { it.copy(offlineMode = mode) }
                 if (mode != OfflineMode.ONLINE) {
-                    _sections.value = emptyList()
+                    _uiState.update { it.copy(sections = emptyList()) }
                 } else {
                     loadSections()
                 }
@@ -80,7 +62,7 @@ class MusicHomeViewModel @Inject constructor(
         }
         launch {
             offlineRepository.getOfflineLibrary().collect { items ->
-                _offlineLibrary.value = items
+                _uiState.update { it.copy(offlineLibrary = items) }
             }
         }
     }
@@ -91,12 +73,11 @@ class MusicHomeViewModel @Inject constructor(
 
     fun loadSections() {
         launch {
-            if (offlineMode != OfflineMode.ONLINE) {
-                _isLoading.value = false
+            if (_uiState.value.offlineMode != OfflineMode.ONLINE) {
+                _uiState.update { it.copy(isLoading = false) }
                 return@launch
             }
-            _isLoading.value = true
-            _error.value = null
+            _uiState.update { it.copy(isLoading = true, error = null) }
             try {
                 val sectionsList = mutableListOf<MusicHomeSection>()
 
@@ -140,28 +121,29 @@ class MusicHomeViewModel @Inject constructor(
 
                     val results = awaitAll(favArtists, latestAlbums, recentlyPlayed, topRatedAlbums, favTracks)
 
-                    results[0]?.takeIf { it.isNotEmpty() }?.let {
-                        sectionsList.add(MusicHomeSection("Favorite Artists", it))
-                    }
-                    results[1]?.takeIf { it.isNotEmpty() }?.let {
-                        sectionsList.add(MusicHomeSection("Latest Albums", it))
-                    }
-                    results[2]?.takeIf { it.isNotEmpty() }?.let {
-                        sectionsList.add(MusicHomeSection("Recently Played", it))
-                    }
-                    results[3]?.takeIf { it.isNotEmpty() }?.let {
-                        sectionsList.add(MusicHomeSection("Top Rated Albums", it))
-                    }
-                    results[4]?.takeIf { it.isNotEmpty() }?.let {
-                        sectionsList.add(MusicHomeSection("Favorite Tracks", it))
-                    }
+                    fun section(type: MusicHomeSectionType, items: List<MediaItem>?) =
+                        items?.takeIf { it.isNotEmpty() }?.let { MusicHomeSection(type, it) }
+
+                    section(MusicHomeSectionType.FAVORITE_ARTISTS, results[0])?.let(sectionsList::add)
+                    section(MusicHomeSectionType.LATEST_ALBUMS, results[1])?.let(sectionsList::add)
+                    section(MusicHomeSectionType.RECENTLY_PLAYED, results[2])?.let(sectionsList::add)
+                    section(MusicHomeSectionType.TOP_RATED_ALBUMS, results[3])?.let(sectionsList::add)
+                    section(MusicHomeSectionType.FAVORITE_TRACKS, results[4])?.let(sectionsList::add)
                 }
 
-                _sections.value = sectionsList
+                _uiState.update { it.copy(sections = sectionsList) }
             } catch (e: Exception) {
-                _error.value = e.message ?: "Failed to load music"
+                val message = e.message ?: "Failed to load music"
+                // Keep showing cached sections if we have them; only swap to the full
+                // ErrorScreen when there's nothing to show. A failed refresh after data
+                // has loaded surfaces as a transient toast instead of wiping the screen.
+                if (_uiState.value.sections.isEmpty()) {
+                    _uiState.update { it.copy(error = message) }
+                } else {
+                    userMessageBus.error(message)
+                }
             }
-            _isLoading.value = false
+            _uiState.update { it.copy(isLoading = false) }
         }
     }
 

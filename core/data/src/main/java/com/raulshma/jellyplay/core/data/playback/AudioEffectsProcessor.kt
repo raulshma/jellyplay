@@ -88,6 +88,7 @@ class AudioEffectsProcessor @Inject constructor() {
 
     val nightModeVolumeForStrength: Float
         get() = when (_nightModeStrength) {
+            EffectStrength.NONE -> 1.0f
             EffectStrength.LOW -> 0.7f
             EffectStrength.MODERATE -> 0.4f
             EffectStrength.HIGH -> 0.2f
@@ -95,6 +96,7 @@ class AudioEffectsProcessor @Inject constructor() {
 
     val nightModeGainForStrength: Int
         get() = when (_nightModeStrength) {
+            EffectStrength.NONE -> 0
             EffectStrength.LOW -> 1500
             EffectStrength.MODERATE -> 3000
             EffectStrength.HIGH -> 4500
