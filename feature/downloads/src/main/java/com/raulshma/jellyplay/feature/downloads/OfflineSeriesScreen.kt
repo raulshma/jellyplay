@@ -91,6 +91,7 @@ import com.raulshma.jellyplay.core.ui.tv.tvFocusRestorer
 fun OfflineSeriesScreen(
     seriesId: String,
     onPlayOffline: (itemId: String) -> Unit,
+    onEpisodeDetail: (itemId: String) -> Unit,
     onBack: () -> Unit,
     viewModel: OfflineSeriesViewModel = hiltViewModel(),
 ) {
@@ -104,16 +105,13 @@ fun OfflineSeriesScreen(
 
     LaunchedEffect(seriesId) { viewModel.load(seriesId) }
 
-    var selectedSeasonIndex by remember { mutableIntStateOf(0) }
-    val selectedSeason = seasons.getOrNull(selectedSeasonIndex)
-    val seasonEpisodes = selectedSeason?.let { episodes[it.id] } ?: emptyList()
     var showDeleteDialog by remember { mutableStateOf(false) }
 
     val listFocusRequester = remember { FocusRequester() }
     val listState = rememberLazyListState()
     TvGrabInitialFocus(
         focusRequester = listFocusRequester,
-        itemCount = seasonEpisodes.size,
+        itemCount = seasons.sumOf { episodes[it.id]?.size ?: 0 },
         tag = "offline_series_init",
     )
 
@@ -231,62 +229,24 @@ fun OfflineSeriesScreen(
                 }
             }
 
-            // Season tabs (matching online SeasonsSection styling).
-            if (seasons.size > 1) {
+            // ── Seasons + episodes list. Uses the shared OfflineSeasonsSection
+            // so this screen renders episodes exactly like the online series
+            // detail and the offline episode detail (card layout, tap-to-open,
+            // inline play/delete, per-episode delete). ──
+            if (seasons.isNotEmpty()) {
                 item(key = "seasons") {
                     StaggeredSection(delayIndex = 1) {
-                        Column {
-                            Spacer(Modifier.height(20.dp))
-                            Text(
-                                text = "Seasons",
-                                style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.SemiBold),
-                                color = MaterialTheme.colorScheme.onSurface,
-                                modifier = Modifier.padding(horizontal = contentPad),
+                        Column(modifier = Modifier.padding(top = 20.dp)) {
+                            OfflineSeasonsSection(
+                                seasons = seasons,
+                                episodes = episodes,
+                                contentPad = contentPad,
+                                onEpisodePlay = { episode -> onPlayOffline(episode.id) },
+                                onEpisodeDetail = { episode -> onEpisodeDetail(episode.id) },
+                                onEpisodeDelete = { episode -> viewModel.deleteEpisode(episode.id) },
                             )
-                            Spacer(Modifier.height(16.dp))
-                            TvFocusableItemRow(
-                                items = seasons,
-                                key = { it.id },
-                                contentPadding = PaddingValues(horizontal = contentPad),
-                                horizontalArrangement = Arrangement.spacedBy(8.dp),
-                            ) { index, season, focusModifier ->
-                                SeasonTab(
-                                    name = season.name,
-                                    selected = selectedSeasonIndex == index,
-                                    onClick = { selectedSeasonIndex = index },
-                                    modifier = focusModifier,
-                                )
-                            }
                         }
                     }
-                }
-            }
-
-            item(key = "episodes_header") {
-                StaggeredSection(delayIndex = 2) {
-                    Text(
-                        text = "Episodes",
-                        style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.SemiBold),
-                        color = MaterialTheme.colorScheme.onSurface,
-                        modifier = Modifier.padding(horizontal = contentPad, vertical = 16.dp),
-                    )
-                }
-            }
-
-            if (seasonEpisodes.isEmpty() && selectedSeason != null) {
-                item(key = "empty") {
-                    Box(modifier = Modifier.fillMaxWidth().padding(24.dp), contentAlignment = Alignment.Center) {
-                        ScreenEmptyState(icon = Tabler.Outline.DeviceFloppy, title = "No episodes downloaded for this season")
-                    }
-                }
-            } else {
-                items(seasonEpisodes, key = { it.id }, contentType = { "episode" }) { episode ->
-                    OfflineEpisodeRow(
-                        episode = episode,
-                        contentPad = contentPad,
-                        onPlay = { onPlayOffline(episode.id) },
-                        onDelete = { viewModel.deleteEpisode(episode.id) },
-                    )
                 }
                 item { Spacer(Modifier.height(adaptiveInfo.bottomPadding(isTv))) }
             }
@@ -330,38 +290,20 @@ fun OfflineSeriesScreen(
             icon = { Icon(Tabler.Outline.Trash, contentDescription = null) },
             title = { Text("Delete downloads") },
             text = {
-                Text(
-                    if (selectedSeason != null) "Choose what to delete for this series."
-                    else "Delete all downloaded episodes for this series?",
-                )
+                Text("Delete all downloaded episodes for this series?")
             },
             confirmButton = {
                 TextButton(
                     onClick = {
                         showDeleteDialog = false
-                        if (selectedSeason != null) {
-                            viewModel.deleteSeason(selectedSeason.id)
-                        } else {
-                            viewModel.deleteSeries()
-                            onBack()
-                        }
+                        viewModel.deleteSeries()
+                        onBack()
                     },
                     colors = ButtonDefaults.textButtonColors(contentColor = MaterialTheme.colorScheme.error),
-                ) { Text(if (selectedSeason != null) "This season" else "Delete series") }
+                ) { Text("Delete series") }
             },
             dismissButton = {
-                if (selectedSeason != null) {
-                    TextButton(
-                        onClick = {
-                            showDeleteDialog = false
-                            viewModel.deleteSeries()
-                            onBack()
-                        },
-                        colors = ButtonDefaults.textButtonColors(contentColor = MaterialTheme.colorScheme.error),
-                    ) { Text("Entire series") }
-                } else {
-                    TextButton(onClick = { showDeleteDialog = false }) { Text("Cancel") }
-                }
+                TextButton(onClick = { showDeleteDialog = false }) { Text("Cancel") }
             },
         )
     }
@@ -399,46 +341,6 @@ private fun SeriesHeader(
                 )
             }
         }
-    }
-}
-
-@Composable
-private fun SeasonTab(
-    name: String,
-    selected: Boolean,
-    onClick: () -> Unit,
-    modifier: Modifier = Modifier,
-) {
-    val targetColor = if (selected) MaterialTheme.colorScheme.onSurface
-    else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.15f)
-    val targetContentColor = if (selected) MaterialTheme.colorScheme.surface
-    else MaterialTheme.colorScheme.onSurface
-    val surfaceColor by animateColorAsState(
-        targetValue = targetColor,
-        animationSpec = MaterialTheme.motionScheme.fastEffectsSpec(),
-        label = "offlineSeasonColor",
-    )
-    val contentColor by animateColorAsState(
-        targetValue = targetContentColor,
-        animationSpec = MaterialTheme.motionScheme.fastEffectsSpec(),
-        label = "offlineSeasonContentColor",
-    )
-    val focusState = rememberTvFocusState(focusedScale = 1.05f)
-    Surface(
-        modifier = modifier
-            .clip(ShapeCache.smooth16)
-            .then(focusState.focusModifier)
-            .tvFocusIndicator(focusState, ShapeCache.smooth16)
-            .clickable(onClick = onClick),
-        color = surfaceColor,
-        contentColor = contentColor,
-    ) {
-        Text(
-            text = name,
-            modifier = Modifier.padding(horizontal = 16.dp, vertical = 10.dp),
-            style = MaterialTheme.typography.titleSmall,
-            fontWeight = FontWeight.Bold,
-        )
     }
 }
 
@@ -559,161 +461,5 @@ private fun ChipRow(values: List<String>) {
                 Text(value, style = MaterialTheme.typography.titleSmall, color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.95f))
             }
         }
-    }
-}
-
-@Composable
-private fun OfflineEpisodeRow(
-    episode: OfflineMediaItem,
-    contentPad: androidx.compose.ui.unit.Dp,
-    onPlay: () -> Unit,
-    onDelete: () -> Unit,
-) {
-    val playFocusState = rememberTvFocusState()
-    val deleteFocusState = rememberTvFocusState()
-    val epLabel = buildString {
-        episode.seasonNumber?.let { append("S$it") }
-        episode.episodeNumber?.let { if (isNotEmpty()) append(":"); append("E$it") }
-    }
-
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(horizontal = contentPad)
-            .clip(ShapeCache.smooth12)
-            .background(MaterialTheme.colorScheme.surfaceContainer)
-            .padding(10.dp),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        val thumbModifier = Modifier
-            .width(112.dp)
-            .aspectRatio(16f / 9f)
-            .clip(ShapeCache.smooth8)
-        Box(modifier = thumbModifier.background(MaterialTheme.colorScheme.surfaceVariant)) {
-            val thumb = episode.backdropPath ?: episode.posterPath
-            if (!thumb.isNullOrBlank()) {
-                MediaImage(
-                    url = thumb,
-                    contentDescription = episode.name,
-                    blurHash = episode.blurHashBackdrop ?: episode.blurHashPrimary,
-                    modifier = Modifier.fillMaxSize(),
-                    contentScale = ContentScale.Crop,
-                )
-            }
-            if (episode.downloadStatus == DownloadStatus.COMPLETED) {
-                Icon(
-                    Tabler.Outline.PlayerPlay,
-                    contentDescription = null,
-                    tint = MaterialTheme.colorScheme.onSurface,
-                    modifier = Modifier.align(Alignment.Center).size(20.dp),
-                )
-            }
-            if (episode.playedPercentage in 1.0..94.99) {
-                Box(
-                    modifier = Modifier
-                        .align(Alignment.BottomCenter)
-                        .fillMaxWidth()
-                        .height(3.dp),
-                ) {
-                    Box(
-                        modifier = Modifier
-                            .fillMaxHeight()
-                            .fillMaxWidth((episode.playedPercentage / 100f).toFloat())
-                            .background(MaterialTheme.colorScheme.primary),
-                    )
-                }
-            }
-        }
-
-        Spacer(Modifier.width(12.dp))
-
-        Column(modifier = Modifier.weight(1f)) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                if (epLabel.isNotEmpty()) {
-                    Text(epLabel, style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.primary, modifier = Modifier.padding(end = 8.dp))
-                }
-                Text(
-                    text = episode.name,
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurface,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                    fontWeight = FontWeight.Medium,
-                )
-            }
-            Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(top = 2.dp)) {
-                val ticks = episode.runTimeTicks
-                if (ticks != null && ticks > 0) {
-                    val minutes = (ticks / 600_000_000).toInt()
-                    if (minutes > 0) Text("${minutes}m", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                }
-                val rating = episode.communityRating
-                if (rating != null && rating > 0) {
-                    if (ticks != null && ticks > 0) {
-                        Text(" · ", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.outlineVariant)
-                    }
-                    Icon(Tabler.Outline.Star, contentDescription = null, modifier = Modifier.size(10.dp), tint = MaterialTheme.colorScheme.tertiary)
-                    Spacer(Modifier.width(1.dp))
-                    Text(String.format("%.1f", rating), style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                }
-            }
-            if (!episode.overview.isNullOrBlank()) {
-                Text(
-                    text = episode.overview!!,
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    maxLines = 2,
-                    overflow = TextOverflow.Ellipsis,
-                    modifier = Modifier.padding(top = 4.dp),
-                )
-            }
-            if (episode.downloadStatus == DownloadStatus.COMPLETED) {
-                if (episode.isPlayed) {
-                    WatchedChip()
-                } else if (episode.playedPercentage in 1.0..94.99) {
-                    Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(top = 4.dp)) {
-                        JellyPlayLinearProgressIndicator(
-                            progress = { (episode.playedPercentage / 100f).toFloat() },
-                            modifier = Modifier.width(80.dp).height(4.dp).clip(ShapeCache.smooth4),
-                        )
-                        Spacer(Modifier.width(6.dp))
-                        Text("${episode.playedPercentage.toInt()}% watched", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                    }
-                }
-            } else if (episode.downloadStatus == DownloadStatus.DOWNLOADING) {
-                val progress = if (episode.totalSizeBytes > 0) episode.downloadedBytes.toFloat() / episode.totalSizeBytes else 0f
-                JellyPlayLinearProgressIndicator(
-                    progress = { progress },
-                    modifier = Modifier.fillMaxWidth().padding(top = 4.dp).height(4.dp).clip(ShapeCache.smooth4),
-                )
-            }
-        }
-
-        if (episode.downloadStatus == DownloadStatus.COMPLETED) {
-            IconButton(
-                onClick = onPlay,
-                modifier = Modifier.then(playFocusState.focusModifier).tvFocusIndicator(playFocusState, CircleShape),
-            ) {
-                Icon(Tabler.Outline.PlayerPlay, contentDescription = "Play", tint = MaterialTheme.colorScheme.primary)
-            }
-        }
-        IconButton(
-            onClick = onDelete,
-            modifier = Modifier.then(deleteFocusState.focusModifier).tvFocusIndicator(deleteFocusState, CircleShape),
-        ) {
-            Icon(Tabler.Outline.Trash, contentDescription = "Delete", tint = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.size(20.dp))
-        }
-    }
-}
-
-@Composable
-private fun WatchedChip() {
-    Row(
-        verticalAlignment = Alignment.CenterVertically,
-        modifier = Modifier.padding(top = 4.dp),
-    ) {
-        Icon(Tabler.Outline.Check, contentDescription = "Watched", modifier = Modifier.size(14.dp), tint = MaterialTheme.colorScheme.primary)
-        Spacer(Modifier.width(4.dp))
-        Text("Watched", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.primary)
     }
 }

@@ -7,12 +7,17 @@ import com.raulshma.jellyplay.core.model.OfflineMediaItem
 import com.raulshma.jellyplay.core.ui.viewmodel.JellyPlayViewModel
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.stateIn
+import java.util.concurrent.ConcurrentHashMap
 import javax.inject.Inject
 
 @OptIn(ExperimentalCoroutinesApi::class)
@@ -35,6 +40,38 @@ class OfflineDetailViewModel @Inject constructor(
             if (id == null) flowOf(emptyList()) else offlineRepository.getChildren(id)
         }.stateIn(scope, SharingStarted.WhileSubscribed(5_000), emptyList())
 
+    /**
+     * Seasons for the loaded item's series. Populated only when the item is an
+     * episode (i.e. [OfflineMediaItem.seriesId] is set) so the detail screen can
+     * render the same seasons/episodes list the online episode detail shows.
+     * Empty otherwise.
+     */
+    val seasons: StateFlow<List<OfflineMediaItem>> =
+        item.flatMapLatest { loaded ->
+            val seriesId = loaded?.seriesId
+            if (seriesId == null) flowOf(emptyList()) else offlineRepository.getSeasonsForSeries(seriesId)
+        }.stateIn(scope, SharingStarted.WhileSubscribed(5_000), emptyList())
+
+    /**
+     * Episodes keyed by season id for the loaded item's series. Loaded once all
+     * seasons are known so the UI can switch season tabs without re-fetching
+     * (mirrors OfflineSeriesViewModel.episodes). Empty for non-episode items.
+     */
+    val episodes: StateFlow<Map<String, List<OfflineMediaItem>>> =
+        seasons.flatMapLatest { seasonList ->
+            if (seasonList.isEmpty()) {
+                flowOf(emptyMap())
+            } else {
+                val map = ConcurrentHashMap<String, List<OfflineMediaItem>>()
+                coroutineScope {
+                    seasonList.map { season ->
+                        async { map[season.id] = offlineRepository.getEpisodesForSeason(season.id).first() }
+                    }.awaitAll()
+                }
+                flowOf(map.toMap())
+            }
+        }.stateIn(scope, SharingStarted.WhileSubscribed(5_000), emptyMap())
+
     /** Drives the screen's data. Called once from a LaunchedEffect(itemId). */
     fun load(itemId: String) {
         if (_itemId.value == itemId) return
@@ -55,5 +92,10 @@ class OfflineDetailViewModel @Inject constructor(
             offlineRepository.deleteOfflineItem(id)
             onDone()
         }
+    }
+
+    /** Deletes a single episode from the embedded seasons list. */
+    fun deleteEpisode(episodeId: String) {
+        launch { offlineRepository.deleteOfflineItem(episodeId) }
     }
 }
