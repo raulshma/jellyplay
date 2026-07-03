@@ -17,8 +17,6 @@ import com.raulshma.jellyplay.core.model.TrackType
 import com.raulshma.jellyplay.core.model.VideoEffectsConfig
 import com.raulshma.jellyplay.core.model.parseLanguageFromLabel
 import kotlinx.coroutines.channels.awaitClose
-import kotlinx.coroutines.delay
-import kotlinx.coroutines.withTimeoutOrNull
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -26,7 +24,6 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.callbackFlow
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.asSharedFlow
-import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.CoroutineScope
@@ -45,10 +42,6 @@ class LibVlcPlayerEngine(
 
     companion object {
         private const val TAG = "LibVlcPlayerEngine"
-        // Max time the position-polling loop will wait for playback to resume
-        // before re-checking config (M2). Prevents the ticker from suspending
-        // forever while paused.
-        private const val POSITION_PAUSED_RECHECK_MS = 2_500L
     }
 
     private val isLowRamDevice by lazy { EngineDeviceProfile.isLowRamDevice(context) }
@@ -65,9 +58,6 @@ class LibVlcPlayerEngine(
 
     private val _isPlaying = MutableStateFlow(false)
     override val isPlaying: StateFlow<Boolean> = _isPlaying.asStateFlow()
-
-    private val _currentCues = MutableStateFlow<List<String>>(emptyList())
-    override val currentCues: StateFlow<List<String>> = _currentCues.asStateFlow()
 
     private val _availableTracks = MutableStateFlow<List<MediaTrack>>(emptyList())
     override val availableTracks: StateFlow<List<MediaTrack>> = _availableTracks.asStateFlow()
@@ -393,7 +383,7 @@ class LibVlcPlayerEngine(
         } catch (_: Exception) {}
     }
 
-    override fun selectTrack(type: TrackType, index: Int, trackGroup: Any?) {
+    override fun selectTrack(type: TrackType, index: Int) {
         try {
             val mp = mediaPlayer ?: return
             if (type == TrackType.AUDIO) {
@@ -787,35 +777,28 @@ class LibVlcPlayerEngine(
 
     override val positionFlow: Flow<Long> = callbackFlow {
         trySend(currentPositionMs)
-        var lastPlayingState = _isPlaying.value
-        val ticker = engineScope.launch {
-            while (isActive) {
-                if (!_isPlaying.value) {
-                    // Bounded wait (M2): previously `_isPlaying.first { it }`
-                    // suspended forever while paused, freezing buffer/stats
-                    // updates and ignoring polling-interval changes. Re-check
-                    // every few seconds so config is honoured even while paused.
-                    withTimeoutOrNull(POSITION_PAUSED_RECHECK_MS) {
-                        _isPlaying.first { it }
-                    }
-                }
-                delay(_pollingIntervalMs.value)
+        // The polling loop (bounded paused-wait, play↔pause edge detection) is
+        // shared via [EnginePositionTicker]. Per-tick readbacks are wrapped in
+        // runCatching because currentPositionMs/durationMs touch the native
+        // mediaPlayer, which can throw if it is torn down concurrently.
+        val ticker = EnginePositionTicker(
+            scope = engineScope,
+            pollingIntervalMs = _pollingIntervalMs,
+            isPlayingFlow = _isPlaying,
+            isCurrentlyPlaying = { _isPlaying.value },
+            onActive = {
                 runCatching {
                     trySend(currentPositionMs)
-                    val currentlyPlaying = _isPlaying.value
-                    if (currentlyPlaying || currentlyPlaying != lastPlayingState) {
-                        _bufferedPositionMs.value = durationMs.coerceAtLeast(0L).let { dur ->
-                            if (dur > 0 && _bufferedPositionMs.value <= currentPositionMs) dur
-                            else _bufferedPositionMs.value
-                        }
-                        if (_videoStatsEnabled.value) {
-                            updateVideoStats()
-                        }
+                    _bufferedPositionMs.value = durationMs.coerceAtLeast(0L).let { dur ->
+                        if (dur > 0 && _bufferedPositionMs.value <= currentPositionMs) dur
+                        else _bufferedPositionMs.value
                     }
-                    lastPlayingState = currentlyPlaying
+                    if (_videoStatsEnabled.value) {
+                        updateVideoStats()
+                    }
                 }
-            }
-        }
+            },
+        ).launch()
         awaitClose { ticker.cancel() }
     }
 

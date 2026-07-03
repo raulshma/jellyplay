@@ -137,6 +137,7 @@ data class EqualizerSettings(
 @Immutable
 @Serializable
 enum class EffectStrength(val displayName: String) {
+    NONE("Off"),
     LOW("Low"),
     MODERATE("Moderate"),
     HIGH("High"),

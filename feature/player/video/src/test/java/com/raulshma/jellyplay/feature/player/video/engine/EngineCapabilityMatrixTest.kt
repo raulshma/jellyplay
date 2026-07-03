@@ -105,10 +105,13 @@ class EngineCapabilityMatrixTest {
         assertTrue(c.supportsAudioPassthrough)
         assertTrue(c.supportsSubtitleStyle)
         assertTrue(c.supportsSubtitleVerticalPosition)
-        assertTrue(c.supportsDialogueBoost)
-        assertTrue(c.supportsNightMode)
-        assertTrue(c.supportsAudioNormalization)
-        assertTrue(c.supportsChannelMixing)
+        // These four are Android-AudioEffect-based but LibVLC exposes no audio
+        // session id (returns UNSET), so the effect helpers short-circuit and
+        // the effects cannot be toggled at runtime — only as startup filters.
+        assertFalse(c.supportsDialogueBoost)
+        assertFalse(c.supportsNightMode)
+        assertFalse(c.supportsAudioNormalization)
+        assertFalse(c.supportsChannelMixing)
         assertTrue(c.supportsVideoFilters)
         assertFalse(c.supportsLiveQualitySwitch)
         assertFalse(c.supportsBandwidthEstimate)

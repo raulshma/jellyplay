@@ -251,7 +251,6 @@ class HomeViewModel @Inject constructor(
             is HomeUiEvent.ClearRequestResult -> clearRequestResult()
             is HomeUiEvent.LoadSeerrServiceDetails -> loadSeerrServiceDetails(event.mediaType)
             is HomeUiEvent.LoadTvSeasons -> loadTvSeasons(event.tmdbId)
-            is HomeUiEvent.PrefetchSeerrDetails -> prefetchSeerrDetails(event.tmdbId, event.mediaType, event.onDone)
             is HomeUiEvent.DismissNewsletterBanner -> _uiState.update { it.copy(newsletterBannerVisible = false) }
         }
     }
@@ -392,7 +391,7 @@ class HomeViewModel @Inject constructor(
         }
     }
 
-    private fun prefetchSeerrDetails(tmdbId: Int, mediaType: String, onDone: () -> Unit) {
+    fun prefetchSeerrDetails(tmdbId: Int, mediaType: String, onDone: () -> Unit) {
         launch {
             seerrRequestDelegate.prefetchDetails(tmdbId, mediaType)
             onDone()
@@ -439,6 +438,12 @@ class HomeViewModel @Inject constructor(
                 pinnedHomeSections,
             )
                 .onSuccess { fetchedSections ->
+                    // Surface a non-blocking notice when some enabled sections didn't
+                    // load (e.g. a per-section 403/empty response) so the user knows the
+                    // home page isn't intentionally sparse.
+                    val partial = fetchedSections.size < enabledSections.size &&
+                        fetchedSections.isNotEmpty()
+                    _uiState.update { it.copy(partialLoadError = partial) }
                     val finalSections = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Default) {
                         val orderIndex = homeSectionOrder.withIndex().associate { it.value to it.index }
                         val ordered = fetchedSections
@@ -517,6 +522,7 @@ class HomeViewModel @Inject constructor(
                     if (_uiState.value.sections.isEmpty()) {
                         _uiState.update { s -> s.copy(error = throwable.message ?: "${throwable::class.simpleName}") }
                     }
+                    _uiState.update { it.copy(partialLoadError = false) }
                 }
 
             if (_uiState.value.discoverEnabled) {

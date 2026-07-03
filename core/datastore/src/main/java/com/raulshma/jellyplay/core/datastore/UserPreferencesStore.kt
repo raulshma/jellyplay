@@ -180,6 +180,7 @@ class UserPreferencesStore @Inject constructor(
         val AUTO_EQ_BY_GENRE = booleanPreferencesKey("auto_eq_by_genre")
         val HOME_HERO_ENABLED = booleanPreferencesKey("home_hero_enabled")
         val NAV_BAR_SHOW_LABELS = booleanPreferencesKey("nav_bar_show_labels")
+        val HIDE_BOTTOM_NAV_ON_SCROLL = booleanPreferencesKey("hide_bottom_nav_on_scroll")
         val ONBOARDING_COMPLETED = booleanPreferencesKey("onboarding_completed")
         val PERFORMANCE_MODE = booleanPreferencesKey("performance_mode")
         val NEWSLETTER_ENABLED = booleanPreferencesKey("newsletter_enabled")
@@ -188,6 +189,7 @@ class UserPreferencesStore @Inject constructor(
         val AUDIO_NIGHT_MODE_GAIN = intPreferencesKey("audio_night_mode_gain")
         val WIFI_ONLY_DOWNLOADS = booleanPreferencesKey("wifi_only_downloads")
         val DOWNLOAD_CONNECTIONS = intPreferencesKey("download_connections")
+        val MAX_CONCURRENT_DOWNLOADS = intPreferencesKey("max_concurrent_downloads")
         val VIRTUALIZER_STRENGTH = intPreferencesKey("virtualizer_strength")
         val NEWSLETTER_DAY_OF_WEEK = intPreferencesKey("newsletter_day_of_week")
 
@@ -960,10 +962,13 @@ class UserPreferencesStore @Inject constructor(
             pitchSemitones = readFloat(prefs, Keys.PITCH_SEMITONES, "pitch_semitones", 0f),
             wifiOnlyDownloads = readBool(prefs, Keys.WIFI_ONLY_DOWNLOADS, "wifi_only_downloads", true),
             downloadConnections = readInt(prefs, Keys.DOWNLOAD_CONNECTIONS, "download_connections", 4),
+            maxConcurrentDownloads = readInt(prefs, Keys.MAX_CONCURRENT_DOWNLOADS, "max_concurrent_downloads", 3)
+                .coerceIn(1, 6),
             enabledHomeSectionTypes = enabledHomeSectionTypes,
             homeSectionOrder = homeSectionOrder,
             hiddenLibrarySectionIds = hiddenLibrarySectionIds,
             navBarShowLabels = readBool(prefs, Keys.NAV_BAR_SHOW_LABELS, "nav_bar_show_labels", true),
+            hideBottomNavOnScroll = readBool(prefs, Keys.HIDE_BOTTOM_NAV_ON_SCROLL, "hide_bottom_nav_on_scroll", true),
             homeHeroEnabled = readBool(prefs, Keys.HOME_HERO_ENABLED, "home_hero_enabled", true),
             onboardingCompleted = readBool(prefs, Keys.ONBOARDING_COMPLETED, "onboarding_completed", false),
             mpvConfig = mpvConfig,
@@ -2028,6 +2033,10 @@ class UserPreferencesStore @Inject constructor(
         context.dataStore.edit { it[Keys.DOWNLOAD_CONNECTIONS] = count }
     }
 
+    suspend fun setMaxConcurrentDownloads(count: Int) {
+        context.dataStore.edit { it[Keys.MAX_CONCURRENT_DOWNLOADS] = count.coerceIn(1, 6) }
+    }
+
     suspend fun setEnabledHomeSectionTypes(types: Set<HomeSectionType>) {
         context.dataStore.edit {
             it[Keys.HOME_ENABLED_SECTION_TYPES] = json.encodeToString(types.map { t -> t.name }.toSet())
@@ -2052,6 +2061,10 @@ class UserPreferencesStore @Inject constructor(
 
     suspend fun setNavBarShowLabels(show: Boolean) {
         context.dataStore.edit { it[Keys.NAV_BAR_SHOW_LABELS] = show }
+    }
+
+    suspend fun setHideBottomNavOnScroll(hide: Boolean) {
+        context.dataStore.edit { it[Keys.HIDE_BOTTOM_NAV_ON_SCROLL] = hide }
     }
 
     suspend fun setHomeHeroEnabled(enabled: Boolean) {
@@ -2345,6 +2358,7 @@ class UserPreferencesStore @Inject constructor(
             settings[Keys.PITCH_SEMITONES] = prefs.pitchSemitones
             settings[Keys.WIFI_ONLY_DOWNLOADS] = prefs.wifiOnlyDownloads
             settings[Keys.DOWNLOAD_CONNECTIONS] = prefs.downloadConnections
+            settings[Keys.MAX_CONCURRENT_DOWNLOADS] = prefs.maxConcurrentDownloads
             settings[Keys.HOME_ENABLED_SECTION_TYPES] = json.encodeToString(
                 kotlinx.serialization.serializer<Set<com.raulshma.jellyplay.core.model.HomeSectionType>>(),
                 prefs.enabledHomeSectionTypes,
@@ -2358,6 +2372,7 @@ class UserPreferencesStore @Inject constructor(
                 prefs.hiddenLibrarySectionIds,
             )
             settings[Keys.NAV_BAR_SHOW_LABELS] = prefs.navBarShowLabels
+            settings[Keys.HIDE_BOTTOM_NAV_ON_SCROLL] = prefs.hideBottomNavOnScroll
             settings[Keys.HOME_HERO_ENABLED] = prefs.homeHeroEnabled
             settings[Keys.ONBOARDING_COMPLETED] = prefs.onboardingCompleted
             settings[Keys.MPV_CONFIG] = json.encodeToString(

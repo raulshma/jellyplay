@@ -150,7 +150,15 @@ fun DownloadsScreen(
                             formatBytes = { viewModel.formatBytes(it) },
                             formatSpeed = { viewModel.formatSpeed(it) },
                             formatEta = { d, t, s -> viewModel.formatEta(d, t, s) },
+                            // Completed downloads open their detail page on tap
+                            // (matching the online experience) rather than auto-playing.
+                            // A distinct Play action is still available in the row.
                             onClick = {
+                                if (download.status == DownloadStatus.COMPLETED) {
+                                    onItemClick(download.mediaItemId)
+                                }
+                            },
+                            onPlay = {
                                 if (download.status == DownloadStatus.COMPLETED) {
                                     onPlayOffline(download.mediaItemId, download.mediaType)
                                 }
@@ -177,6 +185,7 @@ private fun DownloadItemRow(
     formatSpeed: (Long) -> String,
     formatEta: (Long, Long, Long) -> String,
     onClick: () -> Unit,
+    onPlay: () -> Unit,
     onCancel: () -> Unit,
     onPause: () -> Unit,
     onResume: () -> Unit,
@@ -377,6 +386,12 @@ private fun DownloadItemRow(
                     )
                 }
                 DownloadStatus.COMPLETED -> {
+                    DownloadActionButton(
+                        icon = Tabler.Outline.PlayerPlay,
+                        contentDescription = "Play",
+                        tint = MaterialTheme.colorScheme.primary,
+                        onClick = onPlay,
+                    )
                     DownloadActionButton(
                         icon = Tabler.Outline.Trash,
                         contentDescription = "Delete",

@@ -25,9 +25,7 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -346,14 +344,9 @@ private fun SearchItemRow(
         else -> Color.Transparent
     }
 
-    var visible by remember { mutableStateOf(false) }
-    LaunchedEffect(Unit) { visible = true }
-
-    val animationProgress by animateFloatAsState(
-        targetValue = if (visible) 1f else 0f,
-        animationSpec = MaterialTheme.motionScheme.fastEffectsSpec(),
-        label = "searchItemAnim",
-    )
+    // No per-item entrance animation: in a LazyColumn, items are disposed on
+    // scroll-out and re-composed on scroll-back, so a `LaunchedEffect(Unit)`
+    // entrance animation would re-fire and flicker on every re-entry.
 
     Row(
         modifier = Modifier
@@ -363,8 +356,6 @@ private fun SearchItemRow(
             .graphicsLayer {
                 scaleX = scale
                 scaleY = scale
-                alpha = animationProgress
-                translationY = (1f - animationProgress) * 8f
             }
             .clip(ShapeCache.smooth12)
             .background(backgroundColor)

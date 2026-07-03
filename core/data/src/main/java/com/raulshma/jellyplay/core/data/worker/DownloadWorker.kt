@@ -6,6 +6,7 @@ import android.os.Build
 import androidx.hilt.work.HiltWorker
 import androidx.work.CoroutineWorker
 import androidx.work.WorkerParameters
+import com.raulshma.jellyplay.core.data.playback.DownloadConcurrencyLimiter
 import com.raulshma.jellyplay.core.database.dao.DownloadDao
 import com.raulshma.jellyplay.core.database.dao.UserDao
 import com.raulshma.jellyplay.core.database.crypto.TokenCipher
@@ -29,6 +30,7 @@ class DownloadWorker @AssistedInject constructor(
     private val preferencesStore: UserPreferencesStore,
     private val client: OkHttpClient,
     private val tokenCipher: TokenCipher,
+    private val concurrencyLimiter: DownloadConcurrencyLimiter,
 ) : CoroutineWorker(context, params) {
 
     override suspend fun doWork(): Result {
@@ -39,6 +41,11 @@ class DownloadWorker @AssistedInject constructor(
         if (entity.status == DownloadStatus.PAUSED.name || entity.status == DownloadStatus.CANCELLED.name) {
             return Result.success()
         }
+
+        // Keep the shared limiter sized to the user's preference.
+        val maxConcurrent = preferencesStore.preferences.firstOrNull()?.maxConcurrentDownloads
+            ?: DownloadConcurrencyLimiter.DEFAULT_MAX
+        concurrencyLimiter.configure(maxConcurrent)
 
         val notificationId = downloadId.hashCode() and 0x7FFFFFFF
         try {
@@ -81,7 +88,10 @@ class DownloadWorker @AssistedInject constructor(
 
         val numConnections = preferencesStore.preferences.firstOrNull()?.downloadConnections?.coerceIn(1, 8) ?: 1
 
-        return try {
+        // Gate the actual transfer on a shared concurrency slot so at most
+        // `maxConcurrentDownloads` run at once; the rest block here.
+        return concurrencyLimiter.withPermit {
+            try {
             if (existingBytes > 0L) {
                 performSingleConnectionDownload(
                     downloadClient = downloadClient,
@@ -137,6 +147,7 @@ class DownloadWorker @AssistedInject constructor(
                 dao.updateProgress(downloadId, existingBytes, DownloadStatus.FAILED.name)
             }
             Result.failure()
+        }
         }
     }
 

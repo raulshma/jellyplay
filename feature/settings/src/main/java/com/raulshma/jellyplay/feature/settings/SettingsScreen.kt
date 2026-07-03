@@ -104,6 +104,8 @@ fun SettingsScreen(
     onAboutClick: () -> Unit = {},
     onWatchProgressHeatmapClick: () -> Unit = {},
     onAppearanceSettings: (String?) -> Unit = {},
+    onPinnedHomeSections: (String?) -> Unit = {},
+    onHomeLayoutPresets: (String?) -> Unit = {},
     onPlaybackSettings: (String?) -> Unit = {},
     onAudioSettings: (String?) -> Unit = {},
     onLanguageSettings: (String?) -> Unit = {},
@@ -163,16 +165,10 @@ fun SettingsScreen(
     var isSearchFocused by remember { mutableStateOf(false) }
 
     val filteredItems = remember(searchQuery) {
-        if (searchQuery.isBlank()) {
-            emptyList()
-        } else {
-            SettingsSearchRegistry.items.filter { item ->
-                item.title.contains(searchQuery, ignoreCase = true) ||
-                item.subtitle.contains(searchQuery, ignoreCase = true) ||
-                item.category.contains(searchQuery, ignoreCase = true) ||
-                item.keywords.any { it.contains(searchQuery, ignoreCase = true) }
-            }
-        }
+        // Ranked fuzzy match: tolerates typos, merged/split terms and synonyms so advanced
+        // settings with jargon-heavy titles/thin keyword lists stay findable. See
+        // SettingsSearchMatcher for scoring details.
+        SettingsSearchMatcher.search(searchQuery, SettingsSearchRegistry.items)
     }
 
     BackHandler(enabled = isSearchActive) {
@@ -503,8 +499,6 @@ fun SettingsScreen(
                                                     viewModel.setShowAdvancedSettings(true)
                                                     userMessageBus.info(uiTextOf(R.string.settings_advanced_enabled))
                                                 }
-                                                isSearchActive = false
-                                                searchQuery = ""
                                                  if (item.id == "logout") {
                                                      onLogout(false)
                                                  } else {
@@ -515,6 +509,14 @@ fun SettingsScreen(
                                                         is Route.AppearanceSettings -> {
                                                             lastClickedSettingId = "appearance"
                                                             onAppearanceSettings(item.id)
+                                                        }
+                                                        is Route.PinnedHomeSections -> {
+                                                            lastClickedSettingId = "appearance"
+                                                            onPinnedHomeSections(item.id)
+                                                        }
+                                                        is Route.HomeLayoutPresets -> {
+                                                            lastClickedSettingId = "appearance"
+                                                            onHomeLayoutPresets(item.id)
                                                         }
                                                         is Route.PlaybackSettings -> {
                                                             lastClickedSettingId = "playback"
@@ -555,6 +557,10 @@ fun SettingsScreen(
                                                         else -> {}
                                                     }
                                                 }
+                                                // Dismiss search after navigation has been dispatched so the
+                                                // main settings list doesn't briefly reveal during the transition.
+                                                isSearchActive = false
+                                                searchQuery = ""
                                             }
                                     )
                                 }
@@ -739,7 +745,7 @@ fun SettingsScreen(
                     AnimatedSettingsEntrance(7) {
                         SettingListItem(
                             icon = Tabler.Outline.Database,
-                            title = "Storage",
+                            title = "Downloads & Storage",
                             subtitle = "Cache: ${viewModel.cacheSizeMb} MB",
                             index = 0, count = 1,
                             highlighted = lastClickedSettingId == "storage",

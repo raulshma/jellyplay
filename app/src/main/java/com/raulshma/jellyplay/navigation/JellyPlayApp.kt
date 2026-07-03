@@ -1,6 +1,7 @@
 package com.raulshma.jellyplay.navigation
 
 import android.content.Intent
+import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.ActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
@@ -99,6 +100,7 @@ import androidx.compose.ui.unit.IntOffset
 import androidx.compose.foundation.layout.offset
 import androidx.compose.ui.draw.scale
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.blur
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.NavigationBarItem
 import androidx.compose.material3.NavigationBarItemDefaults
@@ -109,7 +111,9 @@ import kotlin.math.roundToInt
 import com.raulshma.jellyplay.MainActivity
 import com.raulshma.jellyplay.MainViewModel
 import com.raulshma.jellyplay.core.data.playback.AudioPlaybackManager
+import com.raulshma.jellyplay.core.model.ExperimentalFeature
 import com.raulshma.jellyplay.core.model.HomeMode
+import com.raulshma.jellyplay.core.model.isExperimentalEnabled
 import com.raulshma.jellyplay.core.ui.adaptive.LocalAdaptiveInfo
 import com.raulshma.jellyplay.core.ui.adaptive.LocalJellyPlayUi
 import com.raulshma.jellyplay.core.ui.adaptive.WindowSizeClass
@@ -511,6 +515,27 @@ private fun MainContent(
 
     val isTv = context.isTv()
 
+    // Press-and-hold "peek" preview (Instagram-style). Remembered once at the
+    // root and provided via LocalMediaPreviewController; the overlay collects it
+    // below. Purely ephemeral UI state, so no DI/ViewModel involvement. The
+    // whole feature is dormant unless the user opts in under Experimental
+    // settings (off by default).
+    val peekEnabled = preferences.isExperimentalEnabled(ExperimentalFeature.MEDIA_CARD_PEEK)
+    val mediaPreviewController = remember {
+        com.raulshma.jellyplay.core.ui.preview.MediaPreviewController()
+    }
+    val mediaPreviewState by mediaPreviewController.state.collectAsStateWithLifecycle()
+    // Blur the live content behind the peek overlay. Skipped on TV (no peek), in
+    // performance mode (Modifier.blur over the full tree is GPU-costly), and when
+    // the feature is disabled — in which case mediaPreviewState is always null.
+    val previewBlur by androidx.compose.animation.core.animateFloatAsState(
+        targetValue = if (peekEnabled && !isTv && !preferences.performanceMode && mediaPreviewState != null) 14f else 0f,
+        animationSpec = androidx.compose.animation.core.tween(durationMillis = 220),
+        label = "previewBackdropBlur",
+    )
+    val previewBlurModifier =
+        if (previewBlur > 0.5f) Modifier.blur(previewBlur.dp) else Modifier
+
     // Single root collector for app-wide one-shot messages.
     // Phone renders a Snackbar (accessible, dismissible, localizable); TV keeps
     // a system Toast since the TV layout has no root SnackbarHost. Either way,
@@ -580,6 +605,9 @@ private fun MainContent(
         LocalPerformanceMode provides preferences.performanceMode,
         LocalFloatingNavVisibility provides isBottomNavVisibleState,
         LocalUserMessageBus provides userMessageBus,
+        com.raulshma.jellyplay.core.ui.preview.LocalMediaPreviewController provides mediaPreviewController,
+        com.raulshma.jellyplay.core.ui.preview.LocalMediaPeekEnabled provides
+            preferences.isExperimentalEnabled(ExperimentalFeature.MEDIA_CARD_PEEK),
         com.raulshma.jellyplay.core.ui.components.LocalCardDisplayPreferences provides com.raulshma.jellyplay.core.ui.components.CardDisplayPreferences(
             showUnwatchedBadge = preferences.showUnwatchedBadge,
             showWatchedCheckmark = preferences.showWatchedCheckmark,
@@ -622,6 +650,10 @@ private fun MainContent(
             }
 
             Box(Modifier.fillMaxSize()) {
+            // Wrap the live content (TV / Phone / FullScreen) in its own Box so
+            // the peek overlay's backdrop blur applies to it only, leaving the
+            // SnackbarHost and the overlay itself sharp.
+            Box(Modifier.fillMaxSize().then(previewBlurModifier)) {
             // Hoist the TV drawer state above the isFullScreenRoute branch so it survives visiting a
             // full-screen route (e.g. the player) and back, instead of being recreated when
             // TvNavigationDrawer leaves and re-enters composition. Fully-qualified to avoid clashing with the mobile
@@ -651,6 +683,13 @@ private fun MainContent(
                 )
             } else {
                 if (!isFullScreenRoute) {
+                    // Wire the system/gesture back button to in-app navigation so back
+                    // from a deep screen returns to the tab root before exiting the app
+                    //. At a tab root, fall through to the OS (exit). The
+                    // full-screen player is excluded — it owns its own BackHandler.
+                    BackHandler(enabled = !navigator.isAtTabRoot()) {
+                        navigator.goBack()
+                    }
                     PhoneContent(
                         navigationState = navigationState,
                         currentTopLevel = currentTopLevel,
@@ -671,6 +710,7 @@ private fun MainContent(
                         isSynthwave = isSynthwave,
                         isExpanded = isExpanded,
                         isBottomNavVisibleState = isBottomNavVisibleState,
+                        hideBottomNavOnScroll = preferences.hideBottomNavOnScroll,
                         bottomNavOffsetHeightPx = bottomNavOffsetHeightPx,
                         showMiniPlayer = showMiniPlayer,
                         audioPlaybackManager = audioPlaybackManager,
@@ -711,11 +751,20 @@ private fun MainContent(
                     )
                 }
                 }
+            } // end inner blur Box
                 androidx.compose.material3.SnackbarHost(
                     hostState = snackbarHostState,
                     modifier = Modifier
                         .align(androidx.compose.ui.Alignment.BottomCenter)
                         .padding(bottom = if (isFullScreenRoute) 16.dp else 96.dp)
+                )
+            }
+            // Press-and-hold peek overlay — topmost. Only composed when the user
+            // has enabled the experimental feature and on phone; on TV the
+            // controller is never triggered, so this would render nothing anyway.
+            if (peekEnabled && !isTv) {
+                com.raulshma.jellyplay.core.ui.preview.MediaPreviewOverlay(
+                    controller = mediaPreviewController,
                 )
             }
             }
@@ -832,6 +881,7 @@ private fun PhoneContent(
     isSynthwave: Boolean,
     isExpanded: Boolean,
     isBottomNavVisibleState: androidx.compose.runtime.MutableState<Boolean>,
+    hideBottomNavOnScroll: Boolean,
     bottomNavOffsetHeightPx: androidx.compose.runtime.MutableFloatState,
     showMiniPlayer: Boolean,
     audioPlaybackManager: AudioPlaybackManager,
@@ -901,6 +951,13 @@ private fun PhoneContent(
             }
         },
     ) {
+        // When hide-on-scroll is disabled, keep the nav bar permanently visible
+        //. The nestedScrollConnection is still constructed so its
+        // identity stays stable, but it is only attached to the tree when the
+        // setting is on.
+        androidx.compose.runtime.LaunchedEffect(hideBottomNavOnScroll) {
+            if (!hideBottomNavOnScroll) isBottomNavVisible = true
+        }
         val nestedScrollConnection = remember {
             object : NestedScrollConnection {
                 override fun onPreScroll(available: Offset, source: NestedScrollSource): Offset {
@@ -945,7 +1002,7 @@ private fun PhoneContent(
                 modifier = Modifier
                     .fillMaxSize()
                     .then(appBackgroundModifier)
-                    .then(if (!isExpanded) Modifier.nestedScroll(nestedScrollConnection) else Modifier)
+                    .then(if (!isExpanded && hideBottomNavOnScroll) Modifier.nestedScroll(nestedScrollConnection) else Modifier)
             ) {
                 Box(modifier = Modifier.fillMaxSize()) {
                     MainNavDisplay(
@@ -1157,7 +1214,7 @@ private data class ExternalLaunchTarget(
 
 private fun routeToIcon(route: Route): ImageVector = when (route) {
     Route.Home -> Tabler.Outline.Home
-    Route.Library -> Tabler.Outline.Music
+    Route.Library -> Tabler.Outline.Stack2
     Route.Search -> Tabler.Outline.Search
     Route.LiveTv -> Tabler.Outline.DeviceTv
     Route.MusicBrowse -> Tabler.Outline.Disc

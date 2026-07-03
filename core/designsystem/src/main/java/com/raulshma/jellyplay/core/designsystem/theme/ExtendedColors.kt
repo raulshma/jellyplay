@@ -69,3 +69,28 @@ val MaterialTheme.extendedColors: ExtendedColors
     get() = LocalExtendedColors.current
 
 val LocalIsLightTheme = staticCompositionLocalOf { false }
+
+/**
+ * The scrim color used behind on-video player chrome (control bars, overlays).
+ *
+ * Material 3's [androidx.compose.material3.ColorScheme.scrim] is always black in both light and
+ * dark schemes, which forces a dark look even in light mode. For the player to respect the theme,
+ * the scrim base flips: white in light mode (yielding a light translucent gradient behind controls,
+ * paired with the dark `onSurface` text the controls already use) and black in dark mode (the
+ * classic dark gradient behind light text). Overlay surfaces and pills derive their fills/borders
+ * from the *foreground* counterpart — [playerOnScrim] — so they stay cohesive in either theme.
+ */
+@Composable
+@ReadOnlyComposable
+fun playerScrimColor(): Color =
+    if (LocalIsLightTheme.current) Color.White else Color.Black
+
+/**
+ * The foreground color for on-video player chrome that sits on top of a [playerScrimColor] fill.
+ * The inverse of the scrim: black-on-white in light mode, white-on-black in dark mode. Use this
+ * for overlay text, icon tints, pill borders and translucent chip backgrounds.
+ */
+@Composable
+@ReadOnlyComposable
+fun playerOnScrim(): Color =
+    if (LocalIsLightTheme.current) Color.Black else Color.White

@@ -494,6 +494,41 @@ val MIGRATION_26_27 = object : Migration(26, 27) {
     }
 }
 
+// Per-item / per-series dialogue-boost strength.
+// Nullable column: NULL means "no per-item rule" (resolve to the effective default).
+val MIGRATION_27_28 = object : Migration(27, 28) {
+    override fun migrate(db: SupportSQLiteDatabase) {
+        db.execSQL("ALTER TABLE item_playback_preferences ADD COLUMN dialogueBoostStrength TEXT")
+    }
+}
+
+// Offline playback progress: position ticks, played percentage, isPlayed, and
+// last-played date. Lets downloads render watched state and
+// resume positions while offline, seeded from server UserData at download time.
+val MIGRATION_28_29 = object : Migration(28, 29) {
+    override fun migrate(db: SupportSQLiteDatabase) {
+        db.execSQL("ALTER TABLE offline_media ADD COLUMN playbackPositionTicks INTEGER")
+        db.execSQL("ALTER TABLE offline_media ADD COLUMN playedPercentage REAL NOT NULL DEFAULT 0.0")
+        db.execSQL("ALTER TABLE offline_media ADD COLUMN isPlayed INTEGER NOT NULL DEFAULT 0")
+        db.execSQL("ALTER TABLE offline_media ADD COLUMN lastPlayedDate TEXT")
+    }
+}
+
+// Rich metadata for offline detail screens: original title, critic rating,
+// studios (comma-joined), tagline, and a JSON blob of cast/people. Lets the
+// redesigned offline detail screens show the same information as the online
+// detail screen. All columns are nullable so pre-existing rows degrade
+// gracefully until the item is re-downloaded.
+val MIGRATION_29_30 = object : Migration(29, 30) {
+    override fun migrate(db: SupportSQLiteDatabase) {
+        db.execSQL("ALTER TABLE offline_media ADD COLUMN originalTitle TEXT")
+        db.execSQL("ALTER TABLE offline_media ADD COLUMN criticRating REAL")
+        db.execSQL("ALTER TABLE offline_media ADD COLUMN studios TEXT")
+        db.execSQL("ALTER TABLE offline_media ADD COLUMN tagline TEXT")
+        db.execSQL("ALTER TABLE offline_media ADD COLUMN peopleJson TEXT")
+    }
+}
+
 val ALL_MIGRATIONS = listOf(
     MIGRATION_1_2,
     MIGRATION_2_3,
@@ -520,4 +555,7 @@ val ALL_MIGRATIONS = listOf(
     MIGRATION_23_24,
     MIGRATION_25_26,
     MIGRATION_26_27,
+    MIGRATION_27_28,
+    MIGRATION_28_29,
+    MIGRATION_29_30,
 )

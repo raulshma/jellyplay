@@ -18,8 +18,6 @@ import com.raulshma.jellyplay.core.model.ResolvedPlayback
 import com.raulshma.jellyplay.core.model.StreamType
 import com.raulshma.jellyplay.core.model.SubtitleStyle
 import com.raulshma.jellyplay.core.model.EngineSpecificConfig
-import com.raulshma.jellyplay.feature.player.video.engine.AudioEffectsConfig
-import com.raulshma.jellyplay.feature.player.video.engine.EngineConfig
 import com.raulshma.jellyplay.feature.player.video.engine.MediaEngine
 import com.raulshma.jellyplay.feature.player.video.engine.PlaybackRequest
 import com.raulshma.jellyplay.feature.player.video.engine.PlayerEngineFactory
@@ -284,31 +282,15 @@ class PlayerSessionManager(
         val eng = playerEngineFactory.create(playerType)
         _engine.value = eng
         lastPlayerType = playerType
-        
+
         playerLifecycleManager.activeCallbacks = eng
         playerLifecycleManager.requestAutoEnterPip(eng.capabilities.supportsPip)
 
-        val config = EngineConfig(
-            decoderMode = prefs.decoderMode,
-            audioPassthrough = prefs.audioPassthrough,
-            audioDelayMs = prefs.audioDelayMs,
-            subtitleDelayMs = prefs.subtitleStyle.offsetMs,
-            subtitleStyle = prefs.resolvedSubtitleStyle(isHdr = prefs.isHdrFromStreams(_sessionState.value.mediaStreams)),
-            audioEffects = AudioEffectsConfig(
-                dialogueBoostEnabled = prefs.dialogueBoostEnabled,
-                dialogueBoostStrength = prefs.dialogueBoostStrength,
-                nightModeEnabled = prefs.nightModeEnabled,
-                nightModeStrength = prefs.nightModeStrength,
-                nightModeGain = prefs.audioNightModeGain,
-                equalizerEnabled = prefs.equalizerEnabled,
-                equalizerSettings = prefs.equalizerSettings,
-                audioNormalizationMode = prefs.audioNormalizationMode,
-                audioNormalizationEnabled = prefs.audioNormalizationEnabled,
-                channelMixMode = prefs.channelMixMode,
-                channelMixEnabled = prefs.channelMixEnabled,
-            ),
+        val config = EngineConfigBuilder.buildFromPreferences(
+            prefs = prefs,
+            mediaStreams = _sessionState.value.mediaStreams,
+            itemId = detail.item.id,
             engineSpecific = resolveEngineConfig(playerType, prefs),
-            pauseOnAudioFocusLoss = prefs.pauseOnAudioFocusLoss,
         )
         eng.updateConfig(config)
         eng.setPlaybackSpeed(prefs.videoDefaultSpeed)
@@ -444,27 +426,12 @@ class PlayerSessionManager(
         playerLifecycleManager.activeCallbacks = eng
         playerLifecycleManager.requestAutoEnterPip(eng.capabilities.supportsPip)
 
-        val config = EngineConfig(
-            decoderMode = prefs.decoderMode,
-            audioPassthrough = prefs.audioPassthrough,
-            audioDelayMs = prefs.audioDelayMs,
-            subtitleDelayMs = prefs.subtitleStyle.offsetMs,
-            subtitleStyle = prefs.resolvedSubtitleStyle(isHdr = prefs.isHdrFromStreams(_sessionState.value.mediaStreams)),
-            audioEffects = AudioEffectsConfig(
-                dialogueBoostEnabled = prefs.dialogueBoostEnabled,
-                dialogueBoostStrength = prefs.dialogueBoostStrength,
-                nightModeEnabled = prefs.nightModeEnabled,
-                nightModeStrength = prefs.nightModeStrength,
-                nightModeGain = prefs.audioNightModeGain,
-                equalizerEnabled = prefs.equalizerEnabled,
-                equalizerSettings = prefs.equalizerSettings,
-                audioNormalizationMode = prefs.audioNormalizationMode,
-                audioNormalizationEnabled = prefs.audioNormalizationEnabled,
-                channelMixMode = prefs.channelMixMode,
-                channelMixEnabled = prefs.channelMixEnabled,
-            ),
+        val state = _sessionState.value
+        val config = EngineConfigBuilder.buildFromPreferences(
+            prefs = prefs,
+            mediaStreams = state.mediaStreams,
+            itemId = state.currentItemId,
             engineSpecific = resolveEngineConfig(playerType, prefs),
-            pauseOnAudioFocusLoss = prefs.pauseOnAudioFocusLoss,
         )
         eng.updateConfig(config)
         eng.setPlaybackSpeed(playbackSpeed)

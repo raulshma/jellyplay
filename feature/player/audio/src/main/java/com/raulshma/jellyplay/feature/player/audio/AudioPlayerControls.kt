@@ -1,0 +1,350 @@
+package com.raulshma.jellyplay.feature.player.audio
+
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.spring
+import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.interaction.collectIsPressedAsState
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Text
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.dp
+import com.composables.icons.tabler.Tabler
+import com.composables.icons.tabler.filled.*
+import com.composables.icons.tabler.outline.*
+import com.raulshma.jellyplay.core.designsystem.theme.ShapeCache
+import com.raulshma.jellyplay.feature.player.audio.R
+import com.raulshma.jellyplay.feature.player.audio.components.WaveformSeekBar
+import com.raulshma.jellyplay.core.ui.tv.rememberTvFocusState
+import com.raulshma.jellyplay.core.ui.tv.tvFocusIndicator
+
+/** Waveform seek bar + timestamp row — Pixel Player style. */
+@Composable
+internal fun PixelProgressSection(
+    currentPosition: Long,
+    duration: Long,
+    isPlaying: Boolean,
+    accentColor: Color,
+    onSeek: (Float) -> Unit,
+) {
+    WaveformSeekBar(
+        progress = if (duration > 0) currentPosition.toFloat() / duration else 0f,
+        isPlaying = isPlaying,
+        activeColor = accentColor,
+        inactiveColor = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.25f),
+        onSeek = onSeek,
+        modifier = Modifier.fillMaxWidth(),
+        durationMs = duration,
+    )
+
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(top = 4.dp),
+        horizontalArrangement = Arrangement.SpaceBetween,
+    ) {
+        Text(
+            com.raulshma.jellyplay.core.ui.components.formatDurationMs(currentPosition),
+            style = MaterialTheme.typography.labelSmall,
+            color = accentColor.copy(alpha = 0.8f),
+        )
+        Text(
+            if (duration > 0) com.raulshma.jellyplay.core.ui.components.formatDurationMs(duration) else "--:--",
+            style = MaterialTheme.typography.labelSmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+    }
+}
+
+/** Primary transport row in a pill container: |◁  ‖  ▷| */
+@Composable
+internal fun PixelTransportControls(
+    isPlaying: Boolean,
+    onTogglePlayPause: () -> Unit,
+    onSkipPrevious: () -> Unit,
+    onSkipNext: () -> Unit,
+    pillSurface: Color,
+    accentColor: Color,
+    playFocusRequester: FocusRequester? = null,
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(ShapeCache.smoothPill)
+            .background(pillSurface)
+            .padding(horizontal = 16.dp, vertical = 8.dp),
+        horizontalArrangement = Arrangement.SpaceEvenly,
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        val sharedTransitionScope = com.raulshma.jellyplay.core.ui.components.LocalSharedTransitionScope.current
+        val animatedVisibilityScope = com.raulshma.jellyplay.core.ui.components.LocalAnimatedVisibilityScope.current
+
+        @OptIn(androidx.compose.animation.ExperimentalSharedTransitionApi::class)
+        val sharedNextModifier = if (sharedTransitionScope != null && animatedVisibilityScope != null) {
+            with(sharedTransitionScope) {
+                Modifier.sharedElement(
+                    rememberSharedContentState(key = "audio_player_skip_next"),
+                    animatedVisibilityScope = animatedVisibilityScope,
+                )
+            }
+        } else Modifier
+
+        IconButtonWithPressAnimation(
+            onClick = onSkipPrevious,
+            icon = {
+                Icon(
+                    Tabler.Outline.PlayerSkipBack, "Previous",
+                    modifier = Modifier.size(28.dp),
+                    tint = MaterialTheme.colorScheme.onSurface,
+                )
+            },
+            size = 48.dp,
+        )
+        // Central play/pause — larger, rounded-square, light accent bg
+        PixelPlayPauseButton(
+            isPlaying = isPlaying,
+            onClick = onTogglePlayPause,
+            accentColor = accentColor,
+            focusRequester = playFocusRequester,
+        )
+        IconButtonWithPressAnimation(
+            onClick = onSkipNext,
+            icon = {
+                Icon(
+                    Tabler.Outline.PlayerSkipForward, "Next",
+                    modifier = Modifier.size(28.dp),
+                    tint = MaterialTheme.colorScheme.onSurface,
+                )
+            },
+            size = 48.dp,
+            modifier = sharedNextModifier,
+        )
+    }
+}
+
+/** Secondary controls row: Shuffle, Repeat, Favorite — in darker pill */
+@Composable
+internal fun PixelSecondaryControls(
+    shuffleMode: Boolean,
+    repeatMode: Int,
+    isFavorite: Boolean,
+    downloadItem: com.raulshma.jellyplay.core.model.DownloadItem?,
+    abLoopStartMs: Long?,
+    abLoopEndMs: Long?,
+    onToggleShuffle: () -> Unit,
+    onCycleRepeatMode: () -> Unit,
+    onToggleFavorite: () -> Unit,
+    onDownloadClick: () -> Unit,
+    onAbLoopClick: () -> Unit,
+    pillSurfaceDark: Color,
+    accentColor: Color,
+) {
+    val abLabelSetA = stringResource(R.string.audio_ab_set_point_a)
+    val abLabelSetB = stringResource(R.string.audio_ab_set_point_b)
+    val abLabelClear = stringResource(R.string.audio_ab_clear)
+    Row(
+        modifier = Modifier
+            .fillMaxWidth(0.8f)
+            .clip(ShapeCache.smoothPill)
+            .background(pillSurfaceDark)
+            .padding(horizontal = 16.dp, vertical = 6.dp),
+        horizontalArrangement = Arrangement.SpaceEvenly,
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        IconButtonWithPressAnimation(
+            onClick = onToggleShuffle,
+            tint = if (shuffleMode) accentColor else MaterialTheme.colorScheme.onSurfaceVariant,
+            icon = {
+                Icon(Tabler.Outline.ArrowsShuffle, "Shuffle", modifier = Modifier.size(22.dp))
+            },
+        )
+        IconButtonWithPressAnimation(
+            onClick = onCycleRepeatMode,
+            tint = if (repeatMode > 0) accentColor else MaterialTheme.colorScheme.onSurfaceVariant,
+            icon = {
+                Icon(
+                    if (repeatMode == 2) Tabler.Outline.RepeatOnce else Tabler.Outline.Repeat,
+                    when (repeatMode) {
+                        0 -> "Repeat off"; 1 -> "Repeat all"; else -> "Repeat one"
+                    },
+                    modifier = Modifier.size(22.dp),
+                )
+            },
+        )
+        // A→B repeat: cycles set-A → set-B → clear.
+        IconButtonWithPressAnimation(
+            onClick = onAbLoopClick,
+            tint = if (abLoopStartMs != null) accentColor else MaterialTheme.colorScheme.onSurfaceVariant,
+            icon = {
+                val label = when {
+                    abLoopStartMs != null && abLoopEndMs != null -> abLabelClear
+                    abLoopStartMs != null -> abLabelSetB
+                    else -> abLabelSetA
+                }
+                Box(
+                    contentAlignment = Alignment.Center,
+                    modifier = Modifier
+                        .size(22.dp)
+                        .semantics { this.contentDescription = label },
+                ) {
+                    Text(
+                        text = if (abLoopEndMs != null) "A-B" else "A",
+                        style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold),
+                        color = if (abLoopStartMs != null) accentColor else MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+            },
+        )
+        IconButtonWithPressAnimation(
+            onClick = onToggleFavorite,
+            tint = if (isFavorite) accentColor else MaterialTheme.colorScheme.onSurfaceVariant,
+            icon = {
+                Icon(
+                    if (isFavorite) Tabler.Filled.Heart else Tabler.Outline.Heart,
+                    "Favorite",
+                    modifier = Modifier.size(22.dp),
+                )
+            },
+        )
+        IconButtonWithPressAnimation(
+            onClick = onDownloadClick,
+            tint = if (downloadItem?.status == com.raulshma.jellyplay.core.model.DownloadStatus.COMPLETED) accentColor else MaterialTheme.colorScheme.onSurfaceVariant,
+            icon = {
+                if (downloadItem?.status == com.raulshma.jellyplay.core.model.DownloadStatus.DOWNLOADING || downloadItem?.status == com.raulshma.jellyplay.core.model.DownloadStatus.PENDING) {
+                    androidx.compose.material3.CircularProgressIndicator(
+                        modifier = Modifier.size(18.dp),
+                        strokeWidth = 2.dp,
+                        color = accentColor
+                    )
+                } else {
+                    Icon(
+                        imageVector = if (downloadItem?.status == com.raulshma.jellyplay.core.model.DownloadStatus.COMPLETED) Tabler.Outline.Check else Tabler.Outline.Download,
+                        contentDescription = "Download",
+                        modifier = Modifier.size(22.dp)
+                    )
+                }
+            },
+        )
+    }
+}
+
+/** Pixel Player play/pause: rounded-square, light accent background */
+@Composable
+internal fun PixelPlayPauseButton(
+    isPlaying: Boolean,
+    onClick: () -> Unit,
+    accentColor: Color,
+    focusRequester: FocusRequester? = null,
+) {
+    val focusState = rememberTvFocusState()
+    val interactionSource = remember { MutableInteractionSource() }
+    val isPressed by interactionSource.collectIsPressedAsState()
+    val scale by animateFloatAsState(
+        targetValue = if (isPressed) 0.88f else 1f,
+        animationSpec = spring(stiffness = 500f),
+        label = "pixelPlayScale",
+    )
+
+    val sharedTransitionScope = com.raulshma.jellyplay.core.ui.components.LocalSharedTransitionScope.current
+    val animatedVisibilityScope = com.raulshma.jellyplay.core.ui.components.LocalAnimatedVisibilityScope.current
+
+    @OptIn(androidx.compose.animation.ExperimentalSharedTransitionApi::class)
+    val sharedModifier = if (sharedTransitionScope != null && animatedVisibilityScope != null) {
+        with(sharedTransitionScope) {
+            Modifier.sharedElement(
+                rememberSharedContentState(key = "audio_player_play_pause"),
+                animatedVisibilityScope = animatedVisibilityScope,
+            )
+        }
+    } else Modifier
+
+    val buttonBg = MaterialTheme.colorScheme.primaryContainer
+    val iconColor = MaterialTheme.colorScheme.onPrimaryContainer
+
+    Box(
+        modifier = Modifier
+            .then(sharedModifier)
+            .size(64.dp)
+            .graphicsLayer { scaleX = scale; scaleY = scale }
+            .then(if (focusRequester != null) Modifier.focusRequester(focusRequester) else Modifier)
+            .then(focusState.focusModifier)
+            .tvFocusIndicator(focusState, ShapeCache.smooth20)
+            .clip(ShapeCache.smooth20)
+            .background(buttonBg)
+            
+            .clickable(
+                interactionSource = interactionSource,
+                indication = null,
+                onClick = onClick,
+            ),
+        contentAlignment = Alignment.Center,
+    ) {
+        Icon(
+            if (isPlaying) Tabler.Outline.PlayerPause else Tabler.Outline.PlayerPlay,
+            if (isPlaying) "Pause" else "Play",
+            modifier = Modifier.size(36.dp),
+            tint = iconColor,
+        )
+    }
+}
+
+@OptIn(androidx.compose.material3.ExperimentalMaterial3ExpressiveApi::class)
+@Composable
+private fun IconButtonWithPressAnimation(
+    onClick: () -> Unit,
+    tint: Color = MaterialTheme.colorScheme.onSurface,
+    icon: @Composable () -> Unit,
+    size: androidx.compose.ui.unit.Dp = 40.dp,
+    modifier: Modifier = Modifier,
+) {
+    val focusState = rememberTvFocusState()
+    val interactionSource = remember { MutableInteractionSource() }
+    val isPressed by interactionSource.collectIsPressedAsState()
+    val scale by animateFloatAsState(
+        targetValue = if (isPressed) 0.85f else 1f,
+        animationSpec = MaterialTheme.motionScheme.fastSpatialSpec(),
+        label = "transportScale",
+    )
+
+    IconButton(
+        onClick = onClick,
+        modifier = modifier
+            .size(size)
+            .graphicsLayer { scaleX = scale; scaleY = scale }
+            .then(focusState.focusModifier)
+            .tvFocusIndicator(focusState, CircleShape)
+            ,
+        shapes = androidx.compose.material3.IconButtonDefaults.shapes(),
+        interactionSource = interactionSource,
+    ) {
+        androidx.compose.runtime.CompositionLocalProvider(
+            androidx.compose.material3.LocalContentColor provides tint
+        ) {
+            icon()
+        }
+    }
+}

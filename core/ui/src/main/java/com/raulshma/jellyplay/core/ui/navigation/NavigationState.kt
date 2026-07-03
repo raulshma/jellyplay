@@ -66,4 +66,14 @@ class Navigator(val state: NavigationState, private val navigateFilter: ((NavKey
 
     fun currentRoute(): NavKey =
         state.backStacks[state.topLevelRoute.value]?.lastOrNull() ?: state.startRoute
+
+    /**
+     * `true` when the current tab is showing only its top-level/root route (no
+     * pushed screens to pop). Used to decide whether the system back button
+     * should navigate within the app or fall through to the OS (exit). See #62-I.
+     */
+    fun isAtTabRoot(): Boolean {
+        val currentStack = state.backStacks[state.topLevelRoute.value] ?: return true
+        return currentStack.size <= 1
+    }
 }

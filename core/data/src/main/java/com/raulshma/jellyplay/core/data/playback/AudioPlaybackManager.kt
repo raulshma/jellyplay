@@ -78,6 +78,7 @@ class AudioPlaybackManager @Inject constructor(
     private val bandwidthInterceptor: com.raulshma.jellyplay.core.network.interceptor.BandwidthInterceptor,
     private val lyricsManager: AudioLyricsManager,
     private val effectsProcessor: AudioEffectsProcessor,
+    private val sleepTimerManager: SleepTimerManager,
 ) : AudioEffectsManager, AudioQueueManager {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
 
@@ -1217,6 +1218,11 @@ class AudioPlaybackManager @Inject constructor(
      */
     private fun onTrackEnded() {
         _isPlaying.value = false
+        // Arm-and-fire hook for the "End of episode" sleep timer. triggerEndOfEpisode() is a
+        // no-op unless the timer is in end-of-episode mode and active, so this is safe to call
+        // on every track end. When it fires, it invokes onTimerExpired (set by the player VM to
+        // togglePlayPause), pausing playback after the current track.
+        sleepTimerManager.triggerEndOfEpisode()
     }
 
     private fun onTrackTransitioned() {

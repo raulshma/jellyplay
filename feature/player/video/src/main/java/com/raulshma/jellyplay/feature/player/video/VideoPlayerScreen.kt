@@ -135,11 +135,13 @@ import com.raulshma.jellyplay.feature.player.video.components.TrackPickerSheet
 import com.raulshma.jellyplay.feature.player.video.components.TrickplayOverlay
 import com.raulshma.jellyplay.feature.player.video.components.VideoFilterSheet
 import com.raulshma.jellyplay.feature.player.video.findActivity
-import com.raulshma.jellyplay.feature.player.video.subtitle.VttTagParser
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import androidx.compose.animation.core.tween
 import com.raulshma.jellyplay.core.designsystem.theme.AlphaEasing
+import com.raulshma.jellyplay.core.designsystem.theme.PlayerDarkTheme
+import com.raulshma.jellyplay.core.designsystem.theme.playerOnScrim
+import com.raulshma.jellyplay.core.designsystem.theme.playerScrimColor
 import com.raulshma.jellyplay.core.ui.animation.AnimationTokens
 import androidx.media3.ui.AspectRatioFrameLayout
 
@@ -221,9 +223,6 @@ fun VideoPlayerScreen(
     var seekTrickplayBitmap by remember { mutableStateOf<android.graphics.Bitmap?>(null) }
     var gestureTrickplayBitmap by remember { mutableStateOf<android.graphics.Bitmap?>(null) }
     var tvTrickplayBitmap by remember { mutableStateOf<android.graphics.Bitmap?>(null) }
-    val mpvSubtitleCues = uiState.currentSubtitleCues
-        .takeIf { uiState.usesSubtitleOverlay && it.isNotEmpty() }
-        ?: emptyList()
 
     LaunchedEffect(itemId) {
         if (viewModel.isBackgroundCasting) {
@@ -792,12 +791,6 @@ fun VideoPlayerScreen(
                 }
             }
 
-            MpvSubtitleOverlay(
-                cues = mpvSubtitleCues,
-                style = uiState.subtitleStyle,
-                visible = !isInPipMode,
-            )
-
             GestureOverlay(
                 seekDirection = seekState.direction,
                 seekOffsetMs = seekState.offsetMs,
@@ -918,7 +911,7 @@ fun VideoPlayerScreen(
                     Box(
                         modifier = Modifier
                             .clip(ShapeCache.smoothPill)
-                            .background(Color.Black.copy(alpha = 0.7f))
+                            .background(playerScrimColor().copy(alpha = 0.7f))
                             .padding(horizontal = 16.dp, vertical = 8.dp),
                         contentAlignment = Alignment.Center,
                     ) {
@@ -1007,7 +1000,7 @@ fun VideoPlayerScreen(
                     modifier = Modifier.align(Alignment.Center),
                     contentAlignment = Alignment.Center,
                 ) {
-                    JellyPlayLoadingIndicator(color = Color.White)
+                    JellyPlayLoadingIndicator(color = playerOnScrim())
                 }
             }
 
@@ -1084,8 +1077,8 @@ fun VideoPlayerScreen(
                 Snackbar(
                     snackbarData = data,
                     shape = ShapeCache.smoothPill,
-                    containerColor = Color.White.copy(alpha = 0.15f),
-                    contentColor = Color.White,
+                    containerColor = playerOnScrim().copy(alpha = 0.15f),
+                    contentColor = playerOnScrim(),
                 )
             }
 
@@ -1160,6 +1153,10 @@ fun VideoPlayerScreen(
             val onControlsFocusChange by remember { mutableStateOf({ hasFocus: Boolean -> controlsHasFocus = hasFocus }) }
             val onOverflowMenuChange by remember { mutableStateOf({ open: Boolean -> isOverflowMenuOpen = open }) }
 
+            // Control bars always render as a dark "chrome zone" (dark scrim + light text/icons)
+            // because they float over arbitrary video content, regardless of the app theme.
+            // Drawers and other surfaces outside this wrapper still respect the ambient theme.
+            PlayerDarkTheme {
             PlayerControls(
                 title = title,
                 subtitle = subtitle,
@@ -1261,6 +1258,7 @@ fun VideoPlayerScreen(
                 castManager = viewModel.castManagerField,
                 modifier = Modifier.fillMaxSize(),
             )
+            } // end PlayerDarkTheme (control bars)
 
             AnimatedVisibility(
                 visible = !isTv && uiState.trickplayEnabled && showControls && isSeeking,
@@ -1428,7 +1426,7 @@ private fun BoxScope.AutoAspectRatioBadge(
     ) {
         Surface(
             shape = ShapeCache.smoothPill,
-            color = Color.White.copy(alpha = 0.12f),
+            color = playerOnScrim().copy(alpha = 0.12f),
         ) {
             Text(
                 text = "Auto: ${detectedAspectRatio?.displayName ?: ""}",

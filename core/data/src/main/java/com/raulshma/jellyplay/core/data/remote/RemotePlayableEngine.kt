@@ -30,7 +30,7 @@ interface RemotePlayableEngine {
     fun pause()
     fun stop()
     fun seekTo(positionMs: Long)
-    fun selectTrack(type: TrackType, index: Int, trackGroup: Any? = null)
+    fun selectTrack(type: TrackType, index: Int)
     fun setMaxVideoBitrate(bps: Int?)
 
     fun setVolume(value: Float)

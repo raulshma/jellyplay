@@ -19,14 +19,20 @@ import com.raulshma.jellyplay.core.datastore.UserPreferencesStore
 import com.raulshma.jellyplay.core.model.EffectStrength
 import com.raulshma.jellyplay.core.model.PlaybackMode
 import com.raulshma.jellyplay.core.model.UserPreferences
+import com.raulshma.jellyplay.core.model.DownloadItem
+import com.raulshma.jellyplay.core.model.DownloadStatus
+import com.raulshma.jellyplay.core.model.MediaType
+import com.raulshma.jellyplay.core.model.OfflineMediaItem
 import com.raulshma.jellyplay.core.ui.feedback.UserMessageBus
 import com.raulshma.jellyplay.feature.player.video.components.AspectRatio
+import io.mockk.coEvery
 import io.mockk.every
 import io.mockk.mockk
 import io.mockk.verify
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.test.UnconfinedTestDispatcher
 import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.setMain
@@ -44,6 +50,8 @@ class VideoPlayerViewModelTest {
     private val testDispatcher = UnconfinedTestDispatcher()
 
     private lateinit var viewModel: VideoPlayerViewModel
+    private lateinit var downloadRepository: DownloadRepository
+    private lateinit var offlineRepository: OfflineRepository
 
     @Before
     fun setUp() {
@@ -52,8 +60,8 @@ class VideoPlayerViewModelTest {
         val context = mockk<Context>(relaxed = true)
         val mediaRepository = mockk<MediaRepository>(relaxed = true)
         val playbackRepository = mockk<PlaybackRepository>(relaxed = true)
-        val downloadRepository = mockk<DownloadRepository>(relaxed = true)
-        val offlineRepository = mockk<OfflineRepository>(relaxed = true)
+        downloadRepository = mockk(relaxed = true)
+        offlineRepository = mockk(relaxed = true)
         val itemPlaybackPreferenceRepository = mockk<ItemPlaybackPreferenceRepository>(relaxed = true)
         val preferencesStore = mockk<UserPreferencesStore>(relaxed = true)
         val sessionManager = mockk<PlaybackSessionManager>(relaxed = true)
@@ -242,4 +250,92 @@ class VideoPlayerViewModelTest {
         fn.isAccessible = true
         return fn.invoke(viewModel) as Long
     }
+
+    // ── Offline resume position resolution ────────────────────────────
+
+    @Test
+    fun resolveOfflineResumeTicks_completedDownloadWithProgress_returnsStoredPosition() = runBlocking {
+        val itemId = "item-movie"
+        val savedTicks = 5 * 60 * 1_000L * 10_000L // 5 min, in ticks
+        coEvery { downloadRepository.getDownloadByMediaItemId(itemId) } returns downloadItem(itemId)
+        coEvery { offlineRepository.getOfflineItem(itemId) } returns offlineMediaItem(itemId, savedTicks)
+
+        val resolved = callResolveOfflineResumeTicks(itemId, startPositionTicks = 0L)
+
+        assertEquals(savedTicks, resolved)
+    }
+
+    @Test
+    fun resolveOfflineResumeTicks_withExplicitStartPosition_keepsCallerValue() = runBlocking {
+        val itemId = "item-movie"
+        val explicitTicks = 30 * 1_000L * 10_000L
+        coEvery { downloadRepository.getDownloadByMediaItemId(itemId) } returns downloadItem(itemId)
+        coEvery { offlineRepository.getOfflineItem(itemId) } returns
+            offlineMediaItem(itemId, 10 * 60 * 1_000L * 10_000L)
+
+        val resolved = callResolveOfflineResumeTicks(itemId, explicitTicks)
+
+        assertEquals(explicitTicks, resolved)
+        // The offline store should not even be consulted when the caller
+        // already provided a start position.
+        io.mockk.coVerify(exactly = 0) { offlineRepository.getOfflineItem(any()) }
+    }
+
+    @Test
+    fun resolveOfflineResumeTicks_nonCompletedDownload_returnsZero() = runBlocking {
+        val itemId = "item-movie"
+        coEvery { downloadRepository.getDownloadByMediaItemId(itemId) } returns
+            downloadItem(itemId, status = DownloadStatus.DOWNLOADING)
+
+        val resolved = callResolveOfflineResumeTicks(itemId, startPositionTicks = 0L)
+
+        assertEquals(0L, resolved)
+    }
+
+    @Test
+    fun resolveOfflineResumeTicks_noDownload_returnsZero() = runBlocking {
+        val itemId = "item-movie"
+        coEvery { downloadRepository.getDownloadByMediaItemId(itemId) } returns null
+
+        val resolved = callResolveOfflineResumeTicks(itemId, startPositionTicks = 0L)
+
+        assertEquals(0L, resolved)
+    }
+
+    @Test
+    fun resolveOfflineResumeTicks_completedDownloadWithoutProgress_returnsZero() = runBlocking {
+        val itemId = "item-movie"
+        coEvery { downloadRepository.getDownloadByMediaItemId(itemId) } returns downloadItem(itemId)
+        coEvery { offlineRepository.getOfflineItem(itemId) } returns offlineMediaItem(itemId, null)
+
+        val resolved = callResolveOfflineResumeTicks(itemId, startPositionTicks = 0L)
+
+        assertEquals(0L, resolved)
+    }
+
+    private fun downloadItem(
+        itemId: String,
+        status: DownloadStatus = DownloadStatus.COMPLETED,
+    ) = DownloadItem(
+        id = "dl-$itemId",
+        mediaItemId = itemId,
+        name = "Test Movie",
+        mediaType = MediaType.MOVIE,
+        downloadPath = "/data/media/movie.mp4",
+        downloadUrl = "http://example.com/movie",
+        totalSizeBytes = 1_000_000L,
+        downloadedBytes = 1_000_000L,
+        status = status,
+    )
+
+    private fun offlineMediaItem(itemId: String, positionTicks: Long?) = OfflineMediaItem(
+        id = itemId,
+        name = "Test Movie",
+        mediaType = MediaType.MOVIE,
+        runTimeTicks = 3_600_000 * 10_000L,
+        playbackPositionTicks = positionTicks,
+    )
+
+    private suspend fun callResolveOfflineResumeTicks(itemId: String, startPositionTicks: Long): Long =
+        viewModel.resolveOfflineResumeTicks(itemId, startPositionTicks)
 }

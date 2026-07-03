@@ -84,20 +84,6 @@ class HomeUiEventTest {
     }
 
     @Test
-    fun prefetchSeerrDetails_holdsAllFields() {
-        var callbackCalled = false
-        val event = HomeUiEvent.PrefetchSeerrDetails(
-            tmdbId = 99,
-            mediaType = "tv",
-            onDone = { callbackCalled = true },
-        )
-        assertEquals(99, event.tmdbId)
-        assertEquals("tv", event.mediaType)
-        event.onDone()
-        assertTrue(callbackCalled)
-    }
-
-    @Test
     fun requestSeerrMedia_holdsRequiredFields() {
         val item = makeSeerrItem(id = 1, title = "Test")
         val event = HomeUiEvent.RequestSeerrMedia(item = item)

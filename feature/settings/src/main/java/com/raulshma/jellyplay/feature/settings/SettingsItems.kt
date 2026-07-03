@@ -108,6 +108,12 @@ internal fun SettingListItem(
 
     LaunchedEffect(highlighted) {
         if (highlighted) {
+            // Wait for BOTH (a) the screen-level coarse group-scroll to bring this item into the
+            // composition window and finish its animation, and (b) the parent SettingsGroup's
+            // expand animation to settle. Without this delay the measured offset is still
+            // mid-transition (or the item is not yet composed) and the bring-into-view either
+            // misses its target or lands at the wrong position.
+            kotlinx.coroutines.delay(400)
             focusRequester.tryRequestFocus("settings_item")
             bringIntoViewRequester.bringIntoView()
         }
@@ -242,6 +248,12 @@ internal fun SettingToggleItem(
 
     LaunchedEffect(highlighted) {
         if (highlighted) {
+            // Wait for BOTH (a) the screen-level coarse group-scroll to bring this item into the
+            // composition window and finish its animation, and (b) the parent SettingsGroup's
+            // expand animation to settle. Without this delay the measured offset is still
+            // mid-transition (or the item is not yet composed) and the bring-into-view either
+            // misses its target or lands at the wrong position.
+            kotlinx.coroutines.delay(400)
             focusRequester.tryRequestFocus("settings_item")
             bringIntoViewRequester.bringIntoView()
         }
