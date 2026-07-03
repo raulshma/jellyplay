@@ -392,6 +392,86 @@ object SettingsSearchRegistry {
             icon = Tabler.Outline.Activity,
             isAdvanced = true
         ),
+        SettingsSearchItem(
+            id = "blue_light_filter",
+            title = "Blue Light Filter",
+            subtitle = "Tint the screen amber to reduce eye strain at night",
+            category = "Appearance",
+            keywords = listOf("blue light", "amber", "eye care", "night", "filter", "tint"),
+            route = Route.AppearanceSettings(),
+            icon = Tabler.Outline.Moon,
+            isAdvanced = true
+        ),
+        SettingsSearchItem(
+            id = "blue_light_strength",
+            title = "Blue Light Filter Strength",
+            subtitle = "Intensity of the amber overlay",
+            category = "Appearance",
+            keywords = listOf("blue light", "strength", "amber", "intensity", "overlay"),
+            route = Route.AppearanceSettings(),
+            icon = Tabler.Outline.Adjustments,
+            isAdvanced = true
+        ),
+        SettingsSearchItem(
+            id = "monochrome_mode",
+            title = "Monochrome Mode",
+            subtitle = "Apply strict black/white theme inspired by Nothing OS",
+            category = "Appearance",
+            keywords = listOf("monochrome", "black", "white", "nothing", "grayscale", "minimal"),
+            route = Route.AppearanceSettings(),
+            icon = Tabler.Outline.Palette,
+            isAdvanced = true
+        ),
+        SettingsSearchItem(
+            id = "hide_search_history",
+            title = "Hide Search History",
+            subtitle = "Hide recent search history from the search screen",
+            category = "Appearance",
+            keywords = listOf("search", "history", "hide", "privacy", "recent"),
+            route = Route.AppearanceSettings(),
+            icon = Tabler.Outline.EyeOff,
+            isAdvanced = true
+        ),
+        SettingsSearchItem(
+            id = "scheduled_start",
+            title = "Theme Scheduled Start",
+            subtitle = "Hour to switch to the daytime theme",
+            category = "Appearance",
+            keywords = listOf("theme", "schedule", "start", "hour", "day", "auto"),
+            route = Route.AppearanceSettings(),
+            icon = Tabler.Outline.Sunrise,
+            isAdvanced = true
+        ),
+        SettingsSearchItem(
+            id = "scheduled_end",
+            title = "Theme Scheduled End",
+            subtitle = "Hour to switch to the nighttime theme",
+            category = "Appearance",
+            keywords = listOf("theme", "schedule", "end", "hour", "night", "auto"),
+            route = Route.AppearanceSettings(),
+            icon = Tabler.Outline.Sunset,
+            isAdvanced = true
+        ),
+        SettingsSearchItem(
+            id = "newsletter_enabled",
+            title = "Enable Newsletter",
+            subtitle = "Enable periodic newsletter digest",
+            category = "Appearance",
+            keywords = listOf("newsletter", "digest", "email", "periodic", "report"),
+            route = Route.AppearanceSettings(),
+            icon = Tabler.Outline.Mail,
+            isAdvanced = true
+        ),
+        SettingsSearchItem(
+            id = "newsletter_delivery_day",
+            title = "Newsletter Delivery Day",
+            subtitle = "Day of the week to receive the newsletter",
+            category = "Appearance",
+            keywords = listOf("newsletter", "delivery", "day", "schedule", "weekday", "send"),
+            route = Route.AppearanceSettings(),
+            icon = Tabler.Outline.Calendar,
+            isAdvanced = true
+        ),
 
         // Playback Settings
         SettingsSearchItem(
@@ -686,6 +766,421 @@ object SettingsSearchRegistry {
             icon = Tabler.Outline.Music,
             isAdvanced = true
         ),
+        SettingsSearchItem(
+            id = "hold_speed",
+            title = "Hold-to-Seek",
+            subtitle = "Long-press to fast-forward or rewind",
+            category = "Playback",
+            keywords = listOf("hold", "seek", "fast forward", "rewind", "long press"),
+            route = Route.PlaybackSettings(),
+            icon = Tabler.Outline.RewindForward30
+        ),
+        SettingsSearchItem(
+            id = "hold_speed_multiplier",
+            title = "Hold-to-Seek Speed",
+            subtitle = "Playback speed while holding",
+            category = "Playback",
+            keywords = listOf("hold", "seek", "speed", "multiplier", "fast"),
+            route = Route.PlaybackSettings(),
+            icon = Tabler.Outline.Rocket
+        ),
+        SettingsSearchItem(
+            id = "android_tv_watch_next",
+            title = "Watch Next Row (Android TV)",
+            subtitle = "Publish Continue / Next Up to Android TV home",
+            category = "Playback",
+            keywords = listOf("android tv", "watch next", "home", "tv", "continue"),
+            route = Route.PlaybackSettings(),
+            icon = Tabler.Outline.DeviceTv,
+            isAdvanced = true
+        ),
+        SettingsSearchItem(
+            id = "tv_zoom_mode",
+            title = "TV Zoom Mode",
+            subtitle = "Crop/zoom video to fill the screen",
+            category = "Playback",
+            keywords = listOf("tv", "zoom", "crop", "fill", "screen"),
+            route = Route.PlaybackSettings(),
+            icon = Tabler.Outline.Crop,
+            isAdvanced = true
+        ),
+        SettingsSearchItem(
+            id = "default_brightness_level",
+            title = "Default Brightness Level",
+            subtitle = "Default screen brightness for video playback",
+            category = "Playback",
+            keywords = listOf("brightness", "default", "screen", "light", "level"),
+            route = Route.PlaybackSettings(),
+            icon = Tabler.Outline.Sun,
+            isAdvanced = true
+        ),
+        SettingsSearchItem(
+            id = "trickplay_on_gestures",
+            title = "Trickplay on Gestures",
+            subtitle = "Show thumbnails during swipe seek",
+            category = "Playback",
+            keywords = listOf("trickplay", "thumbnails", "gesture", "swipe", "seek"),
+            route = Route.PlaybackSettings(),
+            icon = Tabler.Outline.HandMove,
+            isAdvanced = true
+        ),
+        SettingsSearchItem(
+            id = "show_time_remaining",
+            title = "Show Time Remaining",
+            subtitle = "Display remaining time instead of elapsed time",
+            category = "Playback",
+            keywords = listOf("time", "remaining", "elapsed", "duration", "countdown"),
+            route = Route.PlaybackSettings(),
+            icon = Tabler.Outline.Clock,
+            isAdvanced = true
+        ),
+        SettingsSearchItem(
+            id = "pause_on_focus_loss",
+            title = "Pause on Focus Loss",
+            subtitle = "Pause playback when system reports audio focus loss",
+            category = "Playback",
+            keywords = listOf("pause", "focus", "loss", "audio focus", "interruption"),
+            route = Route.PlaybackSettings(),
+            icon = Tabler.Outline.PlayerPause,
+            isAdvanced = true
+        ),
+        // MPV Engine Config
+        SettingsSearchItem(
+            id = "mpv_video_output",
+            title = "MPV Video Output",
+            subtitle = "MPV video output driver",
+            category = "Playback",
+            keywords = listOf("mpv", "video output", "vo", "gpu", "render"),
+            route = Route.PlaybackSettings(),
+            icon = Tabler.Outline.Video,
+            isAdvanced = true
+        ),
+        SettingsSearchItem(
+            id = "mpv_scaler",
+            title = "MPV Scaler",
+            subtitle = "MPV video scaling algorithm",
+            category = "Playback",
+            keywords = listOf("mpv", "scaler", "scaling", "interpolation", "quality"),
+            route = Route.PlaybackSettings(),
+            icon = Tabler.Outline.ArrowAutofitHeight,
+            isAdvanced = true
+        ),
+        SettingsSearchItem(
+            id = "mpv_debanding",
+            title = "MPV Debanding",
+            subtitle = "GPU debanding to smooth color banding",
+            category = "Playback",
+            keywords = listOf("mpv", "deband", "debanding", "banding", "gradient"),
+            route = Route.PlaybackSettings(),
+            icon = Tabler.Outline.ColorFilter,
+            isAdvanced = true
+        ),
+        SettingsSearchItem(
+            id = "mpv_interpolation",
+            title = "MPV Interpolation",
+            subtitle = "Smooth motion for mixed frame rates",
+            category = "Playback",
+            keywords = listOf("mpv", "interpolation", "smooth", "motion", "judder"),
+            route = Route.PlaybackSettings(),
+            icon = Tabler.Outline.ArrowsHorizontal,
+            isAdvanced = true
+        ),
+        SettingsSearchItem(
+            id = "mpv_audio_output",
+            title = "MPV Audio Output",
+            subtitle = "MPV audio output driver",
+            category = "Playback",
+            keywords = listOf("mpv", "audio output", "ao", "sound"),
+            route = Route.PlaybackSettings(),
+            icon = Tabler.Outline.Volume,
+            isAdvanced = true
+        ),
+        SettingsSearchItem(
+            id = "mpv_audio_fallback",
+            title = "MPV Audio Fallback",
+            subtitle = "Fallback audio output driver",
+            category = "Playback",
+            keywords = listOf("mpv", "audio", "fallback", "secondary", "output"),
+            route = Route.PlaybackSettings(),
+            icon = Tabler.Outline.ArrowBack,
+            isAdvanced = true
+        ),
+        SettingsSearchItem(
+            id = "mpv_buffer_size",
+            title = "MPV Buffer Size",
+            subtitle = "MPV demuxer maximum byte buffer",
+            category = "Playback",
+            keywords = listOf("mpv", "buffer", "demuxer", "size", "bytes", "cache"),
+            route = Route.PlaybackSettings(),
+            icon = Tabler.Outline.Database,
+            isAdvanced = true
+        ),
+        SettingsSearchItem(
+            id = "mpv_hwdec_override",
+            title = "MPV HW Dec Override",
+            subtitle = "Override hardware decoding for MPV",
+            category = "Playback",
+            keywords = listOf("mpv", "hardware", "hwdec", "decoder", "override", "gpu"),
+            route = Route.PlaybackSettings(),
+            icon = Tabler.Outline.Cpu,
+            isAdvanced = true
+        ),
+        SettingsSearchItem(
+            id = "mpv_skip_loop_filter",
+            title = "MPV Skip Loop Filter",
+            subtitle = "H.264 loop filter skip level for performance",
+            category = "Playback",
+            keywords = listOf("mpv", "skip", "loop filter", "h264", "performance"),
+            route = Route.PlaybackSettings(),
+            icon = Tabler.Outline.Filter,
+            isAdvanced = true
+        ),
+        SettingsSearchItem(
+            id = "mpv_frame_drop",
+            title = "MPV Frame Drop",
+            subtitle = "MPV frame dropping strategy",
+            category = "Playback",
+            keywords = listOf("mpv", "frame", "drop", "vdrop", "performance"),
+            route = Route.PlaybackSettings(),
+            icon = Tabler.Outline.PhotoDown,
+            isAdvanced = true
+        ),
+        // VLC Engine Config
+        SettingsSearchItem(
+            id = "vlc_audio_output",
+            title = "VLC Audio Output",
+            subtitle = "LibVLC audio output module",
+            category = "Playback",
+            keywords = listOf("vlc", "libvlc", "audio output", "sound"),
+            route = Route.PlaybackSettings(),
+            icon = Tabler.Outline.Volume,
+            isAdvanced = true
+        ),
+        SettingsSearchItem(
+            id = "vlc_audio_time_stretch",
+            title = "VLC Audio Time Stretch",
+            subtitle = "Pitch-corrected speed change",
+            category = "Playback",
+            keywords = listOf("vlc", "time stretch", "pitch", "speed"),
+            route = Route.PlaybackSettings(),
+            icon = Tabler.Outline.Clock,
+            isAdvanced = true
+        ),
+        SettingsSearchItem(
+            id = "vlc_video_output",
+            title = "VLC Video Output",
+            subtitle = "LibVLC video output module",
+            category = "Playback",
+            keywords = listOf("vlc", "libvlc", "video output", "display"),
+            route = Route.PlaybackSettings(),
+            icon = Tabler.Outline.Video,
+            isAdvanced = true
+        ),
+        SettingsSearchItem(
+            id = "vlc_network_caching",
+            title = "VLC Network Caching",
+            subtitle = "LibVLC network buffering time",
+            category = "Playback",
+            keywords = listOf("vlc", "network", "caching", "buffer", "streaming"),
+            route = Route.PlaybackSettings(),
+            icon = Tabler.Outline.Wifi,
+            isAdvanced = true
+        ),
+        SettingsSearchItem(
+            id = "vlc_skip_loop_filter",
+            title = "VLC Skip Loop Filter",
+            subtitle = "H.264 loop filter skip level",
+            category = "Playback",
+            keywords = listOf("vlc", "skip", "loop filter", "h264", "quality"),
+            route = Route.PlaybackSettings(),
+            icon = Tabler.Outline.Filter,
+            isAdvanced = true
+        ),
+        SettingsSearchItem(
+            id = "vlc_skip_frames",
+            title = "VLC Skip Frames",
+            subtitle = "Enable frame skipping for performance",
+            category = "Playback",
+            keywords = listOf("vlc", "skip frames", "performance", "frame"),
+            route = Route.PlaybackSettings(),
+            icon = Tabler.Outline.PlayerSkipForward,
+            isAdvanced = true
+        ),
+        SettingsSearchItem(
+            id = "vlc_decoder_threads",
+            title = "VLC Decoder Threads",
+            subtitle = "Number of decoder threads",
+            category = "Playback",
+            keywords = listOf("vlc", "decoder", "threads", "cpu", "multithreading"),
+            route = Route.PlaybackSettings(),
+            icon = Tabler.Outline.Cpu,
+            isAdvanced = true
+        ),
+        SettingsSearchItem(
+            id = "vlc_drop_late_frames",
+            title = "VLC Drop Late Frames",
+            subtitle = "Discard delayed frames",
+            category = "Playback",
+            keywords = listOf("vlc", "drop", "late", "frames", "delayed"),
+            route = Route.PlaybackSettings(),
+            icon = Tabler.Outline.Trash,
+            isAdvanced = true
+        ),
+        // ExoPlayer Engine Config
+        SettingsSearchItem(
+            id = "exo_video_scaling",
+            title = "Exo Video Scaling",
+            subtitle = "ExoPlayer video scaling mode",
+            category = "Playback",
+            keywords = listOf("exoplayer", "exo", "scaling", "video", "resize"),
+            route = Route.PlaybackSettings(),
+            icon = Tabler.Outline.ArrowAutofitHeight,
+            isAdvanced = true
+        ),
+        SettingsSearchItem(
+            id = "exo_frame_rate_strategy",
+            title = "Exo Frame Rate Strategy",
+            subtitle = "ExoPlayer display refresh matching strategy",
+            category = "Playback",
+            keywords = listOf("exoplayer", "exo", "frame rate", "refresh", "strategy"),
+            route = Route.PlaybackSettings(),
+            icon = Tabler.Outline.Clock,
+            isAdvanced = true
+        ),
+        SettingsSearchItem(
+            id = "exo_skip_silence",
+            title = "Exo Skip Silence",
+            subtitle = "Skip silent sections in audio",
+            category = "Playback",
+            keywords = listOf("exoplayer", "exo", "skip", "silence", "audio", "gap"),
+            route = Route.PlaybackSettings(),
+            icon = Tabler.Outline.Volume,
+            isAdvanced = true
+        ),
+        SettingsSearchItem(
+            id = "exo_audio_offload",
+            title = "Exo Audio Offload",
+            subtitle = "ExoPlayer audio offload mode for battery saving",
+            category = "Playback",
+            keywords = listOf("exoplayer", "exo", "audio", "offload", "battery"),
+            route = Route.PlaybackSettings(),
+            icon = Tabler.Outline.Headphones,
+            isAdvanced = true
+        ),
+        SettingsSearchItem(
+            id = "exo_decoder_fallback",
+            title = "Exo Decoder Fallback",
+            subtitle = "Fallback to secondary decoders on failure",
+            category = "Playback",
+            keywords = listOf("exoplayer", "exo", "decoder", "fallback", "secondary"),
+            route = Route.PlaybackSettings(),
+            icon = Tabler.Outline.ToggleLeft,
+            isAdvanced = true
+        ),
+        SettingsSearchItem(
+            id = "exo_back_buffer",
+            title = "Exo Back Buffer",
+            subtitle = "ExoPlayer back buffer duration",
+            category = "Playback",
+            keywords = listOf("exoplayer", "exo", "back buffer", "rewind", "buffer"),
+            route = Route.PlaybackSettings(),
+            icon = Tabler.Outline.Database,
+            isAdvanced = true
+        ),
+        SettingsSearchItem(
+            id = "exo_preferred_codecs",
+            title = "Exo Preferred Codecs",
+            subtitle = "Preferred MIME types for ExoPlayer video decoding",
+            category = "Playback",
+            keywords = listOf("exoplayer", "exo", "codec", "mime", "preferred", "video"),
+            route = Route.PlaybackSettings(),
+            icon = Tabler.Outline.Code,
+            isAdvanced = true
+        ),
+        // SyncPlay
+        SettingsSearchItem(
+            id = "syncplay_join_behavior",
+            title = "SyncPlay Join Behavior",
+            subtitle = "Action when joining a SyncPlay group",
+            category = "Playback",
+            keywords = listOf("syncplay", "join", "behavior", "group", "watch party"),
+            route = Route.PlaybackSettings(),
+            icon = Tabler.Outline.MessageQuestion
+        ),
+        SettingsSearchItem(
+            id = "syncplay_tolerance",
+            title = "SyncPlay Sync Tolerance",
+            subtitle = "Allowed drift before correcting playback",
+            category = "Playback",
+            keywords = listOf("syncplay", "tolerance", "drift", "sync", "correction"),
+            route = Route.PlaybackSettings(),
+            icon = Tabler.Outline.WaveSine
+        ),
+        SettingsSearchItem(
+            id = "syncplay_auto_accept_invites",
+            title = "SyncPlay Auto-Accept Invites",
+            subtitle = "Automatically accept SyncPlay invites from friends",
+            category = "Playback",
+            keywords = listOf("syncplay", "auto", "accept", "invites", "friends"),
+            route = Route.PlaybackSettings(),
+            icon = Tabler.Outline.CircleCheck
+        ),
+        // Casting & DLNA
+        SettingsSearchItem(
+            id = "casting_strategy",
+            title = "Casting Strategy",
+            subtitle = "Preferred method for big screen streaming",
+            category = "Playback",
+            keywords = listOf("casting", "strategy", "dlna", "cast", "chromecast", "tv"),
+            route = Route.PlaybackSettings(),
+            icon = Tabler.Outline.Cast
+        ),
+        SettingsSearchItem(
+            id = "background_casting",
+            title = "Background Casting",
+            subtitle = "Keep casting active when app is closed",
+            category = "Playback",
+            keywords = listOf("casting", "background", "keep alive", "dlna", "cast"),
+            route = Route.PlaybackSettings(),
+            icon = Tabler.Outline.Settings
+        ),
+        SettingsSearchItem(
+            id = "preferred_renderer",
+            title = "Preferred Renderer",
+            subtitle = "Device to target by default when casting",
+            category = "Playback",
+            keywords = listOf("renderer", "preferred", "cast", "device", "target", "tv"),
+            route = Route.PlaybackSettings(),
+            icon = Tabler.Outline.Devices
+        ),
+        // Live TV & DVR
+        SettingsSearchItem(
+            id = "dvr_pre_padding",
+            title = "DVR Pre-Padding",
+            subtitle = "Start recording before scheduled time",
+            category = "Playback",
+            keywords = listOf("dvr", "pre padding", "recording", "live tv", "start", "early"),
+            route = Route.PlaybackSettings(),
+            icon = Tabler.Outline.Clock
+        ),
+        SettingsSearchItem(
+            id = "dvr_post_padding",
+            title = "DVR Post-Padding",
+            subtitle = "Extend recording after scheduled end time",
+            category = "Playback",
+            keywords = listOf("dvr", "post padding", "recording", "live tv", "end", "extend"),
+            route = Route.PlaybackSettings(),
+            icon = Tabler.Outline.Clock
+        ),
+        SettingsSearchItem(
+            id = "dvr_recording_quality",
+            title = "DVR Recording Quality",
+            subtitle = "Default video quality for DVR recordings",
+            category = "Playback",
+            keywords = listOf("dvr", "recording", "quality", "live tv", "resolution"),
+            route = Route.PlaybackSettings(),
+            icon = Tabler.Outline.Video
+        ),
 
         // Audio Player Settings
         SettingsSearchItem(
@@ -824,6 +1319,155 @@ object SettingsSearchRegistry {
             icon = Tabler.Outline.Adjustments,
             isAdvanced = true
         ),
+        SettingsSearchItem(
+            id = "audio_autoplay_next",
+            title = "Auto-play Next (Audio)",
+            subtitle = "Automatically plays next audio track",
+            category = "Audio Player",
+            keywords = listOf("audio", "autoplay", "next", "track", "music", "continuous"),
+            route = Route.AudioSettings(),
+            icon = Tabler.Outline.PlaylistAdd
+        ),
+        SettingsSearchItem(
+            id = "night_mode_volume",
+            title = "Night Mode Volume",
+            subtitle = "Maximum volume level at night",
+            category = "Audio Player",
+            keywords = listOf("night mode", "volume", "max", "limit", "quiet"),
+            route = Route.AudioSettings(),
+            icon = Tabler.Outline.Music,
+            isAdvanced = true
+        ),
+        SettingsSearchItem(
+            id = "night_mode_gain",
+            title = "Night Mode Gain",
+            subtitle = "Loudness compensation at night",
+            category = "Audio Player",
+            keywords = listOf("night mode", "gain", "loudness", "compensation", "boost"),
+            route = Route.AudioSettings(),
+            icon = Tabler.Outline.Adjustments,
+            isAdvanced = true
+        ),
+        SettingsSearchItem(
+            id = "audio_skip_prev_threshold",
+            title = "Skip Previous Threshold",
+            subtitle = "Restart song if past this point",
+            category = "Audio Player",
+            keywords = listOf("skip", "previous", "threshold", "restart", "song", "rewind"),
+            route = Route.AudioSettings(),
+            icon = Tabler.Outline.PlayerSkipForward,
+            isAdvanced = true
+        ),
+        SettingsSearchItem(
+            id = "audio_preload_buffer",
+            title = "Audio Preload Buffer",
+            subtitle = "Amount to buffer ahead during audio playback",
+            category = "Audio Player",
+            keywords = listOf("audio", "preload", "buffer", "cache", "ahead"),
+            route = Route.AudioSettings(),
+            icon = Tabler.Outline.Refresh,
+            isAdvanced = true
+        ),
+        SettingsSearchItem(
+            id = "replaygain_preamp",
+            title = "ReplayGain Pre-Amp",
+            subtitle = "Fine-tune target loudness",
+            category = "Audio Player",
+            keywords = listOf("replaygain", "preamp", "pre-amp", "loudness", "gain", "target"),
+            route = Route.AudioSettings(),
+            icon = Tabler.Outline.Adjustments,
+            isAdvanced = true
+        ),
+        SettingsSearchItem(
+            id = "equalizer_preset",
+            title = "Equalizer Preset",
+            subtitle = "Quick equalizer preset selection",
+            category = "Audio Player",
+            keywords = listOf("equalizer", "preset", "eq", "profile", "bass", "treble"),
+            route = Route.AudioSettings(),
+            icon = Tabler.Outline.Adjustments,
+            isAdvanced = true
+        ),
+        SettingsSearchItem(
+            id = "night_mode",
+            title = "Night Mode",
+            subtitle = "Lower intensity audio profile at night",
+            category = "Audio Player",
+            keywords = listOf("night mode", "audio", "evening", "quiet", "soft"),
+            route = Route.AudioSettings(),
+            icon = Tabler.Outline.Gauge,
+            isAdvanced = true
+        ),
+        SettingsSearchItem(
+            id = "night_mode_strength",
+            title = "Night Mode Strength",
+            subtitle = "Intensity of night mode audio profile",
+            category = "Audio Player",
+            keywords = listOf("night mode", "strength", "intensity", "audio", "level"),
+            route = Route.AudioSettings(),
+            icon = Tabler.Outline.Moon,
+            isAdvanced = true
+        ),
+        SettingsSearchItem(
+            id = "bass_boost_strength",
+            title = "Bass Boost Strength",
+            subtitle = "Intensity of low-end bass boost",
+            category = "Audio Player",
+            keywords = listOf("bass", "boost", "strength", "intensity", "low end", "subwoofer"),
+            route = Route.AudioSettings(),
+            icon = Tabler.Outline.WaveSine,
+            isAdvanced = true
+        ),
+        SettingsSearchItem(
+            id = "virtualizer_strength",
+            title = "Virtualizer Strength",
+            subtitle = "Intensity of spatial audio virtualizer",
+            category = "Audio Player",
+            keywords = listOf("virtualizer", "strength", "spatial", "3d", "surround"),
+            route = Route.AudioSettings(),
+            icon = Tabler.Outline.Speakerphone,
+            isAdvanced = true
+        ),
+        SettingsSearchItem(
+            id = "volume_boost_gain",
+            title = "Volume Boost Gain",
+            subtitle = "Loudness boost level",
+            category = "Audio Player",
+            keywords = listOf("volume boost", "gain", "loudness", "preamp", "level"),
+            route = Route.AudioSettings(),
+            icon = Tabler.Outline.Speakerphone,
+            isAdvanced = true
+        ),
+        SettingsSearchItem(
+            id = "auto_eq_by_genre",
+            title = "Auto-EQ by Genre",
+            subtitle = "Automatically apply EQ preset based on genre",
+            category = "Audio Player",
+            keywords = listOf("auto eq", "genre", "automatic", "equalizer", "preset", "music"),
+            route = Route.AudioSettings(),
+            icon = Tabler.Outline.Wand,
+            isAdvanced = true
+        ),
+        SettingsSearchItem(
+            id = "channel_mix_mode",
+            title = "Channel Mix Mode",
+            subtitle = "Surround channel mixing algorithm",
+            category = "Audio Player",
+            keywords = listOf("channel", "mix", "mode", "surround", "stereo", "downmix"),
+            route = Route.AudioSettings(),
+            icon = Tabler.Outline.Speakerphone,
+            isAdvanced = true
+        ),
+        SettingsSearchItem(
+            id = "pitch_shift",
+            title = "Pitch Shift",
+            subtitle = "Shift audio pitch in semitones",
+            category = "Audio Player",
+            keywords = listOf("pitch", "shift", "semitone", "tone", "key", "audio"),
+            route = Route.AudioSettings(),
+            icon = Tabler.Outline.WaveSine,
+            isAdvanced = true
+        ),
 
         // Language & Subtitles
         SettingsSearchItem(
@@ -941,6 +1585,25 @@ object SettingsSearchRegistry {
             icon = Tabler.Outline.ArrowBarDown,
             isAdvanced = true
         ),
+        SettingsSearchItem(
+            id = "high_contrast_subtitles",
+            title = "High-Contrast Subtitles",
+            subtitle = "Maximally legible subtitle style for accessibility",
+            category = "Language & Subtitles",
+            keywords = listOf("high contrast", "subtitles", "accessibility", "legible", "captions"),
+            route = Route.LanguageSettings(),
+            icon = Tabler.Outline.Eye
+        ),
+        SettingsSearchItem(
+            id = "hdr_subtitle_font_size",
+            title = "HDR Subtitle Font Size",
+            subtitle = "Subtitle text size for HDR content",
+            category = "Language & Subtitles",
+            keywords = listOf("hdr", "subtitle", "font size", "text", "dolby vision"),
+            route = Route.LanguageSettings(),
+            icon = Tabler.Outline.Typography,
+            isAdvanced = true
+        ),
 
         // Notifications
         SettingsSearchItem(
@@ -970,6 +1633,92 @@ object SettingsSearchRegistry {
             keywords = listOf("system", "notification", "channel", "settings", "customize"),
             route = Route.NotificationSettings(),
             icon = Tabler.Outline.Settings,
+            isAdvanced = true
+        ),
+        SettingsSearchItem(
+            id = "notification_check_frequency",
+            title = "Notification Check Frequency",
+            subtitle = "How often to check for new media",
+            category = "Notifications",
+            keywords = listOf("notification", "check", "frequency", "interval", "polling", "new media"),
+            route = Route.NotificationSettings(),
+            icon = Tabler.Outline.Clock
+        ),
+        SettingsSearchItem(
+            id = "quiet_hours",
+            title = "Quiet Hours",
+            subtitle = "Suppress notifications during set hours",
+            category = "Notifications",
+            keywords = listOf("quiet hours", "suppress", "silent", "night", "do not disturb"),
+            route = Route.NotificationSettings(),
+            icon = Tabler.Outline.Moon,
+            isAdvanced = true
+        ),
+        SettingsSearchItem(
+            id = "quiet_start",
+            title = "Quiet Hours Start",
+            subtitle = "Begin quiet hours",
+            category = "Notifications",
+            keywords = listOf("quiet hours", "start", "begin", "night", "silent"),
+            route = Route.NotificationSettings(),
+            icon = Tabler.Outline.Sunset,
+            isAdvanced = true
+        ),
+        SettingsSearchItem(
+            id = "quiet_end",
+            title = "Quiet Hours End",
+            subtitle = "End quiet hours",
+            category = "Notifications",
+            keywords = listOf("quiet hours", "end", "morning", "silent"),
+            route = Route.NotificationSettings(),
+            icon = Tabler.Outline.Sunrise,
+            isAdvanced = true
+        ),
+        SettingsSearchItem(
+            id = "notification_sound",
+            title = "Notification Sound",
+            subtitle = "Play notification sound",
+            category = "Notifications",
+            keywords = listOf("notification", "sound", "audio", "alert", "tone"),
+            route = Route.NotificationSettings(),
+            icon = Tabler.Outline.Volume
+        ),
+        SettingsSearchItem(
+            id = "notification_vibrate",
+            title = "Notification Vibrate",
+            subtitle = "Vibrate on notification",
+            category = "Notifications",
+            keywords = listOf("notification", "vibrate", "vibration", "haptic", "buzz"),
+            route = Route.NotificationSettings(),
+            icon = Tabler.Outline.PhoneCall
+        ),
+        SettingsSearchItem(
+            id = "notification_lights",
+            title = "Notification Lights",
+            subtitle = "Pulse notification light on supported devices",
+            category = "Notifications",
+            keywords = listOf("notification", "lights", "led", "pulse", "blink"),
+            route = Route.NotificationSettings(),
+            icon = Tabler.Outline.Bulb
+        ),
+        SettingsSearchItem(
+            id = "max_per_check",
+            title = "Max Notifications Per Check",
+            subtitle = "Maximum items per notification batch",
+            category = "Notifications",
+            keywords = listOf("max", "per check", "batch", "items", "limit", "notification"),
+            route = Route.NotificationSettings(),
+            icon = Tabler.Outline.LetterCase,
+            isAdvanced = true
+        ),
+        SettingsSearchItem(
+            id = "notification_libraries",
+            title = "Notification Libraries",
+            subtitle = "Choose which libraries trigger notifications",
+            category = "Notifications",
+            keywords = listOf("notification", "libraries", "folders", "monitor", "per library"),
+            route = Route.NotificationSettings(),
+            icon = Tabler.Outline.Folders,
             isAdvanced = true
         ),
 
@@ -1107,6 +1856,116 @@ object SettingsSearchRegistry {
             route = Route.StorageSettings(),
             icon = Tabler.Outline.Trash
         ),
+        SettingsSearchItem(
+            id = "download_connections",
+            title = "Connections per Download",
+            subtitle = "Parallel streams for a single file download",
+            category = "Storage",
+            keywords = listOf("connections", "parallel", "streams", "download", "segments"),
+            route = Route.StorageSettings(),
+            icon = Tabler.Outline.Download,
+            isAdvanced = true
+        ),
+        SettingsSearchItem(
+            id = "max_concurrent_downloads",
+            title = "Max Simultaneous Downloads",
+            subtitle = "How many downloads may transfer at once",
+            category = "Storage",
+            keywords = listOf("concurrent", "simultaneous", "parallel", "downloads", "max", "queue"),
+            route = Route.StorageSettings(),
+            icon = Tabler.Outline.ArrowBarToDown,
+            isAdvanced = true
+        ),
+        SettingsSearchItem(
+            id = "auto_offline",
+            title = "Auto Offline",
+            subtitle = "Automatically switch to offline when network is lost",
+            category = "Storage",
+            keywords = listOf("auto offline", "network lost", "offline", "automatic", "disconnect"),
+            route = Route.StorageSettings(),
+            icon = Tabler.Outline.WifiOff
+        ),
+        SettingsSearchItem(
+            id = "metered_network_behavior",
+            title = "Metered Network Behavior",
+            subtitle = "Behavior when connected to a cellular/metered connection",
+            category = "Storage",
+            keywords = listOf("metered", "cellular", "behavior", "data", "mobile", "network"),
+            route = Route.StorageSettings(),
+            icon = Tabler.Outline.Compass
+        ),
+        SettingsSearchItem(
+            id = "cellular_streaming_quality",
+            title = "Cellular Streaming Quality",
+            subtitle = "Preferred video quality profile when on cellular network",
+            category = "Storage",
+            keywords = listOf("cellular", "streaming", "quality", "mobile", "data", "resolution"),
+            route = Route.StorageSettings(),
+            icon = Tabler.Outline.DeviceMobile
+        ),
+        SettingsSearchItem(
+            id = "auto_download_new_episodes",
+            title = "Auto-Download New Episodes",
+            subtitle = "Automatically download next episode of active series",
+            category = "Storage",
+            keywords = listOf("auto download", "new episodes", "automatic", "next", "series"),
+            route = Route.StorageSettings(),
+            icon = Tabler.Outline.Download
+        ),
+        SettingsSearchItem(
+            id = "download_schedule",
+            title = "Download Schedule",
+            subtitle = "Only download during specific hours",
+            category = "Storage",
+            keywords = listOf("download", "schedule", "hours", "overnight", "window", "time"),
+            route = Route.StorageSettings(),
+            icon = Tabler.Outline.Clock
+        ),
+        SettingsSearchItem(
+            id = "download_schedule_start",
+            title = "Download Schedule Start",
+            subtitle = "Hour when downloads are allowed",
+            category = "Storage",
+            keywords = listOf("download", "schedule", "start", "hour", "window", "begin"),
+            route = Route.StorageSettings(),
+            icon = Tabler.Outline.Sun
+        ),
+        SettingsSearchItem(
+            id = "download_schedule_end",
+            title = "Download Schedule End",
+            subtitle = "Hour when downloads stop",
+            category = "Storage",
+            keywords = listOf("download", "schedule", "end", "hour", "window", "stop"),
+            route = Route.StorageSettings(),
+            icon = Tabler.Outline.Moon
+        ),
+        SettingsSearchItem(
+            id = "download_schedule_wifi_only",
+            title = "Wi-Fi Only During Schedule",
+            subtitle = "Require unmetered (Wi-Fi) network during the schedule window",
+            category = "Storage",
+            keywords = listOf("download", "schedule", "wifi only", "unmetered", "require"),
+            route = Route.StorageSettings(),
+            icon = Tabler.Outline.Wifi
+        ),
+        SettingsSearchItem(
+            id = "max_download_storage_limit",
+            title = "Max Download Storage Limit",
+            subtitle = "Restrict size of downloads directory",
+            category = "Storage",
+            keywords = listOf("download", "storage", "limit", "max", "size", "cap", "gb"),
+            route = Route.StorageSettings(),
+            icon = Tabler.Outline.Database
+        ),
+        SettingsSearchItem(
+            id = "download_storage_location",
+            title = "Download Storage Location",
+            subtitle = "Folder path for storing downloaded media",
+            category = "Storage",
+            keywords = listOf("download", "storage", "location", "folder", "sd card", "internal"),
+            route = Route.StorageSettings(),
+            icon = Tabler.Outline.Folder
+        ),
 
         // Security
         SettingsSearchItem(
@@ -1153,6 +2012,16 @@ object SettingsSearchRegistry {
             keywords = listOf("remote", "control", "cast", "play to", "external control", "receive commands"),
             route = Route.SecuritySettings(),
             icon = Tabler.Outline.Cast
+        ),
+        SettingsSearchItem(
+            id = "auto_lock_timer",
+            title = "Auto-Lock Timer",
+            subtitle = "Time before app locks after leaving",
+            category = "Security",
+            keywords = listOf("auto lock", "timer", "lock", "timeout", "delay", "security"),
+            route = Route.SecuritySettings(),
+            icon = Tabler.Outline.Clock,
+            isAdvanced = true
         ),
 
         // Backup

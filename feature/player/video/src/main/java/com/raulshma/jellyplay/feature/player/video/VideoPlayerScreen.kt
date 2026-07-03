@@ -139,6 +139,7 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import androidx.compose.animation.core.tween
 import com.raulshma.jellyplay.core.designsystem.theme.AlphaEasing
+import com.raulshma.jellyplay.core.designsystem.theme.PlayerDarkTheme
 import com.raulshma.jellyplay.core.ui.animation.AnimationTokens
 import androidx.media3.ui.AspectRatioFrameLayout
 
@@ -599,6 +600,13 @@ fun VideoPlayerScreen(
             modifier = Modifier.fillMaxSize()
         )
     } else {
+        // Force a dark color scheme for the entire player subtree. The player chrome (controls,
+        // overlays, drawers, gesture indicators) is always rendered on the dark video surface and
+        // assumes light foregrounds. Without this, a light ambient theme resolves `onSurface` to
+        // dark colors → invisible dark-on-dark text/controls (issue: player light-mode contrast).
+        // PlayerDarkTheme also sets LocalContentColor so uncolored Text/Icons fall back to a light
+        // foreground (MaterialTheme alone does not). The accent (primary) is preserved.
+        PlayerDarkTheme {
         Box(
             modifier = Modifier
                 .fillMaxSize()
@@ -1357,7 +1365,13 @@ fun VideoPlayerScreen(
             }
         }
     }
+    } // end PlayerDarkTheme
 
+    // Sheets render outside the player Box above, so they must be wrapped in the player dark
+    // theme too — otherwise their titles/labels inherit the ambient (light) content color and
+    // LocalContentColor, rendering dark-on-dark. PlayerDarkTheme forces the dark scheme + a
+    // light LocalContentColor, so every sheet's uncolored Text/Icon is high-contrast.
+    PlayerDarkTheme {
     PlayerSheetRouter(
         currentSheet = currentSheet,
         onSheetChange = { sheet -> currentSheet = sheet },
@@ -1380,6 +1394,7 @@ fun VideoPlayerScreen(
             )
         },
     )
+    } // end PlayerDarkTheme (sheets)
 
     val playerError = uiState.playerError
     if (uiState.showPlaybackErrorDialog && playerError != null) {

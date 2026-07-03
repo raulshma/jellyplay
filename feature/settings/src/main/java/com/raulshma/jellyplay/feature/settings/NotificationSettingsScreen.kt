@@ -155,6 +155,7 @@ fun NotificationSettingsScreen(
                             title = "Check Frequency",
                             subtitle = "How often to check for new media",
                             trailingText = notifPrefs.checkFrequency.displayName,
+                            highlighted = highlightSettingId == "notification_check_frequency",
                             index = notifIdx++, count = notifTotal,
                             onClick = { activeDialog = NotificationSettingsDialog.FrequencyPicker },
                         )
@@ -164,6 +165,7 @@ fun NotificationSettingsScreen(
                                 title = "Quiet Hours",
                                 subtitle = "Suppress notifications during set hours",
                                 checked = notifPrefs.quietHoursEnabled,
+                                highlighted = highlightSettingId == "quiet_hours",
                                 index = notifIdx++, count = notifTotal,
                                 onCheckedChange = { enabled ->
                                     viewModel.updateNotificationPreferences { it.copy(quietHoursEnabled = enabled) }
@@ -175,6 +177,7 @@ fun NotificationSettingsScreen(
                                     title = "Quiet Start",
                                     subtitle = "Begin quiet hours",
                                     trailingText = formatMinutes(notifPrefs.quietHoursStart),
+                                    highlighted = highlightSettingId == "quiet_start",
                                     index = notifIdx++, count = notifTotal,
                                     onClick = { activeDialog = NotificationSettingsDialog.QuietStartPicker },
                                 )
@@ -183,6 +186,7 @@ fun NotificationSettingsScreen(
                                     title = "Quiet End",
                                     subtitle = "End quiet hours",
                                     trailingText = formatMinutes(notifPrefs.quietHoursEnd),
+                                    highlighted = highlightSettingId == "quiet_end",
                                     index = notifIdx++, count = notifTotal,
                                     onClick = { activeDialog = NotificationSettingsDialog.QuietEndPicker },
                                 )
@@ -192,6 +196,7 @@ fun NotificationSettingsScreen(
                                 title = "Respect System DND",
                                 subtitle = "Don't show notifications when Do Not Disturb is active",
                                 checked = notifPrefs.respectSystemDnd,
+                                highlighted = highlightSettingId == "respect_system_dnd",
                                 index = notifIdx++, count = notifTotal,
                                 onCheckedChange = { enabled ->
                                     viewModel.updateNotificationPreferences { it.copy(respectSystemDnd = enabled) }
@@ -201,6 +206,7 @@ fun NotificationSettingsScreen(
                                 icon = Tabler.Outline.Settings,
                                 title = "System Notification Settings",
                                 subtitle = "Customize per-library channel in system settings",
+                                highlighted = highlightSettingId == "system_notification_settings",
                                 index = notifIdx++, count = notifTotal,
                                 onClick = {
                                     val intent = android.content.Intent(android.provider.Settings.ACTION_APP_NOTIFICATION_SETTINGS).apply {
@@ -215,6 +221,7 @@ fun NotificationSettingsScreen(
                             title = "Sound",
                             subtitle = "Play notification sound",
                             checked = notifPrefs.soundEnabled,
+                            highlighted = highlightSettingId == "notification_sound",
                             index = notifIdx++, count = notifTotal,
                             onCheckedChange = { enabled ->
                                 viewModel.updateNotificationPreferences { it.copy(soundEnabled = enabled) }
@@ -225,6 +232,7 @@ fun NotificationSettingsScreen(
                             title = "Vibrate",
                             subtitle = "Vibrate on notification",
                             checked = notifPrefs.vibrateEnabled,
+                            highlighted = highlightSettingId == "notification_vibrate",
                             index = notifIdx++, count = notifTotal,
                             onCheckedChange = { enabled ->
                                 viewModel.updateNotificationPreferences { it.copy(vibrateEnabled = enabled) }
@@ -235,6 +243,7 @@ fun NotificationSettingsScreen(
                             title = "Notification Lights",
                             subtitle = "Pulse notification light on devices that support it",
                             checked = notifPrefs.lightsEnabled,
+                            highlighted = highlightSettingId == "notification_lights",
                             index = notifIdx++, count = notifTotal,
                             onCheckedChange = { enabled ->
                                 viewModel.updateNotificationPreferences { it.copy(lightsEnabled = enabled) }
@@ -246,6 +255,7 @@ fun NotificationSettingsScreen(
                                 title = "Max Per Check",
                                 subtitle = "Maximum items per notification batch",
                                 trailingText = "${notifPrefs.maxPerCheck}",
+                                highlighted = highlightSettingId == "max_per_check",
                                 index = notifIdx++, count = notifTotal,
                                 onClick = { activeDialog = NotificationSettingsDialog.MaxPerCheckPicker },
                             )
@@ -257,6 +267,7 @@ fun NotificationSettingsScreen(
                                 icon = Tabler.Outline.Folders,
                                 title = "Libraries",
                                 subtitle = "$enabledLibraries of $libraryCount libraries monitored",
+                                highlighted = highlightSettingId == "notification_libraries",
                                 index = notifIdx, count = notifTotal,
                                 onClick = { activeDialog = NotificationSettingsDialog.LibrariesPicker },
                             )

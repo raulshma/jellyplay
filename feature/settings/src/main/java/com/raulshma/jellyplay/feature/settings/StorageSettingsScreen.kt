@@ -72,9 +72,9 @@ fun StorageSettingsScreen(
     val scrollState = rememberLazyListState()
     val scrollIndex = remember(highlightSettingId) {
         when (highlightSettingId) {
-            in listOf("clear_cache", "wifi_only_downloads", "auto_delete_cache", "max_cache_size") -> 0
-            in listOf("offline_mode", "adaptive_bitrate", "bandwidth_cap", "data_saver", "network_timeout", "verbose_logging") -> 1
-            in listOf("download_quality", "smart_downloads") -> 2
+            in listOf("clear_cache", "wifi_only_downloads", "download_connections", "max_concurrent_downloads", "auto_delete_cache", "max_cache_size") -> 0
+            in listOf("offline_mode", "auto_offline", "adaptive_bitrate", "bandwidth_cap", "metered_network_behavior", "cellular_streaming_quality", "cellular_download_warning", "data_saver", "network_timeout", "verbose_logging", "user_data_sync") -> 1
+            in listOf("download_quality", "smart_downloads", "auto_download_new_episodes", "download_schedule", "download_schedule_start", "download_schedule_end", "download_schedule_wifi_only", "max_download_storage_limit", "download_storage_location") -> 2
             else -> -1
         }
     }
@@ -219,6 +219,7 @@ fun StorageSettingsScreen(
                             title = "Connections per download",
                             subtitle = "Parallel streams for a single file",
                             trailingText = "${preferences.downloadConnections}",
+                            highlighted = highlightSettingId == "download_connections",
                             index = storageIdx++, count = storageTotal,
                             onClick = {
                                 val options = listOf(1, 2, 4, 8, 12, 16)
@@ -232,6 +233,7 @@ fun StorageSettingsScreen(
                             title = "Max simultaneous downloads",
                             subtitle = "How many downloads may transfer at once",
                             trailingText = "${preferences.maxConcurrentDownloads}",
+                            highlighted = highlightSettingId == "max_concurrent_downloads",
                             index = storageIdx++, count = storageTotal,
                             onClick = {
                                 val options = listOf(1, 2, 3, 4, 5, 6)
@@ -276,7 +278,7 @@ fun StorageSettingsScreen(
                         "Status: $status"
                     },
                     modifier = Modifier.padding(vertical = 8.dp),
-                    initiallyExpanded = highlightSettingId in listOf("offline_mode", "adaptive_bitrate", "bandwidth_cap", "data_saver"),
+                    initiallyExpanded = highlightSettingId in listOf("offline_mode", "auto_offline", "adaptive_bitrate", "bandwidth_cap", "metered_network_behavior", "cellular_streaming_quality", "cellular_download_warning", "data_saver", "network_timeout", "verbose_logging", "user_data_sync"),
                 ) {
                     val networkTotal = 11
                     var networkIdx = 0
@@ -296,6 +298,7 @@ fun StorageSettingsScreen(
                         title = "Auto Offline",
                         subtitle = "Automatically switch to offline when network is lost",
                         checked = preferences.autoOfflineEnabled,
+                        highlighted = highlightSettingId == "auto_offline",
                         index = networkIdx++, count = networkTotal,
                         onCheckedChange = { viewModel.setAutoOfflineEnabled(it) },
                     )
@@ -332,6 +335,7 @@ fun StorageSettingsScreen(
                         title = "Metered Network Behavior",
                         subtitle = "Behavior when connected to a cellular/metered connection",
                         trailingText = preferences.meteredNetworkBehavior.displayName,
+                        highlighted = highlightSettingId == "metered_network_behavior",
                         index = networkIdx++, count = networkTotal,
                         onClick = {
                             val options = MeteredNetworkBehavior.entries
@@ -346,6 +350,7 @@ fun StorageSettingsScreen(
                         title = "Cellular Streaming Quality",
                         subtitle = "Preferred video quality profile when on cellular network",
                         trailingText = streamingQualityLabel(preferences.cellularStreamingQuality),
+                        highlighted = highlightSettingId == "cellular_streaming_quality",
                         index = networkIdx++, count = networkTotal,
                         onClick = {
                             val options = StreamingQuality.entries
@@ -451,6 +456,7 @@ fun StorageSettingsScreen(
                         title = "Auto-Download New Episodes",
                         subtitle = "Automatically download next episode of active series",
                         checked = preferences.autoDownloadNewEpisodes,
+                        highlighted = highlightSettingId == "auto_download_new_episodes",
                         index = downloadIdx++, count = downloadTotal,
                         onCheckedChange = { viewModel.setAutoDownloadNewEpisodes(it) }
                     )
@@ -460,6 +466,7 @@ fun StorageSettingsScreen(
                         title = "Download Schedule",
                         subtitle = "Only download during specific hours (e.g., overnight)",
                         checked = preferences.downloadScheduleEnabled,
+                        highlighted = highlightSettingId == "download_schedule",
                         index = downloadIdx++, count = downloadTotal,
                         onCheckedChange = { viewModel.setDownloadScheduleEnabled(it) }
                     )
@@ -470,6 +477,7 @@ fun StorageSettingsScreen(
                             title = "Schedule Start",
                             subtitle = "Hour when downloads are allowed (24h format)",
                             trailingText = "${preferences.downloadScheduleWindow.startHour}:00",
+                            highlighted = highlightSettingId == "download_schedule_start",
                             index = downloadIdx++, count = downloadTotal,
                             onClick = {
                                 val current = preferences.downloadScheduleWindow
@@ -483,6 +491,7 @@ fun StorageSettingsScreen(
                             title = "Schedule End",
                             subtitle = "Hour when downloads stop (24h format)",
                             trailingText = "${preferences.downloadScheduleWindow.endHour}:00",
+                            highlighted = highlightSettingId == "download_schedule_end",
                             index = downloadIdx++, count = downloadTotal,
                             onClick = {
                                 val current = preferences.downloadScheduleWindow
@@ -496,6 +505,7 @@ fun StorageSettingsScreen(
                             title = "Wi-Fi Only During Schedule",
                             subtitle = "Require unmetered (Wi-Fi) network during the schedule window",
                             checked = preferences.downloadScheduleWindow.wifiOnly,
+                            highlighted = highlightSettingId == "download_schedule_wifi_only",
                             index = downloadIdx++, count = downloadTotal,
                             onCheckedChange = {
                                 val current = preferences.downloadScheduleWindow
@@ -509,6 +519,7 @@ fun StorageSettingsScreen(
                         title = "Max Download Storage Limit",
                         subtitle = "Restrict size of downloads directory",
                         trailingText = if (preferences.maxDownloadStorageGb == 0) "Unlimited" else "${preferences.maxDownloadStorageGb} GB",
+                        highlighted = highlightSettingId == "max_download_storage_limit",
                         index = downloadIdx++, count = downloadTotal,
                         onClick = {
                             val sizes = listOf(0, 5, 10, 20, 50)
@@ -523,6 +534,7 @@ fun StorageSettingsScreen(
                         title = "Download Storage Location",
                         subtitle = "Folder path for storing downloaded media",
                         trailingText = if (preferences.downloadStorageLocation == "INTERNAL") "Internal Storage" else "External SD Card",
+                        highlighted = highlightSettingId == "download_storage_location",
                         index = downloadIdx, count = downloadTotal,
                         onClick = {
                             val nextLoc = if (preferences.downloadStorageLocation == "INTERNAL") "EXTERNAL" else "INTERNAL"

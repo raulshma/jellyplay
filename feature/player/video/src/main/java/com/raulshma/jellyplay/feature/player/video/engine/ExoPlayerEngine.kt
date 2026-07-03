@@ -545,23 +545,49 @@ class ExoPlayerEngine(
                 android.view.ViewGroup.LayoutParams.MATCH_PARENT,
             )
         }
-        pv.post {
-            val subtitleView = pv.subtitleView ?: return@post
-            val parent = subtitleView.parent as? android.view.ViewGroup ?: return@post
-            if (parent !== pv) {
-                parent.removeView(subtitleView)
-                pv.addView(
-                    subtitleView,
-                    android.widget.FrameLayout.LayoutParams(
-                        android.view.ViewGroup.LayoutParams.MATCH_PARENT,
-                        android.view.ViewGroup.LayoutParams.MATCH_PARENT,
-                    ),
-                )
-            }
+        pv.post { reparentSubtitleViewIntoVideoFrame(pv) }
+        // Re-parent the SubtitleView into the (re-laid-out) content frame after
+        // every layout pass. In portrait the PlayerView letterboxes the video
+        // into the AspectRatioFrameLayout content frame; the SubtitleView must
+        // live inside that frame (not the full-screen PlayerView) so captions
+        // sit at the bottom of the *video*, and setBottomPaddingFraction /
+        // fractional text sizes compute against the video height, not the much
+        // taller screen height. See issue #66-A.
+        pv.addOnLayoutChangeListener { _, _, _, _, _, _, _, _, _ ->
+            pv.post { reparentSubtitleViewIntoVideoFrame(pv) }
         }
         playerView = pv
         applySubtitleStyleToView(pv, currentConfig.subtitleStyle)
         return pv
+    }
+
+    /**
+     * Moves PlayerView's SubtitleView from the full-screen PlayerView into the
+     * [AspectRatioFrameLayout] content frame (the letterboxed video rectangle).
+     * While the SubtitleView is a direct child of the PlayerView its layout
+     * fractions (bottom padding, fractional text size) are computed against the
+     * whole screen height, so in portrait — where the video is letterboxed —
+     * captions land in the bottom black bar instead of on the video. Inside the
+     * content frame they are measured against the video dimensions, keeping them
+     * correct and consistent with mpv / VLC across rotation. See issue #66-A.
+     */
+    private fun reparentSubtitleViewIntoVideoFrame(pv: PlayerView) {
+        val subtitleView = pv.subtitleView ?: return
+        val contentFrame = pv.findViewById<android.view.ViewGroup>(
+            androidx.media3.ui.R.id.exo_content_frame
+        ) ?: return
+        val currentParent = subtitleView.parent as? android.view.ViewGroup
+        if (currentParent === contentFrame) return
+        currentParent?.removeView(subtitleView)
+        // Append (not index 0): the video surface is the first child of the
+        // content frame, so a 0-index insert would render captions behind it.
+        contentFrame.addView(
+            subtitleView,
+            android.widget.FrameLayout.LayoutParams(
+                android.view.ViewGroup.LayoutParams.MATCH_PARENT,
+                android.view.ViewGroup.LayoutParams.MATCH_PARENT,
+            ),
+        )
     }
 
     override fun applySubtitleStyleToView(view: View, style: SubtitleStyle) {
@@ -589,7 +615,14 @@ class ExoPlayerEngine(
                 )
                 sv.setFixedTextSize(android.util.TypedValue.COMPLEX_UNIT_SP, style.fontSize.toFloat())
             } else {
+                // Keep embedded colors/positioning but force a stable font size.
                 sv.setApplyEmbeddedStyles(true)
+                // Without this, cues that carry an embedded font size make Media3
+                // size text as a fraction of the (full-screen) SubtitleView height.
+                // On rotation to portrait that height grows dramatically and the
+                // captions become huge, while mpv (libass, sizes against the video
+                // frame) stays correct. See issue #66-A.
+                sv.setApplyEmbeddedFontSizes(false)
                 sv.setStyle(
                     CaptionStyleCompat(
                         Color.WHITE,
@@ -600,9 +633,6 @@ class ExoPlayerEngine(
                         android.graphics.Typeface.SANS_SERIF
                     )
                 )
-                // Fixed SP size keeps captions stable across orientation changes:
-                // a height-fraction (setFractionalTextSize) recomputes against the
-                // new (much taller, narrower) portrait view, making captions huge.
                 sv.setFixedTextSize(android.util.TypedValue.COMPLEX_UNIT_SP, DEFAULT_SUBTITLE_SIZE_SP)
             }
             sv.setBottomPaddingFraction(style.verticalPosition)

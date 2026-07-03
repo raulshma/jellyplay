@@ -184,6 +184,7 @@ fun SecuritySettingsScreen(
                             title = "Auto-Lock Timer",
                             subtitle = "Time before app locks after leaving",
                             trailingText = lockTimerLabels[lockTimerOptions.indexOf(preferences.autoLockTimerMs).coerceAtMost(lockTimerOptions.lastIndex)],
+                            highlighted = highlightSettingId == "auto_lock_timer",
                             index = secIdx, count = secTotal,
                             onClick = {
                                 val currentIdx = lockTimerOptions.indexOf(preferences.autoLockTimerMs).coerceAtMost(lockTimerOptions.lastIndex)
@@ -208,6 +209,7 @@ fun SecuritySettingsScreen(
                         title = "Authorize Device",
                         subtitle = "Enter a Quick Connect code to approve another device",
                         trailingText = "",
+                        highlighted = highlightSettingId == "quick_connect_authorize",
                         index = 0, count = 1,
                         onClick = {
                             qcCode = ""
