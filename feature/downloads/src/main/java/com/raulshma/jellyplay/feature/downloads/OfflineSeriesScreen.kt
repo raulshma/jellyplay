@@ -23,14 +23,16 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import com.raulshma.jellyplay.core.ui.components.JellyPlayLinearProgressIndicator
 import androidx.compose.material3.LoadingIndicator
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.Tab
 import androidx.compose.material3.TabRow
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -83,6 +85,7 @@ fun OfflineSeriesScreen(
     var selectedSeasonIndex by remember { mutableIntStateOf(0) }
     val selectedSeason = seasons.getOrNull(selectedSeasonIndex)
     val seasonEpisodes = selectedSeason?.let { episodes[it.id] } ?: emptyList()
+    var showDeleteDialog by remember { mutableStateOf(false) }
 
     // TV focus-on-launch: focus the first episode once data arrives so D-pad input lands on
     // content, not the navigation drawer.
@@ -96,6 +99,22 @@ fun OfflineSeriesScreen(
     JellyPlayScreenScaffold(
         title = seriesItem?.name ?: "Loading...",
         onBack = onBack,
+        // Top bin button for bulk delete (issue #65-C): replaces the two full-width
+        // buttons that used to sit below the episode list.
+        actions = {
+            val binFocusState = rememberTvFocusState()
+            IconButton(
+                onClick = { showDeleteDialog = true },
+                modifier = Modifier
+                    .then(binFocusState.focusModifier)
+                    .tvFocusIndicator(binFocusState, CircleShape),
+            ) {
+                Icon(
+                    Tabler.Outline.Trash,
+                    contentDescription = "Delete downloads",
+                )
+            }
+        },
     ) {
         Column(modifier = Modifier.fillMaxSize()) {
             seriesItem?.let { series ->
@@ -221,51 +240,59 @@ fun OfflineSeriesScreen(
                             },
                         )
                     }
-
-                    item {
-                        Spacer(Modifier.height(8.dp))
-                        if (selectedSeason != null) {
-                            val deleteSeasonFocusState = rememberTvFocusState()
-                            OutlinedButton(
-                                onClick = { viewModel.deleteSeason(selectedSeason.id) },
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .then(deleteSeasonFocusState.focusModifier)
-                                    .tvFocusIndicator(deleteSeasonFocusState, ShapeCache.smooth12),
-                            ) {
-                                Icon(
-                                    Tabler.Outline.Trash,
-                                    contentDescription = null,
-                                    modifier = Modifier.size(18.dp),
-                                )
-                                Spacer(Modifier.width(8.dp))
-                                Text("Delete Season")
-                            }
-                        }
-                    }
-
-                    item {
-                        Spacer(Modifier.height(4.dp))
-                        val deleteSeriesFocusState = rememberTvFocusState()
-                        OutlinedButton(
-                            onClick = { viewModel.deleteSeries(seriesId) },
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .then(deleteSeriesFocusState.focusModifier)
-                                .tvFocusIndicator(deleteSeriesFocusState, ShapeCache.smooth12),
-                        ) {
-                            Icon(
-                                Tabler.Outline.Trash,
-                                contentDescription = null,
-                                modifier = Modifier.size(18.dp),
-                            )
-                            Spacer(Modifier.width(8.dp))
-                            Text("Delete Entire Series")
-                        }
-                    }
                 }
             }
         }
+    }
+
+    // Bulk-delete chooser (issue #65-C). Offers season-vs-series deletion with
+    // confirmation, reusing the existing deleteSeason/deleteSeries handlers.
+    if (showDeleteDialog) {
+        AlertDialog(
+            onDismissRequest = { showDeleteDialog = false },
+            icon = { Icon(Tabler.Outline.Trash, contentDescription = null) },
+            title = { Text("Delete downloads") },
+            text = {
+                Text(
+                    if (selectedSeason != null)
+                        "Choose what to delete for this series."
+                    else
+                        "Delete all downloaded episodes for this series?",
+                )
+            },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        showDeleteDialog = false
+                        if (selectedSeason != null) {
+                            viewModel.deleteSeason(selectedSeason.id)
+                        } else {
+                            viewModel.deleteSeries(seriesId)
+                        }
+                    },
+                    colors = androidx.compose.material3.ButtonDefaults.textButtonColors(
+                        contentColor = MaterialTheme.colorScheme.error,
+                    ),
+                ) {
+                    Text(if (selectedSeason != null) "This season" else "Delete series")
+                }
+            },
+            dismissButton = {
+                if (selectedSeason != null) {
+                    TextButton(
+                        onClick = {
+                            showDeleteDialog = false
+                            viewModel.deleteSeries(seriesId)
+                        },
+                        colors = androidx.compose.material3.ButtonDefaults.textButtonColors(
+                            contentColor = MaterialTheme.colorScheme.error,
+                        ),
+                    ) { Text("Entire series") }
+                } else {
+                    TextButton(onClick = { showDeleteDialog = false }) { Text("Cancel") }
+                }
+            },
+        )
     }
 }
 
@@ -362,22 +389,66 @@ private fun OfflineEpisodeRow(
             }
 
             if (episode.downloadStatus == DownloadStatus.COMPLETED) {
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    modifier = Modifier.padding(top = 4.dp),
-                ) {
-                    Icon(
-                        Tabler.Outline.Check,
-                        contentDescription = null,
-                        modifier = Modifier.size(14.dp),
-                        tint = MaterialTheme.colorScheme.primary,
-                    )
-                    Spacer(Modifier.width(4.dp))
-                    Text(
-                        text = "Downloaded",
-                        style = MaterialTheme.typography.labelSmall,
-                        color = MaterialTheme.colorScheme.primary,
-                    )
+                // Render watched state / resume progress for downloaded episodes
+                // (issue #65-A/B): a checkmark when fully watched, or a progress
+                // bar + resume label when partially watched.
+                if (episode.isPlayed) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        modifier = Modifier.padding(top = 4.dp),
+                    ) {
+                        Icon(
+                            Tabler.Outline.Check,
+                            contentDescription = "Watched",
+                            modifier = Modifier.size(14.dp),
+                            tint = MaterialTheme.colorScheme.primary,
+                        )
+                        Spacer(Modifier.width(4.dp))
+                        Text(
+                            text = "Watched",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.primary,
+                        )
+                    }
+                } else if (episode.playedPercentage in 0.01..94.99) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(top = 4.dp),
+                    ) {
+                        JellyPlayLinearProgressIndicator(
+                            progress = { (episode.playedPercentage / 100f).toFloat() },
+                            modifier = Modifier
+                                .width(80.dp)
+                                .height(4.dp)
+                                .clip(ShapeCache.smooth4),
+                        )
+                        Spacer(Modifier.width(6.dp))
+                        Text(
+                            text = "${episode.playedPercentage.toInt()}% watched",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
+                } else {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        modifier = Modifier.padding(top = 4.dp),
+                    ) {
+                        Icon(
+                            Tabler.Outline.Check,
+                            contentDescription = null,
+                            modifier = Modifier.size(14.dp),
+                            tint = MaterialTheme.colorScheme.primary,
+                        )
+                        Spacer(Modifier.width(4.dp))
+                        Text(
+                            text = "Downloaded",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.primary,
+                        )
+                    }
                 }
             } else if (episode.downloadStatus == DownloadStatus.DOWNLOADING) {
                 val progress = if (episode.totalSizeBytes > 0) {

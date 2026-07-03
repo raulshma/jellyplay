@@ -92,10 +92,22 @@ data class UserPreferences(
     val pitchSemitones: Float = 0f,
     val wifiOnlyDownloads: Boolean = true,
     val downloadConnections: Int = 4,
+    /**
+     * Maximum number of downloads allowed to run concurrently. WorkManager may
+     * enqueue many workers; this cap gates how many actually transfer at once
+     * (the rest block on a permit). Distinct from [downloadConnections], which
+     * is per-file parallel streams. See issue #64-A.
+     */
+    val maxConcurrentDownloads: Int = 3,
     val enabledHomeSectionTypes: Set<HomeSectionType> = HomeSectionType.CONFIGURABLE.toSet(),
     val homeSectionOrder: List<HomeSectionType> = HomeSectionType.CONFIGURABLE,
     val hiddenLibrarySectionIds: Set<String> = emptySet(),
     val navBarShowLabels: Boolean = true,
+    /**
+     * Whether the floating navigation bar auto-hides on scroll-down. When false
+     * the bar stays pinned (issue #62-I).
+     */
+    val hideBottomNavOnScroll: Boolean = true,
     val homeHeroEnabled: Boolean = true,
     val onboardingCompleted: Boolean = false,
     val mpvConfig: MpvEngineConfig = MpvEngineConfig(),

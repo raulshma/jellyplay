@@ -605,6 +605,15 @@ fun AppearanceSettingsScreen(
                 }
             }
 
+            // Floating navigation bar customization (enable/disable items, reorder,
+            // hide-on-scroll) — issues #62-D / #62-I.
+            item {
+                NavigationCustomizationGroup(
+                    preferences = preferences,
+                    viewModel = viewModel,
+                )
+            }
+
             // Library & Cards: commonly-used display toggles, shown regardless of Advanced mode (issue #62-E).
             item {
                 SettingsGroup(

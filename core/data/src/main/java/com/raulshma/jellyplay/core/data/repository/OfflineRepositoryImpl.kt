@@ -135,6 +135,24 @@ class OfflineRepositoryImpl @Inject constructor(
         offlineMediaDao.cleanupOrphans()
     }
 
+    override suspend fun updatePlaybackProgress(
+        itemId: String,
+        positionTicks: Long?,
+        percentage: Double,
+        isPlayed: Boolean,
+    ) {
+        // Only record progress for items actually in the offline store; a server-
+        // only item has no offline row to update.
+        if (offlineMediaDao.getById(itemId) == null) return
+        offlineMediaDao.updatePlaybackProgress(
+            itemId = itemId,
+            positionTicks = positionTicks,
+            percentage = percentage.coerceIn(0.0, 100.0),
+            isPlayed = isPlayed,
+            lastPlayedDate = java.time.OffsetDateTime.now().toString(),
+        )
+    }
+
     override suspend fun searchOffline(query: String, limit: Int): List<OfflineMediaItem> {
         val trimmed = query.trim()
         if (trimmed.length < MIN_OFFLINE_SEARCH_LENGTH || limit <= 0) return emptyList()
@@ -181,5 +199,9 @@ class OfflineRepositoryImpl @Inject constructor(
             ?.map { it.trim() }
             ?.filter { it.isNotEmpty() } ?: emptyList(),
         childCount = childCount ?: 0,
+        playbackPositionTicks = playbackPositionTicks,
+        playedPercentage = playedPercentage,
+        isPlayed = isPlayed,
+        lastPlayedDate = lastPlayedDate,
     )
 }

@@ -107,13 +107,9 @@ internal fun HomeDrawerBody(
                 scope = scope,
                 onClick = callbacks.onWatchProgressHeatmapClick,
             )
-            DrawerItem(
-                icon = Tabler.Outline.Inbox,
-                label = "Seerr Requests",
-                drawerState = drawerState,
-                scope = scope,
-                onClick = callbacks.onRequestsClick,
-            )
+            // NOTE (issue #62-K): "Seerr Requests" and "About" previously duplicated
+            // here were removed — they live in the app-level drawer to keep a single
+            // coherent "more" surface. This drawer stays focused on account/activity.
 
             Spacer(modifier = Modifier.height(8.dp))
 
@@ -140,13 +136,6 @@ internal fun HomeDrawerBody(
                 drawerState = drawerState,
                 scope = scope,
                 onClick = callbacks.onSetupWizardClick,
-            )
-            DrawerItem(
-                icon = Tabler.Outline.InfoCircle,
-                label = "About JellyPlay",
-                drawerState = drawerState,
-                scope = scope,
-                onClick = callbacks.onAboutClick,
             )
         }
     }

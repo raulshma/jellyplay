@@ -670,8 +670,11 @@ class DownloadRepositoryImpl @Inject constructor(
         parentId = parentId,
         seriesId = seriesId,
         seasonId = seasonId,
-        seriesName = seriesName,
-        seasonName = seasonName,
+        // Clear the series subtitle for top-level entities where it would just
+        // duplicate the title (issue #64-B); only episodes carry a meaningful
+        // series name distinct from their own.
+        seriesName = if (mediaType == MediaType.EPISODE || mediaType == MediaType.SEASON) seriesName else null,
+        seasonName = if (mediaType == MediaType.EPISODE) seasonName else null,
         episodeNumber = episodeNumber,
         seasonNumber = seasonNumber,
         indexNumber = indexNumber,
@@ -682,7 +685,23 @@ class DownloadRepositoryImpl @Inject constructor(
         blurHashBackdrop = blurHashes.backdrop,
         premiereDate = premiereDate,
         genres = genres.joinToString(","),
+        // Seed playback progress from server UserData so the download shows its
+        // watched/resume state immediately (issue #65-A).
+        playbackPositionTicks = playbackPositionTicks,
+        playedPercentage = computePlayedPercentage(playbackPositionTicks, runTimeTicks, isPlayed),
+        isPlayed = isPlayed,
+        lastPlayedDate = null,
     )
+
+    /** Derives a 0–100 played percentage, guarding against divide-by-zero. */
+    private fun computePlayedPercentage(positionTicks: Long?, runTimeTicks: Long?, isPlayed: Boolean): Double =
+        when {
+            isPlayed -> 100.0
+            positionTicks == null || positionTicks <= 0L -> 0.0
+            runTimeTicks == null || runTimeTicks <= 0L -> 0.0
+            else -> ((positionTicks.toDouble() / runTimeTicks.toDouble()) * 100.0)
+                .coerceIn(0.0, 100.0)
+        }
 
     private suspend fun cleanupDownloadFiles(entity: DownloadEntity) {
         if (entity.downloadPath.isNotBlank()) {
