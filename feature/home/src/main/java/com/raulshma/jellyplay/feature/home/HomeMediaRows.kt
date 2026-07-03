@@ -453,6 +453,7 @@ fun HomeMediaRow(
     focusRequester: FocusRequester? = null,
     onRowFocused: (() -> Unit)? = null,
     clippingEnabled: Boolean = false,
+    showEpisodeSeriesBadge: Boolean = false,
 ) {
     val adaptiveInfo = LocalAdaptiveInfo.current
     val isTv = LocalTvMode.current
@@ -502,6 +503,7 @@ fun HomeMediaRow(
                     sharedElementKey = "poster_${item.id}",
                     photoFolderChildImageUrls = photoFolderChildUrls[item.id].orEmpty(),
                     clipToShape = clippingEnabled,
+                    showEpisodeSeriesBadge = showEpisodeSeriesBadge,
                 )
             }
         } else {
@@ -531,6 +533,7 @@ fun HomeMediaRow(
                     sharedElementKey = "poster_${item.id}",
                     photoFolderChildImageUrls = photoFolderChildUrls[item.id].orEmpty(),
                     clipToShape = clippingEnabled,
+                    showEpisodeSeriesBadge = showEpisodeSeriesBadge,
                 )
             }
         }

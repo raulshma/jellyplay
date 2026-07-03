@@ -55,7 +55,7 @@ private fun streamingQualityLabel(quality: StreamingQuality): String = when (qua
     StreamingQuality.UHD_4K -> "4K (Ultra HD)"
 }
 
-@OptIn(ExperimentalMaterial3Api::class, androidx.compose.material3.ExperimentalMaterial3ExpressiveApi::class)
+@OptIn(ExperimentalMaterial3Api::class, androidx.compose.material3.ExperimentalMaterial3ExpressiveApi::class, androidx.compose.foundation.ExperimentalFoundationApi::class)
 @Composable
 fun StorageSettingsScreen(
     onBack: () -> Unit,
@@ -79,6 +79,10 @@ fun StorageSettingsScreen(
         }
     }
 
+    // Phase 1 (coarse): scroll the containing group into the LazyColumn's composition window so the
+    // target item is actually composed — items in off-screen groups (later sections) are otherwise
+    // never mounted and their bringIntoViewRequester has no target. Phase 2 (centering) is then
+    // performed by the highlighted item itself via CenterBringIntoViewSpec.
     LaunchedEffect(scrollIndex) {
         if (scrollIndex >= 0) {
             try {
@@ -105,6 +109,12 @@ fun StorageSettingsScreen(
             )
         },
     ) { innerPadding ->
+        // Center a highlighted (search-navigated) setting in the viewport instead of parking it
+        // at the bottom edge, which is the default BringIntoViewSpec behaviour.
+        androidx.compose.runtime.CompositionLocalProvider(
+            androidx.compose.foundation.gestures.LocalBringIntoViewSpec provides
+                com.raulshma.jellyplay.core.ui.tv.CenterBringIntoViewSpec
+        ) {
         LazyColumn(
             state = scrollState,
             modifier = Modifier
@@ -552,6 +562,7 @@ fun StorageSettingsScreen(
                     )
                 }
             }
+        }
         }
     }
 

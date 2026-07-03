@@ -962,6 +962,7 @@ private fun HomeContentList(
                         focusRequester = rowFocusRequesters[index],
                         onRowFocused = { homeFocusRow = index },
                         clippingEnabled = experimentalCardClippingEnabled,
+                        showEpisodeSeriesBadge = section.type == HomeSectionType.LATEST_MEDIA,
                     )
                 }
             }
