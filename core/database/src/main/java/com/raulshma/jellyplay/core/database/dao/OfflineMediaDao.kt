@@ -20,8 +20,14 @@ interface OfflineMediaDao {
     @Query("SELECT * FROM offline_media WHERE seasonId = :seasonId AND mediaType = 'EPISODE' ORDER BY episodeNumber ASC")
     fun getEpisodesForSeason(seasonId: String): Flow<List<OfflineMediaEntity>>
 
+    @Query("SELECT * FROM offline_media WHERE parentId = :parentId ORDER BY indexNumber ASC")
+    fun getChildrenByParent(parentId: String): Flow<List<OfflineMediaEntity>>
+
     @Query("SELECT * FROM offline_media WHERE id = :id")
     suspend fun getById(id: String): OfflineMediaEntity?
+
+    @Query("SELECT * FROM offline_media WHERE id = :id")
+    fun getByIdFlow(id: String): Flow<OfflineMediaEntity?>
 
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun upsert(entity: OfflineMediaEntity)
