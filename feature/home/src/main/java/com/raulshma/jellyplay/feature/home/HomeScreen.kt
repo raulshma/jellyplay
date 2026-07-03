@@ -449,11 +449,45 @@ private fun MainHomeContent(
                     .focusGroup()
             ) {
                 when {
-                    state.error != null && state.sections.isEmpty() && state.offlineMode == OfflineMode.ONLINE -> {
+                    // When an online fetch fails but we have downloads, show the offline
+                    // library instead of a hard error (issue #63-A) — downloads are the
+                    // user's primary use case. Only show ErrorScreen when there's nothing
+                    // offline to fall back on.
+                    state.error != null && state.sections.isEmpty() && state.offlineMode == OfflineMode.ONLINE &&
+                        state.offlineLibrary.isEmpty() -> {
                         ErrorScreen(
                             message = state.error!!,
                             onRetry = { viewModel.onEvent(HomeUiEvent.Refresh) },
                             modifier = Modifier.padding(horizontal = contentPad),
+                        )
+                    }
+                    // Fetch failed (online) but downloads are available → fall through to
+                    // the offline rendering below, treating it as an implicit offline state.
+                    state.error != null && state.sections.isEmpty() && state.offlineMode == OfflineMode.ONLINE &&
+                        state.offlineLibrary.isNotEmpty() -> {
+                        val filteredOfflineLibrary = remember(state.offlineLibrary, state.homeMode) {
+                            if (state.homeMode == HomeMode.MUSIC) {
+                                state.offlineLibrary.filter {
+                                    it.mediaType == MediaType.AUDIO ||
+                                    it.mediaType == MediaType.MUSIC ||
+                                    it.mediaType == MediaType.ALBUM ||
+                                    it.mediaType == MediaType.ARTIST
+                                }
+                            } else {
+                                state.offlineLibrary.filter {
+                                    it.mediaType != MediaType.AUDIO &&
+                                    it.mediaType != MediaType.MUSIC &&
+                                    it.mediaType != MediaType.ALBUM &&
+                                    it.mediaType != MediaType.ARTIST
+                                }
+                            }
+                        }
+                        OfflineHomeContent(
+                            offlineLibrary = filteredOfflineLibrary,
+                            onItemClick = callbacks.onOfflineLibraryClick,
+                            contentPadding = contentPad,
+                            backgroundColor = backgroundColor,
+                            onGoOnline = { viewModel.onEvent(HomeUiEvent.Refresh) },
                         )
                     }
                     state.offlineMode != OfflineMode.ONLINE -> {
@@ -494,6 +528,8 @@ private fun MainHomeContent(
                             experimentalCardClippingEnabled = state.experimentalCardClippingEnabled,
                             offlineLibrary = state.offlineLibrary,
                             sections = state.sections,
+                            partialLoadError = state.partialLoadError,
+                            onRetrySectionLoad = { viewModel.onEvent(HomeUiEvent.Refresh) },
                             featuredItem = featuredItem,
                             listState = listState,
                             backgroundColor = backgroundColor,
@@ -686,6 +722,8 @@ private fun HomeContentList(
     experimentalCardClippingEnabled: Boolean,
     offlineLibrary: List<com.raulshma.jellyplay.core.model.OfflineMediaItem>,
     sections: List<com.raulshma.jellyplay.core.model.HomeSection>,
+    partialLoadError: Boolean = false,
+    onRetrySectionLoad: () -> Unit = {},
     featuredItem: com.raulshma.jellyplay.core.model.MediaItem?,
     listState: LazyListState,
     backgroundColor: Color,
@@ -759,6 +797,17 @@ private fun HomeContentList(
             }
         }
 
+        // De-duplicate the downloaded row against the online sections so a title
+        // that already appears in Continue Watching / Latest / Recently Added
+        // isn't shown twice (issue #64-B).
+        val dedupedOfflineLibrary = remember(offlineLibrary, sections) {
+            if (offlineLibrary.isEmpty()) offlineLibrary
+            else {
+                val onlineIds = sections.flatMap { it.items }.mapTo(mutableSetOf()) { it.id }
+                if (onlineIds.isEmpty()) offlineLibrary else offlineLibrary.filter { it.id !in onlineIds }
+            }
+        }
+
         LazyColumn(
             state = listState,
             modifier = Modifier.fillMaxSize(),
@@ -782,6 +831,38 @@ private fun HomeContentList(
                 }
             } else {
                 item(key = "hero_spacer") { Spacer(Modifier.height(100.dp)) }
+            }
+
+            // Non-blocking notice when some home sections failed to load (issue #62-A).
+            if (partialLoadError) {
+                item(key = "partial_load_banner") {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = contentPad, vertical = 4.dp)
+                            .clip(MaterialTheme.shapes.medium)
+                            .background(MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.6f))
+                            .padding(horizontal = 12.dp, vertical = 8.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Icon(
+                            Tabler.Outline.AlertCircle,
+                            contentDescription = null,
+                            modifier = Modifier.size(16.dp),
+                            tint = MaterialTheme.colorScheme.onErrorContainer,
+                        )
+                        Spacer(Modifier.width(8.dp))
+                        Text(
+                            text = "Some sections couldn't be loaded.",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onErrorContainer,
+                            modifier = Modifier.weight(1f),
+                        )
+                        TextButton(onClick = onRetrySectionLoad) {
+                            Text("Retry")
+                        }
+                    }
+                }
             }
 
             if (newsletterBannerVisible) {
@@ -951,12 +1032,12 @@ private fun HomeContentList(
                 }
             }
 
-            if (offlineLibrary.isNotEmpty()) {
+            if (dedupedOfflineLibrary.isNotEmpty()) {
                 item(key = "downloaded_row") {
                     // DownloadedSection renders its own "Downloaded" header, so we
                     // intentionally don't emit a separate header item here.
                     DownloadedSection(
-                        offlineLibrary = offlineLibrary,
+                        offlineLibrary = dedupedOfflineLibrary,
                         onOfflineLibraryClick = onOfflineLibraryClick,
                         contentPad = contentPad,
                         backgroundColor = backgroundColor,

@@ -438,6 +438,12 @@ class HomeViewModel @Inject constructor(
                 pinnedHomeSections,
             )
                 .onSuccess { fetchedSections ->
+                    // Surface a non-blocking notice when some enabled sections didn't
+                    // load (e.g. a per-section 403/empty response) so the user knows the
+                    // home page isn't intentionally sparse (issue #62-A).
+                    val partial = fetchedSections.size < enabledSections.size &&
+                        fetchedSections.isNotEmpty()
+                    _uiState.update { it.copy(partialLoadError = partial) }
                     val finalSections = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Default) {
                         val orderIndex = homeSectionOrder.withIndex().associate { it.value to it.index }
                         val ordered = fetchedSections
@@ -516,6 +522,7 @@ class HomeViewModel @Inject constructor(
                     if (_uiState.value.sections.isEmpty()) {
                         _uiState.update { s -> s.copy(error = throwable.message ?: "${throwable::class.simpleName}") }
                     }
+                    _uiState.update { it.copy(partialLoadError = false) }
                 }
 
             if (_uiState.value.discoverEnabled) {

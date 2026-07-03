@@ -502,6 +502,18 @@ val MIGRATION_27_28 = object : Migration(27, 28) {
     }
 }
 
+// Offline playback progress: position ticks, played percentage, isPlayed, and
+// last-played date (issue #65-A/B). Lets downloads render watched state and
+// resume positions while offline, seeded from server UserData at download time.
+val MIGRATION_28_29 = object : Migration(28, 29) {
+    override fun migrate(db: SupportSQLiteDatabase) {
+        db.execSQL("ALTER TABLE offline_media ADD COLUMN playbackPositionTicks INTEGER")
+        db.execSQL("ALTER TABLE offline_media ADD COLUMN playedPercentage REAL NOT NULL DEFAULT 0.0")
+        db.execSQL("ALTER TABLE offline_media ADD COLUMN isPlayed INTEGER NOT NULL DEFAULT 0")
+        db.execSQL("ALTER TABLE offline_media ADD COLUMN lastPlayedDate TEXT")
+    }
+}
+
 val ALL_MIGRATIONS = listOf(
     MIGRATION_1_2,
     MIGRATION_2_3,
@@ -529,4 +541,5 @@ val ALL_MIGRATIONS = listOf(
     MIGRATION_25_26,
     MIGRATION_26_27,
     MIGRATION_27_28,
+    MIGRATION_28_29,
 )

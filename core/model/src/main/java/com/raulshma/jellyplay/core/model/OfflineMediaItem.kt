@@ -30,4 +30,11 @@ data class OfflineMediaItem(
     val downloadedBytes: Long = 0L,
     val totalSizeBytes: Long = 0L,
     val childCount: Int = 0,
+    // Playback progress (issue #65-A/B). Seeded from server UserData at download
+    // time and updated locally as the user watches offline. `playedPercentage` is
+    // derived (0–100) and stored so it can be rendered without recomputing.
+    val playbackPositionTicks: Long? = null,
+    val playedPercentage: Double = 0.0,
+    val isPlayed: Boolean = false,
+    val lastPlayedDate: String? = null,
 )
