@@ -1,6 +1,5 @@
 package com.raulshma.jellyplay.feature.downloads
 
-import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -13,7 +12,9 @@ import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.requiredHeight
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
@@ -28,6 +29,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -35,16 +37,18 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import kotlinx.coroutines.flow.first
 import com.composables.icons.tabler.Tabler
 import com.composables.icons.tabler.outline.ChevronDown
 import com.composables.icons.tabler.outline.DeviceFloppy
@@ -59,18 +63,19 @@ import com.raulshma.jellyplay.core.model.formatBytes
 import com.raulshma.jellyplay.core.ui.adaptive.AdaptiveBackdropHeight
 import com.raulshma.jellyplay.core.ui.adaptive.LocalAdaptiveInfo
 import com.raulshma.jellyplay.core.ui.adaptive.WindowSizeClass
-import com.raulshma.jellyplay.core.ui.adaptive.bottomPadding
 import com.raulshma.jellyplay.core.ui.adaptive.contentPadding
 import com.raulshma.jellyplay.core.ui.components.JellyPlayScreenScaffold
 import com.raulshma.jellyplay.core.ui.components.OfflinePersonItem
 import com.raulshma.jellyplay.core.ui.components.ScreenEmptyState
 import com.raulshma.jellyplay.core.ui.components.ScreenLoadingState
-import com.raulshma.jellyplay.core.ui.components.focusIndicator
+import com.raulshma.jellyplay.core.ui.components.StaggeredSection
+import com.raulshma.jellyplay.core.ui.components.TransparentTopBar
 import com.raulshma.jellyplay.core.ui.image.MediaImage
 import com.raulshma.jellyplay.core.ui.tv.LocalTvMode
 import com.raulshma.jellyplay.core.ui.tv.TvFocusableItemRow
 import com.raulshma.jellyplay.core.ui.tv.rememberTvFocusState
 import com.raulshma.jellyplay.core.ui.tv.tvFocusIndicator
+import kotlinx.coroutines.flow.first
 import java.text.DateFormat
 import java.util.Date
 
@@ -90,9 +95,8 @@ fun OfflineDetailScreen(
     // Track whether the first load has resolved so we can tell "loading" apart
     // from "the item was deleted / doesn't exist".
     var loaded by remember { mutableStateOf(false) }
-    androidx.compose.runtime.LaunchedEffect(itemId) {
+    LaunchedEffect(itemId) {
         viewModel.load(itemId)
-        // Flip the flag as soon as the flow emits its first value (even null).
         viewModel.item.first()
         loaded = true
     }
@@ -131,6 +135,7 @@ private fun OfflineDetailContent(
     var showDeleteDialog by remember { mutableStateOf(false) }
     var overviewExpanded by remember { mutableStateOf(false) }
     val playFocusState = rememberTvFocusState()
+    val density = LocalDensity.current
 
     val backdropHeight = when {
         isTv -> AdaptiveBackdropHeight.Tv
@@ -148,206 +153,293 @@ private fun OfflineDetailContent(
     }
     val hasProgress = item.playedPercentage in 1.0..94.99
 
-    JellyPlayScreenScaffold(
-        title = item.name,
-        onBack = onBack,
-        actions = {
-            val deleteFocus = rememberTvFocusState()
-            IconButton(
-                onClick = { showDeleteDialog = true },
-                modifier = Modifier
-                    .then(deleteFocus.focusModifier)
-                    .tvFocusIndicator(deleteFocus, CircleShape),
-            ) {
-                Icon(Tabler.Outline.Trash, contentDescription = "Delete download")
-            }
-        },
-    ) { padding ->
-        Box(modifier = Modifier.fillMaxSize()) {
-            LazyColumn(
-                modifier = Modifier.fillMaxSize(),
-                contentPadding = PaddingValues(bottom = adaptiveBottom(isTv)),
-            ) {
-                // Backdrop hero with parallax + scrim.
-                item(key = "backdrop") {
-                    BackdropHero(
-                        backdropUrl = item.backdropPath,
-                        blurHash = item.blurHashBackdrop,
-                        height = baseBackdropHeight,
-                    )
-                }
-                item { Spacer(modifier = Modifier.height(baseBackdropHeight - 170.dp)) }
-
-                // Title + metadata row.
-                item(key = "title") {
-                    Column(modifier = Modifier.padding(horizontal = contentPad)) {
-                        Text(
-                            text = item.name,
-                            style = MaterialTheme.typography.headlineLarge.copy(fontWeight = FontWeight.Bold),
-                            color = MaterialTheme.colorScheme.onSurface,
-                            maxLines = 3,
-                            overflow = TextOverflow.Ellipsis,
-                        )
-                        item.originalTitle?.takeIf { it.isNotBlank() && !it.equals(item.name, true) }?.let { ot ->
-                            Spacer(Modifier.height(4.dp))
-                            Text(
-                                text = ot,
-                                style = MaterialTheme.typography.titleMedium,
-                                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f),
-                                maxLines = 2,
-                                overflow = TextOverflow.Ellipsis,
-                            )
-                        }
-                        item.tagline?.takeIf { it.isNotBlank() }?.let { tagline ->
-                            Spacer(Modifier.height(6.dp))
-                            Text(
-                                text = tagline,
-                                style = MaterialTheme.typography.titleSmall.copy(fontStyle = androidx.compose.ui.text.font.FontStyle.Italic),
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            )
-                        }
-                        Spacer(Modifier.height(12.dp))
-                        InfoRow(item = item)
-                        if (item.genres.isNotEmpty()) {
-                            Spacer(Modifier.height(14.dp))
-                            ChipRow(values = item.genres)
-                        }
-                        if (item.studios.isNotEmpty()) {
-                            Spacer(Modifier.height(10.dp))
-                            ChipRow(values = item.studios, container = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.5f))
-                        }
-                    }
-                }
-
-                // Action row: Play + Delete.
-                item(key = "actions") {
-                    Spacer(Modifier.height(20.dp))
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(horizontal = contentPad),
-                        horizontalArrangement = Arrangement.spacedBy(12.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                    ) {
-                        Box(
-                            modifier = Modifier
-                                .weight(1f)
-                                .height(56.dp)
-                                .clip(ShapeCache.smooth16)
-                                .background(MaterialTheme.colorScheme.primary)
-                                .then(playFocusState.focusModifier)
-                                .tvFocusIndicator(playFocusState, ShapeCache.smooth16)
-                                .clickable { onPlayOffline(item.id, item.mediaType) },
-                            contentAlignment = Alignment.Center,
-                        ) {
-                            // Progress fill behind the label when partially watched.
-                            if (hasProgress) {
-                                Box(
-                                    modifier = Modifier
-                                        .matchParentSize()
-                                        .background(MaterialTheme.colorScheme.onSurface.copy(alpha = 0.15f))
-                                        .fillMaxWidth((item.playedPercentage / 100f).toFloat()),
-                                )
-                            }
-                            Row(verticalAlignment = Alignment.CenterVertically) {
-                                Icon(
-                                    Tabler.Outline.PlayerPlay,
-                                    contentDescription = null,
-                                    tint = MaterialTheme.colorScheme.onPrimary,
-                                    modifier = Modifier.size(20.dp),
-                                )
-                                Spacer(Modifier.width(8.dp))
-                                Text(
-                                    text = playLabel,
-                                    style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.SemiBold),
-                                    color = MaterialTheme.colorScheme.onPrimary,
-                                )
-                            }
-                        }
-                    }
-                }
-
-                // Overview.
-                item.overview?.takeIf { it.isNotBlank() }?.let { overview ->
-                    item(key = "overview") {
-                        Spacer(Modifier.height(20.dp))
-                        Column(modifier = Modifier.padding(horizontal = contentPad)) {
-                            Text(
-                                text = overview,
-                                style = MaterialTheme.typography.bodyLarge,
-                                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.85f),
-                                maxLines = if (overviewExpanded) Int.MAX_VALUE else 4,
-                                overflow = TextOverflow.Ellipsis,
-                            )
-                            TextButton(onClick = { overviewExpanded = !overviewExpanded }) {
-                                Text(if (overviewExpanded) "Show less" else "Show more")
-                                Icon(
-                                    Tabler.Outline.ChevronDown,
-                                    contentDescription = null,
-                                    modifier = Modifier.size(16.dp),
-                                )
-                            }
-                        }
-                    }
-                }
-
-                // Album tracks.
-                if (isAudio && children.isNotEmpty()) {
-                    item(key = "tracks") {
-                        Spacer(Modifier.height(20.dp))
-                        Text(
-                            text = "Tracks",
-                            style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.SemiBold),
-                            color = MaterialTheme.colorScheme.onSurface,
-                            modifier = Modifier.padding(horizontal = contentPad),
-                        )
-                        Spacer(Modifier.height(12.dp))
-                        Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                            children.forEachIndexed { index, track ->
-                                OfflineTrackRow(
-                                    track = track,
-                                    index = index + 1,
-                                    onClick = { onPlayOffline(track.id, track.mediaType) },
-                                )
-                            }
-                        }
-                    }
-                }
-
-                // Download info card.
-                item(key = "downloadInfo") {
-                    Spacer(Modifier.height(20.dp))
-                    DownloadInfoCard(item = item, modifier = Modifier.padding(horizontal = contentPad))
-                }
-
-                // Cast & crew.
-                if (item.cast.isNotEmpty()) {
-                    item(key = "cast") {
-                        Spacer(Modifier.height(20.dp))
-                        Text(
-                            text = "Cast & Crew",
-                            style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.SemiBold),
-                            color = MaterialTheme.colorScheme.onSurface,
-                            modifier = Modifier.padding(horizontal = contentPad),
-                        )
-                        Spacer(Modifier.height(16.dp))
-                        TvFocusableItemRow(
-                            items = item.cast,
-                            key = { "offline_person_${it.id}" },
-                            contentPadding = PaddingValues(horizontal = contentPad),
-                            horizontalArrangement = Arrangement.spacedBy(16.dp),
-                        ) { _, person, focusModifier ->
-                            OfflinePersonItem(
-                                person = person,
-                                imageUrl = personImageUrl(person.id),
-                                modifier = focusModifier,
-                            )
-                        }
-                    }
-                }
-            }
+    // Parallax: track the scroll of the LazyColumn and translate/fade the
+    // backdrop layer with it, mirroring the online detail screen. The first
+    // item is the backdrop spacer (height baseBackdropHeight - 150dp), so the
+    // raw scroll offset maps directly to how far the backdrop has scrolled.
+    val listState = androidx.compose.foundation.lazy.rememberLazyListState()
+    val spacerHeightPx = with(density) { (baseBackdropHeight - 150.dp).toPx() }
+    val collapsedHeightPx = with(density) { backdropHeight.toPx() }
+    val scrollOffset by remember {
+        androidx.compose.runtime.derivedStateOf {
+            (if (listState.firstVisibleItemIndex > 0) spacerHeightPx else 0f) +
+                listState.firstVisibleItemScrollOffset.toFloat()
         }
     }
+    val scrollFraction by remember {
+        androidx.compose.runtime.derivedStateOf {
+            (scrollOffset / collapsedHeightPx).coerceIn(0f, 1f)
+        }
+    }
+
+    // Collapse the top bar once the user has scrolled past ~70% of the
+    // backdrop, mirroring the online detail screen. The bar's container and
+    // title fade in as it collapses; over the backdrop both are transparent so
+    // the image shows through (and the back button keeps its translucent circle).
+    val scrollCollapsed by androidx.compose.animation.core.animateFloatAsState(
+        targetValue = if (scrollFraction > 0.7f) 1f else 0f,
+        animationSpec = MaterialTheme.motionScheme.defaultEffectsSpec(),
+        label = "scrollCollapsed",
+    )
+    val animatedContainerColor = androidx.compose.ui.graphics.lerp(
+        Color.Transparent,
+        MaterialTheme.colorScheme.background.copy(alpha = 0.95f),
+        scrollCollapsed,
+    )
+    val animatedTitleAlpha = scrollCollapsed
+
+    Box(modifier = Modifier.fillMaxSize()) {
+        // ── Backdrop layer (parallax: translates up at half scroll speed
+        // and fades, exactly like the online detail screen) ──
+        BackdropLayer(
+            backdropUrl = item.backdropPath,
+            blurHash = item.blurHashBackdrop,
+            height = backdropHeight,
+            scrollTranslationY = -scrollOffset * 0.5f,
+            scrollAlpha = 1f - (scrollFraction * 0.8f),
+        )
+
+        LazyColumn(
+            state = listState,
+            modifier = Modifier.fillMaxSize(),
+        ) {
+            // Spacer so content starts over the backdrop, matching the
+            // online detail screen's overlap.
+            item { Spacer(modifier = Modifier.height(baseBackdropHeight - 150.dp)) }
+
+            // Poster overlapping the backdrop (phone layout, matching online).
+            item(key = "poster") {
+                val posterWidth = when {
+                    isTv -> 160.dp
+                    windowSizeClass == WindowSizeClass.Expanded -> 140.dp
+                    else -> 120.dp
+                }
+                val posterHeight = posterWidth * 1.2f
+                val overlap = 40.dp
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(posterHeight - overlap),
+                ) {
+                    Row(
+                        modifier = Modifier
+                            .padding(horizontal = contentPad)
+                            .offset(y = -overlap),
+                        verticalAlignment = Alignment.Bottom,
+                    ) {
+                        if (!item.posterPath.isNullOrBlank()) {
+                            MediaImage(
+                                url = item.posterPath!!,
+                                contentDescription = item.name,
+                                blurHash = item.blurHashPrimary,
+                                modifier = Modifier
+                                    .width(posterWidth)
+                                    .requiredHeight(posterHeight)
+                                    .clip(ShapeCache.smooth8),
+                                contentScale = ContentScale.Crop,
+                            )
+                        }
+                    }
+                }
+            }
+
+                // ── Title + metadata block (mirrors online DetailContentBody) ──
+                item(key = "title") {
+                    StaggeredSection(delayIndex = 0) {
+                        Column(modifier = Modifier.padding(horizontal = contentPad)) {
+                            Text(
+                                text = item.name,
+                                style = MaterialTheme.typography.headlineLarge.copy(fontWeight = FontWeight.Bold),
+                                color = MaterialTheme.colorScheme.onSurface,
+                                maxLines = 3,
+                                overflow = TextOverflow.Ellipsis,
+                            )
+                            item.originalTitle
+                                ?.takeIf { it.isNotBlank() && !it.equals(item.name, ignoreCase = true) }
+                                ?.let { originalTitle ->
+                                    Spacer(Modifier.height(6.dp))
+                                    Text(
+                                        text = originalTitle,
+                                        style = MaterialTheme.typography.titleMedium,
+                                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.75f),
+                                        maxLines = 2,
+                                        overflow = TextOverflow.Ellipsis,
+                                    )
+                                }
+                            Spacer(Modifier.height(12.dp))
+                            InfoRow(item = item)
+                            if (item.genres.isNotEmpty()) {
+                                Spacer(Modifier.height(14.dp))
+                                ChipRow(values = item.genres)
+                            }
+                            if (item.studios.isNotEmpty()) {
+                                Spacer(Modifier.height(10.dp))
+                                ChipRow(
+                                    values = item.studios,
+                                    container = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.5f),
+                                )
+                            }
+                            item.tagline?.takeIf { it.isNotBlank() }?.let { tagline ->
+                                Spacer(Modifier.height(10.dp))
+                                Text(
+                                    text = tagline,
+                                    style = MaterialTheme.typography.titleSmall.copy(fontStyle = FontStyle.Italic),
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                )
+                            }
+                        }
+                    }
+                }
+
+                // ── Action row (Play + progress fill) ──
+                item(key = "actions") {
+                    StaggeredSection(delayIndex = 1) {
+                        Column(modifier = Modifier.padding(horizontal = contentPad)) {
+                            Spacer(Modifier.height(24.dp))
+                            PlayButton(
+                                label = playLabel,
+                                hasProgress = hasProgress,
+                                progressFraction = (item.playedPercentage / 100f).toFloat(),
+                                focusState = playFocusState,
+                                onClick = { onPlayOffline(item.id, item.mediaType) },
+                            )
+                        }
+                    }
+                }
+
+                // ── Overview ──
+                item.overview?.takeIf { it.isNotBlank() }?.let { overview ->
+                    item(key = "overview") {
+                        StaggeredSection(delayIndex = 2) {
+                            Column(modifier = Modifier.padding(horizontal = contentPad)) {
+                                Spacer(Modifier.height(24.dp))
+                                Text(
+                                    text = overview,
+                                    style = MaterialTheme.typography.bodyLarge,
+                                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.85f),
+                                    lineHeight = androidx.compose.ui.unit.TextUnit(24f, androidx.compose.ui.unit.TextUnitType.Sp),
+                                    maxLines = if (overviewExpanded) Int.MAX_VALUE else 4,
+                                    overflow = TextOverflow.Ellipsis,
+                                )
+                                if (overview.length > 200) {
+                                    TextButton(onClick = { overviewExpanded = !overviewExpanded }) {
+                                        Text(if (overviewExpanded) "Show less" else "Show more")
+                                        Icon(
+                                            Tabler.Outline.ChevronDown,
+                                            contentDescription = null,
+                                            modifier = Modifier.size(16.dp),
+                                        )
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+
+                // ── Album tracks ──
+                if (isAudio && children.isNotEmpty()) {
+                    item(key = "tracks") {
+                        StaggeredSection(delayIndex = 3) {
+                            Column(modifier = Modifier.padding(horizontal = contentPad)) {
+                                Spacer(Modifier.height(24.dp))
+                                Text(
+                                    text = "Tracks",
+                                    style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.SemiBold),
+                                    color = MaterialTheme.colorScheme.onSurface,
+                                )
+                                Spacer(Modifier.height(12.dp))
+                                Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                                    children.forEachIndexed { index, track ->
+                                        OfflineTrackRow(
+                                            track = track,
+                                            index = index + 1,
+                                            onClick = { onPlayOffline(track.id, track.mediaType) },
+                                        )
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+
+                // ── Download info card ──
+                item(key = "downloadInfo") {
+                    StaggeredSection(delayIndex = 4) {
+                        Column(modifier = Modifier.padding(horizontal = contentPad)) {
+                            Spacer(Modifier.height(24.dp))
+                            DownloadInfoCard(item = item)
+                        }
+                    }
+                }
+
+                // ── Cast & crew ──
+                if (item.cast.isNotEmpty()) {
+                    item(key = "cast") {
+                        StaggeredSection(delayIndex = 5) {
+                            Column {
+                                Text(
+                                    text = "Cast & Crew",
+                                    style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.SemiBold),
+                                    color = MaterialTheme.colorScheme.onSurface,
+                                    modifier = Modifier.padding(horizontal = contentPad),
+                                )
+                                Spacer(Modifier.height(16.dp))
+                                TvFocusableItemRow(
+                                    items = item.cast,
+                                    key = { "offline_person_${it.id}" },
+                                    contentPadding = PaddingValues(horizontal = contentPad),
+                                    horizontalArrangement = Arrangement.spacedBy(16.dp),
+                                ) { _, person, focusModifier ->
+                                    OfflinePersonItem(
+                                        person = person,
+                                        imageUrl = personImageUrl(person.id),
+                                        modifier = focusModifier,
+                                    )
+                                }
+                            }
+                        }
+                    }
+                }
+
+                // Bottom clearance.
+                item { Spacer(Modifier.height(if (isTv) 80.dp else 100.dp)) }
+            }
+
+            // ── Transparent overlay top bar (matches the online detail screen):
+            // sits on top of the backdrop, container + title fade in only once
+            // the backdrop has scrolled away. The back button always shows with
+            // its translucent circle so it stays legible over the image. ──
+            TransparentTopBar(
+                title = item.name,
+                onBack = onBack,
+                containerColor = animatedContainerColor,
+                titleAlpha = animatedTitleAlpha,
+                scrollCollapsed = scrollCollapsed,
+                actions = {
+                    val deleteFocus = rememberTvFocusState()
+                    IconButton(
+                        onClick = { showDeleteDialog = true },
+                        modifier = Modifier
+                            .then(deleteFocus.focusModifier)
+                            .tvFocusIndicator(deleteFocus, CircleShape)
+                            .padding(8.dp)
+                            .clip(CircleShape)
+                            .background(
+                                color = if (scrollCollapsed < 0.5f)
+                                    MaterialTheme.colorScheme.surface.copy(alpha = 0.3f)
+                                else Color.Transparent,
+                            ),
+                    ) {
+                        Icon(
+                            Tabler.Outline.Trash,
+                            contentDescription = "Delete download",
+                            tint = if (scrollCollapsed < 0.5f) Color.White
+                            else MaterialTheme.colorScheme.onSurface,
+                        )
+                    }
+                },
+            )
+        }
 
     if (showDeleteDialog) {
         AlertDialog(
@@ -368,45 +460,71 @@ private fun OfflineDetailContent(
     }
 }
 
+/**
+ * The fixed backdrop layer behind the scrolling content. Matches the online
+ * detail screen: image with parallax-ready scale + a 4-stop vertical gradient
+ * scrim that fades to the surface color where content begins.
+ */
 @Composable
-private fun BackdropHero(
+private fun BackdropLayer(
     backdropUrl: String?,
     blurHash: String?,
     height: androidx.compose.ui.unit.Dp,
+    scrollTranslationY: Float = 0f,
+    scrollAlpha: Float = 1f,
+    modifier: Modifier = Modifier,
 ) {
-    Box(
-        modifier = Modifier
-            .fillMaxWidth()
-            .height(height),
-    ) {
-        if (!backdropUrl.isNullOrBlank()) {
-            MediaImage(
-                url = backdropUrl,
-                contentDescription = null,
-                blurHash = blurHash,
-                modifier = Modifier.fillMaxSize(),
-                contentScale = ContentScale.Crop,
-            )
-        } else {
+    val density = LocalDensity.current
+    val baseBackdropHeight = height / 1.2f
+    val surface = MaterialTheme.colorScheme.surface
+    // Build the gradient in composable scope (MaterialTheme.colorScheme is a
+    // @Composable read and can't be accessed inside drawBehind's DrawScope).
+    val startYPx = with(density) { (baseBackdropHeight - 200.dp).toPx() }
+    Box(modifier = modifier) {
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(height)
+                .graphicsLayer {
+                    translationY = scrollTranslationY
+                    alpha = scrollAlpha
+                },
+        ) {
+            if (!backdropUrl.isNullOrBlank()) {
+                MediaImage(
+                    url = backdropUrl,
+                    contentDescription = null,
+                    blurHash = blurHash,
+                    modifier = Modifier.fillMaxSize(),
+                    contentScale = ContentScale.Crop,
+                )
+            } else {
+                Box(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .background(MaterialTheme.colorScheme.surfaceVariant),
+                )
+            }
+            // 4-stop gradient scrim, identical to the online detail screen.
             Box(
                 modifier = Modifier
                     .fillMaxSize()
-                    .background(MaterialTheme.colorScheme.surfaceVariant),
+                    .drawBehind {
+                        drawRect(
+                            Brush.verticalGradient(
+                                colors = listOf(
+                                    Color.Transparent,
+                                    surface.copy(alpha = 0.4f),
+                                    surface.copy(alpha = 0.9f),
+                                    surface,
+                                ),
+                                startY = startYPx,
+                                endY = size.height,
+                            ),
+                        )
+                    },
             )
         }
-        Box(
-            modifier = Modifier
-                .fillMaxSize()
-                .background(
-                    Brush.verticalGradient(
-                        colors = listOf(
-                            Color.Transparent,
-                            MaterialTheme.colorScheme.surface.copy(alpha = 0.4f),
-                            MaterialTheme.colorScheme.surface,
-                        ),
-                    ),
-                ),
-        )
     }
 }
 
@@ -472,9 +590,54 @@ private fun ChipRow(
 }
 
 @Composable
-private fun DownloadInfoCard(item: OfflineMediaItem, modifier: Modifier = Modifier) {
+private fun PlayButton(
+    label: String,
+    hasProgress: Boolean,
+    progressFraction: Float,
+    focusState: com.raulshma.jellyplay.core.ui.tv.TvFocusState,
+    onClick: () -> Unit,
+) {
+    Box(
+        modifier = Modifier
+            .fillMaxWidth()
+            .height(56.dp)
+            .clip(ShapeCache.smooth16)
+            .background(MaterialTheme.colorScheme.primary)
+            .then(focusState.focusModifier)
+            .tvFocusIndicator(focusState, ShapeCache.smooth16)
+            .clickable(onClick = onClick),
+        contentAlignment = Alignment.Center,
+    ) {
+        // Progress fill behind the label when partially watched.
+        if (hasProgress) {
+            Box(
+                modifier = Modifier
+                    .matchParentSize()
+                    .background(MaterialTheme.colorScheme.onSurface.copy(alpha = 0.15f))
+                    .fillMaxWidth(progressFraction.coerceIn(0f, 1f)),
+            )
+        }
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Icon(
+                Tabler.Outline.PlayerPlay,
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.onPrimary,
+                modifier = Modifier.size(20.dp),
+            )
+            Spacer(Modifier.width(8.dp))
+            Text(
+                text = label,
+                style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.SemiBold),
+                color = MaterialTheme.colorScheme.onPrimary,
+            )
+        }
+    }
+}
+
+@Composable
+private fun DownloadInfoCard(item: OfflineMediaItem) {
     Column(
-        modifier = modifier
+        modifier = Modifier
             .fillMaxWidth()
             .clip(ShapeCache.smooth16)
             .background(MaterialTheme.colorScheme.surfaceContainer)
@@ -545,6 +708,3 @@ private fun OfflineTrackRow(
 
 private fun formatDate(epochMillis: Long): String =
     DateFormat.getDateInstance(DateFormat.MEDIUM).format(Date(epochMillis))
-
-private fun adaptiveBottom(isTv: Boolean): androidx.compose.ui.unit.Dp =
-    if (isTv) 80.dp else 100.dp

@@ -139,7 +139,7 @@ fun OfflineHomeContent(
                 OfflineSection(
                     title = "Continue Watching",
                     items = continueWatching,
-                    cardWidth = rowCardWidth * 2, // landscape cards are wider
+                    cardWidth = rowCardWidth,
                     contentPad = contentPadding,
                     onItemClick = onOfflineItemClick,
                 )
@@ -198,6 +198,9 @@ private fun OfflineSection(
                     item = item,
                     onClick = { onItemClick(item.id, item.mediaType) },
                     modifier = Modifier.width(cardWidth),
+                    // On the offline home every card is downloaded by definition,
+                    // so the "Downloaded" status badge would be redundant.
+                    showStatusBadge = false,
                 )
             }
         }
