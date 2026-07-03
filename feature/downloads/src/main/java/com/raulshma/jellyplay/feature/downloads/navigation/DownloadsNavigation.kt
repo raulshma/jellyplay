@@ -44,6 +44,9 @@ fun EntryProviderScope<NavKey>.downloadsSection(
             onPlayOffline = { itemId ->
                 navigator.navigate(Route.VideoPlayer(itemId))
             },
+            onEpisodeDetail = { itemId ->
+                navigator.navigate(Route.OfflineDetail(itemId))
+            },
             onBack = { navigator.goBack() },
         )
     }
@@ -57,6 +60,12 @@ fun EntryProviderScope<NavKey>.downloadsSection(
                 } else {
                     navigator.navigate(Route.VideoPlayer(itemId))
                 }
+            },
+            onNavigateToSeries = { seriesId ->
+                navigator.navigate(Route.OfflineSeries(seriesId))
+            },
+            onNavigateToDetail = { itemId ->
+                navigator.navigate(Route.OfflineDetail(itemId))
             },
             onBack = { navigator.goBack() },
         )
