@@ -159,6 +159,7 @@ fun AudioSettingsScreen(
                         title = "Auto-play Next",
                         subtitle = if (preferences.audioAutoplayNext) "Automatically plays next track" else "Manual track selection",
                         checked = preferences.audioAutoplayNext,
+                        highlighted = highlightSettingId == "audio_autoplay_next",
                         index = idx++, count = total,
                         onCheckedChange = { viewModel.setAudioAutoplayNext(it) },
                     )
@@ -195,6 +196,7 @@ fun AudioSettingsScreen(
                             title = "Night Mode Volume",
                             subtitle = "Maximum volume level at night",
                             trailingText = "${(preferences.audioNightModeVolume * 100).toInt()}%",
+                            highlighted = highlightSettingId == "night_mode_volume",
                             index = idx++, count = total,
                             onClick = { activeDialog = AudioSettingsDialog.NightModeVolumePicker },
                         )
@@ -203,6 +205,7 @@ fun AudioSettingsScreen(
                             title = "Night Mode Gain",
                             subtitle = "Loudness compensation",
                             trailingText = "${preferences.audioNightModeGain}",
+                            highlighted = highlightSettingId == "night_mode_gain",
                             index = idx++, count = total,
                             onClick = { activeDialog = AudioSettingsDialog.NightModeGainPicker },
                         )
@@ -211,6 +214,7 @@ fun AudioSettingsScreen(
                             title = "Skip Prev Threshold",
                             subtitle = "Restart song if past this point",
                             trailingText = "${preferences.audioSkipPreviousThresholdMs / 1000}s",
+                            highlighted = highlightSettingId == "audio_skip_prev_threshold",
                             index = idx++, count = total,
                             onClick = { activeDialog = AudioSettingsDialog.SkipPrevThresholdPicker },
                         )
@@ -237,6 +241,7 @@ fun AudioSettingsScreen(
                             title = "Preload Buffer",
                             subtitle = "Amount to buffer ahead during audio playback",
                             trailingText = preferences.audioPreloadBufferSize.displayName,
+                            highlighted = highlightSettingId == "audio_preload_buffer",
                             index = idx++, count = total,
                             onClick = { activeDialog = AudioSettingsDialog.AudioPreloadBufferPicker },
                         )
@@ -267,6 +272,7 @@ fun AudioSettingsScreen(
                                 title = "ReplayGain Pre-Amp",
                                 subtitle = "Fine-tune target loudness",
                                 trailingText = "${if (preferences.replayGainPreAmpDb >= 0) "+" else ""}${String.format("%.1f", preferences.replayGainPreAmpDb)} dB",
+                                highlighted = highlightSettingId == "replaygain_preamp",
                                 index = idx++, count = total,
                                 onClick = { activeDialog = AudioSettingsDialog.PreAmpPicker },
                             )
@@ -287,6 +293,7 @@ fun AudioSettingsScreen(
                                 title = "Equalizer Preset",
                                 subtitle = "Quick preset: ${preferences.equalizerPreset.displayName}",
                                 trailingText = preferences.equalizerPreset.displayName,
+                                highlighted = highlightSettingId == "equalizer_preset",
                                 index = idx++, count = total,
                                 onClick = { activeDialog = AudioSettingsDialog.EqualizerPresetPicker },
                             )
@@ -319,6 +326,7 @@ fun AudioSettingsScreen(
                             title = "Night Mode",
                             subtitle = if (preferences.nightModeEnabled) preferences.nightModeStrength.displayName else "Off",
                             checked = preferences.nightModeEnabled,
+                            highlighted = highlightSettingId == "night_mode",
                             index = idx++, count = total,
                             onCheckedChange = { viewModel.setNightModeEnabled(it) },
                         )
@@ -328,6 +336,7 @@ fun AudioSettingsScreen(
                                 title = "Night Mode Strength",
                                 subtitle = preferences.nightModeStrength.displayName,
                                 trailingText = preferences.nightModeStrength.displayName,
+                                highlighted = highlightSettingId == "night_mode_strength",
                                 index = idx++, count = total,
                                 onClick = {
                                     val strengths = EffectStrength.entries
@@ -352,6 +361,7 @@ fun AudioSettingsScreen(
                                 title = "Bass Boost Strength",
                                 subtitle = preferences.bassBoostStrength.displayName,
                                 trailingText = preferences.bassBoostStrength.displayName,
+                                highlighted = highlightSettingId == "bass_boost_strength",
                                 index = idx++, count = total,
                                 onClick = {
                                     val strengths = EffectStrength.entries
@@ -376,6 +386,7 @@ fun AudioSettingsScreen(
                                 title = "Virtualizer Strength",
                                 subtitle = "${preferences.virtualizerStrength / 10}%",
                                 trailingText = "${preferences.virtualizerStrength / 10}%",
+                                highlighted = highlightSettingId == "virtualizer_strength",
                                 index = idx++, count = total,
                                 onClick = {
                                     val steps = listOf(0, 200, 400, 500, 600, 800, 1000)
@@ -400,6 +411,7 @@ fun AudioSettingsScreen(
                                 title = "Volume Boost Gain",
                                 subtitle = "Loudness boost level",
                                 trailingText = "+${"%.1f".format(preferences.volumeBoostGain / 100.0)} dB",
+                                highlighted = highlightSettingId == "volume_boost_gain",
                                 index = idx++, count = total,
                                 onClick = { activeDialog = AudioSettingsDialog.VolumeBoostGainPicker },
                             )
@@ -423,6 +435,7 @@ fun AudioSettingsScreen(
                             title = "Auto-EQ by Genre",
                             subtitle = if (preferences.autoEqByGenre) "Automatically applies EQ preset based on genre" else "Off",
                             checked = preferences.autoEqByGenre,
+                            highlighted = highlightSettingId == "auto_eq_by_genre",
                             index = idx++, count = total,
                             onCheckedChange = { viewModel.setAutoEqByGenre(it) },
                         )
@@ -441,6 +454,7 @@ fun AudioSettingsScreen(
                                 title = "Channel Mix Mode",
                                 subtitle = preferences.channelMixMode.displayName,
                                 trailingText = preferences.channelMixMode.displayName,
+                                highlighted = highlightSettingId == "channel_mix_mode",
                                 index = idx++, count = total,
                                 onClick = { activeDialog = AudioSettingsDialog.ChannelMixModePicker },
                             )
@@ -459,6 +473,7 @@ fun AudioSettingsScreen(
                             title = "Pitch Shift",
                             subtitle = if (preferences.pitchSemitones == 0f) "Normal pitch" else "${if (preferences.pitchSemitones > 0) "+" else ""}${preferences.pitchSemitones} semitones",
                             trailingText = if (preferences.pitchSemitones == 0f) "0" else "${if (preferences.pitchSemitones > 0) "+" else ""}${preferences.pitchSemitones}",
+                            highlighted = highlightSettingId == "pitch_shift",
                             index = idx, count = total,
                             onClick = { activeDialog = AudioSettingsDialog.PitchShiftPicker },
                         )

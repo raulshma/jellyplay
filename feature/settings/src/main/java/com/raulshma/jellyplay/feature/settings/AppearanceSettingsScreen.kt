@@ -77,11 +77,32 @@ fun AppearanceSettingsScreen(
     )
 
     val scrollState = rememberLazyListState()
-    val scrollIndex = remember(highlightSettingId) {
+    val scrollIndex = remember(highlightSettingId, showAdvanced) {
+        val themeGroup = listOf(
+            "theme_mode", "theme_scheduler", "synthwave_mode", "soothing_mode", "monochrome_mode",
+            "dynamic_theming", "oled_mode", "contrast", "library_view_mode", "home_mode", "hero_section",
+            "clock_home", "continue_watching_click", "unhide_cw", "merge_continue_next_up", "next_up_max_days",
+            "next_up_rewatching", "theme_music", "nav_labels", "date_format", "font_scale", "color_blind_mode",
+            "hand_mode", "scheduled_start", "scheduled_end",
+        )
+        val libraryGroup = listOf(
+            "show_unwatched_badge", "show_watched_checkmark", "hide_watched_items", "hide_episode_thumbnails",
+            "skip_specials", "haptics_enabled", "show_share_media", "hide_search_history", "show_external_ratings",
+        )
+        val performanceGroup = listOf("performance_mode", "reduce_motion")
+        val eyeCareGroup = listOf("blue_light_filter", "blue_light_strength")
+        val homeLayoutGroup = listOf("pinned_home_sections", "home_layout_presets")
+        val newsletterGroup = listOf("newsletter_enabled", "newsletter_delivery_day")
+        // Index 0 = Theme, 1 = Navigation customization, 2 = Library & Cards.
+        // Performance/Eye Care/Home Layout/Newsletter only exist when advanced is on
+        // and occupy indices 3/4/5/6 respectively.
         when (highlightSettingId) {
-            in listOf("theme_mode", "theme_scheduler", "synthwave_mode", "soothing_mode", "dynamic_theming", "oled_mode", "contrast", "library_view_mode", "home_mode", "hero_section", "clock_home", "continue_watching_click", "merge_continue_next_up", "next_up_max_days", "next_up_rewatching", "theme_music", "nav_labels", "date_format", "font_scale", "color_blind_mode", "hand_mode", "scheduled_start", "scheduled_end") -> 0
-            in listOf("show_unwatched_badge", "show_watched_checkmark", "hide_watched_items", "hide_episode_thumbnails", "skip_specials", "show_share_media", "show_external_ratings") -> 1
-            in listOf("performance_mode", "reduce_motion") -> 2
+            in themeGroup -> 0
+            in libraryGroup -> 2
+            in performanceGroup -> if (showAdvanced) 3 else -1
+            in eyeCareGroup -> if (showAdvanced) 4 else -1
+            in homeLayoutGroup -> if (showAdvanced) 5 else -1
+            in newsletterGroup -> if (showAdvanced) 6 else -1
             else -> -1
         }
     }
@@ -433,6 +454,7 @@ fun AppearanceSettingsScreen(
                                     icon = Tabler.Outline.Eye,
                                     title = "Unhide All from Continue Watching",
                                     subtitle = "${preferences.hiddenCwItemIds.size} hidden item(s)",
+                                    highlighted = highlightSettingId == "unhide_cw",
                                     index = currentIdx++, count = totalCount,
                                     onClick = { viewModel.unhideAllCwItems() },
                                 )
@@ -928,6 +950,7 @@ fun AppearanceSettingsScreen(
                         }
                     },
                     modifier = Modifier.padding(vertical = 8.dp),
+                    initiallyExpanded = highlightSettingId in listOf("newsletter_enabled", "newsletter_delivery_day"),
                 ) {
                     val newsletterSections = remember { mutableStateListOf<NewsletterSectionType>().apply { addAll(preferences.newsletterSectionOrder) } }
                     val itemHeights = remember { mutableStateMapOf<NewsletterSectionType, Int>() }
@@ -992,6 +1015,7 @@ fun AppearanceSettingsScreen(
                         title = "Enable Newsletter",
                         subtitle = "Enable periodic newsletter digest",
                         checked = preferences.newsletterEnabled,
+                        highlighted = highlightSettingId == "newsletter_enabled",
                         index = 0,
                         count = totalCount,
                         onCheckedChange = { viewModel.setNewsletterEnabled(it) }
@@ -1013,6 +1037,7 @@ fun AppearanceSettingsScreen(
                         title = "Newsletter Delivery Day",
                         subtitle = "Day of the week to receive the newsletter",
                         trailingText = dayLabel,
+                        highlighted = highlightSettingId == "newsletter_delivery_day",
                         index = 1,
                         count = totalCount,
                         onClick = {
