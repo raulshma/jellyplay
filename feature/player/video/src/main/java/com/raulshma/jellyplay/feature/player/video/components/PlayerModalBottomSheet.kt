@@ -33,7 +33,6 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalFocusManager
@@ -101,11 +100,10 @@ private fun InWindowPlayerSheet(
     content: @Composable ColumnScope.() -> Unit,
 ) {
     val density = LocalDensity.current
-    // Force a dark color scheme for the in-window sheet chrome. The player surface
-    // is always the dark video, and the ambient app theme may be light/dynamic-light,
-    // which would render sheet titles unreadable (issue #66-C). PlayerDarkTheme (applied
-    // around PlayerSheetRouter) sets both the dark scheme and LocalContentColor, so sheet
-    // titles/labels fall back to a light, high-contrast foreground.
+    // The sheet chrome follows the ambient theme: it is a full UI panel (not an overlay on the
+    // video), so light/dynamic-light sheets render with light surfaces in light mode. The
+    // container/handle colors below are read from MaterialTheme.colorScheme so they flip correctly.
+    val colorScheme = MaterialTheme.colorScheme
     val typography = MaterialTheme.typography
     val focusManager = LocalFocusManager.current
     val keyboardController = LocalSoftwareKeyboardController.current
@@ -140,7 +138,7 @@ private fun InWindowPlayerSheet(
         Box(
             Modifier
                 .fillMaxSize()
-                .background(Color.Black.copy(alpha = scrimAlpha))
+                .background(colorScheme.scrim.copy(alpha = scrimAlpha))
                 .pointerInput(Unit) { detectTapGestures(onTap = { dismiss() }) },
         )
 
@@ -152,7 +150,7 @@ private fun InWindowPlayerSheet(
                 .imePadding()
                 .offset { IntOffset(0, translationY.roundToInt()) }
                 .clip(SheetTopShape)
-                .background(MaterialTheme.colorScheme.surfaceContainer),
+                .background(colorScheme.surfaceContainer),
         ) {
             Box(
                 modifier = Modifier
@@ -187,16 +185,23 @@ private fun InWindowPlayerSheet(
                     Modifier
                         .size(width = 40.dp, height = 4.dp)
                         .clip(CircleShape)
-                        .background(MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.4f)),
+                        .background(colorScheme.onSurfaceVariant.copy(alpha = 0.4f)),
                 )
             }
 
-            // PlayerDarkTheme (around PlayerSheetRouter) already provides the dark color scheme
-            // and LocalContentColor; re-declaring MaterialTheme here with a fresh darkColorScheme()
-            // would clobber the accent and drop the LocalContentColor override. Just reuse the
-            // ambient typography so sheet text styles stay consistent.
-            MaterialTheme(typography = typography) {
-                content()
+            MaterialTheme(
+                colorScheme = colorScheme,
+                typography = typography,
+            ) {
+                // MaterialTheme overrides the color scheme but does NOT set LocalContentColor, so a
+                // Text/Icon without an explicit color would fall back to the default (black) and
+                // render dark-on-dark in dark mode. Mirror what a Surface does and pin the content
+                // color to the sheet's onSurface so uncolored titles/labels stay legible.
+                androidx.compose.runtime.CompositionLocalProvider(
+                    androidx.compose.material3.LocalContentColor provides colorScheme.onSurface,
+                ) {
+                    content()
+                }
             }
         }
     }

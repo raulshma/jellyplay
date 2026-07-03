@@ -9,6 +9,7 @@ import com.raulshma.jellyplay.core.ui.tv.tvFocusIndicator
 import androidx.compose.animation.core.tween
 import com.raulshma.jellyplay.core.designsystem.theme.AlphaEasing
 import com.raulshma.jellyplay.core.designsystem.theme.PointToPointEasing
+import com.raulshma.jellyplay.core.designsystem.theme.playerOnScrim
 import com.raulshma.jellyplay.core.designsystem.theme.ShapeCache
 import com.raulshma.jellyplay.core.ui.animation.AnimationTokens
 import com.raulshma.jellyplay.core.model.MediaSegmentType
@@ -122,7 +123,7 @@ private fun SkipButtonOverlay(
             verticalAlignment = Alignment.CenterVertically,
             modifier = Modifier
                 .clip(ShapeCache.smoothPill)
-                .background(Color.White.copy(alpha = 0.12f))
+                .background(playerOnScrim().copy(alpha = 0.12f))
                 .border(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.35f), ShapeCache.smoothPill)
                 .ifElse(isTv, Modifier.focusRequester(tvFocusRequester))
                 .then(skipFocusState.focusModifier)

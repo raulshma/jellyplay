@@ -227,7 +227,7 @@ internal fun BoxScope.PlayerOverflowMenu(
                                 )
                             },
                             // Selecting a strength (including NONE/off) routes through the
-                            // per-item strength setter, which clears the pref for NONE (issue #66-B).
+                            // per-item strength setter, which clears the pref for NONE.
                             onClick = {
                                 onDialogueBoostStrengthChange(strength)
                                 onDismiss()

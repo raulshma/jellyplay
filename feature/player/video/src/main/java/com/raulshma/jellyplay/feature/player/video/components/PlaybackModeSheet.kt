@@ -99,7 +99,7 @@ fun PlaybackModeSheet(
                                 .clip(shape)
                                 .background(
                                     if (isSelected) MaterialTheme.colorScheme.primary.copy(alpha = 0.1f)
-                                    else Color.White.copy(alpha = 0.04f)
+                                    else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.04f)
                                 )
                                 .then(modeFocusState.focusModifier)
                                 .ifElse(isFirstOrSelected, Modifier.focusRequester(focusRequester))

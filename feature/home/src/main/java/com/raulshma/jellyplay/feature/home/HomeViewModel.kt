@@ -440,7 +440,7 @@ class HomeViewModel @Inject constructor(
                 .onSuccess { fetchedSections ->
                     // Surface a non-blocking notice when some enabled sections didn't
                     // load (e.g. a per-section 403/empty response) so the user knows the
-                    // home page isn't intentionally sparse (issue #62-A).
+                    // home page isn't intentionally sparse.
                     val partial = fetchedSections.size < enabledSections.size &&
                         fetchedSections.isNotEmpty()
                     _uiState.update { it.copy(partialLoadError = partial) }

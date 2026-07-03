@@ -1,6 +1,8 @@
 package com.raulshma.jellyplay.feature.player.video.components
 
 import androidx.compose.foundation.background
+import com.raulshma.jellyplay.core.designsystem.theme.playerOnScrim
+import com.raulshma.jellyplay.core.designsystem.theme.playerScrimColor
 import com.raulshma.jellyplay.core.designsystem.theme.ShapeCache
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -289,13 +291,13 @@ private fun EpisodeRow(
                     modifier = Modifier
                         .align(Alignment.Center)
                         .size(36.dp)
-                        .background(Color.Black.copy(alpha = 0.55f), CircleShape),
+                        .background(playerScrimColor().copy(alpha = 0.55f), CircleShape),
                     contentAlignment = Alignment.Center,
                 ) {
                     Icon(
                         Tabler.Outline.PlayerPlay,
                         contentDescription = null,
-                        tint = Color.White,
+                        tint = playerOnScrim(),
                         modifier = Modifier.size(22.dp),
                     )
                 }
@@ -316,13 +318,13 @@ private fun EpisodeRow(
                         .align(Alignment.BottomEnd)
                         .padding(6.dp)
                         .clip(ShapeCache.smooth4)
-                        .background(Color.Black.copy(alpha = 0.6f))
+                        .background(playerScrimColor().copy(alpha = 0.6f))
                         .padding(horizontal = 6.dp, vertical = 2.dp),
                 ) {
                     Text(
                         text = "Watched",
                         style = MaterialTheme.typography.labelSmall,
-                        color = Color.White.copy(alpha = 0.9f),
+                        color = playerOnScrim().copy(alpha = 0.9f),
                     )
                 }
             }

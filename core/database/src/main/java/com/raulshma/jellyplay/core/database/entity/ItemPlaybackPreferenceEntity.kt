@@ -14,7 +14,7 @@ import androidx.room.PrimaryKey
  * epoch-millis conventions used elsewhere in this database.
  *
  * `dialogueBoostStrength` stores the [com.raulshma.jellyplay.core.model.EffectStrength]
- * name (or null) — added in migration 27→28 (issue #66-B).
+ * name (or null) — added in migration 27→28.
  */
 @Entity(
     tableName = "item_playback_preferences",

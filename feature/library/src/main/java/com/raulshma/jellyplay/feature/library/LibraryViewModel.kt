@@ -161,7 +161,7 @@ class LibraryViewModel @Inject constructor(
                     // as a non-blocking status (the screen shows ErrorScreen only
                     // when there are also zero items). This stops a single failed
                     // fetch — e.g. a transient 403 — from making the app unusable
-                    // (issue #62-B).
+                    
                     if (_folders.value.isNullOrEmpty()) {
                         _error.set(error.message ?: "${error::class.simpleName}")
                     }

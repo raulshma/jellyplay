@@ -628,7 +628,7 @@ fun AppearanceSettingsScreen(
             }
 
             // Floating navigation bar customization (enable/disable items, reorder,
-            // hide-on-scroll) — issues #62-D / #62-I.
+            // hide-on-scroll).
             item {
                 NavigationCustomizationGroup(
                     preferences = preferences,
@@ -636,7 +636,7 @@ fun AppearanceSettingsScreen(
                 )
             }
 
-            // Library & Cards: commonly-used display toggles, shown regardless of Advanced mode (issue #62-E).
+            // Library & Cards: commonly-used display toggles, shown regardless of Advanced mode.
             item {
                 SettingsGroup(
                     icon = Tabler.Outline.LayoutGrid,
@@ -749,7 +749,7 @@ fun AppearanceSettingsScreen(
                 }
             }
 
-            // Remaining groups are expert-level; keep them behind the Advanced gate (issue #62-E).
+            // Remaining groups are expert-level; keep them behind the Advanced gate.
             if (showAdvanced) {
             item {
                 SettingsGroup(

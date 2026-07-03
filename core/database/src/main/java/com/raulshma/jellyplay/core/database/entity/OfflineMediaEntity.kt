@@ -43,7 +43,7 @@ data class OfflineMediaEntity(
     val genres: String? = null,
     @ColumnInfo(defaultValue = "0")
     val createdAt: Long = System.currentTimeMillis(),
-    // Playback progress (issue #65-A/B). Nullable/defaulted so existing rows
+    // Playback progress. Nullable/defaulted so existing rows
     // (no recorded progress) resolve to "not started". Added in migration 28→29.
     val playbackPositionTicks: Long? = null,
     @ColumnInfo(defaultValue = "0.0")

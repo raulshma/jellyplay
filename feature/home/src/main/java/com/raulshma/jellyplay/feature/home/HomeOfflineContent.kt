@@ -157,7 +157,7 @@ fun OfflineHomeContent(
                             overflow = TextOverflow.Ellipsis,
                         )
                         // Only show a series subtitle when it's meaningful and not a
-                        // duplicate of the title (issue #64-B): for top-level series/
+                        // duplicate of the title: for top-level series/
                         // movie entities the source often copies `seriesName == name`.
                         val showSeriesSubtitle = !offlineItem.seriesName.isNullOrBlank() &&
                             offlineItem.mediaType == com.raulshma.jellyplay.core.model.MediaType.EPISODE &&

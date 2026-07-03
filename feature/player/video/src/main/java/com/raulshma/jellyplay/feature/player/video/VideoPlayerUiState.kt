@@ -77,7 +77,7 @@ data class VideoPlayerUiState(
     val hasSeriesAudioPref: Boolean = false,
     /** A per-series subtitle-language preference exists for the current series. */
     val hasSeriesSubtitlePref: Boolean = false,
-    /** A per-series dialogue-boost preference exists for the current series (issue #66-B). */
+    /** A per-series dialogue-boost preference exists for the current series. */
     val hasSeriesDialogueBoostPref: Boolean = false,
     val overview: String = "",
     val people: List<PersonInfo> = emptyList(),

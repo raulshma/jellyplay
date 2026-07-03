@@ -224,7 +224,7 @@ class MpvPlayerEngine(
             // letterboxed; "no" keeps captions proportional to the video, so
             // they stay correct and consistent across rotation — matching how
             // ExoPlayer (fixed SP) and VLC (video-relative freetype) behave.
-            // See issue #66-A.
+            //
             mpv.setOptionString("sub-scale-with-window", "no")
             mpv.setOptionString("sub-auto", "fuzzy")
             mpv.setOptionString("sub-visibility", "yes")

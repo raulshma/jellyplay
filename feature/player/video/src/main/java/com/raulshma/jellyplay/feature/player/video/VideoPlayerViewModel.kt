@@ -402,7 +402,7 @@ class VideoPlayerViewModel @Inject constructor(
         onWatchedThresholdReached = { itemId ->
             handleSmartDownloadCleanup(itemId)
             // Mark the offline copy as fully watched so its row shows the
-            // watched state (issue #65-A/B). No-op for non-downloaded items.
+            // watched state. No-op for non-downloaded items.
             launch {
                 offlineRepository.updatePlaybackProgress(itemId, positionTicks = null, percentage = 100.0, isPlayed = true)
             }
@@ -494,7 +494,7 @@ class VideoPlayerViewModel @Inject constructor(
         castManager.acquireConsumer()
         // Register the PiP transport bridge so the Activity can dispatch PiP
         // remote-action intents (play/pause/skip/next) to the active engine
-        // (issue #66-E). Cleared on reset() when playback ends.
+        //. Cleared on reset() when playback ends.
         playerLifecycleManager.pipTransport = PipTransport { action ->
             val engine = playerSessionManager.engine ?: return@PipTransport
             when (action) {
@@ -698,7 +698,7 @@ class VideoPlayerViewModel @Inject constructor(
         // state so the track sheets can show the series-pref toggle state.
         launch {
             playbackPreferenceResolver.resolved.collect { pref ->
-                // Dialogue Boost is resolved per-item (issue #66-B): a stored rule
+                // Dialogue Boost is resolved per-item: a stored rule
                 // pins the strength; otherwise the effective default is OFF (NONE),
                 // so the effect never silently carries across items. The global
                 // setting is intentionally NOT used as the auto fallback here.
@@ -732,7 +732,7 @@ class VideoPlayerViewModel @Inject constructor(
                             isHdr = prefs.isHdrFromStreams(playerSessionManager.sessionState.value.mediaStreams),
                         ),
                         // Dialogue Boost defaults to OFF until the per-item resolver
-                        // applies a stored rule (issue #66-B). It does not inherit the
+                        // applies a stored rule. It does not inherit the
                         // global default, preventing cross-item bleed.
                         dialogueBoostEnabled = false,
                         dialogueBoostStrength = com.raulshma.jellyplay.core.model.EffectStrength.NONE,
@@ -752,7 +752,7 @@ class VideoPlayerViewModel @Inject constructor(
                                 _uiState.update { s -> s.copy(isPlaying = isPlaying) }
                                 syncPlayBridge.onIsPlayingChanged(isPlaying)
                                 // Mirror play state so the Activity can render the correct
-                                // play/pause icon on the PiP window (issue #66-E).
+                                // play/pause icon on the PiP window.
                                 playerLifecycleManager.setPlaying(isPlaying)
                             } }
                             launch { engine.playbackState.collect { state ->
@@ -842,6 +842,25 @@ class VideoPlayerViewModel @Inject constructor(
     }
 
     /**
+     * Offline resume: the offline entry points (Downloads, OfflineLibrary,
+     * OfflineSeries, deep links, remote control, mini-player) all navigate with
+     * `startPositionTicks = 0`. When no explicit position was requested and the
+     * item is a completed download, fall back to the last-known position stored
+     * on the downloaded item (seeded from server UserData and updated while
+     * watching offline). Streaming keeps the caller-provided value.
+     *
+     * Extracted and `suspend` so it is unit-testable in isolation; in
+     * [initializeInternal] it runs inside the load coroutine.
+     */
+    internal suspend fun resolveOfflineResumeTicks(itemId: String, startPositionTicks: Long): Long {
+        if (startPositionTicks != 0L) return startPositionTicks
+        val download = downloadRepository.getDownloadByMediaItemId(itemId)
+        if (download?.status != com.raulshma.jellyplay.core.model.DownloadStatus.COMPLETED) return 0L
+        return offlineRepository.getOfflineItem(itemId)?.playbackPositionTicks
+            ?.takeIf { it > 0L } ?: 0L
+    }
+
+    /**
      * Persists the current playback position so it survives process death.
      * Throttled to at most one write per [POSITION_PERSIST_MIN_INTERVAL_MS]
      * unless [force] (e.g. an explicit seek). Also stashes the server session
@@ -855,7 +874,7 @@ class VideoPlayerViewModel @Inject constructor(
         savedStateHandle[SAVED_KEY_POSITION_MS] = positionMs
         savedStateHandle[SAVED_KEY_PLAY_SESSION_ID] = currentPlaySessionId
         // Mirror progress into the offline store so downloads render watched /
-        // resume state while offline (issue #65-A). No-op for non-downloaded items.
+        // resume state while offline. No-op for non-downloaded items.
         val durationMs = playerSessionManager.engine?.durationMs ?: 0L
         val positionTicks = positionMs * 10_000L // ms → ticks
         val percentage = if (durationMs > 0L) {
@@ -1031,7 +1050,16 @@ class VideoPlayerViewModel @Inject constructor(
                 }
             }
 
-            playerSessionManager.loadMedia(itemId, mediaSourceId, startPositionTicks)
+            // Offline resume: the offline entry points (Downloads, OfflineLibrary,
+            // OfflineSeries, deep links, remote control, mini-player) all navigate with
+            // startPositionTicks = 0. When no explicit position was requested and the item
+            // is a completed download, fall back to the last-known position stored on the
+            // downloaded item (seeded from server UserData and updated while watching
+            // offline). Streaming keeps the caller-provided value. Composes with
+            // resolveStartTicksAfterProcessDeath, which only ever advances the position.
+            val resolvedStartTicks = resolveOfflineResumeTicks(itemId, startPositionTicks)
+
+            playerSessionManager.loadMedia(itemId, mediaSourceId, resolvedStartTicks)
 
             val sessionState = playerSessionManager.sessionState.value
             val source = sessionState.currentMediaSource
@@ -1078,6 +1106,24 @@ class VideoPlayerViewModel @Inject constructor(
                         if (cacheDir != null) {
                             trickplayManager.initializeLocal(itemId, localInfo, cacheDir)
                             _uiState.update { it.copy(trickplayInfo = localInfo) }
+                        }
+                    } else {
+                        // No local trickplay bundled with the download (the
+                        // detached trickplay fetch failed or the server didn't
+                        // have it at download time). Fall back to the server's
+                        // trickplay manifest and cache fetched tiles into the
+                        // download's trickplay dir, so the next offline session
+                        // reads them locally via [initializeLocal] above.
+                        val cacheDir = java.io.File(java.io.File(downloadPath).parentFile, "trickplay")
+                        val serverInfo = mediaRepository.getMediaDetail(itemId)
+                            .getOrNull()
+                            ?.mediaSources
+                            ?.firstOrNull()
+                            ?.trickplayInfo
+                        if (serverInfo != null) {
+                            cacheDir.mkdirs()
+                            trickplayManager.initializeWithCache(itemId, serverInfo, cacheDir)
+                            _uiState.update { it.copy(trickplayInfo = serverInfo) }
                         }
                     }
                 }
@@ -1272,7 +1318,7 @@ class VideoPlayerViewModel @Inject constructor(
     }
 
     fun toggleDialogueBoost() {
-        // Dialogue Boost is persisted per-item/series (issue #66-B): toggling on
+        // Dialogue Boost is persisted per-item/series: toggling on
         // pins MODERATE for this item/series, toggling off clears it (resolves to
         // NONE). It does not touch the global setting, so it never bleeds across
         // unrelated items.
@@ -2290,7 +2336,7 @@ class VideoPlayerViewModel @Inject constructor(
                 keepScreenOnDuringVideo = currentState.keepScreenOnDuringVideo,
                 subtitleStyle = currentState.subtitleStyle,
                 // Reset per-item dialogue boost so it doesn't bleed into the next
-                // item before the resolver re-applies the per-item rule (issue #66-B).
+                // item before the resolver re-applies the per-item rule.
                 dialogueBoostEnabled = false,
                 dialogueBoostStrength = com.raulshma.jellyplay.core.model.EffectStrength.NONE,
                 nightModeEnabled = currentState.nightModeEnabled,

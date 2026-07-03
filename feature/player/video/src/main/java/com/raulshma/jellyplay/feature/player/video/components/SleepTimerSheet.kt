@@ -143,7 +143,7 @@ internal fun SleepTimerSheet(
                                 .clip(shape)
                                 .background(
                                     if (isEndSelected) MaterialTheme.colorScheme.primary.copy(alpha = 0.1f)
-                                    else Color.White.copy(alpha = 0.04f)
+                                    else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.04f)
                                 )
                                 .then(endFocusState.focusModifier)
                                 .then(requesterModifier)
@@ -184,7 +184,7 @@ internal fun SleepTimerSheet(
                                 .clip(shape)
                                 .background(
                                     if (isTarget) MaterialTheme.colorScheme.primary.copy(alpha = 0.1f)
-                                    else Color.White.copy(alpha = 0.04f)
+                                    else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.04f)
                                 )
                                 .then(presetFocusState.focusModifier)
                                 .tvFocusIndicator(presetFocusState, shape)
