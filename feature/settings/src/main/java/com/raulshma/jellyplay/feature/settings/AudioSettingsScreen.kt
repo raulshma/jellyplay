@@ -69,7 +69,7 @@ sealed class AudioSettingsDialog {
     object VolumeBoostGainPicker : AudioSettingsDialog()
 }
 
-@OptIn(ExperimentalMaterial3Api::class, androidx.compose.material3.ExperimentalMaterial3ExpressiveApi::class)
+@OptIn(ExperimentalMaterial3Api::class, androidx.compose.material3.ExperimentalMaterial3ExpressiveApi::class, androidx.compose.foundation.ExperimentalFoundationApi::class)
 @Composable
 fun AudioSettingsScreen(
     onBack: () -> Unit,
@@ -101,6 +101,12 @@ fun AudioSettingsScreen(
             )
         },
     ) { innerPadding ->
+        // Center a highlighted (search-navigated) setting in the viewport instead of parking it
+        // at the bottom edge, which is the default BringIntoViewSpec behaviour.
+        androidx.compose.runtime.CompositionLocalProvider(
+            androidx.compose.foundation.gestures.LocalBringIntoViewSpec provides
+                com.raulshma.jellyplay.core.ui.tv.CenterBringIntoViewSpec
+        ) {
         LazyColumn(
             modifier = Modifier
                 .fillMaxSize()
@@ -489,6 +495,7 @@ fun AudioSettingsScreen(
                     )
                 }
             }
+        }
         }
     }
 

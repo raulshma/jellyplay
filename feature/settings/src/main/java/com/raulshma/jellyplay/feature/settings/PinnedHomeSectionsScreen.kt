@@ -2,6 +2,9 @@ package com.raulshma.jellyplay.feature.settings
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.foundation.relocation.BringIntoViewRequester
+import androidx.compose.foundation.relocation.bringIntoViewRequester
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -58,7 +61,7 @@ import com.raulshma.jellyplay.core.ui.tv.tvFocusIndicator
 import com.raulshma.jellyplay.core.ui.tv.tvFocusRestorer
 import com.raulshma.jellyplay.core.ui.tv.tryRequestFocus
 
-@OptIn(ExperimentalMaterial3Api::class)
+@OptIn(ExperimentalMaterial3Api::class, androidx.compose.foundation.ExperimentalFoundationApi::class)
 @Composable
 fun PinnedHomeSectionsScreen(
     onBack: () -> Unit,
@@ -87,6 +90,12 @@ fun PinnedHomeSectionsScreen(
         onBack = onBack,
         backgroundColor = backgroundColor,
     ) { innerPadding ->
+        // Center a highlighted (search-navigated) setting in the viewport instead of parking it
+        // at the bottom edge, which is the default BringIntoViewSpec behaviour.
+        androidx.compose.runtime.CompositionLocalProvider(
+            androidx.compose.foundation.gestures.LocalBringIntoViewSpec provides
+                com.raulshma.jellyplay.core.ui.tv.CenterBringIntoViewSpec
+        ) {
         LazyColumn(
             state = scrollState,
             modifier = Modifier
@@ -162,6 +171,7 @@ fun PinnedHomeSectionsScreen(
                     )
                 }
             }
+        }
         }
     }
 
@@ -299,6 +309,7 @@ private fun ReorderIconButton(
     }
 }
 
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 private fun AddPinnedSectionRow(
     index: Int,
@@ -309,6 +320,7 @@ private fun AddPinnedSectionRow(
     val shape = expressiveListShape(index, count, innerRadius = 0.dp)
     val tvFocusState = rememberTvFocusState(focusedScale = 1.01f)
     val focusRequester = remember { FocusRequester() }
+    val bringIntoViewRequester = remember { BringIntoViewRequester() }
     val primaryColor = MaterialTheme.colorScheme.primary
     val highlightColor = remember { androidx.compose.animation.Animatable(Color.Transparent) }
 
@@ -322,7 +334,12 @@ private fun AddPinnedSectionRow(
         }
     }
     LaunchedEffect(highlighted) {
-        if (highlighted) focusRequester.tryRequestFocus("pinned_add")
+        if (highlighted) {
+            // Wait for the parent group's expand animation to settle, then center the row.
+            kotlinx.coroutines.delay(400)
+            focusRequester.tryRequestFocus("pinned_add")
+            bringIntoViewRequester.bringIntoView()
+        }
     }
 
     Row(
@@ -332,6 +349,7 @@ private fun AddPinnedSectionRow(
             .background(highlightColor.value)
             .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.06f))
             .focusRequester(focusRequester)
+            .bringIntoViewRequester(bringIntoViewRequester)
             .then(tvFocusState.focusModifier)
             .tvFocusIndicator(tvFocusState, shape)
             .clickable(onClick = onClick)

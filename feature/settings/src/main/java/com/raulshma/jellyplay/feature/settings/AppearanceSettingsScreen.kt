@@ -42,6 +42,7 @@ import com.raulshma.jellyplay.core.ui.adaptive.LocalAdaptiveInfo
 import com.raulshma.jellyplay.core.ui.adaptive.bottomPadding
 import com.raulshma.jellyplay.core.ui.adaptive.contentPadding
 import com.raulshma.jellyplay.core.ui.components.JellyPlayScreenScaffold
+import com.raulshma.jellyplay.core.ui.tv.CenterBringIntoViewSpec
 import com.raulshma.jellyplay.core.ui.tv.LocalTvMode
 import com.raulshma.jellyplay.core.ui.tv.tvFocusRestorer
 import com.raulshma.jellyplay.core.ui.tv.TvGrabInitialFocus
@@ -54,7 +55,7 @@ import com.raulshma.jellyplay.core.ui.components.focusIndicator
 import com.composables.icons.tabler.Tabler
 import com.composables.icons.tabler.outline.*
 
-@OptIn(ExperimentalMaterial3Api::class, androidx.compose.material3.ExperimentalMaterial3ExpressiveApi::class)
+@OptIn(ExperimentalMaterial3Api::class, androidx.compose.material3.ExperimentalMaterial3ExpressiveApi::class, androidx.compose.foundation.ExperimentalFoundationApi::class)
 @Composable
 fun AppearanceSettingsScreen(
     onBack: () -> Unit,
@@ -107,6 +108,10 @@ fun AppearanceSettingsScreen(
         }
     }
 
+    // Phase 1 (coarse): scroll the containing group into the LazyColumn's composition window so the
+    // target item is actually composed — items in off-screen groups (later sections) are otherwise
+    // never mounted and their bringIntoViewRequester has no target. Phase 2 (centering) is then
+    // performed by the highlighted item itself via CenterBringIntoViewSpec.
     LaunchedEffect(scrollIndex) {
         if (scrollIndex >= 0) {
             try {
@@ -139,6 +144,11 @@ fun AppearanceSettingsScreen(
             }
         },
     ) { innerPadding ->
+        // Center a highlighted (search-navigated) setting in the viewport instead of parking it
+        // at the bottom edge, which is the default BringIntoViewSpec behaviour.
+        androidx.compose.runtime.CompositionLocalProvider(
+            androidx.compose.foundation.gestures.LocalBringIntoViewSpec provides CenterBringIntoViewSpec
+        ) {
         LazyColumn(
             state = scrollState,
             modifier = Modifier
@@ -1105,6 +1115,7 @@ fun AppearanceSettingsScreen(
                     )
                 }
             }
+        }
         }
     }
 

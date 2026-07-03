@@ -267,6 +267,7 @@ fun PosterCard(
     sharedElementKey: String? = null,
     photoFolderChildImageUrls: List<String> = emptyList(),
     clipToShape: Boolean = false,
+    showEpisodeSeriesBadge: Boolean = false,
 ) {
     val uiEnvironment = LocalJellyPlayUi.current
     val cardPrefs = LocalCardDisplayPreferences.current
@@ -470,6 +471,39 @@ fun PosterCard(
                     }
                 }
 
+                // Bottom-left season/episode chip for episode cards surfaced in
+                // Latest Media rows. The series name is shown as the card title
+                // (see below) so the chip only needs to carry the S# E# context.
+                if (showEpisodeSeriesBadge && item.mediaType == MediaType.EPISODE) {
+                    val seasonNumber = item.seasonNumber
+                    val episodeNumber = item.episodeNumber
+                    val episodeChip = remember(seasonNumber, episodeNumber) {
+                        when {
+                            seasonNumber != null && episodeNumber != null ->
+                                "S${seasonNumber} E${episodeNumber.toString().padStart(2, '0')}"
+                            episodeNumber != null -> "E${episodeNumber.toString().padStart(2, '0')}"
+                            seasonNumber != null -> "S$seasonNumber"
+                            else -> null
+                        }
+                    }
+                    if (episodeChip != null) {
+                        Text(
+                            text = episodeChip,
+                            style = MaterialTheme.typography.labelSmall,
+                            color = Color.White,
+                            fontWeight = FontWeight.SemiBold,
+                            modifier = Modifier
+                                .align(Alignment.BottomStart)
+                                .padding(start = 6.dp, bottom = 6.dp)
+                                .background(
+                                    MaterialTheme.colorScheme.primary,
+                                    ShapeCache.smooth4,
+                                )
+                                .padding(horizontal = 6.dp, vertical = 2.dp),
+                        )
+                    }
+                }
+
                 if (onPlayClick != null) {
                     PlayButtonWithProgress(
                         progressPercent = if (showProgress) progressPercent else 0f,
@@ -508,8 +542,18 @@ fun PosterCard(
                 top = if (isTv) 8.dp else 6.dp,
             ),
         ) {
+            // For episode cards in Latest Media rows, show the series name as the
+            // title (the episode title alone doesn't identify the show); the
+            // season/episode chip below the image carries the S# E# context.
+            val titleText = remember(item, showEpisodeSeriesBadge) {
+                if (showEpisodeSeriesBadge && item.mediaType == MediaType.EPISODE) {
+                    item.seriesName?.takeIf { it.isNotBlank() } ?: item.name
+                } else {
+                    item.name
+                }
+            }
             Text(
-                text = item.name,
+                text = titleText,
                 style = if (isTv) MaterialTheme.typography.bodyMedium else MaterialTheme.typography.bodySmall,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
