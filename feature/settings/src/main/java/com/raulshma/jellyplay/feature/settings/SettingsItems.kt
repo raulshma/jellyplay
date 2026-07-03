@@ -53,6 +53,15 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.relocation.BringIntoViewRequester
 import androidx.compose.foundation.relocation.bringIntoViewRequester
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
+import androidx.compose.material3.PlainTooltip
+import androidx.compose.material3.TooltipBox
+import androidx.compose.material3.TooltipDefaults
+import androidx.compose.material3.rememberTooltipState
+import androidx.compose.material3.IconButtonDefaults
+import androidx.compose.material3.TooltipAnchorPosition
+import com.raulshma.jellyplay.core.ui.feedback.LocalUserMessageBus
 
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
@@ -491,6 +500,7 @@ internal fun SettingInfoItem(
     )
 }
 
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalMaterial3ExpressiveApi::class)
 @Composable
 internal fun AdvancedSettingsToggleButton(
     showAdvanced: Boolean,
@@ -498,29 +508,59 @@ internal fun AdvancedSettingsToggleButton(
     modifier: Modifier = Modifier,
 ) {
     val isTv = LocalTvMode.current
-    if (isTv) {
-        val focusState = rememberTvFocusState(focusedScale = 1.15f)
-        Box(
-            modifier = modifier
-                .size(36.dp)
-                .then(focusState.focusModifier)
-                .tvFocusIndicator(focusState, ShapeCache.smooth10)
-                .clickable(onClick = onToggle),
-            contentAlignment = Alignment.Center,
-        ) {
-            Icon(
-                if (showAdvanced) Tabler.Outline.Code else Tabler.Outline.Adjustments,
-                contentDescription = if (showAdvanced) "Hide advanced settings" else "Show advanced settings",
-                modifier = Modifier.size(22.dp),
-            )
-        }
-    } else {
-        IconButton(onClick = onToggle, modifier = modifier) {
-            Icon(
-                if (showAdvanced) Tabler.Outline.Code else Tabler.Outline.Adjustments,
-                contentDescription = if (showAdvanced) "Hide advanced settings" else "Show advanced settings",
-                modifier = Modifier.size(22.dp),
-            )
+    val userMessageBus = LocalUserMessageBus.current
+    val tooltipText = if (showAdvanced) "Hide advanced settings" else "Show advanced settings"
+    val onClickAction = {
+        onToggle()
+        val toastMessage = if (showAdvanced) "Advanced settings hidden" else "Advanced settings shown"
+        userMessageBus.info(toastMessage)
+    }
+
+    TooltipBox(
+        positionProvider = TooltipDefaults.rememberTooltipPositionProvider(TooltipAnchorPosition.Above),
+        tooltip = {
+            PlainTooltip {
+                Text(tooltipText)
+            }
+        },
+        state = rememberTooltipState(),
+    ) {
+        if (isTv) {
+            val focusState = rememberTvFocusState(focusedScale = 1.15f)
+            Box(
+                modifier = modifier
+                    .size(36.dp)
+                    .then(focusState.focusModifier)
+                    .tvFocusIndicator(focusState, ShapeCache.smooth10)
+                    .background(
+                        color = if (showAdvanced) MaterialTheme.colorScheme.primaryContainer else Color.Transparent,
+                        shape = ShapeCache.smooth10
+                    )
+                    .clickable(onClick = onClickAction),
+                contentAlignment = Alignment.Center,
+            ) {
+                Icon(
+                    imageVector = if (showAdvanced) Tabler.Outline.Eye else Tabler.Outline.EyeOff,
+                    contentDescription = tooltipText,
+                    tint = if (showAdvanced) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.size(22.dp),
+                )
+            }
+        } else {
+            IconButton(
+                onClick = onClickAction,
+                modifier = modifier,
+                colors = IconButtonDefaults.iconButtonColors(
+                    containerColor = if (showAdvanced) MaterialTheme.colorScheme.primaryContainer else Color.Transparent,
+                    contentColor = if (showAdvanced) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            ) {
+                Icon(
+                    imageVector = if (showAdvanced) Tabler.Outline.Eye else Tabler.Outline.EyeOff,
+                    contentDescription = tooltipText,
+                    modifier = Modifier.size(22.dp),
+                )
+            }
         }
     }
 }

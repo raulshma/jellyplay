@@ -6,6 +6,7 @@ import androidx.compose.animation.core.spring
 import androidx.compose.foundation.background
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.Arrangement
@@ -58,6 +59,12 @@ import com.raulshma.jellyplay.core.ui.tv.tvFocusIndicator
 import com.raulshma.jellyplay.feature.library.LibraryFilters
 import com.raulshma.jellyplay.feature.library.PlayedStatus
 import com.raulshma.jellyplay.feature.library.SortOption
+import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.material3.Surface
+import androidx.compose.ui.window.Dialog
+import androidx.compose.ui.window.DialogProperties
+import com.raulshma.jellyplay.core.ui.tv.LocalTvMode
 
 @OptIn(
     ExperimentalMaterial3Api::class,
@@ -85,13 +92,9 @@ fun LibraryFilterSheet(
     val isLight = LocalIsLightTheme.current
     val sheetContainerColor = if (isLight) MaterialTheme.colorScheme.surfaceContainerLow else MaterialTheme.colorScheme.surfaceContainerHigh
 
-    ModalBottomSheet(
-        onDismissRequest = onDismiss,
-        sheetState = sheetState,
-        containerColor = sheetContainerColor,
-        tonalElevation = 0.dp,
-        shape = RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp),
-    ) {
+    val isTv = LocalTvMode.current
+
+    val filterContent = @Composable {
         val contentColor = MaterialTheme.colorScheme.onSurface
         val contentColorMedium = MaterialTheme.colorScheme.onSurfaceVariant
         val glassBg = if (isLight) Color.Black.copy(alpha = 0.06f) else Color.White.copy(alpha = 0.12f)
@@ -164,7 +167,7 @@ fun LibraryFilterSheet(
             // ── Sort By (ButtonGroup) ──
             SectionLabel("Sort By")
             ButtonGroup(
-                modifier = Modifier.fillMaxWidth(),
+                modifier = Modifier.horizontalScroll(rememberScrollState()),
             ) {
                 SortOption.entries.forEach { option ->
                     ToggleButton(
@@ -203,9 +206,9 @@ fun LibraryFilterSheet(
                         selected = mediaType in selectedMediaTypes,
                         onClick = {
                             selectedMediaTypes = if (mediaType in selectedMediaTypes) {
-                                selectedMediaTypes - mediaType
+                                  selectedMediaTypes - mediaType
                             } else {
-                                selectedMediaTypes + mediaType
+                                  selectedMediaTypes + mediaType
                             }
                         },
                     )
@@ -217,7 +220,7 @@ fun LibraryFilterSheet(
             // ── Status (ButtonGroup) ──
             SectionLabel("Status")
             ButtonGroup(
-                modifier = Modifier.fillMaxWidth(),
+                modifier = Modifier.horizontalScroll(rememberScrollState()),
             ) {
                 PlayedStatus.entries.forEach { status ->
                     ToggleButton(
@@ -256,9 +259,9 @@ fun LibraryFilterSheet(
                             selected = genre.name in selectedGenres,
                             onClick = {
                                 selectedGenres = if (genre.name in selectedGenres) {
-                                    selectedGenres - genre.name
+                                      selectedGenres - genre.name
                                 } else {
-                                    selectedGenres + genre.name
+                                      selectedGenres + genre.name
                                 }
                             },
                         )
@@ -289,8 +292,8 @@ fun LibraryFilterSheet(
                             selected = selection == com.raulshma.jellyplay.core.ui.components.YearPresetSelection.Full,
                             onClick = {
                                 selectedYears = com.raulshma.jellyplay.core.ui.components.toggleYearPreset(
-                                    preset,
-                                    selectedYears,
+                                      preset,
+                                      selectedYears,
                                 )
                             },
                         )
@@ -312,9 +315,9 @@ fun LibraryFilterSheet(
                                 selected = tag in selectedTags,
                                 onClick = {
                                     selectedTags = if (tag in selectedTags) {
-                                        selectedTags - tag
+                                          selectedTags - tag
                                     } else {
-                                        selectedTags + tag
+                                          selectedTags + tag
                                     }
                                 },
                             )
@@ -394,6 +397,40 @@ fun LibraryFilterSheet(
                     color = MaterialTheme.colorScheme.onPrimary,
                 )
             }
+        }
+    }
+
+    if (isTv) {
+        Dialog(
+            onDismissRequest = onDismiss,
+            properties = DialogProperties(
+                usePlatformDefaultWidth = false,
+                dismissOnBackPress = true,
+                dismissOnClickOutside = true
+            )
+        ) {
+            Surface(
+                modifier = Modifier
+                    .fillMaxHeight(0.85f)
+                    .fillMaxWidth(0.7f)
+                    .clip(RoundedCornerShape(24.dp)),
+                color = sheetContainerColor,
+                tonalElevation = 6.dp,
+            ) {
+                Box(modifier = Modifier.fillMaxSize()) {
+                    filterContent()
+                }
+            }
+        }
+    } else {
+        ModalBottomSheet(
+            onDismissRequest = onDismiss,
+            sheetState = sheetState,
+            containerColor = sheetContainerColor,
+            tonalElevation = 0.dp,
+            shape = RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp),
+        ) {
+            filterContent()
         }
     }
 }

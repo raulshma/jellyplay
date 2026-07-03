@@ -634,7 +634,7 @@ fun SettingsScreen(
                             icon = Tabler.Outline.User,
                             title = "Account",
                             summary = { "Signed in as $userName" },
-                            initiallyExpanded = true,
+                            initiallyExpanded = false,
                         ) {
                             SettingListItem(
                                 icon = Tabler.Outline.Logout,

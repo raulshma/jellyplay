@@ -77,6 +77,7 @@ fun AppearanceSettingsScreen(
         tag = "appearance_init",
     )
 
+    val homeLayoutGroup = remember { listOf("pinned_home_sections", "home_layout_presets") }
     val scrollState = rememberLazyListState()
     val scrollIndex = remember(highlightSettingId, showAdvanced) {
         val themeGroup = listOf(
@@ -92,17 +93,16 @@ fun AppearanceSettingsScreen(
         )
         val performanceGroup = listOf("performance_mode", "reduce_motion")
         val eyeCareGroup = listOf("blue_light_filter", "blue_light_strength")
-        val homeLayoutGroup = listOf("pinned_home_sections", "home_layout_presets")
         val newsletterGroup = listOf("newsletter_enabled", "newsletter_delivery_day")
-        // Index 0 = Theme, 1 = Navigation customization, 2 = Library & Cards.
-        // Performance/Eye Care/Home Layout/Newsletter only exist when advanced is on
-        // and occupy indices 3/4/5/6 respectively.
+        // Index 0 = Theme, 1 = Navigation customization, 2 = Library & Cards, 3 = Home Screen Layout.
+        // Performance/Eye Care/Newsletter only exist when advanced is on
+        // and occupy indices 4/5/6 respectively.
         when (highlightSettingId) {
             in themeGroup -> 0
             in libraryGroup -> 2
-            in performanceGroup -> if (showAdvanced) 3 else -1
-            in eyeCareGroup -> if (showAdvanced) 4 else -1
-            in homeLayoutGroup -> if (showAdvanced) 5 else -1
+            in homeLayoutGroup -> 3
+            in performanceGroup -> if (showAdvanced) 4 else -1
+            in eyeCareGroup -> if (showAdvanced) 5 else -1
             in newsletterGroup -> if (showAdvanced) 6 else -1
             else -> -1
         }
@@ -759,79 +759,6 @@ fun AppearanceSettingsScreen(
                 }
             }
 
-            // Remaining groups are expert-level; keep them behind the Advanced gate.
-            if (showAdvanced) {
-            item {
-                SettingsGroup(
-                    icon = Tabler.Outline.Bolt,
-                    title = "Performance",
-                    summary = {
-                        val parts = mutableListOf<String>()
-                        if (preferences.performanceMode) parts.add("Performance Mode")
-                        if (preferences.reduceMotionEnabled) parts.add("Reduced motion")
-                        parts.joinToString(", ").ifEmpty { "Standard experience" }
-                    },
-                    modifier = Modifier.padding(vertical = 8.dp),
-                    initiallyExpanded = highlightSettingId in listOf("performance_mode", "reduce_motion"),
-                ) {
-                    val perfTotal = 2
-                    SettingToggleItem(
-                        icon = Tabler.Outline.Gauge,
-                        title = "Performance Mode",
-                        subtitle = "Reduces animations and effects for better performance on lower-end devices",
-                        checked = preferences.performanceMode,
-                        highlighted = highlightSettingId == "performance_mode",
-                        index = 0, count = perfTotal,
-                        onCheckedChange = { viewModel.setPerformanceMode(it) },
-                    )
-                    SettingToggleItem(
-                        icon = Tabler.Outline.Activity,
-                        title = "Reduce Motion",
-                        subtitle = "Disable heavy parallax and card animations",
-                        checked = preferences.reduceMotionEnabled,
-                        highlighted = highlightSettingId == "reduce_motion",
-                        index = 1, count = perfTotal,
-                        onCheckedChange = { viewModel.setReduceMotionEnabled(it) },
-                    )
-                }
-            }
-
-            item {
-                SettingsGroup(
-                    icon = Tabler.Outline.Eye,
-                    title = "Comfort & Eye Care",
-                    summary = {
-                        if (preferences.blueLightFilterEnabled) {
-                            "Blue light filter · ${(preferences.blueLightFilterStrength * 100).toInt()}%"
-                        } else {
-                            "Off"
-                        }
-                    },
-                    modifier = Modifier.padding(vertical = 8.dp),
-                    initiallyExpanded = highlightSettingId in listOf("blue_light_filter", "blue_light_strength"),
-                ) {
-                    val eyeCareTotal = 2
-                    SettingToggleItem(
-                        icon = Tabler.Outline.Moon,
-                        title = "Blue Light Filter",
-                        subtitle = "Tint the screen amber to reduce eye strain at night",
-                        checked = preferences.blueLightFilterEnabled,
-                        highlighted = highlightSettingId == "blue_light_filter",
-                        index = 0, count = eyeCareTotal,
-                        onCheckedChange = { viewModel.setBlueLightFilterEnabled(it) },
-                    )
-                    SettingListItem(
-                        icon = Tabler.Outline.Adjustments,
-                        title = "Blue Light Filter Strength",
-                        subtitle = "Intensity of the amber overlay",
-                        trailingText = "${(preferences.blueLightFilterStrength * 100).toInt()}%",
-                        highlighted = highlightSettingId == "blue_light_strength",
-                        index = 1, count = eyeCareTotal,
-                        onClick = { showBlueLightStrengthSheet = true },
-                    )
-                }
-            }
-
             item {
                 SettingsGroup(
                     icon = Tabler.Outline.Home,
@@ -841,6 +768,7 @@ fun AppearanceSettingsScreen(
                         "${enabled.size} of ${HomeSectionType.CONFIGURABLE.size} sections visible"
                     },
                     modifier = Modifier.padding(vertical = 8.dp),
+                    initiallyExpanded = highlightSettingId in homeLayoutGroup,
                 ) {
                     SettingListItem(
                         icon = Tabler.Outline.Pinned,
@@ -944,6 +872,79 @@ fun AppearanceSettingsScreen(
                             onDragEnd = { draggingSection = null; persistHomeSectionOrder() },
                         )
                     }
+                }
+            }
+
+            // Remaining groups are expert-level; keep them behind the Advanced gate.
+            if (showAdvanced) {
+            item {
+                SettingsGroup(
+                    icon = Tabler.Outline.Bolt,
+                    title = "Performance",
+                    summary = {
+                        val parts = mutableListOf<String>()
+                        if (preferences.performanceMode) parts.add("Performance Mode")
+                        if (preferences.reduceMotionEnabled) parts.add("Reduced motion")
+                        parts.joinToString(", ").ifEmpty { "Standard experience" }
+                    },
+                    modifier = Modifier.padding(vertical = 8.dp),
+                    initiallyExpanded = highlightSettingId in listOf("performance_mode", "reduce_motion"),
+                ) {
+                    val perfTotal = 2
+                    SettingToggleItem(
+                        icon = Tabler.Outline.Gauge,
+                        title = "Performance Mode",
+                        subtitle = "Reduces animations and effects for better performance on lower-end devices",
+                        checked = preferences.performanceMode,
+                        highlighted = highlightSettingId == "performance_mode",
+                        index = 0, count = perfTotal,
+                        onCheckedChange = { viewModel.setPerformanceMode(it) },
+                    )
+                    SettingToggleItem(
+                        icon = Tabler.Outline.Activity,
+                        title = "Reduce Motion",
+                        subtitle = "Disable heavy parallax and card animations",
+                        checked = preferences.reduceMotionEnabled,
+                        highlighted = highlightSettingId == "reduce_motion",
+                        index = 1, count = perfTotal,
+                        onCheckedChange = { viewModel.setReduceMotionEnabled(it) },
+                    )
+                }
+            }
+
+            item {
+                SettingsGroup(
+                    icon = Tabler.Outline.Eye,
+                    title = "Comfort & Eye Care",
+                    summary = {
+                        if (preferences.blueLightFilterEnabled) {
+                            "Blue light filter · ${(preferences.blueLightFilterStrength * 100).toInt()}%"
+                        } else {
+                            "Off"
+                        }
+                    },
+                    modifier = Modifier.padding(vertical = 8.dp),
+                    initiallyExpanded = highlightSettingId in listOf("blue_light_filter", "blue_light_strength"),
+                ) {
+                    val eyeCareTotal = 2
+                    SettingToggleItem(
+                        icon = Tabler.Outline.Moon,
+                        title = "Blue Light Filter",
+                        subtitle = "Tint the screen amber to reduce eye strain at night",
+                        checked = preferences.blueLightFilterEnabled,
+                        highlighted = highlightSettingId == "blue_light_filter",
+                        index = 0, count = eyeCareTotal,
+                        onCheckedChange = { viewModel.setBlueLightFilterEnabled(it) },
+                    )
+                    SettingListItem(
+                        icon = Tabler.Outline.Adjustments,
+                        title = "Blue Light Filter Strength",
+                        subtitle = "Intensity of the amber overlay",
+                        trailingText = "${(preferences.blueLightFilterStrength * 100).toInt()}%",
+                        highlighted = highlightSettingId == "blue_light_strength",
+                        index = 1, count = eyeCareTotal,
+                        onClick = { showBlueLightStrengthSheet = true },
+                    )
                 }
             }
 
@@ -1110,7 +1111,7 @@ fun AppearanceSettingsScreen(
             if (!showAdvanced) {
                 item {
                     HiddenSettingsHint(
-                        hiddenCount = 9,
+                        hiddenCount = 7,
                         onShowAdvanced = { viewModel.setShowAdvancedSettings(true) },
                     )
                 }
