@@ -47,10 +47,22 @@ fun OfflineMediaCard(
     modifier: Modifier = Modifier,
     onPlayClick: (() -> Unit)? = null,
     sharedElementKey: String? = null,
+    /**
+     * Whether to render the offline status badge ("Downloaded" / progress %).
+     * On the offline home screen every card is by definition downloaded, so
+     * the badge is redundant there — callers set this false. Defaults to true
+     * so the standalone library (which mixes completed/in-flight states) keeps
+     * the affordance.
+     */
+    showStatusBadge: Boolean = true,
 ) {
     val mediaItem = item.toMediaItem()
     val posterUrl = item.posterPath.orEmpty()
     val hasProgress = item.playedPercentage in 1.0..94.99
+    // PosterCard's progressPercent is a 0–1 fraction (it feeds
+    // fillMaxWidth(fraction)), but OfflineMediaItem.playedPercentage is 0–100,
+    // so divide by 100 here — otherwise 1% watched would fill the whole bar.
+    val progressFraction = (item.playedPercentage.toFloat() / 100f).coerceIn(0f, 1f)
 
     Box(modifier = modifier) {
         PosterCard(
@@ -62,38 +74,40 @@ fun OfflineMediaCard(
             onPlayClick = onPlayClick,
             sharedElementKey = sharedElementKey,
             showProgress = hasProgress,
-            progressPercent = item.playedPercentage.toFloat(),
+            progressPercent = progressFraction,
         )
 
-        // Offline-status badge, bottom-start, sitting above the PosterCard's
-        // own caption gradient. Only render for terminal / in-flight states so
-        // the card stays clean for plain pending rows.
-        when (item.downloadStatus) {
-            DownloadStatus.COMPLETED -> OfflineStatusChip(
-                label = "Downloaded",
-                icon = Tabler.Outline.Check,
-                tint = MaterialTheme.colorScheme.primary,
-                modifier = Modifier
-                    .align(Alignment.TopEnd)
-                    .padding(6.dp),
-            )
-            DownloadStatus.DOWNLOADING -> {
-                val progress = if (item.totalSizeBytes > 0) {
-                    (item.downloadedBytes.toFloat() / item.totalSizeBytes).coerceIn(0f, 1f)
-                } else 0f
-                val animated by animateFloatAsState(
-                    targetValue = progress,
-                    animationSpec = tween(durationMillis = 400),
-                    label = "offlineCardProgress",
-                )
-                OfflineProgressChip(
-                    fraction = animated,
+        // Offline-status badge. Suppressed on the offline home (where every
+        // item is already downloaded and the badge is redundant); shown on the
+        // standalone library where completed vs in-flight states matter.
+        if (showStatusBadge) {
+            when (item.downloadStatus) {
+                DownloadStatus.COMPLETED -> OfflineStatusChip(
+                    label = "Downloaded",
+                    icon = Tabler.Outline.Check,
+                    tint = MaterialTheme.colorScheme.primary,
                     modifier = Modifier
                         .align(Alignment.TopEnd)
                         .padding(6.dp),
                 )
+                DownloadStatus.DOWNLOADING -> {
+                    val progress = if (item.totalSizeBytes > 0) {
+                        (item.downloadedBytes.toFloat() / item.totalSizeBytes).coerceIn(0f, 1f)
+                    } else 0f
+                    val animated by animateFloatAsState(
+                        targetValue = progress,
+                        animationSpec = tween(durationMillis = 400),
+                        label = "offlineCardProgress",
+                    )
+                    OfflineProgressChip(
+                        fraction = animated,
+                        modifier = Modifier
+                            .align(Alignment.TopEnd)
+                            .padding(6.dp),
+                    )
+                }
+                else -> Unit
             }
-            else -> Unit
         }
     }
 }

@@ -49,4 +49,6 @@ dependencies {
     implementation(libs.hilt.navigation.compose)
     implementation(libs.kotlinx.serialization.json)
     implementation(libs.work.runtime.ktx)
+
+    testImplementation(libs.junit)
 }

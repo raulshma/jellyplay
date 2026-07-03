@@ -28,13 +28,6 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.draw.drawWithContent
-import androidx.compose.ui.graphics.BlendMode
-import androidx.compose.ui.graphics.Brush
-import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.CompositingStrategy
-import androidx.compose.ui.graphics.graphicsLayer
-import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import com.composables.icons.tabler.Tabler
 import com.composables.icons.tabler.outline.ArrowDown
@@ -42,6 +35,7 @@ import com.composables.icons.tabler.outline.ArrowUp
 import com.raulshma.jellyplay.core.designsystem.theme.ShapeCache
 import com.raulshma.jellyplay.core.model.seerr.SeerrRequestFilter
 import com.raulshma.jellyplay.core.model.seerr.SeerrRequestSort
+import com.raulshma.jellyplay.core.ui.animation.horizontalFadingEdges
 import com.raulshma.jellyplay.core.ui.components.focusIndicator
 
 @Composable
@@ -211,36 +205,3 @@ fun RequestsFilterBar(
         HorizontalDivider(color = colorScheme.outlineVariant.copy(alpha = 0.3f))
     }
 }
-
-private fun Modifier.horizontalFadingEdges(
-    scrollState: ScrollState,
-    length: Dp = 16.dp,
-): Modifier = this
-    .graphicsLayer(compositingStrategy = CompositingStrategy.Offscreen)
-    .drawWithContent {
-        drawContent()
-        val width = size.width
-        val lengthPx = length.toPx()
-
-        if (scrollState.value > 0) {
-            drawRect(
-                brush = Brush.horizontalGradient(
-                    colors = listOf(Color.Transparent, Color.Black),
-                    startX = 0f,
-                    endX = lengthPx,
-                ),
-                blendMode = BlendMode.DstIn,
-            )
-        }
-
-        if (scrollState.value < scrollState.maxValue) {
-            drawRect(
-                brush = Brush.horizontalGradient(
-                    colors = listOf(Color.Black, Color.Transparent),
-                    startX = width - lengthPx,
-                    endX = width,
-                ),
-                blendMode = BlendMode.DstIn,
-            )
-        }
-    }
