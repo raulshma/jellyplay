@@ -9,6 +9,7 @@ import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.aspectRatio
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -50,6 +51,7 @@ import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.composables.icons.tabler.Tabler
+import com.composables.icons.tabler.outline.Check
 import com.composables.icons.tabler.outline.ChevronDown
 import com.composables.icons.tabler.outline.DeviceFloppy
 import com.composables.icons.tabler.outline.Heart
@@ -534,6 +536,22 @@ private fun InfoRow(item: OfflineMediaItem) {
         horizontalArrangement = Arrangement.spacedBy(16.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
+        if (item.isPlayed) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Icon(
+                    imageVector = Tabler.Outline.Check,
+                    contentDescription = "Watched",
+                    tint = MaterialTheme.colorScheme.primary,
+                    modifier = Modifier.size(16.dp),
+                )
+                Spacer(Modifier.width(4.dp))
+                Text(
+                    text = "Watched",
+                    style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.SemiBold),
+                    color = MaterialTheme.colorScheme.primary,
+                )
+            }
+        }
         item.year?.let {
             Text(it.toString(), style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f))
         }
@@ -612,9 +630,10 @@ private fun PlayButton(
         if (hasProgress) {
             Box(
                 modifier = Modifier
-                    .matchParentSize()
-                    .background(MaterialTheme.colorScheme.onSurface.copy(alpha = 0.15f))
-                    .fillMaxWidth(progressFraction.coerceIn(0f, 1f)),
+                    .fillMaxHeight()
+                    .fillMaxWidth(progressFraction.coerceIn(0f, 1f))
+                    .align(Alignment.CenterStart)
+                    .background(Color.Black.copy(alpha = 0.24f)),
             )
         }
         Row(verticalAlignment = Alignment.CenterVertically) {
