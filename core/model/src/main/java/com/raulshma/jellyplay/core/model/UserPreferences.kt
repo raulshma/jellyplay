@@ -96,7 +96,7 @@ data class UserPreferences(
      * Maximum number of downloads allowed to run concurrently. WorkManager may
      * enqueue many workers; this cap gates how many actually transfer at once
      * (the rest block on a permit). Distinct from [downloadConnections], which
-     * is per-file parallel streams. See issue #64-A.
+     * is per-file parallel streams.
      */
     val maxConcurrentDownloads: Int = 3,
     val enabledHomeSectionTypes: Set<HomeSectionType> = HomeSectionType.CONFIGURABLE.toSet(),
@@ -105,7 +105,7 @@ data class UserPreferences(
     val navBarShowLabels: Boolean = true,
     /**
      * Whether the floating navigation bar auto-hides on scroll-down. When false
-     * the bar stays pinned (issue #62-I).
+     * the bar stays pinned.
      */
     val hideBottomNavOnScroll: Boolean = true,
     val homeHeroEnabled: Boolean = true,

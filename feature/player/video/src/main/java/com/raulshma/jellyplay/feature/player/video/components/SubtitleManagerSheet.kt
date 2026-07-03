@@ -287,7 +287,7 @@ private fun SubtitleDownloadItem(
             .fillMaxWidth()
             .padding(horizontal = 16.dp, vertical = 2.dp)
             .clip(shape)
-            .background(Color.White.copy(alpha = 0.04f))
+            .background(MaterialTheme.colorScheme.onSurface.copy(alpha = 0.04f))
             .then(focusState.focusModifier)
             .tvFocusIndicator(focusState, shape)
             .clickable { onDownload() }

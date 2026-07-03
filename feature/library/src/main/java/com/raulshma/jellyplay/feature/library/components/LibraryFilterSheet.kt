@@ -266,7 +266,7 @@ fun LibraryFilterSheet(
                 }
             }
 
-            // ── Year Range (collapsed by default — issue #62-G) ──
+            // ── Year Range (collapsed by default) ──
             Spacer(modifier = Modifier.height(20.dp))
             CollapsibleSection(title = "Year Range") {
                 val presets = remember { com.raulshma.jellyplay.core.ui.components.yearRangePresets() }
@@ -298,7 +298,7 @@ fun LibraryFilterSheet(
                 }
             }
 
-            // ── Tags (collapsed by default — issue #62-G) ──
+            // ── Tags (collapsed by default) ──
             if (availableTags.isNotEmpty()) {
                 Spacer(modifier = Modifier.height(20.dp))
                 CollapsibleSection(title = "Tags") {
@@ -323,7 +323,7 @@ fun LibraryFilterSheet(
                 }
             }
 
-            // ── Minimum Rating (collapsed by default — issue #62-G) ──
+            // ── Minimum Rating (collapsed by default) ──
             Spacer(modifier = Modifier.height(20.dp))
             CollapsibleSection(title = "Minimum Rating") {
                 val ratingOptions = listOf(0f, 3f, 3.5f, 4f, 4.5f)
@@ -412,7 +412,7 @@ private fun SectionLabel(text: String) {
 /**
  * A section whose header can be tapped to expand/collapse its content. Used for
  * the less-frequently-used filter sections (Year, Tags, Rating) to reduce visual
- * clutter — progressive disclosure (issue #62-G). `startExpanded` controls the
+ * clutter — progressive disclosure. `startExpanded` controls the
  * initial state.
  */
 @Composable

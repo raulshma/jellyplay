@@ -80,6 +80,8 @@ import com.raulshma.jellyplay.core.model.StreamingQuality
 import com.raulshma.jellyplay.core.model.PlaybackMode
 import com.raulshma.jellyplay.core.designsystem.theme.AlphaEasing
 import com.raulshma.jellyplay.core.designsystem.theme.FancyTransitionEasing
+import com.raulshma.jellyplay.core.designsystem.theme.playerOnScrim
+import com.raulshma.jellyplay.core.designsystem.theme.playerScrimColor
 import com.raulshma.jellyplay.core.designsystem.theme.ShapeCache
 import com.raulshma.jellyplay.core.designsystem.theme.PointToPointEasing
 import com.raulshma.jellyplay.core.designsystem.theme.SyncStatusColors
@@ -274,9 +276,9 @@ internal fun PlayerControls(
                     .background(
                         Brush.verticalGradient(
                             colors = listOf(
-                                MaterialTheme.colorScheme.scrim.copy(alpha = 0.6f),
-                                MaterialTheme.colorScheme.scrim.copy(alpha = 0.3f),
-                                MaterialTheme.colorScheme.scrim.copy(alpha = 0.08f),
+                                playerScrimColor().copy(alpha = 0.6f),
+                                playerScrimColor().copy(alpha = 0.3f),
+                                playerScrimColor().copy(alpha = 0.08f),
                                 Color.Transparent,
                             )
                         )
@@ -470,9 +472,9 @@ internal fun PlayerControls(
                         Brush.verticalGradient(
                             colors = listOf(
                                 Color.Transparent,
-                                MaterialTheme.colorScheme.scrim.copy(alpha = 0.1f),
-                                MaterialTheme.colorScheme.scrim.copy(alpha = 0.5f),
-                                MaterialTheme.colorScheme.scrim.copy(alpha = 0.7f),
+                                playerScrimColor().copy(alpha = 0.1f),
+                                playerScrimColor().copy(alpha = 0.5f),
+                                playerScrimColor().copy(alpha = 0.7f),
                             )
                         )
                     )
@@ -607,7 +609,7 @@ internal fun PlayerControls(
                         if (!isTv) {
                             // Rotate lives in the always-visible right cluster (not the
                             // horizontalScroll top row) so it can't scroll out of view in
-                            // portrait and strand the user (issue #66-A).
+                            // portrait and strand the user.
                             PlayerIconButton(
                                 icon = Tabler.Outline.Rotate,
                                 contentDescription = "Rotate Screen",

@@ -42,7 +42,7 @@ class DownloadWorker @AssistedInject constructor(
             return Result.success()
         }
 
-        // Keep the shared limiter sized to the user's preference (issue #64-A).
+        // Keep the shared limiter sized to the user's preference.
         val maxConcurrent = preferencesStore.preferences.firstOrNull()?.maxConcurrentDownloads
             ?: DownloadConcurrencyLimiter.DEFAULT_MAX
         concurrencyLimiter.configure(maxConcurrent)
@@ -89,7 +89,7 @@ class DownloadWorker @AssistedInject constructor(
         val numConnections = preferencesStore.preferences.firstOrNull()?.downloadConnections?.coerceIn(1, 8) ?: 1
 
         // Gate the actual transfer on a shared concurrency slot so at most
-        // `maxConcurrentDownloads` run at once; the rest block here (issue #64-A).
+        // `maxConcurrentDownloads` run at once; the rest block here.
         return concurrencyLimiter.withPermit {
             try {
             if (existingBytes > 0L) {

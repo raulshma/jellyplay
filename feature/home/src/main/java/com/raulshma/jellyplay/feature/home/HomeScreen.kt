@@ -450,7 +450,7 @@ private fun MainHomeContent(
             ) {
                 when {
                     // When an online fetch fails but we have downloads, show the offline
-                    // library instead of a hard error (issue #63-A) — downloads are the
+                    // library instead of a hard error — downloads are the
                     // user's primary use case. Only show ErrorScreen when there's nothing
                     // offline to fall back on.
                     state.error != null && state.sections.isEmpty() && state.offlineMode == OfflineMode.ONLINE &&
@@ -799,7 +799,7 @@ private fun HomeContentList(
 
         // De-duplicate the downloaded row against the online sections so a title
         // that already appears in Continue Watching / Latest / Recently Added
-        // isn't shown twice (issue #64-B).
+        // isn't shown twice.
         val dedupedOfflineLibrary = remember(offlineLibrary, sections) {
             if (offlineLibrary.isEmpty()) offlineLibrary
             else {
@@ -833,7 +833,7 @@ private fun HomeContentList(
                 item(key = "hero_spacer") { Spacer(Modifier.height(100.dp)) }
             }
 
-            // Non-blocking notice when some home sections failed to load (issue #62-A).
+            // Non-blocking notice when some home sections failed to load.
             if (partialLoadError) {
                 item(key = "partial_load_banner") {
                     Row(

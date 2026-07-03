@@ -18,7 +18,7 @@ import javax.inject.Singleton
  * setting. Because coroutines waiting on a permit are not preempted, shrinking
  * the limit takes effect as in-flight downloads complete.
  *
- * See issue #64-A. Distinct from the per-file parallel-stream count
+ * Distinct from the per-file parallel-stream count
  * (`downloadConnections`).
  */
 @Singleton

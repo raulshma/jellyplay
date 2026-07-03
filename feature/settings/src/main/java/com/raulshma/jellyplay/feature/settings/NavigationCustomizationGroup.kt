@@ -53,7 +53,7 @@ private val NAV_ITEMS: List<NavItemDescriptor> = listOf(
 /**
  * A settings group that lets the user customize the floating navigation bar:
  * toggle individual items on/off and reorder them by drag, plus toggle the
- * hide-on-scroll behavior (issues #62-D / #62-I).
+ * hide-on-scroll behavior ().
  *
  * Backed by [UserPreferences.hiddenNavItems] / [UserPreferences.navItemOrder] /
  * [UserPreferences.hideBottomNavOnScroll], which the nav-bar composition

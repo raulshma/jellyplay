@@ -458,21 +458,24 @@ private fun ColorScheme.withOledSurfaces(): ColorScheme = copy(
 )
 
 /**
- * Builds a dark [ColorScheme] for the video player surface, preserving the user's chosen accent.
+ * Wraps [content] so it renders as a dark "chrome zone" while preserving the user's accent.
  *
- * The player chrome (controls, overlays, drawers, gesture indicators) is always rendered on top
- * of the dark video and assumes dark surfaces with high-contrast foregrounds. When the ambient
- * app theme is light/dynamic-light, MaterialTheme resolves `onSurface`/`onSurfaceVariant` to dark
- * colors, producing invisible dark-on-dark text. Forcing a dark scheme for the player subtree
- * restores contrast while keeping the accent (primary) consistent with the rest of the app.
+ * On-video control bars float over arbitrary video content, so they always need a dark scrim with
+ * light text/icons — regardless of the app theme. Without this, a light ambient theme resolves
+ * `onSurface` to dark colors, producing invisible dark-on-dark text against the dark scrim. This
+ * wrapper forces the dark [ColorScheme] (so `onSurface`/`onSurfaceVariant` become light), sets
+ * [androidx.compose.material3.LocalContentColor] to a light foreground (MaterialTheme alone does
+ * not), and reports `LocalIsLightTheme = false` so helpers like [playerScrimColor] resolve to the
+ * dark variant. The accent (`primary`/`secondary`/`tertiary`) is copied from the ambient scheme so
+ * play buttons and sliders stay on-brand.
  *
- * Mirrors the per-sheet override applied in `PlayerModalBottomSheet` (issue #66-C), but hoisted so
- * the whole player subtree — not just bottom sheets — is covered.
+ * Scope this to the control-bar subtree only — drawers and other surfaces that should respect the
+ * app theme must sit outside it.
  */
 @Composable
-fun rememberPlayerDarkColorScheme(): ColorScheme {
+fun PlayerDarkTheme(content: @Composable () -> Unit) {
     val ambient = MaterialTheme.colorScheme
-    return remember(ambient.primary, ambient.secondary, ambient.tertiary) {
+    val darkScheme = remember(ambient.primary, ambient.secondary, ambient.tertiary) {
         darkColorScheme(
             primary = ambient.primary,
             onPrimary = ambient.onPrimary,
@@ -484,25 +487,10 @@ fun rememberPlayerDarkColorScheme(): ColorScheme {
             onTertiary = ambient.onTertiary,
         )
     }
-}
-
-/**
- * Wraps [content] in the player's dark color scheme (accent-preserving) **and** sets
- * [LocalContentColor] to the dark scheme's `onSurface`.
- *
- * This is critical: M3's [MaterialTheme] overrides `MaterialTheme.colorScheme` but does **not**
- * update `LocalContentColor`. So any `Text`/`Icon` without an explicit `color` keeps reading the
- * ambient content color — which is dark in a light app theme, rendering sheet titles and labels
- * invisible on the dark sheet surface. Setting `LocalContentColor` here ensures uncolored text
- * and icons fall back to a light, high-contrast foreground. Use around any player subtree (the
- * player surface and the in-window sheets).
- */
-@Composable
-fun PlayerDarkTheme(content: @Composable () -> Unit) {
-    val darkScheme = rememberPlayerDarkColorScheme()
     MaterialTheme(colorScheme = darkScheme) {
-        CompositionLocalProvider(
+        androidx.compose.runtime.CompositionLocalProvider(
             androidx.compose.material3.LocalContentColor provides darkScheme.onSurface,
+            LocalIsLightTheme provides false,
         ) {
             content()
         }

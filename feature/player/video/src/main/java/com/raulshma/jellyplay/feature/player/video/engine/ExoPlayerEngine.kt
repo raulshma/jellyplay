@@ -71,7 +71,7 @@ import kotlinx.coroutines.cancel
 /**
  * Default subtitle text size for the embedded-style path. A fixed SP value keeps
  * captions stable across orientation changes (a height-fraction scales against the
- * view height, which grows dramatically in portrait). See issue #66-A.
+ * view height, which grows dramatically in portrait).
  */
 private const val DEFAULT_SUBTITLE_SIZE_SP = 18f
 
@@ -552,7 +552,7 @@ class ExoPlayerEngine(
         // live inside that frame (not the full-screen PlayerView) so captions
         // sit at the bottom of the *video*, and setBottomPaddingFraction /
         // fractional text sizes compute against the video height, not the much
-        // taller screen height. See issue #66-A.
+        // taller screen height.
         pv.addOnLayoutChangeListener { _, _, _, _, _, _, _, _, _ ->
             pv.post { reparentSubtitleViewIntoVideoFrame(pv) }
         }
@@ -569,7 +569,7 @@ class ExoPlayerEngine(
      * whole screen height, so in portrait — where the video is letterboxed —
      * captions land in the bottom black bar instead of on the video. Inside the
      * content frame they are measured against the video dimensions, keeping them
-     * correct and consistent with mpv / VLC across rotation. See issue #66-A.
+     * correct and consistent with mpv / VLC across rotation.
      */
     private fun reparentSubtitleViewIntoVideoFrame(pv: PlayerView) {
         val subtitleView = pv.subtitleView ?: return
@@ -621,7 +621,7 @@ class ExoPlayerEngine(
                 // size text as a fraction of the (full-screen) SubtitleView height.
                 // On rotation to portrait that height grows dramatically and the
                 // captions become huge, while mpv (libass, sizes against the video
-                // frame) stays correct. See issue #66-A.
+                // frame) stays correct.
                 sv.setApplyEmbeddedFontSizes(false)
                 sv.setStyle(
                     CaptionStyleCompat(

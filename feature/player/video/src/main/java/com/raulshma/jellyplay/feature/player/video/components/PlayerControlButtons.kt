@@ -12,6 +12,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.unit.dp
+import com.raulshma.jellyplay.core.designsystem.theme.playerOnScrim
 import com.raulshma.jellyplay.core.model.StreamingQuality
 import com.raulshma.jellyplay.core.ui.tv.rememberTvFocusState
 import com.raulshma.jellyplay.core.ui.tv.tvFocusIndicator
@@ -35,7 +36,7 @@ internal fun PlayerIconButton(
             .tvFocusIndicator(tvFocusState, IconButtonDefaults.smallRoundShape),
         shape = IconButtonDefaults.smallRoundShape,
         colors = IconButtonDefaults.filledTonalIconButtonColors(
-            containerColor = Color.White.copy(alpha = 0.1f),
+            containerColor = playerOnScrim().copy(alpha = 0.1f),
             contentColor = effectiveTint,
         ),
     ) {
@@ -66,7 +67,7 @@ internal fun PlayerSpeedButton(
             containerColor = if (isActive) {
                 MaterialTheme.colorScheme.primary.copy(alpha = 0.15f)
             } else {
-                Color.White.copy(alpha = 0.1f)
+                playerOnScrim().copy(alpha = 0.1f)
             },
             contentColor = if (isActive) {
                 MaterialTheme.colorScheme.primary
@@ -100,7 +101,7 @@ internal fun PlayerQualityButton(
             containerColor = if (isActive) {
                 MaterialTheme.colorScheme.primary.copy(alpha = 0.15f)
             } else {
-                Color.White.copy(alpha = 0.1f)
+                playerOnScrim().copy(alpha = 0.1f)
             },
             contentColor = if (isActive) {
                 MaterialTheme.colorScheme.primary

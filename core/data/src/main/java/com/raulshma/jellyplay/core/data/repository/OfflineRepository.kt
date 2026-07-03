@@ -16,7 +16,7 @@ interface OfflineRepository {
 
     /**
      * Records playback progress for a downloaded item so it can be shown on the
-     * downloads UI and resumed while offline (issue #65-A). Independent of the
+     * downloads UI and resumed while offline. Independent of the
      * server sync path (which continues when online). No-op if the item isn't
      * in the offline store.
      *

@@ -685,7 +685,7 @@ private fun MainContent(
                 if (!isFullScreenRoute) {
                     // Wire the system/gesture back button to in-app navigation so back
                     // from a deep screen returns to the tab root before exiting the app
-                    // (issue #62-I). At a tab root, fall through to the OS (exit). The
+                    //. At a tab root, fall through to the OS (exit). The
                     // full-screen player is excluded — it owns its own BackHandler.
                     BackHandler(enabled = !navigator.isAtTabRoot()) {
                         navigator.goBack()
@@ -952,7 +952,7 @@ private fun PhoneContent(
         },
     ) {
         // When hide-on-scroll is disabled, keep the nav bar permanently visible
-        // (issue #62-I). The nestedScrollConnection is still constructed so its
+        //. The nestedScrollConnection is still constructed so its
         // identity stays stable, but it is only attached to the tree when the
         // setting is on.
         androidx.compose.runtime.LaunchedEffect(hideBottomNavOnScroll) {

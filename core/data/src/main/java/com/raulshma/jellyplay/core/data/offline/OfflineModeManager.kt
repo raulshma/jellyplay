@@ -107,7 +107,7 @@ class OfflineModeManager @Inject constructor(
         // Treat an unvalidated network (captive portal, Wi-Fi with no upstream) as
         // offline too: a network can report INTERNET capability yet fail validation,
         // leaving the app unable to reach the server. Auto-offline then surfaces the
-        // downloaded library instead of erroring (issue #63-A).
+        // downloaded library instead of erroring.
         val isReachable = hasInternet && isValidated
 
         if (activeNetwork == null || !isReachable) {

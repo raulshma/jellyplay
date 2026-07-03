@@ -99,7 +99,7 @@ fun OfflineSeriesScreen(
     JellyPlayScreenScaffold(
         title = seriesItem?.name ?: "Loading...",
         onBack = onBack,
-        // Top bin button for bulk delete (issue #65-C): replaces the two full-width
+        // Top bin button for bulk delete: replaces the two full-width
         // buttons that used to sit below the episode list.
         actions = {
             val binFocusState = rememberTvFocusState()
@@ -245,7 +245,7 @@ fun OfflineSeriesScreen(
         }
     }
 
-    // Bulk-delete chooser (issue #65-C). Offers season-vs-series deletion with
+    // Bulk-delete chooser. Offers season-vs-series deletion with
     // confirmation, reusing the existing deleteSeason/deleteSeries handlers.
     if (showDeleteDialog) {
         AlertDialog(
@@ -390,7 +390,7 @@ private fun OfflineEpisodeRow(
 
             if (episode.downloadStatus == DownloadStatus.COMPLETED) {
                 // Render watched state / resume progress for downloaded episodes
-                // (issue #65-A/B): a checkmark when fully watched, or a progress
+                //: a checkmark when fully watched, or a progress
                 // bar + resume label when partially watched.
                 if (episode.isPlayed) {
                     Row(

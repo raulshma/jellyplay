@@ -107,7 +107,7 @@ internal fun HomeDrawerBody(
                 scope = scope,
                 onClick = callbacks.onWatchProgressHeatmapClick,
             )
-            // NOTE (issue #62-K): "Seerr Requests" and "About" previously duplicated
+            // NOTE: "Seerr Requests" and "About" previously duplicated
             // here were removed — they live in the app-level drawer to keep a single
             // coherent "more" surface. This drawer stays focused on account/activity.
 
