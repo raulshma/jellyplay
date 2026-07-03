@@ -62,7 +62,7 @@ fun MoodPlaylistsScreen(
                 modifier = Modifier.padding(end = 8.dp),
             )
         },
-    ) { _ ->
+    ) { innerPadding ->
         Spacer(Modifier.height(8.dp))
 
         val adaptiveInfo = LocalAdaptiveInfo.current
@@ -76,7 +76,7 @@ fun MoodPlaylistsScreen(
                 start = adaptiveInfo.contentPadding(isTv),
                 end = adaptiveInfo.contentPadding(isTv),
                 top = 8.dp,
-                bottom = adaptiveInfo.bottomPadding(isTv),
+                bottom = adaptiveInfo.bottomPadding(isTv) + innerPadding.calculateBottomPadding(),
             ),
             horizontalArrangement = Arrangement.spacedBy(adaptiveInfo.itemSpacing(isTv)),
             verticalArrangement = Arrangement.spacedBy(adaptiveInfo.itemSpacing(isTv)),

@@ -28,6 +28,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -57,11 +58,14 @@ internal fun SettingsGroup(
     modifier: Modifier = Modifier,
     content: @Composable () -> Unit,
 ) {
-    var expanded by remember { mutableStateOf(initiallyExpanded) }
+    var expanded by rememberSaveable { mutableStateOf(initiallyExpanded) }
+    var lastInitiallyExpanded by rememberSaveable { mutableStateOf(initiallyExpanded) }
+
     LaunchedEffect(initiallyExpanded) {
-        if (initiallyExpanded) {
+        if (initiallyExpanded && initiallyExpanded != lastInitiallyExpanded) {
             expanded = true
         }
+        lastInitiallyExpanded = initiallyExpanded
     }
 
     val iconColor by animateColorAsState(

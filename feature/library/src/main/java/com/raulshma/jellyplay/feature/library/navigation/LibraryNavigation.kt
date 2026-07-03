@@ -31,6 +31,9 @@ fun EntryProviderScope<NavKey>.librarySection(navigator: Navigator) {
             onItemClick = { itemId, mediaType, parentId, itemName ->
                 navigator.navigatePhotoAware(itemId, mediaType, parentId, itemName)
             },
+            onSmartPlaylistsClick = { navigator.navigate(Route.SmartPlaylists) },
+            onMoodPlaylistsClick = { navigator.navigate(Route.MoodPlaylists) },
+            onPlaylistsClick = { navigator.navigate(Route.Playlists) },
         )
     }
 
@@ -39,6 +42,9 @@ fun EntryProviderScope<NavKey>.librarySection(navigator: Navigator) {
             onItemClick = { itemId, mediaType, parentId, itemName ->
                 navigator.navigatePhotoAware(itemId, mediaType, parentId, itemName)
             },
+            onSmartPlaylistsClick = { navigator.navigate(Route.SmartPlaylists) },
+            onMoodPlaylistsClick = { navigator.navigate(Route.MoodPlaylists) },
+            onPlaylistsClick = { navigator.navigate(Route.Playlists) },
         )
     }
 
