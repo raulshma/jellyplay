@@ -8,7 +8,6 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -20,6 +19,7 @@ import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
@@ -27,21 +27,30 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
-import com.raulshma.jellyplay.core.designsystem.theme.ShapeCache
-import com.raulshma.jellyplay.core.model.DownloadStatus
-import com.raulshma.jellyplay.core.model.OfflineMediaItem
-import com.raulshma.jellyplay.core.ui.components.focusIndicator
-import com.raulshma.jellyplay.core.ui.image.MediaImage
-import com.raulshma.jellyplay.core.ui.components.JellyPlayLinearProgressIndicator
 import com.composables.icons.tabler.Tabler
-import com.composables.icons.tabler.outline.Check
+import com.composables.icons.tabler.outline.DeviceFloppy
 import com.composables.icons.tabler.outline.Download
+import com.composables.icons.tabler.outline.Wifi
+import com.raulshma.jellyplay.core.designsystem.theme.ShapeCache
+import com.raulshma.jellyplay.core.model.MediaType
+import com.raulshma.jellyplay.core.model.OfflineMediaItem
+import com.raulshma.jellyplay.core.model.formatBytes
+import com.raulshma.jellyplay.core.ui.adaptive.LocalAdaptiveInfo
+import com.raulshma.jellyplay.core.ui.adaptive.rowCardWidth
+import com.raulshma.jellyplay.core.ui.components.OfflineMediaCard
+import com.raulshma.jellyplay.core.ui.components.ScreenEmptyState
+import com.raulshma.jellyplay.core.ui.tv.LocalTvMode
 
+/**
+ * Offline home — shown on the Home screen when the app is offline (or the
+ * online fetch failed but downloads exist). Replaces the old flat row list
+ * with a sectioned layout that mirrors the online home: Continue Watching,
+ * Recently Downloaded, then per-type rows (Movies / Series / Music). Wires up
+ * the previously-dormant "Go online" affordance.
+ */
 @Composable
 fun OfflineHomeContent(
     offlineLibrary: List<OfflineMediaItem>,
@@ -49,209 +58,157 @@ fun OfflineHomeContent(
     contentPadding: Dp,
     backgroundColor: Color,
     onGoOnline: () -> Unit,
+    onOfflineItemClick: (itemId: String, mediaType: MediaType) -> Unit = { _, _ -> onItemClick() },
 ) {
+    val isTv = LocalTvMode.current
+    val adaptiveInfo = LocalAdaptiveInfo.current
+    val rowCardWidth = adaptiveInfo.rowCardWidth(isTv)
+
+    if (offlineLibrary.isEmpty()) {
+        Box(modifier = Modifier.fillMaxSize().background(backgroundColor), contentAlignment = Alignment.Center) {
+            ScreenEmptyState(
+                icon = Tabler.Outline.Download,
+                title = "No downloads yet",
+                description = "Download media while online to access it offline.",
+                actionLabel = "Go online",
+                onAction = onGoOnline,
+            )
+        }
+        return
+    }
+
+    // Pre-compute sections. Only non-empty ones render.
+    val continueWatching = remember(offlineLibrary) {
+        offlineLibrary
+            .filter { it.playedPercentage in 1.0..94.99 }
+            .sortedWith(compareByDescending<OfflineMediaItem> { it.lastPlayedDate ?: "" }.thenByDescending { it.createdAt })
+    }
+    val recent = remember(offlineLibrary) {
+        offlineLibrary.sortedByDescending { it.createdAt }.take(10)
+    }
+    val movies = remember(offlineLibrary) { offlineLibrary.filter { it.mediaType == MediaType.MOVIE } }
+    val series = remember(offlineLibrary) { offlineLibrary.filter { it.mediaType == MediaType.SERIES } }
+    val music = remember(offlineLibrary) {
+        offlineLibrary.filter { it.mediaType == MediaType.AUDIO || it.mediaType == MediaType.MUSIC || it.mediaType == MediaType.ALBUM }
+    }
+    val totalBytes = remember(offlineLibrary) { offlineLibrary.sumOf { it.totalSizeBytes } }
+
     LazyColumn(
         modifier = Modifier
             .fillMaxSize()
             .background(backgroundColor),
-        contentPadding = PaddingValues(
-            top = 120.dp,
-            bottom = 120.dp,
-            start = contentPadding,
-            end = contentPadding,
-        ),
-        verticalArrangement = Arrangement.spacedBy(16.dp),
+        contentPadding = PaddingValues(top = 120.dp, bottom = 120.dp),
+        verticalArrangement = Arrangement.spacedBy(28.dp),
     ) {
-        if (offlineLibrary.isEmpty()) {
-            item {
-                Box(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(200.dp),
-                    contentAlignment = Alignment.Center,
-                ) {
-                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                        Icon(
-                            Tabler.Outline.Download,
-                            contentDescription = null,
-                            modifier = Modifier.size(48.dp),
-                            tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                        )
-                        Spacer(Modifier.height(12.dp))
-                        Text(
-                            "No downloads yet",
-                            style = MaterialTheme.typography.bodyLarge,
-                            color = MaterialTheme.colorScheme.onSurface,
-                        )
-                        Text(
-                            "Download media while online to access it offline",
-                            style = MaterialTheme.typography.bodyMedium,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        )
-                    }
-                }
-            }
-        } else {
-            item {
+        // Header: title + storage summary + Go online.
+        item(key = "offline_header") {
+            Column(modifier = Modifier.padding(horizontal = contentPadding)) {
                 Text(
                     text = "Your Downloads",
-                    style = MaterialTheme.typography.titleLarge.copy(
-                        fontWeight = FontWeight.Bold,
-                    ),
+                    style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Bold),
                     color = MaterialTheme.colorScheme.onSurface,
                 )
-            }
-
-            items(
-                count = offlineLibrary.size,
-                key = { index -> "offline_${offlineLibrary[index].id}" },
-                contentType = { "offlineItem" },
-            ) { index ->
-                val offlineItem = offlineLibrary[index]
                 Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .clip(ShapeCache.smooth12)
-                        .background(MaterialTheme.colorScheme.surfaceContainer)
-                        .focusIndicator()
-                        .clickable { onItemClick() }
-                        .padding(12.dp),
                     verticalAlignment = Alignment.CenterVertically,
+                    modifier = Modifier.padding(top = 4.dp),
                 ) {
-                    val posterModifier = Modifier
-                        .width(60.dp)
-                        .aspectRatio(2f / 3f)
-                        .clip(ShapeCache.smooth8)
-
-                    if (!offlineItem.posterPath.isNullOrBlank()) {
-                        MediaImage(
-                            url = offlineItem.posterPath!!,
-                            contentDescription = offlineItem.name,
-                            blurHash = offlineItem.blurHashPrimary,
-                            modifier = posterModifier,
-                            contentScale = ContentScale.Crop,
-                        )
-                    } else {
-                        Box(
-                            modifier = posterModifier.background(MaterialTheme.colorScheme.surfaceVariant),
-                            contentAlignment = Alignment.Center,
-                        ) {
-                            Text(
-                                text = offlineItem.name.take(2).uppercase(),
-                                style = MaterialTheme.typography.labelMedium,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            )
-                        }
-                    }
-
-                    Column(
-                        modifier = Modifier
-                            .weight(1f)
-                            .padding(start = 12.dp),
-                    ) {
-                        Text(
-                            text = offlineItem.name,
-                            style = MaterialTheme.typography.bodyLarge.copy(fontWeight = FontWeight.Medium),
-                            color = MaterialTheme.colorScheme.onSurface,
-                            maxLines = 2,
-                            overflow = TextOverflow.Ellipsis,
-                        )
-                        // Only show a series subtitle when it's meaningful and not a
-                        // duplicate of the title: for top-level series/
-                        // movie entities the source often copies `seriesName == name`.
-                        val showSeriesSubtitle = !offlineItem.seriesName.isNullOrBlank() &&
-                            offlineItem.mediaType == com.raulshma.jellyplay.core.model.MediaType.EPISODE &&
-                            !offlineItem.seriesName.equals(offlineItem.name, ignoreCase = true)
-                        if (showSeriesSubtitle) {
-                            Text(
-                                text = offlineItem.seriesName!!,
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                maxLines = 1,
-                                overflow = TextOverflow.Ellipsis,
-                            )
-                        }
-                        Row(
-                            verticalAlignment = Alignment.CenterVertically,
-                            modifier = Modifier.padding(top = 2.dp),
-                        ) {
-                            if (offlineItem.year != null) {
-                                Text(
-                                    text = offlineItem.year.toString(),
-                                    style = MaterialTheme.typography.labelSmall,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                )
-                            }
-                            if (offlineItem.communityRating != null && offlineItem.communityRating!! > 0) {
-                                if (offlineItem.year != null) {
-                                    Text(
-                                        text = " · ",
-                                        style = MaterialTheme.typography.labelSmall,
-                                        color = MaterialTheme.colorScheme.outlineVariant,
-                                    )
-                                }
-                                val communityRatingText = remember(offlineItem.communityRating) {
-                                    "★ ${String.format("%.1f", offlineItem.communityRating)}"
-                                }
-                                Text(
-                                    text = communityRatingText,
-                                    style = MaterialTheme.typography.labelSmall,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                )
-                            }
-                            if (!offlineItem.officialRating.isNullOrBlank()) {
-                                Text(
-                                    text = " · ${offlineItem.officialRating}",
-                                    style = MaterialTheme.typography.labelSmall,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                )
-                            }
-                        }
-                        if (offlineItem.genres.isNotEmpty()) {
-                            Text(
-                                text = offlineItem.genres.take(3).joinToString(", "),
-                                style = MaterialTheme.typography.labelSmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                maxLines = 1,
-                                overflow = TextOverflow.Ellipsis,
-                            )
-                        }
-                        if (offlineItem.downloadStatus == DownloadStatus.COMPLETED) {
-                            Row(
-                                verticalAlignment = Alignment.CenterVertically,
-                                modifier = Modifier.padding(top = 4.dp),
-                            ) {
-                                Icon(
-                                    Tabler.Outline.Check,
-                                    contentDescription = null,
-                                    modifier = Modifier.size(14.dp),
-                                    tint = MaterialTheme.colorScheme.primary,
-                                )
-                                Spacer(Modifier.width(4.dp))
-                                Text(
-                                    text = "Downloaded",
-                                    style = MaterialTheme.typography.labelSmall,
-                                    color = MaterialTheme.colorScheme.primary,
-                                )
-                            }
-                        } else if (offlineItem.downloadStatus == DownloadStatus.DOWNLOADING) {
-                            val progress = if (offlineItem.totalSizeBytes > 0) {
-                                offlineItem.downloadedBytes.toFloat() / offlineItem.totalSizeBytes
-                            } else 0f
-                            JellyPlayLinearProgressIndicator(
-                                progress = { progress },
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .padding(top = 4.dp),
-                            )
-                        }
-                    }
+                    Icon(
+                        Tabler.Outline.DeviceFloppy,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.size(14.dp),
+                    )
+                    Spacer(Modifier.size(4.dp))
+                    val summary = buildList {
+                        add("${offlineLibrary.size} item${if (offlineLibrary.size == 1) "" else "s"}")
+                        if (totalBytes > 0) add(totalBytes.formatBytes())
+                    }.joinToString(" · ")
+                    Text(summary, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
+                Spacer(Modifier.height(12.dp))
+                OutlinedButton(onClick = onGoOnline, modifier = Modifier.clip(ShapeCache.smooth16)) {
+                    Icon(Tabler.Outline.Wifi, contentDescription = null, modifier = Modifier.size(16.dp))
+                    Spacer(Modifier.size(6.dp))
+                    Text("Go online")
+                }
+            }
+        }
+
+        if (continueWatching.isNotEmpty()) {
+            item(key = "offline_continue") {
+                OfflineSection(
+                    title = "Continue Watching",
+                    items = continueWatching,
+                    cardWidth = rowCardWidth * 2, // landscape cards are wider
+                    contentPad = contentPadding,
+                    onItemClick = onOfflineItemClick,
+                )
+            }
+        }
+
+        item(key = "offline_recent") {
+            OfflineSection(
+                title = "Recently Downloaded",
+                items = recent,
+                cardWidth = rowCardWidth,
+                contentPad = contentPadding,
+                onItemClick = onOfflineItemClick,
+            )
+        }
+
+        if (movies.isNotEmpty()) {
+            item(key = "offline_movies") {
+                OfflineSection(title = "Movies", items = movies, cardWidth = rowCardWidth, contentPad = contentPadding, onItemClick = onOfflineItemClick)
+            }
+        }
+        if (series.isNotEmpty()) {
+            item(key = "offline_series") {
+                OfflineSection(title = "Series", items = series, cardWidth = rowCardWidth, contentPad = contentPadding, onItemClick = onOfflineItemClick)
+            }
+        }
+        if (music.isNotEmpty()) {
+            item(key = "offline_music") {
+                OfflineSection(title = "Music", items = music, cardWidth = rowCardWidth, contentPad = contentPadding, onItemClick = onOfflineItemClick)
             }
         }
     }
 }
 
+@Composable
+private fun OfflineSection(
+    title: String,
+    items: List<OfflineMediaItem>,
+    cardWidth: Dp,
+    contentPad: Dp,
+    onItemClick: (itemId: String, mediaType: MediaType) -> Unit,
+) {
+    Column(modifier = Modifier.fillMaxWidth()) {
+        Text(
+            text = title,
+            style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Bold),
+            color = MaterialTheme.colorScheme.onSurface,
+            modifier = Modifier.padding(start = contentPad, bottom = 12.dp),
+        )
+        LazyRow(
+            contentPadding = PaddingValues(horizontal = contentPad),
+            horizontalArrangement = Arrangement.spacedBy(12.dp),
+        ) {
+            items(items, key = { "offline_${it.id}" }, contentType = { "offlineItem" }) { item ->
+                OfflineMediaCard(
+                    item = item,
+                    onClick = { onItemClick(item.id, item.mediaType) },
+                    modifier = Modifier.width(cardWidth),
+                )
+            }
+        }
+    }
+}
+
+/**
+ * Inline "Downloaded" row shown on the online home. Upgraded from the old
+ * bespoke poster to the shared [OfflineMediaCard] so it matches the rest of
+ * the offline surfaces.
+ */
 @Composable
 fun DownloadedSection(
     offlineLibrary: List<OfflineMediaItem>,
@@ -262,9 +219,7 @@ fun DownloadedSection(
 ) {
     Text(
         text = "Downloaded",
-        style = MaterialTheme.typography.titleLarge.copy(
-            fontWeight = FontWeight.Bold,
-        ),
+        style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Bold),
         color = MaterialTheme.colorScheme.onSurface,
         modifier = modifier
             .fillMaxWidth()
@@ -277,7 +232,7 @@ fun DownloadedSection(
             .fillMaxWidth()
             .background(backgroundColor)
             .padding(horizontal = contentPad, vertical = 4.dp),
-        horizontalArrangement = Arrangement.spacedBy(8.dp),
+        horizontalArrangement = Arrangement.spacedBy(12.dp),
     ) {
         items(
             count = offlineLibrary.size,
@@ -285,47 +240,11 @@ fun DownloadedSection(
             contentType = { "offlineItem" },
         ) { index ->
             val offlineItem = offlineLibrary[index]
-            Column(
-                modifier = Modifier
-                    .width(120.dp)
-                    .focusIndicator()
-                    .clickable { onOfflineLibraryClick() },
-            ) {
-                val posterModifier = Modifier
-                    .fillMaxWidth()
-                    .aspectRatio(2f / 3f)
-                    .clip(ShapeCache.smooth8)
-
-                if (!offlineItem.posterPath.isNullOrBlank()) {
-                    MediaImage(
-                        url = offlineItem.posterPath!!,
-                        contentDescription = offlineItem.name,
-                        blurHash = offlineItem.blurHashPrimary,
-                        modifier = posterModifier,
-                        contentScale = ContentScale.Crop,
-                    )
-                } else {
-                    Box(
-                        modifier = posterModifier.background(MaterialTheme.colorScheme.surfaceVariant),
-                        contentAlignment = Alignment.Center,
-                    ) {
-                        Text(
-                            text = offlineItem.name.take(2).uppercase(),
-                            style = MaterialTheme.typography.titleMedium,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        )
-                    }
-                }
-
-                Text(
-                    text = offlineItem.name,
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurface,
-                    maxLines = 2,
-                    overflow = TextOverflow.Ellipsis,
-                    modifier = Modifier.padding(top = 4.dp),
-                )
-            }
+            OfflineMediaCard(
+                item = offlineItem,
+                onClick = onOfflineLibraryClick,
+                modifier = Modifier.width(120.dp),
+            )
         }
     }
 }

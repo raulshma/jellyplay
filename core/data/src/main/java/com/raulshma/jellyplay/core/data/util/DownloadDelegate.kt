@@ -19,6 +19,10 @@ data class DownloadRequest(
     val imageBlurHash: String?,
     val trickplayInfo: com.raulshma.jellyplay.core.model.TrickplayInfo? = null,
     val mediaStreams: List<MediaStream> = emptyList(),
+    // Full server detail for the item being downloaded. Persisted into the
+    // offline store so the redesigned offline detail screens can show cast,
+    // studios, ratings, overview, etc. — instead of the bare stub used before.
+    val detail: MediaDetail? = null,
 )
 
 data class DownloadResult(
@@ -52,6 +56,7 @@ class DownloadDelegate @Inject constructor(
             imageBlurHash = item.blurHashes.primary,
             trickplayInfo = source.trickplayInfo,
             mediaStreams = source.mediaStreams,
+            detail = detail,
         )
     }
 
@@ -71,16 +76,29 @@ class DownloadDelegate @Inject constructor(
                     downloadRepository.enqueueDownload(downloadItem.id)
                     try {
                         val backdropUrl = playbackRepository.getBackdropUrl(request.mediaItemId, maxWidth = 1280)
-                        val stubItem = com.raulshma.jellyplay.core.model.MediaItem(
-                            id = request.mediaItemId,
-                            name = request.name,
-                            mediaType = com.raulshma.jellyplay.core.model.MediaType.MOVIE,
-                        )
-                        downloadRepository.saveOfflineMediaItem(
-                            stubItem,
-                            request.imageUrl,
-                            backdropUrl,
-                        )
+                        // Persist full metadata when the originating MediaDetail
+                        // is available (overview, cast, studios, ratings, …);
+                        // otherwise fall back to the minimal item path so we
+                        // never leave the download without an offline row.
+                        val detail = request.detail
+                        if (detail != null) {
+                            downloadRepository.saveOfflineMediaDetail(
+                                detail,
+                                request.imageUrl,
+                                backdropUrl,
+                            )
+                        } else {
+                            val minimalItem = com.raulshma.jellyplay.core.model.MediaItem(
+                                id = request.mediaItemId,
+                                name = request.name,
+                                mediaType = com.raulshma.jellyplay.core.model.MediaType.MOVIE,
+                            )
+                            downloadRepository.saveOfflineMediaItem(
+                                minimalItem,
+                                request.imageUrl,
+                                backdropUrl,
+                            )
+                        }
                     } catch (_: Exception) {}
                     request.trickplayInfo?.let { info ->
                         try {

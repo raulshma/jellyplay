@@ -25,6 +25,8 @@ import com.raulshma.jellyplay.core.model.MediaSegment
 import com.raulshma.jellyplay.core.model.MediaStream
 import com.raulshma.jellyplay.core.model.MediaType
 import com.raulshma.jellyplay.core.model.MediaItem
+import com.raulshma.jellyplay.core.model.MediaDetail
+import com.raulshma.jellyplay.core.model.OfflinePersonInfo
 import com.raulshma.jellyplay.core.model.OfflineSubtitleEntry
 import com.raulshma.jellyplay.core.model.OfflineSubtitleManifest
 import com.raulshma.jellyplay.core.model.StreamType
@@ -272,6 +274,17 @@ class DownloadRepositoryImpl @Inject constructor(
         }
     }
 
+    override suspend fun saveOfflineMediaDetail(detail: MediaDetail, imageUrl: String?, backdropUrl: String?) {
+        saveOfflineMetadataForDetail(detail, imageUrl, backdropUrl)
+
+        // For episodes, fall back to the series/season seeding logic so a
+        // lone episode download still has its parent rows.
+        val item = detail.item
+        if (item.mediaType == MediaType.EPISODE) {
+            saveOfflineMediaItem(item, imageUrl, backdropUrl)
+        }
+    }
+
     override suspend fun getDownloadedEpisodeIdsForSeries(seriesId: String): Set<String> {
         return withContext(Dispatchers.IO) {
             downloadDao.getDownloadsForSeries(seriesId)
@@ -295,7 +308,9 @@ class DownloadRepositoryImpl @Inject constructor(
             val imageUrl = playbackRepository.getImageUrl(seriesId, maxWidth = 300)
             val backdropUrl = playbackRepository.getBackdropUrl(seriesId, maxWidth = 1280)
 
-            saveOfflineMetadataForItem(seriesItem, imageUrl, backdropUrl)
+            // Persist full series metadata (cast, studios, ratings, …) from the
+            // fetched detail so the offline series screen is as rich as online.
+            saveOfflineMetadataForDetail(detail, imageUrl, backdropUrl)
 
             val seasons = mediaRepository.getSeasons(seriesId).getOrElse { emptyList() }
             val targetSeasons = if (episodeIds != null) {
@@ -346,7 +361,14 @@ class DownloadRepositoryImpl @Inject constructor(
 
                                 if (streamUrl.isNotBlank()) {
                                     val epImageUrl = playbackRepository.getImageUrl(episode.id, maxWidth = 300)
-                                    val offlineEntity = episode.toOfflineMediaEntity(epImageUrl, null)
+                                    // Use the rich MediaDetail mapper when available so
+                                    // episodes persist cast/studios/criticRating/tagline;
+                                    // otherwise fall back to the item-level mapper.
+                                    val offlineEntity = if (episodeDetail != null) {
+                                        episodeDetail.toOfflineMediaEntity(epImageUrl, null)
+                                    } else {
+                                        episode.toOfflineMediaEntity(epImageUrl, null)
+                                    }
 
                                     val download = startDownload(
                                         mediaItemId = episode.id,
@@ -587,6 +609,27 @@ class DownloadRepositoryImpl @Inject constructor(
         preloadImageToCache(backdropUrl)
     }
 
+    /**
+     * Persist full metadata for a downloaded item from a [MediaDetail], including
+     * cast, studios, critic rating, tagline, and original title. Cast images
+     * are preloaded into the Coil cache so the offline detail screen can render
+     * the cast row without network access.
+     */
+    private suspend fun saveOfflineMetadataForDetail(detail: MediaDetail, imageUrl: String?, backdropUrl: String?) {
+        val entity = detail.toOfflineMediaEntity(imageUrl, backdropUrl)
+        offlineMediaDao.upsert(entity)
+        preloadImageToCache(imageUrl)
+        preloadImageToCache(backdropUrl)
+        // Preload up to 10 cast images so the offline cast row renders without
+        // a network connection. Mirrors the poster/backdrop caching above.
+        detail.people
+            .filter { (it.type == "Actor" || it.type == "Director") && !it.primaryImageTag.isNullOrBlank() }
+            .take(10)
+            .forEach { person ->
+                preloadImageToCache(playbackRepository.getImageUrl(person.id, maxWidth = 200))
+            }
+    }
+
     override fun enqueueDownload(downloadId: String) {
         enqueueDownloadWorker(downloadId)
     }
@@ -692,6 +735,35 @@ class DownloadRepositoryImpl @Inject constructor(
         isPlayed = isPlayed,
         lastPlayedDate = null,
     )
+
+    /**
+     * Maps a [MediaDetail] (the rich server response) to an [OfflineMediaEntity],
+     * additionally persisting original title, critic rating, studios, tagline,
+     * and the cast as a JSON blob. Falls back to the item-level values for the
+     * base fields so this stays consistent with [MediaItem.toOfflineMediaEntity].
+     */
+    private fun MediaDetail.toOfflineMediaEntity(imageUrl: String?, backdropUrl: String?): OfflineMediaEntity {
+        val base = item.toOfflineMediaEntity(imageUrl, backdropUrl)
+        val cast = people
+            .filter { it.type == "Actor" }
+            .map { person ->
+                OfflinePersonInfo(
+                    id = person.id,
+                    name = person.name,
+                    role = person.role,
+                    type = person.type,
+                    imageTag = person.primaryImageTag,
+                    blurHash = person.primaryBlurHash,
+                )
+            }
+        return base.copy(
+            originalTitle = item.originalTitle,
+            criticRating = criticRating,
+            studios = item.studios.joinToString(","),
+            tagline = taglines.firstOrNull(),
+            peopleJson = if (cast.isEmpty()) null else encodeCast(cast),
+        )
+    }
 
     /** Derives a 0–100 played percentage, guarding against divide-by-zero. */
     private fun computePlayedPercentage(positionTicks: Long?, runTimeTicks: Long?, isPlayed: Boolean): Double =

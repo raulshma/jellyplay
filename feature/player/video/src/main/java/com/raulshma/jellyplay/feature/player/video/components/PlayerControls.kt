@@ -62,6 +62,7 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import com.raulshma.jellyplay.core.ui.tv.input.onDpadKey
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.setProgress
@@ -224,6 +225,13 @@ internal fun PlayerControls(
     val videoStats by videoStatsFlow.collectAsStateWithLifecycle()
 
     val isTv = LocalTvMode.current
+    val isPortrait = LocalConfiguration.current.orientation ==
+        android.content.res.Configuration.ORIENTATION_PORTRAIT
+    // In portrait the bottom controls are split 50/50 between the left and
+    // right clusters, both horizontally scrollable, so neither side crowds
+    // the other on narrow screens. Landscape keeps the original asymmetric
+    // layout (scrolling left row, fixed right cluster).
+    val splitBottomControlsEvenly = !isTv && isPortrait
     val tvPlayPauseFocusRequester = remember { FocusRequester() }
     val tvBackFocusRequester = remember { FocusRequester() }
     val tvSeekbarFocusRequester = remember { FocusRequester() }
@@ -538,7 +546,7 @@ internal fun PlayerControls(
                             .weight(1f)
                             .then(if (!isTv) Modifier.horizontalScroll(rememberScrollState()) else Modifier),
                         horizontalArrangement = if (isTv) Arrangement.spacedBy(2.dp) else Arrangement.Start,
-                        verticalAlignment = Alignment.CenterVertically
+                        verticalAlignment = Alignment.CenterVertically,
                     ) {
                         if (supportsLiveQualitySwitch) {
                             PlayerQualityButton(
@@ -592,7 +600,17 @@ internal fun PlayerControls(
                         )
                     }
 
-                    Row(verticalAlignment = Alignment.CenterVertically) {
+                    Row(
+                        modifier = Modifier
+                            .then(if (splitBottomControlsEvenly) Modifier.weight(1f) else Modifier)
+                            .then(
+                                if (splitBottomControlsEvenly) {
+                                    Modifier.horizontalScroll(rememberScrollState())
+                                } else Modifier
+                            ),
+                        horizontalArrangement = if (splitBottomControlsEvenly) Arrangement.End else Arrangement.Start,
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
                         if (!isTv) {
                             PlayerIconButton(
                                 icon = Tabler.Outline.Lock,

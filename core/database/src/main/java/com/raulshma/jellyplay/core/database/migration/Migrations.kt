@@ -514,6 +514,21 @@ val MIGRATION_28_29 = object : Migration(28, 29) {
     }
 }
 
+// Rich metadata for offline detail screens: original title, critic rating,
+// studios (comma-joined), tagline, and a JSON blob of cast/people. Lets the
+// redesigned offline detail screens show the same information as the online
+// detail screen. All columns are nullable so pre-existing rows degrade
+// gracefully until the item is re-downloaded.
+val MIGRATION_29_30 = object : Migration(29, 30) {
+    override fun migrate(db: SupportSQLiteDatabase) {
+        db.execSQL("ALTER TABLE offline_media ADD COLUMN originalTitle TEXT")
+        db.execSQL("ALTER TABLE offline_media ADD COLUMN criticRating REAL")
+        db.execSQL("ALTER TABLE offline_media ADD COLUMN studios TEXT")
+        db.execSQL("ALTER TABLE offline_media ADD COLUMN tagline TEXT")
+        db.execSQL("ALTER TABLE offline_media ADD COLUMN peopleJson TEXT")
+    }
+}
+
 val ALL_MIGRATIONS = listOf(
     MIGRATION_1_2,
     MIGRATION_2_3,
@@ -542,4 +557,5 @@ val ALL_MIGRATIONS = listOf(
     MIGRATION_26_27,
     MIGRATION_27_28,
     MIGRATION_28_29,
+    MIGRATION_29_30,
 )
