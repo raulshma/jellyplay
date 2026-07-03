@@ -218,7 +218,14 @@ class MpvPlayerEngine(
             mpv.setOptionString("ao", aoValue)
             mpv.setOptionString("gpu-context", "android")
             mpv.setOptionString("opengl-es", "yes")
-            mpv.setOptionString("sub-scale-with-window", "yes")
+            // Size subtitles against the video frame, not the OS window. With
+            // "yes" (window-relative), rotating to portrait grows the window
+            // height ~2x and blows the captions up, while the video itself is
+            // letterboxed; "no" keeps captions proportional to the video, so
+            // they stay correct and consistent across rotation — matching how
+            // ExoPlayer (fixed SP) and VLC (video-relative freetype) behave.
+            // See issue #66-A.
+            mpv.setOptionString("sub-scale-with-window", "no")
             mpv.setOptionString("sub-auto", "fuzzy")
             mpv.setOptionString("sub-visibility", "yes")
             mpv.setOptionString("secondary-sub-visibility", "yes")

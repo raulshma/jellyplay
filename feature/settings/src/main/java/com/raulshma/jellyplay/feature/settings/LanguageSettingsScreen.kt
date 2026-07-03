@@ -117,7 +117,7 @@ fun LanguageSettingsScreen(
     val scrollIndex = remember(highlightSettingId) {
         when (highlightSettingId) {
             in listOf("app_language", "audio_language", "subtitle_language") -> 0
-            in listOf("subtitle_font_size", "subtitle_forced_only", "pgs_direct_play", "hdr_subtitle_style", "hdr_subtitle_font_size", "subtitle_color", "subtitle_background", "subtitle_edge_style", "subtitle_sync_offset", "subtitle_vertical_position") -> 1
+            in listOf("subtitle_font_size", "subtitle_forced_only", "high_contrast_subtitles", "pgs_direct_play", "hdr_subtitle_style", "hdr_subtitle_font_size", "subtitle_color", "subtitle_background", "subtitle_edge_style", "subtitle_sync_offset", "subtitle_vertical_position") -> 1
             else -> -1
         }
     }
@@ -207,7 +207,7 @@ fun LanguageSettingsScreen(
                     title = "Subtitles",
                     summary = { "Font size: ${preferences.subtitleStyle.fontSize}sp" },
                     modifier = Modifier.padding(vertical = 8.dp),
-                    initiallyExpanded = highlightSettingId in listOf("subtitle_font_size", "subtitle_color", "subtitle_background", "subtitle_edge_style", "subtitle_sync_offset", "subtitle_vertical_position"),
+                    initiallyExpanded = highlightSettingId in listOf("subtitle_font_size", "subtitle_forced_only", "high_contrast_subtitles", "pgs_direct_play", "hdr_subtitle_style", "hdr_subtitle_font_size", "subtitle_color", "subtitle_background", "subtitle_edge_style", "subtitle_sync_offset", "subtitle_vertical_position"),
                 ) {
                     var subIdx = 0
                     val subTotal = when {

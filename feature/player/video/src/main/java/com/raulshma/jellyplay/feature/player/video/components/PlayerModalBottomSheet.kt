@@ -21,7 +21,6 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.darkColorScheme
 import androidx.compose.material3.SheetState
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
@@ -104,8 +103,9 @@ private fun InWindowPlayerSheet(
     val density = LocalDensity.current
     // Force a dark color scheme for the in-window sheet chrome. The player surface
     // is always the dark video, and the ambient app theme may be light/dynamic-light,
-    // which would render sheet titles unreadable (issue #66-C).
-    val colorScheme = darkColorScheme()
+    // which would render sheet titles unreadable (issue #66-C). PlayerDarkTheme (applied
+    // around PlayerSheetRouter) sets both the dark scheme and LocalContentColor, so sheet
+    // titles/labels fall back to a light, high-contrast foreground.
     val typography = MaterialTheme.typography
     val focusManager = LocalFocusManager.current
     val keyboardController = LocalSoftwareKeyboardController.current
@@ -152,7 +152,7 @@ private fun InWindowPlayerSheet(
                 .imePadding()
                 .offset { IntOffset(0, translationY.roundToInt()) }
                 .clip(SheetTopShape)
-                .background(colorScheme.surfaceContainer),
+                .background(MaterialTheme.colorScheme.surfaceContainer),
         ) {
             Box(
                 modifier = Modifier
@@ -187,14 +187,15 @@ private fun InWindowPlayerSheet(
                     Modifier
                         .size(width = 40.dp, height = 4.dp)
                         .clip(CircleShape)
-                        .background(colorScheme.onSurfaceVariant.copy(alpha = 0.4f)),
+                        .background(MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.4f)),
                 )
             }
 
-            MaterialTheme(
-                colorScheme = colorScheme,
-                typography = typography,
-            ) {
+            // PlayerDarkTheme (around PlayerSheetRouter) already provides the dark color scheme
+            // and LocalContentColor; re-declaring MaterialTheme here with a fresh darkColorScheme()
+            // would clobber the accent and drop the LocalContentColor override. Just reuse the
+            // ambient typography so sheet text styles stay consistent.
+            MaterialTheme(typography = typography) {
                 content()
             }
         }
