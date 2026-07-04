@@ -14,6 +14,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.raulshma.jellyplay.core.model.DecoderMode
@@ -204,7 +205,7 @@ fun PlaybackSettingsScreen(
     }
 
     JellyPlayScreenScaffold(
-        title = "Playback",
+        title = stringResource(R.string.settings_playback_title),
         onBack = onBack,
         backgroundColor = backgroundColor,
         actions = {
@@ -236,8 +237,8 @@ fun PlaybackSettingsScreen(
             item {
                 SettingsGroup(
                     icon = Tabler.Outline.PlayerPlay,
-                    title = "Video Player",
-                    summary = { "Player Engine: ${preferences.preferredPlayer.displayName}" },
+                    title = stringResource(R.string.settings_video_player),
+                    summary = { stringResource(R.string.settings_playback_subtitle, preferences.preferredPlayer.displayName) },
                     modifier = Modifier.padding(vertical = 8.dp),
                     initiallyExpanded = true,
                 ) {
@@ -246,8 +247,8 @@ fun PlaybackSettingsScreen(
 
                     SettingListItem(
                         icon = Tabler.Outline.PlayerPlay,
-                        title = "Player Engine",
-                        subtitle = "Choose media playback engine",
+                        title = stringResource(R.string.settings_player_engine),
+                        subtitle = stringResource(R.string.settings_player_engine_subtitle),
                         trailingText = preferences.preferredPlayer.displayName,
                         highlighted = highlightSettingId == "player_engine",
                         index = idx++, count = total,
@@ -255,8 +256,8 @@ fun PlaybackSettingsScreen(
                     )
                     SettingListItem(
                         icon = Tabler.Outline.PlayerTrackNext,
-                        title = "Seek Duration",
-                        subtitle = "Double-tap to seek",
+                        title = stringResource(R.string.settings_seek_duration),
+                        subtitle = stringResource(R.string.settings_seek_duration_subtitle),
                         trailingText = "${preferences.videoSeekDurationMs / 1000}s",
                         highlighted = highlightSettingId == "seek_duration",
                         index = idx++, count = total,
@@ -264,8 +265,8 @@ fun PlaybackSettingsScreen(
                     )
                     SettingListItem(
                         icon = Tabler.Outline.DeviceMobileRotated,
-                        title = "Orientation",
-                        subtitle = "Default screen orientation",
+                        title = stringResource(R.string.settings_orientation),
+                        subtitle = stringResource(R.string.settings_orientation_subtitle),
                         trailingText = preferences.videoDefaultOrientation.displayName,
                         highlighted = highlightSettingId == "orientation",
                         index = idx++, count = total,
@@ -273,8 +274,8 @@ fun PlaybackSettingsScreen(
                     )
                     SettingToggleItem(
                         icon = Tabler.Outline.HandMove,
-                        title = "Gestures",
-                        subtitle = if (preferences.videoGesturesEnabled) "Swipe and tap gestures active" else "Touch gestures disabled",
+                        title = stringResource(R.string.settings_gestures),
+                        subtitle = if (preferences.videoGesturesEnabled) stringResource(R.string.settings_gestures_on) else stringResource(R.string.settings_gestures_off),
                         checked = preferences.videoGesturesEnabled,
                         highlighted = highlightSettingId == "gestures",
                         index = idx++, count = total,
@@ -282,8 +283,8 @@ fun PlaybackSettingsScreen(
                     )
                     SettingListItem(
                         icon = Tabler.Outline.Gauge,
-                        title = "Default Speed",
-                        subtitle = "Initial playback speed",
+                        title = stringResource(R.string.settings_default_speed),
+                        subtitle = stringResource(R.string.settings_default_speed_subtitle),
                         trailingText = if (preferences.videoDefaultSpeed == 1.0f) "1x" else "${preferences.videoDefaultSpeed}x",
                         highlighted = highlightSettingId == "default_speed",
                         index = idx++, count = total,
@@ -291,8 +292,8 @@ fun PlaybackSettingsScreen(
                     )
                     SettingToggleItem(
                         icon = Tabler.Outline.RewindForward30,
-                        title = "Hold-to-Seek",
-                        subtitle = if (preferences.videoHoldSpeedEnabled) "Long-press to fast-forward/rewind" else "Disabled",
+                        title = stringResource(R.string.settings_hold_to_seek),
+                        subtitle = if (preferences.videoHoldSpeedEnabled) stringResource(R.string.settings_hold_to_seek_on) else stringResource(R.string.settings_disabled),
                         checked = preferences.videoHoldSpeedEnabled,
                         highlighted = highlightSettingId == "hold_speed",
                         index = idx++, count = total,
@@ -300,8 +301,8 @@ fun PlaybackSettingsScreen(
                     )
                     SettingListItem(
                         icon = Tabler.Outline.Rocket,
-                        title = "Hold-to-Seek Speed",
-                        subtitle = "Playback speed while holding",
+                        title = stringResource(R.string.settings_hold_to_seek_speed),
+                        subtitle = stringResource(R.string.settings_hold_to_seek_speed_subtitle),
                         trailingText = "${preferences.videoHoldSpeedMultiplier}x",
                         highlighted = highlightSettingId == "hold_speed_multiplier",
                         index = idx++, count = total,
@@ -309,8 +310,8 @@ fun PlaybackSettingsScreen(
                     )
                     SettingListItem(
                         icon = Tabler.Outline.ArrowAutofitHeight,
-                        title = "Default Aspect",
-                        subtitle = "Video aspect ratio",
+                        title = stringResource(R.string.settings_default_aspect),
+                        subtitle = stringResource(R.string.settings_default_aspect_subtitle),
                         trailingText = preferences.videoDefaultAspectRatio,
                         highlighted = highlightSettingId == "default_aspect",
                         index = idx++, count = total,
@@ -318,8 +319,8 @@ fun PlaybackSettingsScreen(
                     )
                     SettingToggleItem(
                         icon = Tabler.Outline.PlayerSkipForward,
-                        title = "Auto-play Next",
-                        subtitle = if (preferences.videoAutoplayNext) "Automatically plays next episode" else "Manual episode selection",
+                        title = stringResource(R.string.settings_auto_play_next),
+                        subtitle = if (preferences.videoAutoplayNext) stringResource(R.string.settings_auto_play_next_on) else stringResource(R.string.settings_auto_play_next_off),
                         checked = preferences.videoAutoplayNext,
                         highlighted = highlightSettingId == "video_autoplay_next",
                         index = idx++, count = total,
@@ -328,8 +329,8 @@ fun PlaybackSettingsScreen(
                     val countdownLabel = if (preferences.autoPlayCountdownSec == 0) "Off" else "${preferences.autoPlayCountdownSec}s"
                     SettingListItem(
                         icon = Tabler.Outline.Clock,
-                        title = "Auto-Play Countdown",
-                        subtitle = "Countdown duration before auto-playing next episode",
+                        title = stringResource(R.string.settings_auto_play_countdown),
+                        subtitle = stringResource(R.string.settings_auto_play_countdown_subtitle),
                         trailingText = countdownLabel,
                         highlighted = highlightSettingId == "autoplay_countdown",
                         index = idx++, count = total,
@@ -338,8 +339,8 @@ fun PlaybackSettingsScreen(
                     if (showAdvanced) {
                         SettingListItem(
                             icon = Tabler.Outline.Clock,
-                            title = "Controls Timeout",
-                            subtitle = "Auto-hide player controls",
+                            title = stringResource(R.string.settings_controls_timeout),
+                            subtitle = stringResource(R.string.settings_controls_timeout_subtitle),
                             trailingText = "${preferences.videoControlsTimeoutMs / 1000}s",
                             highlighted = highlightSettingId == "controls_timeout",
                             index = idx++, count = total,

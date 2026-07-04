@@ -172,16 +172,34 @@ class LibraryViewModel @Inject constructor(
 
     private fun loadGenres() {
         launch {
-            mediaRepository.getGenres()
-                .onSuccess { _genres.set(it) }
+            // Retry once after a short delay so a transient network blip doesn't
+            // leave the filter sheet permanently missing its Genres section.
+            loadGenresWithRetry()
         }
+    }
+
+    private suspend fun loadGenresWithRetry(retries: Int = 1) {
+        var result = mediaRepository.getGenres()
+        if (retries > 0 && result.isFailure) {
+            kotlinx.coroutines.delay(800)
+            result = mediaRepository.getGenres()
+        }
+        result.onSuccess { _genres.set(it) }
     }
 
     private fun loadTags() {
         launch {
-            mediaRepository.getTags()
-                .onSuccess { _tags.set(it) }
+            loadTagsWithRetry()
         }
+    }
+
+    private suspend fun loadTagsWithRetry(retries: Int = 1) {
+        var result = mediaRepository.getTags()
+        if (retries > 0 && result.isFailure) {
+            kotlinx.coroutines.delay(800)
+            result = mediaRepository.getTags()
+        }
+        result.onSuccess { _tags.set(it) }
     }
 
     fun selectFolder(folder: LibraryFolder?) {
@@ -202,6 +220,8 @@ class LibraryViewModel @Inject constructor(
                         years = saved.years,
                         sortBy = SortOption.entries.find { it.name == saved.sortBy || it.apiValue == saved.sortBy } ?: SortOption.SORT_NAME,
                         playedStatus = PlayedStatus.entries.find { it.name == saved.playedStatus } ?: PlayedStatus.ALL,
+                        tags = saved.tags,
+                        minRating = saved.minRating,
                     )
                 } catch (_: Exception) {
                     newFilters = LibraryFilters()
@@ -249,7 +269,11 @@ class LibraryViewModel @Inject constructor(
     }
 
     fun shuffleLibrary() {
-        updateFilters(_filters.value.copy(sortBy = SortOption.RANDOM))
+        // Shuffle is a transient action: apply RANDOM sort in-memory only so we
+        // don't overwrite the folder's saved default sort order (which is what
+        // a regular filter change via updateFilters persists). On the next visit
+        // the user's chosen sort (e.g. Recently Added) is restored as expected.
+        _filters.set(_filters.value.copy(sortBy = SortOption.RANDOM))
     }
 
     fun clearFilters() {

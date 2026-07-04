@@ -27,6 +27,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.compose.foundation.layout.Arrangement
 import androidx.hilt.navigation.compose.hiltViewModel
@@ -99,7 +100,7 @@ fun StorageSettingsScreen(
     )
 
     JellyPlayScreenScaffold(
-        title = "Downloads & Storage",
+        title = stringResource(R.string.settings_downloads_storage_title),
         onBack = onBack,
         backgroundColor = backgroundColor,
         actions = {
@@ -131,8 +132,8 @@ fun StorageSettingsScreen(
             item {
                 SettingsGroup(
                     icon = Tabler.Outline.Database,
-                    title = "Storage",
-                    summary = { "Cache: ${viewModel.cacheSizeMb} MB" },
+                    title = stringResource(R.string.settings_storage),
+                    summary = { stringResource(R.string.settings_cache_summary, viewModel.cacheSizeMb) },
                     modifier = Modifier.padding(vertical = 8.dp),
                     initiallyExpanded = true,
                 ) {
@@ -144,7 +145,7 @@ fun StorageSettingsScreen(
                                 .padding(horizontal = 16.dp, vertical = 8.dp),
                         ) {
                             Text(
-                                text = "Storage Breakdown",
+                                text = stringResource(R.string.settings_storage_breakdown),
                                 style = MaterialTheme.typography.titleSmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                                 modifier = Modifier.padding(bottom = 8.dp),
@@ -191,9 +192,9 @@ fun StorageSettingsScreen(
                                 modifier = Modifier.fillMaxWidth(),
                                 horizontalArrangement = Arrangement.spacedBy(16.dp),
                             ) {
-                                LegendItem(color = MaterialTheme.colorScheme.primary, label = "Cache: ${breakdown.cacheMb} MB")
-                                LegendItem(color = MaterialTheme.colorScheme.tertiary, label = "Downloads: ${breakdown.downloadsMb} MB")
-                                LegendItem(color = MaterialTheme.colorScheme.secondary, label = "Images: ${breakdown.imagesMb} MB")
+                                LegendItem(color = MaterialTheme.colorScheme.primary, label = stringResource(R.string.settings_legend_cache, breakdown.cacheMb))
+                                LegendItem(color = MaterialTheme.colorScheme.tertiary, label = stringResource(R.string.settings_legend_downloads, breakdown.downloadsMb))
+                                LegendItem(color = MaterialTheme.colorScheme.secondary, label = stringResource(R.string.settings_legend_images, breakdown.imagesMb))
                             }
                         }
                     }
@@ -202,14 +203,14 @@ fun StorageSettingsScreen(
                     var storageIdx = 0
                     SettingInfoItem(
                         icon = Tabler.Outline.Database,
-                        title = "Cache Used",
+                        title = stringResource(R.string.settings_cache_used),
                         subtitle = "${viewModel.cacheSizeMb} MB",
                         index = storageIdx++, count = storageTotal,
                     )
                     SettingListItem(
                         icon = Tabler.Outline.Trash,
-                        title = "Clear Cache",
-                        subtitle = "Free up storage space",
+                        title = stringResource(R.string.settings_clear_cache),
+                        subtitle = stringResource(R.string.settings_clear_cache_subtitle),
                         highlighted = highlightSettingId == "clear_cache",
                         index = storageIdx++, count = storageTotal,
                         onClick = { viewModel.clearCache() },
@@ -217,8 +218,8 @@ fun StorageSettingsScreen(
                     if (showAdvanced) {
                         SettingToggleItem(
                             icon = Tabler.Outline.Wifi,
-                            title = "WiFi Only",
-                            subtitle = if (preferences.wifiOnlyDownloads) "Downloads only on unmetered networks" else "Downloads on any network",
+                            title = stringResource(R.string.settings_wifi_only),
+                            subtitle = if (preferences.wifiOnlyDownloads) stringResource(R.string.settings_wifi_only_on) else stringResource(R.string.settings_wifi_only_off),
                             checked = preferences.wifiOnlyDownloads,
                             highlighted = highlightSettingId == "wifi_only_downloads",
                             index = storageIdx++, count = storageTotal,
@@ -226,8 +227,8 @@ fun StorageSettingsScreen(
                         )
                         SettingListItem(
                             icon = Tabler.Outline.Download,
-                            title = "Connections per download",
-                            subtitle = "Parallel streams for a single file",
+                            title = stringResource(R.string.settings_connections_per_download),
+                            subtitle = stringResource(R.string.settings_connections_per_download_subtitle),
                             trailingText = "${preferences.downloadConnections}",
                             highlighted = highlightSettingId == "download_connections",
                             index = storageIdx++, count = storageTotal,
@@ -240,8 +241,8 @@ fun StorageSettingsScreen(
                         )
                         SettingListItem(
                             icon = Tabler.Outline.ArrowBarToDown,
-                            title = "Max simultaneous downloads",
-                            subtitle = "How many downloads may transfer at once",
+                            title = stringResource(R.string.settings_max_simultaneous_downloads),
+                            subtitle = stringResource(R.string.settings_max_simultaneous_downloads_subtitle),
                             trailingText = "${preferences.maxConcurrentDownloads}",
                             highlighted = highlightSettingId == "max_concurrent_downloads",
                             index = storageIdx++, count = storageTotal,
@@ -254,8 +255,8 @@ fun StorageSettingsScreen(
                         )
                         SettingToggleItem(
                             icon = Tabler.Outline.Refresh,
-                            title = "Auto-delete Cache",
-                            subtitle = if (preferences.autoDeleteCache) "Automatically clears on low storage" else "Manual cache management",
+                            title = stringResource(R.string.settings_auto_delete_cache),
+                            subtitle = if (preferences.autoDeleteCache) stringResource(R.string.settings_auto_delete_on) else stringResource(R.string.settings_auto_delete_off),
                             checked = preferences.autoDeleteCache,
                             highlighted = highlightSettingId == "auto_delete_cache",
                             index = storageIdx++, count = storageTotal,
@@ -263,9 +264,9 @@ fun StorageSettingsScreen(
                         )
                         SettingListItem(
                             icon = Tabler.Outline.Database,
-                            title = "Max Cache Size",
-                            subtitle = "Maximum disk space for caching",
-                            trailingText = if (preferences.maxCacheSizeMb == 0) "Unlimited" else "${preferences.maxCacheSizeMb} MB",
+                            title = stringResource(R.string.settings_max_cache_size),
+                            subtitle = stringResource(R.string.settings_max_cache_size_subtitle),
+                            trailingText = if (preferences.maxCacheSizeMb == 0) stringResource(R.string.settings_unlimited) else "${preferences.maxCacheSizeMb} MB",
                             highlighted = highlightSettingId == "max_cache_size",
                             index = storageIdx, count = storageTotal,
                             onClick = {
@@ -282,10 +283,10 @@ fun StorageSettingsScreen(
             item {
                 SettingsGroup(
                     icon = Tabler.Outline.Cloud,
-                    title = "Network & Offline",
+                    title = stringResource(R.string.settings_network_offline),
                     summary = {
-                        val status = if (preferences.manualOfflineEnabled) "Offline Mode" else "Online"
-                        "Status: $status"
+                        val status = if (preferences.manualOfflineEnabled) stringResource(R.string.settings_offline_mode) else stringResource(R.string.settings_online)
+                        stringResource(R.string.settings_status_value, status)
                     },
                     modifier = Modifier.padding(vertical = 8.dp),
                     initiallyExpanded = highlightSettingId in listOf("offline_mode", "auto_offline", "adaptive_bitrate", "bandwidth_cap", "metered_network_behavior", "cellular_streaming_quality", "cellular_download_warning", "data_saver", "network_timeout", "verbose_logging", "user_data_sync"),
@@ -295,8 +296,8 @@ fun StorageSettingsScreen(
 
                     SettingToggleItem(
                         icon = Tabler.Outline.CloudOff,
-                        title = "Offline Mode",
-                        subtitle = "Force application to run offline",
+                        title = stringResource(R.string.settings_offline_mode),
+                        subtitle = stringResource(R.string.settings_offline_mode_subtitle),
                         checked = preferences.manualOfflineEnabled,
                         highlighted = highlightSettingId == "offline_mode",
                         index = networkIdx++, count = networkTotal,
@@ -305,8 +306,8 @@ fun StorageSettingsScreen(
 
                     SettingToggleItem(
                         icon = Tabler.Outline.WifiOff,
-                        title = "Auto Offline",
-                        subtitle = "Automatically switch to offline when network is lost",
+                        title = stringResource(R.string.settings_auto_offline),
+                        subtitle = stringResource(R.string.settings_auto_offline_subtitle),
                         checked = preferences.autoOfflineEnabled,
                         highlighted = highlightSettingId == "auto_offline",
                         index = networkIdx++, count = networkTotal,
@@ -315,8 +316,8 @@ fun StorageSettingsScreen(
 
                     SettingToggleItem(
                         icon = Tabler.Outline.Gauge,
-                        title = "Adaptive Bitrate",
-                        subtitle = "Cap streaming bitrate on metered networks. Off = full quality (direct play)",
+                        title = stringResource(R.string.settings_adaptive_bitrate),
+                        subtitle = stringResource(R.string.settings_adaptive_bitrate_subtitle),
                         checked = preferences.adaptiveBitrateEnabled,
                         highlighted = highlightSettingId == "adaptive_bitrate",
                         index = networkIdx++, count = networkTotal,
@@ -324,12 +325,12 @@ fun StorageSettingsScreen(
                     )
 
                     val caps = listOf(0L, 1_000_000L, 2_000_000L, 5_000_000L, 10_000_000L, 20_000_000L)
-                    val capLabel = if (preferences.manualBandwidthCap == 0L) "Unlimited" else "${preferences.manualBandwidthCap / 1_000_000L} Mbps"
+                    val capLabel = if (preferences.manualBandwidthCap == 0L) stringResource(R.string.settings_unlimited) else "${preferences.manualBandwidthCap / 1_000_000L} Mbps"
 
                     SettingListItem(
                         icon = Tabler.Outline.Lock,
-                        title = "Manual Bandwidth Cap",
-                        subtitle = "Restrict maximum streaming bandwidth",
+                        title = stringResource(R.string.settings_manual_bandwidth_cap),
+                        subtitle = stringResource(R.string.settings_manual_bandwidth_cap_subtitle),
                         trailingText = capLabel,
                         highlighted = highlightSettingId == "bandwidth_cap",
                         index = networkIdx++, count = networkTotal,
@@ -342,8 +343,8 @@ fun StorageSettingsScreen(
 
                     SettingListItem(
                         icon = Tabler.Outline.Compass,
-                        title = "Metered Network Behavior",
-                        subtitle = "Behavior when connected to a cellular/metered connection",
+                        title = stringResource(R.string.settings_metered_network_behavior),
+                        subtitle = stringResource(R.string.settings_metered_network_behavior_subtitle),
                         trailingText = preferences.meteredNetworkBehavior.displayName,
                         highlighted = highlightSettingId == "metered_network_behavior",
                         index = networkIdx++, count = networkTotal,
@@ -357,8 +358,8 @@ fun StorageSettingsScreen(
 
                     SettingListItem(
                         icon = Tabler.Outline.DeviceMobile,
-                        title = "Cellular Streaming Quality",
-                        subtitle = "Preferred video quality profile when on cellular network",
+                        title = stringResource(R.string.settings_cellular_streaming_quality),
+                        subtitle = stringResource(R.string.settings_cellular_streaming_quality_subtitle),
                         trailingText = streamingQualityLabel(preferences.cellularStreamingQuality),
                         highlighted = highlightSettingId == "cellular_streaming_quality",
                         index = networkIdx++, count = networkTotal,
@@ -374,7 +375,7 @@ fun StorageSettingsScreen(
                     val downloadWarningLabel = if (preferences.cellularDownloadSizeWarningMb == 0) "Disabled" else "${preferences.cellularDownloadSizeWarningMb} MB"
                     SettingListItem(
                         icon = Tabler.Outline.AlertTriangle,
-                        title = "Cellular Download Size Warning",
+                        title = stringResource(R.string.settings_cellular_download_size_warning),
                         subtitle = "Warn before downloading large files on cellular",
                         trailingText = downloadWarningLabel,
                         highlighted = highlightSettingId == "cellular_download_warning",

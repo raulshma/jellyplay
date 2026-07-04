@@ -30,6 +30,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.composables.icons.tabler.Tabler
@@ -37,6 +38,7 @@ import com.composables.icons.tabler.outline.X
 import com.raulshma.jellyplay.core.designsystem.theme.ShapeCache
 import com.raulshma.jellyplay.core.model.LrcLibTrack
 import com.raulshma.jellyplay.core.ui.components.JellyPlayLoadingIndicator
+import com.raulshma.jellyplay.feature.player.audio.R
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -61,18 +63,18 @@ internal fun LyricsSearchSheet(
                 .padding(horizontal = 16.dp)
                 .padding(bottom = 32.dp),
         ) {
-            Text("Find Lyrics", style = MaterialTheme.typography.titleMedium)
+            Text(stringResource(R.string.audio_lyrics_find), style = MaterialTheme.typography.titleMedium)
             Spacer(Modifier.height(12.dp))
             OutlinedTextField(
                 value = searchQuery,
                 onValueChange = { searchQuery = it },
                 modifier = Modifier.fillMaxWidth(),
-                placeholder = { Text("Search artist, song...") },
+                placeholder = { Text(stringResource(R.string.audio_lyrics_search_placeholder)) },
                 singleLine = true,
                 trailingIcon = {
                     if (searchQuery.isNotBlank()) {
                         IconButton(onClick = { searchQuery = "" }) {
-                            Icon(Tabler.Outline.X, "Clear", modifier = Modifier.size(18.dp))
+                            Icon(Tabler.Outline.X, stringResource(R.string.audio_lyrics_clear), modifier = Modifier.size(18.dp))
                         }
                     }
                 },
@@ -82,7 +84,7 @@ internal fun LyricsSearchSheet(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.End,
             ) {
-                TextButton(onClick = onDismiss) { Text("Cancel") }
+                TextButton(onClick = onDismiss) { Text(stringResource(R.string.audio_cancel)) }
                 Spacer(Modifier.width(4.dp))
                 FilledTonalButton(
                     onClick = { onSearch(searchQuery) },
@@ -91,7 +93,7 @@ internal fun LyricsSearchSheet(
                     if (isSearching) {
                         JellyPlayLoadingIndicator(modifier = Modifier.size(16.dp))
                     } else {
-                        Text("Search")
+                        Text(stringResource(R.string.audio_search))
                     }
                 }
             }
@@ -129,7 +131,7 @@ internal fun LyricsSearchSheet(
                                 Spacer(Modifier.width(8.dp))
                                 if (track.hasSyncedLyrics) {
                                     Text(
-                                        "Synced",
+                                        stringResource(R.string.audio_lyrics_synced),
                                         style = MaterialTheme.typography.labelSmall,
                                         color = MaterialTheme.colorScheme.onPrimaryContainer,
                                         modifier = Modifier
@@ -141,7 +143,7 @@ internal fun LyricsSearchSheet(
                                     )
                                 } else if (track.hasPlainLyrics) {
                                     Text(
-                                        "Plain",
+                                        stringResource(R.string.audio_lyrics_plain),
                                         style = MaterialTheme.typography.labelSmall,
                                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                                     )

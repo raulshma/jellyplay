@@ -72,7 +72,7 @@ fun SmartPlaylistDetailScreen(
     JellyPlayScreenScaffold(
         title = playlist?.name ?: "Smart Playlist",
         onBack = onBack,
-    ) { _ ->
+    ) { innerPadding ->
         Box(modifier = Modifier.fillMaxSize()) {
             when {
                 viewModel.isLoading -> {
@@ -100,7 +100,7 @@ fun SmartPlaylistDetailScreen(
                             .focusRequester(listFocusRequester),
                         contentPadding = PaddingValues(
                             top = 8.dp,
-                            bottom = adaptiveInfo.bottomPadding(isTv),
+                            bottom = adaptiveInfo.bottomPadding(isTv) + innerPadding.calculateBottomPadding(),
                             start = contentPad,
                             end = contentPad,
                         ),
@@ -138,7 +138,7 @@ fun SmartPlaylistDetailScreen(
                         .align(Alignment.BottomEnd)
                         .then(playAllFocusState.focusModifier)
                         .tvFocusIndicator(playAllFocusState, ShapeCache.smooth16)
-                        .padding(end = 16.dp, bottom = 64.dp + WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding())
+                        .padding(end = 16.dp, bottom = 64.dp + innerPadding.calculateBottomPadding())
                         .offset {
                             val maxOffset = com.raulshma.jellyplay.core.designsystem.theme.Dimensions.floatingNavHeight.toPx()
                             val yOffset = (-navOffsetPx).coerceAtMost(maxOffset)

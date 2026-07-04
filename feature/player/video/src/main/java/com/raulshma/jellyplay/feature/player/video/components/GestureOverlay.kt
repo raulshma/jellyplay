@@ -69,8 +69,7 @@ private fun brightnessIcon(value: Float) = when {
 }
 
 private fun volumeIcon(value: Float) = when {
-    value == 0f -> Tabler.Outline.VolumeOff
-    value < 0.33f -> Tabler.Outline.VolumeOff
+    value <= 0f -> Tabler.Outline.VolumeOff
     else -> Tabler.Outline.Volume
 }
 

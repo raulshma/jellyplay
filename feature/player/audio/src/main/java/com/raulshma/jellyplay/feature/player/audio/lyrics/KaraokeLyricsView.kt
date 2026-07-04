@@ -1,16 +1,12 @@
 package com.raulshma.jellyplay.feature.player.audio.lyrics
 
-import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
-import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
@@ -18,7 +14,6 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
@@ -47,8 +42,6 @@ fun KaraokeLyricsView(
     modifier: Modifier = Modifier,
 ) {
     val listState = rememberLazyListState()
-    val currentLine = lyrics.getOrNull(currentIndex)
-    val hasAnyWordTimings = remember(lyrics) { lyrics.any { it.words.isNotEmpty() } }
     val activeAlpha = 1f
     val upcomingAlpha = 0.4f
 
@@ -113,8 +106,11 @@ private fun KaraokeLine(
     val activeColor = MaterialTheme.colorScheme.primary
     val inactiveColor = Color.White.copy(alpha = 0.6f)
 
-    val activeWordIndex by remember {
-        derivedStateOf { LrcParser.findCurrentWordIndex(line, positionInLine) }
+    // Compute directly from positionInLine (a plain Long, not a tracked State) so the
+    // active word advances correctly. The previous derivedStateOf captured positionInLine
+    // once and never re-evaluated, so per-word highlighting was frozen.
+    val activeWordIndex = remember(line, positionInLine) {
+        LrcParser.findCurrentWordIndex(line, positionInLine)
     }
 
     val annotated: AnnotatedString = remember(activeWordIndex) {
@@ -141,12 +137,6 @@ private fun KaraokeLine(
         }
     }
 
-    val activeScale by animateFloatAsState(
-        targetValue = if (activeWordIndex >= 0) 1.06f else 1.0f,
-        animationSpec = tween(durationMillis = 180),
-        label = "karaokeLineScale",
-    )
-
     Text(
         text = annotated,
         style = MaterialTheme.typography.headlineSmall.copy(
@@ -156,30 +146,4 @@ private fun KaraokeLine(
         textAlign = TextAlign.Center,
         modifier = modifier,
     )
-}
-
-@Composable
-fun KaraokeModeHint(visible: Boolean) {
-    AnimatedVisibility(visible = visible) {
-        Column(
-            horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.Center,
-            modifier = Modifier
-                .fillMaxSize()
-                .background(Color.Black.copy(alpha = 0.65f))
-                .padding(24.dp),
-        ) {
-            Text(
-                text = "Karaoke mode",
-                style = MaterialTheme.typography.headlineSmall,
-                color = Color.White,
-            )
-            Text(
-                text = "Word-by-word highlighting requires Enhanced LRC lyrics with inline timestamps.",
-                style = MaterialTheme.typography.bodyMedium,
-                color = Color.White.copy(alpha = 0.8f),
-                textAlign = TextAlign.Center,
-            )
-        }
-    }
 }

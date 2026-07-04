@@ -101,7 +101,7 @@ fun PlaylistsScreen(
                 modifier = Modifier.padding(end = 8.dp),
             )
         },
-    ) { _ ->
+    ) { innerPadding ->
         Box(modifier = Modifier.fillMaxSize()) {
             PullToRefreshBox(
                 isRefreshing = viewModel.isLoading && viewModel.playlists.isNotEmpty(),
@@ -126,7 +126,7 @@ fun PlaylistsScreen(
                             contentPadding = PaddingValues(
                                 start = contentPad,
                                 end = contentPad,
-                                bottom = adaptiveInfo.bottomPadding(isTv),
+                                bottom = adaptiveInfo.bottomPadding(isTv) + innerPadding.calculateBottomPadding(),
                             ),
                         ) {
                             items(
@@ -155,7 +155,7 @@ fun PlaylistsScreen(
                     .align(Alignment.BottomEnd)
                     .then(newPlaylistFocusState.focusModifier)
                     .tvFocusIndicator(newPlaylistFocusState, ShapeCache.smooth16)
-                    .padding(end = 16.dp, bottom = 16.dp),
+                    .padding(end = 16.dp, bottom = 16.dp + innerPadding.calculateBottomPadding()),
             )
         }
     }
