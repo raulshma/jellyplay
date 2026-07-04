@@ -529,6 +529,17 @@ val MIGRATION_29_30 = object : Migration(29, 30) {
     }
 }
 
+// Explicit single-column index on lyrics_cache(itemId). The composite
+// (itemId, provider) index already serves `WHERE itemId = :itemId` via a
+// left-prefix match, but adding a dedicated index makes the intent unambiguous
+// and documents that the per-item lookup path is indexed. The composite unique
+// index is retained.
+val MIGRATION_30_31 = object : Migration(30, 31) {
+    override fun migrate(db: SupportSQLiteDatabase) {
+        db.execSQL("CREATE INDEX IF NOT EXISTS index_lyrics_cache_itemId ON lyrics_cache(itemId)")
+    }
+}
+
 val ALL_MIGRATIONS = listOf(
     MIGRATION_1_2,
     MIGRATION_2_3,
@@ -558,4 +569,5 @@ val ALL_MIGRATIONS = listOf(
     MIGRATION_27_28,
     MIGRATION_28_29,
     MIGRATION_29_30,
+    MIGRATION_30_31,
 )

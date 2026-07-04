@@ -195,9 +195,11 @@ private fun formatTime(ms: Long): String {
     val hours = totalSeconds / 3600
     val minutes = (totalSeconds % 3600) / 60
     val seconds = totalSeconds % 60
+    // String templates avoid the per-call Formatter allocation — this runs
+    // per-frame during trickplay scrubbing.
     return if (hours > 0) {
-        String.format("%d:%02d:%02d", hours, minutes, seconds)
+        "$hours:${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}"
     } else {
-        String.format("%02d:%02d", minutes, seconds)
+        "${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}"
     }
 }

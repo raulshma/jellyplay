@@ -230,7 +230,12 @@ fun WideMediaCard(
     )
 
     val dominantColor = rememberDominantColor(backdropUrl.ifBlank { imageUrl }, itemId = item.id)
-    val progressPercent = item.progressFraction() ?: 0f
+    // Memoize the progress fraction so it is recomputed only when the item's
+    // identity or its playback position/runtime ticks change (was recomputed
+    // on every recomposition of the card).
+    val progressPercent = remember(item.id, item.playbackPositionTicks, item.runTimeTicks) {
+        item.progressFraction() ?: 0f
+    }
     val playButtonSize = if (isTv) 44.dp else 36.dp
 
     // Press-and-hold "peek" preview; no-op on TV / when no controller is wired.

@@ -484,10 +484,17 @@ internal fun DetailContentBody(
             val showSeasons = (item.mediaType == MediaType.SERIES || item.mediaType == MediaType.EPISODE) && seasons.isNotEmpty()
             if (showSeasons) {
                 CompositionLocalProvider(LocalContentColor provides MaterialTheme.colorScheme.onSurface) {
-                    val filteredEpisodes = if (preferences.skipSpecials) {
-                        episodes.mapValues { (_, eps) -> eps.filter { it.seasonNumber != 0 } }
-                    } else {
-                        episodes
+                    // Memoize the skip-specials filter so it is not recomputed (allocating
+                    // a new Map + per-season Lists) on every recomposition of this
+                    // detail item (scroll-driven FadingItem animations, sibling
+                    // sections animating). Only re-runs when episodes or the
+                    // skipSpecials flag actually change.
+                    val filteredEpisodes = remember(episodes, preferences.skipSpecials) {
+                        if (preferences.skipSpecials) {
+                            episodes.mapValues { (_, eps) -> eps.filter { it.seasonNumber != 0 } }
+                        } else {
+                            episodes
+                        }
                     }
                     SeasonsSection(
                         seriesItem = item,

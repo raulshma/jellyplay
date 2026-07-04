@@ -107,6 +107,13 @@ abstract class NetworkModule {
     ): TmdbApiClient
 
     companion object {
+        // Hoisted so the pattern compiles once at class load rather than on each
+        // OkHttp client construction (low impact since the provider is @Singleton,
+        // but removes an unnecessary per-cold-start Regex allocation).
+        val TOKEN_PARAM_PATTERN = Regex(
+            "(?i)(\\?|&)(api_key|apikey|token|x-emby-token|accesstoken)=[^&\\s]+",
+        )
+
         @Provides
         @Singleton
         fun provideConnectivityManager(
@@ -150,9 +157,7 @@ abstract class NetworkModule {
             // The logger replaces the query string of any URL line containing a
             // token-bearing param with "[redacted]" so verbose network logging
             // can never leak credentials to logcat.
-            val tokenParamPattern = Regex(
-                "(?i)(\\?|&)(api_key|apikey|token|x-emby-token|accesstoken)=[^&\\s]+",
-            )
+            val tokenParamPattern = TOKEN_PARAM_PATTERN
             val loggingInterceptor = HttpLoggingInterceptor { message ->
                 val safe = if (tokenParamPattern.containsMatchIn(message)) {
                     tokenParamPattern.replace(message) { mr ->

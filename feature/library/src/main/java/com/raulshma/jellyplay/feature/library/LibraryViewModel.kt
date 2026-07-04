@@ -14,9 +14,16 @@ import com.raulshma.jellyplay.core.model.MediaType
 import com.raulshma.jellyplay.core.ui.viewmodel.JellyPlayViewModel
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.flatMapLatest
+import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.sync.Semaphore
+import kotlinx.coroutines.sync.withPermit
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
 import javax.inject.Inject
@@ -59,6 +66,15 @@ enum class PlayedStatus(val displayName: String) {
     PLAYED("Played"),
     UNPLAYED("Unplayed"),
 }
+
+/** Max concurrent requests when prefetching photo-folder child image URLs. */
+private const val PHOTO_FOLDER_PREFETCH_CONCURRENCY = 4
+
+/** Projected slice of [UserPreferences] used to derive the active library view mode. */
+private data class ViewModePrefs(
+    val libraryViewMode: LibraryViewMode,
+    val libraryViewModes: Map<String, String>,
+)
 
 @HiltViewModel
 class LibraryViewModel @Inject constructor(
@@ -122,16 +138,25 @@ class LibraryViewModel @Inject constructor(
     }
 
     private fun loadViewMode() {
+        // Project only the view-mode fields (avoid re-evaluating on every
+        // unrelated pref write) and combine with the selected folder so a
+        // folder change also triggers re-evaluation (was a latent correctness
+        // edge: the old collector only read _selectedFolder inside the prefs
+        // collector, so a folder-only change wouldn't re-derive the mode).
         launch {
-            preferencesStore.preferences.collect { prefs ->
-                val folderId = _selectedFolder.value?.id
-                val perLibrary = folderId?.let { id ->
-                    prefs.libraryViewModes[id]?.let { modeName ->
+            combine(
+                preferencesStore.preferences
+                    .map { ViewModePrefs(it.libraryViewMode, it.libraryViewModes) }
+                    .distinctUntilChanged(),
+                _selectedFolder.flow,
+            ) { viewModePrefs, folder ->
+                val perLibrary = folder?.id?.let { id ->
+                    viewModePrefs.libraryViewModes[id]?.let { modeName ->
                         runCatching { LibraryViewMode.valueOf(modeName) }.getOrNull()
                     }
                 }
-                _viewMode.set(perLibrary ?: prefs.libraryViewMode)
-            }
+                perLibrary ?: viewModePrefs.libraryViewMode
+            }.collect { mode -> _viewMode.set(mode) }
         }
     }
 
@@ -299,11 +324,21 @@ class LibraryViewModel @Inject constructor(
     fun prefetchPhotoFolderChildUrls(items: List<MediaItem>) {
         launch {
             val current = _photoFolderChildUrls.value
-            items.filter { it.mediaType == MediaType.PHOTO_FOLDER && it.id !in current }
-                .forEach { folder ->
-                    val urls = mediaRepository.getPhotoFolderChildImageUrls(folder.id)
-                    _photoFolderChildUrls.set(_photoFolderChildUrls.value + (folder.id to urls))
-                }
+            val toFetch = items.filter { it.mediaType == MediaType.PHOTO_FOLDER && it.id !in current }
+            if (toFetch.isEmpty()) return@launch
+            // Parallelize the per-folder network calls with a bounded semaphore
+            // (was a sequential forEach → N× per-request latency) and emit the
+            // combined result once at the end instead of doing an O(N) map
+            // rebuild + StateFlow re-emit per folder.
+            val permits = Semaphore(PHOTO_FOLDER_PREFETCH_CONCURRENCY)
+            val results = coroutineScope {
+                toFetch.map { folder ->
+                    async {
+                        permits.withPermit { folder.id to mediaRepository.getPhotoFolderChildImageUrls(folder.id) }
+                    }
+                }.awaitAll()
+            }
+            _photoFolderChildUrls.set(_photoFolderChildUrls.value + results)
         }
     }
 }

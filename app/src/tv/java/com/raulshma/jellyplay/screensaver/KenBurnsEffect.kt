@@ -53,6 +53,19 @@ fun KenBurnsImage(
 ) {
     val transform = remember(imageUrl) { KenBurnsTransform.random() }
 
+    // Build the ImageRequest once per imageUrl. Previously this was constructed
+    // inline in the composable body, so the per-frame `progress` recomposition
+    // (driven by rememberInfiniteTransition at ~60 Hz) rebuilt thousands of
+    // short-lived ImageRequest/Size/data-wrapper objects per minute while the
+    // screensaver was active. Coil dedupes by URL, so the rebuild was wasted.
+    val context = LocalContext.current
+    val imageRequest = remember(imageUrl) {
+        ImageRequest.Builder(context)
+            .data(imageUrl)
+            .size(1920, 1080)
+            .build()
+    }
+
     if (enabled) {
         val infiniteTransition = rememberInfiniteTransition(label = "kenBurns")
         val progress by infiniteTransition.animateFloat(
@@ -84,10 +97,7 @@ fun KenBurnsImage(
                 },
         ) {
             AsyncImage(
-                model = ImageRequest.Builder(LocalContext.current)
-                    .data(imageUrl)
-                    .size(1920, 1080)
-                    .build(),
+                model = imageRequest,
                 contentDescription = null,
                 contentScale = ContentScale.Crop,
                 modifier = Modifier.fillMaxSize(),
@@ -95,10 +105,7 @@ fun KenBurnsImage(
         }
     } else {
         AsyncImage(
-            model = ImageRequest.Builder(LocalContext.current)
-                .data(imageUrl)
-                .size(1920, 1080)
-                .build(),
+            model = imageRequest,
             contentDescription = null,
             contentScale = ContentScale.Crop,
             modifier = modifier.fillMaxSize(),
