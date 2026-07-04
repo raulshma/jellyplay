@@ -23,6 +23,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
@@ -71,7 +72,7 @@ fun ExperimentalSettingsScreen(
     )
 
     JellyPlayScreenScaffold(
-        title = "Experimental",
+        title = stringResource(R.string.settings_experimental_title),
         onBack = onBack,
         backgroundColor = backgroundColor,
     ) { innerPadding ->
@@ -96,10 +97,10 @@ fun ExperimentalSettingsScreen(
             item(key = "experimental_features_group") {
                 SettingsGroup(
                     icon = Tabler.Outline.Flask,
-                    title = "Features",
+                    title = stringResource(R.string.settings_features),
                     summary = {
                         val enabled = preferences.enabledExperimentalFeatures.size
-                        if (enabled == 0) "No experimental features enabled" else "$enabled enabled"
+                        if (enabled == 0) stringResource(R.string.settings_no_experimental_enabled) else stringResource(R.string.settings_experimental_count, enabled)
                     },
                     initiallyExpanded = true,
                     modifier = Modifier.padding(vertical = 4.dp),
@@ -139,14 +140,14 @@ private fun ExperimentalDisclaimer(modifier: Modifier = Modifier) {
         Spacer(Modifier.width(10.dp))
         Column {
             Text(
-                text = "Features in development",
+                text = stringResource(R.string.settings_features_in_development),
                 style = MaterialTheme.typography.labelLarge,
                 fontWeight = FontWeight.SemiBold,
                 color = MaterialTheme.colorScheme.onSurface,
             )
             Spacer(Modifier.size(2.dp))
             Text(
-                text = "These options are experimental and may be unstable, change, or be removed. Use at your own risk.",
+                text = stringResource(R.string.settings_experimental_warning),
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )

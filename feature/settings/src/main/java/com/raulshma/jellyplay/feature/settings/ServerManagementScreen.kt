@@ -40,6 +40,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextOverflow
@@ -65,6 +66,7 @@ import androidx.compose.foundation.shape.CircleShape
 import com.raulshma.jellyplay.core.ui.components.focusIndicator
 import com.composables.icons.tabler.Tabler
 import com.composables.icons.tabler.outline.*
+import com.raulshma.jellyplay.feature.settings.R
 
 @OptIn(androidx.compose.material3.ExperimentalMaterial3ExpressiveApi::class)
 @Composable
@@ -105,7 +107,7 @@ fun ServerManagementScreen(
     )
 
     JellyPlayScreenScaffold(
-        title = "Server Management",
+        title = stringResource(R.string.settings_server_management),
         onBack = onBack,
         backgroundColor = backgroundColor,
         actions = {
@@ -113,15 +115,15 @@ fun ServerManagementScreen(
                 onClick = onAddServer,
                 modifier = Modifier.focusIndicator(CircleShape),
             ) {
-                Icon(Tabler.Outline.Plus, "Add Server")
+                Icon(Tabler.Outline.Plus, stringResource(R.string.settings_add_server_cd))
             }
         },
     ) {
         if (servers.isEmpty()) {
             ScreenEmptyState(
                 icon = Tabler.Outline.Server,
-                title = "No servers configured",
-                actionLabel = "Add Server",
+                title = stringResource(R.string.settings_no_servers_configured),
+                actionLabel = stringResource(R.string.settings_add_server_cd),
                 onAction = onAddServer,
             )
         } else {
@@ -135,7 +137,7 @@ fun ServerManagementScreen(
             ) {
                 item {
                     Text(
-                        "Tap a server to switch. Active server is highlighted.",
+                        stringResource(R.string.settings_server_switch_hint),
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                         modifier = Modifier.padding(bottom = 8.dp),
@@ -281,7 +283,7 @@ private fun ServerCard(
                                 )
                                 Spacer(Modifier.width(4.dp))
                                 Text(
-                                    text = "Authenticated",
+                                    text = stringResource(R.string.settings_authenticated),
                                     style = MaterialTheme.typography.labelSmall,
                                     color = if (isActive) {
                                         MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.7f)
@@ -302,13 +304,13 @@ private fun ServerCard(
                         ) {
                             Icon(
                                 if (isExpanded) Tabler.Outline.ChevronUp else Tabler.Outline.ChevronDown,
-                                contentDescription = if (isExpanded) "Collapse" else "Manage addresses",
+                                contentDescription = if (isExpanded) stringResource(R.string.settings_collapse_cd) else stringResource(R.string.settings_manage_addresses_cd),
                                 tint = MaterialTheme.colorScheme.onPrimaryContainer,
                             )
                         }
                         Icon(
                             Tabler.Outline.Check,
-                            contentDescription = "Active",
+                            contentDescription = stringResource(R.string.settings_active_cd),
                             tint = MaterialTheme.colorScheme.onPrimaryContainer,
                         )
                     } else if (isSwitching) {
@@ -322,7 +324,7 @@ private fun ServerCard(
                         ) {
                             Icon(
                                 Tabler.Outline.Trash,
-                                contentDescription = "Remove",
+                                contentDescription = stringResource(R.string.settings_remove_cd),
                                 tint = MaterialTheme.colorScheme.error,
                             )
                         }
@@ -390,7 +392,7 @@ private fun ServerCard(
                             )
                             Spacer(Modifier.width(8.dp))
                             Text(
-                                "Add Address",
+                                stringResource(R.string.settings_add_address),
                                 style = MaterialTheme.typography.labelLarge,
                                 color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.8f),
                             )
@@ -438,7 +440,7 @@ private fun AddressRow(
             if (isPrimary) {
                 Spacer(Modifier.width(8.dp))
                 Text(
-                    "Primary",
+                    stringResource(R.string.settings_primary),
                     style = MaterialTheme.typography.labelSmall,
                     color = MaterialTheme.colorScheme.onPrimaryContainer,
                 )
@@ -457,7 +459,7 @@ private fun AddressRow(
                     .tvFocusIndicator(switchFocus, btnShape),
             ) {
                 Text(
-                    "Switch",
+                    stringResource(R.string.settings_switch),
                     style = MaterialTheme.typography.labelSmall,
                     modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp),
                     color = MaterialTheme.colorScheme.onPrimaryContainer,
@@ -471,7 +473,7 @@ private fun AddressRow(
             ) {
                 Icon(
                     Tabler.Outline.X,
-                    contentDescription = "Remove address",
+                    contentDescription = stringResource(R.string.settings_remove_address_cd),
                     modifier = Modifier.size(16.dp),
                     tint = MaterialTheme.colorScheme.onPrimaryContainer,
                 )
@@ -487,6 +489,14 @@ private fun AddAddressSheet(
     onAdd: (String) -> Unit,
 ) {
     var address by remember { mutableStateOf("") }
+    val isAddressValid = remember(address) {
+        val trimmed = address.trim()
+        if (trimmed.isBlank()) false
+        else runCatching {
+            val host = trimmed.substringAfter("://", trimmed).substringBefore('/')
+            host.isNotBlank() && !host.contains(' ')
+        }.getOrDefault(false)
+    }
 
     AdaptiveSheet(onDismissRequest = onDismiss) {
         Column(
@@ -496,12 +506,12 @@ private fun AddAddressSheet(
                 .padding(bottom = 32.dp),
         ) {
             Text(
-                "Add Server Address",
+                stringResource(R.string.settings_add_server_address),
                 style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Bold),
             )
             Spacer(Modifier.height(8.dp))
             Text(
-                "Enter an alternate URL for this server (e.g., a local IP address).",
+                stringResource(R.string.settings_add_address_description),
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
@@ -509,9 +519,13 @@ private fun AddAddressSheet(
             OutlinedTextField(
                 value = address,
                 onValueChange = { address = it },
-                label = { Text("Server address") },
-                placeholder = { Text("https://192.168.1.100:8096") },
+                label = { Text(stringResource(R.string.settings_server_address_label)) },
+                placeholder = { Text(stringResource(R.string.settings_server_address_placeholder)) },
                 singleLine = true,
+                isError = address.isNotBlank() && !isAddressValid,
+                supportingText = if (address.isNotBlank() && !isAddressValid) {
+                    { Text(stringResource(R.string.settings_server_address_invalid)) }
+                } else null,
                 keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Uri),
                 modifier = Modifier.fillMaxWidth(),
             )
@@ -520,13 +534,13 @@ private fun AddAddressSheet(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.End,
             ) {
-                TextButton(onClick = onDismiss) { Text("Cancel") }
+                TextButton(onClick = onDismiss) { Text(stringResource(R.string.settings_cancel)) }
                 Spacer(Modifier.width(8.dp))
                 androidx.compose.material3.Button(
                     onClick = { onAdd(address.trim()) },
-                    enabled = address.isNotBlank(),
+                    enabled = isAddressValid,
                     shape = ShapeCache.smoothPill,
-                ) { Text("Add") }
+                ) { Text(stringResource(R.string.settings_add)) }
             }
         }
     }

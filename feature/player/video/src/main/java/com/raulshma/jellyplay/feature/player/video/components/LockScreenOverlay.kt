@@ -67,7 +67,10 @@ internal fun SlideToUnlockOverlay(
 
     var dragOffsetY by remember { mutableFloatStateOf(0f) }
     var isDragging by remember { mutableStateOf(false) }
-    var uiVisible by remember { mutableStateOf(false) }
+    // Show the unlock hint immediately when the lock engages so the user knows the
+    // screen is locked and how to unlock. Auto-hides after a few seconds (below) to
+    // avoid obstructing the video; a tap re-reveals it.
+    var uiVisible by remember { mutableStateOf(true) }
 
     val animatedOffset = remember { Animatable(0f) }
 
@@ -89,8 +92,12 @@ internal fun SlideToUnlockOverlay(
 
     LaunchedEffect(visible) {
         if (visible) {
+            // Auto-hide the unlock hint after a few seconds so it doesn't sit on the
+            // video forever. Unlike the previous behavior (which no-op'd and left the
+            // screen locked with no visible affordance), this hides the *hint* while
+            // the screen stays locked; a tap re-reveals it.
             delay(3000L)
-            onDismiss()
+            uiVisible = false
         }
     }
 

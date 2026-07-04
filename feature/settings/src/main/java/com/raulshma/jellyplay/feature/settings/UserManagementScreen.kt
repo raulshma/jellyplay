@@ -36,6 +36,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -62,6 +63,7 @@ import androidx.compose.foundation.shape.CircleShape
 import com.raulshma.jellyplay.core.ui.components.focusIndicator
 import com.composables.icons.tabler.Tabler
 import com.composables.icons.tabler.outline.*
+import com.raulshma.jellyplay.feature.settings.R
 
 @OptIn(androidx.compose.material3.ExperimentalMaterial3ExpressiveApi::class)
 @Composable
@@ -98,7 +100,7 @@ fun UserManagementScreen(
     )
 
     JellyPlayScreenScaffold(
-        title = "Switch User",
+        title = stringResource(R.string.settings_switch_user),
         onBack = onBack,
         backgroundColor = backgroundColor,
         actions = {
@@ -110,12 +112,15 @@ fun UserManagementScreen(
     ) {
         Box(modifier = Modifier.fillMaxSize()) {
             when {
-                serverUsers.isEmpty() && !isLoading -> {
+                isLoading && serverUsers.isEmpty() -> {
+                    com.raulshma.jellyplay.core.ui.components.LoadingScreen()
+                }
+                serverUsers.isEmpty() -> {
                     ScreenEmptyState(
                         icon = Tabler.Outline.User,
-                        title = "No users on this server",
-                        description = "Add a user to get started",
-                        actionLabel = "Add User",
+                        title = stringResource(R.string.settings_no_users),
+                        description = stringResource(R.string.settings_no_users_description),
+                        actionLabel = stringResource(R.string.settings_add_user),
                         onAction = onAddUser,
                     )
                 }
@@ -182,7 +187,7 @@ fun UserManagementScreen(
                         .then(addUserFocusState.focusModifier)
                         .tvFocusIndicator(addUserFocusState, ShapeCache.smooth16),
                     icon = { Icon(Tabler.Outline.Plus, contentDescription = null) },
-                    text = { Text("Add User") },
+                    text = { Text(stringResource(R.string.settings_add_user)) },
                 )
             }
         }
@@ -224,12 +229,12 @@ private fun UserManagementCard(
                 )
                 Column {
                     Text(
-                        text = user.name.ifBlank { "User" },
+                        text = user.name.ifBlank { stringResource(R.string.settings_user_fallback) },
                         style = MaterialTheme.typography.titleMedium,
                     )
                     if (isCurrentUser) {
                         Text(
-                            text = "Signed in",
+                            text = stringResource(R.string.settings_signed_in),
                             style = MaterialTheme.typography.labelSmall,
                             color = MaterialTheme.colorScheme.primary,
                         )
@@ -239,7 +244,7 @@ private fun UserManagementCard(
             if (isCurrentUser) {
                 Icon(
                     Tabler.Outline.Check,
-                    contentDescription = "Current user",
+                        contentDescription = stringResource(R.string.settings_current_user_cd),
                     tint = MaterialTheme.colorScheme.primary,
                 )
             } else {
@@ -249,7 +254,7 @@ private fun UserManagementCard(
                 ) {
                     Icon(
                         Tabler.Outline.Trash,
-                        contentDescription = "Remove user",
+                        contentDescription = stringResource(R.string.settings_remove_user_cd),
                         tint = MaterialTheme.colorScheme.error,
                     )
                 }

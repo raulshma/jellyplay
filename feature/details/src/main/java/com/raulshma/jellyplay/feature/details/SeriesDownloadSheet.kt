@@ -44,18 +44,22 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.res.pluralStringResource
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.state.ToggleableState
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.composables.icons.tabler.Tabler
 import com.composables.icons.tabler.outline.ChevronDown
 import com.composables.icons.tabler.outline.Download
+import com.composables.icons.tabler.outline.X
 import com.raulshma.jellyplay.core.designsystem.theme.ShapeCache
 import com.raulshma.jellyplay.core.ui.components.focusIndicator
 import com.raulshma.jellyplay.core.designsystem.theme.defaultContentSizeSpec
 import com.raulshma.jellyplay.core.designsystem.theme.defaultSpatialSpring
 import com.raulshma.jellyplay.core.designsystem.theme.expressiveListShape
 import com.raulshma.jellyplay.core.model.MediaItem
+import com.raulshma.jellyplay.feature.details.R
 
 @Stable
 private data class SeasonSelectionState(
@@ -106,13 +110,13 @@ fun SeriesDownloadSheet(
         ) {
             Column(modifier = Modifier.weight(1f)) {
                 Text(
-                    text = "Download Series",
+                    text = stringResource(R.string.detail_download_series_title),
                     style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.SemiBold),
                     color = MaterialTheme.colorScheme.onSurface,
                 )
                 Spacer(Modifier.height(2.dp))
                 Text(
-                    text = "Tap a season to see episodes. Select which to download.",
+                    text = stringResource(R.string.detail_download_series_subtitle),
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
@@ -122,10 +126,10 @@ fun SeriesDownloadSheet(
                 onCheckedChange = { onDismiss() },
                 modifier = Modifier.size(40.dp),
             ) {
-                Text(
-                    text = "\u2715",
-                    style = MaterialTheme.typography.titleMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                Icon(
+                    imageVector = Tabler.Outline.X,
+                    contentDescription = stringResource(R.string.detail_cd_close),
+                    modifier = Modifier.size(20.dp),
                 )
             }
         }
@@ -163,7 +167,7 @@ fun SeriesDownloadSheet(
                 ),
                 modifier = Modifier.weight(1f).focusIndicator(),
             ) {
-                Text(if (allSelected) "Deselect All" else "Select All")
+                Text(if (allSelected) stringResource(R.string.detail_deselect_all) else stringResource(R.string.detail_select_all))
             }
         }
 
@@ -182,7 +186,7 @@ fun SeriesDownloadSheet(
             )
             Spacer(Modifier.height(4.dp))
             Text(
-                text = "$totalSelectedCount of ${allSelectableIds.size} episodes selected",
+                text = stringResource(R.string.detail_episodes_selected_format, totalSelectedCount, allSelectableIds.size),
                 style = MaterialTheme.typography.labelSmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
@@ -275,11 +279,13 @@ fun SeriesDownloadSheet(
                             val epCount = season.childCount ?: seasonEpisodes.size
                             if (epCount > 0 || seasonEpisodes.isNotEmpty()) {
                                 val count = if (seasonEpisodes.isNotEmpty()) seasonEpisodes.size else epCount
+                                val episodesLabel = pluralStringResource(R.plurals.detail_episode_count, count, count)
+                                val downloadedLabel = stringResource(R.string.detail_downloaded_count_format, downloadedInSeason)
                                 Text(
                                     text = buildString {
-                                        append("$count episodes")
+                                        append(episodesLabel)
                                         if (downloadedInSeason > 0) {
-                                            append(" \u2022 $downloadedInSeason downloaded")
+                                            append(" $downloadedLabel")
                                         }
                                     },
                                     style = MaterialTheme.typography.labelSmall,
@@ -289,7 +295,7 @@ fun SeriesDownloadSheet(
                         }
                         Icon(
                             imageVector = Tabler.Outline.ChevronDown,
-                            contentDescription = if (isExpanded) "Collapse" else "Expand",
+                            contentDescription = if (isExpanded) stringResource(R.string.detail_cd_collapse) else stringResource(R.string.detail_cd_expand),
                             modifier = Modifier
                                 .size(20.dp)
                                 .graphicsLayer { rotationZ = chevronRotation },
@@ -311,7 +317,7 @@ fun SeriesDownloadSheet(
                             }
                         } else if (seasonEpisodes.isEmpty() && season.id in episodes.keys) {
                             Text(
-                                text = "No episodes available",
+                                text = stringResource(R.string.detail_no_episodes_available),
                                 style = MaterialTheme.typography.bodyMedium,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                                 modifier = Modifier.padding(horizontal = 48.dp, vertical = 12.dp),
@@ -397,7 +403,7 @@ fun SeriesDownloadSheet(
                                         }
                                         if (isDownloaded) {
                                             Text(
-                                                text = "Downloaded",
+                                                text = stringResource(R.string.detail_downloaded_status),
                                                 style = MaterialTheme.typography.labelSmall,
                                                 color = MaterialTheme.colorScheme.tertiary,
                                                 fontWeight = FontWeight.Medium,
@@ -428,7 +434,7 @@ fun SeriesDownloadSheet(
                 onClick = onDismiss,
                 shape = ShapeCache.smoothPill,
             ) {
-                Text("Cancel")
+                Text(stringResource(R.string.detail_cancel))
             }
             Button(
                 onClick = {
@@ -452,7 +458,7 @@ fun SeriesDownloadSheet(
                 )
                 Spacer(Modifier.size(6.dp))
                 Text(
-                    if (isDownloading) "Queuing..."
+                    if (isDownloading) stringResource(R.string.detail_queuing)
                     else "$totalSelectedCount"
                 )
             }

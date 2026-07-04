@@ -1,6 +1,52 @@
 <resources>
     <!-- Library feature user-facing strings (enhancements §2.2) -->
-    <string name="photo_saved_to_gallery">Saved to gallery</string>
+    <string name="library_photo_saved_to_gallery">Saved to gallery</string>
     <string name="library_failed_to_load_items">Failed to load items</string>
     <string name="library_failed_to_load_more_items">Failed to load more items</string>
+
+    <!-- LibraryScreen -->
+    <string name="library_title">Library</string>
+    <string name="library_filters">Filters</string>
+    <string name="library_all">All</string>
+    <string name="library_clear_all">Clear all</string>
+    <plurals name="library_item_count">
+        <item quantity="one">%1$d item</item>
+        <item quantity="other">%1$d items</item>
+    </plurals>
+    <string name="library_no_items_found">No items found</string>
+    <string name="library_try_adjusting_filters">Try adjusting your filters</string>
+    <string name="library_list_view">List view</string>
+    <string name="library_grid_view">Grid view</string>
+    <string name="library_smart_playlists">Smart Playlists</string>
+    <string name="library_mood_playlists">Mood Playlists</string>
+    <string name="library_playlists">Playlists</string>
+    <string name="library_shuffle">Shuffle</string>
+
+    <!-- LibraryFilterSheet -->
+    <string name="library_reset">Reset</string>
+    <string name="library_sort_by">Sort By</string>
+    <string name="library_media_type">Media Type</string>
+    <string name="library_status">Status</string>
+    <string name="library_genres">Genres</string>
+    <string name="library_year_range">Year Range</string>
+    <string name="library_tags">Tags</string>
+    <string name="library_minimum_rating">Minimum Rating</string>
+    <string name="library_apply_filters">Apply Filters</string>
+    <string name="library_collapse">Collapse</string>
+    <string name="library_expand">Expand</string>
+
+    <!-- FavoritesScreen -->
+    <string name="library_favorites">Favorites</string>
+    <string name="library_failed_to_load_favorites">Failed to load favorites</string>
+    <string name="library_no_favorites">No Favorites</string>
+    <string name="library_no_favorites_description">Items you favorite will appear here</string>
+
+    <!-- StudioDetailScreen -->
+    <string name="library_failed_to_load_more">Failed to load more</string>
+
+    <!-- PhotoAlbumScreen -->
+    <string name="library_photos">Photos</string>
+    <string name="library_sort_options">Sort options</string>
+    <string name="library_failed_to_load_photos">Failed to load photos</string>
+    <string name="library_no_photos_found">No photos found</string>
 </resources>

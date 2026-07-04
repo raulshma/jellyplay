@@ -29,6 +29,10 @@ data class DetailUiState(
     val detail: MediaDetail? = null,
     val isLoading: Boolean = false,
     val error: String? = null,
+    // Transient, user-facing feedback (snackbar) for one-shot actions such as
+    // favorite / watched toggles that fail after an optimistic UI update. The
+    // screen is responsible for showing and then clearing it.
+    val userMessage: String? = null,
     // Series content
     val seasons: List<MediaItem> = emptyList(),
     val episodes: Map<String, List<MediaItem>> = emptyMap(),

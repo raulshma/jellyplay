@@ -53,6 +53,7 @@ import com.raulshma.jellyplay.core.designsystem.theme.LocalIsLightTheme
 import com.raulshma.jellyplay.core.designsystem.theme.ShapeCache
 import com.raulshma.jellyplay.core.model.Genre
 import com.raulshma.jellyplay.core.model.MediaType
+import com.raulshma.jellyplay.core.ui.model.mediaTypeDisplayNamePlural
 import com.raulshma.jellyplay.core.ui.components.GlassFilterChip
 import com.raulshma.jellyplay.core.ui.tv.rememberTvFocusState
 import com.raulshma.jellyplay.core.ui.tv.tvFocusIndicator
@@ -64,7 +65,9 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material3.Surface
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
+import androidx.compose.ui.res.stringResource
 import com.raulshma.jellyplay.core.ui.tv.LocalTvMode
+import com.raulshma.jellyplay.feature.library.R
 
 @OptIn(
     ExperimentalMaterial3Api::class,
@@ -112,7 +115,7 @@ fun LibraryFilterSheet(
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 Text(
-                    text = "Filters",
+                    text = stringResource(R.string.library_filters),
                     style = MaterialTheme.typography.headlineSmall,
                     fontWeight = FontWeight.Bold,
                     color = contentColor,
@@ -155,7 +158,7 @@ fun LibraryFilterSheet(
                         .padding(horizontal = 14.dp, vertical = 8.dp),
                 ) {
                     Text(
-                        "Reset",
+                        stringResource(R.string.library_reset),
                         style = MaterialTheme.typography.labelLarge,
                         color = contentColorMedium,
                     )
@@ -165,7 +168,7 @@ fun LibraryFilterSheet(
             Spacer(modifier = Modifier.height(24.dp))
 
             // ── Sort By (ButtonGroup) ──
-            SectionLabel("Sort By")
+            SectionLabel(stringResource(R.string.library_sort_by))
             ButtonGroup(
                 modifier = Modifier.horizontalScroll(rememberScrollState()),
             ) {
@@ -195,14 +198,14 @@ fun LibraryFilterSheet(
             Spacer(modifier = Modifier.height(20.dp))
 
             // ── Media Type (FlowRow with expressive chips) ──
-            SectionLabel("Media Type")
+            SectionLabel(stringResource(R.string.library_media_type))
             FlowRow(
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
                 verticalArrangement = Arrangement.spacedBy(8.dp),
             ) {
                 MediaType.entries.filter { it != MediaType.UNKNOWN }.forEach { mediaType ->
                     GlassFilterChip(
-                        label = mediaType.displayName(),
+                        label = mediaType.mediaTypeDisplayNamePlural(),
                         selected = mediaType in selectedMediaTypes,
                         onClick = {
                             selectedMediaTypes = if (mediaType in selectedMediaTypes) {
@@ -218,7 +221,7 @@ fun LibraryFilterSheet(
             Spacer(modifier = Modifier.height(20.dp))
 
             // ── Status (ButtonGroup) ──
-            SectionLabel("Status")
+            SectionLabel(stringResource(R.string.library_status))
             ButtonGroup(
                 modifier = Modifier.horizontalScroll(rememberScrollState()),
             ) {
@@ -248,7 +251,7 @@ fun LibraryFilterSheet(
             // ── Genres ──
             if (genres.isNotEmpty()) {
                 Spacer(modifier = Modifier.height(20.dp))
-                SectionLabel("Genres")
+                SectionLabel(stringResource(R.string.library_genres))
                 FlowRow(
                     horizontalArrangement = Arrangement.spacedBy(8.dp),
                     verticalArrangement = Arrangement.spacedBy(8.dp),
@@ -271,7 +274,7 @@ fun LibraryFilterSheet(
 
             // ── Year Range (collapsed by default) ──
             Spacer(modifier = Modifier.height(20.dp))
-            CollapsibleSection(title = "Year Range") {
+            CollapsibleSection(title = stringResource(R.string.library_year_range)) {
                 val presets = remember { com.raulshma.jellyplay.core.ui.components.yearRangePresets() }
                 FlowRow(
                     horizontalArrangement = Arrangement.spacedBy(8.dp),
@@ -304,7 +307,7 @@ fun LibraryFilterSheet(
             // ── Tags (collapsed by default) ──
             if (availableTags.isNotEmpty()) {
                 Spacer(modifier = Modifier.height(20.dp))
-                CollapsibleSection(title = "Tags") {
+                CollapsibleSection(title = stringResource(R.string.library_tags)) {
                     FlowRow(
                         horizontalArrangement = Arrangement.spacedBy(8.dp),
                         verticalArrangement = Arrangement.spacedBy(8.dp),
@@ -328,7 +331,7 @@ fun LibraryFilterSheet(
 
             // ── Minimum Rating (collapsed by default) ──
             Spacer(modifier = Modifier.height(20.dp))
-            CollapsibleSection(title = "Minimum Rating") {
+            CollapsibleSection(title = stringResource(R.string.library_minimum_rating)) {
                 val ratingOptions = listOf(0f, 3f, 3.5f, 4f, 4.5f)
                 FlowRow(
                     horizontalArrangement = Arrangement.spacedBy(8.dp),
@@ -391,7 +394,7 @@ fun LibraryFilterSheet(
                 contentAlignment = Alignment.Center
             ) {
                 Text(
-                    "Apply Filters",
+                    stringResource(R.string.library_apply_filters),
                     style = MaterialTheme.typography.titleSmall,
                     fontWeight = FontWeight.Bold,
                     color = MaterialTheme.colorScheme.onPrimary,
@@ -477,7 +480,7 @@ private fun CollapsibleSection(
             )
             Icon(
                 imageVector = if (expanded) Tabler.Outline.ChevronUp else Tabler.Outline.ChevronDown,
-                contentDescription = if (expanded) "Collapse" else "Expand",
+                contentDescription = stringResource(if (expanded) R.string.library_collapse else R.string.library_expand),
                 modifier = Modifier.size(18.dp),
                 tint = MaterialTheme.colorScheme.onSurfaceVariant,
             )
@@ -486,21 +489,5 @@ private fun CollapsibleSection(
             Column(modifier = Modifier.padding(top = 8.dp)) { content() }
         }
     }
-}
-
-private fun MediaType.displayName(): String = when (this) {
-    MediaType.MOVIE -> "Movies"
-    MediaType.SERIES -> "TV Shows"
-    MediaType.SEASON -> "Seasons"
-    MediaType.EPISODE -> "Episodes"
-    MediaType.MUSIC, MediaType.AUDIO -> "Music"
-    MediaType.ALBUM -> "Albums"
-    MediaType.ARTIST -> "Artists"
-    MediaType.MUSIC_VIDEO -> "Music Videos"
-    MediaType.COLLECTION -> "Collections"
-    MediaType.PHOTO, MediaType.PHOTO_FOLDER -> "Photos"
-    MediaType.LIVE_TV -> "Live TV"
-    MediaType.CHANNEL -> "Channels"
-    MediaType.UNKNOWN -> "Unknown"
 }
 

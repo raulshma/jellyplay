@@ -4,6 +4,7 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -52,7 +53,8 @@ internal fun TrackInfoSection(
                         .then(artistFocusState.focusModifier)
                         .tvFocusIndicator(artistFocusState, ShapeCache.smooth8)
                         .clip(ShapeCache.smooth8)
-                        .clickable { onArtistClick(artistId!!) }
+                        .clickable(role = androidx.compose.ui.semantics.Role.Button) { onArtistClick(artistId!!) }
+                        .padding(vertical = 4.dp)
                 } else Modifier
             ),
         textAlign = TextAlign.Center,

@@ -27,6 +27,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.layout.onSizeChanged
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import com.raulshma.jellyplay.core.model.PreferenceResetCategory
 import androidx.hilt.navigation.compose.hiltViewModel
@@ -124,7 +125,7 @@ fun AppearanceSettingsScreen(
     var showBlueLightStrengthSheet by remember { mutableStateOf(false) }
 
     JellyPlayScreenScaffold(
-        title = "Appearance",
+        title = stringResource(R.string.settings_appearance_title),
         onBack = onBack,
         backgroundColor = backgroundColor,
         actions = {
@@ -138,7 +139,7 @@ fun AppearanceSettingsScreen(
             ) {
                 Icon(
                     Tabler.Outline.Refresh,
-                    contentDescription = "Reset to defaults",
+                    contentDescription = stringResource(R.string.settings_reset_defaults_cd),
                     tint = MaterialTheme.colorScheme.onSurface,
                 )
             }
@@ -165,21 +166,21 @@ fun AppearanceSettingsScreen(
             item {
                 SettingsGroup(
                     icon = Tabler.Outline.Palette,
-                    title = "Theme",
+                    title = stringResource(R.string.settings_theme),
                     summary = {
                         val parts = mutableListOf<String>()
                         if (preferences.synthwaveMode) {
-                            parts.add("Synthwave (${preferences.synthwaveAccent.lowercase().replaceFirstChar { it.uppercase() }})")
+                            parts.add(stringResource(R.string.settings_synthwave_accent, preferences.synthwaveAccent.lowercase().replaceFirstChar { it.uppercase() }))
                         } else if (preferences.soothingMode) {
-                            parts.add("Soothing (${preferences.soothingAccent.lowercase().replaceFirstChar { it.uppercase() }})")
+                            parts.add(stringResource(R.string.settings_soothing_accent, preferences.soothingAccent.lowercase().replaceFirstChar { it.uppercase() }))
                         } else if (preferences.monochromeMode) {
-                            parts.add("Monochrome (Nothing Phone)")
+                            parts.add(stringResource(R.string.settings_monochrome_nothing))
                         } else {
                             parts.add(preferences.themeMode.name.lowercase().replaceFirstChar { it.uppercase() })
                             val accentName = preferences.accentColorSwatch.lowercase().replaceFirstChar { it.uppercase() }
                             parts.add("$accentName accent")
                             parts.add(preferences.colorStyle.displayName)
-                            if (preferences.dynamicTheming) parts.add("Artwork dynamic")
+                            if (preferences.dynamicTheming) parts.add(stringResource(R.string.settings_artwork_dynamic))
                         }
                         if (preferences.oledMode) parts.add("OLED")
                         if (preferences.contrastLevel != ContrastLevel.DEFAULT) parts.add("${preferences.contrastLevel.name.lowercase().replaceFirstChar { it.uppercase() }} contrast")
@@ -251,19 +252,19 @@ fun AppearanceSettingsScreen(
                             "theme_mode" -> {
                                 SettingListItem(
                                     icon = Tabler.Outline.Moon,
-                                    title = "Theme Mode",
+                                    title = stringResource(R.string.settings_theme_mode),
                                     subtitle = if (preferences.synthwaveMode) {
-                                        "Overridden by Synthwave Mode"
+                                        stringResource(R.string.settings_overridden_synthwave)
                                     } else if (preferences.soothingMode) {
-                                        "Overridden by Soothing Mode"
+                                        stringResource(R.string.settings_overridden_soothing)
                                     } else if (preferences.monochromeMode) {
-                                        "Overridden by Monochrome Mode"
+                                        stringResource(R.string.settings_overridden_monochrome)
                                     } else {
                                         when (preferences.themeMode) {
-                                            ThemeMode.SYSTEM -> "Follow system setting"
-                                            ThemeMode.LIGHT -> "Always light"
-                                            ThemeMode.DARK -> "Always dark"
-                                            ThemeMode.SCHEDULED -> "Auto day/night (${preferences.scheduledThemeStartHour}:00–${preferences.scheduledThemeEndHour}:00)"
+                                            ThemeMode.SYSTEM -> stringResource(R.string.settings_theme_follow_system)
+                                            ThemeMode.LIGHT -> stringResource(R.string.settings_theme_always_light)
+                                            ThemeMode.DARK -> stringResource(R.string.settings_theme_always_dark)
+                                            ThemeMode.SCHEDULED -> stringResource(R.string.settings_theme_scheduled, preferences.scheduledThemeStartHour, preferences.scheduledThemeEndHour)
                                         }
                                     },
                                     trailingText = if (preferences.synthwaveMode) "-" else if (preferences.soothingMode) "-" else if (preferences.monochromeMode) "-" else preferences.themeMode.name,
@@ -285,8 +286,8 @@ fun AppearanceSettingsScreen(
                             "synthwave_mode" -> {
                                 SettingToggleItem(
                                     icon = Tabler.Outline.Palette,
-                                    title = "Synthwave Mode",
-                                    subtitle = "Apply retro-futuristic neon theme with sharp corners",
+                                    title = stringResource(R.string.settings_synthwave_mode),
+                                    subtitle = stringResource(R.string.settings_synthwave_mode_subtitle),
                                     checked = preferences.synthwaveMode,
                                     highlighted = highlightSettingId == "synthwave_mode",
                                     index = currentIdx++, count = totalCount,
@@ -303,8 +304,8 @@ fun AppearanceSettingsScreen(
                             "soothing_mode" -> {
                                 SettingToggleItem(
                                     icon = Tabler.Outline.Palette,
-                                    title = "Soothing Mode",
-                                    subtitle = "Apply a calm, Facebook-inspired theme with soft rounded corners",
+                                    title = stringResource(R.string.settings_soothing_mode),
+                                    subtitle = stringResource(R.string.settings_soothing_mode_subtitle),
                                     checked = preferences.soothingMode,
                                     highlighted = highlightSettingId == "soothing_mode",
                                     index = currentIdx++, count = totalCount,
@@ -321,8 +322,8 @@ fun AppearanceSettingsScreen(
                             "monochrome_mode" -> {
                                 SettingToggleItem(
                                     icon = Tabler.Outline.Palette,
-                                    title = "Monochrome Mode",
-                                    subtitle = "Apply strict black/white theme inspired by Nothing OS",
+                                    title = stringResource(R.string.settings_monochrome_mode),
+                                    subtitle = stringResource(R.string.settings_monochrome_mode_subtitle),
                                     checked = preferences.monochromeMode,
                                     highlighted = highlightSettingId == "monochrome_mode",
                                     index = currentIdx++, count = totalCount,
@@ -346,8 +347,8 @@ fun AppearanceSettingsScreen(
                             "dynamic_theming" -> {
                                 SettingToggleItem(
                                     icon = Tabler.Outline.Video,
-                                    title = "Dynamic Theming",
-                                    subtitle = "Colors extracted from artwork",
+                                    title = stringResource(R.string.settings_dynamic_theming),
+                                    subtitle = stringResource(R.string.settings_dynamic_theming_subtitle),
                                     checked = preferences.dynamicTheming,
                                     highlighted = highlightSettingId == "dynamic_theming",
                                     index = currentIdx++, count = totalCount,
@@ -357,8 +358,8 @@ fun AppearanceSettingsScreen(
                             "oled_mode" -> {
                                 SettingToggleItem(
                                     icon = Tabler.Outline.BrightnessHalf,
-                                    title = "OLED Mode",
-                                    subtitle = "Pure black backgrounds for AMOLED displays",
+                                    title = stringResource(R.string.settings_oled_mode),
+                                    subtitle = stringResource(R.string.settings_oled_mode_subtitle),
                                     checked = preferences.oledMode,
                                     highlighted = highlightSettingId == "oled_mode",
                                     index = currentIdx++, count = totalCount,
@@ -368,11 +369,11 @@ fun AppearanceSettingsScreen(
                             "contrast" -> {
                                 SettingListItem(
                                     icon = Tabler.Outline.Adjustments,
-                                    title = "Contrast",
+                                    title = stringResource(R.string.settings_contrast),
                                     subtitle = when (preferences.contrastLevel) {
-                                        ContrastLevel.DEFAULT -> "Standard contrast"
-                                        ContrastLevel.MEDIUM -> "Medium contrast"
-                                        ContrastLevel.HIGH -> "High contrast"
+                                        ContrastLevel.DEFAULT -> stringResource(R.string.settings_contrast_standard)
+                                        ContrastLevel.MEDIUM -> stringResource(R.string.settings_contrast_medium)
+                                        ContrastLevel.HIGH -> stringResource(R.string.settings_contrast_high)
                                     },
                                     trailingText = preferences.contrastLevel.name,
                                     highlighted = highlightSettingId == "contrast",
@@ -390,10 +391,10 @@ fun AppearanceSettingsScreen(
                             "library_view_mode" -> {
                                 SettingListItem(
                                     icon = Tabler.Outline.LayoutGrid,
-                                    title = "Library View Mode",
+                                    title = stringResource(R.string.settings_library_view_mode),
                                     subtitle = when (preferences.libraryViewMode) {
-                                        LibraryViewMode.GRID -> "Display items in a grid layout"
-                                        LibraryViewMode.LIST -> "Display items in a list layout"
+                                        LibraryViewMode.GRID -> stringResource(R.string.settings_library_view_grid)
+                                        LibraryViewMode.LIST -> stringResource(R.string.settings_library_view_list)
                                     },
                                     trailingText = preferences.libraryViewMode.name,
                                     highlighted = highlightSettingId == "library_view_mode",
@@ -410,8 +411,8 @@ fun AppearanceSettingsScreen(
                             "home_mode" -> {
                                 SettingListItem(
                                     icon = Tabler.Outline.Home,
-                                    title = "Home Mode",
-                                    subtitle = if (preferences.homeMode == HomeMode.VIDEO) "Video-focused home screen" else "Music-focused home screen",
+                                    title = stringResource(R.string.settings_home_mode),
+                                    subtitle = if (preferences.homeMode == HomeMode.VIDEO) stringResource(R.string.settings_home_mode_video) else stringResource(R.string.settings_home_mode_music),
                                     trailingText = preferences.homeMode.name,
                                     highlighted = highlightSettingId == "home_mode",
                                     index = currentIdx++, count = totalCount,
@@ -424,8 +425,8 @@ fun AppearanceSettingsScreen(
                             "hero_section" -> {
                                 SettingToggleItem(
                                     icon = Tabler.Outline.LayersLinked,
-                                    title = "Show Hero Section",
-                                    subtitle = if (preferences.homeHeroEnabled) "Featured content banner on home" else "Compact home layout",
+                                    title = stringResource(R.string.settings_show_hero_section),
+                                    subtitle = if (preferences.homeHeroEnabled) stringResource(R.string.settings_show_hero_on) else stringResource(R.string.settings_show_hero_off),
                                     checked = preferences.homeHeroEnabled,
                                     highlighted = highlightSettingId == "hero_section",
                                     index = currentIdx++, count = totalCount,
@@ -435,8 +436,8 @@ fun AppearanceSettingsScreen(
                             "clock_home" -> {
                                 SettingToggleItem(
                                     icon = Tabler.Outline.Clock,
-                                    title = "Show Clock on Home",
-                                    subtitle = if (preferences.showClockOnHome) "Display current time in top bar" else "No clock on home",
+                                    title = stringResource(R.string.settings_show_clock_home),
+                                    subtitle = if (preferences.showClockOnHome) stringResource(R.string.settings_show_clock_on) else stringResource(R.string.settings_show_clock_off),
                                     checked = preferences.showClockOnHome,
                                     highlighted = highlightSettingId == "clock_home",
                                     index = currentIdx++, count = totalCount,
@@ -446,7 +447,7 @@ fun AppearanceSettingsScreen(
                             "continue_watching_click" -> {
                                 SettingListItem(
                                     icon = Tabler.Outline.PlayerPlay,
-                                    title = "Continue Watching Tap",
+                                    title = stringResource(R.string.settings_continue_watching_tap),
                                     subtitle = "What happens when you tap a Continue Watching tile",
                                     trailingText = preferences.continueWatchingClickBehavior.displayName,
                                     highlighted = highlightSettingId == "continue_watching_click",

@@ -34,6 +34,7 @@ import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusProperties
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.onFocusChanged
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -61,6 +62,7 @@ import com.raulshma.jellyplay.core.ui.tv.LocalTvMode
 import com.raulshma.jellyplay.core.ui.tv.TvFocusableGrid
 import com.raulshma.jellyplay.core.ui.tv.rememberTvFocusState
 import com.raulshma.jellyplay.core.ui.tv.tvFocusIndicator
+import com.raulshma.jellyplay.feature.library.R
 import com.raulshma.jellyplay.feature.library.components.PhotoGridCard
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -102,7 +104,7 @@ fun PhotoAlbumScreen(
     }
 
     JellyPlayScreenScaffold(
-        title = folderName.ifBlank { "Photos" },
+        title = folderName.ifBlank { stringResource(R.string.library_photos) },
         onBack = onBack,
         actions = {
             var showSortMenu by remember { mutableStateOf(false) }
@@ -114,7 +116,7 @@ fun PhotoAlbumScreen(
                 ) {
                     Icon(
                         imageVector = Tabler.Outline.DotsVertical,
-                        contentDescription = "Sort options",
+                        contentDescription = stringResource(R.string.library_sort_options),
                         tint = MaterialTheme.colorScheme.onSurface,
                     )
                 }
@@ -161,14 +163,15 @@ fun PhotoAlbumScreen(
                     photos.loadState.refresh is LoadState.Error -> {
                         ErrorScreen(
                             message = (photos.loadState.refresh as LoadState.Error)
-                                .error.localizedMessage ?: "Failed to load photos",
+                                .error.localizedMessage
+                                ?: stringResource(R.string.library_failed_to_load_photos),
                             onRetry = { photos.refresh() },
                         )
                     }
                     photos.itemCount == 0 -> {
                         ScreenEmptyState(
                             icon = Tabler.Outline.Photo,
-                            title = "No photos found",
+                            title = stringResource(R.string.library_no_photos_found),
                         )
                     }
                     else -> {
@@ -218,7 +221,8 @@ fun PhotoAlbumScreen(
                     }
                     is LoadState.Error -> {
                         Text(
-                            text = appendState.error.localizedMessage ?: "Failed to load more",
+                            text = appendState.error.localizedMessage
+                                ?: stringResource(R.string.library_failed_to_load_more),
                             color = MaterialTheme.colorScheme.error,
                             style = MaterialTheme.typography.bodySmall,
                             modifier = Modifier

@@ -31,6 +31,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalConfiguration
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.raulshma.jellyplay.core.model.SubtitleColor
@@ -135,7 +136,7 @@ fun LanguageSettingsScreen(
     }
 
     JellyPlayScreenScaffold(
-        title = "Language & Subtitles",
+        title = stringResource(R.string.settings_language_subs_title),
         onBack = onBack,
         backgroundColor = backgroundColor,
         actions = {
@@ -167,24 +168,24 @@ fun LanguageSettingsScreen(
             item {
                 SettingsGroup(
                     icon = Tabler.Outline.Language,
-                    title = "Language",
+                    title = stringResource(R.string.settings_language),
                     summary = {
                         val parts = mutableListOf<String>()
                         val appLangLabel = appLanguages.firstOrNull { it.first == preferences.appLanguage }?.second
-                            ?: preferences.appLanguage ?: "System Default"
-                        parts.add("UI: $appLangLabel")
-                        parts.add("Audio: ${preferences.preferredAudioLanguage ?: "Default"}")
+                            ?: preferences.appLanguage ?: stringResource(R.string.settings_lang_system_default)
+                        parts.add(stringResource(R.string.settings_ui_label, appLangLabel))
+                        parts.add(stringResource(R.string.settings_audio_label, preferences.preferredAudioLanguage ?: stringResource(R.string.settings_lang_default)))
                         parts.joinToString(", ")
                     },
                     modifier = Modifier.padding(vertical = 8.dp),
                     initiallyExpanded = true,
                 ) {
                     val appLangLabel = appLanguages.firstOrNull { it.first == preferences.appLanguage }?.second
-                        ?: preferences.appLanguage ?: "System Default"
+                        ?: preferences.appLanguage ?: stringResource(R.string.settings_lang_system_default)
                     SettingListItem(
                         icon = Tabler.Outline.Language,
-                        title = "Display Language",
-                        subtitle = "App interface language (restarts app)",
+                        title = stringResource(R.string.settings_display_language),
+                        subtitle = stringResource(R.string.settings_display_language_subtitle),
                         trailingText = appLangLabel,
                         highlighted = highlightSettingId == "app_language",
                         index = 0, count = 3,
@@ -192,18 +193,18 @@ fun LanguageSettingsScreen(
                     )
                     SettingListItem(
                         icon = Tabler.Outline.Language,
-                        title = "Audio Language",
-                        subtitle = "Preferred audio track language",
-                        trailingText = preferences.preferredAudioLanguage ?: "Default",
+                        title = stringResource(R.string.settings_audio_language),
+                        subtitle = stringResource(R.string.settings_audio_language_subtitle),
+                        trailingText = preferences.preferredAudioLanguage ?: stringResource(R.string.settings_lang_default),
                         highlighted = highlightSettingId == "audio_language",
                         index = 1, count = 3,
                         onClick = { activeDialog = LanguageSettingsDialog.AudioLanguagePicker },
                     )
                     SettingListItem(
                         icon = Tabler.Outline.Subtitles,
-                        title = "Subtitle Language",
-                        subtitle = "Preferred subtitle language",
-                        trailingText = preferences.preferredSubtitleLanguage ?: "Default",
+                        title = stringResource(R.string.settings_subtitle_language),
+                        subtitle = stringResource(R.string.settings_subtitle_language_subtitle),
+                        trailingText = preferences.preferredSubtitleLanguage ?: stringResource(R.string.settings_lang_default),
                         highlighted = highlightSettingId == "subtitle_language",
                         index = 2, count = 3,
                         onClick = { activeDialog = LanguageSettingsDialog.SubtitleLanguagePicker },
@@ -214,8 +215,8 @@ fun LanguageSettingsScreen(
             item {
                 SettingsGroup(
                     icon = Tabler.Outline.Subtitles,
-                    title = "Subtitles",
-                    summary = { "Font size: ${preferences.subtitleStyle.fontSize}sp" },
+                    title = stringResource(R.string.settings_subtitles),
+                    summary = { stringResource(R.string.settings_subtitles_summary, preferences.subtitleStyle.fontSize) },
                     modifier = Modifier.padding(vertical = 8.dp),
                     initiallyExpanded = highlightSettingId in listOf("subtitle_font_size", "subtitle_forced_only", "high_contrast_subtitles", "pgs_direct_play", "hdr_subtitle_style", "hdr_subtitle_font_size", "subtitle_color", "subtitle_background", "subtitle_edge_style", "subtitle_sync_offset", "subtitle_vertical_position"),
                 ) {
@@ -227,8 +228,8 @@ fun LanguageSettingsScreen(
                     }
                     SettingListItem(
                         icon = Tabler.Outline.Typography,
-                        title = "Font Size",
-                        subtitle = "Subtitle text size",
+                        title = stringResource(R.string.settings_font_size),
+                        subtitle = stringResource(R.string.settings_font_size_subtitle),
                         trailingText = "${preferences.subtitleStyle.fontSize}sp",
                         highlighted = highlightSettingId == "subtitle_font_size",
                         index = subIdx++, count = subTotal,
@@ -236,8 +237,8 @@ fun LanguageSettingsScreen(
                     )
                     SettingToggleItem(
                         icon = Tabler.Outline.TextSize,
-                        title = "Forced Subtitles Only",
-                        subtitle = if (preferences.subtitlesForcedOnly) "Show subtitles only when forced tracks are present" else "Show subtitles per preferred language",
+                        title = stringResource(R.string.settings_forced_subtitles),
+                        subtitle = if (preferences.subtitlesForcedOnly) stringResource(R.string.settings_forced_subtitles_on) else stringResource(R.string.settings_forced_subtitles_off),
                         checked = preferences.subtitlesForcedOnly,
                         highlighted = highlightSettingId == "subtitle_forced_only",
                         index = subIdx++, count = subTotal,
@@ -245,8 +246,8 @@ fun LanguageSettingsScreen(
                     )
                     SettingToggleItem(
                         icon = Tabler.Outline.Eye,
-                        title = "High-Contrast Subtitles",
-                        subtitle = if (preferences.highContrastSubtitles) "Maximally legible subtitle style for accessibility" else "Use subtitle style as configured",
+                        title = stringResource(R.string.settings_high_contrast_subtitles),
+                        subtitle = if (preferences.highContrastSubtitles) stringResource(R.string.settings_high_contrast_on) else stringResource(R.string.settings_high_contrast_off),
                         checked = preferences.highContrastSubtitles,
                         highlighted = highlightSettingId == "high_contrast_subtitles",
                         index = subIdx++, count = subTotal,
@@ -255,8 +256,8 @@ fun LanguageSettingsScreen(
                     if (showAdvanced) {
                         SettingToggleItem(
                             icon = Tabler.Outline.Photo,
-                            title = "PGS Direct Play",
-                            subtitle = if (preferences.pgsSubtitleDirectPlay) "Render PGS subtitles natively (MPV only)" else "Burn in PGS subtitles via server transcode",
+                            title = stringResource(R.string.settings_pgs_direct_play),
+                            subtitle = if (preferences.pgsSubtitleDirectPlay) stringResource(R.string.settings_pgs_direct_play_on) else stringResource(R.string.settings_pgs_direct_play_off),
                             checked = preferences.pgsSubtitleDirectPlay,
                             highlighted = highlightSettingId == "pgs_direct_play",
                             index = subIdx++, count = subTotal,
@@ -264,8 +265,8 @@ fun LanguageSettingsScreen(
                         )
                         SettingToggleItem(
                             icon = Tabler.Outline.Sun,
-                            title = "Separate HDR Subtitle Style",
-                            subtitle = if (preferences.hdrSubtitleStyleEnabled) "Custom subtitle style for HDR content" else "Use same subtitle style for all content",
+                            title = stringResource(R.string.settings_hdr_subtitle_style),
+                            subtitle = if (preferences.hdrSubtitleStyleEnabled) stringResource(R.string.settings_hdr_subtitle_on) else stringResource(R.string.settings_hdr_subtitle_off),
                             checked = preferences.hdrSubtitleStyleEnabled,
                             highlighted = highlightSettingId == "hdr_subtitle_style",
                             index = subIdx++, count = subTotal,

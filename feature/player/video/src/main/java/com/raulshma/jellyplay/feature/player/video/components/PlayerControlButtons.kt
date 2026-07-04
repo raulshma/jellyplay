@@ -111,18 +111,8 @@ internal fun PlayerQualityButton(
         ),
     ) {
         Text(
-            quality.shortLabel,
+            quality.displayName,
             style = MaterialTheme.typography.labelMedium,
         )
     }
 }
-
-private val StreamingQuality.shortLabel: String
-    get() = when (this) {
-        StreamingQuality.AUTO -> "Auto"
-        StreamingQuality.LOW_360P -> "360p"
-        StreamingQuality.SD_480P -> "480p"
-        StreamingQuality.HD_720P -> "720p"
-        StreamingQuality.FHD_1080P -> "1080p"
-        StreamingQuality.UHD_4K -> "4K"
-    }

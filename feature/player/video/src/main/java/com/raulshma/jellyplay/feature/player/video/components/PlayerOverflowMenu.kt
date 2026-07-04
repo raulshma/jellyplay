@@ -163,8 +163,6 @@ internal fun BoxScope.PlayerOverflowMenu(
         }
     }
 
-    if (!expanded) return
-
     // Rendered in-window (NOT via a Material3 DropdownMenu/Popup). A DropdownMenu
     // opens a brand-new top-level window that does not inherit the player's
     // immersive mode, so the status/navigation bars would flash on every open —

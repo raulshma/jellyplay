@@ -82,6 +82,7 @@ private fun HorizontalMediaScroller(
     contentPad: androidx.compose.ui.unit.Dp,
     clippingEnabled: Boolean,
     modifier: Modifier = Modifier,
+    key: ((index: Int) -> Any)? = null,
     itemContent: @Composable (index: Int) -> Unit,
 ) {
     if (clippingEnabled) {
@@ -98,7 +99,13 @@ private fun HorizontalMediaScroller(
             horizontalArrangement = Arrangement.spacedBy(spacing),
             modifier = modifier,
         ) {
-            items(itemCount) { index -> itemContent(index) }
+            // Stable keys + contentType let Compose preserve scroll position
+            // across recompositions and reuse item slots efficiently.
+            items(
+                count = itemCount,
+                key = key,
+                contentType = { "mediaCard" },
+            ) { index -> itemContent(index) }
         }
     }
 }
@@ -118,11 +125,9 @@ fun ContinueWatchingRow(
 ) {
     val adaptiveInfo = LocalAdaptiveInfo.current
     val isTv = LocalTvMode.current
-    val cardWidth = when {
-        isTv -> 400.dp
-        adaptiveInfo.windowSizeClass != WindowSizeClass.Compact -> 320.dp
-        else -> 260.dp
-    }
+    // Continue-watching cards are wide (landscape thumbnails + progress/metadata), so they
+    // scale ~1.6× the portrait poster-card width rather than using [rowCardWidth] directly.
+    val cardWidth = (adaptiveInfo.rowCardWidth(isTv) * 1.6f).coerceAtLeast(260.dp)
     val contentPad = adaptiveInfo.contentPadding(isTv)
     val spacing = adaptiveInfo.itemSpacing(isTv)
 
@@ -165,6 +170,7 @@ fun ContinueWatchingRow(
                 contentPad = contentPad,
                 clippingEnabled = clippingEnabled,
                 modifier = Modifier.tvFocusRestorer(),
+                key = { index -> items[index].id },
             ) { index ->
                 val item = items[index]
                 val memoizedClick = remember(item) { { onItemClick(item) } }
@@ -514,6 +520,7 @@ fun HomeMediaRow(
                 contentPad = contentPad,
                 clippingEnabled = clippingEnabled,
                 modifier = Modifier.tvFocusRestorer(),
+                key = { index -> effectiveItems[index].id },
             ) { index ->
                 val item = effectiveItems[index]
                 val memoizedClick = remember(item) { { onItemClick(item) } }
