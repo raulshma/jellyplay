@@ -40,6 +40,7 @@ import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.res.stringResource
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.paging.LoadState
@@ -56,6 +57,7 @@ import com.raulshma.jellyplay.core.ui.components.rememberScreenBackgroundColor
 import com.raulshma.jellyplay.core.designsystem.theme.ShapeCache
 import com.raulshma.jellyplay.core.ui.tv.LocalTvMode
 import com.raulshma.jellyplay.core.ui.tv.TvFocusableGrid
+import com.raulshma.jellyplay.feature.library.R
 
 @Composable
 fun FavoritesScreen(
@@ -76,7 +78,7 @@ fun FavoritesScreen(
     }
 
     JellyPlayScreenScaffold(
-        title = "Favorites",
+        title = stringResource(R.string.library_favorites),
         onBack = onBack,
         backgroundColor = backgroundColor,
     ) { innerPadding ->
@@ -95,40 +97,20 @@ fun FavoritesScreen(
 
             when {
                 pagingItems.loadState.refresh is LoadState.Loading && pagingItems.itemCount == 0 -> {
-                    Box(
-                        modifier = Modifier.fillMaxSize(),
-                        contentAlignment = Alignment.Center,
-                    ) {
-                        com.raulshma.jellyplay.core.ui.components.JellyPlayLoadingIndicator(
-                            color = MaterialTheme.colorScheme.primary,
-                        )
-                    }
+                    com.raulshma.jellyplay.core.ui.components.DelayedLoadingScreen()
                 }
                 pagingItems.loadState.refresh is LoadState.Error -> {
-                    Box(
-                        modifier = Modifier.fillMaxSize(),
-                        contentAlignment = Alignment.Center,
-                    ) {
-                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                            Text(
-                                text = "Failed to load favorites",
-                                style = MaterialTheme.typography.titleMedium,
-                                color = MaterialTheme.colorScheme.onSurface,
-                            )
-                            Spacer(Modifier.height(8.dp))
-                            Text(
-                                text = (pagingItems.loadState.refresh as LoadState.Error).error.message ?: "Unknown error",
-                                style = MaterialTheme.typography.bodyMedium,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            )
-                        }
-                    }
+                    com.raulshma.jellyplay.core.ui.components.ErrorScreen(
+                        message = (pagingItems.loadState.refresh as LoadState.Error).error.message
+                            ?: stringResource(R.string.library_failed_to_load_favorites),
+                        onRetry = { pagingItems.retry() },
+                    )
                 }
                 pagingItems.itemCount == 0 && pagingItems.loadState.refresh is LoadState.NotLoading -> {
                     com.raulshma.jellyplay.core.ui.components.ScreenEmptyState(
                         icon = Tabler.Outline.Heart,
-                        title = "No Favorites",
-                        description = "Items you favorite will appear here",
+                        title = stringResource(R.string.library_no_favorites),
+                        description = stringResource(R.string.library_no_favorites_description),
                     )
                 }
                 else -> {

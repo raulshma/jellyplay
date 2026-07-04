@@ -16,12 +16,14 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.composables.icons.tabler.Tabler
 import com.composables.icons.tabler.outline.*
 import com.raulshma.jellyplay.core.ui.tv.rememberTvFocusState
 import com.raulshma.jellyplay.core.ui.tv.tvFocusIndicator
+import com.raulshma.jellyplay.feature.player.audio.R
 
 @Composable
 internal fun PixelPlayerTopBar(
@@ -71,13 +73,13 @@ internal fun PixelPlayerTopBar(
                 .tvFocusIndicator(minimizeFocusState, CircleShape)
         ) {
             Icon(
-                Tabler.Outline.ChevronDown, "Minimize",
+                Tabler.Outline.ChevronDown, stringResource(R.string.audio_topbar_minimize),
                 tint = MaterialTheme.colorScheme.onBackground,
                 modifier = Modifier.size(28.dp),
             )
         }
         Text(
-            "Now Playing",
+            stringResource(R.string.audio_topbar_now_playing),
             style = MaterialTheme.typography.titleSmall,
             color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.8f),
             letterSpacing = 1.sp,
@@ -92,7 +94,7 @@ internal fun PixelPlayerTopBar(
                 ) {
                     Icon(
                         if (lyricsVisible) Tabler.Outline.Microphone2 else Tabler.Outline.Microphone,
-                        "Lyrics",
+                        stringResource(R.string.audio_topbar_lyrics),
                         tint = if (lyricsVisible) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onBackground,
                         modifier = Modifier.size(22.dp),
                     )
@@ -104,7 +106,7 @@ internal fun PixelPlayerTopBar(
                     .then(queueFocusState.focusModifier)
                     .tvFocusIndicator(queueFocusState, CircleShape)
             ) {
-                Icon(Tabler.Outline.Playlist, "Queue", tint = MaterialTheme.colorScheme.onBackground, modifier = Modifier.size(22.dp))
+                Icon(Tabler.Outline.Playlist, stringResource(R.string.audio_topbar_queue), tint = MaterialTheme.colorScheme.onBackground, modifier = Modifier.size(22.dp))
             }
             Box {
                 IconButton(
@@ -113,7 +115,7 @@ internal fun PixelPlayerTopBar(
                         .then(moreFocusState.focusModifier)
                         .tvFocusIndicator(moreFocusState, CircleShape)
                 ) {
-                    Icon(Tabler.Outline.DotsVertical, "More", tint = MaterialTheme.colorScheme.onBackground, modifier = Modifier.size(22.dp))
+                    Icon(Tabler.Outline.DotsVertical, stringResource(R.string.audio_topbar_more), tint = MaterialTheme.colorScheme.onBackground, modifier = Modifier.size(22.dp))
                 }
                 val itemColors = androidx.compose.material3.MenuDefaults.itemColors(
                     textColor = MaterialTheme.colorScheme.onSurface,
@@ -121,50 +123,50 @@ internal fun PixelPlayerTopBar(
                 )
                 DropdownMenu(expanded = showMenu, onDismissRequest = { onMenuToggle(false) }) {
                     DropdownMenuItem(
-                        text = { Text("Speed (${if (speed == 1.0f) "1x" else "${speed}x"})") },
+                        text = { Text(stringResource(R.string.audio_menu_speed, if (speed == 1.0f) "1x" else "${speed}x")) },
                         onClick = onSpeedClick,
                         leadingIcon = { Icon(Tabler.Outline.Gauge, null) },
                         colors = itemColors,
                     )
                     DropdownMenuItem(
-                        text = { Text("Equalizer") },
+                        text = { Text(stringResource(R.string.audio_menu_equalizer)) },
                         onClick = onEqualizerClick,
                         leadingIcon = { Icon(Tabler.Outline.Adjustments, null) },
                         colors = itemColors,
                     )
                     DropdownMenuItem(
-                        text = { Text("Audio Effects") },
+                        text = { Text(stringResource(R.string.audio_menu_audio_effects)) },
                         onClick = onEffectsClick,
                         leadingIcon = { Icon(Tabler.Outline.Ear, null) },
                         colors = itemColors,
                     )
                     DropdownMenuItem(
-                        text = { Text(if (dialogueBoostEnabled) "Dialogue Boost · ${dialogueBoostStrength.displayName}" else "Dialogue Boost") },
+                        text = { Text(if (dialogueBoostEnabled) stringResource(R.string.audio_menu_dialogue_boost_with_strength, dialogueBoostStrength.displayName) else stringResource(R.string.audio_menu_dialogue_boost)) },
                         onClick = { onDialogueBoostClick(); onMenuToggle(false) },
                         leadingIcon = { Icon(Tabler.Outline.Microphone2, null) },
                         colors = itemColors,
                     )
                     DropdownMenuItem(
-                        text = { Text(if (nightModeEnabled) "Night Mode · ${nightModeStrength.displayName}" else "Night Mode") },
+                        text = { Text(if (nightModeEnabled) stringResource(R.string.audio_menu_night_mode_with_strength, nightModeStrength.displayName) else stringResource(R.string.audio_menu_night_mode)) },
                         onClick = { onNightModeClick(); onMenuToggle(false) },
                         leadingIcon = { Icon(Tabler.Outline.Moon, null) },
                         colors = itemColors,
                     )
                     DropdownMenuItem(
-                        text = { Text("Ambient Mode") },
+                        text = { Text(stringResource(R.string.audio_menu_ambient_mode)) },
                         onClick = onAmbientClick,
                         leadingIcon = { Icon(Tabler.Outline.MoonStars, null) },
                         colors = itemColors,
                     )
                     DropdownMenuItem(
-                        text = { Text(if (sleepTimerActive) "Sleep Timer · $sleepTimerDisplayText" else "Sleep Timer") },
+                        text = { Text(if (sleepTimerActive) stringResource(R.string.audio_menu_sleep_timer_active, sleepTimerDisplayText) else stringResource(R.string.audio_menu_sleep_timer)) },
                         onClick = onSleepTimerClick,
                         leadingIcon = { Icon(Tabler.Outline.Stopwatch, null) },
                         colors = itemColors,
                     )
                     if (hasKaraokeLyrics) {
                         DropdownMenuItem(
-                            text = { Text(if (karaokeMode) "Karaoke Mode · On" else "Karaoke Mode") },
+                            text = { Text(if (karaokeMode) stringResource(R.string.audio_menu_karaoke_mode_on) else stringResource(R.string.audio_menu_karaoke_mode)) },
                             onClick = { onKaraokeToggle(!karaokeMode); onMenuToggle(false) },
                             leadingIcon = { Icon(Tabler.Outline.Microphone2, null) },
                             colors = itemColors,

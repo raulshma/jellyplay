@@ -38,7 +38,6 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import com.raulshma.jellyplay.core.designsystem.theme.ShapeCache
 import com.raulshma.jellyplay.core.designsystem.theme.smoothCornerShape
-import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
@@ -146,7 +145,7 @@ fun PhotoViewerScreen(
     LaunchedEffect(saveResult) {
         when (val result = saveResult) {
             is SaveResult.Success -> {
-                userMessageBus.info(uiTextOf(R.string.photo_saved_to_gallery))
+                userMessageBus.info(uiTextOf(R.string.library_photo_saved_to_gallery))
                 viewModel.clearSaveResult()
             }
             is SaveResult.Error -> {
@@ -352,7 +351,7 @@ fun PhotoViewerScreen(
                                         onClick = { viewModel.savePhotoToGallery() },
                                     ) {
                                         if (isSaving) {
-                                            CircularProgressIndicator(modifier = Modifier.size(20.dp), color = Color.White, strokeWidth = 2.dp)
+                                            com.raulshma.jellyplay.core.ui.components.JellyPlayCircularProgressIndicator(modifier = Modifier.size(20.dp), color = Color.White)
                                         } else {
                                             Icon(Tabler.Outline.Download, contentDescription = "Save", tint = Color.White, modifier = Modifier.size(20.dp))
                                         }

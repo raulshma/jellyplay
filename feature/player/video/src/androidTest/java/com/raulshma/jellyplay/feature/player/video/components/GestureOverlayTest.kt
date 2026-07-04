@@ -1,7 +1,6 @@
 package com.raulshma.jellyplay.feature.player.video.components
 
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.ui.test.assertDoesNotExist
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithText
@@ -52,6 +51,8 @@ class GestureOverlayTest {
                     onBrightnessGesture = {},
                     onVolumeGesture = {},
                     onClearOverlays = {},
+                    showControls = true,
+                    onEdgeSwipe = {},
                 )
             }
         }
@@ -73,6 +74,8 @@ class GestureOverlayTest {
                     onBrightnessGesture = {},
                     onVolumeGesture = {},
                     onClearOverlays = {},
+                    showControls = true,
+                    onEdgeSwipe = {},
                 )
             }
         }
@@ -94,6 +97,8 @@ class GestureOverlayTest {
                     onBrightnessGesture = {},
                     onVolumeGesture = {},
                     onClearOverlays = {},
+                    showControls = true,
+                    onEdgeSwipe = {},
                 )
             }
         }
@@ -115,6 +120,8 @@ class GestureOverlayTest {
                     onBrightnessGesture = {},
                     onVolumeGesture = {},
                     onClearOverlays = {},
+                    showControls = true,
+                    onEdgeSwipe = {},
                 )
             }
         }
@@ -136,6 +143,8 @@ class GestureOverlayTest {
                     onBrightnessGesture = {},
                     onVolumeGesture = {},
                     onClearOverlays = {},
+                    showControls = true,
+                    onEdgeSwipe = {},
                 )
             }
         }
@@ -204,6 +213,8 @@ class GestureOverlayTest {
                     onBrightnessGesture = {},
                     onVolumeGesture = {},
                     onClearOverlays = {},
+                    showControls = true,
+                    onEdgeSwipe = {},
                 )
             }
         }
@@ -225,6 +236,8 @@ class GestureOverlayTest {
                     onBrightnessGesture = {},
                     onVolumeGesture = {},
                     onClearOverlays = {},
+                    showControls = true,
+                    onEdgeSwipe = {},
                 )
             }
         }
@@ -248,6 +261,8 @@ class GestureOverlayTest {
                     onVolumeGesture = {},
                     onClearOverlays = {},
                     onHapticPulse = { hapticCalled = true },
+                    showControls = true,
+                    onEdgeSwipe = {},
                 )
             }
         }
@@ -269,6 +284,8 @@ class GestureOverlayTest {
                     onBrightnessGesture = {},
                     onVolumeGesture = {},
                     onClearOverlays = {},
+                    showControls = true,
+                    onEdgeSwipe = {},
                 )
             }
         }
@@ -290,6 +307,8 @@ class GestureOverlayTest {
                     onBrightnessGesture = {},
                     onVolumeGesture = {},
                     onClearOverlays = {},
+                    showControls = true,
+                    onEdgeSwipe = {},
                 )
             }
         }
@@ -313,6 +332,8 @@ class GestureOverlayTest {
                     onVolumeGesture = {},
                     onClearOverlays = {},
                     overlayDismissDelayMs = 1200L,
+                    showControls = true,
+                    onEdgeSwipe = {},
                 )
             }
         }

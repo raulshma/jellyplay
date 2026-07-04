@@ -31,6 +31,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import com.composables.icons.tabler.Tabler
+import com.composables.icons.tabler.outline.AlertCircle
 import com.composables.icons.tabler.outline.DeviceFloppy
 import com.composables.icons.tabler.outline.Download
 import com.composables.icons.tabler.outline.Wifi
@@ -39,6 +40,7 @@ import com.raulshma.jellyplay.core.model.MediaType
 import com.raulshma.jellyplay.core.model.OfflineMediaItem
 import com.raulshma.jellyplay.core.model.formatBytes
 import com.raulshma.jellyplay.core.ui.adaptive.LocalAdaptiveInfo
+import com.raulshma.jellyplay.core.ui.adaptive.itemSpacing
 import com.raulshma.jellyplay.core.ui.adaptive.rowCardWidth
 import com.raulshma.jellyplay.core.ui.components.OfflineMediaCard
 import com.raulshma.jellyplay.core.ui.components.ScreenEmptyState
@@ -59,6 +61,11 @@ fun OfflineHomeContent(
     backgroundColor: Color,
     onGoOnline: () -> Unit,
     onOfflineItemClick: (itemId: String, mediaType: MediaType) -> Unit = { _, _ -> onItemClick() },
+    /**
+     * Optional non-blocking banner shown above the offline content. Used to surface the
+     * "online fetch failed, showing downloads" fallback so the implicit switch isn't silent.
+     */
+    statusMessage: String? = null,
 ) {
     val isTv = LocalTvMode.current
     val adaptiveInfo = LocalAdaptiveInfo.current
@@ -100,6 +107,34 @@ fun OfflineHomeContent(
         contentPadding = PaddingValues(top = 120.dp, bottom = 120.dp),
         verticalArrangement = Arrangement.spacedBy(28.dp),
     ) {
+        // Non-blocking status banner (e.g. "couldn't reach server — showing downloads").
+        if (statusMessage != null) {
+            item(key = "offline_status_banner") {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    modifier = Modifier
+                        .padding(horizontal = contentPadding)
+                        .padding(bottom = 12.dp)
+                        .clip(ShapeCache.smooth16)
+                        .background(MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.6f))
+                        .padding(horizontal = 12.dp, vertical = 8.dp),
+                ) {
+                    Icon(
+                        Tabler.Outline.AlertCircle,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.onErrorContainer,
+                        modifier = Modifier.size(16.dp),
+                    )
+                    Spacer(Modifier.size(8.dp))
+                    Text(
+                        text = statusMessage,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onErrorContainer,
+                    )
+                }
+            }
+        }
+
         // Header: title + storage summary + Go online.
         item(key = "offline_header") {
             Column(modifier = Modifier.padding(horizontal = contentPadding)) {
@@ -220,9 +255,14 @@ fun DownloadedSection(
     backgroundColor: Color,
     modifier: Modifier = Modifier,
 ) {
+    val adaptiveInfo = LocalAdaptiveInfo.current
+    val isTv = LocalTvMode.current
+    val cardWidth = adaptiveInfo.rowCardWidth(isTv)
+    val spacing = adaptiveInfo.itemSpacing(isTv)
+
     Text(
         text = "Downloaded",
-        style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Bold),
+        style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.SemiBold),
         color = MaterialTheme.colorScheme.onSurface,
         modifier = modifier
             .fillMaxWidth()
@@ -235,7 +275,7 @@ fun DownloadedSection(
             .fillMaxWidth()
             .background(backgroundColor)
             .padding(horizontal = contentPad, vertical = 4.dp),
-        horizontalArrangement = Arrangement.spacedBy(12.dp),
+        horizontalArrangement = Arrangement.spacedBy(spacing),
     ) {
         items(
             count = offlineLibrary.size,
@@ -246,7 +286,7 @@ fun DownloadedSection(
             OfflineMediaCard(
                 item = offlineItem,
                 onClick = onOfflineLibraryClick,
-                modifier = Modifier.width(120.dp),
+                modifier = Modifier.width(cardWidth),
             )
         }
     }

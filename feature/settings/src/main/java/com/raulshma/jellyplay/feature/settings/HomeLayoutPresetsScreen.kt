@@ -19,7 +19,6 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
@@ -66,6 +65,7 @@ import com.raulshma.jellyplay.core.ui.tv.tvFocusRestorer
 import com.raulshma.jellyplay.core.ui.feedback.uiTextOf
 import com.raulshma.jellyplay.core.ui.components.formatDate
 import com.raulshma.jellyplay.core.model.DateFormatPreference
+import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import com.raulshma.jellyplay.feature.settings.R
 import java.util.Date
@@ -93,10 +93,13 @@ fun HomeLayoutPresetsScreen(
     var actionTarget by remember { mutableStateOf<HomeLayoutPreset?>(null) }
     var resetConfirm by remember { mutableStateOf(false) }
 
+    val shareSubject = stringResource(R.string.settings_home_layout_subject_plain)
+    val shareChooser = stringResource(R.string.settings_share_home_layout)
+
     val scrollState = rememberLazyListState()
 
     JellyPlayScreenScaffold(
-        title = "Home Layout Presets",
+        title = stringResource(R.string.settings_home_layout_presets),
         onBack = onBack,
         backgroundColor = backgroundColor,
     ) { innerPadding ->
@@ -122,33 +125,33 @@ fun HomeLayoutPresetsScreen(
             item {
                 SettingsGroup(
                     icon = Tabler.Outline.Bookmarks,
-                    title = "Layout Presets",
+                    title = stringResource(R.string.settings_layout_presets),
                     summary = {
-                        if (presets.isEmpty()) "No saved presets" else "${presets.size} saved preset${if (presets.size != 1) "s" else ""}"
+                        if (presets.isEmpty()) stringResource(R.string.settings_no_saved_presets) else pluralStringResource(R.plurals.settings_saved_presets_count, presets.size, presets.size)
                     },
                     modifier = Modifier.padding(vertical = 8.dp),
                     initiallyExpanded = true,
                 ) {
                     ActionRow(
                         icon = Tabler.Outline.DeviceFloppy,
-                        title = "Save Current Layout",
-                        subtitle = "Snapshot your current home layout as a named preset",
+                        title = stringResource(R.string.settings_save_current_layout),
+                        subtitle = stringResource(R.string.settings_save_current_layout_subtitle),
                         index = 0,
                         count = 4,
                         onClick = { showSaveSheet = true },
                     )
                     ActionRow(
                         icon = Tabler.Outline.Download,
-                        title = "Import Preset",
-                        subtitle = "Load a preset from pasted JSON (e.g. shared or from the web)",
+                        title = stringResource(R.string.settings_import_preset),
+                        subtitle = stringResource(R.string.settings_import_preset_subtitle),
                         index = 1,
                         count = 4,
                         onClick = { showImportSheet = true },
                     )
                     ActionRow(
                         icon = Tabler.Outline.Share,
-                        title = "Share Current Layout",
-                        subtitle = "Export your current layout as shareable JSON",
+                        title = stringResource(R.string.settings_share_current_layout),
+                        subtitle = stringResource(R.string.settings_share_current_layout_subtitle),
                         index = 2,
                         count = 4,
                         onClick = {
@@ -156,16 +159,16 @@ fun HomeLayoutPresetsScreen(
                             clipboard.setText(AnnotatedString(json))
                             val share = Intent(Intent.ACTION_SEND).apply {
                                 type = "application/json"
-                                putExtra(Intent.EXTRA_SUBJECT, "JellyPlay Home Layout")
+                                putExtra(Intent.EXTRA_SUBJECT, shareSubject)
                                 putExtra(Intent.EXTRA_TEXT, json)
                             }
-                            context.startActivity(Intent.createChooser(share, "Share Home Layout"))
+                            context.startActivity(Intent.createChooser(share, shareChooser))
                         },
                     )
                     ActionRow(
                         icon = Tabler.Outline.Refresh,
-                        title = "Reset to Default",
-                        subtitle = "Restore the factory home layout",
+                        title = stringResource(R.string.settings_reset_to_default),
+                        subtitle = stringResource(R.string.settings_reset_to_default_subtitle),
                         index = 3,
                         count = 4,
                         isDestructive = true,
@@ -178,8 +181,8 @@ fun HomeLayoutPresetsScreen(
                 item {
                     SettingsGroup(
                         icon = Tabler.Outline.Bookmarks,
-                        title = "Saved Presets",
-                        summary = { "Tap a preset to load, share or delete it" },
+                        title = stringResource(R.string.settings_saved_presets),
+                        summary = { stringResource(R.string.settings_saved_presets_summary) },
                         modifier = Modifier.padding(vertical = 8.dp),
                         initiallyExpanded = highlightSettingId == "preset_list",
                     ) {
@@ -371,7 +374,7 @@ private fun PresetRow(
         },
         supportingContent = {
             Text(
-                "Saved $dateLabel • ${preset.config.pinnedHomeSections.size} pinned",
+                stringResource(R.string.settings_preset_saved_date, dateLabel, preset.config.pinnedHomeSections.size),
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 maxLines = 1,
@@ -397,7 +400,7 @@ private fun PresetRow(
         trailingContent = {
             Icon(
                 Tabler.Outline.DotsVertical,
-                contentDescription = "Preset actions",
+                contentDescription = stringResource(R.string.settings_preset_actions_cd),
                 tint = MaterialTheme.colorScheme.onSurfaceVariant,
                 modifier = Modifier.size(18.dp),
             )
@@ -433,18 +436,18 @@ private fun SavePresetSheet(
                 .padding(bottom = 32.dp),
         ) {
             Text(
-                "Save Current Layout",
+                stringResource(R.string.settings_save_current_layout),
                 style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Bold),
             )
             Spacer(Modifier.height(16.dp))
             OutlinedTextField(
                 value = name,
                 onValueChange = { name = it },
-                label = { Text("Preset name") },
+                label = { Text(stringResource(R.string.settings_preset_name)) },
                 singleLine = true,
                 isError = isDuplicate,
                 supportingText = if (isDuplicate) {
-                    { Text("A preset with this name already exists") }
+                    { Text(stringResource(R.string.settings_preset_name_exists)) }
                 } else null,
                 keyboardOptions = KeyboardOptions(capitalization = KeyboardCapitalization.Words),
                 modifier = Modifier.fillMaxWidth(),
@@ -454,13 +457,13 @@ private fun SavePresetSheet(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.End,
             ) {
-                TextButton(onClick = onDismiss) { Text("Cancel") }
+                TextButton(onClick = onDismiss) { Text(stringResource(R.string.settings_cancel)) }
                 Spacer(Modifier.width(8.dp))
                 androidx.compose.material3.Button(
                     onClick = { onSave(name) },
                     enabled = canSave,
                     shape = ShapeCache.smoothPill,
-                ) { Text("Save") }
+                ) { Text(stringResource(R.string.settings_save)) }
             }
         }
     }
@@ -483,12 +486,12 @@ private fun ImportPresetSheet(
                 .padding(bottom = 32.dp),
         ) {
             Text(
-                "Import Preset",
+                stringResource(R.string.settings_import_preset),
                 style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Bold),
             )
             Spacer(Modifier.height(8.dp))
             Text(
-                "Paste a shared JellyPlay home layout JSON below, then apply it.",
+                stringResource(R.string.settings_import_paste_description),
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
@@ -496,7 +499,7 @@ private fun ImportPresetSheet(
             OutlinedTextField(
                 value = raw,
                 onValueChange = { raw = it },
-                label = { Text("Preset JSON") },
+                label = { Text(stringResource(R.string.settings_preset_json)) },
                 minLines = 4,
                 maxLines = 8,
                 isError = error != null,
@@ -510,13 +513,13 @@ private fun ImportPresetSheet(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.End,
             ) {
-                TextButton(onClick = onDismiss) { Text("Cancel") }
+                TextButton(onClick = onDismiss) { Text(stringResource(R.string.settings_cancel)) }
                 Spacer(Modifier.width(8.dp))
                 androidx.compose.material3.Button(
                     onClick = { onImport(raw) },
                     enabled = raw.isNotBlank(),
                     shape = ShapeCache.smoothPill,
-                ) { Text("Apply") }
+                ) { Text(stringResource(R.string.settings_apply)) }
             }
         }
     }

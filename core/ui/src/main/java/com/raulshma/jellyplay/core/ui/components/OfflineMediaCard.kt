@@ -77,6 +77,17 @@ fun OfflineMediaCard(
             progressPercent = progressFraction,
         )
 
+        if (item.isPlayed) {
+            OfflineStatusChip(
+                label = "Watched",
+                icon = Tabler.Outline.Check,
+                tint = MaterialTheme.colorScheme.primary,
+                modifier = Modifier
+                    .align(Alignment.TopStart)
+                    .padding(6.dp),
+            )
+        }
+
         // Offline-status badge. Suppressed on the offline home (where every
         // item is already downloaded and the badge is redundant); shown on the
         // standalone library where completed vs in-flight states matter.

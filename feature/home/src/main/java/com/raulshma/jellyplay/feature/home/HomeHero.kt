@@ -80,6 +80,11 @@ import com.composables.icons.tabler.outline.Heart
 import com.composables.icons.tabler.outline.PlayerPlay
 import com.raulshma.jellyplay.core.designsystem.theme.smoothCornerShape
 
+// Hero ambient-animation durations (ms). Named so the tuning is discoverable.
+private const val HERO_BREATH_DURATION_MS = 12_000
+private const val HERO_PLAY_PULSE_DURATION_MS = 1_800
+private const val HERO_RATING_PULSE_DURATION_MS = 2_000
+
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
 fun AnimatedHeroHeader(
@@ -218,7 +223,7 @@ fun HeroHeader(
             initialValue = 1.0f,
             targetValue = 1.04f,
             animationSpec = infiniteRepeatable(
-                animation = tween(12000, easing = FancyTransitionEasing),
+                animation = tween(HERO_BREATH_DURATION_MS, easing = FancyTransitionEasing),
                 repeatMode = RepeatMode.Reverse
             ),
             label = "breath"
@@ -229,7 +234,7 @@ fun HeroHeader(
             initialValue = 1.0f,
             targetValue = 1.35f,
             animationSpec = infiniteRepeatable(
-                animation = tween(1800, easing = AlphaEasing),
+                animation = tween(HERO_PLAY_PULSE_DURATION_MS, easing = AlphaEasing),
                 repeatMode = RepeatMode.Restart
             ),
             label = "playPulseScale"
@@ -240,7 +245,7 @@ fun HeroHeader(
             initialValue = 0.45f,
             targetValue = 0.0f,
             animationSpec = infiniteRepeatable(
-                animation = tween(1800, easing = AlphaEasing),
+                animation = tween(HERO_PLAY_PULSE_DURATION_MS, easing = AlphaEasing),
                 repeatMode = RepeatMode.Restart
             ),
             label = "playPulseAlpha"
@@ -251,7 +256,7 @@ fun HeroHeader(
             initialValue = 0.9f,
             targetValue = 1.1f,
             animationSpec = infiniteRepeatable(
-                animation = tween(2000, easing = FancyTransitionEasing),
+                animation = tween(HERO_RATING_PULSE_DURATION_MS, easing = FancyTransitionEasing),
                 repeatMode = RepeatMode.Reverse
             ),
             label = "ratingPulse"

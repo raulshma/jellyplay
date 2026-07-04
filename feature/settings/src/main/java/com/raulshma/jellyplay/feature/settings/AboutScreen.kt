@@ -24,6 +24,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -52,6 +53,7 @@ import androidx.compose.runtime.LaunchedEffect
 import com.raulshma.jellyplay.core.ui.tv.TvGrabInitialFocus
 import com.raulshma.jellyplay.core.ui.tv.tryRequestFocus
 import com.raulshma.jellyplay.core.ui.components.focusIndicator
+import com.raulshma.jellyplay.feature.settings.R
 
 @Composable
 fun AboutScreen(
@@ -65,6 +67,9 @@ fun AboutScreen(
 
     val backgroundColor = com.raulshma.jellyplay.core.ui.components.rememberScreenBackgroundColor()
 
+    val logsSubject = stringResource(R.string.settings_logs_subject, viewModel.appVersion)
+    val sendLogsChooserTitle = stringResource(R.string.settings_send_logs_chooser)
+
     val focusRequester = remember { FocusRequester() }
     TvGrabInitialFocus(
         focusRequester = focusRequester,
@@ -73,7 +78,7 @@ fun AboutScreen(
     )
 
     JellyPlayScreenScaffold(
-        title = "About",
+        title = stringResource(R.string.settings_about),
         onBack = onBack,
         backgroundColor = backgroundColor,
     ) {
@@ -96,7 +101,7 @@ fun AboutScreen(
                 horizontalAlignment = Alignment.CenterHorizontally,
             ) {
                 Text(
-                    text = "JellyPlay",
+                    text = stringResource(R.string.settings_jellyplay),
                     style = MaterialTheme.typography.headlineMedium.copy(
                         fontWeight = FontWeight.Bold,
                     ),
@@ -104,7 +109,7 @@ fun AboutScreen(
                 )
                 Spacer(Modifier.height(4.dp))
                 Text(
-                    text = "Version ${viewModel.appVersion}",
+                    text = stringResource(R.string.settings_version_value, viewModel.appVersion),
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
@@ -112,26 +117,26 @@ fun AboutScreen(
 
             Spacer(Modifier.height(32.dp))
 
-            SettingsGroupHeader("App Info")
-            SettingsInfoRow("Version", "${viewModel.appVersion} (${viewModel.buildType})")
-            SettingsInfoRow("Min Android", "Android 9 (API 28)")
-            SettingsInfoRow("Target Android", "Android 15 (API 37)")
+            SettingsGroupHeader(stringResource(R.string.settings_app_info))
+            SettingsInfoRow(stringResource(R.string.settings_version_label), stringResource(R.string.settings_version_with_build, viewModel.appVersion, viewModel.buildType))
+            SettingsInfoRow(stringResource(R.string.settings_min_android), viewModel.minSdkInfo)
+            SettingsInfoRow(stringResource(R.string.settings_target_android), viewModel.targetSdkInfo)
 
             Spacer(Modifier.height(16.dp))
 
             if (viewModel.serverVersion != null) {
-                SettingsGroupHeader("Server Info")
-                SettingsInfoRow("Server Name", viewModel.serverName ?: "Unknown")
-                SettingsInfoRow("Server Version", viewModel.serverVersion ?: "Unknown")
-                SettingsInfoRow("Server Address", viewModel.serverAddress ?: "Unknown")
+                SettingsGroupHeader(stringResource(R.string.settings_server_info))
+                SettingsInfoRow(stringResource(R.string.settings_server_name_label), viewModel.serverName ?: stringResource(R.string.settings_unknown))
+                SettingsInfoRow(stringResource(R.string.settings_server_version_label), viewModel.serverVersion ?: stringResource(R.string.settings_unknown))
+                SettingsInfoRow(stringResource(R.string.settings_server_address_label_info), viewModel.serverAddress ?: stringResource(R.string.settings_unknown))
 
                 Spacer(Modifier.height(16.dp))
             }
 
-            SettingsGroupHeader("Links")
+            SettingsGroupHeader(stringResource(R.string.settings_links))
             SettingsClickableRow(
                 icon = { Icon(Tabler.Outline.InfoCircle, contentDescription = null, modifier = Modifier.size(20.dp)) },
-                title = "Changelog",
+                title = stringResource(R.string.settings_changelog),
                 onClick = {
                     try {
                         val intent = android.content.Intent(
@@ -144,7 +149,7 @@ fun AboutScreen(
             )
             SettingsClickableRow(
                 icon = { Icon(Tabler.Outline.Help, contentDescription = null, modifier = Modifier.size(20.dp)) },
-                title = "Help & FAQ",
+                title = stringResource(R.string.settings_help_faq),
                 onClick = {
                     try {
                         val intent = android.content.Intent(
@@ -157,7 +162,7 @@ fun AboutScreen(
             )
             SettingsClickableRow(
                 icon = { Icon(Tabler.Outline.InfoCircle, contentDescription = null, modifier = Modifier.size(20.dp)) },
-                title = "GitHub",
+                title = stringResource(R.string.settings_github),
                 onClick = {
                     try {
                         val intent = android.content.Intent(
@@ -170,7 +175,7 @@ fun AboutScreen(
             )
             SettingsClickableRow(
                 icon = { Icon(Tabler.Outline.License, contentDescription = null, modifier = Modifier.size(20.dp)) },
-                title = "License (GPL-3.0)",
+                title = stringResource(R.string.settings_license),
                 onClick = {
                     try {
                         val intent = android.content.Intent(
@@ -183,13 +188,13 @@ fun AboutScreen(
             )
             SettingsClickableRow(
                 icon = { Icon(Tabler.Outline.ExternalLink, contentDescription = null, modifier = Modifier.size(20.dp)) },
-                title = "Open Source Licenses",
+                title = stringResource(R.string.settings_open_source_licenses),
                 onClick = onLicensesClick,
             )
 
             Spacer(Modifier.height(16.dp))
 
-            SettingsGroupHeader("Diagnostics")
+            SettingsGroupHeader(stringResource(R.string.settings_diagnostics))
             SettingsClickableRow(
                 icon = {
                     Icon(
@@ -198,19 +203,19 @@ fun AboutScreen(
                         modifier = Modifier.size(20.dp),
                     )
                 },
-                title = if (viewModel.isCollectingLogs) "Collecting logs..." else "Send App Logs",
+                title = if (viewModel.isCollectingLogs) stringResource(R.string.settings_collecting_logs) else stringResource(R.string.settings_send_app_logs),
                 onClick = {
                     if (!viewModel.isCollectingLogs) {
                         viewModel.sendAppLogs { uri ->
                             if (uri != null) {
                                 val shareIntent = android.content.Intent(android.content.Intent.ACTION_SEND).apply {
                                     type = "text/plain"
-                                    putExtra(android.content.Intent.EXTRA_SUBJECT, "JellyPlay Logs v${viewModel.appVersion}")
+                                    putExtra(android.content.Intent.EXTRA_SUBJECT, logsSubject)
                                     putExtra(android.content.Intent.EXTRA_STREAM, uri)
                                     addFlags(android.content.Intent.FLAG_GRANT_READ_URI_PERMISSION)
                                 }
                                 context.startActivity(
-                                    android.content.Intent.createChooser(shareIntent, "Send Logs"),
+                                    android.content.Intent.createChooser(shareIntent, sendLogsChooserTitle),
                                 )
                             }
                         }
@@ -219,8 +224,8 @@ fun AboutScreen(
             )
             SettingToggleItem(
                 icon = Tabler.Outline.Refresh,
-                title = "Check for Updates Automatically",
-                subtitle = "Periodically check GitHub for new releases",
+                title = stringResource(R.string.settings_check_updates_automatically),
+                subtitle = stringResource(R.string.settings_check_updates_subtitle),
                 checked = viewModel.selfUpdateCheckEnabled,
                 onCheckedChange = { viewModel.updateSelfUpdateCheckPref(it) },
             )
@@ -234,11 +239,11 @@ fun AboutScreen(
                         )
                     },
                     title = when {
-                        viewModel.isCheckingUpdate -> "Checking for updates..."
+                        viewModel.isCheckingUpdate -> stringResource(R.string.settings_checking_for_updates)
                         viewModel.updateInfo?.isUpdateAvailable == true ->
-                            "Update available: v${viewModel.updateInfo!!.latestVersion}"
-                        viewModel.updateInfo != null -> "Up to date (v${viewModel.updateInfo!!.latestVersion})"
-                        else -> "Check for Updates"
+                            stringResource(R.string.settings_update_available, viewModel.updateInfo!!.latestVersion)
+                        viewModel.updateInfo != null -> stringResource(R.string.settings_up_to_date, viewModel.updateInfo!!.latestVersion)
+                        else -> stringResource(R.string.settings_check_for_updates)
                     },
                     onClick = {
                         val info = viewModel.updateInfo
@@ -259,9 +264,9 @@ fun AboutScreen(
 
             Spacer(Modifier.height(16.dp))
 
-            SettingsGroupHeader("Acknowledgements")
+            SettingsGroupHeader(stringResource(R.string.settings_acknowledgements))
             Text(
-                text = "Built with Jellyfin SDK",
+                text = stringResource(R.string.settings_built_with_jellyfin),
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 modifier = Modifier.padding(horizontal = 16.dp),

@@ -168,6 +168,10 @@ class DetailViewModel @Inject constructor(
         _uiState.update { it.copy(downloadError = null) }
     }
 
+    fun clearUserMessage() {
+        _uiState.update { it.copy(userMessage = null) }
+    }
+
     fun clearSeriesDownloadResult() {
         _uiState.update { it.copy(seriesDownloadResult = null) }
     }
@@ -266,7 +270,7 @@ class DetailViewModel @Inject constructor(
                     themeMusicPlayer.playThemeFor(themeSourceId)
                 }
                 .onFailure { err ->
-                    _uiState.update { it.copy(error = err.message ?: "Failed to load details") }
+                    _uiState.update { it.copy(error = err.message ?: context.getString(R.string.detail_error_load_failed)) }
                 }
             _uiState.update { it.copy(isLoading = false) }
         }
@@ -387,7 +391,7 @@ class DetailViewModel @Inject constructor(
                     it.copy(
                         smartPlayTarget = DetailUiState.SmartPlayTarget(
                             episode = resumeEpisode,
-                            label = "Resume S${s}:E${e}",
+                            label = context.getString(R.string.detail_resume_episode, s, e),
                             startPositionTicks = resumeEpisode.playbackPositionTicks ?: 0,
                         )
                     )
@@ -402,7 +406,8 @@ class DetailViewModel @Inject constructor(
                 val hasWatchedBefore = sorted
                     .takeWhile { it.id != nextEpisode.id }
                     .any { it.isPlayed || (it.playbackPositionTicks ?: 0L) > 0L }
-                val label = if (hasWatchedBefore) "Next Up S${s}:E${e}" else "Play S${s}:E${e}"
+                val label = if (hasWatchedBefore) context.getString(R.string.detail_next_up_episode, s, e)
+                    else context.getString(R.string.detail_play_episode, s, e)
                 _uiState.update {
                     it.copy(
                         smartPlayTarget = DetailUiState.SmartPlayTarget(
@@ -427,7 +432,7 @@ class DetailViewModel @Inject constructor(
                 it.copy(
                     smartPlayTarget = DetailUiState.SmartPlayTarget(
                         episode = first,
-                        label = "Replay S${s}:E${e}",
+                        label = context.getString(R.string.detail_replay_episode, s, e),
                         startPositionTicks = 0,
                     )
                 )
@@ -466,7 +471,8 @@ class DetailViewModel @Inject constructor(
             val s = currentEpisode.seasonNumber ?: 1
             val e = currentEpisode.episodeNumber ?: currentEpisode.indexNumber ?: 1
             val hasProgress = (currentEpisode.playbackPositionTicks ?: 0) > 0 && !currentEpisode.isPlayed
-            val label = if (hasProgress) "Resume S${s}:E${e}" else "Play S${s}:E${e}"
+            val label = if (hasProgress) context.getString(R.string.detail_resume_episode, s, e)
+                else context.getString(R.string.detail_play_episode, s, e)
             _uiState.update {
                 it.copy(
                     smartPlayTarget = DetailUiState.SmartPlayTarget(
@@ -506,6 +512,10 @@ class DetailViewModel @Inject constructor(
                         )
                     }
                 }
+                .onFailure {
+                    // Don't leave the user guessing why the heart didn't flip.
+                    _uiState.update { it.copy(userMessage = context.getString(R.string.detail_msg_couldnt_update_favorite)) }
+                }
         }
     }
 
@@ -513,13 +523,18 @@ class DetailViewModel @Inject constructor(
         val itemId = _uiState.value.detail?.item?.id ?: return
         launch {
             mediaRepository.markPlayed(itemId)
-            _uiState.update { state ->
-                state.copy(
-                    detail = state.detail?.copy(
-                        item = state.detail.item.copy(isPlayed = true)
-                    )
-                )
-            }
+                .onSuccess {
+                    _uiState.update { state ->
+                        state.copy(
+                            detail = state.detail?.copy(
+                                item = state.detail.item.copy(isPlayed = true)
+                            )
+                        )
+                    }
+                }
+                .onFailure {
+                    _uiState.update { it.copy(userMessage = context.getString(R.string.detail_msg_couldnt_mark_played)) }
+                }
         }
     }
 
@@ -527,13 +542,18 @@ class DetailViewModel @Inject constructor(
         val itemId = _uiState.value.detail?.item?.id ?: return
         launch {
             mediaRepository.markUnplayed(itemId)
-            _uiState.update { state ->
-                state.copy(
-                    detail = state.detail?.copy(
-                        item = state.detail.item.copy(isPlayed = false)
-                    )
-                )
-            }
+                .onSuccess {
+                    _uiState.update { state ->
+                        state.copy(
+                            detail = state.detail?.copy(
+                                item = state.detail.item.copy(isPlayed = false)
+                            )
+                        )
+                    }
+                }
+                .onFailure {
+                    _uiState.update { it.copy(userMessage = context.getString(R.string.detail_msg_couldnt_mark_unplayed)) }
+                }
         }
     }
 
@@ -554,11 +574,11 @@ class DetailViewModel @Inject constructor(
 
     fun startDownload() {
         val detail = _uiState.value.detail ?: run {
-            _uiState.update { it.copy(downloadError = "Media details not loaded") }
+            _uiState.update { it.copy(downloadError = context.getString(R.string.detail_error_details_not_loaded)) }
             return
         }
         val source = detail.mediaSources.firstOrNull() ?: run {
-            _uiState.update { it.copy(downloadError = "No media source available for download") }
+            _uiState.update { it.copy(downloadError = context.getString(R.string.detail_error_no_source)) }
             return
         }
 
@@ -612,7 +632,7 @@ class DetailViewModel @Inject constructor(
                     maxBitrate = maxBitrate,
                 )
                 if (streamUrl.isBlank()) {
-                    _uiState.update { it.copy(downloadError = "Could not get stream URL", isDownloading = false) }
+                    _uiState.update { it.copy(downloadError = context.getString(R.string.detail_error_no_stream_url), isDownloading = false) }
                     return@launch
                 }
                 val imageUrl = playbackRepository.getImageUrl(item.id, maxWidth = 300)
@@ -659,10 +679,10 @@ class DetailViewModel @Inject constructor(
                         }
                     }
                 }.onFailure { error ->
-                    _uiState.update { it.copy(downloadError = error.message ?: "Download failed") }
+                    _uiState.update { it.copy(downloadError = error.message ?: context.getString(R.string.detail_error_download_failed)) }
                 }
             } catch (e: Exception) {
-                _uiState.update { it.copy(downloadError = e.message ?: "Download failed") }
+                _uiState.update { it.copy(downloadError = e.message ?: context.getString(R.string.detail_error_download_failed)) }
             }
             _uiState.update { it.copy(isDownloading = false) }
         }
@@ -673,12 +693,12 @@ class DetailViewModel @Inject constructor(
 
     fun downloadSeries(episodeIds: Map<String, List<String>>? = null) {
         val detail = _uiState.value.detail ?: run {
-            _uiState.update { it.copy(seriesDownloadResult = SeriesDownloadResult(error = "Media details not loaded")) }
+            _uiState.update { it.copy(seriesDownloadResult = SeriesDownloadResult(error = context.getString(R.string.detail_error_details_not_loaded))) }
             return
         }
         val item = detail.item
         if (item.mediaType != MediaType.SERIES) {
-            _uiState.update { it.copy(seriesDownloadResult = SeriesDownloadResult(error = "This is not a series")) }
+            _uiState.update { it.copy(seriesDownloadResult = SeriesDownloadResult(error = context.getString(R.string.detail_error_not_a_series))) }
             return
         }
 
@@ -695,7 +715,7 @@ class DetailViewModel @Inject constructor(
                 .onFailure { error ->
                     _uiState.update {
                         it.copy(
-                            seriesDownloadResult = SeriesDownloadResult(error = error.message ?: "Failed to queue downloads"),
+                            seriesDownloadResult = SeriesDownloadResult(error = error.message ?: context.getString(R.string.detail_error_queue_failed)),
                         )
                     }
                 }

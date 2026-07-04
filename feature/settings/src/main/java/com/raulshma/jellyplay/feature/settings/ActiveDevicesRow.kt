@@ -48,6 +48,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -89,7 +90,7 @@ internal fun ActiveDevicesRow(
         ) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Text(
-                    "Active Devices",
+                    stringResource(R.string.settings_active_devices),
                     style = MaterialTheme.typography.titleSmall,
                     fontWeight = FontWeight.SemiBold,
                     color = MaterialTheme.colorScheme.onSurface,
@@ -237,7 +238,7 @@ private fun ActiveDeviceCard(
 
                         Column(modifier = Modifier.weight(1f)) {
                             Text(
-                                session.userName.ifBlank { "Unknown" },
+                                session.userName.ifBlank { stringResource(R.string.settings_unknown) },
                                 style = MaterialTheme.typography.labelLarge,
                                 fontWeight = FontWeight.SemiBold,
                                 color = if (backgroundImageUrl != null) androidx.compose.ui.graphics.Color.White else androidx.compose.ui.graphics.Color.Unspecified,
@@ -296,7 +297,7 @@ private fun ActiveDeviceCard(
                             if (session.playState?.isPaused == true) {
                                 Icon(
                                     Tabler.Outline.PlayerPause,
-                                    contentDescription = "Paused",
+                                    contentDescription = stringResource(R.string.settings_paused_cd),
                                     modifier = Modifier.size(12.dp),
                                     tint = if (backgroundImageUrl != null) androidx.compose.ui.graphics.Color.White else MaterialTheme.colorScheme.onSurfaceVariant,
                                 )
@@ -344,7 +345,7 @@ private fun ActiveDeviceCard(
                         ) {
                             Icon(
                                 Tabler.Outline.Message,
-                                contentDescription = "Send message",
+                                contentDescription = stringResource(R.string.settings_send_message_cd),
                                 modifier = Modifier.size(16.dp),
                                 tint = if (backgroundImageUrl != null) androidx.compose.ui.graphics.Color.White else MaterialTheme.colorScheme.onSurfaceVariant,
                             )
@@ -423,14 +424,15 @@ private fun SendMessageDialog(
     onDismiss: () -> Unit,
     onSend: (header: String, text: String) -> Unit,
 ) {
-    var header by remember { mutableStateOf("Message from Admin") }
+    val defaultHeader = stringResource(R.string.settings_message_from_admin)
+    var header by remember { mutableStateOf(defaultHeader) }
     var text by remember { mutableStateOf("") }
 
     AlertDialog(
         onDismissRequest = onDismiss,
         title = {
             Text(
-                "Send Message",
+                stringResource(R.string.settings_send_message_title),
                 style = MaterialTheme.typography.titleMedium,
                 fontWeight = FontWeight.SemiBold,
             )
@@ -438,21 +440,21 @@ private fun SendMessageDialog(
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
                 Text(
-                    "Send a message to $userName's $deviceName",
+                    stringResource(R.string.settings_send_message_to, userName, deviceName),
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
                 OutlinedTextField(
                     value = header,
                     onValueChange = { header = it },
-                    label = { Text("Header") },
+                    label = { Text(stringResource(R.string.settings_header_label)) },
                     singleLine = true,
                     modifier = Modifier.fillMaxWidth(),
                 )
                 OutlinedTextField(
                     value = text,
                     onValueChange = { text = it },
-                    label = { Text("Message") },
+                    label = { Text(stringResource(R.string.settings_message_label)) },
                     minLines = 2,
                     maxLines = 4,
                     modifier = Modifier.fillMaxWidth(),
@@ -464,25 +466,13 @@ private fun SendMessageDialog(
                 onClick = { onSend(header, text) },
                 enabled = text.isNotBlank(),
             ) {
-                Text("Send")
+                Text(stringResource(R.string.settings_send))
             }
         },
         dismissButton = {
             TextButton(onClick = onDismiss) {
-                Text("Cancel")
+                Text(stringResource(R.string.settings_cancel))
             }
         },
     )
-}
-
-private fun formatTicks(ticks: Long): String {
-    val totalSeconds = ticks / 10_000_000
-    val hours = totalSeconds / 3600
-    val minutes = (totalSeconds % 3600) / 60
-    val seconds = totalSeconds % 60
-    return if (hours > 0) {
-        String.format("%d:%02d:%02d", hours, minutes, seconds)
-    } else {
-        String.format("%d:%02d", minutes, seconds)
-    }
 }

@@ -28,6 +28,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import com.composables.icons.tabler.Tabler
 import com.composables.icons.tabler.filled.Heart
@@ -43,6 +44,7 @@ import com.raulshma.jellyplay.core.ui.components.progressFraction
 import com.raulshma.jellyplay.core.ui.tv.LocalTvMode
 import com.raulshma.jellyplay.core.ui.tv.rememberTvFocusState
 import com.raulshma.jellyplay.core.ui.tv.tvFocusIndicator
+import com.raulshma.jellyplay.feature.details.R
 
 @Composable
 internal fun DetailActionButtons(
@@ -78,7 +80,9 @@ internal fun DetailActionButtons(
         target == null &&
         !allSeasonsFetched
     val hasNoEpisodes = isSeries && allSeasonsFetched && allEpisodesEmpty
-    val canPlayPrimary = isAudio || !isSeries || target != null || hasNoEpisodes
+    // A series with no episodes has no valid play target — never let the primary button
+    // dispatch play on the series root item. The button already dims when this is false.
+    val canPlayPrimary = isAudio || !isSeries || target != null
     val progress = if (target != null) {
         val t = target.startPositionTicks
         val rt = target.episode.runTimeTicks
@@ -89,11 +93,11 @@ internal fun DetailActionButtons(
 
     val playLabel = when {
         target != null -> target.label
-        isResolvingSeriesTarget -> "Finding Episode"
-        hasNoEpisodes -> "No Episodes Available"
-        isSeries -> "No Episodes"
-        hasProgress -> "Resume"
-        else -> "Play"
+        isResolvingSeriesTarget -> stringResource(R.string.detail_play_finding_episode)
+        hasNoEpisodes -> stringResource(R.string.detail_play_no_episodes_available)
+        isSeries -> stringResource(R.string.detail_play_no_episodes)
+        hasProgress -> stringResource(R.string.detail_play_resume)
+        else -> stringResource(R.string.detail_play_play)
     }
 
     val playInteractionSource = remember { MutableInteractionSource() }
@@ -225,7 +229,7 @@ internal fun DetailActionButtons(
                     ) {
                         Icon(
                             if (item.isPlayed) Tabler.Outline.Eye else Tabler.Outline.EyeOff,
-                            contentDescription = if (item.isPlayed) "Mark as Unwatched" else "Mark as Watched",
+                            contentDescription = if (item.isPlayed) stringResource(R.string.detail_cd_mark_as_unwatched) else stringResource(R.string.detail_cd_mark_as_watched),
                             tint = if (item.isPlayed) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface,
                         )
                     }
@@ -245,7 +249,7 @@ internal fun DetailActionButtons(
                     ) {
                         Icon(
                             if (item.isFavorite) Tabler.Filled.Heart else Tabler.Outline.Heart,
-                            contentDescription = "Favorite",
+                            contentDescription = stringResource(R.string.detail_cd_favorite),
                             tint = if (item.isFavorite) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface,
                         )
                     }
@@ -361,7 +365,7 @@ internal fun DetailActionButtons(
                 ) {
                     Icon(
                         if (item.isFavorite) Tabler.Filled.Heart else Tabler.Outline.Heart,
-                        contentDescription = "Favorite",
+                        contentDescription = stringResource(R.string.detail_cd_favorite),
                         tint = if (item.isFavorite) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface,
                     )
                 }

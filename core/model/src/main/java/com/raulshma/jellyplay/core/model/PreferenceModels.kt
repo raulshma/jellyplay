@@ -107,13 +107,13 @@ enum class SubtitleEdgeType {
 
 @Immutable
 @Serializable
-enum class StreamingQuality {
-    AUTO,
-    LOW_360P,
-    SD_480P,
-    HD_720P,
-    FHD_1080P,
-    UHD_4K,
+enum class StreamingQuality(val displayName: String) {
+    AUTO("Auto"),
+    LOW_360P("360p"),
+    SD_480P("480p"),
+    HD_720P("720p"),
+    FHD_1080P("1080p"),
+    UHD_4K("4K"),
 }
 
 @Immutable

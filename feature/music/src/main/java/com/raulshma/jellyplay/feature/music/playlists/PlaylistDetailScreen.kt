@@ -109,7 +109,7 @@ fun PlaylistDetailScreen(
                 modifier = Modifier.padding(end = 8.dp),
             )
         },
-    ) { _ ->
+    ) { innerPadding ->
         PullToRefreshBox(
             isRefreshing = viewModel.isLoading && viewModel.items.isNotEmpty(),
             onRefresh = {
@@ -137,7 +137,7 @@ fun PlaylistDetailScreen(
                         contentPadding = PaddingValues(
                             start = contentPad,
                             end = contentPad,
-                            bottom = adaptiveInfo.bottomPadding(isTv),
+                            bottom = adaptiveInfo.bottomPadding(isTv) + innerPadding.calculateBottomPadding(),
                         ),
                     ) {
                         items(viewModel.items.size, key = { viewModel.items[it].id }, contentType = { "playlistItem" }) { index ->

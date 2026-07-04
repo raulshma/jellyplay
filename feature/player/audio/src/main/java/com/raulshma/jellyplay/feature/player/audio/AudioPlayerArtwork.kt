@@ -51,6 +51,7 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
@@ -64,6 +65,7 @@ import com.raulshma.jellyplay.core.ui.components.JellyPlayLoadingIndicator
 import com.raulshma.jellyplay.core.ui.image.MediaImage
 import com.raulshma.jellyplay.core.ui.tv.rememberTvFocusState
 import com.raulshma.jellyplay.core.ui.tv.tvFocusIndicator
+import com.raulshma.jellyplay.feature.player.audio.R
 
 @OptIn(ExperimentalMaterial3Api::class, androidx.compose.material3.ExperimentalMaterial3ExpressiveApi::class)
 @Composable
@@ -78,11 +80,6 @@ internal fun LyricsOverlay(
     lyricsOffsetMs: Long = com.raulshma.jellyplay.core.data.playback.AudioLyricsManager.DEFAULT_OFFSET_MS,
     onLyricsOffsetChange: (Long) -> Unit = {},
 ) {
-    val overlayAlpha by animateFloatAsState(
-        targetValue = 1f,
-        animationSpec = tween(400),
-        label = "lyricsOverlayAlpha",
-    )
     val listState = rememberLazyListState()
     val searchFocusState = rememberTvFocusState(focusedScale = 1.05f)
     val hasSyncedLyrics = lyrics.any { it.timeMs > 0 }
@@ -101,7 +98,6 @@ internal fun LyricsOverlay(
     Box(
         modifier = Modifier
             .fillMaxSize()
-            .graphicsLayer { alpha = overlayAlpha }
             .background(scrimBrush)
             .clip(ShapeCache.smooth24),
         contentAlignment = Alignment.Center,
@@ -116,7 +112,7 @@ internal fun LyricsOverlay(
                 )
                 Spacer(Modifier.height(8.dp))
                 Text(
-                    "Finding lyrics...",
+                    stringResource(R.string.audio_lyrics_finding),
                     style = MaterialTheme.typography.bodySmall,
                     color = Color.White.copy(alpha = 0.7f),
                 )
@@ -134,7 +130,7 @@ internal fun LyricsOverlay(
                 )
                 Spacer(Modifier.height(8.dp))
                 Text(
-                    "No lyrics found",
+                    stringResource(R.string.audio_lyrics_none_found),
                     style = MaterialTheme.typography.bodyMedium,
                     color = Color.White.copy(alpha = 0.7f),
                 )
@@ -153,7 +149,7 @@ internal fun LyricsOverlay(
                         modifier = Modifier.size(14.dp),
                     )
                     Spacer(Modifier.width(4.dp))
-                    Text("Search", style = MaterialTheme.typography.labelMedium)
+                    Text(stringResource(R.string.audio_search), style = MaterialTheme.typography.labelMedium)
                 }
             }
         } else {
@@ -270,7 +266,7 @@ internal fun LyricsOverlay(
                                         modifier = Modifier.fillMaxWidth(),
                                     ) {
                                         Text(
-                                            "Lyrics offset",
+                                            stringResource(R.string.audio_lyrics_offset),
                                             style = MaterialTheme.typography.labelSmall,
                                             color = Color.White.copy(alpha = 0.8f),
                                         )
@@ -298,7 +294,7 @@ internal fun LyricsOverlay(
                                         horizontalArrangement = Arrangement.End,
                                     ) {
                                         Text(
-                                            "Reset",
+                                            stringResource(R.string.audio_reset),
                                             style = MaterialTheme.typography.labelSmall,
                                             color = Color.White.copy(alpha = 0.7f),
                                             modifier = Modifier.clickable {
@@ -316,10 +312,11 @@ internal fun LyricsOverlay(
                         verticalAlignment = Alignment.CenterVertically,
                     ) {
                     if (lyricsSource != com.raulshma.jellyplay.core.model.LyricsSource.UNKNOWN) {
+                        val embeddedLabel = stringResource(R.string.audio_lyrics_source_embedded)
                         val sourceLabel = when (lyricsSource) {
                             com.raulshma.jellyplay.core.model.LyricsSource.LRCLIB -> "lrclib"
                             com.raulshma.jellyplay.core.model.LyricsSource.EXTERNAL -> "Jellyfin"
-                            com.raulshma.jellyplay.core.model.LyricsSource.EMBEDDED -> "Embedded"
+                            com.raulshma.jellyplay.core.model.LyricsSource.EMBEDDED -> embeddedLabel
                             com.raulshma.jellyplay.core.model.LyricsSource.LRC_FILE -> "LRC"
                             else -> ""
                         }
@@ -355,7 +352,7 @@ internal fun LyricsOverlay(
                         ) {
                             Icon(
                                 if (karaokeMode) Tabler.Outline.Microphone2 else Tabler.Outline.Microphone,
-                                if (karaokeMode) "Karaoke on" else "Karaoke off",
+                                if (karaokeMode) stringResource(R.string.audio_lyrics_karaoke_on) else stringResource(R.string.audio_lyrics_karaoke_off),
                                 tint = Color.White,
                                 modifier = Modifier.size(16.dp),
                             )
@@ -379,7 +376,7 @@ internal fun LyricsOverlay(
                         ) {
                             Icon(
                                 Tabler.Outline.Adjustments,
-                                "Adjust lyrics timing",
+                                stringResource(R.string.audio_lyrics_adjust_timing),
                                 tint = Color.White,
                                 modifier = Modifier.size(15.dp),
                             )
@@ -400,7 +397,7 @@ internal fun LyricsOverlay(
                     ) {
                         Icon(
                             Tabler.Outline.Search,
-                            "Search lyrics",
+                            stringResource(R.string.audio_lyrics_search),
                             modifier = Modifier.size(14.dp),
                             tint = Color.White.copy(alpha = 0.8f),
                         )

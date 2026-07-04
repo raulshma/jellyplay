@@ -37,6 +37,7 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
@@ -52,6 +53,7 @@ import com.raulshma.jellyplay.core.ui.tv.tryRequestFocus
 import com.raulshma.jellyplay.core.ui.tv.tvFocusIndicator
 import com.composables.icons.tabler.Tabler
 import com.composables.icons.tabler.outline.*
+import com.raulshma.jellyplay.feature.player.audio.R
 
 @Composable
 fun AmbientScreen(
@@ -158,7 +160,7 @@ private fun AmbientScreenContent(
                 ) {
                     Icon(
                         Tabler.Outline.PlayerSkipBack,
-                        contentDescription = "Previous",
+                        contentDescription = stringResource(R.string.audio_controls_previous),
                         tint = Color.White.copy(alpha = 0.8f),
                         modifier = Modifier.size(28.dp),
                     )
@@ -175,7 +177,7 @@ private fun AmbientScreenContent(
                 ) {
                     Icon(
                         if (isPlaying) Tabler.Outline.PlayerPause else Tabler.Outline.PlayerPlay,
-                        contentDescription = if (isPlaying) "Pause" else "Play",
+                        contentDescription = if (isPlaying) stringResource(R.string.audio_controls_pause) else stringResource(R.string.audio_controls_play),
                         tint = Color.White,
                         modifier = Modifier.size(36.dp),
                     )
@@ -191,7 +193,7 @@ private fun AmbientScreenContent(
                 ) {
                     Icon(
                         Tabler.Outline.PlayerSkipForward,
-                        contentDescription = "Next",
+                        contentDescription = stringResource(R.string.audio_controls_next),
                         tint = Color.White.copy(alpha = 0.8f),
                         modifier = Modifier.size(28.dp),
                     )
@@ -199,7 +201,7 @@ private fun AmbientScreenContent(
             }
 
             Text(
-                text = "Tap anywhere to exit",
+                text = stringResource(R.string.audio_ambient_tap_to_exit),
                 style = MaterialTheme.typography.labelSmall,
                 color = Color.White.copy(alpha = 0.7f),
                 modifier = Modifier.padding(top = 12.dp),
@@ -212,12 +214,7 @@ private fun AmbientScreenContent(
 private fun AmbientBackground(colors: List<Color>) {
     val blobCount = 4
     val animatables = remember(blobCount) {
-        List(blobCount) { index ->
-            Animatable(initialValue = 0f).apply {
-                val delay = index * 1000
-                val duration = 8000 + index * 2000
-            }
-        }
+        List(blobCount) { Animatable(initialValue = 0f) }
     }
 
     animatables.forEachIndexed { index, animatable ->

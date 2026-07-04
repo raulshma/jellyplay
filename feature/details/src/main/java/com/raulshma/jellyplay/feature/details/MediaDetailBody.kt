@@ -40,6 +40,7 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -47,6 +48,7 @@ import com.composables.icons.tabler.Tabler
 import com.composables.icons.tabler.outline.Heart
 import com.composables.icons.tabler.outline.PlayerPlay
 import com.composables.icons.tabler.outline.Star
+import com.raulshma.jellyplay.feature.details.R
 import com.raulshma.jellyplay.core.designsystem.theme.LocalIsSoothingTheme
 import com.raulshma.jellyplay.core.designsystem.theme.LocalIsSynthwave
 import com.raulshma.jellyplay.core.designsystem.theme.ShapeCache
@@ -57,6 +59,7 @@ import com.raulshma.jellyplay.core.model.UserPreferences
 import com.raulshma.jellyplay.core.model.seerr.SeerrRelatedVideo
 import com.raulshma.jellyplay.core.model.seerr.SeerrSearchItem
 import com.raulshma.jellyplay.core.ui.adaptive.LocalAdaptiveInfo
+import com.raulshma.jellyplay.core.ui.adaptive.contentPadding
 import com.raulshma.jellyplay.core.ui.adaptive.WindowSizeClass
 import com.raulshma.jellyplay.core.ui.adaptive.detailBodyMaxWidth
 import com.raulshma.jellyplay.core.ui.components.PosterCard
@@ -146,6 +149,10 @@ internal fun DetailContentBody(
     val adaptiveInfo = LocalAdaptiveInfo.current
     val isTv = LocalTvMode.current
     val maxWidth = adaptiveInfo.detailBodyMaxWidth(isTv)
+    // Single source of truth for the body's horizontal inset so text, chips, and the
+    // poster/action row all share the same left edge (previously the body hard-coded 24.dp
+    // while the poster row used adaptiveInfo.contentPadding, causing misalignment on phones).
+    val bodyContentPad = adaptiveInfo.contentPadding(isTv)
 
     Box(
         modifier = modifier.fillMaxWidth(),
@@ -161,7 +168,7 @@ internal fun DetailContentBody(
             Column(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(horizontal = 24.dp),
+                    .padding(horizontal = bodyContentPad),
             ) {
                 if (item.mediaType == MediaType.EPISODE && item.seriesId != null) {
                     val seriesNavFocusState = rememberTvFocusState(focusedScale = 1.02f)
@@ -428,12 +435,10 @@ internal fun DetailContentBody(
             }
         }
 
-        StaggeredDetailSection(visible = showContent, delayIndex = 3) { }
-
-        StaggeredDetailSection(visible = showContent, delayIndex = 4) {
+        StaggeredDetailSection(visible = showContent, delayIndex = 3) {
             item.overview?.let { overview ->
                 FadingItem {
-                    Column(modifier = Modifier.padding(horizontal = 24.dp)) {
+                    Column(modifier = Modifier.padding(horizontal = bodyContentPad)) {
                         Text(
                             text = overview,
                             style = MaterialTheme.typography.bodyLarge,
@@ -446,10 +451,10 @@ internal fun DetailContentBody(
         }
 
         StaggeredDetailSection(visible = showContent && isAudio && albumTracks.isNotEmpty(), delayIndex = 5) {
-            Column(modifier = Modifier.padding(horizontal = 24.dp)) {
+            Column(modifier = Modifier.padding(horizontal = bodyContentPad)) {
                 FadingItem {
                     Text(
-                        text = "Tracks",
+                        text = stringResource(R.string.detail_section_tracks),
                         style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.SemiBold),
                         color = MaterialTheme.colorScheme.onSurface
                     )
@@ -513,9 +518,9 @@ internal fun DetailContentBody(
                 Column {
                     FadingItem {
                         Text(
-                            text = "Items",
+                            text = stringResource(R.string.detail_section_items),
                             style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.SemiBold),
-                            modifier = Modifier.padding(horizontal = 24.dp),
+                            modifier = Modifier.padding(horizontal = bodyContentPad),
                             color = MaterialTheme.colorScheme.onSurface
                         )
                     }
@@ -523,7 +528,7 @@ internal fun DetailContentBody(
                     TvFocusableItemRow(
                         items = collectionItems,
                         key = { "collection_${it.id}" },
-                        contentPadding = PaddingValues(horizontal = 24.dp),
+                        contentPadding = PaddingValues(horizontal = bodyContentPad),
                         horizontalArrangement = Arrangement.spacedBy(12.dp),
                     ) { _, collectionItem, focusModifier ->
                             val collectionClick = remember(collectionItem.id) { { onItemClick(collectionItem.id) } }
@@ -543,14 +548,14 @@ internal fun DetailContentBody(
             }
         }
 
-        StaggeredDetailSection(visible = showContent, delayIndex = 7) {
+        StaggeredDetailSection(visible = showContent, delayIndex = 8) {
             if (detail.people.isNotEmpty()) {
                 Column {
                     FadingItem {
                         Text(
-                            text = "Cast & Crew",
+                            text = stringResource(R.string.detail_section_cast_crew),
                             style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.SemiBold),
-                            modifier = Modifier.padding(horizontal = 24.dp),
+                            modifier = Modifier.padding(horizontal = bodyContentPad),
                             color = MaterialTheme.colorScheme.onSurface
                         )
                     }
@@ -559,7 +564,7 @@ internal fun DetailContentBody(
                         TvFocusableItemRow(
                             items = detail.people,
                             key = { "person_${it.id}" },
-                            contentPadding = PaddingValues(horizontal = 24.dp),
+                            contentPadding = PaddingValues(horizontal = bodyContentPad),
                             horizontalArrangement = Arrangement.spacedBy(16.dp),
                         ) { _, person, focusModifier ->
                                 val personClick = remember(person.id) { { onPersonClick(person.id) } }
@@ -578,20 +583,20 @@ internal fun DetailContentBody(
             }
         }
 
-        StaggeredDetailSection(visible = showContent, delayIndex = 8) {
+        StaggeredDetailSection(visible = showContent, delayIndex = 9) {
             if (relatedVideos.isNotEmpty()) {
                 VideosSection(videos = relatedVideos, onVideoClick = onVideoClick)
             }
         }
 
-        StaggeredDetailSection(visible = showContent, delayIndex = 8) {
+        StaggeredDetailSection(visible = showContent, delayIndex = 10) {
             if (detail.relatedItems.isNotEmpty()) {
                 Column {
                     FadingItem {
                         Text(
-                            text = "More Like This",
+                            text = stringResource(R.string.detail_section_more_like_this),
                             style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.SemiBold),
-                            modifier = Modifier.padding(horizontal = 24.dp),
+                            modifier = Modifier.padding(horizontal = bodyContentPad),
                             color = MaterialTheme.colorScheme.onSurface
                         )
                     }
@@ -599,7 +604,7 @@ internal fun DetailContentBody(
                     TvFocusableItemRow(
                         items = detail.relatedItems,
                         key = { "related_${it.id}" },
-                        contentPadding = PaddingValues(horizontal = 24.dp),
+                        contentPadding = PaddingValues(horizontal = bodyContentPad),
                         horizontalArrangement = Arrangement.spacedBy(12.dp),
                     ) { _, related, focusModifier ->
                             val relatedClick = remember(related.id) { { onItemClick(related.id) } }
@@ -628,9 +633,9 @@ internal fun DetailContentBody(
         }
         
         if (isSeerrConnected && isSeerrRecommendationsEnabled && seerrRecommendations.isNotEmpty()) {
-            StaggeredDetailSection(visible = showContent, delayIndex = 8) {
+            StaggeredDetailSection(visible = showContent, delayIndex = 11) {
                 SeerrItemsRow(
-                    title = "Seerr Recommendations",
+                    title = stringResource(R.string.detail_section_seerr_recommendations),
                     keyPrefix = "seerr_rec",
                     contentType = "seerrRecItem",
                     items = seerrRecommendations,
@@ -642,9 +647,9 @@ internal fun DetailContentBody(
 
         // ── Seerr Similar Section ──
         if (isSeerrConnected && isSeerrRecommendationsEnabled && seerrSimilar.isNotEmpty()) {
-            StaggeredDetailSection(visible = showContent, delayIndex = 9) {
+            StaggeredDetailSection(visible = showContent, delayIndex = 12) {
                 SeerrItemsRow(
-                    title = "Seerr Similar",
+                    title = stringResource(R.string.detail_section_seerr_similar),
                     keyPrefix = "seerr_sim",
                     contentType = "seerrSimItem",
                     items = seerrSimilar,
@@ -670,13 +675,14 @@ internal fun SeerrItemsRow(
     val loadingState = com.raulshma.jellyplay.core.ui.components.LocalSeerrCardLoadingState.current
     val prefetch = com.raulshma.jellyplay.core.ui.components.LocalSeerrPrefetch.current
     val cardWidth = if (adaptiveInfo.windowSizeClass != WindowSizeClass.Compact) 200.dp else 160.dp
+    val bodyContentPad = adaptiveInfo.contentPadding(isTv = LocalTvMode.current)
 
     Column {
         FadingItem {
             Text(
                 text = title,
                 style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.SemiBold),
-                modifier = Modifier.padding(horizontal = 24.dp),
+                modifier = Modifier.padding(horizontal = bodyContentPad),
                 color = MaterialTheme.colorScheme.onSurface,
             )
         }
@@ -684,7 +690,7 @@ internal fun SeerrItemsRow(
         TvFocusableItemRow(
             items = items,
             key = { "${keyPrefix}_${it.id}" },
-            contentPadding = PaddingValues(horizontal = 24.dp),
+            contentPadding = PaddingValues(horizontal = bodyContentPad),
             horizontalArrangement = Arrangement.spacedBy(12.dp),
         ) { _, seerrItem, focusModifier ->
                 FadingItem {
@@ -716,12 +722,13 @@ private fun VideosSection(
     videos: List<SeerrRelatedVideo>,
     onVideoClick: (SeerrRelatedVideo) -> Unit,
 ) {
+    val bodyContentPad = LocalAdaptiveInfo.current.contentPadding(isTv = LocalTvMode.current)
     Column {
         FadingItem {
             Text(
-                text = "Videos",
+                text = stringResource(R.string.detail_section_videos),
                 style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.SemiBold),
-                modifier = Modifier.padding(horizontal = 24.dp),
+                modifier = Modifier.padding(horizontal = bodyContentPad),
                 color = MaterialTheme.colorScheme.onSurface
             )
         }
@@ -729,7 +736,7 @@ private fun VideosSection(
         TvFocusableItemRow(
             items = videos,
             key = { it.key ?: "" },
-            contentPadding = PaddingValues(horizontal = 24.dp),
+            contentPadding = PaddingValues(horizontal = bodyContentPad),
             horizontalArrangement = Arrangement.spacedBy(12.dp),
         ) { _, video, focusModifier ->
                 val thumbnailUrl = if (video.site?.lowercase() == "youtube") {

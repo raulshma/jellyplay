@@ -9,6 +9,7 @@ import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.aspectRatio
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -50,6 +51,7 @@ import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.composables.icons.tabler.Tabler
+import com.composables.icons.tabler.outline.Check
 import com.composables.icons.tabler.outline.ChevronDown
 import com.composables.icons.tabler.outline.DeviceFloppy
 import com.composables.icons.tabler.outline.Heart
@@ -83,11 +85,15 @@ import java.util.Date
 fun OfflineDetailScreen(
     itemId: String,
     onPlayOffline: (itemId: String, mediaType: MediaType) -> Unit,
+    onNavigateToSeries: (seriesId: String) -> Unit,
+    onNavigateToDetail: (itemId: String) -> Unit,
     onBack: () -> Unit,
     viewModel: OfflineDetailViewModel = hiltViewModel(),
 ) {
     val item by viewModel.item.collectAsStateWithLifecycle(initialValue = null)
     val children by viewModel.children.collectAsStateWithLifecycle(initialValue = emptyList())
+    val seasons by viewModel.seasons.collectAsStateWithLifecycle(initialValue = emptyList())
+    val episodes by viewModel.episodes.collectAsStateWithLifecycle(initialValue = emptyMap())
     val isTv = LocalTvMode.current
     val adaptiveInfo = LocalAdaptiveInfo.current
     val contentPad = adaptiveInfo.contentPadding(isTv)
@@ -105,11 +111,16 @@ fun OfflineDetailScreen(
         item != null -> OfflineDetailContent(
             item = item!!,
             children = children,
+            seasons = seasons,
+            episodes = episodes,
             contentPad = contentPad,
             isTv = isTv,
             windowSizeClass = adaptiveInfo.windowSizeClass,
             personImageUrl = viewModel::personImageUrl,
             onPlayOffline = onPlayOffline,
+            onNavigateToSeries = onNavigateToSeries,
+            onNavigateToDetail = onNavigateToDetail,
+            onEpisodeDelete = { viewModel.deleteEpisode(it) },
             onDelete = { viewModel.delete(onBack) },
             onBack = onBack,
         )
@@ -124,14 +135,20 @@ fun OfflineDetailScreen(
 private fun OfflineDetailContent(
     item: OfflineMediaItem,
     children: List<OfflineMediaItem>,
+    seasons: List<OfflineMediaItem>,
+    episodes: Map<String, List<OfflineMediaItem>>,
     contentPad: androidx.compose.ui.unit.Dp,
     isTv: Boolean,
     windowSizeClass: WindowSizeClass,
     personImageUrl: (String) -> String,
     onPlayOffline: (itemId: String, mediaType: MediaType) -> Unit,
+    onNavigateToSeries: (seriesId: String) -> Unit,
+    onNavigateToDetail: (itemId: String) -> Unit,
+    onEpisodeDelete: (episodeId: String) -> Unit,
     onDelete: () -> Unit,
     onBack: () -> Unit,
 ) {
+    val isEpisode = item.mediaType == MediaType.EPISODE
     var showDeleteDialog by remember { mutableStateOf(false) }
     var overviewExpanded by remember { mutableStateOf(false) }
     val playFocusState = rememberTvFocusState()
@@ -247,6 +264,71 @@ private fun OfflineDetailContent(
                 item(key = "title") {
                     StaggeredSection(delayIndex = 0) {
                         Column(modifier = Modifier.padding(horizontal = contentPad)) {
+                            // "Series › Season" breadcrumb (episode detail only),
+                            // mirroring the online DetailContentBody.
+                            if (isEpisode && item.seriesId != null) {
+                                val seriesNavFocusState = rememberTvFocusState(focusedScale = 1.02f)
+                                Row(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .padding(bottom = 8.dp)
+                                        .clip(ShapeCache.smooth8)
+                                        .then(seriesNavFocusState.focusModifier)
+                                        .then(Modifier.tvFocusIndicator(seriesNavFocusState, ShapeCache.smooth8))
+                                        .clickable { item.seriesId?.let(onNavigateToSeries) }
+                                        .padding(vertical = 4.dp),
+                                    verticalAlignment = Alignment.CenterVertically,
+                                ) {
+                                    Text(
+                                        text = item.seriesName ?: "Series",
+                                        style = MaterialTheme.typography.titleSmall,
+                                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.95f),
+                                        fontWeight = FontWeight.SemiBold,
+                                        maxLines = 1,
+                                        overflow = TextOverflow.Ellipsis,
+                                    )
+                                    item.seasonName?.let { season ->
+                                        Text(
+                                            text = " › ",
+                                            style = MaterialTheme.typography.titleSmall,
+                                            color = MaterialTheme.colorScheme.outlineVariant,
+                                        )
+                                        Text(
+                                            text = season,
+                                            style = MaterialTheme.typography.titleSmall,
+                                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                            maxLines = 1,
+                                            overflow = TextOverflow.Ellipsis,
+                                        )
+                                    }
+                                }
+                            }
+
+                            // "S{season} · E{episode} · {series}" context line
+                            // (episode detail only), mirroring the online screen.
+                            if (isEpisode) {
+                                val episodeContext = buildString {
+                                    item.seasonNumber?.let { append("S$it") }
+                                    item.episodeNumber?.let {
+                                        if (isNotEmpty()) append(" · ")
+                                        append("E$it")
+                                    }
+                                    item.seriesName?.takeIf { it.isNotBlank() }?.let { series ->
+                                        if (isNotEmpty()) append(" · ")
+                                        append(series)
+                                    }
+                                }
+                                if (episodeContext.isNotBlank()) {
+                                    Text(
+                                        text = episodeContext,
+                                        style = MaterialTheme.typography.titleMedium,
+                                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.88f),
+                                        fontWeight = FontWeight.SemiBold,
+                                    )
+                                    Spacer(Modifier.height(6.dp))
+                                }
+                            }
+
                             Text(
                                 text = item.name,
                                 style = MaterialTheme.typography.headlineLarge.copy(fontWeight = FontWeight.Bold),
@@ -331,6 +413,31 @@ private fun OfflineDetailContent(
                                         )
                                     }
                                 }
+                            }
+                        }
+                    }
+                }
+
+                // ── Seasons / episodes list (episode detail only). Mirrors the
+                // online episode detail screen, which re-renders the seasons
+                // section below the overview so users can jump between episodes.
+                // Skipped when the episode has no series link (older downloads). ──
+                if (isEpisode && item.seriesId != null && seasons.isNotEmpty()) {
+                    item(key = "seasons") {
+                        StaggeredSection(delayIndex = 3) {
+                            Column(modifier = Modifier.padding(top = 24.dp)) {
+                                OfflineSeasonsSection(
+                                    seasons = seasons,
+                                    episodes = episodes,
+                                    contentPad = contentPad,
+                                    currentItemId = item.id,
+                                    currentSeasonId = item.seasonId,
+                                    onEpisodePlay = { episode ->
+                                        onPlayOffline(episode.id, MediaType.EPISODE)
+                                    },
+                                    onEpisodeDetail = { episode -> onNavigateToDetail(episode.id) },
+                                    onEpisodeDelete = { episode -> onEpisodeDelete(episode.id) },
+                                )
                             }
                         }
                     }
@@ -534,6 +641,22 @@ private fun InfoRow(item: OfflineMediaItem) {
         horizontalArrangement = Arrangement.spacedBy(16.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
+        if (item.isPlayed) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Icon(
+                    imageVector = Tabler.Outline.Check,
+                    contentDescription = "Watched",
+                    tint = MaterialTheme.colorScheme.primary,
+                    modifier = Modifier.size(16.dp),
+                )
+                Spacer(Modifier.width(4.dp))
+                Text(
+                    text = "Watched",
+                    style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.SemiBold),
+                    color = MaterialTheme.colorScheme.primary,
+                )
+            }
+        }
         item.year?.let {
             Text(it.toString(), style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f))
         }
@@ -612,9 +735,10 @@ private fun PlayButton(
         if (hasProgress) {
             Box(
                 modifier = Modifier
-                    .matchParentSize()
-                    .background(MaterialTheme.colorScheme.onSurface.copy(alpha = 0.15f))
-                    .fillMaxWidth(progressFraction.coerceIn(0f, 1f)),
+                    .fillMaxHeight()
+                    .fillMaxWidth(progressFraction.coerceIn(0f, 1f))
+                    .align(Alignment.CenterStart)
+                    .background(Color.Black.copy(alpha = 0.24f)),
             )
         }
         Row(verticalAlignment = Alignment.CenterVertically) {

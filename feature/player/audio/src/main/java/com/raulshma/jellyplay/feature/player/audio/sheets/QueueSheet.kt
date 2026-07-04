@@ -3,9 +3,11 @@ package com.raulshma.jellyplay.feature.player.audio.sheets
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
+import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsPressedAsState
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
@@ -16,20 +18,28 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
+import androidx.compose.material3.SwipeToDismissBox
+import androidx.compose.material3.SwipeToDismissBoxValue
 import androidx.compose.material3.Text
 import androidx.compose.material3.rememberModalBottomSheetState
+import androidx.compose.material3.rememberSwipeToDismissBoxState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import com.composables.icons.tabler.Tabler
+import com.composables.icons.tabler.outline.Trash
 import com.raulshma.jellyplay.core.data.playback.AudioQueueItem
+import com.raulshma.jellyplay.feature.player.audio.R
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -50,7 +60,7 @@ internal fun QueueSheet(
                 .padding(bottom = 32.dp),
         ) {
             Text(
-                "Queue",
+                stringResource(R.string.audio_queue_title),
                 style = MaterialTheme.typography.titleMedium,
                 modifier = Modifier.padding(horizontal = 16.dp),
             )
@@ -68,6 +78,7 @@ internal fun QueueSheet(
                         currentIndex = currentIndex,
                         item = item,
                         onSelect = { onSelect(index) },
+                        onRemove = { onRemove(index) },
                     )
                 }
             }
@@ -75,11 +86,68 @@ internal fun QueueSheet(
     }
 }
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 internal fun AnimatedQueueItem(
     index: Int,
     currentIndex: Int,
     item: AudioQueueItem,
+    onSelect: () -> Unit,
+    onRemove: () -> Unit,
+) {
+    // Swipe-to-dismiss removes the item from the queue. The currently-playing
+    // track (index == currentIndex) is intentionally still swipeable — the
+    // underlying player handles queue mutation for the active item safely.
+    val dismissState = rememberSwipeToDismissBoxState(
+        confirmValueChange = { value ->
+            if (value == SwipeToDismissBoxValue.EndToStart) {
+                onRemove()
+                true
+            } else {
+                false
+            }
+        },
+        positionalThreshold = { distance -> distance * 0.6f },
+    )
+
+    SwipeToDismissBox(
+        state = dismissState,
+        backgroundContent = {
+            val isError = dismissState.targetValue == SwipeToDismissBoxValue.EndToStart ||
+                dismissState.dismissDirection == SwipeToDismissBoxValue.EndToStart
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .background(
+                        if (isError) MaterialTheme.colorScheme.errorContainer
+                        else MaterialTheme.colorScheme.surface,
+                    )
+                    .padding(horizontal = 20.dp),
+                contentAlignment = Alignment.CenterEnd,
+            ) {
+                Icon(
+                    imageVector = Tabler.Outline.Trash,
+                    contentDescription = stringResource(R.string.audio_queue_remove),
+                    tint = MaterialTheme.colorScheme.onErrorContainer,
+                )
+            }
+        },
+        enableDismissFromStartToEnd = false,
+    ) {
+        QueueItemContent(
+            isCurrentItem = index == currentIndex,
+            name = item.name,
+            artist = item.artist,
+            onSelect = onSelect,
+        )
+    }
+}
+
+@Composable
+private fun QueueItemContent(
+    isCurrentItem: Boolean,
+    name: String,
+    artist: String,
     onSelect: () -> Unit,
 ) {
     val interactionSource = remember { MutableInteractionSource() }
@@ -94,7 +162,6 @@ internal fun AnimatedQueueItem(
         animationSpec = tween(50),
         label = "queueItemAlpha",
     )
-    val isCurrentItem = index == currentIndex
 
     Row(
         modifier = Modifier
@@ -110,7 +177,7 @@ internal fun AnimatedQueueItem(
     ) {
         Column(modifier = Modifier.weight(1f)) {
             Text(
-                item.name,
+                name,
                 style = MaterialTheme.typography.bodyLarge,
                 fontWeight = if (isCurrentItem) FontWeight.SemiBold else FontWeight.Normal,
                 color = if (isCurrentItem) MaterialTheme.colorScheme.primary
@@ -119,7 +186,7 @@ internal fun AnimatedQueueItem(
                 overflow = TextOverflow.Ellipsis,
             )
             Text(
-                item.artist,
+                artist,
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 maxLines = 1,
