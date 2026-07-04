@@ -27,6 +27,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalConfiguration
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.raulshma.jellyplay.core.model.AudioNormalizationMode
@@ -91,7 +92,7 @@ fun AudioSettingsScreen(
     )
 
     JellyPlayScreenScaffold(
-        title = "Audio Player",
+        title = stringResource(R.string.settings_audio_player_title),
         onBack = onBack,
         backgroundColor = backgroundColor,
         actions = {
@@ -122,8 +123,8 @@ fun AudioSettingsScreen(
             item {
                 SettingsGroup(
                     icon = Tabler.Outline.Music,
-                    title = "Audio Player",
-                    summary = { "Default speed: ${if (preferences.audioDefaultSpeed == 1.0f) "1x" else "${preferences.audioDefaultSpeed}x"}" },
+                    title = stringResource(R.string.settings_audio_player_title),
+                    summary = { stringResource(R.string.settings_default_speed_value, if (preferences.audioDefaultSpeed == 1.0f) "1x" else "${preferences.audioDefaultSpeed}x") },
                     modifier = Modifier.padding(vertical = 8.dp),
                     initiallyExpanded = true,
                 ) {
@@ -153,8 +154,8 @@ fun AudioSettingsScreen(
 
                     SettingListItem(
                         icon = Tabler.Outline.Gauge,
-                        title = "Default Speed",
-                        subtitle = if (preferences.audioDefaultSpeed == 1.0f) "Normal playback speed" else "${preferences.audioDefaultSpeed}x playback",
+                        title = stringResource(R.string.settings_audio_default_speed),
+                        subtitle = if (preferences.audioDefaultSpeed == 1.0f) stringResource(R.string.settings_audio_default_speed_normal) else stringResource(R.string.settings_audio_default_speed_value, "${preferences.audioDefaultSpeed}x"),
                         trailingText = if (preferences.audioDefaultSpeed == 1.0f) "1x" else "${preferences.audioDefaultSpeed}x",
                         highlighted = highlightSettingId == "audio_default_speed",
                         index = idx++, count = total,
@@ -162,8 +163,8 @@ fun AudioSettingsScreen(
                     )
                     SettingToggleItem(
                         icon = Tabler.Outline.PlaylistAdd,
-                        title = "Auto-play Next",
-                        subtitle = if (preferences.audioAutoplayNext) "Automatically plays next track" else "Manual track selection",
+                        title = stringResource(R.string.settings_audio_auto_play_next),
+                        subtitle = if (preferences.audioAutoplayNext) stringResource(R.string.settings_audio_auto_play_on) else stringResource(R.string.settings_audio_auto_play_off),
                         checked = preferences.audioAutoplayNext,
                         highlighted = highlightSettingId == "audio_autoplay_next",
                         index = idx++, count = total,
@@ -171,8 +172,8 @@ fun AudioSettingsScreen(
                     )
                     SettingToggleItem(
                         icon = Tabler.Outline.Eye,
-                        title = "Audio Visualizer",
-                        subtitle = if (preferences.audioVisualizerEnabled) "Real-time FFT audio visualizer active" else "Visualizer disabled",
+                        title = stringResource(R.string.settings_audio_visualizer),
+                        subtitle = if (preferences.audioVisualizerEnabled) stringResource(R.string.settings_audio_visualizer_on) else stringResource(R.string.settings_audio_visualizer_off),
                         checked = preferences.audioVisualizerEnabled,
                         highlighted = highlightSettingId == "audio_visualizer",
                         index = idx++, count = total,
@@ -180,8 +181,8 @@ fun AudioSettingsScreen(
                     )
                     SettingListItem(
                         icon = Tabler.Outline.Clock,
-                        title = "Sleep Timer",
-                        subtitle = if (preferences.sleepTimerDurationMs == 0L) "No sleep timer set" else "${preferences.sleepTimerDurationMs / 60000} minutes",
+                        title = stringResource(R.string.settings_sleep_timer),
+                        subtitle = if (preferences.sleepTimerDurationMs == 0L) stringResource(R.string.settings_sleep_timer_off) else stringResource(R.string.settings_sleep_timer_minutes, preferences.sleepTimerDurationMs / 60000),
                         trailingText = if (preferences.sleepTimerDurationMs == 0L) "Off" else "${preferences.sleepTimerDurationMs / 60000}m",
                         highlighted = highlightSettingId == "sleep_timer",
                         index = idx++, count = total,
@@ -189,8 +190,8 @@ fun AudioSettingsScreen(
                     )
                     SettingToggleItem(
                         icon = Tabler.Outline.Speakerphone,
-                        title = "Audio Description",
-                        subtitle = if (preferences.preferAudioDescription) "Prefer descriptive/narrated audio tracks" else "Standard audio tracks",
+                        title = stringResource(R.string.settings_audio_description),
+                        subtitle = if (preferences.preferAudioDescription) stringResource(R.string.settings_audio_description_on) else stringResource(R.string.settings_audio_description_off),
                         checked = preferences.preferAudioDescription,
                         highlighted = highlightSettingId == "audio_description",
                         index = idx++, count = total,
@@ -199,8 +200,8 @@ fun AudioSettingsScreen(
                     if (showAdvanced) {
                         SettingListItem(
                             icon = Tabler.Outline.Music,
-                            title = "Night Mode Volume",
-                            subtitle = "Maximum volume level at night",
+                            title = stringResource(R.string.settings_night_mode_volume),
+                            subtitle = stringResource(R.string.settings_night_mode_volume_subtitle),
                             trailingText = "${(preferences.audioNightModeVolume * 100).toInt()}%",
                             highlighted = highlightSettingId == "night_mode_volume",
                             index = idx++, count = total,
@@ -208,8 +209,8 @@ fun AudioSettingsScreen(
                         )
                         SettingListItem(
                             icon = Tabler.Outline.Adjustments,
-                            title = "Night Mode Gain",
-                            subtitle = "Loudness compensation",
+                            title = stringResource(R.string.settings_night_mode_gain),
+                            subtitle = stringResource(R.string.settings_night_mode_gain_subtitle),
                             trailingText = "${preferences.audioNightModeGain}",
                             highlighted = highlightSettingId == "night_mode_gain",
                             index = idx++, count = total,
@@ -217,8 +218,8 @@ fun AudioSettingsScreen(
                         )
                         SettingListItem(
                             icon = Tabler.Outline.PlayerSkipForward,
-                            title = "Skip Prev Threshold",
-                            subtitle = "Restart song if past this point",
+                            title = stringResource(R.string.settings_skip_prev_threshold),
+                            subtitle = stringResource(R.string.settings_skip_prev_threshold_subtitle),
                             trailingText = "${preferences.audioSkipPreviousThresholdMs / 1000}s",
                             highlighted = highlightSettingId == "audio_skip_prev_threshold",
                             index = idx++, count = total,
@@ -226,8 +227,8 @@ fun AudioSettingsScreen(
                         )
                         SettingToggleItem(
                             icon = Tabler.Outline.PlaylistAdd,
-                            title = "Gapless Playback",
-                            subtitle = if (preferences.audioGaplessEnabled) "Seamless track transitions" else "Brief pause between tracks",
+                            title = stringResource(R.string.settings_gapless_playback),
+                            subtitle = if (preferences.audioGaplessEnabled) stringResource(R.string.settings_gapless_on) else stringResource(R.string.settings_gapless_off),
                             checked = preferences.audioGaplessEnabled,
                             highlighted = highlightSettingId == "gapless_playback",
                             index = idx++, count = total,
@@ -235,8 +236,8 @@ fun AudioSettingsScreen(
                         )
                         SettingListItem(
                             icon = Tabler.Outline.Music,
-                            title = "Crossfade Duration",
-                            subtitle = if (preferences.audioCrossfadeDurationMs > 0) "${preferences.audioCrossfadeDurationMs / 1000}s overlap between tracks" else "No crossfade",
+                            title = stringResource(R.string.settings_crossfade_duration),
+                            subtitle = if (preferences.audioCrossfadeDurationMs > 0) stringResource(R.string.settings_crossfade_on, preferences.audioCrossfadeDurationMs / 1000) else stringResource(R.string.settings_crossfade_off),
                             trailingText = if (preferences.audioCrossfadeDurationMs > 0) "${preferences.audioCrossfadeDurationMs / 1000}s" else "Off",
                             highlighted = highlightSettingId == "crossfade",
                             index = idx++, count = total,
@@ -244,8 +245,8 @@ fun AudioSettingsScreen(
                         )
                         SettingListItem(
                             icon = Tabler.Outline.Refresh,
-                            title = "Preload Buffer",
-                            subtitle = "Amount to buffer ahead during audio playback",
+                            title = stringResource(R.string.settings_preload_buffer),
+                            subtitle = stringResource(R.string.settings_preload_buffer_subtitle),
                             trailingText = preferences.audioPreloadBufferSize.displayName,
                             highlighted = highlightSettingId == "audio_preload_buffer",
                             index = idx++, count = total,
@@ -253,18 +254,18 @@ fun AudioSettingsScreen(
                         )
                         SettingListItem(
                             icon = Tabler.Outline.Adjustments,
-                            title = "Volume Normalization",
+                            title = stringResource(R.string.settings_volume_normalization),
                             subtitle = when (preferences.audioNormalizationMode) {
-                                AudioNormalizationMode.NONE -> "Off"
-                                AudioNormalizationMode.DYNAMIC -> "Dynamic compression"
-                                AudioNormalizationMode.TRACK -> "Per-track ReplayGain"
-                                AudioNormalizationMode.ALBUM -> "Album-aware ReplayGain"
+                                AudioNormalizationMode.NONE -> stringResource(R.string.settings_norm_off)
+                                AudioNormalizationMode.DYNAMIC -> stringResource(R.string.settings_norm_dynamic)
+                                AudioNormalizationMode.TRACK -> stringResource(R.string.settings_norm_track)
+                                AudioNormalizationMode.ALBUM -> stringResource(R.string.settings_norm_album)
                             },
                             trailingText = when (preferences.audioNormalizationMode) {
-                                AudioNormalizationMode.NONE -> "Off"
-                                AudioNormalizationMode.DYNAMIC -> "Dynamic"
-                                AudioNormalizationMode.TRACK -> "Track"
-                                AudioNormalizationMode.ALBUM -> "Album"
+                                AudioNormalizationMode.NONE -> stringResource(R.string.settings_norm_off)
+                                AudioNormalizationMode.DYNAMIC -> stringResource(R.string.settings_norm_dynamic_short)
+                                AudioNormalizationMode.TRACK -> stringResource(R.string.settings_norm_track_short)
+                                AudioNormalizationMode.ALBUM -> stringResource(R.string.settings_norm_album_short)
                             },
                             highlighted = highlightSettingId == "volume_normalization",
                             index = idx++, count = total,
@@ -275,8 +276,8 @@ fun AudioSettingsScreen(
                         ) {
                             SettingListItem(
                                 icon = Tabler.Outline.Adjustments,
-                                title = "ReplayGain Pre-Amp",
-                                subtitle = "Fine-tune target loudness",
+                                title = stringResource(R.string.settings_replaygain_preamp),
+                                subtitle = stringResource(R.string.settings_replaygain_preamp_subtitle),
                                 trailingText = "${if (preferences.replayGainPreAmpDb >= 0) "+" else ""}${String.format("%.1f", preferences.replayGainPreAmpDb)} dB",
                                 highlighted = highlightSettingId == "replaygain_preamp",
                                 index = idx++, count = total,
@@ -285,8 +286,8 @@ fun AudioSettingsScreen(
                         }
                         SettingToggleItem(
                             icon = Tabler.Outline.Adjustments,
-                            title = "Equalizer",
-                            subtitle = if (preferences.equalizerEnabled) "10-band equalizer active" else "Equalizer disabled",
+                            title = stringResource(R.string.settings_equalizer),
+                            subtitle = if (preferences.equalizerEnabled) stringResource(R.string.settings_equalizer_on) else stringResource(R.string.settings_equalizer_off),
                             checked = preferences.equalizerEnabled,
                             highlighted = highlightSettingId == "equalizer",
                             index = idx++, count = total,

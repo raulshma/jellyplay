@@ -7,6 +7,7 @@ import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.gestures.drag
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.offset
@@ -176,19 +177,22 @@ fun WaveformSeekBar(
 
         if (isDragging && durationMs > 0) {
             val tooltipTime = formatTime((dragFraction * durationMs).toLong())
-            val tooltipOffsetFraction = dragFraction.coerceIn(0.05f, 0.95f)
-            Box(
+            BoxWithConstraints(
                 modifier = Modifier
                     .fillMaxWidth()
                     .height(40.dp),
                 contentAlignment = Alignment.TopCenter,
             ) {
+                // Derive the tooltip offset from the measured parent width instead of
+                // assuming a fixed 100dp width, which mis-placed it on every other screen.
+                val tooltipWidthDp = 50.dp
+                val tooltipX = (maxWidth * dragFraction) - (tooltipWidthDp / 2)
                 Text(
                     text = tooltipTime,
                     color = MaterialTheme.colorScheme.onSurface,
                     style = MaterialTheme.typography.labelSmall.copy(fontSize = 11.sp),
                     modifier = Modifier
-                        .offset(x = with(density) { (tooltipOffsetFraction * 100f).dp - 25.dp })
+                        .offset(x = tooltipX)
                         .background(
                             MaterialTheme.colorScheme.surfaceContainerHigh,
                             ShapeCache.smooth4,

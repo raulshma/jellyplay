@@ -144,7 +144,6 @@ internal fun PlayerControls(
     onPlayPause: () -> Unit,
     onSeekBack: () -> Unit,
     onSeekForward: () -> Unit,
-    onSeek: (Float) -> Unit,
     onSeekStart: () -> Unit,
     onSeekEnd: () -> Unit,
     onSeekPositionChange: (Long) -> Unit,
@@ -513,10 +512,6 @@ internal fun PlayerControls(
                     trickplayBitmap = tvTrickplayBitmap,
                     playbackSpeed = playbackSpeed,
                     showTimeRemaining = showTimeRemaining,
-                    onSeek = { fraction ->
-                        onSeek(fraction)
-                        onSeekPositionChange((fraction * duration).toLong())
-                    },
                     onSeekStart = onSeekStart,
                     onSeekEnd = onSeekEnd,
                     onSeekPositionChange = onSeekPositionChange,
@@ -926,7 +921,6 @@ private fun TvControllableSeekBar(
     trickplayBitmap: Bitmap? = null,
     playbackSpeed: Float = 1.0f,
     showTimeRemaining: Boolean = false,
-    onSeek: (Float) -> Unit,
     onSeekStart: () -> Unit,
     onSeekEnd: () -> Unit,
     onSeekPositionChange: (Long) -> Unit = {},
@@ -1014,7 +1008,6 @@ private fun TvControllableSeekBar(
                         setProgress { target ->
                             val clamped = target.coerceIn(0f, 1f)
                             onSeekStart()
-                            onSeek(clamped)
                             onSeekPositionChange((clamped * duration).toLong())
                             onSeekEnd()
                             true
@@ -1056,7 +1049,6 @@ private fun TvControllableSeekBar(
                                         onSeekStart()
                                     }
                                     tvSeekPosition = (tvSeekPosition + seekStep).coerceAtMost(1f)
-                                    onSeek(tvSeekPosition)
                                     onSeekPositionChange((tvSeekPosition * duration).toLong())
                                     true
                                 },
@@ -1067,7 +1059,6 @@ private fun TvControllableSeekBar(
                                         onSeekStart()
                                     }
                                     tvSeekPosition = (tvSeekPosition - seekStep).coerceAtLeast(0f)
-                                    onSeek(tvSeekPosition)
                                     onSeekPositionChange((tvSeekPosition * duration).toLong())
                                     true
                                 },
@@ -1089,7 +1080,7 @@ private fun TvControllableSeekBar(
                                     onSeekStart()
                                     var fraction = (downEvent.position.x / size.width).coerceIn(0f, 1f)
                                     dragFraction = fraction
-                                    onSeek(fraction)
+                                    onSeekPositionChange((fraction * duration).toLong())
                                     isDragging = true
 
                                     do {
@@ -1098,7 +1089,7 @@ private fun TvControllableSeekBar(
                                         if (change != null) {
                                             fraction = (change.position.x / size.width).coerceIn(0f, 1f)
                                             dragFraction = fraction
-                                            onSeek(fraction)
+                                            onSeekPositionChange((fraction * duration).toLong())
                                             change.consume()
                                         }
                                     } while (change?.pressed == true)

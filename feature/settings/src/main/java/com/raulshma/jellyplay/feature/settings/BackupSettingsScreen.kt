@@ -16,6 +16,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.raulshma.jellyplay.core.ui.adaptive.LocalAdaptiveInfo
@@ -65,7 +66,7 @@ fun BackupSettingsScreen(
     )
 
     JellyPlayScreenScaffold(
-        title = "Backup & Restore",
+        title = stringResource(R.string.settings_backup_restore),
         onBack = onBack,
         backgroundColor = backgroundColor,
     ) { innerPadding ->
@@ -90,15 +91,15 @@ fun BackupSettingsScreen(
             item {
                 SettingsGroup(
                     icon = Tabler.Outline.DatabaseExport,
-                    title = "Backup & Restore",
-                    summary = { "Export or import app settings" },
+                    title = stringResource(R.string.settings_backup_restore),
+                    summary = { stringResource(R.string.settings_backup_restore_subtitle) },
                     modifier = Modifier.padding(vertical = 8.dp),
                     initiallyExpanded = true,
                 ) {
                     SettingListItem(
                         icon = Tabler.Outline.FileExport,
-                        title = "Export Settings",
-                        subtitle = "Save current settings to a JSON file",
+                        title = stringResource(R.string.settings_export_settings),
+                        subtitle = stringResource(R.string.settings_export_settings_subtitle),
                         index = 0, count = 3,
                         highlighted = highlightSettingId == "backup_export",
                         onClick = {
@@ -107,8 +108,8 @@ fun BackupSettingsScreen(
                     )
                     SettingListItem(
                         icon = Tabler.Outline.FileImport,
-                        title = "Import Settings",
-                        subtitle = "Restore settings from a backup file",
+                        title = stringResource(R.string.settings_import_settings),
+                        subtitle = stringResource(R.string.settings_import_settings_subtitle),
                         index = 1, count = 3,
                         highlighted = highlightSettingId == "backup_import",
                         onClick = {
@@ -117,8 +118,8 @@ fun BackupSettingsScreen(
                     )
                     SettingListItem(
                         icon = Tabler.Outline.AlertTriangle,
-                        title = "Factory Reset",
-                        subtitle = "Reset all settings to factory defaults",
+                        title = stringResource(R.string.settings_factory_reset),
+                        subtitle = stringResource(R.string.settings_factory_reset_subtitle),
                         index = 2, count = 3,
                         highlighted = highlightSettingId == "factory_reset",
                         onClick = {
@@ -141,10 +142,10 @@ fun BackupSettingsScreen(
     if (showFactoryResetDialog) {
         AlertDialog(
             onDismissRequest = { showFactoryResetDialog = false },
-            title = { Text("Factory Reset") },
+            title = { Text(stringResource(R.string.settings_factory_reset)) },
             text = {
                 Text(
-                    text = "This will reset ALL settings to factory defaults. You will be logged out and all app data will be cleared. This action cannot be undone.",
+                    text = stringResource(R.string.settings_factory_reset_message),
                     style = MaterialTheme.typography.bodyMedium,
                 )
             },
@@ -156,12 +157,12 @@ fun BackupSettingsScreen(
                         onBack()
                     }
                 ) {
-                    Text("Reset", color = MaterialTheme.colorScheme.error)
+                    Text(stringResource(R.string.settings_reset), color = MaterialTheme.colorScheme.error)
                 }
             },
             dismissButton = {
                 TextButton(onClick = { showFactoryResetDialog = false }) {
-                    Text("Cancel")
+                    Text(stringResource(R.string.settings_cancel))
                 }
             },
         )

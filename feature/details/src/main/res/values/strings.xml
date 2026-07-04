@@ -1,0 +1,131 @@
+<resources>
+    <!-- ════════════════════════════════════════════════════════════════════
+         Media Detail feature strings.
+
+         Prefixed `detail_` so they never collide with other modules once
+         resources are merged at the app level. Mirrors the `core_` convention
+         in core/ui/src/main/res/values/strings.xml.
+         ════════════════════════════════════════════════════════════════════ -->
+
+    <!-- ── Section titles / headers ─────────────────────────────────────── -->
+    <string name="detail_section_tracks">Tracks</string>
+    <string name="detail_section_items">Items</string>
+    <string name="detail_section_cast_crew">Cast &amp; Crew</string>
+    <string name="detail_section_more_like_this">More Like This</string>
+    <string name="detail_section_videos">Videos</string>
+    <string name="detail_section_seasons">Seasons</string>
+    <string name="detail_section_seerr_recommendations">Seerr Recommendations</string>
+    <string name="detail_section_seerr_similar">Seerr Similar</string>
+
+    <!-- ── Primary action button labels ─────────────────────────────────── -->
+    <string name="detail_play_play">Play</string>
+    <string name="detail_play_resume">Resume</string>
+    <string name="detail_play_finding_episode">Finding Episode</string>
+    <string name="detail_play_no_episodes_available">No Episodes Available</string>
+    <string name="detail_play_no_episodes">No Episodes</string>
+
+    <!-- ── Smart-play templates (verb + S#:E#) ────────────────────────────
+         Positional args: %1$d = season number, %2$d = episode number. -->
+    <string name="detail_resume_episode">Resume S%1$d:E%2$d</string>
+    <string name="detail_next_up_episode">Next Up S%1$d:E%2$d</string>
+    <string name="detail_play_episode">Play S%1$d:E%2$d</string>
+    <string name="detail_replay_episode">Replay S%1$d:E%2$d</string>
+
+    <!-- ── Action icon content descriptions (TalkBack) ──────────────────── -->
+    <string name="detail_cd_mark_as_watched">Mark as Watched</string>
+    <string name="detail_cd_mark_as_unwatched">Mark as Unwatched</string>
+    <string name="detail_cd_favorite">Favorite</string>
+    <string name="detail_cd_options">Options</string>
+    <string name="detail_cd_episode_play">Play</string>
+    <string name="detail_cd_track_play">Play</string>
+    <string name="detail_cd_close">Close</string>
+    <string name="detail_cd_collapse">Collapse</string>
+    <string name="detail_cd_expand">Expand</string>
+
+    <!-- ── Episode / season card labels ─────────────────────────────────── -->
+    <string name="detail_season_format">Season %1$d</string>
+    <string name="detail_no_episodes_available">No episodes available</string>
+    <string name="detail_spoiler">Spoiler</string>
+    <string name="detail_watched_badge">Watched</string>
+    <string name="detail_time_left_format">%1$s left</string>
+
+    <!-- ── Overflow / options menu ──────────────────────────────────────── -->
+    <string name="detail_option_edit">Edit</string>
+    <string name="detail_option_share">Share</string>
+    <string name="detail_option_downloaded">Downloaded</string>
+    <string name="detail_option_downloading">Downloading…</string>
+    <string name="detail_option_downloading_percent">Downloading (%1$d%%)</string>
+    <string name="detail_option_download">Download</string>
+    <string name="detail_option_downloading_series">Downloading Series…</string>
+    <string name="detail_option_download_series">Download Series</string>
+    <string name="detail_option_hide_from_next_up">Hide from Next Up</string>
+    <string name="detail_option_hide_from_continue_watching">Hide from Continue Watching</string>
+    <string name="detail_option_technical_info">Technical Info</string>
+
+    <!-- ── Series download sheet ────────────────────────────────────────── -->
+    <string name="detail_download_series_title">Download Series</string>
+    <string name="detail_download_series_subtitle">Tap a season to see episodes. Select which to download.</string>
+    <string name="detail_select_all">Select All</string>
+    <string name="detail_deselect_all">Deselect All</string>
+    <string name="detail_episodes_selected_format">%1$d of %2$d episodes selected</string>
+    <plurals name="detail_episode_count">
+        <item quantity="one">%1$d episode</item>
+        <item quantity="other">%1$d episodes</item>
+    </plurals>
+    <string name="detail_downloaded_count_format">• %1$d downloaded</string>
+    <string name="detail_queuing">Queuing…</string>
+    <string name="detail_downloaded_status">Downloaded</string>
+    <string name="detail_cancel">Cancel</string>
+
+    <!-- ── Stream picker (audio / subtitle) ─────────────────────────────── -->
+    <string name="detail_select_audio">Select Audio</string>
+    <string name="detail_select_subtitle">Select Subtitle</string>
+    <string name="detail_stream_auto">Auto</string>
+    <string name="detail_stream_default">Default</string>
+    <string name="detail_stream_subtitle_off">Off</string>
+    <string name="detail_stream_default_badge">DEFAULT</string>
+    <string name="detail_audio_track_format">Track %1$d</string>
+    <string name="detail_subtitle_track_format">Track %1$d</string>
+    <string name="detail_subtitle_off">OFF</string>
+    <string name="detail_audio_channels_format">%1$dCH</string>
+
+    <!-- ── Download dialogs ─────────────────────────────────────────────── -->
+    <string name="detail_download_dialog_title">Download</string>
+    <string name="detail_download_anyway">Download anyway</string>
+    <string name="detail_cellular_download_title">Large download on cellular</string>
+    <string name="detail_cellular_download_message">You are on a metered network. This download is about %1$d MB and may use significant mobile data.</string>
+    <string name="detail_estimated_size">Estimated size: %1$s</string>
+    <string name="detail_available_storage">Available storage: %1$s</string>
+    <string name="detail_not_enough_storage">Not enough storage space available.</string>
+
+    <!-- ── File-size formatting ─────────────────────────────────────────── -->
+    <string name="detail_size_gb">%1$.1f GB</string>
+    <string name="detail_size_mb">%1$.1f MB</string>
+    <string name="detail_size_kb">%1$.1f KB</string>
+    <string name="detail_size_b">%1$d B</string>
+    <string name="detail_size_unknown">Unknown</string>
+
+    <!-- ── Share ────────────────────────────────────────────────────────── -->
+    <string name="detail_share_via">Share via</string>
+
+    <!-- ── Snackbar / user feedback (from ViewModel) ────────────────────── -->
+    <string name="detail_msg_couldnt_update_favorite">Couldn\'t update favorite</string>
+    <string name="detail_msg_couldnt_mark_played">Couldn\'t mark as played</string>
+    <string name="detail_msg_couldnt_mark_unplayed">Couldn\'t mark as unplayed</string>
+    <string name="detail_msg_no_episodes_queued">No episodes could be queued</string>
+
+    <!-- ── Snackbar: episodes queued (plurals) ──────────────────────────── -->
+    <plurals name="detail_episodes_queued">
+        <item quantity="one">%1$d episode queued for download</item>
+        <item quantity="other">%1$d episodes queued for download</item>
+    </plurals>
+
+    <!-- ── ViewModel error messages (shown via ErrorScreen / snackbar) ──── -->
+    <string name="detail_error_load_failed">Couldn\'t load details</string>
+    <string name="detail_error_details_not_loaded">Media details not loaded</string>
+    <string name="detail_error_no_source">No media source available for download</string>
+    <string name="detail_error_no_stream_url">Could not get stream URL</string>
+    <string name="detail_error_download_failed">Download failed</string>
+    <string name="detail_error_not_a_series">This is not a series</string>
+    <string name="detail_error_queue_failed">Failed to queue downloads</string>
+</resources>

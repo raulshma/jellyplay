@@ -78,22 +78,6 @@ fun IntroSkipOverlay(
 }
 
 @Composable
-fun CreditsSkipOverlay(
-    isVisible: Boolean,
-    onSkip: () -> Unit,
-    modifier: Modifier = Modifier,
-    focusRequester: FocusRequester? = null,
-) {
-    SkipButtonOverlay(
-        isVisible = isVisible,
-        text = "Skip Credits",
-        onSkip = onSkip,
-        modifier = modifier,
-        focusRequester = focusRequester,
-    )
-}
-
-@Composable
 private fun SkipButtonOverlay(
     isVisible: Boolean,
     text: String,

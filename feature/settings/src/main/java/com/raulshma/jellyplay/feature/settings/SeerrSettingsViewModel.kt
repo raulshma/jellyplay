@@ -46,9 +46,6 @@ class SeerrSettingsViewModel @Inject constructor(
     private val _isTesting = composeState(false)
     val isTesting: Boolean get() = _isTesting.value
 
-    private val _isChecked = composeState(false)
-    val isChecked: Boolean get() = _isChecked.value
-
     init {
         launch {
             val prefs = seerrPreferencesStore.preferences.first()
@@ -58,7 +55,6 @@ class SeerrSettingsViewModel @Inject constructor(
             _email.value = prefs.email
             _apiKey.value = secureCredentialsStore.getApiKey()
             _password.value = secureCredentialsStore.getPassword()
-            _isChecked.value = prefs.serverUrl.isNotBlank()
             if (prefs.serverUrl.isNotBlank()) {
                 val hasCreds = when (prefs.authMethod) {
                     SeerrAuthMethod.API_KEY -> secureCredentialsStore.getApiKey().isNotBlank()
@@ -164,13 +160,14 @@ class SeerrSettingsViewModel @Inject constructor(
         launch {
             _isTesting.value = true
             try {
-                seerrPreferencesStore.setServerUrl(serverUrl)
-                seerrPreferencesStore.setAuthMethod(SeerrAuthMethod.JELLYFIN)
-                seerrPreferencesStore.setUsername(username)
-                secureCredentialsStore.setPassword(password)
-
+                // Persist credentials only after a successful login so failed attempts
+                // don't leave bad credentials saved.
                 seerrRepository.loginJellyfin(username, password)
                     .onSuccess { response ->
+                        seerrPreferencesStore.setServerUrl(serverUrl)
+                        seerrPreferencesStore.setAuthMethod(SeerrAuthMethod.JELLYFIN)
+                        seerrPreferencesStore.setUsername(username)
+                        secureCredentialsStore.setPassword(password)
                         _connectionStatus.value = ConnectionStatus.Connected(response.version, true)
                     }
                     .onFailure { error ->
@@ -195,13 +192,14 @@ class SeerrSettingsViewModel @Inject constructor(
         launch {
             _isTesting.value = true
             try {
-                seerrPreferencesStore.setServerUrl(serverUrl)
-                seerrPreferencesStore.setAuthMethod(SeerrAuthMethod.LOCAL)
-                seerrPreferencesStore.setEmail(email)
-                secureCredentialsStore.setPassword(password)
-
+                // Persist credentials only after a successful login so failed attempts
+                // don't leave bad credentials saved.
                 seerrRepository.loginLocal(email, password)
                     .onSuccess { response ->
+                        seerrPreferencesStore.setServerUrl(serverUrl)
+                        seerrPreferencesStore.setAuthMethod(SeerrAuthMethod.LOCAL)
+                        seerrPreferencesStore.setEmail(email)
+                        secureCredentialsStore.setPassword(password)
                         _connectionStatus.value = ConnectionStatus.Connected(response.version, true)
                     }
                     .onFailure { error ->

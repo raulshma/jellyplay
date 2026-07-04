@@ -15,13 +15,18 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -32,6 +37,7 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import com.composables.icons.tabler.Tabler
 import com.composables.icons.tabler.outline.DeviceFloppy
+import com.composables.icons.tabler.outline.Trash
 import com.raulshma.jellyplay.core.designsystem.theme.ShapeCache
 import com.raulshma.jellyplay.core.model.OfflineMediaItem
 import com.raulshma.jellyplay.core.ui.components.ScreenEmptyState
@@ -70,6 +76,11 @@ internal fun OfflineSeasonsSection(
         seasons.indexOfFirst { it.id == id }.coerceAtLeast(0)
     } ?: 0
     var selectedSeasonIndex by remember { mutableIntStateOf(initialSeasonIndex) }
+
+    // Pending per-episode delete confirmation. The per-episode trash badge is a
+    // small touch target overlapping the play affordance on a 16:9 thumbnail, so
+    // confirm before removing the file — matching the per-series confirmation.
+    var pendingDelete by remember { mutableStateOf<OfflineMediaItem?>(null) }
 
     // Re-select the matching season if the highlighted episode's season changes
     // (e.g. after the detail screen loads its seasons).
@@ -139,12 +150,33 @@ internal fun OfflineSeasonsSection(
                         isCurrentEpisode = episode.id == currentItemId,
                         onPlayClick = { onEpisodePlay(episode) },
                         onDetailClick = { onEpisodeDetail(episode) },
-                        onDelete = { onEpisodeDelete(episode) },
+                        onDelete = { pendingDelete = episode },
                         modifier = focusModifier,
                     )
                 }
             }
         }
+    }
+
+    pendingDelete?.let { episode ->
+        AlertDialog(
+            onDismissRequest = { pendingDelete = null },
+            icon = { Icon(Tabler.Outline.Trash, contentDescription = null) },
+            title = { Text("Delete episode") },
+            text = { Text("Remove \"${episode.name}\" from your device?") },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        pendingDelete = null
+                        onEpisodeDelete(episode)
+                    },
+                    colors = ButtonDefaults.textButtonColors(contentColor = MaterialTheme.colorScheme.error),
+                ) { Text("Delete") }
+            },
+            dismissButton = {
+                TextButton(onClick = { pendingDelete = null }) { Text("Cancel") }
+            },
+        )
     }
 }
 
