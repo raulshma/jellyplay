@@ -21,6 +21,8 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.ElevatedCard
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
@@ -28,6 +30,7 @@ import androidx.compose.material3.IconButton
 import com.raulshma.jellyplay.core.ui.components.JellyPlayLinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -78,6 +81,11 @@ fun DownloadsScreen(
         hasError = uiState.error != null,
         networkStatus = networkStatus,
     )
+
+    // Pending delete confirmation. Deleting a completed download removes the
+    // file from disk, so we confirm first — matching OfflineDetailScreen and
+    // OfflineSeriesScreen within the same module.
+    var pendingDelete by remember { mutableStateOf<DownloadItem?>(null) }
 
     val adaptiveInfo = LocalAdaptiveInfo.current
     val isTv = LocalTvMode.current
@@ -166,7 +174,7 @@ fun DownloadsScreen(
                             onCancel = { viewModel.cancelDownload(download) },
                             onPause = { viewModel.pauseDownload(download) },
                             onResume = { viewModel.resumeDownload(download) },
-                            onDelete = { viewModel.deleteDownload(download) },
+                            onDelete = { pendingDelete = download },
                             onRetry = { viewModel.retryDownload(download) },
                             onMoveToFront = { viewModel.moveToFront(download) },
                             onLowerPriority = { viewModel.lowerPriority(download) },
@@ -175,6 +183,29 @@ fun DownloadsScreen(
                 }
             }
         }
+    }
+
+    pendingDelete?.let { item ->
+        AlertDialog(
+            onDismissRequest = { pendingDelete = null },
+            icon = { Icon(Tabler.Outline.Trash, contentDescription = null) },
+            title = { Text("Delete download") },
+            text = {
+                Text("Remove \"${item.name}\" from your device? This frees up ${viewModel.formatBytes(item.totalSizeBytes)}.")
+            },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        pendingDelete = null
+                        viewModel.deleteDownload(item)
+                    },
+                    colors = ButtonDefaults.textButtonColors(contentColor = MaterialTheme.colorScheme.error),
+                ) { Text("Delete") }
+            },
+            dismissButton = {
+                TextButton(onClick = { pendingDelete = null }) { Text("Cancel") }
+            },
+        )
     }
 }
 

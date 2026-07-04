@@ -39,6 +39,7 @@ import com.composables.icons.tabler.outline.*
 import com.raulshma.jellyplay.core.designsystem.theme.ShapeCache
 import com.raulshma.jellyplay.feature.player.audio.R
 import com.raulshma.jellyplay.feature.player.audio.components.WaveformSeekBar
+import com.raulshma.jellyplay.core.ui.components.JellyPlayCircularProgressIndicator
 import com.raulshma.jellyplay.core.ui.tv.rememberTvFocusState
 import com.raulshma.jellyplay.core.ui.tv.tvFocusIndicator
 
@@ -84,6 +85,7 @@ internal fun PixelProgressSection(
 @Composable
 internal fun PixelTransportControls(
     isPlaying: Boolean,
+    isLoading: Boolean,
     onTogglePlayPause: () -> Unit,
     onSkipPrevious: () -> Unit,
     onSkipNext: () -> Unit,
@@ -117,7 +119,7 @@ internal fun PixelTransportControls(
             onClick = onSkipPrevious,
             icon = {
                 Icon(
-                    Tabler.Outline.PlayerSkipBack, "Previous",
+                    Tabler.Outline.PlayerSkipBack, stringResource(R.string.audio_controls_previous),
                     modifier = Modifier.size(28.dp),
                     tint = MaterialTheme.colorScheme.onSurface,
                 )
@@ -127,6 +129,7 @@ internal fun PixelTransportControls(
         // Central play/pause — larger, rounded-square, light accent bg
         PixelPlayPauseButton(
             isPlaying = isPlaying,
+            isLoading = isLoading,
             onClick = onTogglePlayPause,
             accentColor = accentColor,
             focusRequester = playFocusRequester,
@@ -135,7 +138,7 @@ internal fun PixelTransportControls(
             onClick = onSkipNext,
             icon = {
                 Icon(
-                    Tabler.Outline.PlayerSkipForward, "Next",
+                    Tabler.Outline.PlayerSkipForward, stringResource(R.string.audio_controls_next),
                     modifier = Modifier.size(28.dp),
                     tint = MaterialTheme.colorScheme.onSurface,
                 )
@@ -166,6 +169,11 @@ internal fun PixelSecondaryControls(
     val abLabelSetA = stringResource(R.string.audio_ab_set_point_a)
     val abLabelSetB = stringResource(R.string.audio_ab_set_point_b)
     val abLabelClear = stringResource(R.string.audio_ab_clear)
+    val abPointALabel = stringResource(R.string.audio_ab_point_a_label)
+    val abLoopActiveLabel = stringResource(R.string.audio_ab_loop_active_label)
+    val repeatOff = stringResource(R.string.audio_controls_repeat_off)
+    val repeatAll = stringResource(R.string.audio_controls_repeat_all)
+    val repeatOne = stringResource(R.string.audio_controls_repeat_one)
     Row(
         modifier = Modifier
             .fillMaxWidth(0.8f)
@@ -179,7 +187,7 @@ internal fun PixelSecondaryControls(
             onClick = onToggleShuffle,
             tint = if (shuffleMode) accentColor else MaterialTheme.colorScheme.onSurfaceVariant,
             icon = {
-                Icon(Tabler.Outline.ArrowsShuffle, "Shuffle", modifier = Modifier.size(22.dp))
+                Icon(Tabler.Outline.ArrowsShuffle, stringResource(R.string.audio_controls_shuffle), modifier = Modifier.size(22.dp))
             },
         )
         IconButtonWithPressAnimation(
@@ -189,7 +197,7 @@ internal fun PixelSecondaryControls(
                 Icon(
                     if (repeatMode == 2) Tabler.Outline.RepeatOnce else Tabler.Outline.Repeat,
                     when (repeatMode) {
-                        0 -> "Repeat off"; 1 -> "Repeat all"; else -> "Repeat one"
+                        0 -> repeatOff; 1 -> repeatAll; else -> repeatOne
                     },
                     modifier = Modifier.size(22.dp),
                 )
@@ -212,7 +220,7 @@ internal fun PixelSecondaryControls(
                         .semantics { this.contentDescription = label },
                 ) {
                     Text(
-                        text = if (abLoopEndMs != null) "A-B" else "A",
+                        text = if (abLoopEndMs != null) abLoopActiveLabel else abPointALabel,
                         style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold),
                         color = if (abLoopStartMs != null) accentColor else MaterialTheme.colorScheme.onSurfaceVariant,
                     )
@@ -225,7 +233,7 @@ internal fun PixelSecondaryControls(
             icon = {
                 Icon(
                     if (isFavorite) Tabler.Filled.Heart else Tabler.Outline.Heart,
-                    "Favorite",
+                    stringResource(R.string.audio_controls_favorite),
                     modifier = Modifier.size(22.dp),
                 )
             },
@@ -235,15 +243,14 @@ internal fun PixelSecondaryControls(
             tint = if (downloadItem?.status == com.raulshma.jellyplay.core.model.DownloadStatus.COMPLETED) accentColor else MaterialTheme.colorScheme.onSurfaceVariant,
             icon = {
                 if (downloadItem?.status == com.raulshma.jellyplay.core.model.DownloadStatus.DOWNLOADING || downloadItem?.status == com.raulshma.jellyplay.core.model.DownloadStatus.PENDING) {
-                    androidx.compose.material3.CircularProgressIndicator(
+                    JellyPlayCircularProgressIndicator(
                         modifier = Modifier.size(18.dp),
-                        strokeWidth = 2.dp,
                         color = accentColor
                     )
                 } else {
                     Icon(
                         imageVector = if (downloadItem?.status == com.raulshma.jellyplay.core.model.DownloadStatus.COMPLETED) Tabler.Outline.Check else Tabler.Outline.Download,
-                        contentDescription = "Download",
+                        contentDescription = stringResource(R.string.audio_controls_download),
                         modifier = Modifier.size(22.dp)
                     )
                 }
@@ -256,6 +263,7 @@ internal fun PixelSecondaryControls(
 @Composable
 internal fun PixelPlayPauseButton(
     isPlaying: Boolean,
+    isLoading: Boolean,
     onClick: () -> Unit,
     accentColor: Color,
     focusRequester: FocusRequester? = null,
@@ -303,12 +311,20 @@ internal fun PixelPlayPauseButton(
             ),
         contentAlignment = Alignment.Center,
     ) {
-        Icon(
-            if (isPlaying) Tabler.Outline.PlayerPause else Tabler.Outline.PlayerPlay,
-            if (isPlaying) "Pause" else "Play",
-            modifier = Modifier.size(36.dp),
-            tint = iconColor,
-        )
+        if (isLoading) {
+            // Show a spinner while the media item is buffering/loading.
+            JellyPlayCircularProgressIndicator(
+                modifier = Modifier.size(36.dp),
+                color = iconColor,
+            )
+        } else {
+            Icon(
+                if (isPlaying) Tabler.Outline.PlayerPause else Tabler.Outline.PlayerPlay,
+                if (isPlaying) stringResource(R.string.audio_controls_pause) else stringResource(R.string.audio_controls_play),
+                modifier = Modifier.size(36.dp),
+                tint = iconColor,
+            )
+        }
     }
 }
 

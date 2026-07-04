@@ -97,7 +97,10 @@ import com.raulshma.jellyplay.core.ui.adaptive.LocalAdaptiveInfo
 import com.raulshma.jellyplay.core.ui.adaptive.WindowSizeClass
 import com.raulshma.jellyplay.core.ui.adaptive.bottomPadding
 import com.raulshma.jellyplay.core.ui.adaptive.contentPadding
+import com.raulshma.jellyplay.core.ui.adaptive.itemSpacing
+import com.raulshma.jellyplay.core.ui.components.DelayedLoadingScreen
 import com.raulshma.jellyplay.core.ui.components.ErrorScreen
+import com.raulshma.jellyplay.core.ui.components.ScreenEmptyState
 import com.raulshma.jellyplay.core.ui.components.LocalNavigationBarColor
 import com.raulshma.jellyplay.core.ui.components.LocalNetworkStatus
 import com.raulshma.jellyplay.core.ui.components.LocalSeerrCardLoadingState
@@ -116,9 +119,6 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.debounce
 import kotlinx.coroutines.flow.distinctUntilChanged
-
-private val COMPACT_DISCOVER_PATTERN = listOf(3, 2, 3)
-private val EXPANDED_DISCOVER_PATTERN = listOf(5, 4, 6, 5)
 
 /**
  * Aggregates every navigation callback the Home screen needs so that
@@ -174,6 +174,22 @@ fun HomeScreen(
         callbacks = callbacks,
         musicContent = musicContent,
     )
+}
+
+/**
+ * Filters the offline library by the current home mode: [HomeMode.MUSIC] keeps audio/music
+ * types, everything else excludes them so video and music home screens never mix.
+ */
+private fun filterOfflineByMode(
+    library: List<OfflineMediaItem>,
+    homeMode: HomeMode,
+): List<OfflineMediaItem> {
+    val musicTypes = setOf(MediaType.AUDIO, MediaType.MUSIC, MediaType.ALBUM, MediaType.ARTIST)
+    return if (homeMode == HomeMode.MUSIC) {
+        library.filter { it.mediaType in musicTypes }
+    } else {
+        library.filter { it.mediaType !in musicTypes }
+    }
 }
 
 @Composable
@@ -459,7 +475,7 @@ private fun MainHomeContent(
                     state.error != null && state.sections.isEmpty() && state.offlineMode == OfflineMode.ONLINE &&
                         state.offlineLibrary.isEmpty() -> {
                         ErrorScreen(
-                            message = state.error!!,
+                            message = "Couldn't load content. Check your connection and try again.",
                             onRetry = { viewModel.onEvent(HomeUiEvent.Refresh) },
                             modifier = Modifier.padding(horizontal = contentPad),
                         )
@@ -469,21 +485,7 @@ private fun MainHomeContent(
                     state.error != null && state.sections.isEmpty() && state.offlineMode == OfflineMode.ONLINE &&
                         state.offlineLibrary.isNotEmpty() -> {
                         val filteredOfflineLibrary = remember(state.offlineLibrary, state.homeMode) {
-                            if (state.homeMode == HomeMode.MUSIC) {
-                                state.offlineLibrary.filter {
-                                    it.mediaType == MediaType.AUDIO ||
-                                    it.mediaType == MediaType.MUSIC ||
-                                    it.mediaType == MediaType.ALBUM ||
-                                    it.mediaType == MediaType.ARTIST
-                                }
-                            } else {
-                                state.offlineLibrary.filter {
-                                    it.mediaType != MediaType.AUDIO &&
-                                    it.mediaType != MediaType.MUSIC &&
-                                    it.mediaType != MediaType.ALBUM &&
-                                    it.mediaType != MediaType.ARTIST
-                                }
-                            }
+                            filterOfflineByMode(state.offlineLibrary, state.homeMode)
                         }
                         OfflineHomeContent(
                             offlineLibrary = filteredOfflineLibrary,
@@ -492,25 +494,12 @@ private fun MainHomeContent(
                             contentPadding = contentPad,
                             backgroundColor = backgroundColor,
                             onGoOnline = { viewModel.onEvent(HomeUiEvent.Refresh) },
+                            statusMessage = "Couldn't reach the server — showing your downloads.",
                         )
                     }
                     state.offlineMode != OfflineMode.ONLINE -> {
                         val filteredOfflineLibrary = remember(state.offlineLibrary, state.homeMode) {
-                            if (state.homeMode == HomeMode.MUSIC) {
-                                state.offlineLibrary.filter {
-                                    it.mediaType == MediaType.AUDIO ||
-                                    it.mediaType == MediaType.MUSIC ||
-                                    it.mediaType == MediaType.ALBUM ||
-                                    it.mediaType == MediaType.ARTIST
-                                }
-                            } else {
-                                state.offlineLibrary.filter {
-                                    it.mediaType != MediaType.AUDIO &&
-                                    it.mediaType != MediaType.MUSIC &&
-                                    it.mediaType != MediaType.ALBUM &&
-                                    it.mediaType != MediaType.ARTIST
-                                }
-                            }
+                            filterOfflineByMode(state.offlineLibrary, state.homeMode)
                         }
                         OfflineHomeContent(
                             offlineLibrary = filteredOfflineLibrary,
@@ -783,14 +772,18 @@ private fun HomeContentList(
     }
 
     if (sections.isEmpty()) {
-        Box(
-            Modifier.fillMaxSize().padding(horizontal = contentPad),
-            contentAlignment = Alignment.Center,
-        ) {
-            Text(
-                if (isLoading) "" else "No content available. Check your Jellyfin libraries.",
-                style = MaterialTheme.typography.bodyLarge,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
+        if (isLoading) {
+            // Initial online fetch with nothing to show yet — a real loading state
+            // instead of a blank screen. Delayed so fast loads don't flicker.
+            DelayedLoadingScreen(modifier = Modifier.padding(horizontal = contentPad))
+        } else {
+            ScreenEmptyState(
+                icon = Tabler.Outline.Movie,
+                title = "No Content Available",
+                description = "Check your Jellyfin libraries and try refreshing.",
+                actionLabel = "Refresh",
+                onAction = onRetrySectionLoad,
+                modifier = Modifier.padding(horizontal = contentPad),
             )
         }
     } else {
@@ -971,7 +964,7 @@ private fun HomeContentList(
                 item(key = "seerr_discover_header") {
                     Text(
                         text = "Discover",
-                        style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Bold),
+                        style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.SemiBold),
                         color = MaterialTheme.colorScheme.onSurface,
                         modifier = Modifier
                             .fillMaxWidth()
@@ -988,7 +981,7 @@ private fun HomeContentList(
                     val rowItems = discoverRows[rowIndex]
                     val pattern = if (adaptiveInfo.windowSizeClass == WindowSizeClass.Compact) COMPACT_DISCOVER_PATTERN else EXPANDED_DISCOVER_PATTERN
                     val targetSize = pattern[rowIndex % pattern.size]
-                    val spacing = 8.dp
+                    val spacing = adaptiveInfo.itemSpacing(isTv)
 
                     CompositionLocalProvider(
                         LocalSeerrCardLoadingState provides seerrCardLoadingState,

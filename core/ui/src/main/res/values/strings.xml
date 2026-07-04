@@ -12,4 +12,37 @@
          and referenced by multiple feature modules). -->
     <string name="msg_no_video_player_found">No video player found</string>
     <string name="msg_smart_download_deleted">Watched download removed to free up space</string>
+
+    <!-- Localizable labels for [com.raulshma.jellyplay.core.model.MediaType], shared
+         by every feature screen that renders a media-type badge or filter chip.
+         Kept here (not in core/model) because the model layer has no resource
+         access; resolve them via [mediaTypeDisplayName] / [mediaTypeDisplayNamePlural]. -->
+    <string name="core_media_movie">Movie</string>
+    <string name="core_media_series">Series</string>
+    <string name="core_media_season">Season</string>
+    <string name="core_media_episode">Episode</string>
+    <string name="core_media_track">Track</string>
+    <string name="core_media_album">Album</string>
+    <string name="core_media_artist">Artist</string>
+    <string name="core_media_music_video">Music Video</string>
+    <string name="core_media_collection">Collection</string>
+    <string name="core_media_photo">Photo</string>
+    <string name="core_media_live_tv">Live TV</string>
+    <string name="core_media_channel">Channel</string>
+    <string name="core_media_unknown">Item</string>
+
+    <!-- Plural forms (e.g. filter chips, library headers). -->
+    <string name="core_media_movie_plural">Movies</string>
+    <string name="core_media_series_plural">TV Shows</string>
+    <string name="core_media_season_plural">Seasons</string>
+    <string name="core_media_episode_plural">Episodes</string>
+    <string name="core_media_music_plural">Music</string>
+    <string name="core_media_album_plural">Albums</string>
+    <string name="core_media_artist_plural">Artists</string>
+    <string name="core_media_music_video_plural">Music Videos</string>
+    <string name="core_media_collection_plural">Collections</string>
+    <string name="core_media_photo_plural">Photos</string>
+    <string name="core_media_live_tv_plural">Live TV</string>
+    <string name="core_media_channel_plural">Channels</string>
+    <string name="core_media_unknown_plural">Unknown</string>
 </resources>

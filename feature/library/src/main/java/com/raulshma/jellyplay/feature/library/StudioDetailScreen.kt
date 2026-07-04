@@ -12,6 +12,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -35,6 +36,7 @@ import com.raulshma.jellyplay.core.ui.tv.LocalTvMode
 import com.raulshma.jellyplay.core.ui.tv.TvFocusableGrid
 import com.composables.icons.tabler.Tabler
 import com.composables.icons.tabler.outline.*
+import com.raulshma.jellyplay.feature.library.R
 
 @Composable
 fun StudioDetailScreen(
@@ -70,7 +72,8 @@ fun StudioDetailScreen(
                 }
                 is LoadState.Error -> {
                     ErrorScreen(
-                        message = refreshState.error.localizedMessage ?: "Failed to load items",
+                        message = refreshState.error.localizedMessage
+                            ?: stringResource(R.string.library_failed_to_load_items),
                         onRetry = { items.refresh() },
                     )
                 }
@@ -78,7 +81,7 @@ fun StudioDetailScreen(
                     if (items.itemCount == 0) {
                         ScreenEmptyState(
                             icon = Tabler.Outline.Movie,
-                            title = "No items found",
+                            title = stringResource(R.string.library_no_items_found),
                         )
                     } else {
                         val adaptiveInfo = LocalAdaptiveInfo.current
@@ -129,7 +132,8 @@ fun StudioDetailScreen(
                 }
                 is LoadState.Error -> {
                     Text(
-                        text = appendState.error.localizedMessage ?: "Failed to load more",
+                        text = appendState.error.localizedMessage
+                            ?: stringResource(R.string.library_failed_to_load_more),
                         color = MaterialTheme.colorScheme.error,
                         style = MaterialTheme.typography.bodySmall,
                         modifier = Modifier

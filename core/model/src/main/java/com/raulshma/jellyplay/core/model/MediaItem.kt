@@ -32,6 +32,13 @@ val MediaType.isVideoType: Boolean
 val MediaType.isMusicTrack: Boolean
     get() = this == MediaType.AUDIO || this == MediaType.MUSIC
 
+// NOTE: User-facing display labels for MediaType previously lived here as
+// `displayName` / `displayNamePlural`. They were hardcoded English and could
+// not read string resources, so they were untranslatable. They have moved to
+// `core:ui` — see `mediaTypeDisplayName` / `mediaTypeDisplayNamePlural`
+// (and their `@StringRes` variants) in
+// com.raulshma.jellyplay.core.ui.model.MediaTypeNames.
+
 val MediaType.isPhotoType: Boolean
     get() = this == MediaType.PHOTO || this == MediaType.PHOTO_FOLDER
 

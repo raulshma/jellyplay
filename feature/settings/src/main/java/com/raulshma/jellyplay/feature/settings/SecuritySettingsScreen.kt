@@ -23,6 +23,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
@@ -75,6 +76,13 @@ fun SecuritySettingsScreen(
     val biometricAvailability = rememberBiometricAvailability()
     val canShowBiometric = biometricAvailability == BiometricAuthHelper.Availability.AVAILABLE
     val backgroundColor = com.raulshma.jellyplay.core.ui.components.rememberScreenBackgroundColor()
+
+    val pinMustBe4Digits = stringResource(R.string.settings_pin_must_be_4_digits)
+    val pinsDoNotMatch = stringResource(R.string.settings_pins_do_not_match)
+    val incorrectPin = stringResource(R.string.settings_incorrect_pin)
+    val authorizationFailed = stringResource(R.string.settings_authorization_failed)
+    val biometricTitle = stringResource(R.string.settings_enable_biometric_title)
+    val biometricSubtitle = stringResource(R.string.settings_enable_biometric_subtitle)
     val focusRequester = remember { FocusRequester() }
     TvGrabInitialFocus(
         focusRequester = focusRequester,
@@ -106,7 +114,7 @@ fun SecuritySettingsScreen(
     }
 
     JellyPlayScreenScaffold(
-        title = "Security",
+        title = stringResource(R.string.settings_security),
         onBack = onBack,
         backgroundColor = backgroundColor,
         actions = {
@@ -138,13 +146,13 @@ fun SecuritySettingsScreen(
             item {
                 SettingsGroup(
                     icon = Tabler.Outline.Lock,
-                    title = "Security",
+                    title = stringResource(R.string.settings_security),
                     summary = {
                         when {
-                            preferences.pinLockEnabled && preferences.biometricLockEnabled -> "PIN + Biometric lock: On"
-                            preferences.biometricLockEnabled -> "Biometric lock: On"
-                            preferences.pinLockEnabled -> "PIN lock: On"
-                            else -> "Lock: Off"
+                            preferences.pinLockEnabled && preferences.biometricLockEnabled -> stringResource(R.string.settings_pin_biometric_on)
+                            preferences.biometricLockEnabled -> stringResource(R.string.settings_biometric_on)
+                            preferences.pinLockEnabled -> stringResource(R.string.settings_pin_on)
+                            else -> stringResource(R.string.settings_lock_off)
                         }
                     },
                     modifier = Modifier.padding(vertical = 8.dp),
@@ -155,8 +163,8 @@ fun SecuritySettingsScreen(
                     var secIdx = 0
                     SettingToggleItem(
                         icon = if (preferences.pinLockEnabled) Tabler.Outline.Lock else Tabler.Outline.LockOpen,
-                        title = "PIN Lock",
-                        subtitle = if (preferences.pinLockEnabled) "App locked with PIN" else "No PIN set",
+                        title = stringResource(R.string.settings_pin_lock),
+                        subtitle = if (preferences.pinLockEnabled) stringResource(R.string.settings_pin_locked) else stringResource(R.string.settings_no_pin_set),
                         checked = preferences.pinLockEnabled,
                         highlighted = highlightSettingId == "pin_lock",
                         index = secIdx++, count = secTotal,
@@ -174,8 +182,8 @@ fun SecuritySettingsScreen(
                         val bioActivity = remember(bioContext) { bioContext.findFragmentActivity() }
                         SettingToggleItem(
                             icon = Tabler.Outline.Fingerprint,
-                            title = "Biometric Unlock",
-                            subtitle = if (preferences.biometricLockEnabled) "Use fingerprint, face, or device credential" else "Disabled",
+                            title = stringResource(R.string.settings_biometric_unlock),
+                            subtitle = if (preferences.biometricLockEnabled) stringResource(R.string.settings_biometric_unlock_subtitle) else stringResource(R.string.settings_disabled),
                             checked = preferences.biometricLockEnabled,
                             highlighted = highlightSettingId == "biometric_lock",
                             index = secIdx++, count = secTotal,
@@ -183,8 +191,8 @@ fun SecuritySettingsScreen(
                                 if (enabled && bioActivity != null) {
                                     BiometricAuthHelper.authenticate(
                                         activity = bioActivity,
-                                        title = "Enable Biometric Unlock",
-                                        subtitle = "Verify your identity to enable biometric lock",
+                                        title = biometricTitle,
+                                        subtitle = biometricSubtitle,
                                         onSuccess = { viewModel.setBiometricLockEnabled(true) },
                                         onError = {},
                                         onFailed = {},
@@ -198,8 +206,8 @@ fun SecuritySettingsScreen(
                     if (preferences.pinLockEnabled) {
                         SettingToggleItem(
                             icon = Tabler.Outline.Key,
-                            title = "PIN for Player Lock",
-                            subtitle = if (preferences.usePinForPlayerLock) "Require PIN to unlock player" else "Slide to unlock",
+                            title = stringResource(R.string.settings_pin_for_player_lock),
+                            subtitle = if (preferences.usePinForPlayerLock) stringResource(R.string.settings_require_pin_player) else stringResource(R.string.settings_slide_to_unlock),
                             checked = preferences.usePinForPlayerLock,
                             highlighted = highlightSettingId == "pin_for_player_lock",
                             index = secIdx++, count = secTotal,
@@ -208,11 +216,17 @@ fun SecuritySettingsScreen(
                     }
                     if (showAdvanced) {
                         val lockTimerOptions = listOf(0L, 30_000L, 60_000L, 300_000L, 600_000L)
-                        val lockTimerLabels = listOf("Immediately", "30 seconds", "1 minute", "5 minutes", "10 minutes")
+                        val lockTimerLabels = listOf(
+                            stringResource(R.string.settings_lock_immediately),
+                            stringResource(R.string.settings_lock_30_seconds),
+                            stringResource(R.string.settings_lock_1_minute),
+                            stringResource(R.string.settings_lock_5_minutes),
+                            stringResource(R.string.settings_lock_10_minutes),
+                        )
                         SettingListItem(
                             icon = Tabler.Outline.Clock,
-                            title = "Auto-Lock Timer",
-                            subtitle = "Time before app locks after leaving",
+                            title = stringResource(R.string.settings_auto_lock_timer),
+                            subtitle = stringResource(R.string.settings_auto_lock_timer_subtitle),
                             trailingText = lockTimerLabels[lockTimerOptions.indexOf(preferences.autoLockTimerMs).coerceAtMost(lockTimerOptions.lastIndex)],
                             highlighted = highlightSettingId == "auto_lock_timer",
                             index = secIdx, count = secTotal,
@@ -229,15 +243,15 @@ fun SecuritySettingsScreen(
             item {
                 SettingsGroup(
                     icon = Tabler.Outline.Bolt,
-                    title = "Quick Connect Authorizer",
-                    summary = { "Approve Quick Connect codes from other devices" },
+                    title = stringResource(R.string.settings_quick_connect_authorizer),
+                    summary = { stringResource(R.string.settings_quick_connect_authorizer_summary) },
                     modifier = Modifier.padding(vertical = 8.dp),
                     initiallyExpanded = true,
                 ) {
                     SettingListItem(
                         icon = Tabler.Outline.DeviceDesktop,
-                        title = "Authorize Device",
-                        subtitle = "Enter a Quick Connect code to approve another device",
+                        title = stringResource(R.string.settings_authorize_device),
+                        subtitle = stringResource(R.string.settings_authorize_device_subtitle),
                         trailingText = "",
                         highlighted = highlightSettingId == "quick_connect_authorize",
                         index = 0, count = 1,
@@ -253,18 +267,18 @@ fun SecuritySettingsScreen(
             item {
                 SettingsGroup(
                     icon = Tabler.Outline.Cast,
-                    title = "Remote Control",
+                    title = stringResource(R.string.settings_remote_control),
                     summary = {
-                        if (preferences.remoteControlEnabled) "This device can be controlled from other sessions"
-                        else "Only this device can control playback"
+                        if (preferences.remoteControlEnabled) stringResource(R.string.settings_remote_control_on)
+                        else stringResource(R.string.settings_remote_control_off)
                     },
                     modifier = Modifier.padding(vertical = 8.dp),
                     initiallyExpanded = true,
                 ) {
                     SettingToggleItem(
                         icon = Tabler.Outline.Cast,
-                        title = "Allow Remote Control",
-                        subtitle = "Let other sessions play, pause and seek on this device",
+                        title = stringResource(R.string.settings_allow_remote_control),
+                        subtitle = stringResource(R.string.settings_allow_remote_control_subtitle),
                         checked = preferences.remoteControlEnabled,
                         highlighted = highlightSettingId == "remote_control_enabled",
                         index = 0, count = 1,
@@ -293,7 +307,7 @@ fun SecuritySettingsScreen(
                 pinConfirm = ""
                 pinError = null
             },
-            title = { Text("Set PIN Lock") },
+            title = { Text(stringResource(R.string.settings_set_pin_lock)) },
             text = {
                 Column {
                     androidx.compose.material3.OutlinedTextField(
@@ -304,7 +318,7 @@ fun SecuritySettingsScreen(
                                 pinError = null
                             }
                         },
-                        label = { Text("4-digit PIN") },
+                        label = { Text(stringResource(R.string.settings_4_digit_pin)) },
                         visualTransformation = PasswordVisualTransformation(),
                         singleLine = true,
                         isError = pinError != null,
@@ -320,7 +334,7 @@ fun SecuritySettingsScreen(
                                 pinError = null
                             }
                         },
-                        label = { Text("Confirm PIN") },
+                        label = { Text(stringResource(R.string.settings_confirm_pin)) },
                         visualTransformation = PasswordVisualTransformation(),
                         singleLine = true,
                         isError = pinError != null,
@@ -346,8 +360,8 @@ fun SecuritySettingsScreen(
             confirmButton = {
                 TextButton(onClick = {
                     when {
-                        pinInput.length != 4 -> pinError = "PIN must be 4 digits"
-                        pinInput != pinConfirm -> pinError = "PINs do not match"
+                        pinInput.length != 4 -> pinError = pinMustBe4Digits
+                        pinInput != pinConfirm -> pinError = pinsDoNotMatch
                         else -> {
                             viewModel.setPin(pinInput)
                             activeDialog = SecuritySettingsDialog.None
@@ -356,7 +370,7 @@ fun SecuritySettingsScreen(
                             pinError = null
                         }
                     }
-                }) { Text("Set PIN") }
+                }) { Text(stringResource(R.string.settings_set_pin)) }
             },
             dismissButton = {
                 TextButton(onClick = {
@@ -364,7 +378,7 @@ fun SecuritySettingsScreen(
                     pinInput = ""
                     pinConfirm = ""
                     pinError = null
-                }) { Text("Cancel") }
+                }) { Text(stringResource(R.string.settings_cancel)) }
             },
         )
     }
@@ -375,11 +389,11 @@ fun SecuritySettingsScreen(
                 activeDialog = SecuritySettingsDialog.None
                 pinDisableAuthError = null
             },
-            title = { Text("Disable PIN Lock") },
+            title = { Text(stringResource(R.string.settings_disable_pin_lock)) },
             text = {
                 Column {
                     Text(
-                        "Enter your current PIN to disable PIN lock.",
+                        stringResource(R.string.settings_disable_pin_message),
                         style = MaterialTheme.typography.bodyMedium,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
@@ -392,7 +406,7 @@ fun SecuritySettingsScreen(
                                 pinDisableAuthError = null
                             }
                         },
-                        label = { Text("Current PIN") },
+                        label = { Text(stringResource(R.string.settings_current_pin)) },
                         visualTransformation = PasswordVisualTransformation(),
                         singleLine = true,
                         isError = pinDisableAuthError != null,
@@ -424,16 +438,16 @@ fun SecuritySettingsScreen(
                         pinInput = ""
                         pinDisableAuthError = null
                     } else {
-                        pinDisableAuthError = "Incorrect PIN"
+                        pinDisableAuthError = incorrectPin
                     }
-                }) { Text("Confirm") }
+                }) { Text(stringResource(R.string.settings_confirm)) }
             },
             dismissButton = {
                 TextButton(onClick = {
                     activeDialog = SecuritySettingsDialog.None
                     pinInput = ""
                     pinDisableAuthError = null
-                }) { Text("Cancel") }
+                }) { Text(stringResource(R.string.settings_cancel)) }
             },
         )
     }
@@ -447,11 +461,11 @@ fun SecuritySettingsScreen(
                     qcError = null
                 }
             },
-            title = { Text("Authorize Quick Connect") },
+            title = { Text(stringResource(R.string.settings_authorize_quick_connect)) },
             text = {
                 Column {
                     Text(
-                        "Enter the 6-digit code displayed on the other device.",
+                        stringResource(R.string.settings_authorize_quick_connect_message),
                         style = MaterialTheme.typography.bodyMedium,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
@@ -464,7 +478,7 @@ fun SecuritySettingsScreen(
                                 qcError = null
                             }
                         },
-                        label = { Text("Quick Connect Code") },
+                        label = { Text(stringResource(R.string.settings_quick_connect_code)) },
                         singleLine = true,
                         isError = qcError != null,
                         enabled = !qcLoading,
@@ -499,12 +513,12 @@ fun SecuritySettingsScreen(
                                 activeDialog = SecuritySettingsDialog.None
                                 qcCode = ""
                             } else {
-                                qcError = error ?: "Authorization failed"
+                                qcError = error ?: authorizationFailed
                             }
                         }
                     },
                 ) {
-                    Text(if (qcLoading) "Authorizing..." else "Authorize")
+                    Text(if (qcLoading) stringResource(R.string.settings_authorizing) else stringResource(R.string.settings_authorize))
                 }
             },
             dismissButton = {
@@ -515,7 +529,7 @@ fun SecuritySettingsScreen(
                         qcCode = ""
                         qcError = null
                     },
-                ) { Text("Cancel") }
+                ) { Text(stringResource(R.string.settings_cancel)) }
             },
         )
     }

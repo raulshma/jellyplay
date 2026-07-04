@@ -78,6 +78,7 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalUriHandler
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -106,6 +107,7 @@ import com.raulshma.jellyplay.core.ui.components.CircleBgBackButton
 import com.raulshma.jellyplay.core.ui.components.focusIndicator
 import com.raulshma.jellyplay.core.ui.components.ErrorScreen
 import com.raulshma.jellyplay.core.ui.components.InlineTrailerPlayer
+import com.raulshma.jellyplay.core.ui.components.DelayedLoadingScreen
 import com.raulshma.jellyplay.core.ui.components.LoadingScreen
 import com.raulshma.jellyplay.core.ui.components.LocalAnimatedVisibilityScope
 import com.raulshma.jellyplay.core.ui.components.LocalNavigationBarColor
@@ -160,6 +162,7 @@ fun MediaDetailScreen(
     val downloadedEpisodeIds = uiState.downloadedEpisodeIds
     val seriesDownloadResult = uiState.seriesDownloadResult
     val downloadError = uiState.downloadError
+    val userMessage = uiState.userMessage
     val cellularDownloadWarningMb = uiState.cellularDownloadWarningMb
     val seerrTvSeasons = uiState.seerrTvSeasons
     LaunchedEffect(detail) {
@@ -186,15 +189,16 @@ fun MediaDetailScreen(
     // Dismiss any open trailer dialog when navigating to a different item.
     LaunchedEffect(itemId) { activeTrailerKey = null }
     val snackbarHostState = remember { SnackbarHostState() }
+    val snackbarContext = LocalContext.current
 
     LaunchedEffect(seriesDownloadResult) {
         seriesDownloadResult?.let { result ->
             val message = if (result.error != null) {
                 result.error
             } else if (result.queuedCount > 0) {
-                "${result.queuedCount} episode${if (result.queuedCount != 1) "s" else ""} queued for download"
+                snackbarContext.resources.getQuantityString(R.plurals.detail_episodes_queued, result.queuedCount, result.queuedCount)
             } else {
-                "No episodes could be queued"
+                snackbarContext.getString(R.string.detail_msg_no_episodes_queued)
             }
             snackbarHostState.showSnackbar(message)
             viewModel.clearSeriesDownloadResult()
@@ -208,24 +212,30 @@ fun MediaDetailScreen(
         }
     }
 
+    LaunchedEffect(userMessage) {
+        userMessage?.let { message ->
+            snackbarHostState.showSnackbar(message)
+            viewModel.clearUserMessage()
+        }
+    }
+
     if (cellularDownloadWarningMb != null) {
         AlertDialog(
             onDismissRequest = { viewModel.dismissCellularDownloadWarning() },
-            title = { Text("Large download on cellular") },
+            title = { Text(stringResource(R.string.detail_cellular_download_title)) },
             text = {
                 Text(
-                    "You are on a metered network. This download is about " +
-                        "$cellularDownloadWarningMb MB and may use significant mobile data.",
+                    stringResource(R.string.detail_cellular_download_message, cellularDownloadWarningMb),
                 )
             },
             confirmButton = {
                 TextButton(onClick = { viewModel.confirmCellularDownload() }) {
-                    Text("Download anyway")
+                    Text(stringResource(R.string.detail_download_anyway))
                 }
             },
             dismissButton = {
                 TextButton(onClick = { viewModel.dismissCellularDownloadWarning() }) {
-                    Text("Cancel")
+                    Text(stringResource(R.string.detail_cancel))
                 }
             },
         )
@@ -545,7 +555,7 @@ private fun DetailContent(
                 putExtra(Intent.EXTRA_TEXT, "jellyplay://media/$itemId")
                 addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
             }
-            context.startActivity(Intent.createChooser(shareIntent, "Share via"))
+            context.startActivity(Intent.createChooser(shareIntent, context.getString(R.string.detail_share_via)))
         }
     }
     val mediaOptions = rememberMediaOptions(
@@ -677,12 +687,15 @@ private fun DetailContent(
                 },
             ),
     ) {
-        // While the detail is still loading (contentVisible == false) there is no focusable node on
-        // screen, so TV focus is orphaned until data arrives. Show a focusable loading surface for
-        // that window; LoadingScreen requests focus on TV. It is removed the moment contentVisible
-        // flips true, after which the contentFocusRequester grab takes over on the Play button.
-        if (isTv && !contentVisible && error == null) {
-            LoadingScreen(modifier = Modifier.fillMaxSize())
+        // While the detail is still loading (contentVisible == false) show a loading surface.
+        // On TV it must be focusable (LoadingScreen grabs focus) so the D-pad isn't orphaned
+        // until data arrives; on touch we use a delayed spinner so fast loads don't flicker.
+        if (!contentVisible && error == null) {
+            if (isTv) {
+                LoadingScreen(modifier = Modifier.fillMaxSize())
+            } else {
+                DelayedLoadingScreen(modifier = Modifier.fillMaxSize())
+            }
         }
         Box(
             modifier = Modifier
@@ -828,7 +841,7 @@ private fun DetailContent(
                                             .clip(ShapeCache.smooth12)
                                             .graphicsLayer { alpha = contentAlpha }
                                         .then(
-                                            if (itemId != null) {
+                                            run {
                                                 val sharedTransitionScope = LocalSharedTransitionScope.current
                                                 val animatedVisibilityScope = LocalAnimatedVisibilityScope.current
                                                 @OptIn(androidx.compose.animation.ExperimentalSharedTransitionApi::class)
@@ -840,7 +853,7 @@ private fun DetailContent(
                                                         )
                                                     }
                                                 } else Modifier
-                                            } else Modifier
+                                            }
                                         ),
                                     contentScale = ContentScale.Crop,
                                 )
@@ -1079,7 +1092,7 @@ private fun DetailContent(
                             ) {
                                 Icon(
                                     Tabler.Outline.DotsVertical,
-                                    contentDescription = "Options",
+                                    contentDescription = stringResource(R.string.detail_cd_options),
                                     tint = editIconColor,
                                 )
                             }
@@ -1123,31 +1136,31 @@ private fun DetailContent(
         }
         val fileSizeText = fileSize?.let { size ->
             when {
-                size >= 1_000_000_000 -> "%.1f GB".format(size / 1_000_000_000.0)
-                size >= 1_000_000 -> "%.1f MB".format(size / 1_000_000.0)
-                size >= 1_000 -> "%.1f KB".format(size / 1_000.0)
-                else -> "$size B"
+                size >= 1_000_000_000 -> stringResource(R.string.detail_size_gb, size / 1_000_000_000.0)
+                size >= 1_000_000 -> stringResource(R.string.detail_size_mb, size / 1_000_000.0)
+                size >= 1_000 -> stringResource(R.string.detail_size_kb, size / 1_000.0)
+                else -> stringResource(R.string.detail_size_b, size)
             }
-        } ?: "Unknown"
+        } ?: stringResource(R.string.detail_size_unknown)
         val availableText = when {
-            availableBytes >= 1_000_000_000 -> "%.1f GB".format(availableBytes / 1_000_000_000.0)
-            availableBytes >= 1_000_000 -> "%.1f MB".format(availableBytes / 1_000_000.0)
-            else -> "%.1f KB".format(availableBytes / 1_000.0)
+            availableBytes >= 1_000_000_000 -> stringResource(R.string.detail_size_gb, availableBytes / 1_000_000_000.0)
+            availableBytes >= 1_000_000 -> stringResource(R.string.detail_size_mb, availableBytes / 1_000_000.0)
+            else -> stringResource(R.string.detail_size_kb, availableBytes / 1_000_000.0)
         }
         val enoughSpace = fileSize == null || fileSize <= availableBytes
 
         AlertDialog(
             onDismissRequest = { showDownloadDialog = false },
-            title = { Text("Download") },
+            title = { Text(stringResource(R.string.detail_download_dialog_title)) },
             text = {
                 Column {
-                    Text("Estimated size: $fileSizeText")
+                    Text(stringResource(R.string.detail_estimated_size, fileSizeText))
                     Spacer(Modifier.height(8.dp))
-                    Text("Available storage: $availableText")
+                    Text(stringResource(R.string.detail_available_storage, availableText))
                     if (!enoughSpace) {
                         Spacer(Modifier.height(8.dp))
                         Text(
-                            "Not enough storage space available.",
+                            stringResource(R.string.detail_not_enough_storage),
                             color = MaterialTheme.colorScheme.error,
                         )
                     }
@@ -1161,12 +1174,12 @@ private fun DetailContent(
                     },
                     enabled = enoughSpace,
                 ) {
-                    Text("Download")
+                    Text(stringResource(R.string.detail_download_dialog_title))
                 }
             },
             dismissButton = {
                 TextButton(onClick = { showDownloadDialog = false }) {
-                    Text("Cancel")
+                    Text(stringResource(R.string.detail_cancel))
                 }
             },
         )
@@ -1175,7 +1188,7 @@ private fun DetailContent(
     if (showTvOptionsMenu) {
         TvSafeSheet(
             onDismissRequest = { showTvOptionsMenu = false },
-            title = "Options",
+            title = stringResource(R.string.detail_cd_options),
         ) {
             Column(modifier = Modifier.verticalWrapAround()) {
                 mediaOptions.forEach { option ->

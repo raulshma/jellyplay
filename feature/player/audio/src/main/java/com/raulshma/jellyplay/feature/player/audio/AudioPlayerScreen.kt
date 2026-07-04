@@ -103,10 +103,9 @@ fun AudioPlayerScreen(
     var showErrorOverlay by remember { mutableStateOf(false) }
 
     LaunchedEffect(uiState.playbackError) {
+        // Show the persistent error overlay only. A snackbar was previously shown here too,
+        // which was redundant with the overlay and auto-dismissed before the user could react.
         showErrorOverlay = uiState.playbackError != null
-        uiState.playbackError?.let { error ->
-            snackbarHostState.showSnackbar(error, duration = SnackbarDuration.Short)
-        }
     }
 
     // Surface an "Undo" affordance after destructive queue operations
@@ -129,7 +128,7 @@ fun AudioPlayerScreen(
             val result = snackbarHostState.showSnackbar(
                 message = message,
                 actionLabel = undoActionLabel,
-                duration = SnackbarDuration.Short,
+                duration = SnackbarDuration.Long,
             )
             if (result == SnackbarResult.ActionPerformed) {
                 viewModel.undoLastQueueOperation()
@@ -159,12 +158,14 @@ fun AudioPlayerScreen(
     }
 
     BackHandler {
-        if (showQueue || showSpeedPicker || showEqualizer || showLyricsSearch || showEffectsSheet) {
+        if (showQueue || showSpeedPicker || showEqualizer || showLyricsSearch || showEffectsSheet || showSleepTimer || showDeleteConfirm) {
             showQueue = false
             showSpeedPicker = false
             showEqualizer = false
             showLyricsSearch = false
             showEffectsSheet = false
+            showSleepTimer = false
+            showDeleteConfirm = false
         } else if (showLyrics) {
             showLyrics = false
         } else {
@@ -365,7 +366,7 @@ fun AudioPlayerScreen(
                     onNightModeStrengthChange = { viewModel.setNightModeStrength(it) },
                     onAmbientClick = { showMenu = false; onAmbientClick(uiState.albumArtUrl.ifBlank { null }, uiState.title, uiState.artist) },
                     sleepTimerActive = sleepTimer.active,
-                    sleepTimerDisplayText = if (sleepTimer.endOfEpisode) "End of episode" else com.raulshma.jellyplay.core.ui.components.formatDurationMs(sleepTimer.remainingMs),
+                    sleepTimerDisplayText = if (sleepTimer.endOfEpisode) stringResource(R.string.audio_sleep_timer_end_of_episode) else com.raulshma.jellyplay.core.ui.components.formatDurationMs(sleepTimer.remainingMs),
                     onSleepTimerClick = { showMenu = false; showSleepTimer = true },
                     karaokeMode = lyricsState.karaokeMode,
                     onKaraokeToggle = { viewModel.setKaraokeModeEnabled(it) },
@@ -430,6 +431,7 @@ fun AudioPlayerScreen(
                             Spacer(Modifier.height(16.dp))
                             PixelTransportControls(
                                 isPlaying = uiState.isPlaying,
+                                isLoading = uiState.isLoading,
                                 onTogglePlayPause = { viewModel.togglePlayPause() },
                                 onSkipPrevious = { viewModel.skipToPrevious() },
                                 onSkipNext = { viewModel.skipToNext() },
@@ -511,6 +513,7 @@ fun AudioPlayerScreen(
                         Spacer(Modifier.height(20.dp))
                         PixelTransportControls(
                             isPlaying = uiState.isPlaying,
+                            isLoading = uiState.isLoading,
                             onTogglePlayPause = { viewModel.togglePlayPause() },
                             onSkipPrevious = { viewModel.skipToPrevious() },
                             onSkipNext = { viewModel.skipToNext() },
@@ -646,7 +649,7 @@ fun AudioPlayerScreen(
                                 .then(retryFocusState.focusModifier)
                                 .tvFocusIndicator(retryFocusState, ShapeCache.smooth12),
                         ) {
-                            Text("Retry", color = MaterialTheme.colorScheme.error)
+                            Text(stringResource(R.string.audio_error_retry), color = MaterialTheme.colorScheme.error)
                         }
                     }
                 }
@@ -738,8 +741,8 @@ fun AudioPlayerScreen(
     if (showDeleteConfirm) {
         AlertDialog(
             onDismissRequest = { showDeleteConfirm = false },
-            title = { Text("Delete Download") },
-            text = { Text("Remove the downloaded file for this track?") },
+            title = { Text(stringResource(R.string.audio_download_delete_title)) },
+            text = { Text(stringResource(R.string.audio_download_delete_message)) },
             confirmButton = {
                 TextButton(
                     onClick = {
@@ -747,12 +750,12 @@ fun AudioPlayerScreen(
                         viewModel.downloadCurrentTrack()
                     },
                 ) {
-                    Text("Delete", color = MaterialTheme.colorScheme.error)
+                    Text(stringResource(R.string.audio_download_delete_confirm), color = MaterialTheme.colorScheme.error)
                 }
             },
             dismissButton = {
                 TextButton(onClick = { showDeleteConfirm = false }) {
-                    Text("Cancel")
+                    Text(stringResource(R.string.audio_cancel))
                 }
             },
         )

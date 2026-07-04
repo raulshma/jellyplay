@@ -46,6 +46,7 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -59,12 +60,16 @@ import com.raulshma.jellyplay.core.ui.components.JellyPlayLoadingIndicator
 import com.raulshma.jellyplay.core.ui.components.formatDurationFromTicks
 import com.raulshma.jellyplay.core.ui.components.formatRemainingTimeFromTicks
 import com.raulshma.jellyplay.core.ui.components.progressFraction
+import com.raulshma.jellyplay.core.ui.adaptive.LocalAdaptiveInfo
+import com.raulshma.jellyplay.core.ui.adaptive.rowCardWidth
 import com.raulshma.jellyplay.core.ui.image.MediaImage
 import com.raulshma.jellyplay.core.ui.preview.rememberMediaPeek
 import com.raulshma.jellyplay.core.ui.preview.rememberReleaseDismiss
 import com.raulshma.jellyplay.core.ui.tv.TvFocusableItemRow
+import com.raulshma.jellyplay.core.ui.tv.LocalTvMode
 import com.raulshma.jellyplay.core.ui.tv.rememberTvFocusState
 import com.raulshma.jellyplay.core.ui.tv.tvFocusIndicator
+import com.raulshma.jellyplay.feature.details.R
 
 @OptIn(ExperimentalMaterial3ExpressiveApi::class)
 @Composable
@@ -104,7 +109,7 @@ internal fun SeasonsSection(
     Column {
         FadingItem {
             Text(
-                text = "Seasons",
+                text = stringResource(R.string.detail_section_seasons),
                 style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.SemiBold),
                 modifier = Modifier.padding(horizontal = 24.dp),
                 color = MaterialTheme.colorScheme.onSurface
@@ -144,7 +149,7 @@ internal fun SeasonsSection(
                         contentColor = contentColor,
                     ) {
                         Text(
-                            text = season.name ?: "Season ${season.indexNumber ?: index + 1}",
+                            text = season.name ?: stringResource(R.string.detail_season_format, season.indexNumber ?: (index + 1)),
                             modifier = Modifier.padding(horizontal = 16.dp, vertical = 10.dp),
                             style = MaterialTheme.typography.titleSmall,
                             fontWeight = FontWeight.Bold,
@@ -160,8 +165,6 @@ internal fun SeasonsSection(
         val isFetched = selectedSeason?.id?.let { fetchedSeasonIds.contains(it) } ?: false
         val isLoading = seasonEpisodes == null && selectedSeason != null && !isFetched
 
-        val defaultEffectsSpec = MaterialTheme.motionScheme.defaultEffectsSpec<Float>()
-        val fastEffectsSpec = MaterialTheme.motionScheme.fastEffectsSpec<Float>()
         AnimatedContent(
             targetState = selectedSeasonIndex to (seasonEpisodes?.size ?: 0),
             transitionSpec = {
@@ -218,19 +221,13 @@ internal fun SeasonsSection(
                         contentAlignment = Alignment.Center,
                     ) {
                         FadingItem {
-                            Text("No episodes available", color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            Text(stringResource(R.string.detail_no_episodes_available), color = MaterialTheme.colorScheme.onSurfaceVariant)
                         }
                     }
                 }
             }
         }
     }
-}
-
-@OptIn(ExperimentalMaterial3ExpressiveApi::class)
-@Composable
-internal fun EpisodeCardSkeleton() {
-    JellyPlayLoadingIndicator()
 }
 
 @Composable
@@ -259,6 +256,10 @@ internal fun EpisodeCard(
     )
 
     val cardFocusState = rememberTvFocusState(focusedScale = 1.03f)
+    // Episode cards are wide (thumbnail + metadata), scaling ~1.5× the adaptive poster width.
+    val adaptiveInfo = LocalAdaptiveInfo.current
+    val isTv = LocalTvMode.current
+    val cardWidth = (adaptiveInfo.rowCardWidth(isTv) * 1.5f).coerceAtLeast(260.dp)
 
     // Press-and-hold "peek" preview; no-op on TV / when no controller is wired.
     val peek = rememberMediaPeek(
@@ -292,7 +293,7 @@ internal fun EpisodeCard(
 
     Column(
         modifier = modifier
-            .width(280.dp)
+            .width(cardWidth)
             .then(borderModifier)
             .clip(ShapeCache.smooth16)
             .background(
@@ -338,7 +339,7 @@ internal fun EpisodeCard(
                     contentAlignment = Alignment.Center,
                 ) {
                     Text(
-                        text = "Spoiler",
+                        text = stringResource(R.string.detail_spoiler),
                         style = MaterialTheme.typography.titleMedium,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
@@ -347,7 +348,7 @@ internal fun EpisodeCard(
             val epPlayFocusState = rememberTvFocusState(focusedScale = 1.15f)
             Icon(
                 Tabler.Outline.PlayerPlay,
-                contentDescription = "Play",
+                contentDescription = stringResource(R.string.detail_cd_episode_play),
                 tint = MaterialTheme.colorScheme.onSurface,
                 modifier = Modifier
                     .size(48.dp)
@@ -385,7 +386,7 @@ internal fun EpisodeCard(
                         .padding(horizontal = 6.dp, vertical = 2.dp),
                 ) {
                     Text(
-                        text = "Watched",
+                        text = stringResource(R.string.detail_watched_badge),
                         style = MaterialTheme.typography.labelSmall,
                         color = Color.White.copy(alpha = 0.9f),
                     )
@@ -422,7 +423,7 @@ internal fun EpisodeCard(
                     modifier = Modifier.padding(top = 4.dp)
                 ) {
                     Text(
-                        text = "$remainingTime left",
+                        text = stringResource(R.string.detail_time_left_format, remainingTime),
                         style = MaterialTheme.typography.labelMedium,
                         color = MaterialTheme.colorScheme.primary,
                     )

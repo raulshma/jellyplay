@@ -56,6 +56,19 @@ data class SearchFilters(
  */
 private const val OFFLINE_SEARCH_RESULT_LIMIT: Int = 10
 
+/**
+ * Debounce applied to the search query before triggering a library/Seerr
+ * lookup. Kept short so results feel immediate while still coalescing rapid
+ * keystrokes and avoiding one network round-trip per character.
+ */
+private const val SEARCH_DEBOUNCE_MS: Long = 300
+
+/**
+ * Delay before a single retry of the genre/tag filter lookups. A transient
+ * network blip shouldn't leave the filter sheet permanently missing a section.
+ */
+private const val FILTER_RETRY_DELAY_MS: Long = 800
+
 @OptIn(FlowPreview::class, ExperimentalCoroutinesApi::class)
 @HiltViewModel
 class SearchViewModel @Inject constructor(
@@ -127,7 +140,7 @@ class SearchViewModel @Inject constructor(
     private var seerrSearchJob: Job? = null
 
     val pagedResults: Flow<PagingData<MediaItem>> = combine(
-        queryFlow.flow.debounce(800).distinctUntilChanged(),
+        queryFlow.flow.debounce(SEARCH_DEBOUNCE_MS).distinctUntilChanged(),
         _filters.flow,
     ) { q, f -> q to f }
         .flatMapLatest { (currentQuery, filters) ->
@@ -265,16 +278,33 @@ class SearchViewModel @Inject constructor(
 
     private fun loadGenres() {
         launch {
-            mediaRepository.getGenres()
-                .onSuccess { _genres.set(it) }
+            // Retry once after a short delay so a transient network blip doesn't
+            // leave the filter sheet permanently missing its Genres section.
+            loadListWithRetry(mediaRepository::getGenres) { _genres.set(it) }
         }
     }
 
     private fun loadTags() {
         launch {
-            mediaRepository.getTags()
-                .onSuccess { _tags.set(it) }
+            loadListWithRetry(mediaRepository::getTags) { _tags.set(it) }
         }
+    }
+
+    /**
+     * Fetches [fetch] and publishes the result via [onResult]. On failure, retries
+     * once after [FILTER_RETRY_DELAY_MS] so a transient network blip doesn't leave
+     * a filter section permanently empty.
+     */
+    private suspend fun <T> loadListWithRetry(
+        fetch: suspend () -> Result<List<T>>,
+        onResult: (List<T>) -> Unit,
+    ) {
+        var result = fetch()
+        if (result.isFailure) {
+            kotlinx.coroutines.delay(FILTER_RETRY_DELAY_MS)
+            result = fetch()
+        }
+        result.onSuccess(onResult)
     }
 
     /**

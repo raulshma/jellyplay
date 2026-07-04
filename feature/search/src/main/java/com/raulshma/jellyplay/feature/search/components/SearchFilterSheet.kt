@@ -35,10 +35,13 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.res.stringResource
+import com.raulshma.jellyplay.feature.search.R
 import com.raulshma.jellyplay.core.designsystem.theme.LocalIsLightTheme
 import com.raulshma.jellyplay.core.designsystem.theme.ShapeCache
 import com.raulshma.jellyplay.core.model.Genre
 import com.raulshma.jellyplay.core.model.MediaType
+import com.raulshma.jellyplay.core.ui.model.mediaTypeDisplayNamePlural
 import com.raulshma.jellyplay.core.ui.components.GlassFilterChip
 import com.raulshma.jellyplay.core.ui.components.yearPresetSelection
 import com.raulshma.jellyplay.core.ui.components.yearRangePresets
@@ -91,7 +94,7 @@ fun SearchFilterSheet(
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 Text(
-                    text = "Filters",
+                    text = stringResource(R.string.search_filters_title),
                     style = MaterialTheme.typography.headlineSmall,
                     fontWeight = FontWeight.Bold,
                     color = contentColor,
@@ -132,7 +135,7 @@ fun SearchFilterSheet(
                         .padding(horizontal = 14.dp, vertical = 8.dp),
                 ) {
                     Text(
-                        "Clear All",
+                        stringResource(R.string.search_clear_all),
                         style = MaterialTheme.typography.labelLarge,
                         color = contentColorMedium,
                     )
@@ -141,14 +144,14 @@ fun SearchFilterSheet(
 
             Spacer(modifier = Modifier.height(24.dp))
 
-            SectionLabel("Media Type")
+            SectionLabel(stringResource(R.string.search_filter_media_type))
             FlowRow(
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
                 verticalArrangement = Arrangement.spacedBy(8.dp),
             ) {
                 MediaType.entries.filter { it != MediaType.UNKNOWN }.forEach { mediaType ->
                     GlassFilterChip(
-                        label = mediaType.displayName(),
+                        label = mediaType.mediaTypeDisplayNamePlural(),
                         selected = mediaType in selectedMediaTypes,
                         onClick = {
                             selectedMediaTypes = if (mediaType in selectedMediaTypes) {
@@ -163,7 +166,7 @@ fun SearchFilterSheet(
 
             if (genres.isNotEmpty()) {
                 Spacer(modifier = Modifier.height(20.dp))
-                SectionLabel("Genres")
+                SectionLabel(stringResource(R.string.search_filter_genres))
                 FlowRow(
                     horizontalArrangement = Arrangement.spacedBy(8.dp),
                     verticalArrangement = Arrangement.spacedBy(8.dp),
@@ -185,14 +188,14 @@ fun SearchFilterSheet(
             }
 
             Spacer(modifier = Modifier.height(20.dp))
-            SectionLabel("Year Range")
+            SectionLabel(stringResource(R.string.search_filter_year_range))
             val presets = remember { yearRangePresets() }
             FlowRow(
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
                 verticalArrangement = Arrangement.spacedBy(8.dp),
             ) {
                 GlassFilterChip(
-                    label = "Any",
+                    label = stringResource(R.string.search_filter_any),
                     selected = selectedYears.isEmpty(),
                     onClick = { selectedYears = emptySet() },
                 )
@@ -210,7 +213,7 @@ fun SearchFilterSheet(
 
             if (availableTags.isNotEmpty()) {
                 Spacer(modifier = Modifier.height(20.dp))
-                SectionLabel("Tags")
+                SectionLabel(stringResource(R.string.search_filter_tags))
                 FlowRow(
                     horizontalArrangement = Arrangement.spacedBy(8.dp),
                     verticalArrangement = Arrangement.spacedBy(8.dp),
@@ -232,7 +235,7 @@ fun SearchFilterSheet(
             }
 
             Spacer(modifier = Modifier.height(20.dp))
-            SectionLabel("Minimum Rating")
+            SectionLabel(stringResource(R.string.search_filter_minimum_rating))
             val ratingOptions = listOf(0f, 3f, 3.5f, 4f, 4.5f)
             FlowRow(
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
@@ -240,7 +243,7 @@ fun SearchFilterSheet(
             ) {
                 ratingOptions.forEach { rating ->
                     GlassFilterChip(
-                        label = if (rating == 0f) "Any" else "${rating}+",
+                        label = if (rating == 0f) stringResource(R.string.search_filter_any) else stringResource(R.string.search_filter_rating_plus, rating),
                         selected = selectedMinRating == rating,
                         onClick = { selectedMinRating = rating },
                     )
@@ -291,7 +294,7 @@ fun SearchFilterSheet(
                 contentAlignment = Alignment.Center,
             ) {
                 Text(
-                    "Apply Filters",
+                    stringResource(R.string.search_apply_filters),
                     style = MaterialTheme.typography.titleSmall,
                     fontWeight = FontWeight.Bold,
                     color = MaterialTheme.colorScheme.onPrimary,
@@ -310,20 +313,4 @@ private fun SectionLabel(text: String) {
         fontWeight = FontWeight.SemiBold,
         modifier = Modifier.padding(bottom = 10.dp),
     )
-}
-
-private fun MediaType.displayName(): String = when (this) {
-    MediaType.MOVIE -> "Movies"
-    MediaType.SERIES -> "TV Shows"
-    MediaType.SEASON -> "Seasons"
-    MediaType.EPISODE -> "Episodes"
-    MediaType.MUSIC, MediaType.AUDIO -> "Music"
-    MediaType.ALBUM -> "Albums"
-    MediaType.ARTIST -> "Artists"
-    MediaType.MUSIC_VIDEO -> "Music Videos"
-    MediaType.COLLECTION -> "Collections"
-    MediaType.PHOTO, MediaType.PHOTO_FOLDER -> "Photos"
-    MediaType.LIVE_TV -> "Live TV"
-    MediaType.CHANNEL -> "Channels"
-    MediaType.UNKNOWN -> "Unknown"
 }

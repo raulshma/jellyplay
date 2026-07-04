@@ -14,7 +14,9 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
+import com.raulshma.jellyplay.feature.player.audio.R
 
 private val SPEED_OPTIONS = floatArrayOf(0.5f, 0.75f, 1.0f, 1.25f, 1.5f, 2.0f)
 
@@ -35,7 +37,7 @@ internal fun SpeedPickerSheet(
                 .padding(horizontal = 16.dp)
                 .padding(bottom = 32.dp),
         ) {
-            Text("Playback Speed", style = MaterialTheme.typography.titleMedium)
+            Text(stringResource(R.string.audio_speed_title), style = MaterialTheme.typography.titleMedium)
             Spacer(Modifier.height(12.dp))
             Row(
                 modifier = Modifier.fillMaxWidth(),

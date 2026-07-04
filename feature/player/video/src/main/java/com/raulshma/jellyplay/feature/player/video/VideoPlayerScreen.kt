@@ -145,6 +145,25 @@ import com.raulshma.jellyplay.core.designsystem.theme.playerScrimColor
 import com.raulshma.jellyplay.core.ui.animation.AnimationTokens
 import androidx.media3.ui.AspectRatioFrameLayout
 
+// ── Player overlay/animation timing (ms) ─────────────────────────────────
+// Named so the tuning is discoverable instead of scattered as bare literals.
+/** How long the gesture-seek ripple/indicator lingers after the last seek input. */
+private const val GESTURE_SEEK_LINGER_MS = 800L
+/** How long the brightness/volume gesture bars stay visible after the gesture ends. */
+private const val GESTURE_BARS_DISMISS_MS = 800L
+/** How long the AutoAspectRatio / Zoom badge is shown before auto-dismissing. */
+private const val ASPECT_BADGE_DURATION_MS = 5_000L
+/** How long the zoom badge is shown before auto-dismissing. */
+private const val ZOOM_BADGE_DURATION_MS = 2_000L
+
+// ── Bottom-control clearances for overlays anchored above the controls ───
+/** Snackbar offset above the bottom controls (landscape/TV layout). */
+private const val SNACKBAR_BOTTOM_CLEARANCE_DP = 200
+/** Hold-speed pill offset above the bottom controls. */
+private const val HOLD_SPEED_PILL_BOTTOM_CLEARANCE_DP = 180
+/** Trickplay thumbnail offset above the bottom controls. */
+private const val TRICKPLAY_THUMB_BOTTOM_CLEARANCE_DP = 120
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun VideoPlayerScreen(
@@ -425,16 +444,21 @@ fun VideoPlayerScreen(
     val aspectRatio = uiState.aspectRatio
     val detectedAspectRatio = uiState.detectedAspectRatio
 
-    val toggleOrientation: () -> Unit = remember(activity) {
+    val toggleOrientation: () -> Unit = remember(activity, uiState.defaultOrientation) {
         {
             activity?.let { act ->
                 val current = act.requestedOrientation
-                act.requestedOrientation = if (current == ActivityInfo.SCREEN_ORIENTATION_LANDSCAPE ||
-                    current == ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE) {
-                    ActivityInfo.SCREEN_ORIENTATION_PORTRAIT
-                } else {
-                    ActivityInfo.SCREEN_ORIENTATION_LANDSCAPE
+                val isPortrait = current == ActivityInfo.SCREEN_ORIENTATION_PORTRAIT ||
+                    current == ActivityInfo.SCREEN_ORIENTATION_SENSOR_PORTRAIT
+                // Resolve the configured default landscape mode so the toggle is symmetric:
+                // portrait ↔ default-landscape, always returning to the user's preferred
+                // landscape rather than drifting between LANDSCAPE and SENSOR_LANDSCAPE.
+                val defaultLandscape = when (uiState.defaultOrientation) {
+                    OrientationMode.LOCKED_LANDSCAPE -> ActivityInfo.SCREEN_ORIENTATION_LANDSCAPE
+                    else -> ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE
                 }
+                act.requestedOrientation = if (isPortrait) defaultLandscape
+                else ActivityInfo.SCREEN_ORIENTATION_PORTRAIT
             }
         }
     }
@@ -864,7 +888,7 @@ fun VideoPlayerScreen(
                         isGestureSeeking = false
                         overlayDismissJob?.cancel()
                         overlayDismissJob = scope.launch {
-                            delay(800)
+                            delay(GESTURE_BARS_DISMISS_MS)
                             brightnessOverlay = -1f
                             volumeOverlay = -1f
                         }
@@ -905,7 +929,7 @@ fun VideoPlayerScreen(
                 Box(
                     modifier = Modifier
                         .fillMaxSize()
-                        .padding(bottom = 180.dp),
+                        .padding(bottom = HOLD_SPEED_PILL_BOTTOM_CLEARANCE_DP.dp),
                     contentAlignment = Alignment.BottomCenter,
                 ) {
                     Box(
@@ -1059,6 +1083,8 @@ fun VideoPlayerScreen(
                 aspectRatio = aspectRatio,
             )
 
+            ZoomBadge(videoZoom = videoZoom)
+
             if (isCastConnected || isCastConnecting) {
                 CastIndicatorOverlay(
                     isConnecting = isCastConnecting,
@@ -1072,7 +1098,7 @@ fun VideoPlayerScreen(
                 hostState = snackbarHostState,
                 modifier = Modifier
                     .align(Alignment.BottomCenter)
-                    .padding(bottom = 200.dp),
+                    .padding(bottom = SNACKBAR_BOTTOM_CLEARANCE_DP.dp),
             ) { data ->
                 Snackbar(
                     snackbarData = data,
@@ -1197,7 +1223,6 @@ fun VideoPlayerScreen(
                 onPlayPause = onPlayPause,
                 onSeekBack = onSeekBack,
                 onSeekForward = onSeekForward,
-                onSeek = { },
                 onSeekStart = onSeekStart,
                 onSeekEnd = onSeekEnd,
                 onSeekPositionChange = onSeekPositionChange,
@@ -1264,7 +1289,7 @@ fun VideoPlayerScreen(
                 visible = !isTv && uiState.trickplayEnabled && showControls && isSeeking,
                 enter = fadeIn(tween(150, easing = AlphaEasing)),
                 exit = fadeOut(tween(200, easing = AlphaEasing)),
-                modifier = Modifier.align(Alignment.BottomCenter).padding(bottom = 120.dp),
+                modifier = Modifier.align(Alignment.BottomCenter).padding(bottom = TRICKPLAY_THUMB_BOTTOM_CLEARANCE_DP.dp),
             ) {
                 TrickplayOverlay(
                     bitmap = seekTrickplayBitmap,
@@ -1277,7 +1302,7 @@ fun VideoPlayerScreen(
 
     LaunchedEffect(seekState.timestamp) {
         if (seekState.direction != 0) {
-            delay(800)
+            delay(GESTURE_SEEK_LINGER_MS)
             seekState.reset()
         }
     }
@@ -1409,7 +1434,7 @@ private fun BoxScope.AutoAspectRatioBadge(
     LaunchedEffect(detectedAspectRatio, aspectRatio) {
         if (detectedAspectRatio != null && detectedAspectRatio != AspectRatio.FIT && aspectRatio == AspectRatio.AUTO) {
             showBadge = true
-            delay(5000L)
+            delay(ASPECT_BADGE_DURATION_MS)
             showBadge = false
         } else {
             showBadge = false
@@ -1430,6 +1455,48 @@ private fun BoxScope.AutoAspectRatioBadge(
         ) {
             Text(
                 text = "Auto: ${detectedAspectRatio?.displayName ?: ""}",
+                modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
+                color = MaterialTheme.colorScheme.primary,
+                style = MaterialTheme.typography.labelMedium.copy(
+                    fontWeight = FontWeight.SemiBold,
+                ),
+            )
+        }
+    }
+}
+
+/**
+ * Transient badge shown after a pinch-to-zoom gesture. Surfaces the current zoom level
+ * (which is otherwise invisible) and — at the default 1× — hints that double-tapping the
+ * centre resets it. Auto-dismisses like [AutoAspectRatioBadge].
+ */
+@Composable
+private fun BoxScope.ZoomBadge(videoZoom: Float) {
+    var showBadge by remember { mutableStateOf(false) }
+    LaunchedEffect(videoZoom) {
+        if (videoZoom != 1f) {
+            showBadge = true
+            delay(ZOOM_BADGE_DURATION_MS)
+            showBadge = false
+        } else {
+            showBadge = false
+        }
+    }
+
+    AnimatedVisibility(
+        visible = showBadge,
+        enter = fadeIn(tween(150, easing = AlphaEasing)),
+        exit = fadeOut(tween(200, easing = AlphaEasing)),
+        modifier = Modifier
+            .align(Alignment.TopCenter)
+            .padding(top = 60.dp),
+    ) {
+        Surface(
+            shape = ShapeCache.smoothPill,
+            color = playerOnScrim().copy(alpha = 0.12f),
+        ) {
+            Text(
+                text = "%.1f×".format(videoZoom),
                 modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
                 color = MaterialTheme.colorScheme.primary,
                 style = MaterialTheme.typography.labelMedium.copy(
