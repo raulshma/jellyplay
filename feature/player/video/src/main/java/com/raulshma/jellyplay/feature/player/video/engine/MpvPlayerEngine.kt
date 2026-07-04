@@ -62,10 +62,8 @@ class MpvPlayerEngine(
     }
 
     private val isLowRamDevice by lazy { EngineDeviceProfile.isLowRamDevice(context) }
-    // `var` so [load] can recreate it if a prior [release] cancelled the
-    // SupervisorJob. Without this the engine is permanently unusable after
-    // release() (positionFlow's ticker launches on this scope and would
-    // silently never emit). Recreated lazily, only when inactive.
+    // `var` because [release] cancels the SupervisorJob and immediately
+    // recreates a fresh scope, keeping the engine reusable without a `load`.
     private var engineScope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
 
     override val capabilities = EngineCapabilityMatrix.MPV
@@ -390,6 +388,10 @@ class MpvPlayerEngine(
         _availableTracks.value = emptyList()
         _bufferedPositionMs.value = 0L
         _videoStats.value = EngineVideoStats()
+        // Recreate the scope so a re-used engine stays usable without waiting
+        // for the next load(). A cancelled scope silently swallows new
+        // launches (no-ops), which would otherwise lose the position ticker.
+        engineScope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
     }
 
     override fun play() {

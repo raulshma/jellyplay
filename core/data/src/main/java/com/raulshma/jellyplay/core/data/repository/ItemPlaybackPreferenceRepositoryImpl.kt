@@ -1,5 +1,7 @@
 package com.raulshma.jellyplay.core.data.repository
 
+import androidx.room.withTransaction
+import com.raulshma.jellyplay.core.database.JellyPlayDatabase
 import com.raulshma.jellyplay.core.database.dao.ItemPlaybackPreferenceDao
 import com.raulshma.jellyplay.core.database.entity.ItemPlaybackPreferenceEntity
 import com.raulshma.jellyplay.core.model.ItemPlaybackPreference
@@ -10,6 +12,7 @@ import javax.inject.Singleton
 @Singleton
 class ItemPlaybackPreferenceRepositoryImpl @Inject constructor(
     private val dao: ItemPlaybackPreferenceDao,
+    private val database: JellyPlayDatabase,
 ) : ItemPlaybackPreferenceRepository {
 
     override suspend fun get(scope: PlaybackPrefScope, key: String): ItemPlaybackPreference? =
@@ -22,33 +25,37 @@ class ItemPlaybackPreferenceRepositoryImpl @Inject constructor(
         subtitleLanguage: String?,
         dialogueBoostStrength: com.raulshma.jellyplay.core.model.EffectStrength?,
     ) {
-        val existing = dao.getByKey(scope.name, key)
-        // `save` treats a null argument as "leave untouched" (preserve the
-        // existing value for that field). Explicit single-field clearing goes
-        // through the dedicated `clear*` methods so "clear" and "not provided"
-        // remain distinguishable.
-        val mergedAudio = audioLanguage ?: existing?.audioLanguage
-        val mergedSub = subtitleLanguage ?: existing?.subtitleLanguage
-        val mergedBoost = dialogueBoostStrength ?: existing?.dialogueBoostStrength?.let {
-            runCatching { com.raulshma.jellyplay.core.model.EffectStrength.valueOf(it) }.getOrNull()
-        }
-        // A row with nothing set carries no preference — drop it so the table
-        // stays tidy and `get` returns null (i.e. "inherit global").
-        if (mergedAudio == null && mergedSub == null && mergedBoost == null) {
-            dao.deleteByKey(scope.name, key)
-            return
-        }
-        dao.upsert(
-            ItemPlaybackPreferenceEntity(
-                id = existing?.id ?: 0,
-                scope = scope.name,
-                key = key,
-                audioLanguage = mergedAudio,
-                subtitleLanguage = mergedSub,
-                dialogueBoostStrength = mergedBoost?.name,
-                updatedAt = System.currentTimeMillis(),
+        // Wrap the read-merge-write in a transaction so two concurrent `save`
+        // calls for the same (scope, key) can't clobber each other's merge.
+        database.withTransaction {
+            val existing = dao.getByKey(scope.name, key)
+            // `save` treats a null argument as "leave untouched" (preserve the
+            // existing value for that field). Explicit single-field clearing goes
+            // through the dedicated `clear*` methods so "clear" and "not provided"
+            // remain distinguishable.
+            val mergedAudio = audioLanguage ?: existing?.audioLanguage
+            val mergedSub = subtitleLanguage ?: existing?.subtitleLanguage
+            val mergedBoost = dialogueBoostStrength ?: existing?.dialogueBoostStrength?.let {
+                runCatching { com.raulshma.jellyplay.core.model.EffectStrength.valueOf(it) }.getOrNull()
+            }
+            // A row with nothing set carries no preference — drop it so the table
+            // stays tidy and `get` returns null (i.e. "inherit global").
+            if (mergedAudio == null && mergedSub == null && mergedBoost == null) {
+                dao.deleteByKey(scope.name, key)
+                return@withTransaction
+            }
+            dao.upsert(
+                ItemPlaybackPreferenceEntity(
+                    id = existing?.id ?: 0,
+                    scope = scope.name,
+                    key = key,
+                    audioLanguage = mergedAudio,
+                    subtitleLanguage = mergedSub,
+                    dialogueBoostStrength = mergedBoost?.name,
+                    updatedAt = System.currentTimeMillis(),
+                )
             )
-        )
+        }
     }
 
     override suspend fun clearAudioLanguage(scope: PlaybackPrefScope, key: String) {

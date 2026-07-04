@@ -100,6 +100,7 @@ import com.raulshma.jellyplay.core.model.MediaType
 import com.raulshma.jellyplay.core.model.UserPreferences
 import com.raulshma.jellyplay.core.model.seerr.SeerrRelatedVideo
 import com.raulshma.jellyplay.core.model.seerr.SeerrSearchItem
+import coil3.size.Size as CoilSize
 import com.raulshma.jellyplay.core.ui.adaptive.LocalAdaptiveInfo
 import com.raulshma.jellyplay.core.ui.adaptive.WindowSizeClass
 import com.raulshma.jellyplay.core.ui.adaptive.*
@@ -353,15 +354,17 @@ fun MediaDetailScreen(
             collectionItems = collectionItems,
             onPlayAlbumTrack = remember(viewModel) { { index: Int -> viewModel.playAlbum(index) } },
             relatedVideos = relatedVideos,
-            onVideoClick = { video ->
-                if (video.site?.lowercase() == "youtube" && video.key != null) {
-                    activeTrailerKey = video.key
-                } else if (video.key != null) {
-                    val url = when (video.site?.lowercase()) {
-                        "youtube" -> "https://www.youtube.com/watch?v=${video.key}"
-                        else -> null
+            onVideoClick = remember(uriHandler) {
+                { video: SeerrRelatedVideo ->
+                    if (video.site?.lowercase() == "youtube" && video.key != null) {
+                        activeTrailerKey = video.key
+                    } else if (video.key != null) {
+                        val url = when (video.site?.lowercase()) {
+                            "youtube" -> "https://www.youtube.com/watch?v=${video.key}"
+                            else -> null
+                        }
+                        url?.let { uriHandler.openUri(it) }
                     }
-                    url?.let { uriHandler.openUri(it) }
                 }
             },
             preferences = preferences,
@@ -736,6 +739,9 @@ private fun DetailContent(
                     blurHash = item?.blurHashes?.backdrop,
                     modifier = backdropModifier,
                     contentScale = ContentScale.Crop,
+                    // Full-bleed hero backdrop: decode large enough for 4K TV width
+                    // (3840 px). The default 512×512 produces visible blur on TV.
+                    size = CoilSize(1920, 1080),
                 )
             }
 

@@ -80,6 +80,11 @@ class ThemeMusicPlayer @Inject constructor(
     /**
      * Stops and clears any playing theme music. Safe to call when nothing is
      * playing.
+     *
+     * The underlying [ExoPlayer] is released (not just stopped) because it is
+     * cheap to recreate on the next [ensurePlayer] and the singleton scope
+     * would otherwise retain native media codecs, audio sink and buffers for
+     * the entire app process lifetime.
      */
     fun stop() {
         fetchJob?.cancel()
@@ -88,7 +93,9 @@ class ThemeMusicPlayer @Inject constructor(
         player?.let {
             it.stop()
             it.clearMediaItems()
+            it.release()
         }
+        player = null
     }
 
     private fun ensurePlayer(): ExoPlayer {

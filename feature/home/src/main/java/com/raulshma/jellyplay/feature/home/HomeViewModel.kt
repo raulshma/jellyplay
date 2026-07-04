@@ -32,6 +32,7 @@ import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.FlowPreview
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
@@ -45,6 +46,8 @@ import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.Semaphore
+import kotlinx.coroutines.sync.withPermit
 import java.time.LocalDate
 import java.time.ZoneOffset
 import javax.inject.Inject
@@ -70,8 +73,19 @@ class HomeViewModel @Inject constructor(
 
     companion object {
         private const val REFRESH_INTERVAL_FOREGROUND_MS = 60_000L
-        private const val REFRESH_INTERVAL_BACKGROUND_MS = 120_000L
+        // Background polling is slowed to a 15-minute cadence. The Home VM
+        // survives while its nav entry is in the back stack, so a short
+        // background interval kept fanning out up to 5 Seerr requests while
+        // the user was on a different screen entirely. The existing
+        // onResume-if-stale refresh (see onStart) re-syncs immediately when
+        // the user returns to the foreground, so the longer background
+        // interval costs nothing in freshness.
+        private const val REFRESH_INTERVAL_BACKGROUND_MS = 15 * 60_000L
         private const val MIN_REFRESH_INTERVAL_MS = 30_000L
+        /** Max concurrent requests when prefetching photo-folder child image URLs. */
+        private const val PHOTO_FOLDER_PREFETCH_CONCURRENCY = 4
+        /** TTL for Seerr discover sections (trending/popular change slowly). */
+        private const val DISCOVER_TTL_MS = 10 * 60_000L
     }
 
     private val _uiState = stateFlow(HomeUiState())
@@ -99,6 +113,9 @@ class HomeViewModel @Inject constructor(
     private var homeFocusPosition = HomeFocusPosition()
     private var lastRefreshTime = 0L
     private var isAppInForeground = true
+    // Discover-sections TTL bookkeeping (see DISCOVER_TTL_MS / fetchDiscoverSections).
+    private var lastDiscoverFetchEpochMs = 0L
+    private var discoverCacheInvalidated = true
 
     private val searchQueryFlow: MutableStateFlow<String> = MutableStateFlow("")
     private var searchJob: Job? = null
@@ -267,11 +284,23 @@ class HomeViewModel @Inject constructor(
     fun prefetchPhotoFolderChildUrls(items: List<com.raulshma.jellyplay.core.model.MediaItem>) {
         launch {
             val current = _photoFolderChildUrls.value
-            items.filter { it.mediaType == com.raulshma.jellyplay.core.model.MediaType.PHOTO_FOLDER && it.id !in current }
-                .forEach { folder ->
-                    val urls = mediaRepository.getPhotoFolderChildImageUrls(folder.id)
-                    _photoFolderChildUrls.value = _photoFolderChildUrls.value + (folder.id to urls)
-                }
+            val toFetch = items.filter {
+                it.mediaType == com.raulshma.jellyplay.core.model.MediaType.PHOTO_FOLDER && it.id !in current
+            }
+            if (toFetch.isEmpty()) return@launch
+            // Parallelize the per-folder network calls with a bounded semaphore
+            // (was a sequential forEach → N× per-request latency) and emit the
+            // combined result once at the end instead of doing an O(N) map
+            // rebuild + StateFlow re-emit per folder.
+            val permits = Semaphore(PHOTO_FOLDER_PREFETCH_CONCURRENCY)
+            val results = coroutineScope {
+                toFetch.map { folder ->
+                    async {
+                        permits.withPermit { folder.id to mediaRepository.getPhotoFolderChildImageUrls(folder.id) }
+                    }
+                }.awaitAll()
+            }
+            _photoFolderChildUrls.value = _photoFolderChildUrls.value + results
         }
     }
 
@@ -316,6 +345,7 @@ class HomeViewModel @Inject constructor(
             resetHomeFocusPosition()
             _uiState.update { it.copy(sections = emptyList(), favorites = emptyList(), discoverSections = emptyMap(), error = null) }
             mediaRepository.invalidateCaches()
+            invalidateDiscoverCache()
             fetchAndUpdateSections()
             startPeriodicRefresh()
         }
@@ -325,6 +355,7 @@ class HomeViewModel @Inject constructor(
         launch {
             _uiState.update { it.copy(isRefreshing = true, error = null) }
             mediaRepository.invalidateCaches()
+            invalidateDiscoverCache()
             fetchAndUpdateSections()
             startPeriodicRefresh()
         }
@@ -537,6 +568,13 @@ class HomeViewModel @Inject constructor(
     private suspend fun fetchDiscoverSections(prefs: SeerrPreferences) {
         if (!prefs.enabled || !prefs.discoverEnabled) return
         if (offlineModeManager.networkStatus.value == NetworkStatus.Local) return
+        // Trending/popular change slowly; cache discover results for
+        // DISCOVER_TTL_MS so "just sitting on Home" doesn't fan out up to 5
+        // Seerr round-trips per minute (C2 periodic refresh + per pref change).
+        // A user-initiated refresh (swipe-to-refresh) sets `force = true` which
+        // bypasses this gate via [invalidateDiscoverCache].
+        val now = System.currentTimeMillis()
+        if (!discoverCacheInvalidated && now - lastDiscoverFetchEpochMs < DISCOVER_TTL_MS) return
 
         val today = LocalDate.now(ZoneOffset.systemDefault())
             .atStartOfDay(ZoneOffset.systemDefault())
@@ -568,7 +606,17 @@ class HomeViewModel @Inject constructor(
             }
         }
 
+        lastDiscoverFetchEpochMs = System.currentTimeMillis()
+        discoverCacheInvalidated = false
         _uiState.update { it.copy(discoverSections = newSections) }
+    }
+
+    /**
+     * Resets the discover-sections TTL so the next [fetchDiscoverSections]
+     * actually hits the network. Called on user-initiated refresh.
+     */
+    fun invalidateDiscoverCache() {
+        discoverCacheInvalidated = true
     }
 
     private fun startPeriodicRefresh() {

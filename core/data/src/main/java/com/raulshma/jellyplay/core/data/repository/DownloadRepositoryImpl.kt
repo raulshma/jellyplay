@@ -115,17 +115,16 @@ class DownloadRepositoryImpl @Inject constructor(
 
         val prefs = preferencesStore.preferences.first()
         val maxBytes = prefs.maxCacheSizeMb.toLong() * 1024 * 1024
-        if (maxBytes > 0) {
+        // Enforce the user-facing download storage cap (in GB). 0 = unlimited.
+        val maxBytesFromGb = prefs.maxDownloadStorageGb.toLong() * 1024L * 1024L * 1024L
+        // Compute the current downloaded bytes once and compare against both
+        // caps (was two identical SUM queries back-to-back when both caps set).
+        if (maxBytes > 0 || maxBytesFromGb > 0) {
             val currentBytes = downloadDao.getTotalDownloadedBytes()
-            if (currentBytes >= maxBytes) {
+            if (maxBytes > 0 && currentBytes >= maxBytes) {
                 throw IllegalStateException("Download limit reached (${prefs.maxCacheSizeMb} MB). Free up space in Settings › Storage or increase the limit.")
             }
-        }
-        // Enforce the user-facing download storage cap (in GB). 0 = unlimited.
-        if (prefs.maxDownloadStorageGb > 0) {
-            val maxBytesFromGb = prefs.maxDownloadStorageGb.toLong() * 1024L * 1024L * 1024L
-            val currentBytes = downloadDao.getTotalDownloadedBytes()
-            if (currentBytes >= maxBytesFromGb) {
+            if (maxBytesFromGb > 0 && currentBytes >= maxBytesFromGb) {
                 throw IllegalStateException("Download storage limit reached (${prefs.maxDownloadStorageGb} GB). Free up space in Settings › Storage or increase the limit.")
             }
         }
@@ -285,17 +284,17 @@ class DownloadRepositoryImpl @Inject constructor(
         }
     }
 
-    override suspend fun getDownloadedEpisodeIdsForSeries(seriesId: String): Set<String> {
-        return withContext(Dispatchers.IO) {
-            downloadDao.getDownloadsForSeries(seriesId)
-                .mapNotNull { it.mediaItemId }
-                .toSet()
-        }
-    }
+    override suspend fun getDownloadedEpisodeIdsForSeries(seriesId: String): Set<String> =
+        // Room suspend functions already switch to the Room query executor, so
+        // the wrapping `withContext(Dispatchers.IO)` was an unnecessary thread-
+        // pool handoff. (The withContext(Dispatchers.IO) calls that wrap actual
+        // File/FileOutputStream I/O elsewhere in this file are correct and stay.)
+        downloadDao.getDownloadsForSeries(seriesId)
+            .mapNotNull { it.mediaItemId }
+            .toSet()
 
-    override suspend fun getDownloadedSeriesIds(): List<String> = withContext(Dispatchers.IO) {
+    override suspend fun getDownloadedSeriesIds(): List<String> =
         downloadDao.getDownloadedSeriesIds()
-    }
 
     override suspend fun downloadSeries(
         seriesId: String,

@@ -84,6 +84,17 @@ class AudioPlaybackManager @Inject constructor(
 
     private val queuePreWarmPermits = Semaphore(8)
 
+    companion object {
+        // Position-poll interval while playback is actively progressing. Matches
+        // the video side's default ticker cadence (≈4 Hz).
+        private const val POSITION_POLL_INTERVAL_MS = 250L
+        // While paused, the position/lyrics/crossfade work in startPositionTracking
+        // is a no-op; re-check playback state at this interval (mirrors
+        // EnginePositionTicker.POSITION_PAUSED_RECHECK_MS) instead of polling
+        // at POSITION_POLL_INTERVAL_MS for the whole paused session.
+        private const val POSITION_PAUSED_RECHECK_MS = 2_500L
+    }
+
     private var exoPlayer: ExoPlayer? = null
     private var currentPreferences = com.raulshma.jellyplay.core.model.UserPreferences()
 
@@ -380,11 +391,13 @@ class AudioPlaybackManager @Inject constructor(
                 }
             }
         }
-        scope.launch {
-            _repeatMode.collect { mode ->
-                exoPlayer?.repeatMode = getExoPlayerRepeatMode(mode)
-            }
-        }
+        // Note: there is intentionally no `_repeatMode.collect { exoPlayer?.repeatMode = ... }`
+        // here. `setRepeatMode()` sets `exoPlayer.repeatMode` inline, the player
+        // listener (`onRepeatModeChanged`) is the single source of truth for
+        // syncing `_repeatMode` back from the player, and `ensureExoPlayer()`
+        // restores `player.repeatMode` from `_repeatMode.value` on creation.
+        // A collector would just re-apply the same value (redundant JNI call)
+        // and live for the singleton's lifetime.
     }
 
     fun setGaplessEnabled(enabled: Boolean) {
@@ -1390,27 +1403,43 @@ class AudioPlaybackManager @Inject constructor(
             var bandwidthSampleTick = 0
             var lastBufferedPosition = 0L
             while (true) {
-                exoPlayer?.let { player ->
-                    val pos = player.currentPosition
-                    val dur = player.duration.coerceAtLeast(0L)
-                    // A→B loop: when both markers are set and we reach B while
-                    // playing, jump back to A.
-                    val abEnd = _abLoopEndMs.value
-                    val abStart = _abLoopStartMs.value
-                    if (abEnd != null && abStart != null && player.isPlaying && pos >= abEnd) {
-                        player.seekTo(abStart)
-                    }
-                    if (pos != lastPosition) {
-                        _currentPosition.value = pos
-                        lastPosition = pos
-                    }
-                    if (dur != lastDuration) {
-                        _duration.value = dur
-                        lastDuration = dur
-                    }
-                    if (lyricsManager.lyrics.value.isNotEmpty()) {
-                        lyricsManager.updateCurrentLyricIndex(_currentPosition.value)
-                    }
+                val player = exoPlayer
+                if (player == null) {
+                    // No player yet — wait briefly and re-check rather than busy-looping.
+                    delay(250)
+                    continue
+                }
+                // While paused, the position/duration/lyrics/crossfade work below
+                // is a no-op (position doesn't move, crossfader only runs when
+                // playing, lyrics index is stable). Suspend reactively on the
+                // play→resume edge instead of polling at 4 Hz for the whole
+                // paused session — mirrors the EnginePositionTicker pattern on
+                // the video side and removes continuous background CPU/battery.
+                if (!player.isPlaying) {
+                    delay(POSITION_PAUSED_RECHECK_MS)
+                    continue
+                }
+
+                val pos = player.currentPosition
+                val dur = player.duration.coerceAtLeast(0L)
+                // A→B loop: when both markers are set and we reach B while
+                // playing, jump back to A.
+                val abEnd = _abLoopEndMs.value
+                val abStart = _abLoopStartMs.value
+                if (abEnd != null && abStart != null && player.isPlaying && pos >= abEnd) {
+                    player.seekTo(abStart)
+                }
+                if (pos != lastPosition) {
+                    _currentPosition.value = pos
+                    lastPosition = pos
+                }
+                if (dur != lastDuration) {
+                    _duration.value = dur
+                    lastDuration = dur
+                }
+                if (lyricsManager.lyrics.value.isNotEmpty()) {
+                    lyricsManager.updateCurrentLyricIndex(_currentPosition.value)
+                }
 
                 if (_crossfadeDurationMs.value > 0 && player.isPlaying && _repeatMode.value != 2) {
                     crossfader.maybeStart()
@@ -1430,8 +1459,7 @@ class AudioPlaybackManager @Inject constructor(
                         }
                     }
                 }
-            }
-            delay(250)
+                delay(POSITION_POLL_INTERVAL_MS)
             }
         }
     }

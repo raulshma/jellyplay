@@ -79,17 +79,24 @@ object WidgetImageLoader {
         val density = context.resources.displayMetrics.density
         val cornerRadiusPx = cornerRadiusDp * density
         val output = Bitmap.createBitmap(bitmap.width, bitmap.height, Bitmap.Config.ARGB_8888)
-        val canvas = Canvas(output)
-        val paint = Paint().apply {
-            isAntiAlias = true
-            color = 0xff424242.toInt()
+        try {
+            val canvas = Canvas(output)
+            val paint = Paint().apply {
+                isAntiAlias = true
+                color = 0xff424242.toInt()
+            }
+            val rect = Rect(0, 0, bitmap.width, bitmap.height)
+            val rectF = RectF(rect)
+            canvas.drawARGB(0, 0, 0, 0)
+            canvas.drawRoundRect(rectF, cornerRadiusPx, cornerRadiusPx, paint)
+            paint.xfermode = PorterDuffXfermode(PorterDuff.Mode.SRC_IN)
+            canvas.drawBitmap(bitmap, rect, rect, paint)
+        } finally {
+            // The input bitmap is no longer referenced once it has been drawn
+            // into `output`; recycle it promptly to avoid N pairs of bitmaps
+            // briefly coexisting during concurrent `preloadPosters` fetches.
+            bitmap.recycle()
         }
-        val rect = Rect(0, 0, bitmap.width, bitmap.height)
-        val rectF = RectF(rect)
-        canvas.drawARGB(0, 0, 0, 0)
-        canvas.drawRoundRect(rectF, cornerRadiusPx, cornerRadiusPx, paint)
-        paint.xfermode = PorterDuffXfermode(PorterDuff.Mode.SRC_IN)
-        canvas.drawBitmap(bitmap, rect, rect, paint)
         return output
     }
 }

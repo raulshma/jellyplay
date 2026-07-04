@@ -22,6 +22,11 @@ fun isLanguageMatch(trackLang: String?, prefLang: String?): Boolean {
     }
 }
 
+// Compiled once and reused (was recompiled inside parseLanguageFromLabel on
+// every media-open / track-switch call). Mirrors the cached-regex pattern used
+// in MediaRepositoryImpl and DownloadRepositoryImpl.
+private val NON_ALPHANUMERIC_SPLIT = Regex("[^a-zA-Z0-9]+")
+
 private val localeLookupMap: Map<String, String> by lazy {
     val map = mutableMapOf<String, String>()
     for (locale in Locale.getAvailableLocales()) {
@@ -75,7 +80,7 @@ fun parseLanguageFromLabel(label: String?): String? {
     val normalizedLabel = label.lowercase()
     
     // Split by non-alphanumeric characters to isolate words
-    val words = normalizedLabel.split(Regex("[^a-zA-Z0-9]+"))
+    val words = normalizedLabel.split(NON_ALPHANUMERIC_SPLIT)
     for (word in words) {
         if (word.isNotBlank()) {
             val matchedIso = localeLookupMap[word]

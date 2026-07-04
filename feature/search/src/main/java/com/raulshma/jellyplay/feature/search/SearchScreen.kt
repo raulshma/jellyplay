@@ -777,10 +777,18 @@ fun SearchScreen(
                                 if (item != null) {
                                     AnimatedSearchItem(index = index) {
                                         val itemProgress = item.progressFraction()
+                                        // Memoize the per-item URL + click lambda (LibraryScreen
+                                        // already does this) so a results re-emit (paging,
+                                        // typing) doesn't recompute getImageUrl or allocate a
+                                        // fresh onClick lambda per visible item.
+                                        val imageUrl = remember(item.id) { viewModel.getImageUrl(item.id) }
+                                        val onClick = remember(item.id, item.mediaType, item.parentId, item.name) {
+                                            { onItemClick(item.id, item.mediaType, item.parentId, item.name) }
+                                        }
                                         PosterCard(
                                             item = item,
-                                            imageUrl = viewModel.getImageUrl(item.id),
-                                            onClick = { onItemClick(item.id, item.mediaType, item.parentId, item.name) },
+                                            imageUrl = imageUrl,
+                                            onClick = onClick,
                                             showProgress = itemProgress != null && itemProgress > 0f,
                                             progressPercent = itemProgress ?: 0f,
                                             blurHash = item.blurHashes.primary,

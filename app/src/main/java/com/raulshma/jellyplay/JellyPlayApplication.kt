@@ -1,5 +1,6 @@
 package com.raulshma.jellyplay
 
+import android.app.ActivityManager
 import android.app.Application
 import android.content.Context
 import coil3.ImageLoader
@@ -139,13 +140,21 @@ class JellyPlayApplication : Application(), SingletonImageLoader.Factory, Config
         val cacheMb = userPreferencesStore.preferences.value.maxCacheSizeMb
         val cacheSize = if (cacheMb > 0) cacheMb * 1024L * 1024L else 256L * 1024 * 1024
 
+        // Tier the memory-cache budget on device RAM class, mirroring the
+        // EngineDeviceProfile.isLowRamDevice gate already used for trickplay.
+        // On a 1 GB TV stick the default 20% would over-reserve a small heap
+        // competing with MPV/ExoPlayer native buffers.
+        val am = getSystemService(Context.ACTIVITY_SERVICE) as? ActivityManager
+        val isLowRamDevice = am?.let { it.isLowRamDevice || it.memoryClass <= 256 } ?: false
+        val memoryCachePercent = if (isLowRamDevice) 0.12 else 0.20
+
         ImageLoader.Builder(this)
             .components {
                 add(OkHttpNetworkFetcherFactory(callFactory = { imageClient }))
             }
             .memoryCache {
                 MemoryCache.Builder()
-                    .maxSizePercent(this@JellyPlayApplication, 0.20)
+                    .maxSizePercent(this@JellyPlayApplication, memoryCachePercent)
                     .build()
             }
             .diskCache {

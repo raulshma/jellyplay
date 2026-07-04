@@ -86,6 +86,10 @@ data class DownloadEntity(
     tableName = "lyrics_cache",
     indices = [
         Index(value = ["fetchedAt"]),
+        // Explicit single-column index so the `WHERE itemId = :itemId` lookup
+        // (getByItemId, called on every lyrics render) is unambiguously indexed
+        // rather than relying on a left-prefix of the composite (itemId, provider).
+        Index(value = ["itemId"]),
         Index(value = ["itemId", "provider"], unique = true),
     ],
 )
