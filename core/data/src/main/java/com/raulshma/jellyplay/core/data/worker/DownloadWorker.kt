@@ -317,10 +317,13 @@ class DownloadWorker @AssistedInject constructor(
 
                         val now = System.currentTimeMillis()
                         if (now - lastProgressUpdate >= progressUpdateIntervalMs) {
-                            val currentEntity = dao.getDownloadById(downloadId)
-                            if (currentEntity == null ||
-                                currentEntity.status == DownloadStatus.PAUSED.name ||
-                                currentEntity.status == DownloadStatus.CANCELLED.name
+                            // Read only the status column (was a 23-col SELECT *)
+                            // — the loop only needs to detect a pause/cancel
+                            // transition written by another process.
+                            val currentStatus = dao.getStatus(downloadId)
+                            if (currentStatus == null ||
+                                currentStatus == DownloadStatus.PAUSED.name ||
+                                currentStatus == DownloadStatus.CANCELLED.name
                             ) {
                                 response.close()
                                 return Result.success()

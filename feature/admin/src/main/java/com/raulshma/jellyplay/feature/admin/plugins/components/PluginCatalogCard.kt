@@ -38,6 +38,7 @@ import com.composables.icons.tabler.outline.Download
 import com.composables.icons.tabler.outline.Puzzle
 import com.raulshma.jellyplay.core.designsystem.theme.ShapeCache
 import com.raulshma.jellyplay.core.model.PluginPackage
+import com.raulshma.jellyplay.core.ui.image.MediaImage
 import com.raulshma.jellyplay.core.ui.tv.rememberTvFocusState
 import com.raulshma.jellyplay.core.ui.tv.tvFocusIndicator
 import com.raulshma.jellyplay.feature.admin.plugins.isTrustedRepository
@@ -213,10 +214,14 @@ internal fun PluginImage(
         contentAlignment = Alignment.Center,
     ) {
         if (!imageUrl.isNullOrBlank()) {
-            coil3.compose.AsyncImage(
-                model = imageUrl,
+            // Route through the central MediaImage pipeline so the plugin image
+            // gets the same crossfade + explicit decode size as the rest of the app
+            // (avoids the bare-String AsyncImage over-decode at 40 dp).
+            MediaImage(
+                url = imageUrl,
                 contentDescription = null,
                 modifier = Modifier.fillMaxWidth(),
+                size = coil3.size.Size(80, 80),
             )
         } else {
             Box(

@@ -18,6 +18,15 @@ interface DownloadDao {
     @Query("SELECT * FROM downloads WHERE id = :id")
     suspend fun getDownloadById(id: String): DownloadEntity?
 
+    /**
+     * Targeted single-column read of a download's status. Used by the
+     * per-2-s progress loop in DownloadWorker, which previously did a full
+     * `SELECT *` (23 cols incl. downloadUrl / errorMessage) just to detect a
+     * pause/cancel transition.
+     */
+    @Query("SELECT status FROM downloads WHERE id = :id")
+    suspend fun getStatus(id: String): String?
+
     @Query("SELECT * FROM downloads WHERE mediaItemId = :mediaItemId")
     suspend fun getDownloadByMediaItemId(mediaItemId: String): DownloadEntity?
 
