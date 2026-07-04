@@ -44,6 +44,8 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.DockedSearchBar
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
@@ -55,6 +57,7 @@ import com.raulshma.jellyplay.core.ui.components.progressFraction
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.SearchBarDefaults
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -80,6 +83,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.paging.LoadState
 import androidx.paging.compose.collectAsLazyPagingItems
 import com.raulshma.jellyplay.core.model.MediaType
+import com.raulshma.jellyplay.core.ui.model.mediaTypeDisplayName
 import com.raulshma.jellyplay.core.model.OfflineMediaItem
 import androidx.paging.compose.itemKey
 import com.raulshma.jellyplay.core.data.repository.SearchHistoryItem
@@ -112,6 +116,7 @@ import com.raulshma.jellyplay.core.designsystem.theme.ShapeCache
 import java.util.Locale
 import com.composables.icons.tabler.Tabler
 import com.composables.icons.tabler.outline.*
+import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import com.raulshma.jellyplay.feature.search.R
 
@@ -178,6 +183,10 @@ fun SearchScreen(
     val focusManager = LocalFocusManager.current
     var isSearchFocused by remember { mutableStateOf(false) }
 
+    // Guards the destructive "Clear all" recent-searches action behind a
+    // confirmation, since clearing is irreversible and one tap away.
+    var showClearHistoryDialog by remember { mutableStateOf(false) }
+
     // Grab focus into the search field on TV entry. Without this the first D-pad press drifts to
     // the drawer rail and expands it. LaunchedEffect(Unit) re-fires on every composition entry
     // (including back-nav from a detail page), which is the desired behavior for a top-level screen.
@@ -209,10 +218,9 @@ fun SearchScreen(
 
     val backgroundColor = rememberScreenBackgroundColor()
 
-    var headerVisible by remember { mutableStateOf(true) }
-
     val adaptiveInfo = LocalAdaptiveInfo.current
     val isTv = LocalTvMode.current
+    val context = androidx.compose.ui.platform.LocalContext.current
     val contentPad = adaptiveInfo.contentPadding(isTv)
     val spacing = adaptiveInfo.itemSpacing(isTv)
     val bottomPad = adaptiveInfo.bottomPadding(isTv)
@@ -256,7 +264,7 @@ fun SearchScreen(
             ) {
                 // ── Title + action row ──
                 AnimatedVisibility(
-                    visible = headerVisible,
+                    visible = true,
                     enter = fadeIn(tween(500, easing = AlphaEasing)) + slideInVertically(
                         tween(500, easing = FancyTransitionEasing),
                         initialOffsetY = { -40 },
@@ -271,7 +279,7 @@ fun SearchScreen(
                     ) {
                         Row(verticalAlignment = Alignment.CenterVertically) {
                             Text(
-                                text = "Search",
+                                text = stringResource(R.string.search_title),
                                 style = MaterialTheme.typography.headlineLarge.copy(
                                     fontWeight = FontWeight.Bold,
                                 ),
@@ -291,7 +299,7 @@ fun SearchScreen(
                                 ExpressiveToolbarIconButton(
                                     onClick = { viewModel.toggleShowFilters() },
                                     icon = Tabler.Outline.Filter,
-                                    contentDescription = "Filters",
+                                    contentDescription = stringResource(R.string.search_action_filters),
                                     highlighted = hasActiveFilters,
                                 )
                                 if (hasActiveFilters) {
@@ -313,7 +321,7 @@ fun SearchScreen(
 
                 // ── Search field (MD3 expressive DockedSearchBar) ──
                 AnimatedVisibility(
-                    visible = headerVisible,
+                    visible = true,
                     enter = fadeIn(tween(500, delayMillis = 100, easing = AlphaEasing)) + slideInVertically(
                         tween(500, delayMillis = 100, easing = FancyTransitionEasing),
                         initialOffsetY = { 40 },
@@ -324,7 +332,13 @@ fun SearchScreen(
                             SearchBarDefaults.InputField(
                                 query = query,
                                 onQueryChange = { viewModel.search(it) },
-                                onSearch = { },
+                                onSearch = {
+                                    // The IME "Search"/"Done" action: clear focus so the
+                                    // soft keyboard dismisses. The debounced query already
+                                    // covers the actual search; this only improves the
+                                    // keyboard ergonomics for hardware/IME submit.
+                                    focusManager.clearFocus()
+                                },
                                 expanded = false,
                                 onExpandedChange = { },
                                 modifier = Modifier
@@ -334,7 +348,7 @@ fun SearchScreen(
                                     ,
                                     placeholder = {
                                     Text(
-                                        "Search movies, shows, music...",
+                                        stringResource(R.string.search_placeholder),
                                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                                     )
                                 },
@@ -358,7 +372,7 @@ fun SearchScreen(
                                         ) {
                                             Icon(
                                                 imageVector = Tabler.Outline.X,
-                                                contentDescription = "Clear search",
+                                                contentDescription = stringResource(R.string.search_clear_search),
                                                 tint = MaterialTheme.colorScheme.onSurfaceVariant,
                                                 modifier = Modifier.size(16.dp),
                                             )
@@ -376,15 +390,19 @@ fun SearchScreen(
                                                             RecognizerIntent.LANGUAGE_MODEL_FREE_FORM,
                                                         )
                                                         putExtra(RecognizerIntent.EXTRA_LANGUAGE, Locale.getDefault())
-                                                        putExtra(RecognizerIntent.EXTRA_PROMPT, "Search for movies, shows, music...")
+                                                        putExtra(RecognizerIntent.EXTRA_PROMPT, context.getString(R.string.search_voice_prompt))
                                                     }
-                                                    speechLauncher.launch(intent)
+                                                    // Guard against devices/TVs without a speech-recognition activity.
+                                                    val activityAvailable = intent.resolveActivity(context.packageManager) != null
+                                                    if (activityAvailable) {
+                                                        speechLauncher.launch(intent)
+                                                    }
                                                 },
                                             contentAlignment = Alignment.Center,
                                         ) {
                                             Icon(
                                                 imageVector = Tabler.Outline.Microphone,
-                                                contentDescription = "Voice search",
+                                                contentDescription = stringResource(R.string.search_voice_search),
                                                 tint = MaterialTheme.colorScheme.onSurfaceVariant,
                                                 modifier = Modifier.size(16.dp),
                                             )
@@ -441,11 +459,11 @@ fun SearchScreen(
                                 .then(clearAllFocusState.focusModifier)
                                 .tvFocusIndicator(clearAllFocusState, ShapeCache.smooth8)
                                 .clip(ShapeCache.smooth8)
-                                .clickable { viewModel.clearFilters() }
+                                .clickable(role = androidx.compose.ui.semantics.Role.Button) { viewModel.clearFilters() }
                                 .padding(horizontal = 10.dp, vertical = 5.dp),
                         ) {
                             Text(
-                                text = "Clear all",
+                                text = stringResource(R.string.search_clear_all),
                                 style = MaterialTheme.typography.labelSmall,
                                 color = MaterialTheme.colorScheme.primary,
                                 fontWeight = FontWeight.SemiBold,
@@ -456,11 +474,11 @@ fun SearchScreen(
 
                 // ── Result count ──
                 AnimatedVisibility(
-                    visible = headerVisible && pagedResults.itemCount > 0,
+                    visible = pagedResults.itemCount > 0,
                     enter = fadeIn(tween(400, delayMillis = 200, easing = AlphaEasing)),
                 ) {
                     Text(
-                        text = "${pagedResults.itemCount} results",
+                        text = pluralStringResource(R.plurals.search_result_count, pagedResults.itemCount, pagedResults.itemCount),
                         style = MaterialTheme.typography.labelMedium,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                         modifier = Modifier.padding(
@@ -511,7 +529,7 @@ fun SearchScreen(
                             .padding(start = contentPad, end = contentPad, top = 12.dp),
                     ) {
                         Text(
-                            text = "Request via Seerr",
+                            text = stringResource(R.string.search_request_via_seerr),
                             style = MaterialTheme.typography.titleSmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                             fontWeight = FontWeight.SemiBold,
@@ -564,7 +582,7 @@ fun SearchScreen(
                                 tint = MaterialTheme.colorScheme.error.copy(alpha = 0.7f),
                             )
                             Text(
-                                text = "Seerr search failed",
+                                text = stringResource(R.string.search_seerr_search_failed),
                                 style = MaterialTheme.typography.labelMedium,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                             )
@@ -574,7 +592,7 @@ fun SearchScreen(
                                 .clip(ShapeCache.smooth8)
                                 .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.12f))
                                 
-                                .clickable { viewModel.retrySeerrSearch() }
+                                .clickable(role = androidx.compose.ui.semantics.Role.Button) { viewModel.retrySeerrSearch() }
                                 .padding(horizontal = 10.dp, vertical = 5.dp),
                             verticalAlignment = Alignment.CenterVertically,
                             horizontalArrangement = Arrangement.spacedBy(4.dp),
@@ -586,7 +604,7 @@ fun SearchScreen(
                                 tint = MaterialTheme.colorScheme.primary,
                             )
                             Text(
-                                text = "Retry",
+                                text = stringResource(R.string.search_retry),
                                 style = MaterialTheme.typography.labelSmall,
                                 color = MaterialTheme.colorScheme.primary,
                                 fontWeight = FontWeight.SemiBold,
@@ -642,21 +660,21 @@ fun SearchScreen(
                                         verticalAlignment = Alignment.CenterVertically,
                                     ) {
                                         Text(
-                                            text = "Recent Searches",
+                                            text = stringResource(R.string.search_recent_searches),
                                             style = MaterialTheme.typography.titleMedium,
                                             fontWeight = FontWeight.SemiBold,
                                             color = MaterialTheme.colorScheme.onSurface,
                                         )
                                         val clearHistoryFocusState = rememberTvFocusState()
                                         Text(
-                                            text = "Clear all",
+                                            text = stringResource(R.string.search_clear_all),
                                             style = MaterialTheme.typography.labelMedium,
                                             color = MaterialTheme.colorScheme.primary,
                                             modifier = Modifier
                                                 .then(clearHistoryFocusState.focusModifier)
                                                 .tvFocusIndicator(clearHistoryFocusState, CircleShape)
                                                 .clip(CircleShape)
-                                                .clickable { viewModel.clearHistory() }
+                                                .clickable { showClearHistoryDialog = true }
                                                 .padding(horizontal = 8.dp, vertical = 4.dp),
                                         )
                                     }
@@ -707,7 +725,7 @@ fun SearchScreen(
                                                 ) {
                                                     Icon(
                                                         Tabler.Outline.X,
-                                                        contentDescription = "Remove",
+                                                        contentDescription = stringResource(R.string.search_remove),
                                                         modifier = Modifier.size(16.dp),
                                                         tint = MaterialTheme.colorScheme.onSurfaceVariant,
                                                     )
@@ -719,8 +737,8 @@ fun SearchScreen(
                             } else {
                                 ScreenEmptyState(
                                     icon = Tabler.Outline.Search,
-                                    title = "Search your library",
-                                    description = "Movies, shows, music, and more",
+                                    title = stringResource(R.string.search_search_your_library),
+                                    description = stringResource(R.string.search_search_your_library_desc),
                                 )
                             }
                             } // close verticalScroll Column
@@ -886,6 +904,27 @@ fun SearchScreen(
             onDismiss = { viewModel.toggleShowFilters() },
         )
     }
+
+    if (showClearHistoryDialog) {
+        AlertDialog(
+            onDismissRequest = { showClearHistoryDialog = false },
+            icon = { Icon(Tabler.Outline.Trash, contentDescription = null) },
+            title = { Text(stringResource(R.string.search_clear_search_history)) },
+            text = { Text(stringResource(R.string.search_clear_history_confirm)) },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        showClearHistoryDialog = false
+                        viewModel.clearHistory()
+                    },
+                    colors = ButtonDefaults.textButtonColors(contentColor = MaterialTheme.colorScheme.error),
+                ) { Text(stringResource(R.string.search_action_clear)) }
+            },
+            dismissButton = {
+                TextButton(onClick = { showClearHistoryDialog = false }) { Text(stringResource(R.string.search_action_cancel)) }
+            },
+        )
+    }
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -953,7 +992,7 @@ private fun SuggestionSection(
                 tint = MaterialTheme.colorScheme.onSurfaceVariant,
             )
             Text(
-                text = "Suggestions",
+                text = stringResource(R.string.search_suggestions),
                 style = MaterialTheme.typography.titleSmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 fontWeight = FontWeight.SemiBold,
@@ -1007,7 +1046,7 @@ private fun OfflineSearchSection(
                 tint = MaterialTheme.colorScheme.onSurfaceVariant,
             )
             Text(
-                text = "On-device",
+                text = stringResource(R.string.search_on_device),
                 style = MaterialTheme.typography.titleSmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 fontWeight = FontWeight.SemiBold,
@@ -1092,26 +1131,10 @@ private fun OfflineSearchCard(
                 tint = MaterialTheme.colorScheme.tertiary,
             )
             Text(
-                text = item.mediaType.displayName(),
+                text = item.mediaType.mediaTypeDisplayName(),
                 style = MaterialTheme.typography.labelSmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
         }
     }
-}
-
-private fun MediaType.displayName(): String = when (this) {
-    MediaType.MOVIE -> "Movie"
-    MediaType.SERIES -> "Series"
-    MediaType.SEASON -> "Season"
-    MediaType.EPISODE -> "Episode"
-    MediaType.MUSIC, MediaType.AUDIO -> "Track"
-    MediaType.ALBUM -> "Album"
-    MediaType.ARTIST -> "Artist"
-    MediaType.MUSIC_VIDEO -> "Music Video"
-    MediaType.COLLECTION -> "Collection"
-    MediaType.PHOTO, MediaType.PHOTO_FOLDER -> "Photo"
-    MediaType.LIVE_TV -> "Live TV"
-    MediaType.CHANNEL -> "Channel"
-    MediaType.UNKNOWN -> "Item"
 }

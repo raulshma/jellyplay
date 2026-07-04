@@ -6,6 +6,12 @@ import com.raulshma.jellyplay.core.model.seerr.SeerrSearchItem
 import com.raulshma.jellyplay.core.ui.adaptive.LocalAdaptiveInfo
 import com.raulshma.jellyplay.core.ui.adaptive.WindowSizeClass
 
+/** Item counts per discover row on compact (phone) layouts. */
+internal val COMPACT_DISCOVER_PATTERN = listOf(3, 2, 3)
+
+/** Item counts per discover row on expanded (tablet/TV) layouts. */
+internal val EXPANDED_DISCOVER_PATTERN = listOf(5, 4, 6, 5)
+
 @Composable
 fun rememberDiscoverRows(
     allDiscoverItems: List<SeerrSearchItem>,
@@ -15,9 +21,9 @@ fun rememberDiscoverRows(
         val result = mutableListOf<List<SeerrSearchItem>>()
         var i = 0
         val pattern = if (adaptiveInfo.windowSizeClass == WindowSizeClass.Compact) {
-            listOf(3, 2, 3)
+            COMPACT_DISCOVER_PATTERN
         } else {
-            listOf(5, 4, 6, 5)
+            EXPANDED_DISCOVER_PATTERN
         }
         var patternIdx = 0
         while (i < allDiscoverItems.size) {

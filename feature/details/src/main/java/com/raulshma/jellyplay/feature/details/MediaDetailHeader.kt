@@ -32,6 +32,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.composables.icons.tabler.Tabler
@@ -45,6 +46,7 @@ import com.raulshma.jellyplay.core.model.MediaStream
 import com.raulshma.jellyplay.core.model.StreamType
 import com.raulshma.jellyplay.core.model.UserPreferences
 import com.raulshma.jellyplay.core.model.isLanguageMatch
+import com.raulshma.jellyplay.feature.details.R
 import com.raulshma.jellyplay.core.ui.components.TvSafeSheet
 import com.raulshma.jellyplay.core.ui.tv.LocalTvMode
 import com.raulshma.jellyplay.core.ui.tv.rememberTvFocusState
@@ -177,7 +179,7 @@ internal fun MediaInfoSection(
                             2 -> "STEREO"
                             6 -> "5.1"
                             8 -> "7.1"
-                            else -> "${channels}CH"
+                            else -> stringResource(R.string.detail_audio_channels_format, channels)
                         }
                     )
                 }
@@ -199,7 +201,7 @@ internal fun MediaInfoSection(
                 ?.takeIf { it.isNotBlank() }
                 ?.let { if (it.length > 10) it.take(10) + "…" else it }
                 ?: selectedSubtitle?.language?.uppercase()?.take(3)
-                ?: "OFF"
+                ?: stringResource(R.string.detail_subtitle_off)
 
             FadingItem(modifier = Modifier.weight(1f)) {
                 QuickInfoPill(
@@ -219,9 +221,9 @@ internal fun MediaInfoSection(
                 StreamPickerType.AUDIO -> {
                     buildList {
                         if (selectedAudioIndex != null) {
-                            add(StreamPickerOption(index = null, label = "Auto", isDefault = false))
+                            add(StreamPickerOption(index = null, label = stringResource(R.string.detail_stream_auto), isDefault = false))
                         }
-                        add(StreamPickerOption(index = -1, label = "Default", isDefault = true))
+                        add(StreamPickerOption(index = -1, label = stringResource(R.string.detail_stream_default), isDefault = true))
                         addAll(
                             audioStreams.map { stream ->
                                 StreamPickerOption(
@@ -229,7 +231,7 @@ internal fun MediaInfoSection(
                                     label = stream.displayTitle
                                         ?: stream.title
                                         ?: stream.language
-                                        ?: "Track ${stream.index}",
+                                        ?: stringResource(R.string.detail_audio_track_format, stream.index),
                                     isDefault = stream.isDefault,
                                 )
                             }
@@ -239,9 +241,9 @@ internal fun MediaInfoSection(
                 StreamPickerType.SUBTITLE -> {
                     buildList {
                         if (selectedSubtitleIndex != null) {
-                            add(StreamPickerOption(index = null, label = "Auto", isDefault = false))
+                            add(StreamPickerOption(index = null, label = stringResource(R.string.detail_stream_auto), isDefault = false))
                         }
-                        add(StreamPickerOption(index = -1, label = "Off", isDefault = true))
+                        add(StreamPickerOption(index = -1, label = stringResource(R.string.detail_stream_subtitle_off), isDefault = true))
                         addAll(
                             subtitleStreams.map { stream ->
                                 StreamPickerOption(
@@ -249,7 +251,7 @@ internal fun MediaInfoSection(
                                     label = stream.displayTitle
                                         ?: stream.title
                                         ?: stream.language
-                                        ?: "Track ${stream.index}",
+                                        ?: stringResource(R.string.detail_subtitle_track_format, stream.index),
                                     isDefault = stream.isDefault,
                                 )
                             }
@@ -265,7 +267,7 @@ internal fun MediaInfoSection(
 
             TvSafeSheet(
                 onDismissRequest = { picker = null },
-                title = if (activePicker == StreamPickerType.AUDIO) "Select Audio" else "Select Subtitle",
+                title = if (activePicker == StreamPickerType.AUDIO) stringResource(R.string.detail_select_audio) else stringResource(R.string.detail_select_subtitle),
             ) {
                     LazyColumn(
                         verticalArrangement = Arrangement.spacedBy(6.dp),
@@ -316,7 +318,7 @@ internal fun MediaInfoSection(
                                 )
                                 if (option.isDefault && option.index != null) {
                                     Text(
-                                        text = "DEFAULT",
+                                        text = stringResource(R.string.detail_stream_default_badge),
                                         style = MaterialTheme.typography.labelSmall,
                                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                                         modifier = Modifier.padding(end = 8.dp),
@@ -396,74 +398,6 @@ internal fun QuickInfoPill(
                 contentDescription = null,
                 tint = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.8f),
                 modifier = Modifier.size(16.dp),
-            )
-        }
-    }
-}
-
-@Composable
-internal fun InfoBadge(
-    text: String,
-    highlight: Boolean = false,
-) {
-    Box(
-        modifier = Modifier
-            .clip(ShapeCache.smooth4)
-            .background(
-                if (highlight) MaterialTheme.colorScheme.primary.copy(alpha = 0.25f)
-                else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.15f)
-            )
-            .padding(horizontal = 8.dp, vertical = 4.dp),
-    ) {
-        Text(
-            text = text,
-            style = MaterialTheme.typography.labelSmall,
-            color = if (highlight) MaterialTheme.colorScheme.onSurface else MaterialTheme.colorScheme.onSurface,
-        )
-    }
-}
-
-@Composable
-internal fun SubtitleChip(
-    label: String,
-    isSelected: Boolean,
-    isDefault: Boolean = false,
-    onClick: () -> Unit,
-) {
-    val bgColor by animateColorAsState(
-        targetValue = if (isSelected) MaterialTheme.colorScheme.primary
-        else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.15f),
-        animationSpec = MaterialTheme.motionScheme.fastEffectsSpec(),
-        label = "subtitleChipBg",
-    )
-    val contentColor by animateColorAsState(
-        targetValue = if (isSelected) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.85f),
-        animationSpec = MaterialTheme.motionScheme.fastEffectsSpec(),
-        label = "subtitleChipContent",
-    )
-    val chipFocusState = rememberTvFocusState(focusedScale = 1.05f)
-
-    Row(
-        modifier = Modifier
-            .clip(ShapeCache.smooth16)
-            .background(bgColor)
-            .then(chipFocusState.focusModifier)
-            .then(Modifier.tvFocusIndicator(chipFocusState, ShapeCache.smooth16))
-            .clickable { onClick() }
-            .padding(horizontal = 16.dp, vertical = 8.dp),
-        horizontalArrangement = Arrangement.spacedBy(4.dp),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        Text(
-            text = label,
-            style = MaterialTheme.typography.bodyMedium,
-            color = contentColor,
-        )
-        if (isDefault && !isSelected) {
-            Text(
-                text = "(default)",
-                style = MaterialTheme.typography.labelSmall,
-                color = contentColor.copy(alpha = 0.6f),
             )
         }
     }

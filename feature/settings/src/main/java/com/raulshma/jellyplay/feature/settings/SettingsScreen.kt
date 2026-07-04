@@ -25,7 +25,9 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
@@ -43,6 +45,8 @@ import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import com.raulshma.jellyplay.core.ui.tv.input.onDpadKey
 import com.raulshma.jellyplay.core.ui.tv.input.onDpadKeyEvent
+import androidx.compose.ui.res.pluralStringResource
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -160,9 +164,16 @@ fun SettingsScreen(
 
     val backgroundColor = com.raulshma.jellyplay.core.ui.components.rememberScreenBackgroundColor()
 
+    val searchBackCd = stringResource(R.string.settings_search_back_cd)
+    val clearSearchCd = stringResource(R.string.settings_clear_search_cd)
+    val newsletterCd = stringResource(R.string.settings_newsletter_cd)
+    val advLabel = stringResource(R.string.settings_advanced_badge)
+
     var searchQuery by remember { mutableStateOf("") }
     var isSearchActive by remember { mutableStateOf(false) }
     var isSearchFocused by remember { mutableStateOf(false) }
+    var showSignOutConfirm by remember { mutableStateOf(false) }
+    var signOutFromServer by remember { mutableStateOf(false) }
 
     val filteredItems = remember(searchQuery) {
         // Ranked fuzzy match: tolerates typos, merged/split terms and synonyms so advanced
@@ -177,7 +188,7 @@ fun SettingsScreen(
     }
 
     com.raulshma.jellyplay.core.ui.components.JellyPlayScreenScaffold(
-        title = "Settings",
+        title = stringResource(R.string.settings_title),
         onBack = onBack,
         backgroundColor = backgroundColor,
         topBarStyle = TopBarStyle.None,
@@ -271,7 +282,7 @@ fun SettingsScreen(
                                     ),
                                 placeholder = {
                                     Text(
-                                        "Search settings...",
+                                        stringResource(R.string.settings_search_placeholder),
                                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                                     )
                                 },
@@ -286,7 +297,7 @@ fun SettingsScreen(
                                             }
                                         },
                                         icon = if (isSearchActive) Tabler.Outline.ArrowLeft else Tabler.Outline.Search,
-                                        contentDescription = "Search / Back",
+                                        contentDescription = searchBackCd,
                                         tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
                                         iconSize = 20.dp,
                                         modifier = Modifier
@@ -308,7 +319,7 @@ fun SettingsScreen(
                                             SettingsIconButton(
                                                 onClick = { searchQuery = "" },
                                                 icon = Tabler.Outline.X,
-                                                contentDescription = "Clear search",
+                                                contentDescription = clearSearchCd,
                                                 tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
                                                 iconSize = 18.dp,
                                                 modifier = Modifier
@@ -324,7 +335,7 @@ fun SettingsScreen(
                                             SettingsIconButton(
                                                 onClick = onNewsletterClick,
                                                 icon = Tabler.Outline.Mail,
-                                                contentDescription = "Newsletter",
+                                                contentDescription = newsletterCd,
                                                 tint = MaterialTheme.colorScheme.onSurfaceVariant,
                                                 iconSize = 20.dp,
                                                 modifier = Modifier
@@ -471,7 +482,7 @@ fun SettingsScreen(
                                                             .padding(horizontal = 6.dp, vertical = 2.dp)
                                                     ) {
                                                         Text(
-                                                            text = "Adv",
+                                                            text = advLabel,
                                                             style = MaterialTheme.typography.labelSmall,
                                                             color = MaterialTheme.colorScheme.onTertiaryContainer,
                                                             fontWeight = FontWeight.SemiBold
@@ -573,7 +584,7 @@ fun SettingsScreen(
                                 contentAlignment = Alignment.Center
                             ) {
                                 Text(
-                                    text = "No matching settings found",
+                                    text = stringResource(R.string.settings_no_matches),
                                     style = MaterialTheme.typography.bodyMedium,
                                     color = MaterialTheme.colorScheme.onSurfaceVariant
                                 )
@@ -632,28 +643,30 @@ fun SettingsScreen(
                     AnimatedSettingsEntrance(1) {
                         SettingsGroup(
                             icon = Tabler.Outline.User,
-                            title = "Account",
-                            summary = { "Signed in as $userName" },
+                            title = stringResource(R.string.settings_account),
+                            summary = { stringResource(R.string.settings_signed_in_as_name, userName) },
                             initiallyExpanded = false,
                         ) {
                             SettingListItem(
                                 icon = Tabler.Outline.Logout,
-                                title = "Sign Out",
-                                subtitle = "Log out of current account",
+                                title = stringResource(R.string.settings_sign_out),
+                                subtitle = stringResource(R.string.settings_sign_out_subtitle),
                                 index = 0, count = 2,
                                 isDestructive = true,
                                 onClick = {
-                                    onLogout(false)
+                                    signOutFromServer = false
+                                    showSignOutConfirm = true
                                 },
                             )
                             SettingListItem(
                                 icon = Tabler.Outline.Logout,
-                                title = "Sign Out from Server",
-                                subtitle = "Revoke this device's session on the server",
+                                title = stringResource(R.string.settings_sign_out_from_server),
+                                subtitle = stringResource(R.string.settings_sign_out_from_server_subtitle),
                                 index = 1, count = 2,
                                 isDestructive = true,
                                 onClick = {
-                                    onLogout(true)
+                                    signOutFromServer = true
+                                    showSignOutConfirm = true
                                 },
                             )
                         }
@@ -664,7 +677,7 @@ fun SettingsScreen(
                     AnimatedSettingsEntrance(2) {
                         SettingListItem(
                             icon = Tabler.Outline.Palette,
-                            title = "Appearance",
+                            title = stringResource(R.string.settings_appearance),
                             subtitle = buildAppearanceSummary(preferences),
                             index = 0, count = 1,
                             highlighted = lastClickedSettingId == "appearance",
@@ -680,8 +693,8 @@ fun SettingsScreen(
                     AnimatedSettingsEntrance(3) {
                         SettingListItem(
                             icon = Tabler.Outline.PlayerPlay,
-                            title = "Playback",
-                            subtitle = "Player Engine: ${preferences.preferredPlayer.displayName}",
+                            title = stringResource(R.string.settings_playback),
+                            subtitle = stringResource(R.string.settings_playback_subtitle, preferences.preferredPlayer.displayName),
                             index = 0, count = 1,
                             highlighted = lastClickedSettingId == "playback",
                             onClick = {
@@ -696,8 +709,8 @@ fun SettingsScreen(
                     AnimatedSettingsEntrance(4) {
                         SettingListItem(
                             icon = Tabler.Outline.Music,
-                            title = "Audio Player",
-                            subtitle = "Default speed: ${if (preferences.audioDefaultSpeed == 1.0f) "1x" else "${preferences.audioDefaultSpeed}x"}",
+                            title = stringResource(R.string.settings_audio_player),
+                            subtitle = stringResource(R.string.settings_default_speed_value, if (preferences.audioDefaultSpeed == 1.0f) "1x" else "${preferences.audioDefaultSpeed}x"),
                             index = 0, count = 1,
                             highlighted = lastClickedSettingId == "audio",
                             onClick = {
@@ -712,8 +725,8 @@ fun SettingsScreen(
                     AnimatedSettingsEntrance(5) {
                         SettingListItem(
                             icon = Tabler.Outline.Language,
-                            title = "Language & Subtitles",
-                            subtitle = "Audio: ${preferences.preferredAudioLanguage ?: "Default"}",
+                            title = stringResource(R.string.settings_language_subtitles),
+                            subtitle = stringResource(R.string.settings_language_subtitle, preferences.preferredAudioLanguage ?: "Default"),
                             index = 0, count = 1,
                             highlighted = lastClickedSettingId == "language",
                             onClick = {
@@ -729,8 +742,8 @@ fun SettingsScreen(
                         val notifPrefs = preferences.notificationPreferences
                         SettingListItem(
                             icon = Tabler.Outline.Bell,
-                            title = "Notifications",
-                            subtitle = if (notifPrefs.enabled) "Checking ${notifPrefs.checkFrequency.displayName.lowercase()}" else "Disabled",
+                            title = stringResource(R.string.settings_notifications),
+                            subtitle = if (notifPrefs.enabled) stringResource(R.string.settings_notifications_checking, notifPrefs.checkFrequency.displayName.lowercase()) else stringResource(R.string.settings_disabled),
                             index = 0, count = 1,
                             highlighted = lastClickedSettingId == "notifications",
                             onClick = {
@@ -745,8 +758,8 @@ fun SettingsScreen(
                     AnimatedSettingsEntrance(7) {
                         SettingListItem(
                             icon = Tabler.Outline.Database,
-                            title = "Downloads & Storage",
-                            subtitle = "Cache: ${viewModel.cacheSizeMb} MB",
+                            title = stringResource(R.string.settings_downloads_storage),
+                            subtitle = stringResource(R.string.settings_cache_subtitle, viewModel.cacheSizeMb),
                             index = 0, count = 1,
                             highlighted = lastClickedSettingId == "storage",
                             onClick = {
@@ -761,12 +774,12 @@ fun SettingsScreen(
                     AnimatedSettingsEntrance(8) {
                         SettingListItem(
                             icon = Tabler.Outline.Lock,
-                            title = "Security",
+                            title = stringResource(R.string.settings_security),
                             subtitle = when {
-                                preferences.pinLockEnabled && preferences.biometricLockEnabled -> "PIN + Biometric lock: On"
-                                preferences.biometricLockEnabled -> "Biometric lock: On"
-                                preferences.pinLockEnabled -> "PIN lock: On"
-                                else -> "Lock: Off"
+                                preferences.pinLockEnabled && preferences.biometricLockEnabled -> stringResource(R.string.settings_pin_biometric_on)
+                                preferences.biometricLockEnabled -> stringResource(R.string.settings_biometric_on)
+                                preferences.pinLockEnabled -> stringResource(R.string.settings_pin_on)
+                                else -> stringResource(R.string.settings_lock_off)
                             },
                             index = 0, count = 1,
                             highlighted = lastClickedSettingId == "security",
@@ -782,8 +795,8 @@ fun SettingsScreen(
                     AnimatedSettingsEntrance(9) {
                         SettingListItem(
                             icon = Tabler.Outline.DatabaseExport,
-                            title = "Backup & Restore",
-                            subtitle = "Export or import app settings",
+                            title = stringResource(R.string.settings_backup_restore),
+                            subtitle = stringResource(R.string.settings_backup_restore_subtitle),
                             index = 0, count = 1,
                             highlighted = lastClickedSettingId == "backup",
                             onClick = {
@@ -799,7 +812,7 @@ fun SettingsScreen(
                         AnimatedSettingsEntrance(10) {
                             SettingsGroup(
                                 icon = Tabler.Outline.Moon,
-                                title = "Screensaver",
+                                title = stringResource(R.string.settings_screensaver),
                                 summary = {
                                     val cats = preferences.dreamImageCategories.map { it.name.lowercase().replaceFirstChar { c -> c.uppercase() } }
                                     cats.joinToString(", ")
@@ -808,21 +821,24 @@ fun SettingsScreen(
                                 val dreamTotal = 5
                                 SettingToggleItem(
                                     icon = Tabler.Outline.Typography,
-                                    title = "Show Title",
-                                    subtitle = if (preferences.dreamShowTitle) "Display media title" else "Hide media title",
+                                    title = stringResource(R.string.settings_show_title),
+                                    subtitle = if (preferences.dreamShowTitle) stringResource(R.string.settings_display_media_title) else stringResource(R.string.settings_hide_media_title),
                                     checked = preferences.dreamShowTitle,
                                     index = 0, count = dreamTotal,
                                     onCheckedChange = { viewModel.setDreamShowTitle(it) },
                                 )
+                                val categoryMovies = stringResource(R.string.settings_category_movies)
+                                val categoryTv = stringResource(R.string.settings_category_tv)
+                                val categoryMusic = stringResource(R.string.settings_category_music)
                                 SettingListItem(
                                     icon = Tabler.Outline.Movie,
-                                    title = "Categories",
-                                    subtitle = "Choose which library types appear",
+                                    title = stringResource(R.string.settings_categories),
+                                    subtitle = stringResource(R.string.settings_categories_subtitle),
                                     trailingText = preferences.dreamImageCategories.joinToString(", ") {
                                         when (it) {
-                                            DreamImageCategory.MOVIES -> "Movies"
-                                            DreamImageCategory.SERIES -> "TV"
-                                            DreamImageCategory.MUSIC -> "Music"
+                                            DreamImageCategory.MOVIES -> categoryMovies
+                                            DreamImageCategory.SERIES -> categoryTv
+                                            DreamImageCategory.MUSIC -> categoryMusic
                                         }
                                     },
                                     index = 1, count = dreamTotal,
@@ -841,8 +857,8 @@ fun SettingsScreen(
                                 )
                                 SettingListItem(
                                     icon = Tabler.Outline.Stopwatch,
-                                    title = "Slideshow Interval",
-                                    subtitle = "Time between image changes",
+                                    title = stringResource(R.string.settings_slideshow_interval),
+                                    subtitle = stringResource(R.string.settings_slideshow_interval_subtitle),
                                     trailingText = "${preferences.dreamSlideshowIntervalMs / 1000}s",
                                     index = 2, count = dreamTotal,
                                     onClick = {
@@ -854,15 +870,15 @@ fun SettingsScreen(
                                 )
                                 SettingToggleItem(
                                     icon = Tabler.Outline.Wand,
-                                    title = "Ken Burns Effect",
-                                    subtitle = if (preferences.dreamKenBurnsEnabled) "Pan and zoom animation" else "Static display",
+                                    title = stringResource(R.string.settings_ken_burns),
+                                    subtitle = if (preferences.dreamKenBurnsEnabled) stringResource(R.string.settings_ken_burns_on) else stringResource(R.string.settings_ken_burns_off),
                                     checked = preferences.dreamKenBurnsEnabled,
                                     index = 3, count = dreamTotal,
                                     onCheckedChange = { viewModel.setDreamKenBurnsEnabled(it) },
                                 )
                                 SettingListItem(
                                     icon = Tabler.Outline.ArrowRight,
-                                    title = "Transition Style",
+                                    title = stringResource(R.string.settings_transition_style),
                                     subtitle = preferences.dreamTransitionStyle.name,
                                     trailingText = preferences.dreamTransitionStyle.name,
                                     index = 4, count = dreamTotal,
@@ -882,7 +898,7 @@ fun SettingsScreen(
                     AnimatedSettingsEntrance(if (isTv) 11 else 10) {
                         SettingListItem(
                             icon = Tabler.Outline.Flask,
-                            title = "Experimental",
+                            title = stringResource(R.string.settings_experimental),
                             subtitle = buildExperimentalSummary(preferences),
                             index = 0, count = 1,
                             highlighted = lastClickedSettingId == "experimental",
@@ -898,8 +914,8 @@ fun SettingsScreen(
                     AnimatedSettingsEntrance(if (isTv) 12 else 11) {
                         SettingListItem(
                             icon = Tabler.Outline.InfoCircle,
-                            title = "About",
-                            subtitle = "App version and licenses",
+                            title = stringResource(R.string.settings_about),
+                            subtitle = stringResource(R.string.settings_about_subtitle),
                             index = 0, count = 1,
                             highlighted = lastClickedSettingId == "about",
                             onClick = {
@@ -911,24 +927,55 @@ fun SettingsScreen(
                 }
             }
         }
+
+        if (showSignOutConfirm) {
+            AlertDialog(
+                onDismissRequest = { showSignOutConfirm = false },
+                title = { Text(if (signOutFromServer) stringResource(R.string.settings_sign_out_confirm_title_server) else stringResource(R.string.settings_sign_out_confirm_title)) },
+                text = {
+                    Text(
+                        if (signOutFromServer) {
+                            stringResource(R.string.settings_sign_out_confirm_message_server)
+                        } else {
+                            stringResource(R.string.settings_sign_out_confirm_message)
+                        },
+                    )
+                },
+                confirmButton = {
+                    TextButton(
+                        onClick = {
+                            val fromServer = signOutFromServer
+                            showSignOutConfirm = false
+                            onLogout(fromServer)
+                        },
+                    ) { Text(stringResource(R.string.settings_sign_out), color = MaterialTheme.colorScheme.error) }
+                },
+                dismissButton = {
+                    TextButton(onClick = { showSignOutConfirm = false }) { Text(stringResource(R.string.settings_cancel)) }
+                },
+            )
+        }
+        }
     }
 }
 }
-}
 
+@Composable
 private fun buildAppearanceSummary(preferences: com.raulshma.jellyplay.core.model.UserPreferences): String {
     val parts = mutableListOf<String>()
     parts.add(preferences.themeMode.name.lowercase().replaceFirstChar { it.uppercase() })
-    if (preferences.dynamicTheming) parts.add("Dynamic")
-    if (preferences.oledMode) parts.add("OLED")
-    if (preferences.contrastLevel != ContrastLevel.DEFAULT) parts.add("${preferences.contrastLevel.name.lowercase().replaceFirstChar { it.uppercase() }} contrast")
-    if (preferences.performanceMode) parts.add("Performance")
+    if (preferences.dynamicTheming) parts.add(stringResource(R.string.settings_dynamic_token))
+    if (preferences.oledMode) parts.add(stringResource(R.string.settings_oled_token))
+    if (preferences.contrastLevel != ContrastLevel.DEFAULT) parts.add(stringResource(R.string.settings_contrast_suffix, preferences.contrastLevel.name.lowercase().replaceFirstChar { it.uppercase() }))
+    if (preferences.performanceMode) parts.add(stringResource(R.string.settings_performance_token))
     return parts.joinToString(", ")
 }
 
+@Composable
 private fun buildExperimentalSummary(preferences: com.raulshma.jellyplay.core.model.UserPreferences): String {
     val count = preferences.enabledExperimentalFeatures.size
-    return if (count == 0) "Early-access features" else "$count feature${if (count != 1) "s" else ""} enabled"
+    return if (count == 0) stringResource(R.string.settings_early_access_features)
+    else pluralStringResource(R.plurals.settings_features_enabled, count, count)
 }
 
 @Composable
@@ -961,7 +1008,7 @@ private fun SettingsProfileBanner(
         Spacer(Modifier.width(16.dp))
         Column {
             Text(
-                "Signed in as",
+                stringResource(R.string.settings_signed_in_as_label),
                 style = MaterialTheme.typography.labelMedium,
                 color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.7f),
             )
@@ -1089,7 +1136,7 @@ private fun SettingsTvCollapsedSearchRow(
             )
             Spacer(Modifier.width(12.dp))
             Text(
-                text = "Search settings...",
+                text = stringResource(R.string.settings_search_placeholder),
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 style = MaterialTheme.typography.bodyMedium,
             )
@@ -1098,7 +1145,7 @@ private fun SettingsTvCollapsedSearchRow(
         SettingsIconButton(
             onClick = onNewsletterClick,
             icon = Tabler.Outline.Mail,
-            contentDescription = "Newsletter",
+            contentDescription = stringResource(R.string.settings_newsletter_cd),
             tint = MaterialTheme.colorScheme.onSurfaceVariant,
             iconSize = 20.dp,
         )

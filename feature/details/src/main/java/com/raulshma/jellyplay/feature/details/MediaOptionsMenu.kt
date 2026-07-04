@@ -3,6 +3,7 @@ package com.raulshma.jellyplay.feature.details
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.res.stringResource
 import com.composables.icons.tabler.Tabler
 import com.composables.icons.tabler.outline.Check
 import com.composables.icons.tabler.outline.Download
@@ -16,6 +17,7 @@ import com.raulshma.jellyplay.core.model.MediaDetail
 import com.raulshma.jellyplay.core.model.MediaItem
 import com.raulshma.jellyplay.core.model.MediaType
 import com.raulshma.jellyplay.core.model.UserPreferences
+import com.raulshma.jellyplay.feature.details.R
 
 /**
  * A single resolved options-menu entry, shared by the touch [DropdownMenu]
@@ -72,29 +74,43 @@ internal fun rememberMediaOptions(
     val canDownload = item != null && detail != null && detail.mediaSources.isNotEmpty() &&
         (item.mediaType == MediaType.AUDIO || item.mediaType == MediaType.MUSIC || (!isAudio && !isSeries))
 
+    // Resolve localized labels in the @Composable body — the remember {} calculation lambda
+    // below is not a composable scope, so stringResource cannot be called inside it.
+    val labelEdit = stringResource(R.string.detail_option_edit)
+    val labelShare = stringResource(R.string.detail_option_share)
+    val labelDownloaded = stringResource(R.string.detail_option_downloaded)
+    val labelDownloadingPercent = stringResource(R.string.detail_option_downloading_percent, (downloadProgress * 100).toInt())
+    val labelDownloading = stringResource(R.string.detail_option_downloading)
+    val labelDownload = stringResource(R.string.detail_option_download)
+    val labelDownloadingSeries = stringResource(R.string.detail_option_downloading_series)
+    val labelDownloadSeries = stringResource(R.string.detail_option_download_series)
+    val labelHideFromNextUp = stringResource(R.string.detail_option_hide_from_next_up)
+    val labelHideFromContinueWatching = stringResource(R.string.detail_option_hide_from_continue_watching)
+    val labelTechnicalInfo = stringResource(R.string.detail_option_technical_info)
+
     return remember(item, detail, itemId, isAudio, isSeries, seasons, preferences.showShareMediaOption,
         activeDownload, isDownloading, isDownloadingSeries, isDownloadActive, isDownloadCompleted,
         downloadStatus, downloadProgress) {
         buildList {
-            add(MediaOption("Edit", Tabler.Outline.Pencil) {
+            add(MediaOption(labelEdit, Tabler.Outline.Pencil) {
                 onClose(); onEditClick()
             })
             if (preferences.showShareMediaOption) {
-                add(MediaOption("Share", Tabler.Outline.Share) {
+                add(MediaOption(labelShare, Tabler.Outline.Share) {
                     onClose(); onShare()
                 })
             }
             if (canDownload) {
                 val label = when {
-                    isDownloadCompleted -> "Downloaded"
+                    isDownloadCompleted -> labelDownloaded
                     isDownloading || isDownloadActive -> {
                         if (downloadProgress > 0f && downloadStatus == DownloadStatus.DOWNLOADING) {
-                            "Downloading (${(downloadProgress * 100).toInt()}%)"
+                            labelDownloadingPercent
                         } else {
-                            "Downloading..."
+                            labelDownloading
                         }
                     }
-                    else -> "Download"
+                    else -> labelDownload
                 }
                 add(
                     MediaOption(
@@ -108,7 +124,7 @@ internal fun rememberMediaOptions(
             } else if (!isAudio && item != null && isSeries && seasons.isNotEmpty()) {
                 add(
                     MediaOption(
-                        label = if (isDownloadingSeries) "Downloading Series..." else "Download Series",
+                        label = if (isDownloadingSeries) labelDownloadingSeries else labelDownloadSeries,
                         icon = Tabler.Outline.Download,
                         enabled = !isDownloadingSeries,
                     ) {
@@ -117,14 +133,14 @@ internal fun rememberMediaOptions(
                 )
             }
             if (isSeries || item?.seriesId != null) {
-                add(MediaOption("Hide from Next Up", Tabler.Outline.EyeOff) {
+                add(MediaOption(labelHideFromNextUp, Tabler.Outline.EyeOff) {
                     onClose(); onHideFromNextUp()
                 })
             }
-            add(MediaOption("Hide from Continue Watching", Tabler.Outline.EyeOff) {
+            add(MediaOption(labelHideFromContinueWatching, Tabler.Outline.EyeOff) {
                 onClose(); onHideFromContinueWatching()
             })
-            add(MediaOption("Technical Info", Tabler.Outline.InfoCircle) {
+            add(MediaOption(labelTechnicalInfo, Tabler.Outline.InfoCircle) {
                 onClose(); onTechnicalInfo()
             })
         }

@@ -11,7 +11,10 @@ import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import com.raulshma.jellyplay.core.model.ChapterInfo
 import com.raulshma.jellyplay.core.model.EffectStrength
+import com.raulshma.jellyplay.feature.player.video.engine.EngineVideoStats
 import com.raulshma.jellyplay.feature.player.video.formatDuration
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
 import org.junit.Rule
 import org.junit.Test
 
@@ -42,14 +45,19 @@ class PlayerControlsTest {
         nightModeStrength: EffectStrength = EffectStrength.MODERATE,
         audioPassthrough: Boolean = false,
     ) {
+        val currentPositionFlow: StateFlow<Long> = MutableStateFlow(currentPosition)
+        val bufferedPositionFlow: StateFlow<Long> = MutableStateFlow(currentPosition)
+        val videoStatsFlow: StateFlow<EngineVideoStats> = MutableStateFlow(EngineVideoStats())
         composeTestRule.setContent {
             MaterialTheme {
                 PlayerControls(
                     title = title,
                     subtitle = subtitle,
                     isPlaying = isPlaying,
-                    currentPosition = currentPosition,
+                    currentPositionFlow = currentPositionFlow,
                     duration = duration,
+                    bufferedPositionFlow = bufferedPositionFlow,
+                    videoStatsFlow = videoStatsFlow,
                     playbackSpeed = playbackSpeed,
                     chapters = chapters,
                     dialogueBoostEnabled = dialogueBoostEnabled,
@@ -68,7 +76,6 @@ class PlayerControlsTest {
                     onPlayPause = {},
                     onSeekBack = {},
                     onSeekForward = {},
-                    onSeek = {},
                     onSeekStart = {},
                     onSeekEnd = {},
                     onSeekPositionChange = {},
@@ -87,7 +94,6 @@ class PlayerControlsTest {
                     onAVSyncClick = {},
                     onDecoderClick = {},
                     onPassthroughClick = {},
-                    onOcrClick = {},
                     onSubtitleDownloadClick = {},
                 )
             }
@@ -205,7 +211,7 @@ class PlayerControlsTest {
     fun playerControls_supportsSubtitleStyle_showsStyleInOverflow() {
         setContent(supportsSubtitleStyle = true)
         composeTestRule.onNodeWithContentDescription("More options").performClick()
-        composeTestRule.waitUntil(5000L) { composeTestRule.onNodeWithText("Subtitle Style").fetchSemanticsNodes().isNotEmpty() }
+        composeTestRule.waitUntil(timeoutMillis = 5000L) { composeTestRule.onNodeWithText("Subtitle Style").fetchSemanticsNodes().isNotEmpty() }
         composeTestRule.onNodeWithText("Subtitle Style").assertIsDisplayed()
     }
 
@@ -220,7 +226,7 @@ class PlayerControlsTest {
     fun playerControls_supportsDialogueBoost_showsBoostInOverflow() {
         setContent(supportsDialogueBoost = true)
         composeTestRule.onNodeWithContentDescription("More options").performClick()
-        composeTestRule.waitUntil(5000L) { composeTestRule.onNodeWithText("Dialogue Boost").fetchSemanticsNodes().isNotEmpty() }
+        composeTestRule.waitUntil(timeoutMillis = 5000L) { composeTestRule.onNodeWithText("Dialogue Boost").fetchSemanticsNodes().isNotEmpty() }
         composeTestRule.onNodeWithText("Dialogue Boost").assertIsDisplayed()
     }
 
@@ -235,7 +241,7 @@ class PlayerControlsTest {
     fun playerControls_supportsNightMode_showsNightInOverflow() {
         setContent(supportsNightMode = true)
         composeTestRule.onNodeWithContentDescription("More options").performClick()
-        composeTestRule.waitUntil(5000L) { composeTestRule.onNodeWithText("Night Mode").fetchSemanticsNodes().isNotEmpty() }
+        composeTestRule.waitUntil(timeoutMillis = 5000L) { composeTestRule.onNodeWithText("Night Mode").fetchSemanticsNodes().isNotEmpty() }
         composeTestRule.onNodeWithText("Night Mode").assertIsDisplayed()
     }
 
@@ -250,7 +256,7 @@ class PlayerControlsTest {
     fun playerControls_supportsAudioDelay_showsDelayInOverflow() {
         setContent(supportsAudioDelay = true)
         composeTestRule.onNodeWithContentDescription("More options").performClick()
-        composeTestRule.waitUntil(5000L) { composeTestRule.onNodeWithText("Audio Delay").fetchSemanticsNodes().isNotEmpty() }
+        composeTestRule.waitUntil(timeoutMillis = 5000L) { composeTestRule.onNodeWithText("Audio Delay").fetchSemanticsNodes().isNotEmpty() }
         composeTestRule.onNodeWithText("Audio Delay").assertIsDisplayed()
     }
 
@@ -265,7 +271,7 @@ class PlayerControlsTest {
     fun playerControls_supportsPassthrough_showsPassthroughInOverflow() {
         setContent(supportsAudioPassthrough = true)
         composeTestRule.onNodeWithContentDescription("More options").performClick()
-        composeTestRule.waitUntil(5000L) { composeTestRule.onNodeWithText("Passthrough").fetchSemanticsNodes().isNotEmpty() }
+        composeTestRule.waitUntil(timeoutMillis = 5000L) { composeTestRule.onNodeWithText("Passthrough").fetchSemanticsNodes().isNotEmpty() }
         composeTestRule.onNodeWithText("Passthrough").assertIsDisplayed()
     }
 
@@ -279,14 +285,19 @@ class PlayerControlsTest {
     @Test
     fun playerControls_backButton_callsOnBack() {
         var backClicked = false
+        val currentPositionFlow: StateFlow<Long> = MutableStateFlow(0L)
+        val bufferedPositionFlow: StateFlow<Long> = MutableStateFlow(0L)
+        val videoStatsFlow: StateFlow<EngineVideoStats> = MutableStateFlow(EngineVideoStats())
         composeTestRule.setContent {
             MaterialTheme {
                 PlayerControls(
                     title = "Test",
                     subtitle = "",
                     isPlaying = false,
-                    currentPosition = 0L,
+                    currentPositionFlow = currentPositionFlow,
                     duration = 0L,
+                    bufferedPositionFlow = bufferedPositionFlow,
+                    videoStatsFlow = videoStatsFlow,
                     playbackSpeed = 1.0f,
                     chapters = emptyList(),
                     dialogueBoostEnabled = false,
@@ -300,7 +311,6 @@ class PlayerControlsTest {
                     onPlayPause = {},
                     onSeekBack = {},
                     onSeekForward = {},
-                    onSeek = {},
                     onSeekStart = {},
                     onSeekEnd = {},
                     onSeekPositionChange = {},
@@ -330,14 +340,19 @@ class PlayerControlsTest {
     @Test
     fun playerControls_playPauseToggles_callsOnPlayPause() {
         var playPauseCount = 0
+        val currentPositionFlow: StateFlow<Long> = MutableStateFlow(0L)
+        val bufferedPositionFlow: StateFlow<Long> = MutableStateFlow(0L)
+        val videoStatsFlow: StateFlow<EngineVideoStats> = MutableStateFlow(EngineVideoStats())
         composeTestRule.setContent {
             MaterialTheme {
                 PlayerControls(
                     title = "Test",
                     subtitle = "",
                     isPlaying = false,
-                    currentPosition = 0L,
+                    currentPositionFlow = currentPositionFlow,
                     duration = 0L,
+                    bufferedPositionFlow = bufferedPositionFlow,
+                    videoStatsFlow = videoStatsFlow,
                     playbackSpeed = 1.0f,
                     chapters = emptyList(),
                     dialogueBoostEnabled = false,
@@ -351,7 +366,6 @@ class PlayerControlsTest {
                     onPlayPause = { playPauseCount++ },
                     onSeekBack = {},
                     onSeekForward = {},
-                    onSeek = {},
                     onSeekStart = {},
                     onSeekEnd = {},
                     onSeekPositionChange = {},

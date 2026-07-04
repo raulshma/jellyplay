@@ -33,6 +33,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.res.stringResource
 import com.raulshma.jellyplay.core.ui.tv.TvGrabInitialFocus
 import com.raulshma.jellyplay.core.ui.tv.tryRequestFocus
 import com.raulshma.jellyplay.core.model.CheckFrequency
@@ -89,7 +90,7 @@ fun NotificationSettingsScreen(
     )
 
     JellyPlayScreenScaffold(
-        title = "Notifications",
+        title = stringResource(R.string.settings_notifications),
         onBack = onBack,
         backgroundColor = backgroundColor,
         actions = {
@@ -122,10 +123,10 @@ fun NotificationSettingsScreen(
             item {
                 SettingsGroup(
                     icon = Tabler.Outline.Bell,
-                    title = "Notifications",
+                    title = stringResource(R.string.settings_notifications),
                     summary = {
-                        if (notifPrefs.enabled) "Checking ${notifPrefs.checkFrequency.displayName.lowercase()}"
-                        else "Disabled"
+                        if (notifPrefs.enabled) stringResource(R.string.settings_notifications_checking, notifPrefs.checkFrequency.displayName.lowercase())
+                        else stringResource(R.string.settings_disabled)
                     },
                     modifier = Modifier.padding(vertical = 8.dp),
                     initiallyExpanded = true,
@@ -146,8 +147,8 @@ fun NotificationSettingsScreen(
 
                     SettingToggleItem(
                         icon = Tabler.Outline.Bell,
-                        title = "Enable Notifications",
-                        subtitle = "Get notified when new media is added to your server",
+                        title = stringResource(R.string.settings_enable_notifications),
+                        subtitle = stringResource(R.string.settings_enable_notifications_subtitle),
                         checked = notifPrefs.enabled,
                         highlighted = highlightSettingId == "notifications_enable",
                         index = notifIdx++, count = notifTotal,
@@ -158,8 +159,8 @@ fun NotificationSettingsScreen(
                     if (notifPrefs.enabled) {
                         SettingListItem(
                             icon = Tabler.Outline.Clock,
-                            title = "Check Frequency",
-                            subtitle = "How often to check for new media",
+                            title = stringResource(R.string.settings_check_frequency),
+                            subtitle = stringResource(R.string.settings_check_frequency_subtitle),
                             trailingText = notifPrefs.checkFrequency.displayName,
                             highlighted = highlightSettingId == "notification_check_frequency",
                             index = notifIdx++, count = notifTotal,
@@ -168,8 +169,8 @@ fun NotificationSettingsScreen(
                         if (showAdvanced) {
                             SettingToggleItem(
                                 icon = Tabler.Outline.Moon,
-                                title = "Quiet Hours",
-                                subtitle = "Suppress notifications during set hours",
+                                title = stringResource(R.string.settings_quiet_hours),
+                                subtitle = stringResource(R.string.settings_quiet_hours_subtitle),
                                 checked = notifPrefs.quietHoursEnabled,
                                 highlighted = highlightSettingId == "quiet_hours",
                                 index = notifIdx++, count = notifTotal,
@@ -180,8 +181,8 @@ fun NotificationSettingsScreen(
                             if (notifPrefs.quietHoursEnabled) {
                                 SettingListItem(
                                     icon = Tabler.Outline.Sunset,
-                                    title = "Quiet Start",
-                                    subtitle = "Begin quiet hours",
+                                    title = stringResource(R.string.settings_quiet_start),
+                                    subtitle = stringResource(R.string.settings_quiet_start_subtitle),
                                     trailingText = formatMinutes(notifPrefs.quietHoursStart),
                                     highlighted = highlightSettingId == "quiet_start",
                                     index = notifIdx++, count = notifTotal,
@@ -189,8 +190,8 @@ fun NotificationSettingsScreen(
                                 )
                                 SettingListItem(
                                     icon = Tabler.Outline.Sunrise,
-                                    title = "Quiet End",
-                                    subtitle = "End quiet hours",
+                                    title = stringResource(R.string.settings_quiet_end),
+                                    subtitle = stringResource(R.string.settings_quiet_end_subtitle),
                                     trailingText = formatMinutes(notifPrefs.quietHoursEnd),
                                     highlighted = highlightSettingId == "quiet_end",
                                     index = notifIdx++, count = notifTotal,
@@ -199,8 +200,8 @@ fun NotificationSettingsScreen(
                             }
                             SettingToggleItem(
                                 icon = Tabler.Outline.BellOff,
-                                title = "Respect System DND",
-                                subtitle = "Don't show notifications when Do Not Disturb is active",
+                                title = stringResource(R.string.settings_respect_system_dnd),
+                                subtitle = stringResource(R.string.settings_respect_system_dnd_subtitle),
                                 checked = notifPrefs.respectSystemDnd,
                                 highlighted = highlightSettingId == "respect_system_dnd",
                                 index = notifIdx++, count = notifTotal,
@@ -210,8 +211,8 @@ fun NotificationSettingsScreen(
                             )
                             SettingListItem(
                                 icon = Tabler.Outline.Settings,
-                                title = "System Notification Settings",
-                                subtitle = "Customize per-library channel in system settings",
+                                title = stringResource(R.string.settings_system_notification_settings),
+                                subtitle = stringResource(R.string.settings_system_notification_settings_subtitle),
                                 highlighted = highlightSettingId == "system_notification_settings",
                                 index = notifIdx++, count = notifTotal,
                                 onClick = {
@@ -224,8 +225,8 @@ fun NotificationSettingsScreen(
                         }
                         SettingToggleItem(
                             icon = Tabler.Outline.Volume,
-                            title = "Sound",
-                            subtitle = "Play notification sound",
+                            title = stringResource(R.string.settings_sound),
+                            subtitle = stringResource(R.string.settings_sound_subtitle),
                             checked = notifPrefs.soundEnabled,
                             highlighted = highlightSettingId == "notification_sound",
                             index = notifIdx++, count = notifTotal,
@@ -234,9 +235,9 @@ fun NotificationSettingsScreen(
                             },
                         )
                         SettingToggleItem(
-                            icon = Tabler.Outline.PhoneCall,
-                            title = "Vibrate",
-                            subtitle = "Vibrate on notification",
+                            icon = Tabler.Outline.Bell,
+                            title = stringResource(R.string.settings_vibrate),
+                            subtitle = stringResource(R.string.settings_vibrate_subtitle),
                             checked = notifPrefs.vibrateEnabled,
                             highlighted = highlightSettingId == "notification_vibrate",
                             index = notifIdx++, count = notifTotal,
@@ -246,8 +247,8 @@ fun NotificationSettingsScreen(
                         )
                         SettingToggleItem(
                             icon = Tabler.Outline.Bulb,
-                            title = "Notification Lights",
-                            subtitle = "Pulse notification light on devices that support it",
+                            title = stringResource(R.string.settings_notification_lights),
+                            subtitle = stringResource(R.string.settings_notification_lights_subtitle),
                             checked = notifPrefs.lightsEnabled,
                             highlighted = highlightSettingId == "notification_lights",
                             index = notifIdx++, count = notifTotal,
@@ -258,8 +259,8 @@ fun NotificationSettingsScreen(
                         if (showAdvanced) {
                             SettingListItem(
                                 icon = Tabler.Outline.LetterCase,
-                                title = "Max Per Check",
-                                subtitle = "Maximum items per notification batch",
+                                title = stringResource(R.string.settings_max_per_check),
+                                subtitle = stringResource(R.string.settings_max_per_check_subtitle),
                                 trailingText = "${notifPrefs.maxPerCheck}",
                                 highlighted = highlightSettingId == "max_per_check",
                                 index = notifIdx++, count = notifTotal,
@@ -271,8 +272,8 @@ fun NotificationSettingsScreen(
                             }
                             SettingListItem(
                                 icon = Tabler.Outline.Folders,
-                                title = "Libraries",
-                                subtitle = "$enabledLibraries of $libraryCount libraries monitored",
+                                title = stringResource(R.string.settings_libraries),
+                                subtitle = stringResource(R.string.settings_libraries_subtitle, enabledLibraries, libraryCount),
                                 highlighted = highlightSettingId == "notification_libraries",
                                 index = notifIdx, count = notifTotal,
                                 onClick = { activeDialog = NotificationSettingsDialog.LibrariesPicker },
@@ -298,7 +299,7 @@ fun NotificationSettingsScreen(
         val notifPrefs = preferences.notificationPreferences
         AlertDialog(
             onDismissRequest = { activeDialog = NotificationSettingsDialog.None },
-            title = { Text("Check Frequency") },
+            title = { Text(stringResource(R.string.settings_check_frequency)) },
             text = {
                 Column {
                     CheckFrequency.entries.forEachIndexed { index, freq ->
@@ -333,7 +334,7 @@ fun NotificationSettingsScreen(
                 }
             },
             confirmButton = {
-                TextButton(onClick = { activeDialog = NotificationSettingsDialog.None }) { Text("Cancel") }
+                TextButton(onClick = { activeDialog = NotificationSettingsDialog.None }) { Text(stringResource(R.string.settings_cancel)) }
             },
         )
     }
@@ -347,7 +348,7 @@ fun NotificationSettingsScreen(
         )
         AlertDialog(
             onDismissRequest = { activeDialog = NotificationSettingsDialog.None },
-            title = { Text("Quiet Hours Start") },
+            title = { Text(stringResource(R.string.settings_quiet_hours_start)) },
             text = {
                 androidx.compose.material3.TimePicker(state = timePickerState)
             },
@@ -359,10 +360,10 @@ fun NotificationSettingsScreen(
                         }
                         activeDialog = NotificationSettingsDialog.None
                     }
-                ) { Text("OK") }
+                ) { Text(stringResource(R.string.settings_ok)) }
             },
             dismissButton = {
-                TextButton(onClick = { activeDialog = NotificationSettingsDialog.None }) { Text("Cancel") }
+                TextButton(onClick = { activeDialog = NotificationSettingsDialog.None }) { Text(stringResource(R.string.settings_cancel)) }
             },
         )
     }
@@ -376,7 +377,7 @@ fun NotificationSettingsScreen(
         )
         AlertDialog(
             onDismissRequest = { activeDialog = NotificationSettingsDialog.None },
-            title = { Text("Quiet Hours End") },
+            title = { Text(stringResource(R.string.settings_quiet_hours_end)) },
             text = {
                 androidx.compose.material3.TimePicker(state = timePickerState)
             },
@@ -388,10 +389,10 @@ fun NotificationSettingsScreen(
                         }
                         activeDialog = NotificationSettingsDialog.None
                     }
-                ) { Text("OK") }
+                ) { Text(stringResource(R.string.settings_ok)) }
             },
             dismissButton = {
-                TextButton(onClick = { activeDialog = NotificationSettingsDialog.None }) { Text("Cancel") }
+                TextButton(onClick = { activeDialog = NotificationSettingsDialog.None }) { Text(stringResource(R.string.settings_cancel)) }
             },
         )
     }
@@ -401,7 +402,7 @@ fun NotificationSettingsScreen(
         val options = listOf(5, 10, 15, 20, 30, 50, 100)
         AlertDialog(
             onDismissRequest = { activeDialog = NotificationSettingsDialog.None },
-            title = { Text("Max Items Per Check") },
+            title = { Text(stringResource(R.string.settings_max_items_per_check)) },
             text = {
                 Column(modifier = Modifier.verticalScroll(rememberScrollState())) {
                     options.forEach { opt ->
@@ -423,13 +424,13 @@ fun NotificationSettingsScreen(
                                 }
                             )
                             Spacer(Modifier.width(8.dp))
-                            Text(text = "$opt items", style = MaterialTheme.typography.bodyLarge)
+                            Text(text = stringResource(R.string.settings_items_count, opt), style = MaterialTheme.typography.bodyLarge)
                         }
                     }
                 }
             },
             confirmButton = {
-                TextButton(onClick = { activeDialog = NotificationSettingsDialog.None }) { Text("Cancel") }
+                TextButton(onClick = { activeDialog = NotificationSettingsDialog.None }) { Text(stringResource(R.string.settings_cancel)) }
             }
         )
     }
@@ -438,12 +439,12 @@ fun NotificationSettingsScreen(
         val notifPrefs = preferences.notificationPreferences
         AlertDialog(
             onDismissRequest = { activeDialog = NotificationSettingsDialog.None },
-            title = { Text("Monitored Libraries") },
+            title = { Text(stringResource(R.string.settings_monitored_libraries)) },
             text = {
                 Column(modifier = Modifier.verticalScroll(rememberScrollState())) {
                     if (viewModel.libraryFolders.isEmpty()) {
                         Text(
-                            text = "No libraries found",
+                            text = stringResource(R.string.settings_no_libraries_found),
                             style = MaterialTheme.typography.bodyMedium,
                             modifier = Modifier.padding(16.dp)
                         )
@@ -481,7 +482,7 @@ fun NotificationSettingsScreen(
                 }
             },
             confirmButton = {
-                TextButton(onClick = { activeDialog = NotificationSettingsDialog.None }) { Text("Done") }
+                TextButton(onClick = { activeDialog = NotificationSettingsDialog.None }) { Text(stringResource(R.string.settings_done)) }
             }
         )
     }

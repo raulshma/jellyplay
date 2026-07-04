@@ -52,7 +52,6 @@ class JellyPlayNotificationProvider(
     fun release() {
         scope.cancel()
         synchronized(bitmapLock) {
-            cachedBitmap?.recycle()
             cachedBitmap = null
             cachedArtworkUri = null
         }
@@ -181,9 +180,7 @@ class JellyPlayNotificationProvider(
                 if (bitmap != null) {
                     val accentColor = extractAccentColor(bitmap)
                     synchronized(bitmapLock) {
-                        val old = cachedBitmap
                         cachedBitmap = bitmap
-                        old?.recycle()
                         cachedAccentColor = accentColor
                     }
                     withContext(Dispatchers.Main) {

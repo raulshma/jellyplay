@@ -26,6 +26,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -35,6 +36,7 @@ import com.raulshma.jellyplay.core.designsystem.theme.ShapeCache
 import com.raulshma.jellyplay.core.model.MediaItem
 import com.raulshma.jellyplay.core.ui.components.focusIndicator
 import com.raulshma.jellyplay.core.ui.image.MediaImage
+import com.raulshma.jellyplay.feature.details.R
 
 @Composable
 internal fun AlbumTrackItem(
@@ -113,7 +115,7 @@ internal fun AlbumTrackItem(
         ) {
             Icon(
                 Tabler.Outline.PlayerPlay,
-                contentDescription = "Play",
+                contentDescription = stringResource(R.string.detail_cd_track_play),
                 tint = MaterialTheme.colorScheme.onSurfaceVariant,
             )
         }

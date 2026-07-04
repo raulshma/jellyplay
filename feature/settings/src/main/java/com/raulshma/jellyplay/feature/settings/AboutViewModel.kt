@@ -33,6 +33,12 @@ class AboutViewModel @Inject constructor(
         if ((info.flags and android.content.pm.ApplicationInfo.FLAG_DEBUGGABLE) != 0) "Debug" else "Release"
     }
 
+    // Min/target SDK info derived at runtime from the application info so the About screen
+    // never drifts from the actual build configuration in app/build.gradle.kts.
+    private val appInfo get() = context.applicationInfo
+    val minSdkInfo: String get() = "API ${appInfo.minSdkVersion}"
+    val targetSdkInfo: String get() = "API ${appInfo.targetSdkVersion}"
+
     var serverName by composeState<String?>(null)
         private set
 

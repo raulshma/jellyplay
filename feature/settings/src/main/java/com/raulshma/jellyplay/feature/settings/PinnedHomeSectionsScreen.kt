@@ -33,6 +33,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Color
@@ -86,7 +87,7 @@ fun PinnedHomeSectionsScreen(
     val scrollState = rememberLazyListState()
 
     JellyPlayScreenScaffold(
-        title = "Pinned Home Sections",
+        title = stringResource(R.string.settings_pinned_home_sections),
         onBack = onBack,
         backgroundColor = backgroundColor,
     ) { innerPadding ->
@@ -112,10 +113,10 @@ fun PinnedHomeSectionsScreen(
             item {
                 SettingsGroup(
                     icon = Tabler.Outline.Pinned,
-                    title = "Pinned Sections",
+                    title = stringResource(R.string.settings_pinned_sections),
                     summary = {
                         if (pinnedSections.isEmpty()) {
-                            "No pinned sections yet"
+                            stringResource(R.string.settings_no_pinned_sections)
                         } else {
                             val byType = pinnedSections.groupBy { it.type.displayName }
                             byType.entries.joinToString(", ") { (type, list) ->
@@ -141,7 +142,7 @@ fun PinnedHomeSectionsScreen(
                             )
                             Spacer(Modifier.width(12.dp))
                             Text(
-                                text = "Pin collections, playlists, favorites, genres or studios to your home screen for quick access.",
+                                text = stringResource(R.string.settings_pinned_helper),
                                 style = MaterialTheme.typography.bodyMedium,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                             )
@@ -247,19 +248,19 @@ private fun PinnedSectionRow(
             Row(verticalAlignment = Alignment.CenterVertically) {
                 ReorderIconButton(
                     icon = Tabler.Outline.ChevronUp,
-                    contentDescription = "Move up",
+                    contentDescription = stringResource(R.string.settings_move_up_cd),
                     enabled = canMoveUp,
                     onClick = onMoveUp,
                 )
                 ReorderIconButton(
                     icon = Tabler.Outline.ChevronDown,
-                    contentDescription = "Move down",
+                    contentDescription = stringResource(R.string.settings_move_down_cd),
                     enabled = canMoveDown,
                     onClick = onMoveDown,
                 )
                 ReorderIconButton(
                     icon = Tabler.Outline.X,
-                    contentDescription = "Remove ${section.title}",
+                    contentDescription = stringResource(R.string.settings_remove_section_cd, section.title),
                     enabled = true,
                     onClick = onRemove,
                     isDestructive = true,
@@ -364,7 +365,7 @@ private fun AddPinnedSectionRow(
         )
         Spacer(Modifier.width(14.dp))
         Text(
-            text = "Add Pinned Section",
+            text = stringResource(R.string.settings_add_pinned_section),
             style = MaterialTheme.typography.bodyLarge,
             fontWeight = FontWeight.SemiBold,
             color = MaterialTheme.colorScheme.primary,
@@ -389,13 +390,14 @@ private fun AddPinnedSectionSheet(
                 .padding(bottom = 32.dp),
         ) {
             Text(
-                if (selectedType == null) "Add Pinned Section" else "Choose ${selectedType!!.displayName}",
+                if (selectedType == null) stringResource(R.string.settings_add_pinned_section) else stringResource(R.string.settings_choose_x, selectedType!!.displayName),
                 style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Bold),
                 modifier = Modifier.padding(horizontal = 24.dp),
             )
             Spacer(Modifier.height(12.dp))
 
             val currentType = selectedType
+            val favoritesTitle = stringResource(R.string.settings_favorites)
             if (currentType == null) {
                 PinnedTypePicker(onSelect = { type ->
                     if (type == PinnedSectionType.FAVORITES) {
@@ -403,7 +405,7 @@ private fun AddPinnedSectionSheet(
                             PinnedHomeSection(
                                 type = type,
                                 sourceId = PinnedHomeSection.FAVORITES_SOURCE_ID,
-                                title = "Favorites",
+                                title = favoritesTitle,
                             )
                         )
                         onPinned()
@@ -446,11 +448,11 @@ private fun PinnedTypePicker(onSelect: (PinnedSectionType) -> Unit) {
             val shape = expressiveListShape(index, totalCount, innerRadius = 0.dp)
             val tvFocusState = rememberTvFocusState(focusedScale = 1.01f)
             val iconAndSubtitle: Pair<ImageVector, String> = when (type) {
-                PinnedSectionType.COLLECTION -> Tabler.Outline.Folders to "A curated box-set of items"
-                PinnedSectionType.PLAYLIST -> Tabler.Outline.List to "A saved playback playlist"
-                PinnedSectionType.FAVORITES -> Tabler.Outline.Heart to "Everything you have favorited"
-                PinnedSectionType.GENRE -> Tabler.Outline.Category to "Items matching a genre"
-                PinnedSectionType.STUDIO -> Tabler.Outline.Building to "Items from a studio"
+                PinnedSectionType.COLLECTION -> Tabler.Outline.Folders to stringResource(R.string.settings_pinned_collection_desc)
+                PinnedSectionType.PLAYLIST -> Tabler.Outline.List to stringResource(R.string.settings_pinned_playlist_desc)
+                PinnedSectionType.FAVORITES -> Tabler.Outline.Heart to stringResource(R.string.settings_pinned_favorites_desc)
+                PinnedSectionType.GENRE -> Tabler.Outline.Category to stringResource(R.string.settings_pinned_genre_desc)
+                PinnedSectionType.STUDIO -> Tabler.Outline.Building to stringResource(R.string.settings_pinned_studio_desc)
             }
             val icon = iconAndSubtitle.first
             val subtitle = iconAndSubtitle.second
@@ -510,7 +512,7 @@ private fun PinnedOptionBrowser(
         TvSafeTextButton(onClick = onBack) {
             Icon(Tabler.Outline.ArrowLeft, contentDescription = null, modifier = Modifier.size(16.dp))
             Spacer(Modifier.width(6.dp))
-            Text("Back")
+            Text(stringResource(R.string.settings_back))
         }
     }
 
@@ -522,7 +524,7 @@ private fun PinnedOptionBrowser(
                     .padding(vertical = 40.dp),
                 contentAlignment = Alignment.Center,
             ) {
-                androidx.compose.material3.CircularProgressIndicator()
+                com.raulshma.jellyplay.core.ui.components.JellyPlayLoadingIndicator()
             }
         }
         error != null -> {
@@ -533,7 +535,7 @@ private fun PinnedOptionBrowser(
                 horizontalAlignment = Alignment.CenterHorizontally,
             ) {
                 Text(
-                    "Couldn't load items",
+                    stringResource(R.string.settings_couldnt_load_items),
                     style = MaterialTheme.typography.titleMedium,
                 )
                 Spacer(Modifier.height(4.dp))
@@ -547,7 +549,7 @@ private fun PinnedOptionBrowser(
         }
         options.isEmpty() -> {
             Text(
-                "Nothing available to pin.",
+                stringResource(R.string.settings_nothing_to_pin),
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 modifier = Modifier
@@ -603,14 +605,14 @@ private fun PinnedOptionBrowser(
                         if (isPinned) {
                             Icon(
                                 Tabler.Outline.Check,
-                                contentDescription = "Already pinned",
+                                contentDescription = stringResource(R.string.settings_already_pinned_cd),
                                 tint = MaterialTheme.colorScheme.primary,
                                 modifier = Modifier.size(18.dp),
                             )
                         } else {
                             Icon(
                                 Tabler.Outline.Plus,
-                                contentDescription = "Pin",
+                                contentDescription = stringResource(R.string.settings_pin_cd),
                                 tint = MaterialTheme.colorScheme.onSurfaceVariant,
                                 modifier = Modifier.size(18.dp),
                             )

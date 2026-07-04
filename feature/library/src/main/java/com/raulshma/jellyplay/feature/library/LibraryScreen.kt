@@ -112,6 +112,7 @@ import com.raulshma.jellyplay.feature.library.components.LibraryListItem
 import com.raulshma.jellyplay.core.ui.animation.animateContentSizeNoClip
 import com.composables.icons.tabler.Tabler
 import com.composables.icons.tabler.outline.*
+import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import com.raulshma.jellyplay.feature.library.R
 import kotlinx.coroutines.launch
@@ -166,8 +167,6 @@ fun LibraryScreen(
 
     val backgroundColor = MaterialTheme.colorScheme.background
 
-    var headerVisible by remember { mutableStateOf(true) }
-
     val isScrolled by remember {
         derivedStateOf { gridState.firstVisibleItemIndex > 0 || gridState.firstVisibleItemScrollOffset > 50 }
     }
@@ -219,7 +218,7 @@ fun LibraryScreen(
                         .padding(top = 16.dp),
                 ) {
                     AnimatedVisibility(
-                        visible = headerVisible,
+                        visible = true,
                         enter = fadeIn(
                             spring(stiffness = Spring.StiffnessMediumLow)
                         ) + slideInVertically(
@@ -237,7 +236,7 @@ fun LibraryScreen(
                             verticalAlignment = Alignment.CenterVertically,
                         ) {
                             Text(
-                                text = "Library",
+                                text = stringResource(R.string.library_title),
                                 style = MaterialTheme.typography.headlineLarge.copy(
                                     fontWeight = FontWeight.Bold,
                                 ),
@@ -286,12 +285,12 @@ fun LibraryScreen(
                                 ) {
                                     Icon(
                                         Tabler.Outline.Filter,
-                                        contentDescription = "Filters",
+                                        contentDescription = stringResource(R.string.library_filters),
                                         modifier = Modifier.size(18.dp),
                                         tint = MaterialTheme.colorScheme.onBackground
                                     )
                                     Text(
-                                        text = "Filters",
+                                        text = stringResource(R.string.library_filters),
                                         style = MaterialTheme.typography.labelLarge,
                                         color = MaterialTheme.colorScheme.onBackground,
                                         fontWeight = FontWeight.SemiBold
@@ -304,7 +303,7 @@ fun LibraryScreen(
                     Spacer(Modifier.height(16.dp))
 
                     AnimatedVisibility(
-                        visible = headerVisible && folders.size > 1,
+                        visible = folders.size > 1,
                         enter = fadeIn(
                             spring(stiffness = Spring.StiffnessMediumLow)
                         ) + slideInVertically(
@@ -321,7 +320,7 @@ fun LibraryScreen(
                         ) {
                             item {
                                 GlassPill(
-                                    label = "All",
+                                    label = stringResource(R.string.library_all),
                                     selected = selectedFolder == null,
                                     onClick = { viewModel.selectFolder(null) },
                                 )
@@ -423,7 +422,7 @@ fun LibraryScreen(
                                     .padding(horizontal = 10.dp, vertical = 5.dp),
                             ) {
                                 Text(
-                                    text = "Clear all",
+                                    text = stringResource(R.string.library_clear_all),
                                     style = MaterialTheme.typography.labelSmall,
                                     color = MaterialTheme.colorScheme.primary,
                                     fontWeight = FontWeight.SemiBold,
@@ -433,11 +432,11 @@ fun LibraryScreen(
                     }
 
                     AnimatedVisibility(
-                        visible = headerVisible && pagedItems.itemCount > 0,
+                        visible = pagedItems.itemCount > 0,
                         enter = fadeIn(MaterialTheme.motionScheme.defaultEffectsSpec()),
                     ) {
                         Text(
-                            text = "${pagedItems.itemCount} items",
+                            text = pluralStringResource(R.plurals.library_item_count, pagedItems.itemCount, pagedItems.itemCount),
                             style = MaterialTheme.typography.labelMedium,
                                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                             modifier = Modifier.padding(
@@ -498,13 +497,13 @@ fun LibraryScreen(
                                             tint = MaterialTheme.colorScheme.onSurfaceVariant,
                                         )
                                         Text(
-                                            text = "No items found",
+                                            text = stringResource(R.string.library_no_items_found),
                                             style = MaterialTheme.typography.bodyLarge,
                                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                                         )
                                         if (hasActiveFilters) {
                                             Text(
-                                                text = "Try adjusting your filters",
+                                                text = stringResource(R.string.library_try_adjusting_filters),
                                                 style = MaterialTheme.typography.bodySmall,
                                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                                             )
@@ -630,7 +629,7 @@ fun LibraryScreen(
                                     ) {
                                         Icon(
                                             Tabler.Outline.Filter,
-                                            contentDescription = "Filters",
+                                            contentDescription = stringResource(R.string.library_filters),
                                         )
                                     }
                                 },
@@ -645,7 +644,7 @@ fun LibraryScreen(
                                 ) {
                                     Icon(
                                         if (viewMode == LibraryViewMode.GRID) Tabler.Outline.List else Tabler.Outline.GridDots,
-                                        contentDescription = if (viewMode == LibraryViewMode.GRID) "List view" else "Grid view",
+                                        contentDescription = stringResource(if (viewMode == LibraryViewMode.GRID) R.string.library_list_view else R.string.library_grid_view),
                                         modifier = Modifier.size(20.dp),
                                     )
                                 }
@@ -655,7 +654,7 @@ fun LibraryScreen(
                                 ) {
                                     Icon(
                                         Tabler.Outline.Wand,
-                                        contentDescription = "Smart Playlists",
+                                        contentDescription = stringResource(R.string.library_smart_playlists),
                                         modifier = Modifier.size(20.dp),
                                     )
                                 }
@@ -665,7 +664,7 @@ fun LibraryScreen(
                                 ) {
                                     Icon(
                                         Tabler.Outline.MoodSmile,
-                                        contentDescription = "Mood Playlists",
+                                        contentDescription = stringResource(R.string.library_mood_playlists),
                                         modifier = Modifier.size(20.dp),
                                     )
                                 }
@@ -675,7 +674,7 @@ fun LibraryScreen(
                                 ) {
                                     Icon(
                                         Tabler.Outline.Playlist,
-                                        contentDescription = "Playlists",
+                                        contentDescription = stringResource(R.string.library_playlists),
                                         modifier = Modifier.size(20.dp),
                                     )
                                 }
@@ -685,7 +684,7 @@ fun LibraryScreen(
                                 ) {
                                     Icon(
                                         Tabler.Outline.ArrowsShuffle,
-                                        contentDescription = "Shuffle",
+                                        contentDescription = stringResource(R.string.library_shuffle),
                                         modifier = Modifier.size(20.dp),
                                     )
                                 }

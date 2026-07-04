@@ -50,6 +50,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
@@ -131,7 +132,7 @@ fun SeerrSettingsScreen(
     )
 
     JellyPlayScreenScaffold(
-        title = "Seerr Settings",
+        title = stringResource(R.string.settings_seerr_settings),
         onBack = onBack,
         backgroundColor = backgroundColor,
     ) {
@@ -162,18 +163,18 @@ fun SeerrSettingsScreen(
                 AnimatedSettingsEntrance(index = 1, visible = animateEntrance) {
                     SettingsGroup(
                         icon = Tabler.Outline.Server,
-                        title = "Server Connection",
+                        title = stringResource(R.string.settings_server_connection),
                         summary = {
                             when (connectionStatus) {
                                 is ConnectionStatus.Connected -> {
                                     val versionText = if (connectionStatus.version.isNotBlank()) " (v${connectionStatus.version})" else ""
-                                    "Connected to ${viewModel.serverUrl}$versionText"
+                                    stringResource(R.string.settings_connected_to, "${viewModel.serverUrl}$versionText")
                                 }
-                                is ConnectionStatus.Error -> "Connection failed"
+                                is ConnectionStatus.Error -> stringResource(R.string.settings_connection_failed)
                                 else -> {
-                                    if (isTesting) "Connecting..."
-                                    else if (viewModel.serverUrl.isNotBlank()) "Credentials configured"
-                                    else "Configure server address"
+                                    if (isTesting) stringResource(R.string.settings_connecting)
+                                    else if (viewModel.serverUrl.isNotBlank()) stringResource(R.string.settings_credentials_configured)
+                                    else stringResource(R.string.settings_configure_server_address)
                                 }
                             }
                         },
@@ -188,8 +189,8 @@ fun SeerrSettingsScreen(
                             OutlinedTextField(
                                 value = viewModel.serverUrl,
                                 onValueChange = viewModel::onServerUrlChanged,
-                                label = { Text("Server URL") },
-                                placeholder = { Text("http://localhost:5055") },
+                                label = { Text(stringResource(R.string.settings_server_url)) },
+                                placeholder = { Text(stringResource(R.string.settings_server_url_placeholder)) },
                                 leadingIcon = {
                                     Icon(Tabler.Outline.Globe, contentDescription = null)
                                 },
@@ -199,7 +200,7 @@ fun SeerrSettingsScreen(
                                             onClick = { viewModel.onServerUrlChanged("") },
                                             modifier = Modifier.focusIndicator(CircleShape),
                                         ) {
-                                            Icon(Tabler.Outline.X, contentDescription = "Clear")
+                                            Icon(Tabler.Outline.X, contentDescription = stringResource(R.string.settings_clear_cd))
                                         }
                                     }
                                 },
@@ -218,7 +219,7 @@ fun SeerrSettingsScreen(
                                     selected = viewModel.authMethod == SeerrAuthMethod.API_KEY,
                                     icon = {},
                                 ) {
-                                    Text("API Key")
+                                    Text(stringResource(R.string.settings_seerr_api_key_method))
                                 }
                                 SegmentedButton(
                                     shape = SegmentedButtonDefaults.itemShape(index = 1, count = 3),
@@ -226,7 +227,7 @@ fun SeerrSettingsScreen(
                                     selected = viewModel.authMethod == SeerrAuthMethod.JELLYFIN,
                                     icon = {},
                                 ) {
-                                    Text("Jellyfin")
+                                    Text(stringResource(R.string.settings_seerr_jellyfin_method))
                                 }
                                 SegmentedButton(
                                     shape = SegmentedButtonDefaults.itemShape(index = 2, count = 3),
@@ -234,7 +235,7 @@ fun SeerrSettingsScreen(
                                     selected = viewModel.authMethod == SeerrAuthMethod.LOCAL,
                                     icon = {},
                                 ) {
-                                    Text("Local")
+                                    Text(stringResource(R.string.settings_seerr_local_method))
                                 }
                             }
 
@@ -266,9 +267,9 @@ fun SeerrSettingsScreen(
                                     }
                                     Text(
                                         when (viewModel.authMethod) {
-                                            SeerrAuthMethod.API_KEY -> "Test Connection"
+                                            SeerrAuthMethod.API_KEY -> stringResource(R.string.settings_test_connection)
                                             SeerrAuthMethod.JELLYFIN,
-                                            SeerrAuthMethod.LOCAL -> "Sign In"
+                                            SeerrAuthMethod.LOCAL -> stringResource(R.string.settings_seerr_sign_in)
                                         }
                                     )
                                 }
@@ -282,7 +283,7 @@ fun SeerrSettingsScreen(
                                             contentColor = MaterialTheme.colorScheme.error,
                                         ),
                                     ) {
-                                        Text("Disconnect")
+                                        Text(stringResource(R.string.settings_disconnect))
                                     }
                                 }
                             }
@@ -305,7 +306,7 @@ fun SeerrSettingsScreen(
                     AnimatedSettingsEntrance(index = 2, visible = animateEntrance) {
                         SettingsGroup(
                             icon = Tabler.Outline.Puzzle,
-                            title = "Integration Features",
+                            title = stringResource(R.string.settings_integration_features),
                             summary = {
                                 if (preferences.enabled) {
                                     val count = listOf(
@@ -313,9 +314,9 @@ fun SeerrSettingsScreen(
                                         preferences.recommendationsEnabled,
                                         preferences.discoverEnabled
                                     ).count { it } + 1
-                                    "$count of 4 features active"
+                                    stringResource(R.string.settings_features_active, count)
                                 } else {
-                                    "Disabled"
+                                    stringResource(R.string.settings_disabled)
                                 }
                             },
                             modifier = Modifier.padding(vertical = 4.dp),
@@ -326,8 +327,8 @@ fun SeerrSettingsScreen(
 
                             SettingToggleItem(
                                 icon = Tabler.Outline.Puzzle,
-                                title = "Enable Seerr Integration",
-                                subtitle = "Connect your Seerr server with JellyPlay",
+                                title = stringResource(R.string.settings_enable_seerr_integration),
+                                subtitle = stringResource(R.string.settings_enable_seerr_subtitle),
                                 checked = preferences.enabled,
                                 index = 0,
                                 count = featTotal,
@@ -348,8 +349,8 @@ fun SeerrSettingsScreen(
                                 ) {
                                     SettingToggleItem(
                                         icon = Tabler.Outline.Search,
-                                        title = "Search Integration",
-                                        subtitle = "Request media directly from app search",
+                                        title = stringResource(R.string.settings_search_integration),
+                                        subtitle = stringResource(R.string.settings_search_integration_subtitle),
                                         checked = preferences.searchEnabled,
                                         index = 1,
                                         count = 4,
@@ -357,8 +358,8 @@ fun SeerrSettingsScreen(
                                     )
                                     SettingToggleItem(
                                         icon = Tabler.Outline.Sparkles,
-                                        title = "Recommendations & Similar",
-                                        subtitle = "Show Seerr recommendations on media detail screens",
+                                        title = stringResource(R.string.settings_recommendations_similar),
+                                        subtitle = stringResource(R.string.settings_recommendations_subtitle),
                                         checked = preferences.recommendationsEnabled,
                                         index = 2,
                                         count = 4,
@@ -366,8 +367,8 @@ fun SeerrSettingsScreen(
                                     )
                                     SettingToggleItem(
                                         icon = Tabler.Outline.Compass,
-                                        title = "Advance Discover",
-                                        subtitle = "Show Trending, Popular & Upcoming content on the home screen",
+                                        title = stringResource(R.string.settings_advanced_discover),
+                                        subtitle = stringResource(R.string.settings_advanced_discover_subtitle),
                                         checked = preferences.discoverEnabled,
                                         index = 3,
                                         count = 4,
@@ -390,8 +391,8 @@ fun SeerrSettingsScreen(
                                     val discTotal = 5
                                     SettingToggleItem(
                                         icon = Tabler.Outline.Flame,
-                                        title = "Trending",
-                                        subtitle = "Trending movies and series",
+                                        title = stringResource(R.string.settings_trending),
+                                        subtitle = stringResource(R.string.settings_trending_subtitle),
                                         checked = preferences.discoverTrending,
                                         index = 0,
                                         count = discTotal,
@@ -399,8 +400,8 @@ fun SeerrSettingsScreen(
                                     )
                                     SettingToggleItem(
                                         icon = Tabler.Outline.Movie,
-                                        title = "Popular Movies",
-                                        subtitle = "Popular movies on TMDB",
+                                        title = stringResource(R.string.settings_popular_movies),
+                                        subtitle = stringResource(R.string.settings_popular_movies_subtitle),
                                         checked = preferences.discoverPopularMovies,
                                         index = 1,
                                         count = discTotal,
@@ -408,8 +409,8 @@ fun SeerrSettingsScreen(
                                     )
                                     SettingToggleItem(
                                         icon = Tabler.Outline.DeviceTv,
-                                        title = "Popular Series",
-                                        subtitle = "Popular TV series on TMDB",
+                                        title = stringResource(R.string.settings_popular_series),
+                                        subtitle = stringResource(R.string.settings_popular_series_subtitle),
                                         checked = preferences.discoverPopularTv,
                                         index = 2,
                                         count = discTotal,
@@ -417,8 +418,8 @@ fun SeerrSettingsScreen(
                                     )
                                     SettingToggleItem(
                                         icon = Tabler.Outline.CalendarTime,
-                                        title = "Upcoming Movies",
-                                        subtitle = "Movies coming soon to theaters",
+                                        title = stringResource(R.string.settings_upcoming_movies),
+                                        subtitle = stringResource(R.string.settings_upcoming_movies_subtitle),
                                         checked = preferences.discoverUpcomingMovies,
                                         index = 3,
                                         count = discTotal,
@@ -426,8 +427,8 @@ fun SeerrSettingsScreen(
                                     )
                                     SettingToggleItem(
                                         icon = Tabler.Outline.CalendarEvent,
-                                        title = "Upcoming Series",
-                                        subtitle = "TV series coming soon",
+                                        title = stringResource(R.string.settings_upcoming_series),
+                                        subtitle = stringResource(R.string.settings_upcoming_series_subtitle),
                                         checked = preferences.discoverUpcomingTv,
                                         index = 4,
                                         count = discTotal,
@@ -444,11 +445,11 @@ fun SeerrSettingsScreen(
                     AnimatedSettingsEntrance(index = 3, visible = animateEntrance) {
                         SettingsGroup(
                             icon = Tabler.Outline.World,
-                            title = "Content Regions",
+                            title = stringResource(R.string.settings_content_regions),
                             summary = {
                                 val streamingLabel = COMMON_REGIONS.find { it.first == preferences.streamingRegion }?.second?.substringAfter(" ") ?: preferences.streamingRegion
                                 val discoverLabel = COMMON_REGIONS.find { it.first == preferences.discoverRegion }?.second?.substringAfter(" ") ?: preferences.discoverRegion
-                                "Streaming: $streamingLabel, Discover: $discoverLabel"
+                                stringResource(R.string.settings_content_regions_summary, streamingLabel, discoverLabel)
                             },
                             modifier = Modifier.padding(vertical = 4.dp),
                             initiallyExpanded = true,
@@ -458,8 +459,8 @@ fun SeerrSettingsScreen(
 
                             SettingListItem(
                                 icon = Tabler.Outline.DeviceTv,
-                                title = "Streaming Region",
-                                subtitle = "Region used to determine available streaming providers",
+                                title = stringResource(R.string.settings_streaming_region),
+                                subtitle = stringResource(R.string.settings_streaming_region_subtitle),
                                 trailingText = streamingFlagAndName,
                                 index = 0,
                                 count = 2,
@@ -467,8 +468,8 @@ fun SeerrSettingsScreen(
                             )
                             SettingListItem(
                                 icon = Tabler.Outline.Compass,
-                                title = "Discover Region",
-                                subtitle = "Region used for release dates and content discovery",
+                                title = stringResource(R.string.settings_discover_region),
+                                subtitle = stringResource(R.string.settings_discover_region_subtitle),
                                 trailingText = discoverFlagAndName,
                                 index = 1,
                                 count = 2,
@@ -559,14 +560,14 @@ private fun SeerrHeader() {
         Spacer(Modifier.width(16.dp))
         Column {
             Text(
-                text = "Seerr Request Hub",
+                text = stringResource(R.string.settings_seerr_request_hub),
                 style = MaterialTheme.typography.titleLarge,
                 fontWeight = FontWeight.Bold,
                 color = MaterialTheme.colorScheme.onSurface,
             )
             Spacer(Modifier.height(4.dp))
             Text(
-                text = "Connect Jellyseerr or Overseerr to search, discover, and request content directly from within JellyPlay.",
+                text = stringResource(R.string.settings_seerr_header_description),
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
@@ -580,8 +581,8 @@ private fun ApiKeyFields(viewModel: SeerrSettingsViewModel) {
     OutlinedTextField(
         value = viewModel.apiKey,
         onValueChange = viewModel::onApiKeyChanged,
-        label = { Text("API Key") },
-        placeholder = { Text("Enter your Seerr API key") },
+        label = { Text(stringResource(R.string.settings_api_key_label)) },
+        placeholder = { Text(stringResource(R.string.settings_api_key_placeholder)) },
         leadingIcon = {
             Icon(Tabler.Outline.Key, contentDescription = null)
         },
@@ -592,7 +593,7 @@ private fun ApiKeyFields(viewModel: SeerrSettingsViewModel) {
             ) {
                 Icon(
                     imageVector = if (apiKeyVisible) Tabler.Outline.EyeOff else Tabler.Outline.Eye,
-                    contentDescription = if (apiKeyVisible) "Hide API key" else "Show API key"
+                    contentDescription = if (apiKeyVisible) stringResource(R.string.settings_hide_api_key) else stringResource(R.string.settings_show_api_key)
                 )
             }
         },
@@ -612,8 +613,8 @@ private fun JellyfinAuthFields(viewModel: SeerrSettingsViewModel) {
         OutlinedTextField(
             value = viewModel.username,
             onValueChange = viewModel::onUsernameChanged,
-            label = { Text("Username") },
-            placeholder = { Text("Jellyfin username") },
+            label = { Text(stringResource(R.string.settings_username_label)) },
+            placeholder = { Text(stringResource(R.string.settings_jellyfin_username_placeholder)) },
             leadingIcon = {
                 Icon(Tabler.Outline.User, contentDescription = null)
             },
@@ -625,8 +626,8 @@ private fun JellyfinAuthFields(viewModel: SeerrSettingsViewModel) {
         OutlinedTextField(
             value = viewModel.password,
             onValueChange = viewModel::onPasswordChanged,
-            label = { Text("Password") },
-            placeholder = { Text("Jellyfin password") },
+            label = { Text(stringResource(R.string.settings_password_label)) },
+            placeholder = { Text(stringResource(R.string.settings_jellyfin_password_placeholder)) },
             leadingIcon = {
                 Icon(Tabler.Outline.Lock, contentDescription = null)
             },
@@ -637,7 +638,7 @@ private fun JellyfinAuthFields(viewModel: SeerrSettingsViewModel) {
             ) {
                 Icon(
                     imageVector = if (passwordVisible) Tabler.Outline.EyeOff else Tabler.Outline.Eye,
-                    contentDescription = if (passwordVisible) "Hide password" else "Show password"
+                    contentDescription = if (passwordVisible) stringResource(R.string.settings_hide_password) else stringResource(R.string.settings_show_password)
                 )
             }
         },
@@ -658,8 +659,8 @@ private fun LocalAuthFields(viewModel: SeerrSettingsViewModel) {
         OutlinedTextField(
             value = viewModel.email,
             onValueChange = viewModel::onEmailChanged,
-            label = { Text("Email") },
-            placeholder = { Text("Seerr account email") },
+            label = { Text(stringResource(R.string.settings_email_label)) },
+            placeholder = { Text(stringResource(R.string.settings_seerr_email_placeholder)) },
             leadingIcon = {
                 Icon(Tabler.Outline.Mail, contentDescription = null)
             },
@@ -672,8 +673,8 @@ private fun LocalAuthFields(viewModel: SeerrSettingsViewModel) {
         OutlinedTextField(
             value = viewModel.password,
             onValueChange = viewModel::onPasswordChanged,
-            label = { Text("Password") },
-            placeholder = { Text("Seerr account password") },
+            label = { Text(stringResource(R.string.settings_password_label)) },
+            placeholder = { Text(stringResource(R.string.settings_seerr_password_placeholder)) },
             leadingIcon = {
                 Icon(Tabler.Outline.Lock, contentDescription = null)
             },
@@ -684,7 +685,7 @@ private fun LocalAuthFields(viewModel: SeerrSettingsViewModel) {
                 ) {
                     Icon(
                         imageVector = if (passwordVisible) Tabler.Outline.EyeOff else Tabler.Outline.Eye,
-                        contentDescription = if (passwordVisible) "Hide password" else "Show password"
+                        contentDescription = if (passwordVisible) stringResource(R.string.settings_hide_password) else stringResource(R.string.settings_show_password)
                     )
                 }
             },
@@ -703,13 +704,13 @@ private fun ConnectionStatusBanner(status: ConnectionStatus) {
     val (icon, title, subtitle, color) = when (status) {
         is ConnectionStatus.Connected -> Quadruple(
             Tabler.Outline.CircleCheck,
-            "Connected",
-            if (status.version.isNotBlank()) "Server reached (v${status.version})" else "Seerr server reached successfully",
+            stringResource(R.string.settings_connected),
+            if (status.version.isNotBlank()) stringResource(R.string.settings_server_reached_version, status.version) else stringResource(R.string.settings_seerr_server_reached),
             StatusColors.success
         )
         is ConnectionStatus.Error -> Quadruple(
             Tabler.Outline.AlertTriangle,
-            "Connection Failed",
+            stringResource(R.string.settings_connection_failed_title),
             status.message,
             MaterialTheme.colorScheme.error
         )

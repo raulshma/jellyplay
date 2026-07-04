@@ -74,6 +74,37 @@ class DetailViewModelTest {
         every { seerrRepository.isConnected() } returns flowOf(false)
         every { seerrRepository.isRecommendationsEnabled() } returns flowOf(false)
 
+        // The ViewModel resolves localized labels via context.getString(resId, vararg). As a
+        // pure unit test (no Robolectric/instrumentation), stub the smart-play templates to
+        // reconstruct their canonical form so assertions stay focused on target selection.
+        // Context.getString(int, Object...) is a vararg; mockk collects the trailing args into
+        // args[1] as an Array, so the two format Ints are (args[1] as Array<*>)[0] and [1].
+        every {
+            context.getString(R.string.detail_resume_episode, any(), any())
+        } answers {
+            val fmt = args[1] as Array<*>
+            "Resume S${fmt[0]}:E${fmt[1]}"
+        }
+        every {
+            context.getString(R.string.detail_next_up_episode, any(), any())
+        } answers {
+            val fmt = args[1] as Array<*>
+            "Next Up S${fmt[0]}:E${fmt[1]}"
+        }
+        every {
+            context.getString(R.string.detail_play_episode, any(), any())
+        } answers {
+            val fmt = args[1] as Array<*>
+            "Play S${fmt[0]}:E${fmt[1]}"
+        }
+        every {
+            context.getString(R.string.detail_replay_episode, any(), any())
+        } answers {
+            val fmt = args[1] as Array<*>
+            "Replay S${fmt[0]}:E${fmt[1]}"
+        }
+        every { context.getString(R.string.detail_error_load_failed) } returns "Failed to load details"
+
         viewModel = DetailViewModel(
             context = context,
             mediaRepository = mediaRepository,
