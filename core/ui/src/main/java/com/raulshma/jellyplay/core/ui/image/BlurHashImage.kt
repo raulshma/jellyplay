@@ -9,7 +9,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.layout.ContentScale
-import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.IntSize
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -40,7 +39,6 @@ internal fun BlurHashImage(
     decodeWidth: Int = 32,
     decodeHeight: Int = 32,
 ) {
-    val density = LocalDensity.current
     val bitmapState = produceState<ImageBitmap?>(null, blurHash, decodeWidth, decodeHeight) {
         val cached = BlurHashCache.get(blurHash)
         if (cached != null && !cached.isRecycled) {

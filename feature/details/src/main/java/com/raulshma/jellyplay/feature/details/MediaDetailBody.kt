@@ -33,7 +33,6 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.blur
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.graphics.Brush
@@ -86,15 +85,12 @@ internal fun FadingItem(
         animationSpec = tween(300),
         label = "itemAlpha"
     )
-    val blurRadius by animateFloatAsState(
-        targetValue = if (visible) 0f else 8f,
-        animationSpec = tween(400),
-        label = "itemBlur"
-    )
+    // Render-thread blur animation dropped (was the most expensive piece of the
+    // entrance animation, applied to ~20 nested FadingItems during screen entry).
+    // Alpha-only fade preserves the entrance feel at a fraction of the cost.
     Box(
         modifier = modifier
             .graphicsLayer { this.alpha = alpha }
-            .blur(blurRadius.dp)
     ) {
         content()
     }
@@ -730,6 +726,31 @@ private fun VideosSection(
     onVideoClick: (SeerrRelatedVideo) -> Unit,
 ) {
     val bodyContentPad = LocalAdaptiveInfo.current.contentPadding(isTv = LocalTvMode.current)
+    // The video card border depends only on the active theme, not on the per-video
+    // data, so compute it once here rather than rebuilding a BorderStroke + gradient
+    // per video per recomposition.
+    val isSynthwave = LocalIsSynthwave.current
+    val isSoothing = LocalIsSoothingTheme.current
+    val videoCardBorder = when {
+        isSynthwave -> {
+            androidx.compose.foundation.BorderStroke(
+                width = 1.5.dp,
+                brush = Brush.linearGradient(
+                    colors = listOf(
+                        MaterialTheme.colorScheme.primary,
+                        MaterialTheme.colorScheme.secondary
+                    )
+                )
+            )
+        }
+        isSoothing -> {
+            androidx.compose.foundation.BorderStroke(
+                width = 0.8.dp,
+                color = MaterialTheme.colorScheme.outline.copy(alpha = 0.35f)
+            )
+        }
+        else -> null
+    }
     Column {
         FadingItem {
             Text(
@@ -746,33 +767,13 @@ private fun VideosSection(
             contentPadding = PaddingValues(horizontal = bodyContentPad),
             horizontalArrangement = Arrangement.spacedBy(12.dp),
         ) { _, video, focusModifier ->
-                val thumbnailUrl = if (video.site?.lowercase() == "youtube") {
-                    "https://img.youtube.com/vi/${video.key}/mqdefault.jpg"
-                } else null
+                val thumbnailUrl = remember(video.site, video.key) {
+                    if (video.site?.equals("youtube", ignoreCase = true) == true) {
+                        "https://img.youtube.com/vi/${video.key}/mqdefault.jpg"
+                    } else null
+                }
 
                 val videoCardFocusState = rememberTvFocusState(focusedScale = 1.05f)
-                val isSynthwave = LocalIsSynthwave.current
-                val isSoothing = LocalIsSoothingTheme.current
-                val videoCardBorder = when {
-                    isSynthwave -> {
-                        androidx.compose.foundation.BorderStroke(
-                            width = 1.5.dp,
-                            brush = Brush.linearGradient(
-                                colors = listOf(
-                                    MaterialTheme.colorScheme.primary,
-                                    MaterialTheme.colorScheme.secondary
-                                )
-                            )
-                        )
-                    }
-                    isSoothing -> {
-                        androidx.compose.foundation.BorderStroke(
-                            width = 0.8.dp,
-                            color = MaterialTheme.colorScheme.outline.copy(alpha = 0.35f)
-                        )
-                    }
-                    else -> null
-                }
 
                 FadingItem {
                     Card(

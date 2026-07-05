@@ -90,7 +90,7 @@ fun QualityPickerSheet(
 
             if (isTv) {
                 LazyColumn(modifier = Modifier.verticalWrapAround()) {
-                    items(StreamingQuality.entries) { quality ->
+                    items(StreamingQuality.entries, key = { it.name }) { quality ->
                         val isSelected = quality == currentQuality
                         val isFirstOrSelected = isSelected || (currentQuality !in StreamingQuality.entries && quality == StreamingQuality.AUTO)
                         val qualityFocusState = rememberTvFocusState(focusedScale = 1.02f)

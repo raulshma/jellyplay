@@ -19,7 +19,7 @@ import okhttp3.OkHttpClient
 import okhttp3.Request
 import java.io.File
 import java.net.SocketTimeoutException
-import java.util.concurrent.TimeUnit
+import javax.inject.Named
 
 @HiltWorker
 class DownloadWorker @AssistedInject constructor(
@@ -28,7 +28,11 @@ class DownloadWorker @AssistedInject constructor(
     private val dao: DownloadDao,
     private val userDao: UserDao,
     private val preferencesStore: UserPreferencesStore,
-    private val client: OkHttpClient,
+    // Pre-tuned singleton (connect=30s, read=60s, write=30s) shared across
+    // all concurrent DownloadWorker invocations. Previously each doWork()
+    // call cloned the base client via newBuilder().build(), multiplying the
+    // interceptor-list allocation when several workers ran at once.
+    @Named("download") private val client: OkHttpClient,
     private val tokenCipher: TokenCipher,
     private val concurrencyLimiter: DownloadConcurrencyLimiter,
 ) : CoroutineWorker(context, params) {
@@ -80,12 +84,6 @@ class DownloadWorker @AssistedInject constructor(
             tokenCipher.decrypt(userDao.getUserById(uid)?.accessToken)
         }
 
-        val downloadClient = client.newBuilder()
-            .connectTimeout(30, TimeUnit.SECONDS)
-            .readTimeout(60, TimeUnit.SECONDS)
-            .writeTimeout(30, TimeUnit.SECONDS)
-            .build()
-
         val numConnections = preferencesStore.preferences.firstOrNull()?.downloadConnections?.coerceIn(1, 8) ?: 1
 
         // Gate the actual transfer on a shared concurrency slot so at most
@@ -94,7 +92,7 @@ class DownloadWorker @AssistedInject constructor(
             try {
             if (existingBytes > 0L) {
                 performSingleConnectionDownload(
-                    downloadClient = downloadClient,
+                    downloadClient = client,
                     dao = dao,
                     downloadId = downloadId,
                     entity = entity,
@@ -103,11 +101,11 @@ class DownloadWorker @AssistedInject constructor(
                     accessToken = accessToken,
                 )
             } else {
-                val totalSize = probeContentSize(downloadClient, entity.downloadUrl, accessToken)
+                val totalSize = probeContentSize(client, entity.downloadUrl, accessToken)
                 if (totalSize > MIN_MULTI_SIZE && numConnections > 1) {
                     MultiConnectionDownloadStrategy.execute(
                         context = applicationContext,
-                        downloadClient = downloadClient,
+                        downloadClient = client,
                         dao = dao,
                         downloadId = downloadId,
                         entity = entity,
@@ -119,7 +117,7 @@ class DownloadWorker @AssistedInject constructor(
                     )
                 } else {
                     performSingleConnectionDownload(
-                        downloadClient = downloadClient,
+                        downloadClient = client,
                         dao = dao,
                         downloadId = downloadId,
                         entity = entity,

@@ -58,6 +58,9 @@ import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
 import kotlinx.coroutines.flow.conflate
 import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.filter
+import kotlinx.coroutines.flow.drop
+import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.StateFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -97,6 +100,7 @@ import com.raulshma.jellyplay.core.model.EffectStrength
 import com.raulshma.jellyplay.core.model.OrientationMode
 import com.raulshma.jellyplay.core.model.SubtitleEdgeType
 import com.raulshma.jellyplay.core.model.SubtitleStyle
+import com.raulshma.jellyplay.core.model.formatFixed
 import com.raulshma.jellyplay.core.ui.tv.LocalTvMode
 import com.raulshma.jellyplay.core.ui.tv.components.rememberDpadSeekState
 import com.raulshma.jellyplay.core.ui.tv.input.onDpadKeyEvent
@@ -1300,18 +1304,35 @@ fun VideoPlayerScreen(
         }
     }
 
-    LaunchedEffect(seekState.timestamp) {
-        if (seekState.direction != 0) {
-            delay(GESTURE_SEEK_LINGER_MS)
-            seekState.reset()
-        }
+    // Single long-lived collector replaces a fresh LaunchedEffect keyed on
+    // seekState.timestamp (which changes per D-pad seek → coroutine create/cancel
+    // per event, thrashing during hold-and-repeat seeking). The reset side-effect
+    // body is unchanged; only the dispatch mechanism changes.
+    LaunchedEffect(Unit) {
+        snapshotFlow { seekState.timestamp to seekState.direction }
+            .filter { (_, direction) -> direction != 0 }
+            .drop(1) // ignore the initial replay (no seek yet)
+            .collectLatest {
+                delay(GESTURE_SEEK_LINGER_MS)
+                seekState.reset()
+            }
     }
 
     LaunchedEffect(Unit) {
-        snapshotFlow { seekPositionMs }
+        // Combine the position with the gating state into one snapshotFlow and
+        // suppress emits where neither the position nor the gating flags changed,
+        // avoiding re-deriving seeking-state on no-op emissions.
+        snapshotFlow {
+            Triple(
+                seekPositionMs,
+                isSeeking && uiState.trickplayEnabled && uiState.trickplayInfo != null,
+                uiState.trickplayInfo,
+            )
+        }
             .conflate()
-            .collect { pos ->
-                if (isSeeking && uiState.trickplayEnabled && uiState.trickplayInfo != null) {
+            .distinctUntilChanged()
+            .collect { (pos, shouldFetch, _) ->
+                if (shouldFetch) {
                     val bitmap = viewModel.getTrickplayThumbnail(pos)
                     seekTrickplayBitmap = bitmap
                     if (isTv) {
@@ -1329,12 +1350,19 @@ fun VideoPlayerScreen(
     }
 
     LaunchedEffect(Unit) {
-        snapshotFlow { gestureSeekPositionMs }
+        snapshotFlow {
+            Triple(
+                gestureSeekPositionMs,
+                isGestureSeeking && uiState.trickplayOnSeekGesture,
+                uiState.trickplayInfo,
+            )
+        }
             .conflate()
-            .collect { pos ->
-                if (isGestureSeeking && uiState.trickplayOnSeekGesture) {
+            .distinctUntilChanged()
+            .collect { (pos, shouldFetch, trickplayInfo) ->
+                if (shouldFetch) {
                     gestureTrickplayVisible = true
-                    gestureTrickplayBitmap = if (uiState.trickplayInfo != null) {
+                    gestureTrickplayBitmap = if (trickplayInfo != null) {
                         viewModel.getTrickplayThumbnail(pos)
                     } else {
                         null
@@ -1483,6 +1511,9 @@ private fun BoxScope.ZoomBadge(videoZoom: Float) {
         }
     }
 
+    // Format once per distinct zoom value rather than per badge recompose.
+    val zoomText = remember(videoZoom) { "${formatFixed(videoZoom.toDouble(), 1)}×" }
+
     AnimatedVisibility(
         visible = showBadge,
         enter = fadeIn(tween(150, easing = AlphaEasing)),
@@ -1496,7 +1527,7 @@ private fun BoxScope.ZoomBadge(videoZoom: Float) {
             color = playerOnScrim().copy(alpha = 0.12f),
         ) {
             Text(
-                text = "%.1f×".format(videoZoom),
+                text = zoomText,
                 modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
                 color = MaterialTheme.colorScheme.primary,
                 style = MaterialTheme.typography.labelMedium.copy(

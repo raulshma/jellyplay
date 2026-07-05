@@ -19,6 +19,8 @@ import dagger.hilt.android.EntryPointAccessors
 import dagger.hilt.components.SingletonComponent
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.cancel
 import kotlinx.coroutines.launch
 
 class NowPlayingWidget : AppWidgetProvider() {
@@ -29,6 +31,15 @@ class NowPlayingWidget : AppWidgetProvider() {
         fun audioPlaybackManager(): AudioPlaybackManager
     }
 
+    /**
+     * Hoisted out of [onAppWidgetOptionsChanged] so the orphaned `SupervisorJob`
+     * graph is not rebuilt on every widget refresh broadcast (the updater can
+     * fire many times per minute during position changes). Mirrors the sibling
+     * `LibraryRecommendationsWidget.refreshScope` pattern — cancelled in
+     * [onDisabled] when the last widget instance is removed.
+     */
+    private val refreshScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+
     override fun onUpdate(
         context: Context,
         appWidgetManager: AppWidgetManager,
@@ -37,6 +48,11 @@ class NowPlayingWidget : AppWidgetProvider() {
         for (appWidgetId in appWidgetIds) {
             updateAppWidget(context, appWidgetManager, appWidgetId)
         }
+    }
+
+    override fun onDisabled(context: Context?) {
+        super.onDisabled(context)
+        refreshScope.cancel()
     }
 
     override fun onAppWidgetOptionsChanged(
@@ -60,28 +76,33 @@ class NowPlayingWidget : AppWidgetProvider() {
 
         val artUrl = manager.albumArtUrl.value
         val pending = goAsync()
-        val scope = CoroutineScope(Dispatchers.IO)
-        scope.launch {
-            val art = if (!artUrl.isNullOrBlank()) {
-                WidgetImageLoader.loadPoster(context.applicationContext, artUrl)
-            } else null
+        refreshScope.launch {
+            try {
+                val art = if (!artUrl.isNullOrBlank()) {
+                    WidgetImageLoader.loadPoster(context.applicationContext, artUrl)
+                } else null
 
-            val mainHandler = android.os.Handler(context.mainLooper)
-            mainHandler.post {
-                val views = RemoteViews(context.packageName, R.layout.now_playing_widget)
-                wireClickIntents(context, views)
-                bindState(
-                    views = views,
-                    title = title,
-                    subtitle = artist.ifBlank { null },
-                    isPlaying = isPlaying,
-                    albumArt = art,
-                    positionMs = position,
-                    durationMs = duration,
-                    isEmptyState = itemId == null,
-                )
-                applyResponsiveLayout(context, appWidgetManager, appWidgetId, views)
-                appWidgetManager.updateAppWidget(appWidgetId, views)
+                val mainHandler = android.os.Handler(context.mainLooper)
+                mainHandler.post {
+                    val views = RemoteViews(context.packageName, R.layout.now_playing_widget)
+                    wireClickIntents(context, views)
+                    bindState(
+                        views = views,
+                        title = title,
+                        subtitle = artist.ifBlank { null },
+                        isPlaying = isPlaying,
+                        albumArt = art,
+                        positionMs = position,
+                        durationMs = duration,
+                        isEmptyState = itemId == null,
+                    )
+                    applyResponsiveLayout(context, appWidgetManager, appWidgetId, views)
+                    appWidgetManager.updateAppWidget(appWidgetId, views)
+                    pending.finish()
+                }
+            } catch (_: Exception) {
+                // Ensure the goAsync() window always closes even if poster load
+                // fails — otherwise the system may ANR the widget host.
                 pending.finish()
             }
         }

@@ -969,6 +969,17 @@ private fun TvControllableSeekBar(
 
     val seekStep = if (isTv) 30_000f / duration else 10_000f / duration
 
+    // Position-derived labels memoized by second to cut formatDuration allocations
+    // during the 4 Hz position tick (most recomposes only move the playhead).
+    val currentPositionText = remember(currentPosition / 1000) { formatDuration(currentPosition) }
+    val durationText = remember(duration / 1000) { formatDuration(duration) }
+    val remainingText = remember(duration, currentPosition / 1000, showTimeRemaining) {
+        if (duration > 0 && showTimeRemaining) {
+            val remainingMs = (duration - currentPosition).coerceAtLeast(0)
+            "-" + formatDuration(remainingMs)
+        } else null
+    }
+
     Column(modifier = Modifier.fillMaxWidth()) {
         if (isTv && isSeekBarFocused && trickplayBitmap != null) {
             val displayMs = (tvSeekPosition * duration).toLong()
@@ -1217,7 +1228,7 @@ private fun TvControllableSeekBar(
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 Text(
-                    formatDuration(currentPosition),
+                    currentPositionText,
                     style = MaterialTheme.typography.labelSmall.copy(
                         fontFamily = FontFamily.Monospace,
                         fontWeight = FontWeight.Medium,
@@ -1225,12 +1236,7 @@ private fun TvControllableSeekBar(
                     color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f),
                 )
                 val endLabel = if (duration > 0) {
-                    if (showTimeRemaining) {
-                        val remainingMs = (duration - currentPosition).coerceAtLeast(0)
-                        "-" + formatDuration(remainingMs)
-                    } else {
-                        formatDuration(duration)
-                    }
+                    remainingText ?: durationText
                 } else {
                     "--:--"
                 }

@@ -89,7 +89,7 @@ fun CatalogTab(
 
                 // Status filter chips (All / Installed / Available).
                 LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    items(PluginStatusFilter.entries) { status ->
+                    items(PluginStatusFilter.entries, key = { it.name }) { status ->
                         FilterChip(
                             selected = statusFilter == status,
                             onClick = { onStatusFilterChange(status) },
@@ -102,7 +102,7 @@ fun CatalogTab(
 
                 // Category filter chips.
                 LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    items(PluginCategory.entries) { category ->
+                    items(PluginCategory.entries, key = { it.name }) { category ->
                         FilterChip(
                             selected = categoryFilter == category,
                             onClick = { onCategoryFilterChange(category) },

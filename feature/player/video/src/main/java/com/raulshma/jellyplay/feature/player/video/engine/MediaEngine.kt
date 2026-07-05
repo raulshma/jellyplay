@@ -2,6 +2,7 @@ package com.raulshma.jellyplay.feature.player.video.engine
 
 import android.content.Context
 import android.view.View
+import androidx.compose.runtime.Stable
 import com.raulshma.jellyplay.core.data.playback.PlayerLifecycleCallbacks
 import com.raulshma.jellyplay.core.model.AudioNormalizationMode
 import com.raulshma.jellyplay.core.model.ChannelMixMode
@@ -242,6 +243,7 @@ interface VideoSurfaceBinding {
  * [com.raulshma.jellyplay.core.data.remote.RemotePlayableEngine] (which cannot
  * move into a role) or special-case internal hooks kept on the composite type.
  */
+@Stable
 interface MediaEngine :
     PlayerLifecycleCallbacks,
     com.raulshma.jellyplay.core.data.remote.RemotePlayableEngine,

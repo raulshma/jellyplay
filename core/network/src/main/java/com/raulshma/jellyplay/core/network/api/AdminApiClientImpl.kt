@@ -8,6 +8,7 @@ import com.raulshma.jellyplay.core.model.ScheduledTaskInfo
 import com.raulshma.jellyplay.core.model.SessionInfo
 import com.raulshma.jellyplay.core.model.SystemInfo
 import com.raulshma.jellyplay.core.model.TaskTriggerInfo
+import com.raulshma.jellyplay.core.model.TtlCache
 import org.jellyfin.sdk.model.api.DayOfWeek
 import org.jellyfin.sdk.model.api.TaskTriggerInfoType
 import org.jellyfin.sdk.model.serializer.toUUID
@@ -20,9 +21,18 @@ class AdminApiClientImpl @Inject constructor(
     private val engine: JellyfinApiEngine,
 ) : AdminApiClient {
 
+    // loadDashboard() runs on every admin screen entry and on periodic refresh,
+    // re-issuing getSystemInfo + getItemCounts in parallel each time. Both are
+    // near-static (server version / library counts) but the repository layer
+    // does not memoise them here (unlike MediaRepositoryImpl). A short TTL
+    // removes the redundant calls without observable staleness.
+    private val systemInfoCache = TtlCache<SystemInfo>(maxSize = 4, ttlMs = SYSTEM_INFO_TTL_MS)
+    private val itemCountsCache = TtlCache<ItemCounts>(maxSize = 4, ttlMs = ITEM_COUNTS_TTL_MS)
+
     override suspend fun getSystemInfo(): Result<SystemInfo> = engine.apiResultWithRetry {
+        systemInfoCache.get(KEY_SYSTEM_INFO)?.let { return@apiResultWithRetry it }
         val dto = engine.requireApi().systemApi.getSystemInfo().content
-        SystemInfo(
+        val info = SystemInfo(
             serverName = dto.serverName ?: "",
             version = dto.version ?: "",
             productName = dto.productName ?: "",
@@ -43,11 +53,14 @@ class AdminApiClientImpl @Inject constructor(
             logPath = dto.logPath ?: "",
             internalMetadataPath = dto.internalMetadataPath ?: "",
         )
+        systemInfoCache.put(KEY_SYSTEM_INFO, info)
+        info
     }
 
     override suspend fun getItemCounts(): Result<ItemCounts> = engine.apiResultWithRetry {
+        itemCountsCache.get(KEY_ITEM_COUNTS)?.let { return@apiResultWithRetry it }
         val dto = engine.requireApi().libraryApi.getItemCounts().content
-        ItemCounts(
+        val counts = ItemCounts(
             movieCount = dto.movieCount.toLong(),
             seriesCount = dto.seriesCount.toLong(),
             episodeCount = dto.episodeCount.toLong(),
@@ -60,6 +73,8 @@ class AdminApiClientImpl @Inject constructor(
                     dto.songCount.toLong() + dto.musicVideoCount.toLong() +
                     dto.bookCount.toLong(),
         )
+        itemCountsCache.put(KEY_ITEM_COUNTS, counts)
+        counts
     }
 
     override suspend fun restartServer(): Result<Unit> = engine.apiResultWithRetry {
@@ -227,5 +242,15 @@ class AdminApiClientImpl @Inject constructor(
                 arguments = arguments ?: emptyMap(),
             )
         )
+    }
+
+    private companion object {
+        const val KEY_SYSTEM_INFO = "systemInfo"
+        const val KEY_ITEM_COUNTS = "itemCounts"
+        // 2 minutes — long enough to dedupe the parallel calls fired by
+        // loadDashboard() and the independent About-screen getSystemInfo(),
+        // short enough to reflect server version/count changes promptly.
+        const val SYSTEM_INFO_TTL_MS = 2 * 60 * 1000L
+        const val ITEM_COUNTS_TTL_MS = 2 * 60 * 1000L
     }
 }

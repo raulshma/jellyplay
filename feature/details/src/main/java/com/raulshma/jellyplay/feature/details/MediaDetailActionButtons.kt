@@ -75,7 +75,9 @@ internal fun DetailActionButtons(
     val itemProgressFraction = item.progressFraction()
     val hasProgress = itemProgressFraction != null && itemProgressFraction > 0f
     val allSeasonsFetched = seasons.isNotEmpty() && fetchedSeasonIds.size >= seasons.size
-    val allEpisodesEmpty = seasons.isNotEmpty() && episodes.values.all { it.isEmpty() }
+    val allEpisodesEmpty = remember(seasons, episodes) {
+        seasons.isNotEmpty() && episodes.values.all { it.isEmpty() }
+    }
     val isResolvingSeriesTarget = isSeries &&
         target == null &&
         !allSeasonsFetched
@@ -208,7 +210,6 @@ internal fun DetailActionButtons(
                 modifier = iconsModifier,
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
             ) {
-                val isTv = LocalTvMode.current
                 val markTvFocusState = rememberTvFocusState(focusedScale = 1.08f)
                 val favoriteTvFocusState = rememberTvFocusState(focusedScale = 1.08f)
 
