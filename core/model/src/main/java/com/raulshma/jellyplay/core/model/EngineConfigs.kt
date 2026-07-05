@@ -1,8 +1,10 @@
 package com.raulshma.jellyplay.core.model
 
 import androidx.compose.runtime.Immutable
+import androidx.compose.runtime.Stable
 import kotlinx.serialization.Serializable
 
+@Stable
 sealed interface EngineSpecificConfig
 
 @Immutable

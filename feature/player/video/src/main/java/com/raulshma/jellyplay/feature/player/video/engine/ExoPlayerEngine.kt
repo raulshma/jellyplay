@@ -554,7 +554,18 @@ class ExoPlayerEngine(
         // sit at the bottom of the *video*, and setBottomPaddingFraction /
         // fractional text sizes compute against the video height, not the much
         // taller screen height.
-        pv.addOnLayoutChangeListener { _, _, _, _, _, _, _, _, _ ->
+        //
+        // Layout passes fire frequently during playback (controls show/hide,
+        // seekbar interaction, immersive transitions, video-size callbacks);
+        // only reparent on genuine geometry changes to suppress no-op work.
+        var lastFrameW = -1
+        var lastFrameH = -1
+        pv.addOnLayoutChangeListener { _, left, top, right, bottom, _, _, _, _ ->
+            val w = right - left
+            val h = bottom - top
+            if (w == lastFrameW && h == lastFrameH) return@addOnLayoutChangeListener
+            lastFrameW = w
+            lastFrameH = h
             pv.post { reparentSubtitleViewIntoVideoFrame(pv) }
         }
         playerView = pv

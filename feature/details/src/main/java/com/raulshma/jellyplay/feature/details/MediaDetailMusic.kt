@@ -87,6 +87,9 @@ internal fun AlbumTrackItem(
                 blurHash = track.blurHashes.primary,
                 modifier = Modifier.fillMaxSize(),
                 contentScale = ContentScale.Crop,
+                // 48.dp target — decode a small thumbnail instead of full album
+                // artwork (commonly 800–1500 px²). Tracks compose eagerly.
+                size = coil3.size.Size(96, 96),
             )
         }
 

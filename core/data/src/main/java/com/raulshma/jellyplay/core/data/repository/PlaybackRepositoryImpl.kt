@@ -1,6 +1,5 @@
 package com.raulshma.jellyplay.core.data.repository
 
-import com.raulshma.jellyplay.core.data.cache.TtlCache
 import com.raulshma.jellyplay.core.model.CreditTimestamps
 import com.raulshma.jellyplay.core.model.CultureInfo
 import com.raulshma.jellyplay.core.model.IntroTimestamps
@@ -14,6 +13,7 @@ import com.raulshma.jellyplay.core.model.PlaybackStartInfo
 import com.raulshma.jellyplay.core.model.PlayerType
 import com.raulshma.jellyplay.core.model.RemoteSubtitleInfo
 import com.raulshma.jellyplay.core.model.ResolvedPlayback
+import com.raulshma.jellyplay.core.model.TtlCache
 import com.raulshma.jellyplay.core.network.JellyfinApiClient
 import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope

@@ -247,5 +247,26 @@ abstract class NetworkModule {
                 .readTimeout(streamingReadSec, TimeUnit.SECONDS)
                 .build()
         }
+
+        /**
+         * Derived client for download paths. Mirrors the per-run `newBuilder()`
+         * previously invoked inside `DownloadWorker.doWork()` — same connect /
+         * read / write timeouts, but hoisted to a single shared singleton so
+         * concurrent `DownloadWorker` invocations (the limiter allows up to
+         * `maxConcurrentDownloads`) no longer each pay a `build()` cost and
+         * clone the interceptor list. The base `OkHttpClient` shares its
+         * `ConnectionPool` and `Dispatcher` via `newBuilder()`, so behavior is
+         * identical to the prior per-worker client.
+         */
+        @Provides
+        @Singleton
+        @Named("download")
+        fun provideDownloadOkHttpClient(
+            okHttpClient: OkHttpClient,
+        ): OkHttpClient = okHttpClient.newBuilder()
+            .connectTimeout(30, TimeUnit.SECONDS)
+            .readTimeout(60, TimeUnit.SECONDS)
+            .writeTimeout(30, TimeUnit.SECONDS)
+            .build()
     }
 }

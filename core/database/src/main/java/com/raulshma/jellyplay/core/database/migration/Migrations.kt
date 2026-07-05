@@ -551,6 +551,18 @@ val MIGRATION_31_32 = object : Migration(31, 32) {
     }
 }
 
+// Add a non-unique index on `offline_media.name`. The OfflineMediaDao.search
+// query orders by `name COLLATE NOCASE` and a `CASE WHEN name LIKE 'q%'` prefix
+// branch; previously a full table scan ran for every keystroke on the widest
+// table (33 columns). The leading-`%` substring LIKE branch cannot be served
+// by a B-tree index, but the prefix/order-by branches now benefit. Behavior
+// is unchanged; this is purely a query-planner improvement.
+val MIGRATION_32_33 = object : Migration(32, 33) {
+    override fun migrate(db: SupportSQLiteDatabase) {
+        db.execSQL("CREATE INDEX IF NOT EXISTS index_offline_media_name ON offline_media(name)")
+    }
+}
+
 val ALL_MIGRATIONS = listOf(
     MIGRATION_1_2,
     MIGRATION_2_3,
@@ -582,4 +594,5 @@ val ALL_MIGRATIONS = listOf(
     MIGRATION_29_30,
     MIGRATION_30_31,
     MIGRATION_31_32,
+    MIGRATION_32_33,
 )

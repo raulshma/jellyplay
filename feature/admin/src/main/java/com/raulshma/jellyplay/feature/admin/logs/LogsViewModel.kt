@@ -57,6 +57,11 @@ class LogsViewModel @Inject constructor(
     private val _liveEvents = MutableSharedFlow<ActivityLogEntry>(extraBufferCapacity = 64)
     val liveEvents: SharedFlow<ActivityLogEntry> = _liveEvents.asSharedFlow()
 
+    private companion object {
+        /** Reusable lenient Json — hoisted out of the per-WebSocket-message hot path. */
+        val JSON = Json { ignoreUnknownKeys = true }
+    }
+
     private var webSocket: WebSocket? = null
     private var pollingJob: Job? = null
     private var liveCollectJob: Job? = null
@@ -185,12 +190,11 @@ class LogsViewModel @Inject constructor(
         webSocket = okHttpClient.newWebSocket(request, object : WebSocketListener() {
             override fun onMessage(webSocket: WebSocket, text: String) {
                 try {
-                    val json = Json { ignoreUnknownKeys = true }
-                    val obj = json.parseToJsonElement(text).jsonObject
+                    val obj = JSON.parseToJsonElement(text).jsonObject
                     val messageType = obj["MessageType"]?.jsonPrimitive?.contentOrNull
                     if (messageType == "ActivityLogEntry") {
                         val dataStr = obj["MessageData"].toString()
-                        val entry = json.decodeFromString<ActivityLogEntry>(dataStr)
+                        val entry = JSON.decodeFromString<ActivityLogEntry>(dataStr)
                         _liveEvents.tryEmit(entry)
                     }
                 } catch (_: Exception) {}

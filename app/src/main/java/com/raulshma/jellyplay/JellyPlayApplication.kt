@@ -36,7 +36,14 @@ class JellyPlayApplication : Application(), SingletonImageLoader.Factory, Config
 
     @Inject lateinit var okHttpClient: OkHttpClient
     @Inject lateinit var userPreferencesStore: com.raulshma.jellyplay.core.datastore.UserPreferencesStore
-    @Inject lateinit var audioPlaybackManager: com.raulshma.jellyplay.core.data.playback.AudioPlaybackManager
+    // javax.inject.Provider defers Hilt construction of AudioPlaybackManager
+    // (and its transitive 14-dep graph: AudioLibraryBrowser,
+    // AudioProgressReporter, AudioCrossfader, QueueUndoStack, LruCache(25), …)
+    // off the main thread until the IO launch block below actually calls
+    // get(). The start() body already offloads its real work to Dispatchers.IO,
+    // so behavior is unchanged; only the construction cost moves off the
+    // cold-start critical path.
+    @Inject lateinit var audioPlaybackManagerProvider: javax.inject.Provider<com.raulshma.jellyplay.core.data.playback.AudioPlaybackManager>
     @Inject lateinit var nowPlayingWidgetUpdater: com.raulshma.jellyplay.widget.NowPlayingWidgetUpdater
     @Inject lateinit var notificationScheduler: NotificationScheduler
     @Inject lateinit var autoDownloadScheduler: com.raulshma.jellyplay.core.data.worker.AutoDownloadScheduler
@@ -53,7 +60,7 @@ class JellyPlayApplication : Application(), SingletonImageLoader.Factory, Config
         // on the same coroutine (they have no dependency on the groups below).
         applicationScope.launch(Dispatchers.IO) {
             initSentry()
-            audioPlaybackManager.start()
+            audioPlaybackManagerProvider.get().start()
             nowPlayingWidgetUpdater.start()
         }
         // Background schedulers — independent enqueue calls, all KEEP-safe.

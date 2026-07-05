@@ -20,7 +20,6 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.wrapContentWidth
-import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.material3.Badge
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FloatingActionButtonMenu
@@ -34,9 +33,6 @@ import androidx.compose.material3.TextFieldDefaults
 import androidx.compose.material3.ToggleFloatingActionButton
 import androidx.compose.material3.ToggleFloatingActionButtonDefaults
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.derivedStateOf
-import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -45,7 +41,6 @@ import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
-import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.unit.dp
@@ -80,9 +75,8 @@ import com.composables.icons.tabler.outline.Clock
 
 @Composable
 fun HomeTopDock(
-    listState: LazyListState,
-    transitionRangePx: Float,
-    baseIconColor: Color,
+    appBarIconColor: Color,
+    appBarIconColorFaded: Color,
     isSearchFocused: Boolean,
     searchQuery: String,
     offlineMode: OfflineMode,
@@ -98,14 +92,9 @@ fun HomeTopDock(
     searchResultsContent: @Composable () -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    val scrollFraction by remember {
-        derivedStateOf {
-            if (listState.firstVisibleItemIndex > 0) 1f
-            else (listState.firstVisibleItemScrollOffset.toFloat() / transitionRangePx).coerceIn(0f, 1f)
-        }
-    }
-    val appBarIconColor = lerp(baseIconColor, MaterialTheme.colorScheme.onSurface, scrollFraction)
-    val appBarIconColorFaded = appBarIconColor.copy(alpha = 0.9f)
+    // Icon colors are now derived once in MainHomeContent and passed in; this
+    // previously recomputed an identical derivedStateOf + lerp on every
+    // recompose, duplicating work the caller had already done.
     val focusManager = LocalFocusManager.current
 
     val isTv = LocalTvMode.current

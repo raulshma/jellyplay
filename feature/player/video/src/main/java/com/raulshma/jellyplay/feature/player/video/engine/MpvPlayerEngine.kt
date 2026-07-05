@@ -26,6 +26,7 @@ import com.raulshma.jellyplay.core.model.MpvScaler
 import com.raulshma.jellyplay.core.model.MpvSkipLoopFilter
 import com.raulshma.jellyplay.core.model.MpvVideoOutput
 import com.raulshma.jellyplay.core.model.SubtitleEdgeType
+import com.raulshma.jellyplay.core.model.formatFixed
 import com.raulshma.jellyplay.core.model.SubtitleStyle
 import com.raulshma.jellyplay.core.model.TrackType
 import com.raulshma.jellyplay.core.model.VideoEffectsConfig
@@ -414,7 +415,14 @@ class MpvPlayerEngine(
     }
 
     override fun seekTo(positionMs: Long) {
-        try { mpvView?.mpv?.command("seek", "%.6f".format(positionMs / 1000.0), "absolute") } catch (e: Exception) { Log.w(TAG, "seekTo failed", e) }
+        try {
+            // Fixed-precision seconds with 6 decimals (byte-identical to
+            // "%.6f".format for positionMs >= 0; MPV clamps anyway). Avoids the
+            // Formatter + StringBuilder allocation per seek, which fires many
+            // times/sec during scrub / gesture-seek.
+            val secsStr = formatFixed(positionMs / 1000.0, 6)
+            mpvView?.mpv?.command("seek", secsStr, "absolute")
+        } catch (e: Exception) { Log.w(TAG, "seekTo failed", e) }
     }
 
     override fun setPlaybackSpeed(speed: Float) {

@@ -65,6 +65,7 @@ import com.raulshma.jellyplay.core.designsystem.theme.AlphaEasing
 import com.raulshma.jellyplay.core.designsystem.theme.FancyTransitionEasing
 import com.raulshma.jellyplay.core.designsystem.theme.ShapeCache
 import com.raulshma.jellyplay.core.model.MediaItem
+import com.raulshma.jellyplay.core.model.formatFixed
 import com.raulshma.jellyplay.core.ui.adaptive.LocalAdaptiveInfo
 import com.raulshma.jellyplay.core.ui.adaptive.WindowSizeClass
 import com.raulshma.jellyplay.core.ui.image.MediaImage
@@ -206,6 +207,16 @@ fun HeroHeader(
     val detailsTvFocusState = rememberTvFocusState()
     val heroPlayFocusRequester = focusRequester ?: remember { FocusRequester() }
     val heroDetailsFocusRequester = remember { FocusRequester() }
+
+    // Hero recomposes on every parallax/breath animation frame; memoize the
+    // per-item string derivations so they aren't rebuilt per frame.
+    val yearText = remember(item.id, item.year) { item.year?.toString() }
+    val runtimeText = remember(item.id, item.runTimeTicks) {
+        item.runTimeTicks?.let { "${it / 600_000_000}m" }
+    }
+    val ratingText = remember(item.id, item.communityRating) {
+        item.communityRating?.let { formatFixed(it.toDouble(), 1) }
+    }
 
     RequestOrRestoreFocus(
         focusRequester = if (isTv && requestInitialFocus) heroPlayFocusRequester else null,
@@ -363,13 +374,8 @@ fun HeroHeader(
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(12.dp),
             ) {
-                item.year?.let {
-                    InfoChip(text = it.toString())
-                }
-                item.runTimeTicks?.let { ticks ->
-                    val minutes = ticks / 600_000_000
-                    InfoChip(text = "${minutes}m")
-                }
+                yearText?.let { InfoChip(text = it) }
+                runtimeText?.let { InfoChip(text = it) }
                 item.officialRating?.let {
                     InfoChip(
                         text = it,
@@ -380,7 +386,7 @@ fun HeroHeader(
                         letterSpacing = 0.5.sp,
                     )
                 }
-                item.communityRating?.let { rating ->
+                ratingText?.let {
                     Box(
                         modifier = Modifier
                             .clip(ShapeCache.smooth8)
@@ -402,7 +408,7 @@ fun HeroHeader(
                             )
                             Spacer(Modifier.width(4.dp))
                             Text(
-                                text = String.format("%.1f", rating),
+                                text = ratingText,
                                 style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Bold),
                                 color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.9f),
                             )

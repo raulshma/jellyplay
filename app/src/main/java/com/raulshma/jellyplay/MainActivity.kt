@@ -76,10 +76,18 @@ class MainActivity : FragmentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         val splashScreen = installSplashScreen()
         super.onCreate(savedInstanceState)
-        // Initialize Cast SDK eagerly while the splash screen is still up, so the
-        // first composition frame doesn't pay the JNI init cost.
+        // Initialize Cast SDK off the main thread. The MediaRouteButton is set
+        // up lazily inside setContent's AndroidView.factory and
+        // CastButtonFactory.setUpMediaRouteButton resolves CastContext lazily,
+        // so deferring the JNI/Play-Services binding here no longer blocks the
+        // main thread before setContent (i.e. while the splash is still being
+        // evaluated). The original "pay it during the splash" intent is
+        // preserved — the splash stays up via setKeepOnScreenCondition until
+        // session restore completes, overlapping the Cast init.
         if (packageManager.hasSystemFeature("com.google.android.gms.cast")) {
-            runCatching { com.google.android.gms.cast.framework.CastContext.getSharedInstance(this) }
+            lifecycleScope.launch {
+                runCatching { com.google.android.gms.cast.framework.CastContext.getSharedInstance(this@MainActivity) }
+            }
         }
         splashScreen.setKeepOnScreenCondition { viewModel.isRestoring.value }
         splashScreen.setOnExitAnimationListener { splashScreenView ->
