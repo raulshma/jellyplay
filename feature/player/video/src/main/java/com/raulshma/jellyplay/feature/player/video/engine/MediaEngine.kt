@@ -29,6 +29,13 @@ data class PlaybackRequest(
     val authToken: String? = null,
     val minBufferMs: Int = 15_000,
     val maxBufferMs: Int = 50_000,
+    /**
+     * Optional MIME type hint for the primary media item. When set, ExoPlayer
+     * uses it in preference to URI-extension inference to pick the extractor,
+     * which is essential for downloaded files whose on-disk extension does not
+     * match their actual container (e.g. an MKV stream saved as `.mp4`).
+     */
+    val mimeType: String? = null,
 )
 
 data class SubtitleSource(

@@ -134,11 +134,6 @@ class AudioPlayerViewModel @Inject constructor(
             }.collect {}
         }
         launch {
-            audioPlaybackManager.title.collect { value ->
-                _uiState.update { it.copy(title = value) }
-            }
-        }
-        launch {
             combine(
                 audioPlaybackManager.isPlaying,
                 audioPlaybackManager.duration,

@@ -101,6 +101,15 @@ private const val POSITION_PERSIST_MIN_INTERVAL_MS = 5_000L
 private const val CONFIG_SYNC_DEBOUNCE_MS = 150L
 
 /**
+ * Initial-buffering watchdog. If the engine has not reached READY within this
+ * window since load, the playback-error dialog is surfaced so the user can
+ * retry with another engine. Long enough to cover legitimate cold-start
+ * buffering on slow networks, short enough to feel responsive when playback is
+ * genuinely stuck (e.g. undecodable content).
+ */
+private const val BUFFERING_TIMEOUT_MS = 20_000L
+
+/**
  * Segment-relevant slice of [VideoPlayerUiState], used by
  * [VideoPlayerViewModel.segmentOverlayState]. Projecting only these fields
  * (and `distinctUntilChanged`-ing them) means a 4 Hz [currentPositionMs][VideoPlayerViewModel.currentPositionMs]
@@ -844,6 +853,49 @@ class VideoPlayerViewModel @Inject constructor(
                             } }
                             launch { engine.availableTracks.collect { trackSelectionHelper.updateTracksFromEngine() } }
                             launch { engine.errorFlow.collect { e -> _uiState.update { s -> s.copy(playerError = e, showPlaybackErrorDialog = true) } } }
+                            // Buffering watchdog: if the engine never reaches
+                            // READY within BUFFERING_TIMEOUT_MS during the
+                            // *initial* buffer (before first READY), surface the
+                            // playback-error dialog so the user can retry with a
+                            // different engine. Without this, ExoPlayer can sit
+                            // in STATE_BUFFERING forever for undecodable content
+                            // (e.g. wrong extractor on a misnamed download) — no
+                            // PlaybackException is raised, so the errorFlow
+                            // collector above never fires and the spinner spins
+                            // indefinitely. Only armed before first READY so it
+                            // does not trigger on legitimate mid-playback rebuffer
+                            // (seeks, quality switches, network blips).
+                            launch {
+                                var hasReachedReady = false
+                                var watchdogJob: kotlinx.coroutines.Job? = null
+                                engine.playbackState.collect { state ->
+                                    when (state) {
+                                        com.raulshma.jellyplay.feature.player.video.engine.EnginePlaybackState.BUFFERING -> {
+                                            if (!hasReachedReady && watchdogJob == null) {
+                                                watchdogJob = launch {
+                                                    delay(BUFFERING_TIMEOUT_MS)
+                                                    if (!hasReachedReady) {
+                                                        _uiState.update { s -> s.copy(
+                                                            playerError = "Playback failed to start. Try a different player engine.",
+                                                            showPlaybackErrorDialog = true,
+                                                            isBuffering = false,
+                                                        ) }
+                                                    }
+                                                }
+                                            }
+                                        }
+                                        com.raulshma.jellyplay.feature.player.video.engine.EnginePlaybackState.READY -> {
+                                            hasReachedReady = true
+                                            watchdogJob?.cancel()
+                                            watchdogJob = null
+                                        }
+                                        else -> {
+                                            watchdogJob?.cancel()
+                                            watchdogJob = null
+                                        }
+                                    }
+                                }
+                            }
                         }
                     }
                 } else {
