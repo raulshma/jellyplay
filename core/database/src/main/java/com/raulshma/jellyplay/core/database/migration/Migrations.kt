@@ -540,6 +540,17 @@ val MIGRATION_30_31 = object : Migration(30, 31) {
     }
 }
 
+// Capture the original container format ("mkv", "mp4", "ts", ...) reported by
+// the Jellyfin MediaSource at download time. Used at playback to attach the
+// correct MIME type to ExoPlayer, so the right extractor is selected even when
+// the on-disk file uses a hardcoded `.mp4` extension. Nullable: pre-existing
+// rows degrade to extension-based inference (sniffer fallback at playback).
+val MIGRATION_31_32 = object : Migration(31, 32) {
+    override fun migrate(db: SupportSQLiteDatabase) {
+        db.execSQL("ALTER TABLE downloads ADD COLUMN container TEXT")
+    }
+}
+
 val ALL_MIGRATIONS = listOf(
     MIGRATION_1_2,
     MIGRATION_2_3,
@@ -570,4 +581,5 @@ val ALL_MIGRATIONS = listOf(
     MIGRATION_28_29,
     MIGRATION_29_30,
     MIGRATION_30_31,
+    MIGRATION_31_32,
 )

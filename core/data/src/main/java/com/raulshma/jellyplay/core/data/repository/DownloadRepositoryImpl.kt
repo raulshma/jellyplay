@@ -95,6 +95,7 @@ class DownloadRepositoryImpl @Inject constructor(
         seasonName: String?,
         episodeNumber: Int?,
         seasonNumber: Int?,
+        container: String?,
     ): Result<DownloadItem> = runCatching {
         val existing = downloadDao.getDownloadByMediaItemId(mediaItemId)
         if (existing != null) {
@@ -156,7 +157,15 @@ class DownloadRepositoryImpl @Inject constructor(
         val id = UUID.randomUUID().toString()
         val dir = baseDir
         val safeName = name.replace(FILENAME_SANITIZE_REGEX, "_")
-        val extension = if (isAudioType) "mp3" else "mp4"
+        // Prefer the original container reported by the Jellyfin MediaSource so
+        // the on-disk extension reflects the real bytes — ExoPlayer selects its
+        // extractor from the URI extension and hangs silently when the extension
+        // lies (e.g. an MKV stream saved as `.mp4`). Sanitize and fall back to
+        // the legacy hardcoded extension for audio/video when the container is
+        // missing or unsafe (path-traversal / weird chars).
+        val extension = container
+            ?.takeIf { it.isNotBlank() && FILENAME_CONTAINER_REGEX.matches(it) }
+            ?: if (isAudioType) "mp3" else "mp4"
         val filePath = File(dir, "${safeName}_${id.take(8)}.$extension").absolutePath
 
         val entity = DownloadEntity(
@@ -178,6 +187,7 @@ class DownloadRepositoryImpl @Inject constructor(
             seasonName = seasonName,
         episodeNumber = episodeNumber,
         seasonNumber = seasonNumber,
+        container = container,
     )
     downloadDao.insertDownload(entity)
     entity.toDownloadItem()
@@ -383,6 +393,7 @@ class DownloadRepositoryImpl @Inject constructor(
                                         seasonName = season.name,
                                         episodeNumber = episode.episodeNumber,
                                         seasonNumber = episode.seasonNumber,
+                                        container = source?.container,
                                     ).getOrNull()
 
                                     if (download != null) {
@@ -810,6 +821,7 @@ class DownloadRepositoryImpl @Inject constructor(
         seasonNumber = seasonNumber,
         errorMessage = errorMessage,
         priority = priority,
+        container = container,
     )
 
     /**
@@ -829,6 +841,12 @@ class DownloadRepositoryImpl @Inject constructor(
     companion object {
         private const val TAG = "DownloadRepository"
         private val FILENAME_SANITIZE_REGEX = Regex("[^a-zA-Z0-9.\\-]")
+
+        // Container strings from Jellyfin (mkv, mp4, ts, webm, flv, mov, ...).
+        // Constrained to 2-8 alphanumerics so a malformed/missing value can
+        // never leak into the on-disk filename; the caller falls back to the
+        // legacy mp4/mp3 default otherwise.
+        private val FILENAME_CONTAINER_REGEX = Regex("[A-Za-z0-9]{2,8}")
         private val json = Json { ignoreUnknownKeys = true }
     }
 }
