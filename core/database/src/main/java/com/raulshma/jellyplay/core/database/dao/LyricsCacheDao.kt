@@ -9,7 +9,7 @@ import com.raulshma.jellyplay.core.database.entity.LyricsCacheEntity
 @Dao
 interface LyricsCacheDao {
 
-    @Query("SELECT * FROM lyrics_cache WHERE itemId = :itemId LIMIT 1")
+    @Query("SELECT * FROM lyrics_cache WHERE itemId = :itemId ORDER BY id DESC LIMIT 1")
     suspend fun getByItemId(itemId: String): LyricsCacheEntity?
 
     @Query("SELECT * FROM lyrics_cache WHERE itemId = :itemId AND provider = :provider LIMIT 1")

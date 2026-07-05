@@ -178,7 +178,7 @@ private fun ConfigScreen(
             contentPadding = PaddingValues(vertical = 8.dp),
         ) {
             if (isLibraryKind) {
-                items(LibraryOptions) { option ->
+                items(LibraryOptions, key = { option -> option.source.name }) { option ->
                     OptionRow(
                         title = stringResource(option.titleRes),
                         description = stringResource(option.descriptionRes),
@@ -186,7 +186,7 @@ private fun ConfigScreen(
                     ) { viewModel.selectLibrarySource(option.source) }
                 }
             } else {
-                items(SeerrOptions) { option ->
+                items(SeerrOptions, key = { option -> option.source.name }) { option ->
                     OptionRow(
                         title = stringResource(option.titleRes),
                         description = stringResource(option.descriptionRes),

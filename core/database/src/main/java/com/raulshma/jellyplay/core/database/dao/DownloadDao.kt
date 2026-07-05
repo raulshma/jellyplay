@@ -78,6 +78,16 @@ interface DownloadDao {
     @Query("SELECT * FROM downloads WHERE status = :status LIMIT 500")
     suspend fun getDownloadsByStatus(status: String): List<DownloadEntity>
 
+    /**
+     * Cold-start recovery projection. The recovery initializer on every app
+     * launch consumes only [RecoveryRow.id] (and `downloadedBytes` when
+     * rewriting a stuck DOWNLOADING row back to PENDING). Materialising up to
+     * 500 full 23-column entities — incl. `downloadUrl`, `errorMessage`,
+     * `container`, `imageBlurHash` — was pure overhead on the cold-start path.
+     */
+    @Query("SELECT id, downloadedBytes FROM downloads WHERE status = :status LIMIT 500")
+    suspend fun getRecoveryRows(status: String): List<RecoveryRow>
+
     @Query("SELECT * FROM downloads WHERE seriesId = :seriesId")
     suspend fun getDownloadsForSeries(seriesId: String): List<DownloadEntity>
 
@@ -102,3 +112,13 @@ interface DownloadDao {
     @Query("SELECT DISTINCT seriesId FROM downloads WHERE seriesId IS NOT NULL")
     suspend fun getDownloadedSeriesIds(): List<String>
 }
+
+/**
+ * Lightweight row projected out of `downloads` for the cold-start recovery
+ * path — see [DownloadDao.getRecoveryRows]. Carries only the columns the
+ * recovery initializer actually consumes.
+ */
+data class RecoveryRow(
+    val id: String,
+    val downloadedBytes: Long,
+)

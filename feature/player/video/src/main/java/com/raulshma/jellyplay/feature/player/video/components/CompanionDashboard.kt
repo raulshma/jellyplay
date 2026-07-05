@@ -650,10 +650,14 @@ fun SubtitlesTabContent(
 
         Box(modifier = Modifier.weight(1f)) {
             if (lyricsLines.isNotEmpty() && subTabSelected == 0) {
-                // Real-time scrolling lyrics
-                val activeLineIndex = remember(lyricsLines, currentPositionMs) {
-                    val idx = lyricsLines.indexOfLast { it.timeMs <= currentPositionMs }
-                    idx.coerceAtLeast(0)
+                // Real-time scrolling lyrics. derivedStateOf ensures recomposition fires
+                // only when the active line index actually crosses a lyric boundary —
+                // currentPositionMs ticks multiple times per second but most ticks do
+                // not change the active line.
+                val activeLineIndex by remember {
+                    derivedStateOf {
+                        lyricsLines.indexOfLast { it.timeMs <= currentPositionMs }.coerceAtLeast(0)
+                    }
                 }
 
                 LazyColumn(
@@ -662,7 +666,9 @@ fun SubtitlesTabContent(
                     horizontalAlignment = Alignment.CenterHorizontally,
                     verticalArrangement = Arrangement.spacedBy(16.dp)
                 ) {
-                    itemsIndexed(lyricsLines) { index, line ->
+                    // Keyed by index — stable per line so slot identity survives any
+                    // re-emission of the same lyrics list (e.g. a parent recomposition).
+                    itemsIndexed(lyricsLines, key = { idx, _ -> "lyric_$idx" }) { index, line ->
                         val isActive = index == activeLineIndex
                         val textColor by animateColorAsState(
                             targetValue = if (isActive) MaterialTheme.colorScheme.primary else Color.White.copy(alpha = 0.7f),

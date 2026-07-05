@@ -1,8 +1,11 @@
 package com.raulshma.jellyplay.core.model
 
+import androidx.compose.runtime.Stable
+
 /**
  * Represents the health status of the connected Jellyfin server.
  */
+@Stable
 sealed class ServerHealth {
     /** Server health is unknown (not yet checked or not connected). */
     data object Unknown : ServerHealth()

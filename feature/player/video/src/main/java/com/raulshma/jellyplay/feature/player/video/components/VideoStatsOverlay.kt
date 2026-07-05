@@ -28,6 +28,7 @@ import com.raulshma.jellyplay.core.designsystem.theme.ShapeCache
 import com.raulshma.jellyplay.core.designsystem.theme.extendedColors
 import com.raulshma.jellyplay.core.designsystem.theme.playerOnScrim
 import com.raulshma.jellyplay.core.designsystem.theme.playerScrimColor
+import com.raulshma.jellyplay.core.model.formatFixed
 import com.raulshma.jellyplay.feature.player.video.engine.EngineVideoStats
 import java.text.SimpleDateFormat
 import java.util.Date
@@ -75,7 +76,7 @@ fun VideoStatsOverlay(
             StatsRow("Duration", formatDurationMsLocal(durationMs))
             if (durationMs > 0) {
                 val progress = (currentPositionMs.toFloat() / durationMs.toFloat() * 100f)
-                StatsRow("Progress", String.format("%.1f%%", progress))
+                StatsRow("Progress", "${formatFixed(progress.toDouble(), 1)}%")
             }
             StatsRow("Speed", "${playbackSpeed}x")
             val bufferHealthMs = (stats.bufferedPositionMs - currentPositionMs).coerceAtLeast(0L)
@@ -89,7 +90,7 @@ fun VideoStatsOverlay(
                 stats.videoCodec?.let { StatsRow("Codec", it.uppercase()) }
                 stats.videoDecoder?.let { StatsRow("Decoder", it) }
                 stats.videoResolution?.let { StatsRow("Resolution", it) }
-                stats.videoFrameRate?.let { StatsRow("Frame Rate", String.format("%.2f fps", it)) }
+                stats.videoFrameRate?.let { StatsRow("Frame Rate", "${formatFixed(it.toDouble(), 2)} fps") }
                 stats.videoBitrate?.let { StatsRow("Bitrate", formatBitrate(it)) }
                 stats.videoHdrType?.let { StatsRow("HDR", it) }
                 stats.videoColorRange?.let { StatsRow("Color Range", it) }
@@ -132,7 +133,7 @@ fun VideoStatsOverlay(
                     stats.droppedFrames.toFloat() /
                         (stats.droppedFrames + stats.totalVideoFrames) * 100f
                 } else 0f
-                StatsRow("Drop Rate", String.format("%.2f%%", dropPct))
+                StatsRow("Drop Rate", "${formatFixed(dropPct.toDouble(), 2)}%")
             }
             if (stats.bufferSizeBytes > 0) {
                 StatsRow("Buffer Size", formatBytes(stats.bufferSizeBytes))
@@ -199,20 +200,20 @@ private fun StatsRow(
 private fun formatDurationMsLocal(ms: Long): String = com.raulshma.jellyplay.core.ui.components.formatDurationMs(ms)
 
 private fun formatBitrate(bps: Int): String = when {
-    bps >= 1_000_000 -> String.format("%.1f Mbps", bps / 1_000_000.0)
-    bps >= 1_000 -> String.format("%.0f kbps", bps / 1_000.0)
+    bps >= 1_000_000 -> "${formatFixed(bps / 1_000_000.0, 1)} Mbps"
+    bps >= 1_000 -> "${Math.round(bps / 1_000.0)} kbps"
     else -> "$bps bps"
 }
 
 private fun formatBandwidth(bps: Long): String = when {
-    bps >= 1_000_000 -> String.format("%.1f Mbps", bps / 1_000_000.0)
-    bps >= 1_000 -> String.format("%.0f kbps", bps / 1_000.0)
+    bps >= 1_000_000 -> "${formatFixed(bps / 1_000_000.0, 1)} Mbps"
+    bps >= 1_000 -> "${Math.round(bps / 1_000.0)} kbps"
     else -> "$bps bps"
 }
 
 private fun formatBytes(bytes: Long): String = when {
-    bytes >= 1_048_576 -> String.format("%.1f MB", bytes / 1_048_576.0)
-    bytes >= 1_024 -> String.format("%.0f KB", bytes / 1_024.0)
+    bytes >= 1_048_576 -> "${formatFixed(bytes / 1_048_576.0, 1)} MB"
+    bytes >= 1_024 -> "${Math.round(bytes / 1_024.0)} KB"
     else -> "$bytes B"
 }
 
@@ -227,11 +228,15 @@ private fun formatChannels(ch: Int): String = when (ch) {
 @Composable
 private fun rememberCurrentTimeString(): String {
     val formatter = remember { SimpleDateFormat("HH:mm:ss", Locale.getDefault()) }
-    var time by remember { mutableStateOf(formatter.format(Date())) }
+    // Reuse a single Date instance and mutate its underlying time field each
+    // tick instead of allocating a fresh Date() every second.
+    val date = remember { Date() }
+    var time by remember { mutableStateOf(formatter.format(date)) }
     LaunchedEffect(Unit) {
         while (true) {
             kotlinx.coroutines.delay(1000)
-            time = formatter.format(Date())
+            date.time = System.currentTimeMillis()
+            time = formatter.format(date)
         }
     }
     return time

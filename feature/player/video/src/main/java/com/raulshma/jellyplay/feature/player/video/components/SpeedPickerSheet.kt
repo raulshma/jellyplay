@@ -79,7 +79,12 @@ internal fun SpeedPickerSheet(
 
             if (isTv) {
                 LazyColumn(modifier = Modifier.verticalWrapAround()) {
-                    items(SPEED_OPTIONS.toList()) { speed ->
+                    items(
+                        count = SPEED_OPTIONS.size,
+                        key = { SPEED_OPTIONS[it] },
+                        contentType = { "speed" },
+                    ) { i ->
+                        val speed = SPEED_OPTIONS[i]
                         val isSelected = speed == currentSpeed
                         val isFirstOrSelected = isSelected || (SPEED_OPTIONS.none { it == currentSpeed } && speed == 1.0f)
                         val speedFocusState = rememberTvFocusState(focusedScale = 1.02f)

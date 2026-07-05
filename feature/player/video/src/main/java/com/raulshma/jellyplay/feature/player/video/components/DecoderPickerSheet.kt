@@ -85,7 +85,7 @@ fun DecoderPickerSheet(
 
             if (isTv) {
                 LazyColumn(modifier = Modifier.verticalWrapAround()) {
-                    items(DecoderMode.entries) { mode ->
+                    items(DecoderMode.entries, key = { it.name }) { mode ->
                         val isSelected = mode == currentMode
                         val isFirstOrSelected = isSelected || (currentMode !in DecoderMode.entries && mode == DecoderMode.entries.firstOrNull())
                         val modeFocusState = rememberTvFocusState(focusedScale = 1.02f)

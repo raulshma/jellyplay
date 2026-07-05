@@ -11,6 +11,11 @@ import com.raulshma.jellyplay.core.model.DreamImageCategory
 import com.raulshma.jellyplay.core.model.MediaType
 import com.raulshma.jellyplay.core.network.JellyfinApiClient
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
+import kotlinx.coroutines.sync.Semaphore
+import kotlinx.coroutines.sync.withPermit
 import kotlinx.coroutines.withContext
 import kotlin.random.Random
 
@@ -55,15 +60,38 @@ class DreamImageProvider(
             .shuffled(Random)
     }
 
-    fun prefetchImages(urls: List<String>) {
-        urls.forEach { url ->
-            val request = ImageRequest.Builder(context)
-                .data(url)
-                .size(Size(1920, 1080))
-                .allowHardware(true)
-                .build()
-            imageLoader.enqueue(request)
+    /**
+     * Prefetches backdrop bitmaps with bounded concurrency. The screensaver
+     * path runs on the project's explicitly targeted low-RAM TV sticks, where
+     * 50 concurrent 1920×1080 hardware-bitmap fetches can each hold ~8 MB of
+     * native texture. A small [Semaphore] gates peak parallelism — visual
+     * behavior is identical, only peak memory is bounded.
+     */
+    suspend fun prefetchImages(urls: List<String>) {
+        if (urls.isEmpty()) return
+        val gate = Semaphore(MAX_PREFETCH_CONCURRENCY)
+        coroutineScope {
+            urls.map { url ->
+                async(Dispatchers.IO) {
+                    gate.withPermit {
+                        val request = ImageRequest.Builder(context)
+                            .data(url)
+                            .size(Size(1920, 1080))
+                            .allowHardware(true)
+                            .build()
+                        // execute() suspends until decode completes (or fails),
+                        // unlike enqueue() which fires-and-forgets — so the
+                        // semaphore actually bounds in-flight decodes.
+                        runCatching { imageLoader.execute(request) }
+                    }
+                }
+            }.awaitAll()
         }
+    }
+
+    private companion object {
+        /** Bounds concurrent 1920×1080 hardware-bitmap decodes for the screensaver. */
+        const val MAX_PREFETCH_CONCURRENCY = 4
     }
 
     private fun DreamImageCategory.toMediaTypes(): List<MediaType> = when (this) {
