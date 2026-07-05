@@ -202,7 +202,15 @@ data class VideoPlayerUiState(
      * recomputation cost is negligible. Kept as a `fun` (not a `val`) so it
      * is only evaluated when actually needed.
      */
-    fun computeActiveSegment(): MediaSegment? = computeActiveSegmentInternal()
+    fun computeActiveSegment(): MediaSegment? = computeActiveSegmentInternal(currentPosition)
+
+    /**
+     * Position-explicit overload. Lets high-frequency callers (e.g. the
+     * position-tick auto-skip check) compute the active segment for a raw
+     * engine position WITHOUT copying this 95-field state (which is the
+     * highest-frequency avoidable allocation on the playback path).
+     */
+    fun computeActiveSegment(positionMs: Long): MediaSegment? = computeActiveSegmentInternal(positionMs)
 
     companion object {
         private val INTRO_CHAPTER_NAMES = setOf("intro", "introduction", "opening", "op")
@@ -220,8 +228,8 @@ data class VideoPlayerUiState(
         )
     }
 
-    private fun computeActiveSegmentInternal(): MediaSegment? {
-        val posTicks = currentPosition * 10_000
+    private fun computeActiveSegmentInternal(positionMs: Long): MediaSegment? {
+        val posTicks = positionMs * 10_000
         val apiMatches = segments.filter { seg ->
             seg.hasSegment && posTicks >= seg.startTicks && posTicks < seg.endTicks
         }
@@ -230,12 +238,12 @@ data class VideoPlayerUiState(
                 apiMatches.firstOrNull { it.type == priority }
             } ?: apiMatches.first()
         }
-        return detectChapterSegment()
+        return detectChapterSegment(positionMs)
     }
 
-    private fun detectChapterSegment(): MediaSegment? {
+    private fun detectChapterSegment(positionMs: Long): MediaSegment? {
         if (chapters.isEmpty()) return null
-        val posTicks = currentPosition * 10_000
+        val posTicks = positionMs * 10_000
         val idx = chapters.indexOfLast { it.startPositionTicks <= posTicks }
         if (idx < 0) return null
         val chapter = chapters[idx]

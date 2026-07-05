@@ -12,6 +12,7 @@ import androidx.room.PrimaryKey
         Index(value = ["seriesId"]),
         Index(value = ["seasonId"]),
         Index(value = ["mediaType"]),
+        Index(value = ["name"]),
         Index(value = ["seriesId", "mediaType"]),
         Index(value = ["seasonId", "mediaType"]),
         Index(value = ["mediaType", "createdAt"]),

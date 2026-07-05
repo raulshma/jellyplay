@@ -2,6 +2,7 @@ package com.raulshma.jellyplay.feature.player.video.engine
 
 import android.content.Context
 import android.view.View
+import androidx.compose.runtime.Stable
 import com.raulshma.jellyplay.core.data.playback.PlayerLifecycleCallbacks
 import com.raulshma.jellyplay.core.model.AudioNormalizationMode
 import com.raulshma.jellyplay.core.model.ChannelMixMode
@@ -29,6 +30,13 @@ data class PlaybackRequest(
     val authToken: String? = null,
     val minBufferMs: Int = 15_000,
     val maxBufferMs: Int = 50_000,
+    /**
+     * Optional MIME type hint for the primary media item. When set, ExoPlayer
+     * uses it in preference to URI-extension inference to pick the extractor,
+     * which is essential for downloaded files whose on-disk extension does not
+     * match their actual container (e.g. an MKV stream saved as `.mp4`).
+     */
+    val mimeType: String? = null,
 )
 
 data class SubtitleSource(
@@ -235,6 +243,7 @@ interface VideoSurfaceBinding {
  * [com.raulshma.jellyplay.core.data.remote.RemotePlayableEngine] (which cannot
  * move into a role) or special-case internal hooks kept on the composite type.
  */
+@Stable
 interface MediaEngine :
     PlayerLifecycleCallbacks,
     com.raulshma.jellyplay.core.data.remote.RemotePlayableEngine,

@@ -365,7 +365,7 @@ internal fun PlayerControls(
                             if (showEndsAt) {
                                 val remainingMs = (duration - currentPosition).coerceAtLeast(0)
                                 val realRemainingMs = if (playbackSpeed > 0f) (remainingMs / playbackSpeed).toLong() else remainingMs
-                                val endsAt = rememberEndsAtTime(realRemainingMs)
+                                val endsAt = rememberEndsAtTime(realRemainingMs, isVisible)
                                 Text(
                                     text = "Ends at $endsAt",
                                     style = MaterialTheme.typography.bodyMedium,
@@ -969,6 +969,17 @@ private fun TvControllableSeekBar(
 
     val seekStep = if (isTv) 30_000f / duration else 10_000f / duration
 
+    // Position-derived labels memoized by second to cut formatDuration allocations
+    // during the 4 Hz position tick (most recomposes only move the playhead).
+    val currentPositionText = remember(currentPosition / 1000) { formatDuration(currentPosition) }
+    val durationText = remember(duration / 1000) { formatDuration(duration) }
+    val remainingText = remember(duration, currentPosition / 1000, showTimeRemaining) {
+        if (duration > 0 && showTimeRemaining) {
+            val remainingMs = (duration - currentPosition).coerceAtLeast(0)
+            "-" + formatDuration(remainingMs)
+        } else null
+    }
+
     Column(modifier = Modifier.fillMaxWidth()) {
         if (isTv && isSeekBarFocused && trickplayBitmap != null) {
             val displayMs = (tvSeekPosition * duration).toLong()
@@ -1217,7 +1228,7 @@ private fun TvControllableSeekBar(
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 Text(
-                    formatDuration(currentPosition),
+                    currentPositionText,
                     style = MaterialTheme.typography.labelSmall.copy(
                         fontFamily = FontFamily.Monospace,
                         fontWeight = FontWeight.Medium,
@@ -1225,12 +1236,7 @@ private fun TvControllableSeekBar(
                     color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f),
                 )
                 val endLabel = if (duration > 0) {
-                    if (showTimeRemaining) {
-                        val remainingMs = (duration - currentPosition).coerceAtLeast(0)
-                        "-" + formatDuration(remainingMs)
-                    } else {
-                        formatDuration(duration)
-                    }
+                    remainingText ?: durationText
                 } else {
                     "--:--"
                 }
@@ -1248,16 +1254,22 @@ private fun TvControllableSeekBar(
 }
 
 @Composable
-private fun rememberEndsAtTime(remainingMs: Long): String {
+private fun rememberEndsAtTime(remainingMs: Long, controlsVisible: Boolean): String {
     val context = LocalContext.current
     val is24Hour = remember(context) { android.text.format.DateFormat.is24HourFormat(context) }
     val pattern = if (is24Hour) "HH:mm" else "h:mm a"
     val formatter = remember(pattern) { SimpleDateFormat(pattern, Locale.getDefault()) }
     var currentSystemTime by remember { mutableStateOf(System.currentTimeMillis()) }
-    LaunchedEffect(Unit) {
+    // Only poll while the controls (and therefore the "ends-at" label) are
+    // visible, and align the delay to the wall-clock minute boundary — the
+    // label only needs minute precision, so sub-minute updates are invisible.
+    // Was an unconditional 5 s poll for the lifetime of PlayerControls.
+    LaunchedEffect(controlsVisible) {
+        if (!controlsVisible) return@LaunchedEffect
         while (true) {
-            kotlinx.coroutines.delay(5000)
             currentSystemTime = System.currentTimeMillis()
+            val msToNextMinute = 60_000L - (currentSystemTime % 60_000L)
+            kotlinx.coroutines.delay(msToNextMinute.coerceAtLeast(1_000L))
         }
     }
     return remember(currentSystemTime, remainingMs, formatter) {

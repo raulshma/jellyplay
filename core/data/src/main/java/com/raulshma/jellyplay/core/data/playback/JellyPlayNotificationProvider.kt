@@ -52,6 +52,12 @@ class JellyPlayNotificationProvider(
     fun release() {
         scope.cancel()
         synchronized(bitmapLock) {
+            // Mirror NowPlayingWidgetUpdater.stop(): explicitly recycle the
+            // cached artwork bitmap rather than waiting for GC to reclaim the
+            // native allocation. Safe because release() is invoked at service
+            // teardown, after the notification (which held this bitmap via
+            // setLargeIcon) has already been torn down.
+            cachedBitmap?.let { if (!it.isRecycled) it.recycle() }
             cachedBitmap = null
             cachedArtworkUri = null
         }

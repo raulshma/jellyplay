@@ -1,6 +1,10 @@
 package com.raulshma.jellyplay.core.data.repository
 
 import androidx.room.withTransaction
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
+import kotlinx.coroutines.coroutineScope
 import com.raulshma.jellyplay.core.database.JellyPlayDatabase
 import com.raulshma.jellyplay.core.database.dao.DownloadDao
 import com.raulshma.jellyplay.core.database.dao.OfflineMediaDao
@@ -138,13 +142,7 @@ class OfflineRepositoryImpl @Inject constructor(
 
     override suspend fun deleteOfflineSeries(seriesId: String) {
         val downloads = downloadDao.getDownloadsForSeries(seriesId)
-        for (download in downloads) {
-            if (download.downloadPath.isNotBlank()) {
-                val file = java.io.File(download.downloadPath)
-                if (file.exists()) file.delete()
-                DownloadArtifacts.cleanup(file.parentFile)
-            }
-        }
+        deleteArtifactsParallel(downloads.map { it.downloadPath })
         database.withTransaction {
             val ids = downloads.map { it.id }
             if (ids.isNotEmpty()) downloadDao.deleteDownloadsByIds(ids)
@@ -155,19 +153,33 @@ class OfflineRepositoryImpl @Inject constructor(
 
     override suspend fun deleteOfflineSeason(seasonId: String) {
         val downloads = downloadDao.getDownloadsForSeason(seasonId)
-        for (download in downloads) {
-            if (download.downloadPath.isNotBlank()) {
-                val file = java.io.File(download.downloadPath)
-                if (file.exists()) file.delete()
-                DownloadArtifacts.cleanup(file.parentFile)
-            }
-        }
+        deleteArtifactsParallel(downloads.map { it.downloadPath })
         database.withTransaction {
             val ids = downloads.map { it.id }
             if (ids.isNotEmpty()) downloadDao.deleteDownloadsByIds(ids)
             offlineMediaDao.deleteBySeasonId(seasonId)
         }
         cleanupOrphans()
+    }
+
+    /**
+     * Deletes downloaded artifact files concurrently (was a serial per-episode
+     * `File.delete()` + `cleanup()` loop — for a 100-episode series that was
+     * 100+ serial FS syscalls). Runs on Dispatchers.IO; the subsequent DB
+     * transaction does not depend on the file deletion result.
+     */
+    private suspend fun deleteArtifactsParallel(downloadPaths: List<String>) {
+        val paths = downloadPaths.filter { it.isNotBlank() }
+        if (paths.isEmpty()) return
+        coroutineScope {
+            paths.map { path ->
+                async(Dispatchers.IO) {
+                    val file = java.io.File(path)
+                    if (file.exists()) file.delete()
+                    DownloadArtifacts.cleanup(file.parentFile)
+                }
+            }.awaitAll()
+        }
     }
 
     override suspend fun cleanupOrphans() {
@@ -180,9 +192,9 @@ class OfflineRepositoryImpl @Inject constructor(
         percentage: Double,
         isPlayed: Boolean,
     ) {
-        // Only record progress for items actually in the offline store; a server-
-        // only item has no offline row to update.
-        if (offlineMediaDao.getById(itemId) == null) return
+        // The UPDATE's `WHERE id = :itemId` already no-ops for a server-only
+        // item (no offline row), so the previous `getById` guard was a 28-column
+        // SELECT * on every playback-progress tick just to null-check existence.
         offlineMediaDao.updatePlaybackProgress(
             itemId = itemId,
             positionTicks = positionTicks,

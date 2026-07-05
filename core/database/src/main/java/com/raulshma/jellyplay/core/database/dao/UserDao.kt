@@ -15,6 +15,9 @@ interface UserDao {
     @Query("SELECT * FROM users WHERE serverId = :serverId ORDER BY lastConnected DESC")
     fun getUsersForServer(serverId: String): Flow<List<UserEntity>>
 
+    @Query("SELECT * FROM users WHERE serverId = :serverId ORDER BY lastConnected DESC")
+    suspend fun getUsersForServerOnce(serverId: String): List<UserEntity>
+
     @Query("SELECT * FROM users WHERE serverId = :serverId ORDER BY lastConnected DESC LIMIT 1")
     suspend fun getMostRecentUserForServer(serverId: String): UserEntity?
 

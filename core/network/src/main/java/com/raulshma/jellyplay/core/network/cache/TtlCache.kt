@@ -1,8 +1,17 @@
-package com.raulshma.jellyplay.core.data.cache
+package com.raulshma.jellyplay.core.network.cache
 
 import android.os.SystemClock
 import java.util.Collections
 
+/**
+ * Tiny LRU + TTL cache used inside [core:network] clients (e.g.
+ * `MediaInfoApiClientImpl`, `AdminApiClientImpl`) to memoise near-static
+ * server responses that sit below the repository-layer caches in `core:data`.
+ *
+ * `core:network` cannot depend on `core:data` (the dependency direction is
+ * inverted), so this is a focused duplicate of the `core:data` `TtlCache`
+ * rather than a shared abstraction. Keep the two implementations in sync.
+ */
 class TtlCache<V>(
     private val maxSize: Int = DEFAULT_MAX_SIZE,
     private val ttlMs: Long = DEFAULT_TTL_MS,
@@ -31,17 +40,8 @@ class TtlCache<V>(
         map[key] = Entry(value, elapsed())
     }
 
-    fun remove(key: String) {
-        map.remove(key)
-    }
-
     fun clear() {
         map.clear()
-    }
-
-    fun evictExpired() {
-        val now = elapsed()
-        map.entries.removeIf { now - it.value.fetchedAt >= ttlMs }
     }
 
     private fun elapsed(): Long = SystemClock.elapsedRealtime()

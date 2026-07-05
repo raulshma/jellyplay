@@ -230,7 +230,12 @@ fun WideMediaCard(
     )
 
     val dominantColor = rememberDominantColor(backdropUrl.ifBlank { imageUrl }, itemId = item.id)
-    val progressPercent = item.progressFraction() ?: 0f
+    // Memoize the progress fraction so it is recomputed only when the item's
+    // identity or its playback position/runtime ticks change (was recomputed
+    // on every recomposition of the card).
+    val progressPercent = remember(item.id, item.playbackPositionTicks, item.runTimeTicks) {
+        item.progressFraction() ?: 0f
+    }
     val playButtonSize = if (isTv) 44.dp else 36.dp
 
     // Press-and-hold "peek" preview; no-op on TV / when no controller is wired.
@@ -494,6 +499,11 @@ fun HomeMediaRow(
             ) { _, item, focusModifier ->
                 val memoizedClick = remember(item) { { onItemClick(item) } }
                 val memoizedPlayClick = onPlayClick?.let { click -> remember(item, click) { { click(item) } } }
+                // Memoize progress so per-card arithmetic runs only when ticks change,
+                // not on every scroll/animation-frame recompose (matches WideMediaCard).
+                val progressPercent = remember(item.id, item.playbackPositionTicks, item.runTimeTicks) {
+                    item.progressFraction() ?: 0f
+                }
                 PosterCard(
                     item = item,
                     imageUrl = imageUrlBuilder(item),
@@ -501,9 +511,7 @@ fun HomeMediaRow(
                     onClick = memoizedClick,
                     modifier = focusModifier.width(cardWidth),
                     showProgress = item.playbackPositionTicks != null && item.playbackPositionTicks!! > 0,
-                    progressPercent = if (item.runTimeTicks != null && item.runTimeTicks!! > 0) {
-                        (item.playbackPositionTicks?.toFloat() ?: 0f) / item.runTimeTicks!!.toFloat()
-                    } else 0f,
+                    progressPercent = progressPercent,
                     blurHash = item.blurHashes.primary,
                     onPlayClick = memoizedPlayClick,
                     sharedElementKey = "poster_${item.id}",
@@ -525,6 +533,11 @@ fun HomeMediaRow(
                 val item = effectiveItems[index]
                 val memoizedClick = remember(item) { { onItemClick(item) } }
                 val memoizedPlayClick = onPlayClick?.let { click -> remember(item, click) { { click(item) } } }
+                // Memoize progress so per-card arithmetic runs only when ticks change,
+                // not on every scroll/animation-frame recompose (matches WideMediaCard).
+                val progressPercent = remember(item.id, item.playbackPositionTicks, item.runTimeTicks) {
+                    item.progressFraction() ?: 0f
+                }
                 PosterCard(
                     item = item,
                     imageUrl = imageUrlBuilder(item),
@@ -532,9 +545,7 @@ fun HomeMediaRow(
                     onClick = memoizedClick,
                     modifier = Modifier.width(cardWidth),
                     showProgress = item.playbackPositionTicks != null && item.playbackPositionTicks!! > 0,
-                    progressPercent = if (item.runTimeTicks != null && item.runTimeTicks!! > 0) {
-                        (item.playbackPositionTicks?.toFloat() ?: 0f) / item.runTimeTicks!!.toFloat()
-                    } else 0f,
+                    progressPercent = progressPercent,
                     blurHash = item.blurHashes.primary,
                     onPlayClick = memoizedPlayClick,
                     sharedElementKey = "poster_${item.id}",

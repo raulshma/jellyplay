@@ -35,8 +35,11 @@ import com.raulshma.jellyplay.core.model.AudioNormalizationMode
 import com.raulshma.jellyplay.core.model.ChannelMixMode
 import com.raulshma.jellyplay.core.model.DecoderMode
 import com.raulshma.jellyplay.core.model.EffectStrength
+import com.raulshma.jellyplay.core.model.ChapterInfo
 import com.raulshma.jellyplay.core.model.MediaDetail
+import com.raulshma.jellyplay.core.model.MediaItem as JellyfinMediaItem
 import com.raulshma.jellyplay.core.model.MediaSegment
+import com.raulshma.jellyplay.core.model.MediaSegmentType
 import com.raulshma.jellyplay.core.model.MediaStream
 import com.raulshma.jellyplay.core.model.PlaybackMode
 import com.raulshma.jellyplay.core.model.PlaybackPrefScope
@@ -74,6 +77,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.collectLatest
+import kotlinx.coroutines.flow.debounce
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.receiveAsFlow
@@ -93,6 +97,81 @@ private const val SAVED_KEY_ITEM_ID = "video_player.saved_item_id"
 private const val SAVED_KEY_POSITION_MS = "video_player.saved_position_ms"
 private const val SAVED_KEY_PLAY_SESSION_ID = "video_player.saved_play_session_id"
 private const val POSITION_PERSIST_MIN_INTERVAL_MS = 5_000L
+/** Debounce window for engine config syncs driven by slider drags (C11). */
+private const val CONFIG_SYNC_DEBOUNCE_MS = 150L
+
+/**
+ * Initial-buffering watchdog. If the engine has not reached READY within this
+ * window since load, the playback-error dialog is surfaced so the user can
+ * retry with another engine. Long enough to cover legitimate cold-start
+ * buffering on slow networks, short enough to feel responsive when playback is
+ * genuinely stuck (e.g. undecodable content).
+ */
+private const val BUFFERING_TIMEOUT_MS = 20_000L
+
+/**
+ * Segment-relevant slice of [VideoPlayerUiState], used by
+ * [VideoPlayerViewModel.segmentOverlayState]. Projecting only these fields
+ * (and `distinctUntilChanged`-ing them) means a 4 Hz [currentPositionMs][VideoPlayerViewModel.currentPositionMs]
+ * tick does not allocate a fresh 95-field `VideoPlayerUiState.copy(...)` or
+ * re-run `computeActiveSegment()` unless one of these fields actually changed.
+ *
+ * Note: `isInIntro` / `isInCredits` / `shouldShowUpNext` are deliberately NOT
+ * captured here — they are computed properties on [VideoPlayerUiState] that
+ * depend on the live position/duration, so they are re-derived inside
+ * [computeOverlay] from the position-aware state. Only the *inputs* that do
+ * not change every tick are projected.
+ */
+private data class SegmentProjection(
+    val segments: List<MediaSegment>,
+    val chapters: List<ChapterInfo>,
+    val segmentBehaviors: Map<MediaSegmentType, SegmentBehavior>,
+    val autoplayCancelled: Boolean,
+    val isInSyncPlaySession: Boolean,
+    val nextEpisode: JellyfinMediaItem?,
+    val seriesId: String?,
+) {
+    constructor(state: VideoPlayerUiState) : this(
+        segments = state.segments,
+        chapters = state.chapters,
+        segmentBehaviors = state.segmentBehaviors,
+        autoplayCancelled = state.autoplayCancelled,
+        isInSyncPlaySession = state.isInSyncPlaySession,
+        nextEpisode = state.nextEpisode,
+        seriesId = state.seriesId,
+    )
+
+    /**
+     * Builds the [SegmentOverlayState] for a given live position/duration.
+     * Reconstructs a position-aware [VideoPlayerUiState] carrying only the
+     * segment-relevant fields so the existing `computeActiveSegment()` /
+     * `behaviorForType()` / `shouldShowUpNext` logic is reused verbatim (no
+     * duplication of the chapter-name-matching rules). This reconstruction
+     * runs only when the projection changes — not on every 4 Hz tick.
+     */
+    fun computeOverlay(positionMs: Long, durationMs: Long): SegmentOverlayState {
+        val positioned = VideoPlayerUiState(
+            currentPosition = positionMs,
+            duration = durationMs,
+            segments = segments,
+            chapters = chapters,
+            segmentBehaviors = segmentBehaviors,
+            autoplayCancelled = autoplayCancelled,
+            isInSyncPlaySession = isInSyncPlaySession,
+            nextEpisode = nextEpisode,
+            seriesId = seriesId,
+        )
+        val activeSegment = positioned.computeActiveSegment()
+        return SegmentOverlayState(
+            activeSegment = activeSegment,
+            activeSegmentBehavior = activeSegment?.let { positioned.behaviorForType(it.type) }
+                ?: SegmentBehavior.IGNORE,
+            isInIntro = positioned.isInIntro,
+            isInCredits = positioned.isInCredits,
+            shouldShowUpNext = positioned.shouldShowUpNext,
+        )
+    }
+}
 
 @HiltViewModel
 class VideoPlayerViewModel @Inject constructor(
@@ -147,20 +226,20 @@ class VideoPlayerViewModel @Inject constructor(
      * to compute the active segment. The result is `distinctUntilChanged` via
      * [StateFlow], so collectors (the screen root) only recompose when one of
      * these values actually changes — i.e. at segment boundaries, not at 4 Hz.
+     *
+     * Only the segment-relevant slice of [uiState] is projected (via
+     * [SegmentProjection] + `distinctUntilChanged`) so a 4 Hz position tick does
+     * not allocate a fresh 95-field `VideoPlayerUiState.copy(...)` and re-run
+     * `computeActiveSegment()` when no segment-relevant field changed.
      */
     val segmentOverlayState: StateFlow<SegmentOverlayState> = stateIn(
         initial = SegmentOverlayState(),
-        flow = combine(currentPositionMs, durationMs, uiState) { pos, dur, state ->
-            val positioned = state.copy(currentPosition = pos, duration = dur)
-            val seg = positioned.computeActiveSegment()
-            SegmentOverlayState(
-                activeSegment = seg,
-                activeSegmentBehavior = seg?.let { positioned.behaviorForType(it.type) }
-                    ?: SegmentBehavior.IGNORE,
-                isInIntro = positioned.isInIntro,
-                isInCredits = positioned.isInCredits,
-                shouldShowUpNext = positioned.shouldShowUpNext,
-            )
+        flow = combine(
+            currentPositionMs,
+            durationMs,
+            uiState.map(::SegmentProjection).distinctUntilChanged(),
+        ) { pos, dur, proj ->
+            proj.computeOverlay(pos, dur)
         },
     )
 
@@ -244,7 +323,6 @@ class VideoPlayerViewModel @Inject constructor(
     private var transientAudioFocusRequest: android.media.AudioFocusRequest? = null
     private var preDuckVolume: Float? = null
     private var wasPlayingBeforeTransientLoss = false
-    private var duckingEnabledJob: Job? = null
 
     private val _passOutEvents = Channel<String>(Channel.BUFFERED)
     val passOutEvents: kotlinx.coroutines.flow.Flow<String> = _passOutEvents.receiveAsFlow()
@@ -581,6 +659,14 @@ class VideoPlayerViewModel @Inject constructor(
                         updateConfigWithUiState()
                     }
                 }
+                // Duck on transient audio focus loss (phone calls). Folded into
+                // this single preferences collector (was a duplicate collector)
+                // so a pref write rebuilds the snapshot once, not twice.
+                if (prefs.duckOnTransientFocusLoss && transientAudioFocusRequest == null) {
+                    registerTransientFocusLossListener()
+                } else if (!prefs.duckOnTransientFocusLoss && transientAudioFocusRequest != null) {
+                    unregisterTransientFocusLossListener()
+                }
             }
         }
         launch {
@@ -649,19 +735,6 @@ class VideoPlayerViewModel @Inject constructor(
                 } else 0,
             )
         } catch (_: Exception) {}
-
-        // Duck on transient audio focus loss (phone calls). Observed dynamically so
-        // toggling the preference at runtime re-registers without requiring screen re-entry.
-        duckingEnabledJob?.cancel()
-        duckingEnabledJob = launch {
-            preferencesStore.preferences.collect { prefs ->
-                if (prefs.duckOnTransientFocusLoss && transientAudioFocusRequest == null) {
-                    registerTransientFocusLossListener()
-                } else if (!prefs.duckOnTransientFocusLoss && transientAudioFocusRequest != null) {
-                    unregisterTransientFocusLossListener()
-                }
-            }
-        }
 
         launch {
             var lastItemId: String? = null
@@ -749,7 +822,13 @@ class VideoPlayerViewModel @Inject constructor(
                     engineCollectionJob = launch {
                         kotlinx.coroutines.coroutineScope {
                             launch { engine.isPlaying.collect { isPlaying ->
-                                _uiState.update { s -> s.copy(isPlaying = isPlaying) }
+                                // Guard against same-value updates (mirrors the isBuffering
+                                // branch below) so a redundant isPlaying emission does not
+                                // allocate a fresh 95-field uiState copy and invalidate
+                                // every uiState collector.
+                                _uiState.update { s ->
+                                    if (s.isPlaying == isPlaying) s else s.copy(isPlaying = isPlaying)
+                                }
                                 syncPlayBridge.onIsPlayingChanged(isPlaying)
                                 // Mirror play state so the Activity can render the correct
                                 // play/pause icon on the PiP window.
@@ -774,6 +853,49 @@ class VideoPlayerViewModel @Inject constructor(
                             } }
                             launch { engine.availableTracks.collect { trackSelectionHelper.updateTracksFromEngine() } }
                             launch { engine.errorFlow.collect { e -> _uiState.update { s -> s.copy(playerError = e, showPlaybackErrorDialog = true) } } }
+                            // Buffering watchdog: if the engine never reaches
+                            // READY within BUFFERING_TIMEOUT_MS during the
+                            // *initial* buffer (before first READY), surface the
+                            // playback-error dialog so the user can retry with a
+                            // different engine. Without this, ExoPlayer can sit
+                            // in STATE_BUFFERING forever for undecodable content
+                            // (e.g. wrong extractor on a misnamed download) — no
+                            // PlaybackException is raised, so the errorFlow
+                            // collector above never fires and the spinner spins
+                            // indefinitely. Only armed before first READY so it
+                            // does not trigger on legitimate mid-playback rebuffer
+                            // (seeks, quality switches, network blips).
+                            launch {
+                                var hasReachedReady = false
+                                var watchdogJob: kotlinx.coroutines.Job? = null
+                                engine.playbackState.collect { state ->
+                                    when (state) {
+                                        com.raulshma.jellyplay.feature.player.video.engine.EnginePlaybackState.BUFFERING -> {
+                                            if (!hasReachedReady && watchdogJob == null) {
+                                                watchdogJob = launch {
+                                                    delay(BUFFERING_TIMEOUT_MS)
+                                                    if (!hasReachedReady) {
+                                                        _uiState.update { s -> s.copy(
+                                                            playerError = "Playback failed to start. Try a different player engine.",
+                                                            showPlaybackErrorDialog = true,
+                                                            isBuffering = false,
+                                                        ) }
+                                                    }
+                                                }
+                                            }
+                                        }
+                                        com.raulshma.jellyplay.feature.player.video.engine.EnginePlaybackState.READY -> {
+                                            hasReachedReady = true
+                                            watchdogJob?.cancel()
+                                            watchdogJob = null
+                                        }
+                                        else -> {
+                                            watchdogJob?.cancel()
+                                            watchdogJob = null
+                                        }
+                                    }
+                                }
+                            }
                         }
                     }
                 } else {
@@ -1670,14 +1792,27 @@ class VideoPlayerViewModel @Inject constructor(
         playerSessionManager.engine?.updateConfig(config)
     }
 
-    private var configDebounceJob: Job? = null
+    /**
+     * Backing flow for the debounced config-sync. Slider drags fire 60–120
+     * value-changed callbacks/sec; previously each launched a new coroutine
+     * and cancelled the previous (allocating a DispatchedContinuation per call
+     * and walking the job tree on each cancel). A SharedFlow + debounce emits
+     * one coroutine that only fires after the drag settles.
+     */
+    private val configChangeIntent = kotlinx.coroutines.flow.MutableSharedFlow<Unit>(
+        extraBufferCapacity = 1,
+        onBufferOverflow = kotlinx.coroutines.channels.BufferOverflow.DROP_OLDEST,
+    )
 
-    private fun updateConfigWithUiStateDebounced() {
-        configDebounceJob?.cancel()
-        configDebounceJob = launch {
-            delay(50)
+    @OptIn(kotlinx.coroutines.FlowPreview::class)
+    private val configSyncJob: Job = launch {
+        configChangeIntent.debounce(CONFIG_SYNC_DEBOUNCE_MS).collect {
             updateConfigWithUiState()
         }
+    }
+
+    private fun updateConfigWithUiStateDebounced() {
+        configChangeIntent.tryEmit(Unit)
     }
 
     fun playNextEpisode() {
@@ -2464,8 +2599,6 @@ class VideoPlayerViewModel @Inject constructor(
             try { context.unregisterReceiver(it) } catch (_: Exception) {}
         }
         becomingNoisyReceiver = null
-        duckingEnabledJob?.cancel()
-        duckingEnabledJob = null
         unregisterTransientFocusLossListener()
         sleepTimerManager.setOnFadeProgress(null)
         releaseInternals()

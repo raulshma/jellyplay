@@ -272,23 +272,29 @@ internal fun EpisodeCard(
 
     val isSynthwave = LocalIsSynthwave.current
     val isSoothing = LocalIsSoothingTheme.current
-    val borderModifier = when {
-        isSynthwave -> Modifier.border(
-            width = 1.5.dp,
-            brush = Brush.linearGradient(
-                colors = listOf(
-                    MaterialTheme.colorScheme.primary,
-                    MaterialTheme.colorScheme.secondary
-                )
-            ),
-            shape = ShapeCache.smooth16
-        )
-        isSoothing -> Modifier.border(
-            width = 0.8.dp,
-            color = MaterialTheme.colorScheme.outline.copy(alpha = 0.35f),
-            shape = ShapeCache.smooth16
-        )
-        else -> Modifier
+    // Read theme colors here (composable scope) so the remember block below
+    // doesn't need to call composable functions.
+    val primaryColor = MaterialTheme.colorScheme.primary
+    val secondaryColor = MaterialTheme.colorScheme.secondary
+    val outlineColor = MaterialTheme.colorScheme.outline
+    // Depends only on the active theme, not on the per-episode data — wrap in
+    // remember so the Modifier + gradient aren't rebuilt per card per recompose.
+    val borderModifier = remember(isSynthwave, isSoothing, primaryColor, secondaryColor, outlineColor) {
+        when {
+            isSynthwave -> Modifier.border(
+                width = 1.5.dp,
+                brush = Brush.linearGradient(
+                    colors = listOf(primaryColor, secondaryColor)
+                ),
+                shape = ShapeCache.smooth16
+            )
+            isSoothing -> Modifier.border(
+                width = 0.8.dp,
+                color = outlineColor.copy(alpha = 0.35f),
+                shape = ShapeCache.smooth16
+            )
+            else -> Modifier
+        }
     }
 
     Column(
@@ -327,6 +333,9 @@ internal fun EpisodeCard(
                     url = getImageUrl(episode.id),
                     contentDescription = episode.name,
                     blurHash = episode.blurHashes.primary,
+                    // Episode thumbnails render up to ~480 dp wide × 16:9. Decode a
+                    // right-sized bitmap (4–8 cards compose simultaneously).
+                    size = coil3.size.Size(640, 360),
                     modifier = Modifier.fillMaxSize(),
                     contentScale = ContentScale.Crop,
                 )

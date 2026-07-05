@@ -18,6 +18,15 @@ interface DownloadDao {
     @Query("SELECT * FROM downloads WHERE id = :id")
     suspend fun getDownloadById(id: String): DownloadEntity?
 
+    /**
+     * Targeted single-column read of a download's status. Used by the
+     * per-2-s progress loop in DownloadWorker, which previously did a full
+     * `SELECT *` (23 cols incl. downloadUrl / errorMessage) just to detect a
+     * pause/cancel transition.
+     */
+    @Query("SELECT status FROM downloads WHERE id = :id")
+    suspend fun getStatus(id: String): String?
+
     @Query("SELECT * FROM downloads WHERE mediaItemId = :mediaItemId")
     suspend fun getDownloadByMediaItemId(mediaItemId: String): DownloadEntity?
 
@@ -69,6 +78,16 @@ interface DownloadDao {
     @Query("SELECT * FROM downloads WHERE status = :status LIMIT 500")
     suspend fun getDownloadsByStatus(status: String): List<DownloadEntity>
 
+    /**
+     * Cold-start recovery projection. The recovery initializer on every app
+     * launch consumes only [RecoveryRow.id] (and `downloadedBytes` when
+     * rewriting a stuck DOWNLOADING row back to PENDING). Materialising up to
+     * 500 full 23-column entities — incl. `downloadUrl`, `errorMessage`,
+     * `container`, `imageBlurHash` — was pure overhead on the cold-start path.
+     */
+    @Query("SELECT id, downloadedBytes FROM downloads WHERE status = :status LIMIT 500")
+    suspend fun getRecoveryRows(status: String): List<RecoveryRow>
+
     @Query("SELECT * FROM downloads WHERE seriesId = :seriesId")
     suspend fun getDownloadsForSeries(seriesId: String): List<DownloadEntity>
 
@@ -93,3 +112,13 @@ interface DownloadDao {
     @Query("SELECT DISTINCT seriesId FROM downloads WHERE seriesId IS NOT NULL")
     suspend fun getDownloadedSeriesIds(): List<String>
 }
+
+/**
+ * Lightweight row projected out of `downloads` for the cold-start recovery
+ * path — see [DownloadDao.getRecoveryRows]. Carries only the columns the
+ * recovery initializer actually consumes.
+ */
+data class RecoveryRow(
+    val id: String,
+    val downloadedBytes: Long,
+)

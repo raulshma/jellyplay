@@ -167,7 +167,7 @@ class AuthRepositoryImplTest {
         val result = repository.restoreSession()
 
         assertTrue(result.isSuccess)
-        coVerify { preferencesStore.setActiveServer("") }
+        coVerify { preferencesStore.setActiveSession("", "") }
     }
 
     @Test

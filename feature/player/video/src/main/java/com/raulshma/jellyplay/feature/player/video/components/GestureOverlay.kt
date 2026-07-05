@@ -57,6 +57,7 @@ import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import android.os.SystemClock
 import kotlin.math.abs
 import kotlin.math.pow
 import com.composables.icons.tabler.Tabler
@@ -152,7 +153,11 @@ internal fun GestureOverlay(
                                     val dy = change.position.y - change.previousPosition.y
                                     val rawDelta = -(dy / size.height) * 0.5f
                                     val delta = applySensitivityCurve(rawDelta)
-                                    val now = System.currentTimeMillis()
+                                    // Monotonic clock — avoids the wall-clock syscall of
+                                    // System.currentTimeMillis() per move event and is immune
+                                    // to wall-clock jumps. Gesture timing is duration-based
+                                    // (hapticMinInterval), so this is strictly more correct.
+                                    val now = SystemClock.elapsedRealtime()
                                     if (change.position.x > halfWidth) {
                                         currentOnVolumeGesture(delta)
                                         if ((volumeValue <= 0f && delta < 0f) || (volumeValue >= 1f && delta > 0f)) {

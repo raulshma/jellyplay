@@ -1121,6 +1121,14 @@ class UserPreferencesStore @Inject constructor(
     val activeUserId: Flow<String?> = sharedPrefs.map { it[Keys.ACTIVE_USER_ID] }.distinctUntilChanged()
     val deviceId: Flow<String?> = sharedPrefs.map { it[Keys.DEVICE_ID] }.distinctUntilChanged()
 
+    // Narrow per-key flows for hot-path consumers. Reading these avoids
+    // collecting the full ~150-field `preferences` StateFlow (rebuilt on every
+    // pref edit anywhere in the app) just to observe one or two booleans.
+    val manualOfflineEnabled: Flow<Boolean> =
+        sharedPrefs.map { it[Keys.MANUAL_OFFLINE_ENABLED] ?: false }.distinctUntilChanged()
+    val autoOfflineEnabled: Flow<Boolean> =
+        sharedPrefs.map { it[Keys.AUTO_OFFLINE_ENABLED] ?: true }.distinctUntilChanged()
+
     suspend fun ensureDeviceId(): String {
         var id: String? = null
         context.dataStore.edit { prefs ->
@@ -1135,6 +1143,20 @@ class UserPreferencesStore @Inject constructor(
 
     suspend fun setActiveUser(userId: String) {
         context.dataStore.edit { it[Keys.ACTIVE_USER_ID] = userId }
+    }
+
+    /**
+     * Sets the active server and user in a single DataStore edit. Two back-to-
+     * back `setActiveServer` + `setActiveUser` calls (the previous call-site
+     * pattern) each opened their own `edit {}` → 2 disk reads + 2 atomic writes
+     * + 2 full `preferences` re-emissions. Batching them halves the I/O and the
+     * downstream re-derivation cascade.
+     */
+    suspend fun setActiveSession(serverId: String, userId: String) {
+        context.dataStore.edit { prefs ->
+            prefs[Keys.ACTIVE_SERVER_ID] = serverId
+            prefs[Keys.ACTIVE_USER_ID] = userId
+        }
     }
 
     suspend fun setPreferredPlayer(playerType: PlayerType) {

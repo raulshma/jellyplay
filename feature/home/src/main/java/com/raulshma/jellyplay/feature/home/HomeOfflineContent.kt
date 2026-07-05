@@ -84,21 +84,49 @@ fun OfflineHomeContent(
         return
     }
 
-    // Pre-compute sections. Only non-empty ones render.
-    val continueWatching = remember(offlineLibrary) {
-        offlineLibrary
-            .filter { it.playedPercentage in 1.0..94.99 }
-            .sortedWith(compareByDescending<OfflineMediaItem> { it.lastPlayedDate ?: "" }.thenByDescending { it.createdAt })
+    // Single-pass partition + accumulate. Previously this was six independent
+    // full-library traversals (continue-watching filter+sort, recent sort+take,
+    // movies/series/music filters, totalBytes sum) = O(6n) + 6 intermediate
+    // lists on every offline-library emission. Now O(n) for the partition and
+    // byte sum; the two sorts below run on their (small) partition inputs only.
+    val offlineSections = remember(offlineLibrary) {
+        val continueWatching = ArrayList<OfflineMediaItem>()
+        val movies = ArrayList<OfflineMediaItem>()
+        val series = ArrayList<OfflineMediaItem>()
+        val music = ArrayList<OfflineMediaItem>()
+        var totalBytes = 0L
+        for (item in offlineLibrary) {
+            totalBytes += item.totalSizeBytes
+            if (item.playedPercentage in 1.0..94.99) continueWatching += item
+            when (item.mediaType) {
+                MediaType.MOVIE -> movies += item
+                MediaType.SERIES -> series += item
+                MediaType.AUDIO, MediaType.MUSIC, MediaType.ALBUM -> music += item
+                // Other types (PHOTO, PHOTO_FOLDER, etc.) have no home row here.
+                else -> Unit
+            }
+        }
+        // Preserve original comparators for sort stability.
+        continueWatching.sortWith(
+            compareByDescending<OfflineMediaItem> { it.lastPlayedDate ?: "" }
+                .thenByDescending { it.createdAt }
+        )
+        val recent = offlineLibrary.sortedByDescending { it.createdAt }.take(10)
+        OfflineSections(
+            continueWatching = continueWatching,
+            recent = recent,
+            movies = movies,
+            series = series,
+            music = music,
+            totalBytes = totalBytes,
+        )
     }
-    val recent = remember(offlineLibrary) {
-        offlineLibrary.sortedByDescending { it.createdAt }.take(10)
-    }
-    val movies = remember(offlineLibrary) { offlineLibrary.filter { it.mediaType == MediaType.MOVIE } }
-    val series = remember(offlineLibrary) { offlineLibrary.filter { it.mediaType == MediaType.SERIES } }
-    val music = remember(offlineLibrary) {
-        offlineLibrary.filter { it.mediaType == MediaType.AUDIO || it.mediaType == MediaType.MUSIC || it.mediaType == MediaType.ALBUM }
-    }
-    val totalBytes = remember(offlineLibrary) { offlineLibrary.sumOf { it.totalSizeBytes } }
+    val continueWatching = offlineSections.continueWatching
+    val recent = offlineSections.recent
+    val movies = offlineSections.movies
+    val series = offlineSections.series
+    val music = offlineSections.music
+    val totalBytes = offlineSections.totalBytes
 
     LazyColumn(
         modifier = Modifier
@@ -241,6 +269,19 @@ private fun OfflineSection(
         }
     }
 }
+
+/**
+ * Holder for the single-pass partition of the offline library, replacing
+ * six independent full-library traversals. See [OfflineHomeContent].
+ */
+private data class OfflineSections(
+    val continueWatching: List<OfflineMediaItem>,
+    val recent: List<OfflineMediaItem>,
+    val movies: List<OfflineMediaItem>,
+    val series: List<OfflineMediaItem>,
+    val music: List<OfflineMediaItem>,
+    val totalBytes: Long,
+)
 
 /**
  * Inline "Downloaded" row shown on the online home. Upgraded from the old

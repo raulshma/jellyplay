@@ -100,7 +100,7 @@ fun AspectRatioSheet(
 
             if (isTv) {
                 LazyColumn(modifier = Modifier.verticalWrapAround()) {
-                    items(AspectRatio.entries) { ratio ->
+                    items(AspectRatio.entries, key = { it.name }) { ratio ->
                         val isSelected = ratio == currentRatio
                         val isFirstOrSelected = isSelected || (currentRatio !in AspectRatio.entries && ratio == AspectRatio.AUTO)
                         val ratioFocusState = rememberTvFocusState(focusedScale = 1.02f)

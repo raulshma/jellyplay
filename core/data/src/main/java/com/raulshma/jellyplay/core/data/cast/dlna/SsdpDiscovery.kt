@@ -12,7 +12,6 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.withContext
 import java.net.DatagramPacket
 import java.net.DatagramSocket
 import java.net.InetAddress
@@ -105,7 +104,7 @@ class SsdpDiscovery(
         }
     }
 
-    private suspend fun performSearch() = withContext(Dispatchers.IO) {
+    private suspend fun performSearch() {
         val responses = mutableMapOf<String, DiscoveredDevice>()
 
         sendAndCollect(MSEARCH_MEDIA_RENDERER) { location, usn, st ->
