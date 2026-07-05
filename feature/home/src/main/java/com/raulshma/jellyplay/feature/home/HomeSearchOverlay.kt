@@ -228,9 +228,11 @@ fun HomeSearchResultsOverlay(
                         contentType = { "libraryItem" },
                     ) { index ->
                         val item = jellyfinResults[index]
-                        SearchItemRow(
-                            title = item.name,
-                            subtitle = buildString {
+                        // Memoized per row on stable primitives so search-as-you-type
+                        // recompositions don't re-run buildString + branches for every
+                        // visible row.
+                        val subtitle = remember(item.id, item.year, item.mediaType) {
+                            buildString {
                                 item.year?.let { append(it) }
                                 if (item.year != null && item.mediaType != null) append(" · ")
                                 when (item.mediaType) {
@@ -239,7 +241,11 @@ fun HomeSearchResultsOverlay(
                                     MediaType.AUDIO, MediaType.MUSIC -> append("Music")
                                     else -> item.mediaType?.name?.lowercase()?.replaceFirstChar { it.uppercase() }?.let { append(it) }
                                 }
-                            },
+                            }
+                        }
+                        SearchItemRow(
+                            title = item.name,
+                            subtitle = subtitle,
                             imageUrl = getImageUrl(item.id),
                             onClick = { onJellyfinClick(item) },
                             index = index,
@@ -274,9 +280,8 @@ fun HomeSearchResultsOverlay(
                         contentType = { "seerrItem" },
                     ) { index ->
                         val item = seerrResults[index]
-                        SearchItemRow(
-                            title = item.displayName,
-                            subtitle = buildString {
+                        val subtitle = remember(item.id, item.year, item.mediaType, item.voteAverage) {
+                            buildString {
                                 item.year?.let { append(it) }
                                 val typeLabel = when {
                                     item.mediaType.equals("movie", ignoreCase = true) -> "Movie"
@@ -291,7 +296,11 @@ fun HomeSearchResultsOverlay(
                                         append(String.format("%.1f", rating))
                                     }
                                 }
-                            },
+                            }
+                        }
+                        SearchItemRow(
+                            title = item.displayName,
+                            subtitle = subtitle,
                             imageUrl = item.posterUrl ?: "",
                             onClick = { onSeerrClick(item) },
                             index = index + jellyfinResults.size,

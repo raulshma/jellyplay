@@ -27,6 +27,13 @@ data class DownloadItem(
     val seasonNumber: Int? = null,
     val errorMessage: String? = null,
     val priority: Int = 0,
+    /**
+     * Original container format as reported by the Jellyfin MediaSource
+     * (e.g. "mkv", "mp4", "ts"). Used to attach the correct MIME type to the
+     * player engine at playback time so the right extractor is selected for
+     * files whose on-disk extension does not match their actual container.
+     */
+    val container: String? = null,
 )
 
 @Immutable

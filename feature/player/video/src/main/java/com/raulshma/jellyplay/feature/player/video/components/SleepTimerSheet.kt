@@ -171,7 +171,7 @@ internal fun SleepTimerSheet(
                         }
                     }
 
-                    items(PRESET_DURATIONS) { durationMs ->
+                    items(PRESET_DURATIONS, key = { it }) { durationMs ->
                         val isSelected = !isEndOfEpisodeMode && isActive && remainingMs == durationMs
                         val isLastUsed = !isActive && durationMs == lastUsedDurationMs
                         val isTarget = isSelected || isLastUsed

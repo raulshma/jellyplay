@@ -94,10 +94,12 @@ fun SeriesDownloadSheet(
 
     val totalSelectedCount = selectedEpisodeIds.values.sumOf { it.size }
 
-    val allSelected = allSelectableIds.isNotEmpty() &&
-        allSelectableIds.all { id ->
-            selectedEpisodeIds.values.any { id in it }
-        }
+    // Flatten once into a Set instead of scanning every season set per id
+    // (was O(selectable × seasons); now O(total selected) once).
+    val allSelected = remember(allSelectableIds, selectedEpisodeIds) {
+        val selectedFlat = selectedEpisodeIds.values.flatten().toHashSet()
+        allSelectableIds.isNotEmpty() && allSelectableIds.all { it in selectedFlat }
+    }
 
     Column(
         modifier = Modifier
@@ -200,7 +202,7 @@ fun SeriesDownloadSheet(
                 .height(400.dp),
             verticalArrangement = Arrangement.spacedBy(4.dp),
         ) {
-            items(seasons, key = { it.id }) { season ->
+            items(seasons, key = { it.id }, contentType = { "season" }) { season ->
                 val isExpanded = expandedSeasonId == season.id
                 val seasonEpisodes = episodes[season.id].orEmpty()
                 val isLoadingThis = season.id in loadingSeasons

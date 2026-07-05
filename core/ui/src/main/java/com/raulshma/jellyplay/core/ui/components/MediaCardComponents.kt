@@ -383,6 +383,10 @@ fun PosterCard(
                         modifier = imageModifier,
                         contentScale = ContentScale.Crop,
                         crossfade = false,
+                        // Poster cards fill a dynamic column width at a 2:3 aspect ratio.
+                        // ~360×540 px covers ~2× density for typical grid card sizes
+                        // (≤180 dp wide) without the over-decode of the 512×512 default.
+                        size = CoilSize(360, 540),
                     )
                 }
 

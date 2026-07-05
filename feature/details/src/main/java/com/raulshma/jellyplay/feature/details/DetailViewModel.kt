@@ -299,7 +299,18 @@ class DetailViewModel @Inject constructor(
             mediaRepository.getEpisodes(seriesId, seasonId)
                 .onSuccess { episodeList ->
                     episodesMap[seasonId] = episodeList
-                    _uiState.update { it.copy(episodes = episodesMap.toMap()) }
+                    // Fold the fetchedSeasonIds update into the same emission as
+                    // the episodes update so each recursion level produces one
+                    // uiState copy (was two: one for episodes, one for
+                    // fetchedSeasonIds). StateFlow conflation means downstream
+                    // sees the final state either way; this halves the
+                    // intermediate allocation/emit churn.
+                    _uiState.update {
+                        it.copy(
+                            episodes = episodesMap.toMap(),
+                            fetchedSeasonIds = it.fetchedSeasonIds + seasonId,
+                        )
+                    }
 
                     if (episodeList.isEmpty()) {
                         val seasons = _uiState.value.seasons
@@ -317,7 +328,15 @@ class DetailViewModel @Inject constructor(
                 .onFailure {
                     if (!_uiState.value.episodes.containsKey(seasonId)) {
                         episodesMap[seasonId] = emptyList()
-                        _uiState.update { it.copy(episodes = episodesMap.toMap()) }
+                        _uiState.update {
+                            it.copy(
+                                episodes = episodesMap.toMap(),
+                                fetchedSeasonIds = it.fetchedSeasonIds + seasonId,
+                            )
+                        }
+                    } else {
+                        // Still record the fetched season id even on a no-op failure.
+                        _uiState.update { it.copy(fetchedSeasonIds = it.fetchedSeasonIds + seasonId) }
                     }
 
                     val seasons = _uiState.value.seasons
@@ -333,7 +352,6 @@ class DetailViewModel @Inject constructor(
                         maybeComputeSmartPlayTarget()
                     }
                 }
-            _uiState.update { it.copy(fetchedSeasonIds = it.fetchedSeasonIds + seasonId) }
         }
     }
 

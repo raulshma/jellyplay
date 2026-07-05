@@ -23,6 +23,10 @@ data class DownloadRequest(
     // offline store so the redesigned offline detail screens can show cast,
     // studios, ratings, overview, etc. — instead of the bare stub used before.
     val detail: MediaDetail? = null,
+    // Original container format from the Jellyfin MediaSource ("mkv", "mp4",
+    // "ts", ...). Used to derive the on-disk file extension and to attach the
+    // correct MIME type to the player engine at playback time.
+    val container: String? = null,
 )
 
 data class DownloadResult(
@@ -57,6 +61,7 @@ class DownloadDelegate @Inject constructor(
             trickplayInfo = source.trickplayInfo,
             mediaStreams = source.mediaStreams,
             detail = detail,
+            container = source.container,
         )
     }
 
@@ -69,6 +74,7 @@ class DownloadDelegate @Inject constructor(
             downloadUrl = request.downloadUrl,
             imageUrl = request.imageUrl,
             imageBlurHash = request.imageBlurHash,
+            container = request.container,
         )
         return result.fold(
             onSuccess = { downloadItem ->

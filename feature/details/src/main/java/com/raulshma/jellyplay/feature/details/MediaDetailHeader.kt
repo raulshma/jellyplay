@@ -99,9 +99,22 @@ internal fun MediaInfoSection(
     preferences: UserPreferences,
     horizontalPadding: androidx.compose.ui.unit.Dp = 24.dp,
 ) {
-    val videoStream = mediaStreams.firstOrNull { it.type == StreamType.VIDEO }
-    val audioStreams = mediaStreams.filter { it.type == StreamType.AUDIO }
-    val subtitleStreams = mediaStreams.filter { it.type == StreamType.SUBTITLE }
+    // Single-pass extraction of (first video, all audio, all subtitle) replaces
+    // three independent traversals per recomposition.
+    val (videoStream, audioStreams, subtitleStreams) = remember(mediaStreams) {
+        var firstVideo: MediaStream? = null
+        val audio = mutableListOf<MediaStream>()
+        val subtitle = mutableListOf<MediaStream>()
+        mediaStreams.forEach { s ->
+            when (s.type) {
+                StreamType.VIDEO -> if (firstVideo == null) firstVideo = s
+                StreamType.AUDIO -> audio += s
+                StreamType.SUBTITLE -> subtitle += s
+                else -> Unit
+            }
+        }
+        Triple(firstVideo, audio, subtitle)
+    }
 
     if (videoStream == null && audioStreams.isEmpty() && subtitleStreams.isEmpty()) return
 
@@ -138,22 +151,30 @@ internal fun MediaInfoSection(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.spacedBy(8.dp),
         ) {
-            val qualityLabel = buildString {
-                val res = videoStream?.height?.let { h ->
-                    when {
-                        h >= 2160 -> "4K"
-                        h >= 1080 -> "HD"
-                        h >= 720 -> "HD"
-                        else -> "SD"
-                    }
-                } ?: "Auto"
-                append(res)
-                append(" ")
-                val range = videoStream?.videoDoViTitle
-                    ?: videoStream?.videoRangeType
-                    ?: videoStream?.videoRange
-                    ?: "SDR"
-                append(range.uppercase())
+            // Hoist the per-string resources out of the remembered label builders
+            // (stringResource is composable-only) and remember the labels so the
+            // buildString allocations don't repeat per recomposition.
+            val audioChannelsFormat = stringResource(R.string.detail_audio_channels_format)
+            val subtitleOff = stringResource(R.string.detail_subtitle_off)
+
+            val qualityLabel = remember(videoStream) {
+                buildString {
+                    val res = videoStream?.height?.let { h ->
+                        when {
+                            h >= 2160 -> "4K"
+                            h >= 1080 -> "HD"
+                            h >= 720 -> "HD"
+                            else -> "SD"
+                        }
+                    } ?: "Auto"
+                    append(res)
+                    append(" ")
+                    val range = videoStream?.videoDoViTitle
+                        ?: videoStream?.videoRangeType
+                        ?: videoStream?.videoRange
+                        ?: "SDR"
+                    append(range.uppercase())
+                }
             }
 
             FadingItem(modifier = Modifier.weight(1f)) {
@@ -164,24 +185,26 @@ internal fun MediaInfoSection(
                 )
             }
 
-            val audioLabel = buildString {
-                append(
-                    selectedAudio
-                        ?.language?.uppercase()?.take(3)
-                        ?: selectedAudio?.displayTitle?.take(3)?.uppercase()
-                        ?: "AUTO"
-                )
-                selectedAudio?.channels?.let { channels ->
-                    append(" - ")
+            val audioLabel = remember(selectedAudio, audioChannelsFormat) {
+                buildString {
                     append(
-                        when (channels) {
-                            1 -> "MONO"
-                            2 -> "STEREO"
-                            6 -> "5.1"
-                            8 -> "7.1"
-                            else -> stringResource(R.string.detail_audio_channels_format, channels)
-                        }
+                        selectedAudio
+                            ?.language?.uppercase()?.take(3)
+                            ?: selectedAudio?.displayTitle?.take(3)?.uppercase()
+                            ?: "AUTO"
                     )
+                    selectedAudio?.channels?.let { channels ->
+                        append(" - ")
+                        append(
+                            when (channels) {
+                                1 -> "MONO"
+                                2 -> "STEREO"
+                                6 -> "5.1"
+                                8 -> "7.1"
+                                else -> audioChannelsFormat.format(channels)
+                            }
+                        )
+                    }
                 }
             }
 
@@ -196,12 +219,14 @@ internal fun MediaInfoSection(
                 )
             }
 
-            val subtitleLabel = selectedSubtitle
-                ?.displayTitle
-                ?.takeIf { it.isNotBlank() }
-                ?.let { if (it.length > 10) it.take(10) + "…" else it }
-                ?: selectedSubtitle?.language?.uppercase()?.take(3)
-                ?: stringResource(R.string.detail_subtitle_off)
+            val subtitleLabel = remember(selectedSubtitle, subtitleOff) {
+                selectedSubtitle
+                    ?.displayTitle
+                    ?.takeIf { it.isNotBlank() }
+                    ?.let { if (it.length > 10) it.take(10) + "…" else it }
+                    ?: selectedSubtitle?.language?.uppercase()?.take(3)
+                    ?: subtitleOff
+            }
 
             FadingItem(modifier = Modifier.weight(1f)) {
                 QuickInfoPill(
@@ -217,45 +242,69 @@ internal fun MediaInfoSection(
 
         if (picker != null) {
             val activePicker = picker ?: return@Column
-            val options = when (activePicker) {
-                StreamPickerType.AUDIO -> {
-                    buildList {
-                        if (selectedAudioIndex != null) {
-                            add(StreamPickerOption(index = null, label = stringResource(R.string.detail_stream_auto), isDefault = false))
-                        }
-                        add(StreamPickerOption(index = -1, label = stringResource(R.string.detail_stream_default), isDefault = true))
-                        addAll(
-                            audioStreams.map { stream ->
-                                StreamPickerOption(
-                                    index = stream.index,
-                                    label = stream.displayTitle
-                                        ?: stream.title
-                                        ?: stream.language
-                                        ?: stringResource(R.string.detail_audio_track_format, stream.index),
-                                    isDefault = stream.isDefault,
-                                )
+            // Hoist the string lookups out of the remembered builder (stringResource
+            // is composable-only) and remember the option list so it isn't rebuilt
+            // with fresh StreamPickerOption allocations on every recompose while the
+            // picker sheet is open (audio/subtitle lists commonly 10–20 entries).
+            val autoLabel = stringResource(R.string.detail_stream_auto)
+            val defaultLabel = stringResource(R.string.detail_stream_default)
+            val offLabel = stringResource(R.string.detail_stream_subtitle_off)
+            // Fetch the raw format templates (no args → unformatted) so the
+            // remembered builder can substitute the per-stream index itself.
+            val audioTrackFormat = stringResource(R.string.detail_audio_track_format)
+            val subtitleTrackFormat = stringResource(R.string.detail_subtitle_track_format)
+            val options = remember(
+                activePicker,
+                audioStreams,
+                subtitleStreams,
+                selectedAudioIndex,
+                selectedSubtitleIndex,
+                autoLabel,
+                defaultLabel,
+                offLabel,
+                audioTrackFormat,
+                subtitleTrackFormat,
+            ) {
+                when (activePicker) {
+                    StreamPickerType.AUDIO -> {
+                        buildList {
+                            if (selectedAudioIndex != null) {
+                                add(StreamPickerOption(index = null, label = autoLabel, isDefault = false))
                             }
-                        )
+                            add(StreamPickerOption(index = -1, label = defaultLabel, isDefault = true))
+                            addAll(
+                                audioStreams.map { stream ->
+                                    StreamPickerOption(
+                                        index = stream.index,
+                                        label = stream.displayTitle
+                                            ?: stream.title
+                                            ?: stream.language
+                                            ?: audioTrackFormat.format(stream.index),
+                                        isDefault = stream.isDefault,
+                                    )
+                                }
+                            )
+                        }
                     }
-                }
-                StreamPickerType.SUBTITLE -> {
-                    buildList {
-                        if (selectedSubtitleIndex != null) {
-                            add(StreamPickerOption(index = null, label = stringResource(R.string.detail_stream_auto), isDefault = false))
-                        }
-                        add(StreamPickerOption(index = -1, label = stringResource(R.string.detail_stream_subtitle_off), isDefault = true))
-                        addAll(
-                            subtitleStreams.map { stream ->
-                                StreamPickerOption(
-                                    index = stream.index,
-                                    label = stream.displayTitle
-                                        ?: stream.title
-                                        ?: stream.language
-                                        ?: stringResource(R.string.detail_subtitle_track_format, stream.index),
-                                    isDefault = stream.isDefault,
-                                )
+                    StreamPickerType.SUBTITLE -> {
+                        buildList {
+                            if (selectedSubtitleIndex != null) {
+                                add(StreamPickerOption(index = null, label = autoLabel, isDefault = false))
                             }
-                        )
+                            add(StreamPickerOption(index = -1, label = offLabel, isDefault = true))
+                            addAll(
+                                subtitleStreams.map { stream ->
+                                    StreamPickerOption(
+                                        index = stream.index,
+                                        label = stream.displayTitle
+                                            ?: stream.title
+                                            ?: stream.language
+                                            ?: subtitleTrackFormat.format(stream.index),
+                                        isDefault = stream.isDefault,
+                                    )
+                                }
+                            )
+                        }
                     }
                 }
             }

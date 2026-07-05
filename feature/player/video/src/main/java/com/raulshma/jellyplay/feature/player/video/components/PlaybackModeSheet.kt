@@ -86,7 +86,7 @@ fun PlaybackModeSheet(
 
             if (isTv) {
                 LazyColumn(modifier = Modifier.verticalWrapAround()) {
-                    items(PlaybackMode.entries) { mode ->
+                    items(PlaybackMode.entries, key = { it.name }) { mode ->
                         val isSelected = mode == currentMode
                         val isFirstOrSelected = isSelected ||
                             (currentMode !in PlaybackMode.entries && mode == PlaybackMode.AUTO)

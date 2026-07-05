@@ -48,6 +48,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import coil3.size.Size as CoilSize
 import com.raulshma.jellyplay.core.designsystem.theme.AlphaEasing
 import com.raulshma.jellyplay.core.designsystem.theme.FancyTransitionEasing
 import com.raulshma.jellyplay.core.designsystem.theme.RatingColors
@@ -297,6 +298,9 @@ fun SeerrMediaCard(
                         modifier = imageModifier,
                         contentScale = ContentScale.Crop,
                         crossfade = false,
+                        // Poster card (2:3, fillMaxWidth). ~360×540 covers ~2× density
+                        // for typical grid card widths without the 512×512 over-decode.
+                        size = CoilSize(360, 540),
                     )
                 } else {
                     Box(

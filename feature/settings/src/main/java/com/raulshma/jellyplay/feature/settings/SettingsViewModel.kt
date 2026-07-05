@@ -56,6 +56,7 @@ import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.async
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
@@ -334,36 +335,53 @@ class SettingsViewModel @Inject constructor(
 
     private fun calculateCacheSize() {
         launch {
-            val cacheSize = withContext(Dispatchers.IO) { getDirSize(context.cacheDir) }
-            val externalCacheSize = withContext(Dispatchers.IO) {
-                context.externalCacheDir?.let { getDirSize(it) } ?: 0L
-            }
-            cacheSizeMb = (cacheSize + externalCacheSize) / (1024 * 1024)
-
-            val downloadsDir = withContext(Dispatchers.IO) {
-                val prefs = preferencesStore.preferences.value
-                val location = prefs.downloadStorageLocation
-                if (location == "EXTERNAL" && context.getExternalFilesDir(null) != null) {
-                    context.getExternalFilesDir(null)!!
-                } else {
-                    context.filesDir
+            // Five independent recursive FS walks — collapse into a single IO
+            // context-switch and run the walks concurrently rather than one
+            // after another. Each walk can take seconds on large directories.
+            val (cacheSize, externalCacheSize, downloadsSize, imagesSize) = withContext(Dispatchers.IO) {
+                val cacheAsync = async { getDirSize(context.cacheDir) }
+                val extAsync = async { context.externalCacheDir?.let { getDirSize(it) } ?: 0L }
+                val dlAsync = async {
+                    val prefs = preferencesStore.preferences.value
+                    val location = prefs.downloadStorageLocation
+                    val downloadsDir = if (location == "EXTERNAL" && context.getExternalFilesDir(null) != null) {
+                        context.getExternalFilesDir(null)!!
+                    } else {
+                        context.filesDir
+                    }
+                    getDirSize(downloadsDir)
                 }
+                val imgAsync = async {
+                    val imageDir = File(context.cacheDir, "image_cache")
+                    if (imageDir.exists()) getDirSize(imageDir) else 0L
+                }
+                QuadLongs(cacheAsync.await(), extAsync.await(), dlAsync.await(), imgAsync.await())
             }
-            val downloadsSize = withContext(Dispatchers.IO) { getDirSize(downloadsDir) }
 
-            val imagesSize = withContext(Dispatchers.IO) {
-                val imageDir = File(context.cacheDir, "image_cache")
-                if (imageDir.exists()) getDirSize(imageDir) else 0L
-            }
-
-            val total = cacheSizeMb + (downloadsSize / (1024 * 1024)) + (imagesSize / (1024 * 1024))
+            cacheSizeMb = (cacheSize + externalCacheSize) / (1024 * 1024)
+            val downloadsMb = downloadsSize / (1024 * 1024)
+            val imagesMb = imagesSize / (1024 * 1024)
+            val total = cacheSizeMb + downloadsMb + imagesMb
             storageBreakdown = StorageBreakdown(
                 cacheMb = cacheSizeMb,
-                downloadsMb = downloadsSize / (1024 * 1024),
-                imagesMb = imagesSize / (1024 * 1024),
+                downloadsMb = downloadsMb,
+                imagesMb = imagesMb,
                 totalMb = total,
             )
         }
+    }
+
+    /** 4-tuple of `Long` for destructuring the four parallel FS-walk results. */
+    private class QuadLongs(
+        val first: Long,
+        val second: Long,
+        val third: Long,
+        val fourth: Long,
+    ) {
+        operator fun component1(): Long = first
+        operator fun component2(): Long = second
+        operator fun component3(): Long = third
+        operator fun component4(): Long = fourth
     }
 
     private fun getDirSize(dir: File): Long {

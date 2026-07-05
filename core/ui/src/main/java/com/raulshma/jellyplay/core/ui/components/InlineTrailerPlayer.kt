@@ -340,6 +340,10 @@ fun InlineTrailerPlayer(
                 (webView.parent as? ViewGroup)?.removeView(webView)
                 webView.stopLoading()
                 webView.loadUrl("about:blank")
+                // Destroy the native renderer/V8/GPU textures. Detaching + loadUrl("about:blank")
+                // alone leaves the Chromium renderer process alive; destroy() is required to
+                // reclaim it.
+                webView.destroy()
             }
         }
     }

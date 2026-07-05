@@ -2,6 +2,7 @@ package com.raulshma.jellyplay.navigation
 
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.core.Spring
+import androidx.compose.runtime.Stable
 import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.spring
@@ -81,6 +82,10 @@ private const val ExitConfirmationTimeoutMs = 2000L
 // Data + icon mapping
 // ──────────────────────────────────────────────────────────────────────────────
 
+// @Stable (not @Immutable): route is a NavKey marker interface whose impls
+// are not guaranteed immutable — matches the NavigationState precedent for
+// NavKey-holding types.
+@Stable
 data class TvNavItem(
     val route: NavKey,
     val label: String,

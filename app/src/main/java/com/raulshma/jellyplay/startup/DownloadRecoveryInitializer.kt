@@ -38,7 +38,7 @@ class DownloadRecoveryInitializer @Inject constructor(
             // will keep it. Replacing here would cancel an active download and
             // risk orphaned partial bytes between the cancel and the new
             // worker's setForeground call.
-            val pending = downloadDao.getDownloadsByStatus(DownloadStatus.PENDING.name)
+            val pending = downloadDao.getRecoveryRows(DownloadStatus.PENDING.name)
             for (download in pending) {
                 val workRequest = OneTimeWorkRequestBuilder<DownloadWorker>()
                     .setInputData(
@@ -54,7 +54,7 @@ class DownloadRecoveryInitializer @Inject constructor(
                     workRequest,
                 )
             }
-            val stale = downloadDao.getDownloadsByStatus(DownloadStatus.DOWNLOADING.name)
+            val stale = downloadDao.getRecoveryRows(DownloadStatus.DOWNLOADING.name)
             for (download in stale) {
                 downloadDao.updateProgress(download.id, download.downloadedBytes, DownloadStatus.PENDING.name)
                 val workRequest = OneTimeWorkRequestBuilder<DownloadWorker>()

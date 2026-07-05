@@ -186,6 +186,7 @@ private fun AuditEntryCard(entry: AuditLogEntry) {
     }
 }
 
+@Composable
 private fun formatRelativeTime(timestamp: Long): String {
     val diff = System.currentTimeMillis() - timestamp
     return when {
@@ -193,10 +194,18 @@ private fun formatRelativeTime(timestamp: Long): String {
         diff < TimeUnit.HOURS.toMillis(1) -> "${TimeUnit.MILLISECONDS.toMinutes(diff)} minutes ago"
         diff < TimeUnit.DAYS.toMillis(1) -> "${TimeUnit.MILLISECONDS.toHours(diff)} hours ago"
         diff < TimeUnit.DAYS.toMillis(7) -> "${TimeUnit.MILLISECONDS.toDays(diff)} days ago"
-        else -> SimpleDateFormat("MMM dd, yyyy", Locale.getDefault()).format(Date(timestamp))
+        else -> {
+            // Reuse a single SimpleDateFormat per locale instead of constructing
+            // one (pattern parse + DateFormatSymbols graph) per card per
+            // recomposition.
+            val formatter = remember { SimpleDateFormat("MMM dd, yyyy", Locale.getDefault()) }
+            formatter.format(Date(timestamp))
+        }
     }
 }
 
+@Composable
 private fun formatAbsoluteTime(timestamp: Long): String {
-    return SimpleDateFormat("MMM dd, yyyy HH:mm", Locale.getDefault()).format(Date(timestamp))
+    val formatter = remember { SimpleDateFormat("MMM dd, yyyy HH:mm", Locale.getDefault()) }
+    return formatter.format(Date(timestamp))
 }

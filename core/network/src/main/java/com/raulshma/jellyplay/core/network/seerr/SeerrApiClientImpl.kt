@@ -4,6 +4,7 @@ import com.raulshma.jellyplay.core.model.seerr.*
 import com.raulshma.jellyplay.core.network.api.ApiException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.OkHttpClient
 import okhttp3.Request
@@ -201,13 +202,12 @@ class SeerrApiClientImpl @Inject constructor(
     override suspend fun search(
         baseUrl: String, credentials: SeerrCredentials, query: String, page: Int,
     ): Result<SeerrSearchResponse> {
-        val url = buildUrl(baseUrl, "/search")
-            .let { base ->
-                Request.Builder().url(base).build().url.newBuilder()
-                    .addQueryParameter("query", query)
-                    .addQueryParameter("page", page.toString())
-                    .build()
-            }
+        // Build the HttpUrl directly rather than constructing a throwaway
+        // Request merely to borrow its url. Same final URL, less garbage.
+        val url = buildUrl(baseUrl, "/search").toHttpUrl().newBuilder()
+            .addQueryParameter("query", query)
+            .addQueryParameter("page", page.toString())
+            .build()
         val request = Request.Builder().url(url).withAuth(credentials).get().build()
         return parseAndMap(executeRequest(request))
     }
