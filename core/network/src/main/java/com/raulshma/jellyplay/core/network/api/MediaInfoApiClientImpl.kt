@@ -12,6 +12,7 @@ import com.raulshma.jellyplay.core.model.PlaybackReportingActivity
 import com.raulshma.jellyplay.core.model.PlaybackReportingDetail
 import com.raulshma.jellyplay.core.model.PlaybackReportingStatus
 import com.raulshma.jellyplay.core.model.StaleMediaItem
+import com.raulshma.jellyplay.core.model.TtlCache
 import com.raulshma.jellyplay.core.model.WatchedMediaItem
 import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
@@ -36,13 +37,24 @@ class MediaInfoApiClientImpl @Inject constructor(
     private val engine: JellyfinApiEngine,
 ) : MediaInfoApiClient {
 
+    // The server name is effectively session-static but lives below the
+    // repository layer (which already caches library folders), so every
+    // newsletter render previously bypassed the in-memory cache. Short TTL
+    // keeps it fresh across server renames without per-render network calls.
+    private val serverNameCache = TtlCache<String>(maxSize = 4, ttlMs = 30 * 60 * 1000L)
+
+    private suspend fun getCachedServerName(): String {
+        serverNameCache.get(KEY_SERVER_NAME)?.let { return it }
+        return try {
+            val name = engine.requireApi().systemApi.getSystemInfo().content.serverName ?: ""
+            serverNameCache.put(KEY_SERVER_NAME, name)
+            name
+        } catch (_: Exception) { "" }
+    }
+
     override suspend fun getNewsletterData(sinceDate: String, limit: Int): Result<NewsletterData> = engine.apiResultWithRetry {
         coroutineScope {
-            val serverName = async {
-                try {
-                    engine.requireApi().systemApi.getSystemInfo().content.serverName ?: ""
-                } catch (_: Exception) { "" }
-            }
+            val serverName = async { getCachedServerName() }
             val recentlyAdded = async {
                 try {
                     val folders = engine.requireApi().libraryApi.getMediaFolders().content?.items ?: emptyList()
@@ -660,5 +672,9 @@ class MediaInfoApiClientImpl @Inject constructor(
                 )
             }
         }
+    }
+
+    private companion object {
+        const val KEY_SERVER_NAME = "serverName"
     }
 }

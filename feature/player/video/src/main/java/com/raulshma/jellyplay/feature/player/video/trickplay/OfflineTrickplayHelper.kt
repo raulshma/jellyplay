@@ -8,6 +8,16 @@ import java.io.File
 
 object OfflineTrickplayHelper {
 
+    // Compiled once and reused — previously `Regex` was recompiled on every
+    // `loadLocalTrickplayInfo` call (7× per call).
+    private val WIDTH_REGEX = Regex("\"width\"\\s*:\\s*(\\d+)")
+    private val HEIGHT_REGEX = Regex("\"height\"\\s*:\\s*(\\d+)")
+    private val TILE_WIDTH_REGEX = Regex("\"tileWidth\"\\s*:\\s*(\\d+)")
+    private val TILE_HEIGHT_REGEX = Regex("\"tileHeight\"\\s*:\\s*(\\d+)")
+    private val THUMBNAIL_COUNT_REGEX = Regex("\"thumbnailCount\"\\s*:\\s*(\\d+)")
+    private val INTERVAL_REGEX = Regex("\"interval\"\\s*:\\s*(\\d+)")
+    private val BANDWIDTH_REGEX = Regex("\"bandwidth\"\\s*:\\s*(\\d+)")
+
     suspend fun downloadTrickplayData(
         itemId: String,
         trickplayInfo: TrickplayInfo,
@@ -58,13 +68,13 @@ object OfflineTrickplayHelper {
 
         return try {
             val text = withContext(Dispatchers.IO) { metaFile.readText() }
-            val width = text.regexMatch("\"width\"\\s*:\\s*(\\d+)")?.toIntOrNull() ?: return null
-            val height = text.regexMatch("\"height\"\\s*:\\s*(\\d+)")?.toIntOrNull() ?: return null
-            val tileWidth = text.regexMatch("\"tileWidth\"\\s*:\\s*(\\d+)")?.toIntOrNull() ?: return null
-            val tileHeight = text.regexMatch("\"tileHeight\"\\s*:\\s*(\\d+)")?.toIntOrNull() ?: return null
-            val thumbnailCount = text.regexMatch("\"thumbnailCount\"\\s*:\\s*(\\d+)")?.toIntOrNull() ?: return null
-            val interval = text.regexMatch("\"interval\"\\s*:\\s*(\\d+)")?.toIntOrNull() ?: return null
-            val bandwidth = text.regexMatch("\"bandwidth\"\\s*:\\s*(\\d+)")?.toIntOrNull() ?: 0
+            val width = WIDTH_REGEX.find(text)?.groupValues?.getOrNull(1)?.toIntOrNull() ?: return null
+            val height = HEIGHT_REGEX.find(text)?.groupValues?.getOrNull(1)?.toIntOrNull() ?: return null
+            val tileWidth = TILE_WIDTH_REGEX.find(text)?.groupValues?.getOrNull(1)?.toIntOrNull() ?: return null
+            val tileHeight = TILE_HEIGHT_REGEX.find(text)?.groupValues?.getOrNull(1)?.toIntOrNull() ?: return null
+            val thumbnailCount = THUMBNAIL_COUNT_REGEX.find(text)?.groupValues?.getOrNull(1)?.toIntOrNull() ?: return null
+            val interval = INTERVAL_REGEX.find(text)?.groupValues?.getOrNull(1)?.toIntOrNull() ?: return null
+            val bandwidth = BANDWIDTH_REGEX.find(text)?.groupValues?.getOrNull(1)?.toIntOrNull() ?: 0
 
             TrickplayInfo(
                 width = width,
@@ -76,10 +86,5 @@ object OfflineTrickplayHelper {
                 bandwidth = bandwidth,
             )
         } catch (_: Exception) { null }
-    }
-
-    private fun String.regexMatch(pattern: String): String? {
-        val regex = Regex(pattern)
-        return regex.find(this)?.groupValues?.getOrNull(1)
     }
 }

@@ -242,7 +242,10 @@ private fun MainHomeContent(
 
     var showSurprise by remember { mutableStateOf(false) }
     var featuredIndex by remember { mutableIntStateOf(0) }
-    val isTvForRotation = LocalContext.current.isTv()
+    // Computed once — `context.isTv()` reflects the device's form factor, which
+    // does not change across recompositions of this screen.
+    val context = LocalContext.current
+    val isTvForRotation = remember(context) { context.isTv() }
     var autoRotateEnabled by remember { mutableStateOf(!isTvForRotation) }
     var focusInHero by remember { mutableStateOf(true) }
     val heroFocusRequester = remember { FocusRequester() }
@@ -260,8 +263,11 @@ private fun MainHomeContent(
 
     val backdropUrl = remember(featuredItem?.id) { featuredItem?.let { viewModel.getBackdropUrl(it.id) } }
 
-    val savedScrollPos = viewModel.getHomeScrollPosition()
+    // Fetch the saved scroll position once (it is only consumed by the
+    // rememberSaveable initializer below; the previous form re-fetched it on
+    // every recomposition).
     val listState = rememberSaveable(saver = LazyListState.Saver) {
+        val savedScrollPos = viewModel.getHomeScrollPosition()
         LazyListState(
             firstVisibleItemIndex = if (isTv) 0 else savedScrollPos.firstVisibleItemIndex,
             firstVisibleItemScrollOffset = if (isTv) 0 else savedScrollPos.firstVisibleItemScrollOffset,
@@ -514,6 +520,26 @@ private fun MainHomeContent(
                         musicContent()
                     }
                     else -> {
+                        // Lift the unstable lambdas passed to HomeContentList into remembered
+                        // locals so the (~30-param, mostly unstable) composable becomes
+                        // skippable and the entire subtree stops recomposing per keystroke /
+                        // animation frame. `viewModel`, `callbacks` are stable refs; the
+                        // `focusInHero` MutableState setter is stable, so it needs no key.
+                        val onRetrySectionLoad = remember(viewModel) {
+                            { viewModel.onEvent(HomeUiEvent.Refresh) }
+                        }
+                        val onDismissNewsletterBanner = remember(viewModel) {
+                            { viewModel.onEvent(HomeUiEvent.DismissNewsletterBanner) }
+                        }
+                        val onContentItemClick = remember(callbacks) {
+                            { id: String -> callbacks.onItemClick(id, MediaType.UNKNOWN, null, "") }
+                        }
+                        val onFocusChange = remember { { focused: Boolean -> focusInHero = focused } }
+                        val onSeerrRequest = remember(viewModel) {
+                            { item: SeerrSearchItem ->
+                                viewModel.onEvent(HomeUiEvent.SelectSeerrRequestItem(item))
+                            }
+                        }
                         HomeContentList(
                             isLoading = state.isLoading,
                             homeHeroEnabled = state.homeHeroEnabled,
@@ -523,7 +549,7 @@ private fun MainHomeContent(
                             offlineLibrary = state.offlineLibrary,
                             sections = state.sections,
                             partialLoadError = state.partialLoadError,
-                            onRetrySectionLoad = { viewModel.onEvent(HomeUiEvent.Refresh) },
+                            onRetrySectionLoad = onRetrySectionLoad,
                             featuredItem = featuredItem,
                             listState = listState,
                             backgroundColor = backgroundColor,
@@ -535,7 +561,7 @@ private fun MainHomeContent(
                             mediaBackdropUrlBuilder = mediaBackdropUrlBuilder,
                             getImageUrl = remember { { id: String -> viewModel.getImageUrl(id) } },
                             getBackdropUrl = remember { { id: String -> viewModel.getBackdropUrl(id) } },
-                            onDismissNewsletterBanner = { viewModel.onEvent(HomeUiEvent.DismissNewsletterBanner) },
+                            onDismissNewsletterBanner = onDismissNewsletterBanner,
                             mediaOnItemClick = mediaOnItemClick,
                             mediaOnPlayClick = mediaOnPlayClick,
                             continueWatchingClickBehavior = state.continueWatchingClickBehavior,
@@ -546,9 +572,9 @@ private fun MainHomeContent(
                             seerrPrefetch = seerrPrefetch,
                             onSeerrItemClick = callbacks.onSeerrItemClick,
                             onOfflineLibraryClick = callbacks.onOfflineLibraryClick,
-                            onItemClick = { id -> callbacks.onItemClick(id, MediaType.UNKNOWN, null, "") },
-                            onFocusChange = { focusInHero = it },
-                            onSeerrRequest = { viewModel.onEvent(HomeUiEvent.SelectSeerrRequestItem(it)) },
+                            onItemClick = onContentItemClick,
+                            onFocusChange = onFocusChange,
+                            onSeerrRequest = onSeerrRequest,
                             onNewsletterClick = callbacks.onNewsletterClick,
                             photoFolderChildUrls = photoFolderChildUrls,
                             heroFocusRequester = heroFocusRequester,
@@ -557,10 +583,40 @@ private fun MainHomeContent(
                 }
             }
 
+                // Lift the search-results-overlay lambdas (recreated per keystroke
+                // below) into remembered locals so HomeSearchResultsOverlay's
+                // results LazyColumn stops being re-scored each keystroke.
+                // `viewModel`, `callbacks`, `focusManager` are stable; the
+                // `isSearchExpanded` MutableState delegate is stable, so its
+                // setter needs no remember key.
+                val searchGetImageUrl = remember(viewModel) { { id: String -> viewModel.getImageUrl(id) } }
+                val searchOnJellyfinClick = remember(viewModel, callbacks) {
+                    { item: com.raulshma.jellyplay.core.model.MediaItem ->
+                        isSearchExpanded = false
+                        viewModel.onEvent(HomeUiEvent.ClearSearch)
+                        focusManager.clearFocus()
+                        callbacks.onItemClick(item.id, item.mediaType, item.parentId, item.name)
+                    }
+                }
+                val searchOnSeerrClick = remember(viewModel, callbacks) {
+                    { item: SeerrSearchItem ->
+                        isSearchExpanded = false
+                        viewModel.onEvent(HomeUiEvent.ClearSearch)
+                        focusManager.clearFocus()
+                        callbacks.onSearchSeerrClick(item.id, item.mediaType)
+                    }
+                }
+                val searchOnHistoryClick = remember(viewModel) {
+                    { query: String -> viewModel.onEvent(HomeUiEvent.UpdateSearchQuery(query)) }
+                }
+                val searchOnDeleteHistoryItem = remember(viewModel) {
+                    { id: Long -> viewModel.deleteSearchHistoryItem(id) }
+                }
+                val searchOnClearHistory = remember(viewModel) { { viewModel.clearSearchHistory() } }
+
                 HomeTopDock(
-                    listState = listState,
-                    transitionRangePx = transitionRangePx,
-                    baseIconColor = baseIconColor,
+                    appBarIconColor = appBarIconColor,
+                    appBarIconColorFaded = appBarIconColorFaded,
                     isSearchFocused = isSearchFocused,
                     searchQuery = state.searchState.query,
                     offlineMode = state.offlineMode,
@@ -582,25 +638,13 @@ private fun MainHomeContent(
                                 jellyfinResults = state.searchState.jellyfinResults,
                                 seerrResults = state.searchState.seerrResults,
                                 isSearching = state.searchState.isSearching,
-                                getImageUrl = { viewModel.getImageUrl(it) },
-                                onJellyfinClick = { item ->
-                                    isSearchExpanded = false
-                                    viewModel.onEvent(HomeUiEvent.ClearSearch)
-                                    focusManager.clearFocus()
-                                    callbacks.onItemClick(item.id, item.mediaType, item.parentId, item.name)
-                                },
-                                onSeerrClick = { item ->
-                                    isSearchExpanded = false
-                                    viewModel.onEvent(HomeUiEvent.ClearSearch)
-                                    focusManager.clearFocus()
-                                    callbacks.onSearchSeerrClick(item.id, item.mediaType)
-                                },
+                                getImageUrl = searchGetImageUrl,
+                                onJellyfinClick = searchOnJellyfinClick,
+                                onSeerrClick = searchOnSeerrClick,
                                 searchHistory = searchHistory,
-                                onHistoryClick = { query ->
-                                    viewModel.onEvent(HomeUiEvent.UpdateSearchQuery(query))
-                                },
-                                onDeleteHistoryItem = { id -> viewModel.deleteSearchHistoryItem(id) },
-                                onClearHistory = { viewModel.clearSearchHistory() },
+                                onHistoryClick = searchOnHistoryClick,
+                                onDeleteHistoryItem = searchOnDeleteHistoryItem,
+                                onClearHistory = searchOnClearHistory,
                             )
                         }
                     },
@@ -749,6 +793,13 @@ private fun HomeContentList(
 ) {
     val isTv = LocalTvMode.current
     val adaptiveInfo = LocalAdaptiveInfo.current
+
+    // Discover-row dimensions computed once at the composable scope (not inside
+    // the LazyColumn's LazyListScope, where LocalConfiguration isn't readable).
+    val discoverScreenWidth = LocalConfiguration.current.screenWidthDp.dp
+    val discoverRowWidth = discoverScreenWidth - contentPad * 2
+    val discoverSpacing = adaptiveInfo.itemSpacing(isTv)
+    val discoverPattern = if (adaptiveInfo.windowSizeClass == WindowSizeClass.Compact) COMPACT_DISCOVER_PATTERN else EXPANDED_DISCOVER_PATTERN
 
     var askContinueItem by remember { mutableStateOf<com.raulshma.jellyplay.core.model.MediaItem?>(null) }
 
@@ -979,24 +1030,20 @@ private fun HomeContentList(
                     contentType = { "seerrRow" },
                 ) { rowIndex ->
                     val rowItems = discoverRows[rowIndex]
-                    val pattern = if (adaptiveInfo.windowSizeClass == WindowSizeClass.Compact) COMPACT_DISCOVER_PATTERN else EXPANDED_DISCOVER_PATTERN
-                    val targetSize = pattern[rowIndex % pattern.size]
-                    val spacing = adaptiveInfo.itemSpacing(isTv)
+                    val targetSize = discoverPattern[rowIndex % discoverPattern.size]
 
                     CompositionLocalProvider(
                         LocalSeerrCardLoadingState provides seerrCardLoadingState,
                         LocalSeerrPrefetch provides seerrPrefetch,
                     ) {
-                        val screenWidth = LocalConfiguration.current.screenWidthDp.dp
-                        val rowWidth = screenWidth - contentPad * 2
-                        val itemWidth = (rowWidth - spacing * (targetSize - 1)) / targetSize.toFloat()
+                        val itemWidth = (discoverRowWidth - discoverSpacing * (targetSize - 1)) / targetSize.toFloat()
                         LazyRow(
                             modifier = Modifier
                                 .fillMaxWidth()
                                 .then(if (experimentalCardClippingEnabled) Modifier.clipToBounds() else Modifier)
                                 .background(backgroundColor)
-                                .padding(horizontal = contentPad, vertical = spacing / 2),
-                            horizontalArrangement = Arrangement.spacedBy(spacing),
+                                .padding(horizontal = contentPad, vertical = discoverSpacing / 2),
+                            horizontalArrangement = Arrangement.spacedBy(discoverSpacing),
                             userScrollEnabled = false,
                         ) {
                             items(

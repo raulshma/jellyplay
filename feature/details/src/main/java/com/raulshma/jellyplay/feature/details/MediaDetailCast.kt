@@ -21,6 +21,7 @@ import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import coil3.size.Size as CoilSize
 import com.raulshma.jellyplay.core.model.PersonInfo
 import com.raulshma.jellyplay.core.ui.image.MediaImage
 import com.raulshma.jellyplay.core.ui.tv.rememberTvFocusState
@@ -64,6 +65,8 @@ internal fun PersonItem(
                 .size(64.dp)
                 .clip(CircleShape),
             contentScale = ContentScale.Crop,
+            // 64.dp @ ~3× density renders at ~192 px; 128 px covers 2× density with margin.
+            size = CoilSize(128, 128),
         )
         Spacer(Modifier.height(4.dp))
         Text(

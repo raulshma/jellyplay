@@ -37,6 +37,7 @@ import com.raulshma.jellyplay.core.designsystem.theme.LocalIsSynthwave
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
+import coil3.size.Size as CoilSize
 import com.raulshma.jellyplay.core.ui.adaptive.LocalAdaptiveInfo
 import com.raulshma.jellyplay.core.ui.adaptive.bottomPadding
 import com.raulshma.jellyplay.core.ui.adaptive.contentPadding
@@ -137,6 +138,9 @@ fun CollectionDetailScreen(
                                     modifier = Modifier
                                         .fillMaxSize()
                                         .graphicsLayer { alpha = 0.7f },
+                                    // Full-width backdrop banner (~200 dp tall). Decode large
+                                    // enough for tablets/TV rather than the blurry 512 default.
+                                    size = CoilSize(1280, 720),
                                 )
                             }
                         }

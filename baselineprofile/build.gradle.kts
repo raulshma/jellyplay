@@ -1,6 +1,7 @@
 plugins {
     alias(libs.plugins.android.test)
     alias(libs.plugins.kotlin.compose)
+    alias(libs.plugins.androidx.baselineprofile.producer)
 }
 
 android {

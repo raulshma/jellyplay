@@ -9,6 +9,7 @@ import android.graphics.PorterDuffXfermode
 import android.graphics.Rect
 import android.graphics.RectF
 import coil3.imageLoader
+import coil3.request.CachePolicy
 import coil3.request.ImageRequest
 import coil3.request.allowHardware
 import coil3.toBitmap
@@ -49,6 +50,17 @@ object WidgetImageLoader {
                         .data(url)
                         .size(WIDGET_IMAGE_TARGET, WIDGET_IMAGE_TARGET)
                         .allowHardware(false)
+                        // The widget needs its own private bitmap instance: the
+                        // default `toBitmap()` unwrap returns the *shared* Bitmap
+                        // held in Coil's memory cache (and handed out to Compose
+                        // `AsyncImage` consumers). Recycling that shared bitmap
+                        // in [applyRoundedCorners] then crashed any Compose
+                        // painter still drawing the same URL with
+                        // "Canvas: trying to use a recycled bitmap". Disabling
+                        // the memory cache for the widget request guarantees the
+                        // returned bitmap is a fresh decode owned only by us, so
+                        // recycling it after rounding is safe.
+                        .memoryCachePolicy(CachePolicy.DISABLED)
                         .build()
                     val image = context.imageLoader.execute(request).image
                     image?.toBitmap()?.let { applyRoundedCorners(context, it, cornerRadiusDp) }
@@ -79,17 +91,24 @@ object WidgetImageLoader {
         val density = context.resources.displayMetrics.density
         val cornerRadiusPx = cornerRadiusDp * density
         val output = Bitmap.createBitmap(bitmap.width, bitmap.height, Bitmap.Config.ARGB_8888)
-        val canvas = Canvas(output)
-        val paint = Paint().apply {
-            isAntiAlias = true
-            color = 0xff424242.toInt()
+        try {
+            val canvas = Canvas(output)
+            val paint = Paint().apply {
+                isAntiAlias = true
+                color = 0xff424242.toInt()
+            }
+            val rect = Rect(0, 0, bitmap.width, bitmap.height)
+            val rectF = RectF(rect)
+            canvas.drawARGB(0, 0, 0, 0)
+            canvas.drawRoundRect(rectF, cornerRadiusPx, cornerRadiusPx, paint)
+            paint.xfermode = PorterDuffXfermode(PorterDuff.Mode.SRC_IN)
+            canvas.drawBitmap(bitmap, rect, rect, paint)
+        } finally {
+            // The input bitmap is no longer referenced once it has been drawn
+            // into `output`; recycle it promptly to avoid N pairs of bitmaps
+            // briefly coexisting during concurrent `preloadPosters` fetches.
+            bitmap.recycle()
         }
-        val rect = Rect(0, 0, bitmap.width, bitmap.height)
-        val rectF = RectF(rect)
-        canvas.drawARGB(0, 0, 0, 0)
-        canvas.drawRoundRect(rectF, cornerRadiusPx, cornerRadiusPx, paint)
-        paint.xfermode = PorterDuffXfermode(PorterDuff.Mode.SRC_IN)
-        canvas.drawBitmap(bitmap, rect, rect, paint)
         return output
     }
 }

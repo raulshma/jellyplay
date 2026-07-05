@@ -529,6 +529,40 @@ val MIGRATION_29_30 = object : Migration(29, 30) {
     }
 }
 
+// Explicit single-column index on lyrics_cache(itemId). The composite
+// (itemId, provider) index already serves `WHERE itemId = :itemId` via a
+// left-prefix match, but adding a dedicated index makes the intent unambiguous
+// and documents that the per-item lookup path is indexed. The composite unique
+// index is retained.
+val MIGRATION_30_31 = object : Migration(30, 31) {
+    override fun migrate(db: SupportSQLiteDatabase) {
+        db.execSQL("CREATE INDEX IF NOT EXISTS index_lyrics_cache_itemId ON lyrics_cache(itemId)")
+    }
+}
+
+// Capture the original container format ("mkv", "mp4", "ts", ...) reported by
+// the Jellyfin MediaSource at download time. Used at playback to attach the
+// correct MIME type to ExoPlayer, so the right extractor is selected even when
+// the on-disk file uses a hardcoded `.mp4` extension. Nullable: pre-existing
+// rows degrade to extension-based inference (sniffer fallback at playback).
+val MIGRATION_31_32 = object : Migration(31, 32) {
+    override fun migrate(db: SupportSQLiteDatabase) {
+        db.execSQL("ALTER TABLE downloads ADD COLUMN container TEXT")
+    }
+}
+
+// Add a non-unique index on `offline_media.name`. The OfflineMediaDao.search
+// query orders by `name COLLATE NOCASE` and a `CASE WHEN name LIKE 'q%'` prefix
+// branch; previously a full table scan ran for every keystroke on the widest
+// table (33 columns). The leading-`%` substring LIKE branch cannot be served
+// by a B-tree index, but the prefix/order-by branches now benefit. Behavior
+// is unchanged; this is purely a query-planner improvement.
+val MIGRATION_32_33 = object : Migration(32, 33) {
+    override fun migrate(db: SupportSQLiteDatabase) {
+        db.execSQL("CREATE INDEX IF NOT EXISTS index_offline_media_name ON offline_media(name)")
+    }
+}
+
 val ALL_MIGRATIONS = listOf(
     MIGRATION_1_2,
     MIGRATION_2_3,
@@ -558,4 +592,7 @@ val ALL_MIGRATIONS = listOf(
     MIGRATION_27_28,
     MIGRATION_28_29,
     MIGRATION_29_30,
+    MIGRATION_30_31,
+    MIGRATION_31_32,
+    MIGRATION_32_33,
 )

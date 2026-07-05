@@ -1,9 +1,9 @@
 package com.raulshma.jellyplay.core.data.repository
 
-import com.raulshma.jellyplay.core.data.cache.TtlCache
 import com.raulshma.jellyplay.core.datastore.SeerrPreferencesStore
 import com.raulshma.jellyplay.core.datastore.SeerrSecureCredentialsStore
 import com.raulshma.jellyplay.core.model.MediaType
+import com.raulshma.jellyplay.core.model.TtlCache
 import com.raulshma.jellyplay.core.model.seerr.*
 import com.raulshma.jellyplay.core.network.seerr.SeerrApiClient
 import kotlinx.coroutines.CoroutineScope

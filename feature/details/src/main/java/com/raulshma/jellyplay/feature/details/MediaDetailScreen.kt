@@ -100,6 +100,7 @@ import com.raulshma.jellyplay.core.model.MediaType
 import com.raulshma.jellyplay.core.model.UserPreferences
 import com.raulshma.jellyplay.core.model.seerr.SeerrRelatedVideo
 import com.raulshma.jellyplay.core.model.seerr.SeerrSearchItem
+import coil3.size.Size as CoilSize
 import com.raulshma.jellyplay.core.ui.adaptive.LocalAdaptiveInfo
 import com.raulshma.jellyplay.core.ui.adaptive.WindowSizeClass
 import com.raulshma.jellyplay.core.ui.adaptive.*
@@ -139,8 +140,15 @@ fun MediaDetailScreen(
     onBack: () -> Unit,
     viewModel: DetailViewModel = hiltViewModel(),
 ) {
+    // Declared before the load-item effect below so the trailer-dismiss reset
+    // can be merged into it (was previously a separate LaunchedEffect(itemId)).
+    var activeTrailerKey by remember { mutableStateOf<String?>(null) }
+
     LaunchedEffect(itemId) {
         viewModel.loadItem(itemId)
+        // Dismiss any open trailer dialog when navigating to a different item
+        // (previously a separate LaunchedEffect(itemId) block).
+        activeTrailerKey = null
     }
 
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
@@ -165,7 +173,7 @@ fun MediaDetailScreen(
     val userMessage = uiState.userMessage
     val cellularDownloadWarningMb = uiState.cellularDownloadWarningMb
     val seerrTvSeasons = uiState.seerrTvSeasons
-    LaunchedEffect(detail) {
+    LaunchedEffect(detail?.item?.id) {
         detail?.let {
             viewModel.loadSeerrDataIfNeeded(it)
         }
@@ -185,9 +193,6 @@ fun MediaDetailScreen(
     val outerIsLightTheme = rememberIsLightTheme()
 
     var showSeriesDownloadSheet by remember { mutableStateOf(false) }
-    var activeTrailerKey by remember { mutableStateOf<String?>(null) }
-    // Dismiss any open trailer dialog when navigating to a different item.
-    LaunchedEffect(itemId) { activeTrailerKey = null }
     val snackbarHostState = remember { SnackbarHostState() }
     val snackbarContext = LocalContext.current
 
@@ -353,15 +358,17 @@ fun MediaDetailScreen(
             collectionItems = collectionItems,
             onPlayAlbumTrack = remember(viewModel) { { index: Int -> viewModel.playAlbum(index) } },
             relatedVideos = relatedVideos,
-            onVideoClick = { video ->
-                if (video.site?.lowercase() == "youtube" && video.key != null) {
-                    activeTrailerKey = video.key
-                } else if (video.key != null) {
-                    val url = when (video.site?.lowercase()) {
-                        "youtube" -> "https://www.youtube.com/watch?v=${video.key}"
-                        else -> null
+            onVideoClick = remember(uriHandler) {
+                { video: SeerrRelatedVideo ->
+                    if (video.site?.lowercase() == "youtube" && video.key != null) {
+                        activeTrailerKey = video.key
+                    } else if (video.key != null) {
+                        val url = when (video.site?.lowercase()) {
+                            "youtube" -> "https://www.youtube.com/watch?v=${video.key}"
+                            else -> null
+                        }
+                        url?.let { uriHandler.openUri(it) }
                     }
-                    url?.let { uriHandler.openUri(it) }
                 }
             },
             preferences = preferences,
@@ -586,15 +593,24 @@ private fun DetailContent(
         adaptiveInfo.windowSizeClass == WindowSizeClass.Expanded -> com.raulshma.jellyplay.core.ui.adaptive.AdaptiveBackdropHeight.Expanded
         else -> com.raulshma.jellyplay.core.ui.adaptive.AdaptiveBackdropHeight.Portrait
     }
-    val baseBackdropHeight = with(density) { (backdropHeight.toPx() / 1.2f).toDp() }
-    val collapsedHeight = with(density) { backdropHeight.toPx() }
-    val spacerHeightPx = with(density) { (baseBackdropHeight - 150.dp).toPx() }
-    val scrollOffset by remember {
+    // Hoist density-derived dimensions into a single remember keyed on their
+    // inputs so they don't reallocate per recompose and so the derivedStateOf
+    // blocks below capture the current value instead of one frozen at first
+    // composition (which was a latent bug on rotation / window resize / TV toggle).
+    val (baseBackdropHeight, collapsedHeight, spacerHeightPx) = remember(backdropHeight, density) {
+        with(density) {
+            val base = (backdropHeight.toPx() / 1.2f).toDp()
+            val collapsed = backdropHeight.toPx()
+            val spacer = (base - 150.dp).toPx()
+            Triple(base, collapsed, spacer)
+        }
+    }
+    val scrollOffset by remember(spacerHeightPx) {
         derivedStateOf {
             (if (listState.firstVisibleItemIndex > 0) spacerHeightPx else 0f) + listState.firstVisibleItemScrollOffset.toFloat()
         }
     }
-    val scrollFraction by remember {
+    val scrollFraction by remember(collapsedHeight) {
         derivedStateOf {
             (scrollOffset / collapsedHeight).coerceIn(0f, 1f)
         }
@@ -736,6 +752,9 @@ private fun DetailContent(
                     blurHash = item?.blurHashes?.backdrop,
                     modifier = backdropModifier,
                     contentScale = ContentScale.Crop,
+                    // Full-bleed hero backdrop: decode large enough for 4K TV width
+                    // (3840 px). The default 512×512 produces visible blur on TV.
+                    size = CoilSize(1920, 1080),
                 )
             }
 
@@ -835,6 +854,10 @@ private fun DetailContent(
                                         url = getImageUrl(itemId),
                                         contentDescription = null,
                                         blurHash = item?.blurHashes?.primary,
+                                        // 220.dp × 3× ≈ 660 px wide; 2/3 aspect → ~990 px tall.
+                                        // Avoids under-sized decode (blur on TV) and over-sized
+                                        // decode (memory waste on phone) from the default size.
+                                        size = coil3.size.Size(660, 990),
                                         modifier = Modifier
                                             .fillMaxWidth()
                                             .aspectRatio(2f / 3f)
@@ -977,6 +1000,10 @@ private fun DetailContent(
                                             url = getImageUrl(itemId),
                                             contentDescription = null,
                                             blurHash = item?.blurHashes?.primary,
+                                            // Portrait poster (~120 dp × 3× ≈ 432 px) — decode a
+                                            // right-sized thumbnail instead of the default 512×512
+                                            // (or larger) bitmap.
+                                            size = coil3.size.Size(480, 600),
                                             modifier = Modifier
                                                 .fillMaxSize()
                                                 .clip(ShapeCache.smooth8)

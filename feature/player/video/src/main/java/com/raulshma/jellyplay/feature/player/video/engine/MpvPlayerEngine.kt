@@ -26,6 +26,7 @@ import com.raulshma.jellyplay.core.model.MpvScaler
 import com.raulshma.jellyplay.core.model.MpvSkipLoopFilter
 import com.raulshma.jellyplay.core.model.MpvVideoOutput
 import com.raulshma.jellyplay.core.model.SubtitleEdgeType
+import com.raulshma.jellyplay.core.model.formatFixed
 import com.raulshma.jellyplay.core.model.SubtitleStyle
 import com.raulshma.jellyplay.core.model.TrackType
 import com.raulshma.jellyplay.core.model.VideoEffectsConfig
@@ -62,10 +63,8 @@ class MpvPlayerEngine(
     }
 
     private val isLowRamDevice by lazy { EngineDeviceProfile.isLowRamDevice(context) }
-    // `var` so [load] can recreate it if a prior [release] cancelled the
-    // SupervisorJob. Without this the engine is permanently unusable after
-    // release() (positionFlow's ticker launches on this scope and would
-    // silently never emit). Recreated lazily, only when inactive.
+    // `var` because [release] cancels the SupervisorJob and immediately
+    // recreates a fresh scope, keeping the engine reusable without a `load`.
     private var engineScope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
 
     override val capabilities = EngineCapabilityMatrix.MPV
@@ -390,6 +389,10 @@ class MpvPlayerEngine(
         _availableTracks.value = emptyList()
         _bufferedPositionMs.value = 0L
         _videoStats.value = EngineVideoStats()
+        // Recreate the scope so a re-used engine stays usable without waiting
+        // for the next load(). A cancelled scope silently swallows new
+        // launches (no-ops), which would otherwise lose the position ticker.
+        engineScope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
     }
 
     override fun play() {
@@ -412,7 +415,14 @@ class MpvPlayerEngine(
     }
 
     override fun seekTo(positionMs: Long) {
-        try { mpvView?.mpv?.command("seek", "%.6f".format(positionMs / 1000.0), "absolute") } catch (e: Exception) { Log.w(TAG, "seekTo failed", e) }
+        try {
+            // Fixed-precision seconds with 6 decimals (byte-identical to
+            // "%.6f".format for positionMs >= 0; MPV clamps anyway). Avoids the
+            // Formatter + StringBuilder allocation per seek, which fires many
+            // times/sec during scrub / gesture-seek.
+            val secsStr = formatFixed(positionMs / 1000.0, 6)
+            mpvView?.mpv?.command("seek", secsStr, "absolute")
+        } catch (e: Exception) { Log.w(TAG, "seekTo failed", e) }
     }
 
     override fun setPlaybackSpeed(speed: Float) {

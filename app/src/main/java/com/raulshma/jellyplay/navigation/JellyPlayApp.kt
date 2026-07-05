@@ -377,29 +377,42 @@ private fun MainContent(
             currentRoute is Route.Ambient || currentRoute is Route.Onboarding ||
             currentRoute is Route.PhotoViewer
 
-    val activeTopLevelRoutes: LinkedHashMap<Route, String> = when (homeMode) {
-        HomeMode.VIDEO -> VIDEO_TOP_LEVEL_ROUTES
-        HomeMode.MUSIC -> MUSIC_TOP_LEVEL_ROUTES
-    }.let { routes ->
-        val hidden = preferences.hiddenNavItems
-        val order = preferences.navItemOrder
-        val filtered = routes.filterKeys { route ->
-            route::class.simpleName !in hidden
-        }
-        if (order.isEmpty()) {
-            LinkedHashMap(filtered)
-        } else {
-            val ordered = linkedMapOf<Route, String>()
-            for (name in order) {
-                val entry = filtered.entries.find { it.key::class.simpleName == name }
-                if (entry != null) ordered[entry.key] = entry.value
-            }
-            for (entry in filtered) {
-                if (entry.key::class.simpleName !in order) {
-                    ordered[entry.key] = entry.value
+    // Memoize the route filter+reorder so it only re-runs when homeMode /
+    // hiddenNavItems / navItemOrder actually change. MainContent recomposes
+    // frequently (it reads audioTitle/artist/... for the mini player), so the
+    // previous eager `when{}` allocated a fresh LinkedHashMap + intermediate
+    // entry lists + KClass.simpleName lookups on every recomposition.
+    val activeTopLevelRoutes: LinkedHashMap<Route, String> by remember(
+        homeMode,
+        preferences.hiddenNavItems,
+        preferences.navItemOrder,
+    ) {
+        derivedStateOf {
+            when (homeMode) {
+                HomeMode.VIDEO -> VIDEO_TOP_LEVEL_ROUTES
+                HomeMode.MUSIC -> MUSIC_TOP_LEVEL_ROUTES
+            }.let { routes ->
+                val hidden = preferences.hiddenNavItems
+                val order = preferences.navItemOrder
+                val filtered = routes.filterKeys { route ->
+                    route::class.simpleName !in hidden
+                }
+                if (order.isEmpty()) {
+                    LinkedHashMap(filtered)
+                } else {
+                    val ordered = linkedMapOf<Route, String>()
+                    for (name in order) {
+                        val entry = filtered.entries.find { it.key::class.simpleName == name }
+                        if (entry != null) ordered[entry.key] = entry.value
+                    }
+                    for (entry in filtered) {
+                        if (entry.key::class.simpleName !in order) {
+                            ordered[entry.key] = entry.value
+                        }
+                    }
+                    ordered
                 }
             }
-            ordered
         }
     }
 

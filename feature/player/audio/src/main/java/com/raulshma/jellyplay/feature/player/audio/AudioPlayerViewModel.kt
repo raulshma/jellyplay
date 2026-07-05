@@ -111,25 +111,27 @@ class AudioPlayerViewModel @Inject constructor(
                 _uiState.update { it.copy(isLoading = value) }
             }
         }
+        // Group the track-metadata fields that change together on every track
+        // transition into a single combine so a transition produces one
+        // 95-field uiState copy (rather than 5 separate copies + update
+        // attempts). StateFlow conflation means downstream sees the final
+        // state either way; this just removes the per-field allocation churn.
         launch {
-            audioPlaybackManager.artist.collect { value ->
-                _uiState.update { it.copy(artist = value) }
-            }
-        }
-        launch {
-            audioPlaybackManager.artistId.collect { value ->
-                _uiState.update { it.copy(artistId = value) }
-            }
-        }
-        launch {
-            audioPlaybackManager.album.collect { value ->
-                _uiState.update { it.copy(album = value) }
-            }
-        }
-        launch {
-            audioPlaybackManager.albumArtUrl.collect { value ->
-                _uiState.update { it.copy(albumArtUrl = value) }
-            }
+            combine(
+                audioPlaybackManager.artist,
+                audioPlaybackManager.artistId,
+                audioPlaybackManager.album,
+                audioPlaybackManager.albumArtUrl,
+            ) { artist, artistId, album, albumArtUrl ->
+                _uiState.update {
+                    it.copy(
+                        artist = artist,
+                        artistId = artistId,
+                        album = album,
+                        albumArtUrl = albumArtUrl,
+                    )
+                }
+            }.collect {}
         }
         launch {
             combine(

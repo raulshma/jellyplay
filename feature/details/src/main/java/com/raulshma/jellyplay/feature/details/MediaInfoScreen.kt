@@ -1,6 +1,5 @@
 package com.raulshma.jellyplay.feature.details
 
-import androidx.compose.animation.animateColorAsState
 import androidx.compose.foundation.background
 import androidx.compose.foundation.focusGroup
 import androidx.compose.foundation.layout.Arrangement
@@ -133,11 +132,8 @@ private fun MediaSourceSection(
     sourceIndex: Int,
     totalSources: Int,
 ) {
-    val containerColor by animateColorAsState(
-        targetValue = MaterialTheme.colorScheme.surfaceContainerLow,
-        animationSpec = MaterialTheme.motionScheme.defaultEffectsSpec(),
-        label = "sourceContainerColor",
-    )
+    // Constant target — animateColorAsState was pure overhead (target never changes at runtime).
+    val containerColor = MaterialTheme.colorScheme.surfaceContainerLow
 
     Column(
         modifier = Modifier
@@ -170,9 +166,23 @@ private fun MediaSourceSection(
             add("Transcode" to if (source.supportsTranscoding) "Supported" else "No")
         })
 
-        val videoStreams = source.mediaStreams.filter { it.type == StreamType.VIDEO }
-        val audioStreams = source.mediaStreams.filter { it.type == StreamType.AUDIO }
-        val subtitleStreams = source.mediaStreams.filter { it.type == StreamType.SUBTITLE }
+        // Single-pass partition of mediaStreams replaces 3 independent filter
+        // allocations per source per recomposition.
+        val (videoStreams, audioStreams, subtitleStreams) = remember(source.mediaStreams) {
+            val video = mutableListOf<MediaStream>()
+            val audio = mutableListOf<MediaStream>()
+            val subtitle = mutableListOf<MediaStream>()
+            source.mediaStreams.forEach { s ->
+                when (s.type) {
+                    StreamType.VIDEO -> video += s
+                    StreamType.AUDIO -> audio += s
+                    StreamType.SUBTITLE -> subtitle += s
+                    // EMBEDDED_IMAGE and any future types are not displayed here.
+                    else -> Unit
+                }
+            }
+            Triple(video, audio, subtitle)
+        }
 
         if (videoStreams.isNotEmpty()) {
             StreamSection(
@@ -261,11 +271,8 @@ private fun StreamSection(
         }
 
         streams.forEachIndexed { index, stream ->
-            val streamColor by animateColorAsState(
-                targetValue = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f),
-                animationSpec = MaterialTheme.motionScheme.defaultEffectsSpec(),
-                label = "streamContainerColor",
-            )
+            // Constant target — animateColorAsState was pure overhead (target never changes).
+            val streamColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f)
             Column(
                 modifier = Modifier
                     .fillMaxWidth()

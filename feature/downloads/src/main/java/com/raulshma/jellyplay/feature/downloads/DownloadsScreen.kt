@@ -128,6 +128,14 @@ fun DownloadsScreen(
                 description = "Downloaded content will appear here",
             )
         } else {
+            // Hoist the three pure formatter lambdas once above the list. They
+            // only delegate to viewModel and are identical across rows, so
+            // allocating them per-row per-recomposition (the list recomposes on
+            // every progress tick / speed sample) was pure churn (11 fresh
+            // lambdas/row).
+            val formatBytes = remember(viewModel) { { v: Long -> viewModel.formatBytes(v) } }
+            val formatSpeed = remember(viewModel) { { v: Long -> viewModel.formatSpeed(v) } }
+            val formatEta = remember(viewModel) { { d: Long, t: Long, s: Long -> viewModel.formatEta(d, t, s) } }
             LazyColumn(
                 modifier = Modifier
                     .fillMaxSize()
@@ -155,9 +163,9 @@ fun DownloadsScreen(
                     ) {
                         DownloadItemRow(
                             item = download,
-                            formatBytes = { viewModel.formatBytes(it) },
-                            formatSpeed = { viewModel.formatSpeed(it) },
-                            formatEta = { d, t, s -> viewModel.formatEta(d, t, s) },
+                            formatBytes = formatBytes,
+                            formatSpeed = formatSpeed,
+                            formatEta = formatEta,
                             // Completed downloads open their detail page on tap
                             // (matching the online experience) rather than auto-playing.
                             // A distinct Play action is still available in the row.

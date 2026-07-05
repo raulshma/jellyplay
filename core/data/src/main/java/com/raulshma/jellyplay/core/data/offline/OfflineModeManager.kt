@@ -42,13 +42,19 @@ class OfflineModeManager @Inject constructor(
 
     init {
         scope.launch {
+            // Combine the two narrow per-key preference flows instead of the
+            // full ~150-field `preferences` StateFlow. A settings-screen round
+            // trip elsewhere in the app previously re-awakened this collector
+            // and re-derived offline mode even though neither offline flag
+            // changed.
             combine(
-                userPreferencesStore.preferences,
-                networkMonitor.networkStatus
-            ) { prefs, status ->
-                Pair(prefs, status)
-            }.collect { (prefs, status) ->
-                if (prefs.manualOfflineEnabled) {
+                userPreferencesStore.manualOfflineEnabled,
+                userPreferencesStore.autoOfflineEnabled,
+                networkMonitor.networkStatus,
+            ) { manualOffline, autoOffline, status ->
+                Triple(manualOffline, autoOffline, status)
+            }.collect { (manualOffline, autoOffline, status) ->
+                if (manualOffline) {
                     _offlineMode.value = OfflineMode.OFFLINE_MANUAL
                 } else {
                     val current = _offlineMode.value
@@ -58,7 +64,7 @@ class OfflineModeManager @Inject constructor(
 
                     val nowOffline = status == NetworkStatus.Offline
                     if (nowOffline) {
-                        if (prefs.autoOfflineEnabled) {
+                        if (autoOffline) {
                             _offlineMode.value = OfflineMode.OFFLINE_AUTO
                         } else {
                             _offlineMode.value = OfflineMode.ONLINE

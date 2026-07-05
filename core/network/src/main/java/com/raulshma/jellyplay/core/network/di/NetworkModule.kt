@@ -107,6 +107,13 @@ abstract class NetworkModule {
     ): TmdbApiClient
 
     companion object {
+        // Hoisted so the pattern compiles once at class load rather than on each
+        // OkHttp client construction (low impact since the provider is @Singleton,
+        // but removes an unnecessary per-cold-start Regex allocation).
+        val TOKEN_PARAM_PATTERN = Regex(
+            "(?i)(\\?|&)(api_key|apikey|token|x-emby-token|accesstoken)=[^&\\s]+",
+        )
+
         @Provides
         @Singleton
         fun provideConnectivityManager(
@@ -150,9 +157,7 @@ abstract class NetworkModule {
             // The logger replaces the query string of any URL line containing a
             // token-bearing param with "[redacted]" so verbose network logging
             // can never leak credentials to logcat.
-            val tokenParamPattern = Regex(
-                "(?i)(\\?|&)(api_key|apikey|token|x-emby-token|accesstoken)=[^&\\s]+",
-            )
+            val tokenParamPattern = TOKEN_PARAM_PATTERN
             val loggingInterceptor = HttpLoggingInterceptor { message ->
                 val safe = if (tokenParamPattern.containsMatchIn(message)) {
                     tokenParamPattern.replace(message) { mr ->
@@ -242,5 +247,26 @@ abstract class NetworkModule {
                 .readTimeout(streamingReadSec, TimeUnit.SECONDS)
                 .build()
         }
+
+        /**
+         * Derived client for download paths. Mirrors the per-run `newBuilder()`
+         * previously invoked inside `DownloadWorker.doWork()` — same connect /
+         * read / write timeouts, but hoisted to a single shared singleton so
+         * concurrent `DownloadWorker` invocations (the limiter allows up to
+         * `maxConcurrentDownloads`) no longer each pay a `build()` cost and
+         * clone the interceptor list. The base `OkHttpClient` shares its
+         * `ConnectionPool` and `Dispatcher` via `newBuilder()`, so behavior is
+         * identical to the prior per-worker client.
+         */
+        @Provides
+        @Singleton
+        @Named("download")
+        fun provideDownloadOkHttpClient(
+            okHttpClient: OkHttpClient,
+        ): OkHttpClient = okHttpClient.newBuilder()
+            .connectTimeout(30, TimeUnit.SECONDS)
+            .readTimeout(60, TimeUnit.SECONDS)
+            .writeTimeout(30, TimeUnit.SECONDS)
+            .build()
     }
 }

@@ -4,6 +4,7 @@ plugins {
     alias(libs.plugins.kotlin.serialization)
     alias(libs.plugins.ksp)
     alias(libs.plugins.hilt)
+    alias(libs.plugins.androidx.baselineprofile)
 }
 
 android {
@@ -181,4 +182,11 @@ dependencies {
     androidTestImplementation(platform(libs.compose.bom))
     androidTestImplementation(libs.compose.ui.test)
     debugImplementation(libs.compose.ui.test.manifest)
+
+    // Generates and merges a Baseline Profile from the :baselineprofile
+    // macrobenchmark module. AGP installs the resulting baseline-prof.txt /
+    // startup-prof into release builds (see P3 in docs/performance-audit.md).
+    // The androidx.baselineprofile 1.5.x consumer plugin (required for AGP 9)
+    // exposes the producer via the `baselineProfile` configuration.
+    "baselineProfile"(project(":baselineprofile"))
 }

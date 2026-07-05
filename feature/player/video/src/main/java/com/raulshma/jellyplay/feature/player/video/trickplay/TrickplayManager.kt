@@ -15,7 +15,10 @@ import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeoutOrNull
+import java.io.BufferedInputStream
 import java.io.File
+import java.io.FileInputStream
+import java.io.InputStream
 import java.util.concurrent.ConcurrentHashMap
 
 class TrickplayManager(
@@ -254,8 +257,15 @@ class TrickplayManager(
                 val localDir = localCacheDir
                 val localFile = if (localDir != null) File(localDir, "trickplay_${sheetIndex}.jpg") else null
                 val persistDirectory = persistDir
-                val data = if (localFile != null && localFile.exists()) {
-                    localFile.readBytes()
+                if (localFile != null && localFile.exists()) {
+                    // Decode directly from a stream so the compressed JPEG bytes
+                    // never sit in heap alongside the decoded bitmap (which can
+                    // reach MAX_SPRITE_SHEET_PIXELS × 2 bytes). A single
+                    // FileInputStream is fed to BitmapFactory; the file pages in
+                    // from disk instead of doubling the heap footprint.
+                    FileInputStream(localFile).use { fis ->
+                        decodeSpriteSheetSafelyFromStream(fis, trickplayInfo)
+                    }
                 } else {
                     val fetched = playbackRepository.getTrickplayTileImage(id, trickplayInfo.width, sheetIndex)
                         ?: return@withContext null
@@ -267,10 +277,8 @@ class TrickplayManager(
                             } catch (_: Exception) { }
                         }
                     }
-                    fetched
+                    decodeSpriteSheetSafely(fetched, trickplayInfo)
                 }
-
-                decodeSpriteSheetSafely(data, trickplayInfo)
             }.also { bitmap ->
                 if (bitmap != null) {
                     spriteSheetCache.put(sheetIndex, bitmap)
@@ -292,12 +300,7 @@ class TrickplayManager(
     private fun decodeSpriteSheetSafely(data: ByteArray, trickplayInfo: TrickplayInfo): Bitmap? {
         val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
         BitmapFactory.decodeByteArray(data, 0, data.size, bounds)
-        val expectedWidth = trickplayInfo.width * trickplayInfo.tileWidth
-        val expectedHeight = trickplayInfo.height * trickplayInfo.tileHeight
-        val widthCap = expectedWidth.coerceAtLeast(1) * 2
-        val heightCap = expectedHeight.coerceAtLeast(1) * 2
-        if (bounds.outWidth > widthCap || bounds.outHeight > heightCap) return null
-        if (bounds.outWidth.toLong() * bounds.outHeight.toLong() > MAX_SPRITE_SHEET_PIXELS) return null
+        if (!isWithinBounds(bounds, trickplayInfo)) return null
 
         val options = BitmapFactory.Options().apply {
             inPreferredConfig = Bitmap.Config.RGB_565
@@ -308,6 +311,42 @@ class TrickplayManager(
         } catch (t: Throwable) {
             null
         }
+    }
+
+    /**
+     * Stream-based twin of [decodeSpriteSheetSafely] for the local-cache path.
+     * Decoding from an [InputStream] avoids holding the full compressed JPEG
+     * [ByteArray] in heap alongside the decoded bitmap. Uses a marked stream
+     * so the bounds-check pass can rewind before the real decode.
+     */
+    private fun decodeSpriteSheetSafelyFromStream(stream: InputStream, trickplayInfo: TrickplayInfo): Bitmap? {
+        // Buffer + mark so the two-pass (bounds then decode) read works on a
+        // single stream. 1 MB marks comfortably fit any sprite-sheet JPEG.
+        val marked = if (stream.markSupported()) stream else BufferedInputStream(stream, MARK_READLIMIT)
+        return try {
+            val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
+            marked.mark(MARK_READLIMIT)
+            BitmapFactory.decodeStream(marked, null, bounds)
+            if (!isWithinBounds(bounds, trickplayInfo)) return null
+            marked.reset()
+            val options = BitmapFactory.Options().apply {
+                inPreferredConfig = Bitmap.Config.RGB_565
+                inMutable = false
+            }
+            BitmapFactory.decodeStream(marked, null, options)
+        } catch (t: Throwable) {
+            null
+        }
+    }
+
+    private fun isWithinBounds(bounds: BitmapFactory.Options, trickplayInfo: TrickplayInfo): Boolean {
+        val expectedWidth = trickplayInfo.width * trickplayInfo.tileWidth
+        val expectedHeight = trickplayInfo.height * trickplayInfo.tileHeight
+        val widthCap = expectedWidth.coerceAtLeast(1) * 2
+        val heightCap = expectedHeight.coerceAtLeast(1) * 2
+        if (bounds.outWidth > widthCap || bounds.outHeight > heightCap) return false
+        if (bounds.outWidth.toLong() * bounds.outHeight.toLong() > MAX_SPRITE_SHEET_PIXELS) return false
+        return true
     }
 
     fun clear() {
@@ -347,5 +386,9 @@ class TrickplayManager(
         // pathological payloads even when reported tile dimensions are huge.
         // ~40 MP fits well within the RGB_565 sprite-sheet cache budget.
         private const val MAX_SPRITE_SHEET_PIXELS = 40_000_000L
+        // Mark limit for the BufferedInputStream wrapping the local sprite-sheet
+        // file. 1 MB comfortably exceeds any single sprite-sheet JPEG size, so
+        // the two-pass (bounds-check → real decode) rewind always succeeds.
+        private const val MARK_READLIMIT = 1 * 1024 * 1024
     }
 }

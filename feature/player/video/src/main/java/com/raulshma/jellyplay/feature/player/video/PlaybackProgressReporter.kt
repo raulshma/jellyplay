@@ -92,13 +92,14 @@ internal class PlaybackProgressReporter(
     }
 
     private fun checkAutoSkip(currentPositionMs: Long) {
-        // Compute the active segment from the raw tick position rather than
-        // uiState.currentPosition (which is no longer updated at 4 Hz — see
-        // V-1). The result is identical to the previous behaviour, where the
-        // reporter had just pushed this same position into uiState before
-        // reading state.activeSegment.
-        val state = uiState.value.copy(currentPosition = currentPositionMs)
-        val seg = state.computeActiveSegment() ?: return
+        // Compute the active segment from the raw tick position using the
+        // position-explicit overload. This avoids copying the ~95-field
+        // VideoPlayerUiState on every position tick (the highest-frequency
+        // avoidable allocation on the playback path). Behaviour is identical
+        // to the previous `uiState.value.copy(currentPosition = ...)` form:
+        // the copy was only ever read, never emitted to a StateFlow.
+        val state = uiState.value
+        val seg = state.computeActiveSegment(currentPositionMs) ?: return
         val behavior = state.behaviorForType(seg.type)
         if (behavior != SegmentBehavior.AUTO_SKIP) return
         if (seg.id in autoSkippedSegments) return

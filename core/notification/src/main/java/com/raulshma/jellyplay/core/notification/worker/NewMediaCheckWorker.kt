@@ -18,8 +18,12 @@ import com.raulshma.jellyplay.core.notification.dispatcher.NotificationDispatche
 import com.raulshma.jellyplay.core.notification.scheduler.NotificationScheduler
 import dagger.assisted.Assisted
 import dagger.assisted.AssistedInject
-import kotlinx.coroutines.delay
+import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.sync.Semaphore
+import kotlinx.coroutines.sync.withPermit
 import java.io.IOException
 import java.net.SocketTimeoutException
 import java.util.Calendar
@@ -78,47 +82,24 @@ class NewMediaCheckWorker @AssistedInject constructor(
         if (enabledFolders.isEmpty()) return
 
         val isFirstScan = seenMediaRepository.count() == 0
-        val newItemsByLibrary = mutableMapOf<LibraryFolder, List<com.raulshma.jellyplay.core.model.MediaItem>>()
 
-        for (folder in enabledFolders) {
-            if (isStopped) break
-            delay(200)
+        // Per-folder fetches are independent (each folder's seen-id set is keyed
+        // by that folder's items), so they can run concurrently. A small gate
+        // keeps peak server load bounded — replaces the prior naive 200 ms
+        // per-folder `delay` that serialized every fetch behind N network RTTs.
+        val fetchGate = Semaphore(MAX_CONCURRENT_FOLDER_FETCHES)
 
-            val latestResult = mediaRepository.getLatestMedia(
-                parentId = folder.id,
-                limit = prefs.maxPerCheck,
-            )
-            val latest = latestResult.getOrDefault(emptyList())
-            if (latest.isEmpty()) continue
+        val newItemsByLibrary = coroutineScope {
+            enabledFolders.map { folder ->
+                async {
+                    if (isStopped) return@async null
 
-            val config = prefs.libraryConfigs[folder.id]
-            val filtered = if (config != null && config.mediaTypes.isNotEmpty()) {
-                latest.filter { it.mediaType.name in config.mediaTypes }
-            } else {
-                latest
-            }
-            if (filtered.isEmpty()) continue
-
-            val itemIds = filtered.map { it.id }
-            val seenIds = seenMediaRepository.getSeenIds(itemIds)
-            val newItems = filtered.filter { it.id !in seenIds }
-
-            if (newItems.isNotEmpty()) {
-                seenMediaRepository.markAsSeen(
-                    newItems.map { item ->
-                        SeenMediaRecord(
-                            itemId = item.id,
-                            libraryId = folder.id,
-                            mediaType = item.mediaType.name,
-                            seenAtEpochMs = System.currentTimeMillis(),
-                        )
+                    fetchGate.withPermit {
+                        fetchFolderNewItems(folder, prefs, isFirstScan)
                     }
-                )
-                if (!isFirstScan) {
-                    newItemsByLibrary[folder] = newItems
                 }
-            }
-        }
+            }.awaitAll()
+        }.filterNotNull().toMap()
 
         val thirtyDaysAgo = System.currentTimeMillis() - THIRTY_DAYS_MS
         seenMediaRepository.pruneOlderThan(thirtyDaysAgo)
@@ -126,6 +107,59 @@ class NewMediaCheckWorker @AssistedInject constructor(
         if (newItemsByLibrary.isNotEmpty()) {
             dispatcher.dispatch(newItemsByLibrary, prefs)
         }
+    }
+
+    /**
+     * Fetches the latest media for a single library folder and records any
+     * never-seen-before items. Returns the folder → new-items pair (or null if
+     * nothing new was found, the worker was cancelled, or this is the first
+     * scan where notifications would be noise).
+     *
+     * Each folder's seen-id lookups are keyed only by items returned for that
+     * same folder, so concurrent invocations across distinct folders do not
+     * race on shared state.
+     */
+    private suspend fun fetchFolderNewItems(
+        folder: LibraryFolder,
+        prefs: NotificationPreferences,
+        isFirstScan: Boolean,
+    ): Pair<LibraryFolder, List<com.raulshma.jellyplay.core.model.MediaItem>>? {
+        if (isStopped) return null
+
+        val latestResult = mediaRepository.getLatestMedia(
+            parentId = folder.id,
+            limit = prefs.maxPerCheck,
+        )
+        val latest = latestResult.getOrDefault(emptyList())
+        if (latest.isEmpty()) return null
+
+        val config = prefs.libraryConfigs[folder.id]
+        val filtered = if (config != null && config.mediaTypes.isNotEmpty()) {
+            latest.filter { it.mediaType.name in config.mediaTypes }
+        } else {
+            latest
+        }
+        if (filtered.isEmpty()) return null
+
+        val itemIds = filtered.map { it.id }
+        val seenIds = seenMediaRepository.getSeenIds(itemIds)
+        val newItems = filtered.filter { it.id !in seenIds }
+
+        if (newItems.isEmpty()) return null
+
+        seenMediaRepository.markAsSeen(
+            newItems.map { item ->
+                SeenMediaRecord(
+                    itemId = item.id,
+                    libraryId = folder.id,
+                    mediaType = item.mediaType.name,
+                    seenAtEpochMs = System.currentTimeMillis(),
+                )
+            }
+        )
+        // On the first scan everything is "new" — suppress notifications to
+        // avoid spamming the user with the entire library catalog.
+        return if (isFirstScan) null else folder to newItems
     }
 
     private fun isInQuietHours(prefs: NotificationPreferences): Boolean =
@@ -144,6 +178,9 @@ class NewMediaCheckWorker @AssistedInject constructor(
     companion object {
         const val WORK_TAG = "notification"
         private const val THIRTY_DAYS_MS = 30L * 24 * 60 * 60 * 1000
+        /** Bounds concurrent per-folder network fetches so a server with many
+         *  enabled libraries is not hit with N simultaneous requests. */
+        private const val MAX_CONCURRENT_FOLDER_FETCHES = 4
 
         /**
          * Pure helper that decides whether [currentMinutes] falls inside a quiet-hours window

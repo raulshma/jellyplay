@@ -32,14 +32,13 @@ class SearchHistoryRepositoryImpl @Inject constructor(
 
     override suspend fun saveQuery(query: String, userId: String) {
         if (query.trim().length < 2) return
-        dao.insert(
+        dao.insertAndEvict(
             SearchHistoryEntity(
                 query = query.trim(),
                 userId = userId,
                 searchedAt = System.currentTimeMillis(),
             )
         )
-        dao.evictOldest(userId, keepCount = 50)
     }
 
     override suspend fun deleteById(id: Long) {

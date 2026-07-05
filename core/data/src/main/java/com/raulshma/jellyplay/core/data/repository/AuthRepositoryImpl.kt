@@ -103,8 +103,7 @@ class AuthRepositoryImpl @Inject constructor(
         if (userEntity != null) {
             val user = userEntity.toUserInfo(server.address)
             apiClient.setUser(user)
-            preferencesStore.setActiveServer(serverId)
-            preferencesStore.setActiveUser(userEntity.userId)
+            preferencesStore.setActiveSession(serverId, userEntity.userId)
             database.withTransaction {
                 serverDao.updateServer(serverEntity.copy(lastConnected = System.currentTimeMillis()))
                 userDao.updateUser(userEntity.copy(lastConnected = System.currentTimeMillis()))
@@ -256,8 +255,7 @@ class AuthRepositoryImpl @Inject constructor(
                 // Don't log the raw server/user GUIDs — they survive into
                 // release builds and can be used for cross-session correlation.
                 Log.w("AuthRepository", "restoreSession: server not found in DB")
-                preferencesStore.setActiveServer("")
-                preferencesStore.setActiveUser("")
+                preferencesStore.setActiveSession("", "")
                 return@runCatching
             }
             val server = serverEntity.toServerInfo()
@@ -324,8 +322,7 @@ class AuthRepositoryImpl @Inject constructor(
         apiClient.disconnect()
         apiClient.setServer(server.toServerInfo())
         apiClient.setUser(userEntity.toUserInfo(server.address))
-        preferencesStore.setActiveServer(server.id)
-        preferencesStore.setActiveUser(userId)
+        preferencesStore.setActiveSession(server.id, userId)
         database.withTransaction {
             userDao.updateUser(userEntity.copy(lastConnected = System.currentTimeMillis()))
             serverDao.updateServer(
@@ -361,7 +358,9 @@ class AuthRepositoryImpl @Inject constructor(
     }
 
     override suspend fun getUsersForServer(serverId: String): List<UserInfo> {
-        return userDao.getUsersForServer(serverId).first().map { it.toUserInfo() }
+        // Use the one-shot DAO query instead of `.first()` on the Flow, which
+        // would cancel a fresh Flow emission (full query cost) on every call.
+        return userDao.getUsersForServerOnce(serverId).map { it.toUserInfo() }
     }
 
     private suspend fun persistSession(server: ServerInfo, user: UserInfo, fallbackUsername: String = "") {
@@ -401,8 +400,7 @@ class AuthRepositoryImpl @Inject constructor(
                 )
             )
         }
-        preferencesStore.setActiveServer(server.id)
-        preferencesStore.setActiveUser(user.id)
+        preferencesStore.setActiveSession(server.id, user.id)
     }
 
     private fun ServerEntity.toServerInfo() = ServerInfo(

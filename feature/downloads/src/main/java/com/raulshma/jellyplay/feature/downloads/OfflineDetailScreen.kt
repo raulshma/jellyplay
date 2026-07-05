@@ -457,10 +457,15 @@ private fun OfflineDetailContent(
                                 Spacer(Modifier.height(12.dp))
                                 Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
                                     children.forEachIndexed { index, track ->
+                                        // Memoize the per-row click lambda so it isn't reallocated
+                                        // on every recomposition of this detail item.
+                                        val click = remember(track.id, track.mediaType) {
+                                            { onPlayOffline(track.id, track.mediaType) }
+                                        }
                                         OfflineTrackRow(
                                             track = track,
                                             index = index + 1,
-                                            onClick = { onPlayOffline(track.id, track.mediaType) },
+                                            onClick = click,
                                         )
                                     }
                                 }
