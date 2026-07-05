@@ -345,6 +345,7 @@ class ExoPlayerEngine(
 
         val mediaItem = MediaItem.Builder()
             .setUri(request.uri)
+            .apply { request.mimeType?.let { setMimeType(it) } }
             .setSubtitleConfigurations(subtitleConfigs)
             .setMediaMetadata(metadataBuilder.build())
             .build()

@@ -80,6 +80,14 @@ data class DownloadEntity(
     val errorMessage: String? = null,
     @ColumnInfo(defaultValue = "0")
     val priority: Int = 0,
+    /**
+     * Original container format (e.g. "mkv", "mp4", "ts") as reported by the
+     * Jellyfin MediaSource. Used at playback time to attach the correct MIME
+     * type to ExoPlayer so the right extractor is selected for misnamed files
+     * (downloads historically get a hardcoded `.mp4` extension). NULL for
+     * pre-existing rows until the item is re-downloaded.
+     */
+    val container: String? = null,
 )
 
 @Entity(

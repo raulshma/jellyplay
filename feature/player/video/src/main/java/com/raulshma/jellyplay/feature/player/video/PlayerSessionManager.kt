@@ -157,6 +157,19 @@ class PlayerSessionManager(
         val subtitle = offlineItem?.seriesName ?: offlineItem?.overview?.take(60) ?: ""
         val url = Uri.fromFile(localFile).toString()
 
+        // Resolve the real container so ExoPlayer gets the right MIME type and
+        // selects the correct extractor. Precedence:
+        //   1. Container persisted at download time (new downloads).
+        //   2. Magic-byte sniffing fallback (legacy downloads whose on-disk
+        //      extension was hardcoded to .mp4 even when the bytes are MKV/TS/...).
+        // Without this, MKV-in-.mp4 hangs ExoPlayer silently in STATE_BUFFERING
+        // with no error dialog (only MPV plays, because libavformat sniffs content).
+        val containerHint = download?.container
+            ?: com.raulshma.jellyplay.feature.player.video.engine.ContainerSniffer.sniff(localFile)
+        val mimeHint = containerHint?.let {
+            com.raulshma.jellyplay.feature.player.video.engine.ContainerMimeMapper.mapToMime(it)
+        }
+
         _sessionState.update {
             it.copy(
                 title = title,
@@ -188,7 +201,7 @@ class PlayerSessionManager(
             chapters = emptyList(),
         )
 
-        initializeEngine(playerType, detail, null, url, startPositionTicks, prefs)
+        initializeEngine(playerType, detail, null, url, startPositionTicks, prefs, mimeType = mimeHint)
 
         // Attach external subtitles bundled with the download (offline subs).
         loadOfflineSubtitles(downloadPath)
@@ -277,6 +290,7 @@ class PlayerSessionManager(
         startPositionTicks: Long,
         prefs: com.raulshma.jellyplay.core.model.UserPreferences,
         playMethod: PlayMethod = PlayMethod.DIRECT_PLAY,
+        mimeType: String? = null,
     ) {
         _engine.value?.release()
         val eng = playerEngineFactory.create(playerType)
@@ -322,6 +336,7 @@ class PlayerSessionManager(
             authToken = token,
             minBufferMs = prefs.videoPreloadBufferSize.minBufferMs,
             maxBufferMs = prefs.videoPreloadBufferSize.maxBufferMs,
+            mimeType = mimeType,
         )
 
         lastPlaybackRequest = request

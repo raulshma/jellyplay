@@ -51,7 +51,12 @@ biometric = "1.4.0-alpha07"
 # Track for deprecation; if a Tink migration becomes necessary
 security = "1.1.0-alpha06"
 sentry = "8.14.0"
-benchmarkMacro = "1.4.0-beta02"
+benchmarkMacro = "1.5.0-alpha07"
+# androidx.benchmark 1.5.x alphas: required for the Baseline Profile Gradle plugin
+# to be compatible with AGP 9.x (fixes b/443311090 in 1.5.0-alpha01). The plugin
+# and benchmark-macro-junit4 share the androidx.benchmark release train, so the
+# same version.ref is used for both.
+baselineprofile = "1.5.0-alpha07"
 
 [libraries]
 # AndroidX Core
@@ -185,6 +190,12 @@ benchmark-macro-junit4 = { group = "androidx.benchmark", name = "benchmark-macro
 android-application = { id = "com.android.application", version.ref = "agp" }
 android-library = { id = "com.android.library", version.ref = "agp" }
 android-test = { id = "com.android.test", version.ref = "agp" }
+# Baseline Profile Gradle plugin (androidx.benchmark 1.5.x — AGP 9 compatible).
+# - `androidx.baselineprofile`          → applied by the app/consumer module.
+# - `androidx.baselineprofile.producer` → applied by the com.android.test module
+#                                         that runs the macrobenchmark generator.
+androidx-baselineprofile = { id = "androidx.baselineprofile", version.ref = "baselineprofile" }
+androidx-baselineprofile-producer = { id = "androidx.baselineprofile.producer", version.ref = "baselineprofile" }
 kotlin-compose = { id = "org.jetbrains.kotlin.plugin.compose", version.ref = "kotlin" }
 kotlin-serialization = { id = "org.jetbrains.kotlin.plugin.serialization", version.ref = "kotlin" }
 ksp = { id = "com.google.devtools.ksp", version.ref = "ksp" }

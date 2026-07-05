@@ -30,6 +30,7 @@ interface DownloadRepository {
         seasonName: String? = null,
         episodeNumber: Int? = null,
         seasonNumber: Int? = null,
+        container: String? = null,
     ): Result<DownloadItem>
 
     suspend fun cancelDownload(id: String): Result<Unit>
