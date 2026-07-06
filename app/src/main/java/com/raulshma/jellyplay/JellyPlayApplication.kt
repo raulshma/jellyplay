@@ -34,7 +34,11 @@ class JellyPlayApplication : Application(), SingletonImageLoader.Factory, Config
             .setWorkerFactory(workerFactory)
             .build()
 
-    @Inject lateinit var okHttpClient: OkHttpClient
+    // javax.inject.Provider defers Hilt construction of OkHttpClient
+    // (whose provideOkHttpClient does a blocking DataStore read + disk IO)
+    // off the cold-start path until Coil's first image request, which only
+    // happens once setContent renders an image — well after onCreate returns.
+    @Inject lateinit var okHttpClientProvider: javax.inject.Provider<OkHttpClient>
     @Inject lateinit var userPreferencesStore: com.raulshma.jellyplay.core.datastore.UserPreferencesStore
     // javax.inject.Provider defers Hilt construction of AudioPlaybackManager
     // (and its transitive 14-dep graph: AudioLibraryBrowser,
@@ -137,7 +141,17 @@ class JellyPlayApplication : Application(), SingletonImageLoader.Factory, Config
     }
 
     private val imageClient by lazy {
-        okHttpClient.newBuilder()
+        okHttpClientProvider.get().newBuilder()
+            // Drop the inherited OkHttp http_cache so image bytes aren't written
+            // to disk twice. The base client's cache (`cacheDir/http_cache`,
+            // sized for API JSON) is shared via newBuilder(); without this Coil
+            // would also write every fetched image to its own `image_cache`
+            // DiskCache (256 MB default), doubling disk writes for every poster
+            // and bloating http_cache with binary data competing with the small
+            // JSON responses it was sized for. `.cache(null)` leaves Coil's
+            // DiskCache as the sole owner of image bytes — functionally
+            // identical to the previous behavior for image rendering.
+            .cache(null)
             .connectTimeout(30, java.util.concurrent.TimeUnit.SECONDS)
             .readTimeout(30, java.util.concurrent.TimeUnit.SECONDS)
             .build()

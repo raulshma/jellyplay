@@ -119,6 +119,7 @@ fun FavoritesScreen(
                         itemCount = pagingItems.itemCount,
                         key = { index -> pagingItems[index]?.id ?: index },
                         columns = GridCells.Adaptive(minSize = if (isTv) 180.dp else 150.dp),
+                        contentType = { "mediaItem" },
                         state = gridState,
                         contentPadding = PaddingValues(
                             start = if (isTv) 16.dp else 12.dp,

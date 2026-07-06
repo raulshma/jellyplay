@@ -36,6 +36,7 @@ class AudioCrossfader(
     private val speedProvider: () -> Float,
     private val audioBufferProvider: () -> Pair<Int, Int>,
     private val onCrossfadeTransition: suspend (secondary: ExoPlayer, nextIndex: Int, nextItem: AudioQueueItem) -> Unit,
+    private val detachPrimaryListener: (ExoPlayer) -> Unit,
 ) {
     private var crossfadePlayer: ExoPlayer? = null
     private var crossfadeJob: Job? = null
@@ -212,6 +213,14 @@ class AudioCrossfader(
         primary.volume = 0.0f
         secondary.volume = 1.0f
 
+        // Detach the AudioManager's shared playerListener BEFORE stop/release.
+        // ExoPlayer.release() internally clears listeners so it's not a hard
+        // leak — but between primary.release() and the subsequent
+        // secondary.addListener(playerListener) in onCrossfadeTransition, any
+        // queued callback draining on the application looper could otherwise
+        // let playerListener observe events from a dead primary and mutate
+        // _currentPosition/state from a stale source.
+        detachPrimaryListener(primary)
         primary.stop()
         primary.release()
 

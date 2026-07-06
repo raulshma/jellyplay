@@ -785,6 +785,8 @@ class SettingsViewModel @Inject constructor(
 
     private val presetJson = Json { prettyPrint = true; encodeDefaults = true; ignoreUnknownKeys = true }
 
+    private val importExportJson = Json { ignoreUnknownKeys = true; encodeDefaults = true }
+
     val homeLayoutPresets: List<com.raulshma.jellyplay.core.model.HomeLayoutPreset>
         get() = preferences.homeLayoutPresets
 
@@ -863,7 +865,7 @@ class SettingsViewModel @Inject constructor(
         launch {
             val result = runCatching {
                 val text = raw.trim()
-                val parser = Json { ignoreUnknownKeys = true; encodeDefaults = true }
+                val parser = importExportJson
                 if (text.contains("\"config\"")) {
                     val preset = parser.decodeFromString<com.raulshma.jellyplay.core.model.HomeLayoutPreset>(text)
                     preset.config to preset.name
@@ -1344,7 +1346,7 @@ class SettingsViewModel @Inject constructor(
             backupRestoreStatus = null
             runCatching {
                 val prefs = preferences
-                val json = Json { prettyPrint = true; encodeDefaults = true }
+                val json = presetJson
                 val jsonString = json.encodeToString(UserPreferences.serializer(), prefs)
                 withContext(Dispatchers.IO) {
                     context.contentResolver.openOutputStream(uri)?.use { stream ->
@@ -1367,7 +1369,7 @@ class SettingsViewModel @Inject constructor(
                         stream.reader().use { it.readText() }
                     } ?: throw IOException("Cannot open input stream")
                 }
-                val json = Json { ignoreUnknownKeys = true }
+                val json = importExportJson
                 val imported = json.decodeFromString(UserPreferences.serializer(), jsonString)
                 preferencesStore.restorePreferences(imported)
                 backupRestoreStatus = "Settings imported successfully"

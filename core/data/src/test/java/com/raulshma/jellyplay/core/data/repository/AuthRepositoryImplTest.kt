@@ -243,11 +243,9 @@ class AuthRepositoryImplTest {
         repository.removeUser("user-1")
 
         coVerify { userDao.deleteUserById("user-1") }
-        coVerify {
-            serverDao.updateServer(match {
-                it.id == serverWithUser.id && it.userId == null && it.accessToken == null
-            })
-        }
+        // Bulk UPDATE replaces the prior per-row read-modify-write loop.
+        coVerify { serverDao.clearUserFromServers("user-1") }
+        coVerify(exactly = 0) { serverDao.updateServer(any()) }
     }
 
     @Test

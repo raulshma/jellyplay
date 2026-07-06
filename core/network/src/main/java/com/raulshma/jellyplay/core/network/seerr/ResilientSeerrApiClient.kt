@@ -23,7 +23,6 @@ class ResilientSeerrApiClient @Inject constructor(
     private suspend fun <T> req(block: suspend () -> Result<T>): Result<T> =
         RetryPolicy.executeWithRetry(
             maxRetries = MAX_RETRIES,
-            jitterFloorMs = 0L,
             block = block,
         )
 

@@ -44,6 +44,7 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
@@ -103,6 +104,7 @@ import androidx.compose.foundation.layout.offset
 import com.raulshma.jellyplay.core.model.MediaStream
 import com.raulshma.jellyplay.core.model.StreamType
 import com.raulshma.jellyplay.feature.player.video.engine.EngineVideoStats
+import com.raulshma.jellyplay.feature.player.video.engine.PlaybackMetadataSnapshot
 import com.raulshma.jellyplay.feature.player.video.TrackOption
 import com.raulshma.jellyplay.core.designsystem.theme.HdrColors
 import androidx.compose.ui.platform.LocalContext
@@ -223,6 +225,22 @@ internal fun PlayerControls(
     val currentPosition by currentPositionFlow.collectAsStateWithLifecycle()
     val bufferedPosition by bufferedPositionFlow.collectAsStateWithLifecycle()
     val videoStats by videoStatsFlow.collectAsStateWithLifecycle()
+    // Project only the static codec/HDR/audio-channel slice that
+    // PlaybackMetadataRow reads. The full EngineVideoStats stream also carries
+    // high-churn fields (droppedFrames, bufferedPositionMs, videoBitrate,
+    // estimatedBandwidthBps) that tick multiple times per second; without this
+    // projection PlaybackMetadataRow would recompose on every tick even though
+    // its displayed fields almost never change.
+    val playbackMetadata by remember {
+        derivedStateOf {
+            PlaybackMetadataSnapshot(
+                videoCodec = videoStats.videoCodec,
+                videoHdrType = videoStats.videoHdrType,
+                audioCodec = videoStats.audioCodec,
+                audioChannels = videoStats.audioChannels,
+            )
+        }
+    }
 
     val isTv = LocalTvMode.current
     val isPortrait = LocalConfiguration.current.orientation ==
@@ -497,7 +515,7 @@ internal fun PlayerControls(
                         isDirectPlayForced = isDirectPlayForced,
                         hdrType = hdrType,
                         mediaStreams = mediaStreams,
-                        videoStats = videoStats,
+                        videoStats = playbackMetadata,
                         audioTracks = audioTracks,
                         modifier = Modifier.padding(bottom = 6.dp)
                     )

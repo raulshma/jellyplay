@@ -101,6 +101,7 @@ fun SettingsScreen(
     onServerManagement: (String?) -> Unit = {},
     onUserManagement: (String?) -> Unit = {},
     onSeerrSettings: (String?) -> Unit = {},
+    onArrSettings: (String?) -> Unit = {},
     onAdminDashboard: () -> Unit = {},
     onSetupWizard: () -> Unit = {},
     onNewsletterClick: () -> Unit = {},
@@ -517,6 +518,10 @@ fun SettingsScreen(
                                                         is Route.ServerManagement -> onServerManagement(item.id)
                                                         is Route.UserManagement -> onUserManagement(item.id)
                                                         is Route.SeerrSettings -> onSeerrSettings(item.id)
+                                                        is Route.ArrSettings -> {
+                                                            lastClickedSettingId = "integrations"
+                                                            onArrSettings(item.id)
+                                                        }
                                                         is Route.AppearanceSettings -> {
                                                             lastClickedSettingId = "appearance"
                                                             onAppearanceSettings(item.id)
@@ -912,6 +917,22 @@ fun SettingsScreen(
 
                 item {
                     AnimatedSettingsEntrance(if (isTv) 12 else 11) {
+                        SettingListItem(
+                            icon = Tabler.Outline.Download,
+                            title = stringResource(R.string.settings_integrations),
+                            subtitle = stringResource(R.string.settings_integrations_subtitle),
+                            index = 0, count = 1,
+                            highlighted = lastClickedSettingId == "integrations",
+                            onClick = {
+                                lastClickedSettingId = "integrations"
+                                onArrSettings(null)
+                            },
+                        )
+                    }
+                }
+
+                item {
+                    AnimatedSettingsEntrance(if (isTv) 13 else 12) {
                         SettingListItem(
                             icon = Tabler.Outline.InfoCircle,
                             title = stringResource(R.string.settings_about),

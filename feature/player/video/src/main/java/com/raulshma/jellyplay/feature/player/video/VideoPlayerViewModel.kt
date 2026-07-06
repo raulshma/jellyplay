@@ -595,11 +595,22 @@ class VideoPlayerViewModel @Inject constructor(
                 cachedPreferences = prefs
                 val itemId = playerSessionManager.sessionState.value.currentItemId
                 val stored = itemId?.let { prefs.mediaStreamSelections[it] }
-                _uiState.update { state ->
-                    state.copy(
-                        hasAudioOverride = stored?.audioStreamIndex != null,
-                        hasSubtitleOverride = stored?.subtitleStreamIndex != null,
-                    )
+                // Skip the (≈95-field) state copy + collector re-emit when the
+                // two flags haven't changed. Every UserPreferences emission
+                // (dozens of unrelated pref writes trigger this) used to
+                // allocate a fresh copy and re-emit to every uiState collector
+                // even though hasAudioOverride/hasSubtitleOverride rarely
+                // change. The surrounding blocks already guard every other
+                // field with `if (_uiState.value.X != prefs.X)`; this is the
+                // exception.
+                val newAudio = stored?.audioStreamIndex != null
+                val newSub = stored?.subtitleStreamIndex != null
+                if (_uiState.value.hasAudioOverride != newAudio ||
+                    _uiState.value.hasSubtitleOverride != newSub
+                ) {
+                    _uiState.update {
+                        it.copy(hasAudioOverride = newAudio, hasSubtitleOverride = newSub)
+                    }
                 }
                 val resolvedSubtitleStyle = prefs.resolvedSubtitleStyle(
                     isHdr = prefs.isHdrFromStreams(_uiState.value.mediaStreams),

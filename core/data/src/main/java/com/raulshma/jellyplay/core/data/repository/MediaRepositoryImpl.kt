@@ -84,6 +84,15 @@ class MediaRepositoryImpl @Inject constructor(
     private var cachedHomeSectionsKey: String = ""
     private val homeSectionsLock = Any()
 
+    // Throttle for lyrics-cache eviction. cacheLyrics() is called on every
+    // successful lyrics fetch, and each call used to fire a full
+    // DELETE FROM lyrics_cache WHERE fetchedAt < :ts scan over the whole table
+    // — so opening lyrics for a new track walked & re-locked the entire table.
+    // Eviction is best-effort (wrapped in try/catch) and exact cadence isn't
+    // observable, so we cap it at once per hour.
+    @Volatile
+    private var lastLyricsEvictionMs = 0L
+
     /**
      * Long-lived scope for the cache-invalidation observer. Never cancelled —
      * [MediaRepositoryImpl] is a `@Singleton` and lives for the process lifetime.
@@ -705,10 +714,19 @@ class MediaRepositoryImpl @Inject constructor(
                 fetchedAt = System.currentTimeMillis(),
             )
         )
-        try {
-            lyricsCacheDao.deleteOlderThan(System.currentTimeMillis() - 30L * 24 * 60 * 60 * 1000)
-        } catch (e: Exception) {
-            Log.d("MediaRepo", "Failed to evict old lyrics cache", e)
+        // Throttle eviction to at most once per hour. deleteOlderThan is a full
+        // table scan; firing it on every lyrics fetch (which happens whenever a
+        // user opens lyrics for a new track) was walking & re-locking the whole
+        // lyrics_cache table unnecessarily. Eviction semantics (rows older than
+        // 30 days eventually removed) preserved.
+        val now = System.currentTimeMillis()
+        if (now - lastLyricsEvictionMs > 60L * 60 * 1000) {
+            lastLyricsEvictionMs = now
+            try {
+                lyricsCacheDao.deleteOlderThan(now - 30L * 24 * 60 * 60 * 1000)
+            } catch (e: Exception) {
+                Log.d("MediaRepo", "Failed to evict old lyrics cache", e)
+            }
         }
     }
 

@@ -17,7 +17,7 @@ android {
         targetCompatibility = JavaVersion.VERSION_17
     }
     buildFeatures {
-        buildConfig = false
+        buildConfig = true
         resValues = false
     }
     testOptions {

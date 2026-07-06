@@ -37,6 +37,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.composables.icons.tabler.Tabler
+import com.composables.icons.tabler.outline.Ban
 import com.composables.icons.tabler.outline.Check
 import com.composables.icons.tabler.outline.ExternalLink
 import com.composables.icons.tabler.outline.Refresh
@@ -44,6 +45,8 @@ import com.composables.icons.tabler.outline.Trash
 import com.composables.icons.tabler.outline.X
 import com.raulshma.jellyplay.core.designsystem.theme.ShapeCache
 import com.raulshma.jellyplay.core.designsystem.theme.StatusColors
+import com.raulshma.jellyplay.core.model.arr.ArrDownloadSummary
+import com.raulshma.jellyplay.core.model.arr.ArrDownloadStatus
 import com.raulshma.jellyplay.core.model.seerr.SeerrMediaStatus
 import com.raulshma.jellyplay.core.model.seerr.SeerrRequestItem
 import com.raulshma.jellyplay.core.model.seerr.SeerrRequestStatus
@@ -66,6 +69,14 @@ fun RequestDetailBottomSheet(
     onDelete: () -> Unit = {},
     onRemoveFromService: () -> Unit = {},
     onNavigateToDetail: (tmdbId: Int, mediaType: String) -> Unit = { _, _ -> },
+    /** Direct *arr download progress; null when the feature is off or no download exists. */
+    downloadProgress: ArrDownloadSummary? = null,
+    /**
+     * When non-null + [downloadProgress] present, renders queue-management
+     * actions (remove / blocklist + search). Receives whether to add the
+     * release to the blocklist and whether to search for a replacement.
+     */
+    onRemoveFromQueue: ((blocklist: Boolean, searchAgain: Boolean) -> Unit)? = null,
 ) {
     val colorScheme = MaterialTheme.colorScheme
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
@@ -218,12 +229,57 @@ fun RequestDetailBottomSheet(
                         request.seasons.joinToString(", ") { "S${it.seasonNumber}" },
                     )
                 }
-                if (request.media.downloadStatus.isNotEmpty()) {
+                if (downloadProgress != null) {
+                    // Direct *arr: show live percent + time-left.
+                    val text = buildString {
+                        append(formatArrStatus(downloadProgress.status))
+                        append(" · ")
+                        append(downloadProgress.percent)
+                        append('%')
+                        downloadProgress.timeLeft?.takeIf { it.isNotBlank() }?.let {
+                            append(" · ")
+                            append(it)
+                            append(" left")
+                        }
+                    }
+                    DetailRow("Download", text)
+                } else if (request.media.downloadStatus.isNotEmpty()) {
                     val downloadStatusText = request.media.downloadStatus
                         .mapNotNull { it.status }
                         .joinToString(", ")
                         .ifBlank { "In Queue" }
                     DetailRow("Download", downloadStatusText)
+                }
+            }
+
+            // ── Direct *arr queue management actions ──
+            // Shown only when a live queue item exists for this request and
+            // the caller wires the callbacks. Each action confirms first
+            // because they are destructive (remove download client data).
+            if (downloadProgress != null && onRemoveFromQueue != null) {
+                HorizontalDivider(color = colorScheme.outlineVariant.copy(alpha = 0.3f))
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
+                    OutlinedButton(
+                        onClick = { onRemoveFromQueue(false, true) },
+                        modifier = Modifier.weight(1f),
+                        shape = ShapeCache.smooth12,
+                    ) {
+                        Icon(Tabler.Outline.X, contentDescription = null)
+                        Spacer(Modifier.width(8.dp))
+                        Text("Remove & Search")
+                    }
+                    OutlinedButton(
+                        onClick = { onRemoveFromQueue(true, true) },
+                        modifier = Modifier.weight(1f),
+                        shape = ShapeCache.smooth12,
+                    ) {
+                        Icon(Tabler.Outline.Ban, contentDescription = null)
+                        Spacer(Modifier.width(8.dp))
+                        Text("Blocklist & Search")
+                    }
                 }
             }
 
@@ -326,30 +382,34 @@ fun RequestDetailBottomSheet(
                             Spacer(Modifier.width(6.dp))
                             Text(if (isConfirmingDelete) "Sure?" else "Delete Request")
                         }
+                    }
 
-                        if (request.canRemove) {
-                            val serviceLabel = if (request.type.equals("movie", ignoreCase = true)) "Radarr" else "Sonarr"
-                            OutlinedButton(
-                                onClick = {
-                                    if (isConfirmingRemoveFromService) {
-                                        onRemoveFromService()
-                                        isConfirmingRemoveFromService = false
-                                    } else {
-                                        isConfirmingRemoveFromService = true
-                                    }
-                                },
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .focusIndicator(),
-                                shape = ShapeCache.smooth12,
-                                colors = ButtonDefaults.outlinedButtonColors(
-                                    contentColor = colorScheme.error,
-                                ),
-                            ) {
-                                Icon(Tabler.Outline.Trash, contentDescription = null, modifier = Modifier.size(18.dp))
-                                Spacer(Modifier.width(6.dp))
-                                Text(if (isConfirmingRemoveFromService) "Sure?" else "Remove from $serviceLabel")
-                            }
+                    // "Remove from Radarr/Sonarr" is only valid when Seerr reports
+                    // the media as removable (canRemove). It is intentionally NOT
+                    // gated on request status: a user may want to remove the
+                    // download files even while a request is still pending.
+                    if (request.canRemove) {
+                        val serviceLabel = if (request.type.equals("movie", ignoreCase = true)) "Radarr" else "Sonarr"
+                        OutlinedButton(
+                            onClick = {
+                                if (isConfirmingRemoveFromService) {
+                                    onRemoveFromService()
+                                    isConfirmingRemoveFromService = false
+                                } else {
+                                    isConfirmingRemoveFromService = true
+                                }
+                            },
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .focusIndicator(),
+                            shape = ShapeCache.smooth12,
+                            colors = ButtonDefaults.outlinedButtonColors(
+                                contentColor = colorScheme.error,
+                            ),
+                        ) {
+                            Icon(Tabler.Outline.Trash, contentDescription = null, modifier = Modifier.size(18.dp))
+                            Spacer(Modifier.width(6.dp))
+                            Text(if (isConfirmingRemoveFromService) "Sure?" else "Remove from $serviceLabel")
                         }
                     }
                 }
@@ -375,4 +435,19 @@ private fun DetailRow(label: String, value: String) {
             color = MaterialTheme.colorScheme.onSurface,
         )
     }
+}
+
+/**
+ * Render-friendly label for an [ArrDownloadStatus], surfaced in the Download
+ * row of [RequestDetailBottomSheet] when direct *arr progress is available.
+ */
+private fun formatArrStatus(status: ArrDownloadStatus): String = when (status) {
+    ArrDownloadStatus.QUEUED -> "Queued"
+    ArrDownloadStatus.DOWNLOADING -> "Downloading"
+    ArrDownloadStatus.PAUSED -> "Paused"
+    ArrDownloadStatus.COMPLETED -> "Downloaded"
+    ArrDownloadStatus.FAILED -> "Failed"
+    ArrDownloadStatus.WARNING -> "Warning"
+    ArrDownloadStatus.IMPORTED -> "Imported"
+    ArrDownloadStatus.UNKNOWN -> "Unknown"
 }

@@ -143,23 +143,30 @@ class AdminStatisticsRepositoryImpl @Inject constructor(
             apiClient.getPlaybackReportingPlayActivity(days = 30, dataType = "count", filter = userId).getOrDefault(emptyList())
         } else emptyList()
 
-        val fallbackChart = if (pluginChart.isEmpty() || pluginChart.all { it.value == 0L }) {
-            val recentlyPlayed = apiClient.getItemsWithUserData(
+        val fallbackItems = if (pluginChart.isEmpty() || pluginChart.all { it.value == 0L }) {
+            apiClient.getItemsWithUserData(
                 userId = userId,
                 isPlayed = true,
                 sortBy = "DatePlayed",
                 sortOrder = "Descending",
                 startIndex = 0,
                 limit = 300,
-            ).getOrDefault(Pair(0, emptyList()))
-            buildFallbackActivityChart(recentlyPlayed.second)
-        } else pluginChart
+            ).getOrDefault(Pair(0, emptyList())).second
+        } else emptyList()
+        val fallbackChart = if (fallbackItems.isNotEmpty()) buildFallbackActivityChart(fallbackItems) else pluginChart
+        val fallbackTrendData = if (fallbackItems.isNotEmpty()) buildFallbackActivityChart(fallbackItems) else emptyList()
 
-        val fallbackTrendData = buildFallbackTrendData(userId)
-
-        val moviePlayedCount = apiClient.getUserPlayedItemCount(userId, listOf("Movie")).getOrDefault(0)
-        val episodePlayedCount = apiClient.getUserPlayedItemCount(userId, listOf("Episode")).getOrDefault(0)
-        val songPlayedCount = apiClient.getUserPlayedItemCount(userId, listOf("Audio")).getOrDefault(0)
+        val counts = coroutineScope {
+            val movieDeferred = async { apiClient.getUserPlayedItemCount(userId, listOf("Movie")).getOrDefault(0) }
+            val episodeDeferred = async { apiClient.getUserPlayedItemCount(userId, listOf("Episode")).getOrDefault(0) }
+            val songDeferred = async { apiClient.getUserPlayedItemCount(userId, listOf("Audio")).getOrDefault(0) }
+            val movieUnplayedDeferred = async { apiClient.getUserUnplayedItemCount(userId, listOf("Movie")).getOrDefault(0) }
+            intArrayOf(movieDeferred.await(), episodeDeferred.await(), songDeferred.await(), movieUnplayedDeferred.await())
+        }
+        val moviePlayedCount = counts[0]
+        val episodePlayedCount = counts[1]
+        val songPlayedCount = counts[2]
+        val movieUnplayed = counts[3]
 
         val typeBreakdown = listOf(
             ContentBreakdown(
@@ -179,31 +186,43 @@ class AdminStatisticsRepositoryImpl @Inject constructor(
             ),
         ).filter { it.value > 0 }
 
-        val genreBreakdown = if (pluginAvailable) {
-            apiClient.getPlaybackReportingBreakdown("Genre", days = 30, filter = userId).getOrDefault(emptyList())
-        } else emptyList()
-
-        val methodBreakdown = if (pluginAvailable) {
-            apiClient.getPlaybackReportingBreakdown("PlaybackMethod", days = 30, filter = userId).getOrDefault(emptyList())
-        } else emptyList()
-
-        val deviceBreakdown = if (pluginAvailable) {
-            apiClient.getPlaybackReportingBreakdown("ClientName", days = 30, filter = userId).getOrDefault(emptyList())
-        } else emptyList()
+        val breakdowns = coroutineScope {
+            val genreDeferred = async {
+                if (pluginAvailable) apiClient.getPlaybackReportingBreakdown("Genre", days = 30, filter = userId).getOrDefault(emptyList()) else emptyList()
+            }
+            val methodDeferred = async {
+                if (pluginAvailable) apiClient.getPlaybackReportingBreakdown("PlaybackMethod", days = 30, filter = userId).getOrDefault(emptyList()) else emptyList()
+            }
+            val deviceDeferred = async {
+                if (pluginAvailable) apiClient.getPlaybackReportingBreakdown("ClientName", days = 30, filter = userId).getOrDefault(emptyList()) else emptyList()
+            }
+            val activityDeferred = async {
+                if (pluginAvailable) apiClient.getPlaybackReportingUserActivity(days = 30).getOrDefault(emptyList()) else emptyList()
+            }
+            val watchDeferred = async { computeWatchTimeBreakdown(userId) }
+            BreakdownResults(
+                genre = genreDeferred.await(),
+                method = methodDeferred.await(),
+                device = deviceDeferred.await(),
+                pluginActivity = activityDeferred.await(),
+                watchTime = watchDeferred.await(),
+            )
+        }
+        val genreBreakdown = breakdowns.genre
+        val methodBreakdown = breakdowns.method
+        val deviceBreakdown = breakdowns.device
+        val pluginActivity = breakdowns.pluginActivity
+        val watchTimeBreakdown = breakdowns.watchTime
 
         val moviePlayed = moviePlayedCount
         val episodePlayed = episodePlayedCount
         val songPlayed = songPlayedCount
-        val movieTotal = apiClient.getUserUnplayedItemCount(userId, listOf("Movie")).getOrDefault(0) + moviePlayed
+        val movieTotal = movieUnplayed + moviePlayed
         val completionRate = if (movieTotal > 0) moviePlayed.toFloat() / movieTotal else 0f
 
-        val pluginActivity = if (pluginAvailable) {
-            apiClient.getPlaybackReportingUserActivity(days = 30).getOrDefault(emptyList())
-        } else emptyList()
         val userPluginActivity = pluginActivity.firstOrNull { it.userId == userId }
         var totalWatchTimeSec = userPluginActivity?.totalTime ?: 0L
 
-        val watchTimeBreakdown = computeWatchTimeBreakdown(userId)
         if (totalWatchTimeSec == 0L) {
             totalWatchTimeSec = watchTimeBreakdown.totalSeconds
         }
@@ -486,6 +505,14 @@ class AdminStatisticsRepositoryImpl @Inject constructor(
     private suspend fun runWatchedMediaScan(scanId: String, config: MediaCleanupConfig) {
         try {
             val allResults = mutableListOf<MediaItemStub>()
+            // Seen-id set alongside allResults so dedup is O(1) per item instead
+            // of O(n) via allResults.any{}. Without this the .mapNotNull below
+            // is O(total_watched_items²) because allResults grows every
+            // iteration. First-occurrence wins, identical to the previous
+            // allResults.any{} semantics — output ordering is irrelevant here
+            // (results are persisted as JSON and the UI doesn't depend on
+            // insertion order).
+            val seenItemIds = HashSet<String>()
             val users = apiClient.getUsers().getOrDefault(emptyList())
             val pageSize = 200
 
@@ -506,7 +533,7 @@ class AdminStatisticsRepositoryImpl @Inject constructor(
                     val items = result.second
                         .filter { if (!config.includePartiallyWatched) it.completionPct >= 0.9f else true }
                         .mapNotNull { watched ->
-                            if (allResults.any { it.itemId == watched.itemId }) return@mapNotNull null
+                            if (!seenItemIds.add(watched.itemId)) return@mapNotNull null
                             val lastPlayedStr = watched.lastPlayedDate?.take(10)
                             MediaItemStub(
                                 itemId = watched.itemId,
@@ -734,23 +761,15 @@ class AdminStatisticsRepositoryImpl @Inject constructor(
         }
     }
 
-    private suspend fun buildFallbackTrendData(userId: String): List<com.raulshma.jellyplay.core.model.PlaybackActivityPoint> {
-        return try {
-            val items = apiClient.getItemsWithUserData(
-                userId = userId,
-                isPlayed = true,
-                sortBy = "DatePlayed",
-                sortOrder = "Descending",
-                startIndex = 0,
-                limit = 300,
-            ).getOrDefault(Pair(0, emptyList()))
-            buildFallbackActivityChart(items.second)
-        } catch (_: Exception) {
-            emptyList()
-        }
-    }
-
     private fun formatDate(date: java.time.LocalDate): String = date.toString()
+
+    private data class BreakdownResults(
+        val genre: List<com.raulshma.jellyplay.core.model.ContentBreakdown>,
+        val method: List<com.raulshma.jellyplay.core.model.ContentBreakdown>,
+        val device: List<com.raulshma.jellyplay.core.model.ContentBreakdown>,
+        val pluginActivity: List<com.raulshma.jellyplay.core.model.PlaybackReportingActivity>,
+        val watchTime: WatchTimeBreakdown,
+    )
 
     private data class EnhancedStatistics(
         val weeklyWatchTimeSec: Long = 0,

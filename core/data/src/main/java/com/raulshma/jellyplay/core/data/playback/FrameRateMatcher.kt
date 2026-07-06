@@ -43,7 +43,9 @@ object FrameRateMatcher {
             val params = activity.window.attributes
             params.preferredDisplayModeId = targetMode.modeId
             activity.window.attributes = params
-            Log.d(TAG, "Switched display to mode ${targetMode.modeId} (${targetMode.physicalWidth}x${targetMode.physicalHeight} @ ${targetMode.refreshRate}Hz) for ${frameRate}fps content")
+            if (com.raulshma.jellyplay.core.data.BuildConfig.DEBUG) {
+                Log.d(TAG, "Switched display to mode ${targetMode.modeId} (${targetMode.physicalWidth}x${targetMode.physicalHeight} @ ${targetMode.refreshRate}Hz) for ${frameRate}fps content")
+            }
         }
     }
 
@@ -55,7 +57,9 @@ object FrameRateMatcher {
         params.preferredDisplayModeId = modeId
         activity.window.attributes = params
         originalModeId = null
-        Log.d(TAG, "Restored original display mode $modeId")
+        if (com.raulshma.jellyplay.core.data.BuildConfig.DEBUG) {
+            Log.d(TAG, "Restored original display mode $modeId")
+        }
     }
 
     private const val TAG = "FrameRateMatcher"

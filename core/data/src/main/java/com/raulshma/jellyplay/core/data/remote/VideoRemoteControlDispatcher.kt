@@ -41,13 +41,17 @@ class VideoRemoteControlDispatcher @Inject constructor(
                 subtitleStreamIndex = request.subtitleStreamIndex,
             )
         )
-        Log.d(TAG, "Video play requested: itemId=$firstId pos=${request.startPositionTicks} sub=${request.subtitleStreamIndex} audio=${request.audioStreamIndex}")
+        if (com.raulshma.jellyplay.core.data.BuildConfig.DEBUG) {
+            Log.d(TAG, "Video play requested: itemId=$firstId pos=${request.startPositionTicks} sub=${request.subtitleStreamIndex} audio=${request.audioStreamIndex}")
+        }
     }
 
     override suspend fun handlePlaystate(command: PlaystateCommand) {
         withContext(Dispatchers.Main.immediate) {
             val engine = activePlayerController.engine ?: run {
-                Log.d(TAG, "No active video engine for playstate ${command::class.simpleName}")
+                if (com.raulshma.jellyplay.core.data.BuildConfig.DEBUG) {
+                    Log.d(TAG, "No active video engine for playstate ${command::class.simpleName}")
+                }
                 return@withContext
             }
             when (command) {
@@ -81,7 +85,9 @@ class VideoRemoteControlDispatcher @Inject constructor(
                     if (command.mute == true) {
                         engine?.setMuted(true)
                     }
-                    Log.d(TAG, "SetVolume pct=$pct mute=${command.mute}")
+                    if (com.raulshma.jellyplay.core.data.BuildConfig.DEBUG) {
+                        Log.d(TAG, "SetVolume pct=$pct mute=${command.mute}")
+                    }
                 }
                 GeneralCommand.VolumeUp -> {
                     engine?.increaseVolume(0.05f)
@@ -97,11 +103,15 @@ class VideoRemoteControlDispatcher @Inject constructor(
                 }
                 is GeneralCommand.SetAudioStreamIndex -> {
                     engine?.selectTrack(type = TrackType.AUDIO, index = command.index)
-                    Log.d(TAG, "SetAudioStreamIndex=${command.index}")
+                    if (com.raulshma.jellyplay.core.data.BuildConfig.DEBUG) {
+                        Log.d(TAG, "SetAudioStreamIndex=${command.index}")
+                    }
                 }
                 is GeneralCommand.SetSubtitleStreamIndex -> {
                     engine?.selectTrack(type = TrackType.SUBTITLE, index = command.index)
-                    Log.d(TAG, "SetSubtitleStreamIndex=${command.index}")
+                    if (com.raulshma.jellyplay.core.data.BuildConfig.DEBUG) {
+                        Log.d(TAG, "SetSubtitleStreamIndex=${command.index}")
+                    }
                 }
                 is GeneralCommand.SetRepeatMode,
                 is GeneralCommand.SetShuffleQueue,
@@ -110,13 +120,23 @@ class VideoRemoteControlDispatcher @Inject constructor(
                 }
                 is GeneralCommand.SetMaxStreamingBitrate -> {
                     engine?.setMaxVideoBitrate(command.bitrate)
-                    Log.d(TAG, "SetMaxStreamingBitrate=${command.bitrate}")
+                    if (com.raulshma.jellyplay.core.data.BuildConfig.DEBUG) {
+                        Log.d(TAG, "SetMaxStreamingBitrate=${command.bitrate}")
+                    }
                 }
                 GeneralCommand.ToggleFullscreen -> {
                     // TV is always fullscreen; the phone player is itself fullscreen.
                 }
-                is GeneralCommand.DisplayMessage -> Log.d(TAG, "DisplayMessage: ${command.header} ${command.text}")
-                is GeneralCommand.Unknown -> Log.d(TAG, "Unhandled general command: ${command.name}")
+                is GeneralCommand.DisplayMessage -> {
+                    if (com.raulshma.jellyplay.core.data.BuildConfig.DEBUG) {
+                        Log.d(TAG, "DisplayMessage: ${command.header} ${command.text}")
+                    }
+                }
+                is GeneralCommand.Unknown -> {
+                    if (com.raulshma.jellyplay.core.data.BuildConfig.DEBUG) {
+                        Log.d(TAG, "Unhandled general command: ${command.name}")
+                    }
+                }
             }
         }
     }
