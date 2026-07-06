@@ -104,6 +104,7 @@ fun rememberDominantColor(
                     .data(imageUrl)
                     .size(CoilSize(64, 64))
                     .allowHardware(false)
+                    .memoryCacheKey(imageUrl)
                     .build()
                 val result = loader.execute(request)
                 if (result is SuccessResult) {
