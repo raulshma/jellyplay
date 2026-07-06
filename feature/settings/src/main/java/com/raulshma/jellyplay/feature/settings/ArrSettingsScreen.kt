@@ -54,6 +54,7 @@ import com.composables.icons.tabler.outline.DeviceFloppy
 import com.composables.icons.tabler.outline.Plus
 import com.composables.icons.tabler.outline.Refresh
 import com.composables.icons.tabler.outline.Trash
+import com.raulshma.jellyplay.core.model.arr.ArrDiscoveryError
 import com.raulshma.jellyplay.core.model.arr.ArrServerConfig
 import com.raulshma.jellyplay.core.model.arr.ArrServiceKind
 import com.raulshma.jellyplay.core.model.arr.ArrServiceSummary
@@ -175,13 +176,37 @@ fun ArrSettingsScreen(
             val allServers = (servers.radarrServers + servers.sonarrServers)
             if (allServers.isEmpty()) {
                 item {
+                    val text = when {
+                        isRefreshing -> "Resolving servers…"
+                        servers.discoveryError is ArrDiscoveryError.NoAdminPermission ->
+                            stringResource(R.string.settings_arr_no_admin_hint)
+                        servers.discoveryError is ArrDiscoveryError.Other ->
+                            (servers.discoveryError as ArrDiscoveryError.Other).message
+                        else -> stringResource(R.string.settings_arr_no_servers_hint)
+                    }
                     Text(
-                        if (isRefreshing) "Resolving servers…" else stringResource(R.string.settings_arr_no_servers_hint),
+                        text,
                         style = MaterialTheme.typography.bodyMedium,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
                 }
             } else {
+                // A non-empty list with a discovery error means the user added a
+                // manual server as a workaround; surface the misconfiguration so
+                // they know auto-discover is still broken.
+                servers.discoveryError?.let { err ->
+                    item {
+                        Text(
+                            when (err) {
+                                is ArrDiscoveryError.NoAdminPermission ->
+                                    stringResource(R.string.settings_arr_no_admin_hint)
+                                is ArrDiscoveryError.Other -> err.message
+                            },
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.error,
+                        )
+                    }
+                }
                 items(allServers, key = { it.id }) { server ->
                     ServerRow(
                         server = server,

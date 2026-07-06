@@ -6,14 +6,15 @@ import com.raulshma.jellyplay.core.model.arr.ArrBlocklistItem
 import com.raulshma.jellyplay.core.model.arr.ArrCalendarItem
 import com.raulshma.jellyplay.core.model.arr.ArrCommand
 import com.raulshma.jellyplay.core.model.arr.ArrCommandName
+import com.raulshma.jellyplay.core.model.arr.ArrDiscoveryError
 import com.raulshma.jellyplay.core.model.arr.ArrDownloadSummary
 import com.raulshma.jellyplay.core.model.arr.ArrQueueDeleteOptions
 import com.raulshma.jellyplay.core.model.arr.ArrQueueItem
 import com.raulshma.jellyplay.core.model.arr.ArrServerConfig
 import com.raulshma.jellyplay.core.model.arr.ArrServiceKind
 import com.raulshma.jellyplay.core.model.arr.ArrServiceSummary
-import com.raulshma.jellyplay.core.model.seerr.SeerrRadarrServiceDetail
-import com.raulshma.jellyplay.core.model.seerr.SeerrSonarrServiceDetail
+import com.raulshma.jellyplay.core.model.seerr.SeerrRadarrSettings
+import com.raulshma.jellyplay.core.model.seerr.SeerrSonarrSettings
 import com.raulshma.jellyplay.core.network.api.ApiException
 import com.raulshma.jellyplay.core.network.arr.RadarrApiClient
 import com.raulshma.jellyplay.core.network.arr.SonarrApiClient
@@ -40,11 +41,16 @@ import javax.inject.Singleton
  * this impl owns three concerns:
  *
  * 1. **Server resolution** ([resolveServers]). Merges Seerr's
- *    `/service/{radarr,sonarr}` auto-discovered servers with the manual
+ *    `/settings/{radarr,sonarr}` auto-discovered servers with the manual
  *    override list from [ArrPreferencesStore], de-duplicating by canonical
- *    base URL so a server present in both is fetched once. Resolution is
- *    bounded by a [Semaphore] (4 concurrent `getServiceRadarrDetail` calls),
- *    mirroring `RequestsViewModel.enrichRequests`. Cached for
+ *    base URL so a server present in both is fetched once. Discovery reads
+ *    the `/settings` endpoints (not `/service`) because only the settings
+ *    endpoints return the real `apiKey` + `hostname` — the `/service/{id}`
+ *    endpoint is non-sensitive and redacts credentials. This means the Seerr
+ *    account must have Admin permission; a 401/403 is surfaced as
+ *    [ArrDiscoveryError.NoAdminPermission]. Resolution is bounded by a
+ *    [Semaphore] (4 concurrent client calls), mirroring
+ *    `RequestsViewModel.enrichRequests`. Cached for
  *    [ArrRepository.SERVER_CACHE_TTL_MS] via [TtlCache].
  *
  * 2. **Queue/calendar fan-out** ([refreshQueue], [refreshCalendar]). For each
@@ -111,18 +117,20 @@ class ArrRepositoryImpl @Inject constructor(
         val manualRadarr = prefs.manualServers.filter { it.kind == ArrServiceKind.RADARR }
         val manualSonarr = prefs.manualServers.filter { it.kind == ArrServiceKind.SONARR }
 
-        val discoveredRadarr = if (prefs.useSeerrDiscovery) {
-            discoverRadarrServers().getOrElse { emptyList() }
-        } else emptyList()
-        val discoveredSonarr = if (prefs.useSeerrDiscovery) {
-            discoverSonarrServers().getOrElse { emptyList() }
-        } else emptyList()
+        // Discovery outcomes carry an error type so a 401/403 (non-admin Seerr
+        // account) surfaces as a distinct UI message instead of an empty list.
+        val radarrOutcome = if (prefs.useSeerrDiscovery) discoverRadarrServers() else DiscoveryOutcome.success()
+        val sonarrOutcome = if (prefs.useSeerrDiscovery) discoverSonarrServers() else DiscoveryOutcome.success()
 
         // De-dup by canonical baseUrl: manual entries take precedence (a user
         // who manually overrides a discovered server wins).
-        val radarr = dedupByBaseUrl(manualRadarr + discoveredRadarr)
-        val sonarr = dedupByBaseUrl(manualSonarr + discoveredSonarr)
-        val summary = ArrServiceSummary(radarrServers = radarr, sonarrServers = sonarr)
+        val radarr = dedupByBaseUrl(manualRadarr + radarrOutcome.servers)
+        val sonarr = dedupByBaseUrl(manualSonarr + sonarrOutcome.servers)
+        val summary = ArrServiceSummary(
+            radarrServers = radarr,
+            sonarrServers = sonarr,
+            discoveryError = primaryDiscoveryError(radarrOutcome, sonarrOutcome),
+        )
         serverCache.put(SERVERS_KEY, summary)
         Result.success(summary)
     }
@@ -314,10 +322,17 @@ class ArrRepositoryImpl @Inject constructor(
     override suspend fun importQueueItem(item: ArrQueueItem): Result<Unit> =
         withContext(cacheScope.coroutineContext) {
             val server = findServer(item.serverId, item.serverKind) ?: return@withContext noServer()
+            // Import drives the manualimport flow keyed off the download-client
+            // guid, not the queue row id. Rows without one (rare; legacy/
+            // untracked) cannot be force-imported via this path.
+            val downloadId = item.downloadId
+                ?: return@withContext Result.failure(
+                    ApiException.fromHttp(404, "Download id missing — cannot trigger manual import.")
+                )
             if (item.serverKind == ArrServiceKind.RADARR) {
-                radarrApiClient.importQueueItem(server.baseUrl, server.apiKey, item.queueId)
+                radarrApiClient.importQueueItem(server.baseUrl, server.apiKey, downloadId)
             } else {
-                sonarrApiClient.importQueueItem(server.baseUrl, server.apiKey, item.queueId)
+                sonarrApiClient.importQueueItem(server.baseUrl, server.apiKey, downloadId)
             }
         }
 
@@ -403,43 +418,73 @@ class ArrRepositoryImpl @Inject constructor(
     // ── Seerr discovery helpers ────────────────────────────────────────────
 
     /**
-     * Calls Seerr's `/service/radarr` (list of configured servers) then
-     * `/service/radarr/{id}` per server (rich detail with apiKey + hostname).
-     * Failures degrade to empty; the caller will still see manual servers.
+     * Typed result of one service's discovery pass: the resolved servers plus an
+     * optional error. Separated from [Result] so the caller can distinguish
+     * "Seerr has no servers configured" (success, empty) from "Seerr rejected
+     * the call" (failure), which require different UI messages.
      */
-    private suspend fun discoverRadarrServers(): Result<List<ArrServerConfig>> = runCatching {
-        val servers = seerrRepository.getServiceRadarrServers().getOrDefault(emptyList())
-        if (servers.isEmpty()) return@runCatching emptyList()
-        coroutineScope {
-            servers.map { srv ->
-                async {
-                    resolveSemaphore.withPermit {
-                        seerrRepository.getServiceRadarrDetail(srv.id)
-                            .getOrNull()
-                            ?.toArrServerConfig()
-                    }
-                }
-            }.awaitAll().filterNotNull()
+    private data class DiscoveryOutcome(
+        val servers: List<ArrServerConfig> = emptyList(),
+        val error: ArrDiscoveryError? = null,
+    ) {
+        companion object {
+            fun success(servers: List<ArrServerConfig> = emptyList()) = DiscoveryOutcome(servers)
         }
     }
 
-    private suspend fun discoverSonarrServers(): Result<List<ArrServerConfig>> = runCatching {
-        val servers = seerrRepository.getServiceSonarrServers().getOrDefault(emptyList())
-        if (servers.isEmpty()) return@runCatching emptyList()
-        coroutineScope {
-            servers.map { srv ->
-                async {
-                    resolveSemaphore.withPermit {
-                        seerrRepository.getServiceSonarrDetail(srv.id)
-                            .getOrNull()
-                            ?.toArrServerConfig()
-                    }
-                }
-            }.awaitAll().filterNotNull()
+    /**
+     * Reduces two discovery outcomes to the single [ArrDiscoveryError] (if any)
+     * the UI should surface. `NoAdminPermission` is the most actionable and is
+     * hoisted regardless of which service hit it; otherwise the first concrete
+     * error wins. A successful (even empty) outcome never contributes an error.
+     */
+    private fun primaryDiscoveryError(
+        radarr: DiscoveryOutcome,
+        sonarr: DiscoveryOutcome,
+    ): ArrDiscoveryError? {
+        if (radarr.error is ArrDiscoveryError.NoAdminPermission ||
+            sonarr.error is ArrDiscoveryError.NoAdminPermission
+        ) return ArrDiscoveryError.NoAdminPermission
+        return radarr.error ?: sonarr.error
+    }
+
+    /**
+     * Reads Seerr's `/settings/radarr` — a flat array of every configured Radarr
+     * server with the real `apiKey` + `hostname`. This is the only Seerr
+     * endpoint that exposes credentials; the `/service/radarr/{id}` endpoint
+     * redacts them. The `/settings` endpoints require Admin permission, so an
+     * HTTP 401/403 is classified as [ArrDiscoveryError.NoAdminPermission] for a
+     * tailored UI hint.
+     */
+    private suspend fun discoverRadarrServers(): DiscoveryOutcome {
+        return seerrRepository.getRadarrSettings().fold(
+            onSuccess = { list -> DiscoveryOutcome(list.mapNotNull { it.toArrServerConfig() }) },
+            onFailure = { DiscoveryOutcome(error = it.toDiscoveryError()) },
+        )
+    }
+
+    private suspend fun discoverSonarrServers(): DiscoveryOutcome {
+        return seerrRepository.getSonarrSettings().fold(
+            onSuccess = { list -> DiscoveryOutcome(list.mapNotNull { it.toArrServerConfig() }) },
+            onFailure = { DiscoveryOutcome(error = it.toDiscoveryError()) },
+        )
+    }
+
+    /**
+     * Maps an [ApiException] from a `/settings` call to the user-facing
+     * [ArrDiscoveryError]. 401/403 → [ArrDiscoveryError.NoAdminPermission];
+     * anything else → [ArrDiscoveryError.Other] carrying the friendly message.
+     */
+    private fun Throwable.toDiscoveryError(): ArrDiscoveryError {
+        val code = (this as? ApiException)?.httpCode
+        return if (code == 401 || code == 403) {
+            ArrDiscoveryError.NoAdminPermission
+        } else {
+            ArrDiscoveryError.Other(message ?: "Discovery failed.")
         }
     }
 
-    private fun SeerrRadarrServiceDetail.toArrServerConfig(): ArrServerConfig? {
+    private fun SeerrRadarrSettings.toArrServerConfig(): ArrServerConfig? {
         val url = buildBaseUrl(externalUrl, useSsl, hostname, port, baseUrl) ?: return null
         if (apiKey.isBlank()) return null
         return ArrServerConfig(
@@ -452,7 +497,7 @@ class ArrRepositoryImpl @Inject constructor(
         )
     }
 
-    private fun SeerrSonarrServiceDetail.toArrServerConfig(): ArrServerConfig? {
+    private fun SeerrSonarrSettings.toArrServerConfig(): ArrServerConfig? {
         val url = buildBaseUrl(externalUrl, useSsl, hostname, port, baseUrl) ?: return null
         if (apiKey.isBlank()) return null
         return ArrServerConfig(

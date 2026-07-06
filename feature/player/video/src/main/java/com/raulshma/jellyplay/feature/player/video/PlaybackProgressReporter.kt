@@ -43,18 +43,24 @@ internal class PlaybackProgressReporter(
     private val autoSkippedSegments = mutableSetOf<String>()
     private var endedNoNextTriggered = false
     private var watchedThresholdTriggered = false
+    private var cachedDurationMs: Long = 0L
 
     fun startPositionTracking() {
         positionJob?.cancel()
         autoSkippedSegments.clear()
         endedNoNextTriggered = false
         watchedThresholdTriggered = false
+        cachedDurationMs = 0L
         val engine = getMediaEngine() ?: return
         positionJob = viewModel.viewModelScope.launch {
             var lastPos = Long.MIN_VALUE
             var lastDur = Long.MIN_VALUE
             engine.positionFlow.collect { pos ->
-                val dur = engine.durationMs.coerceAtLeast(0L)
+                var dur = cachedDurationMs
+                if (dur <= 0L) {
+                    dur = engine.durationMs.coerceAtLeast(0L)
+                    cachedDurationMs = dur
+                }
                 val buffered = engine.bufferedPositionMs.value
                 val stats = engine.videoStats.value
                 if (pos != lastPos || dur != lastDur) {

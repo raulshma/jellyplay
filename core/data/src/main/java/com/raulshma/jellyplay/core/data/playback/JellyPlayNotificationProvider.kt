@@ -48,6 +48,7 @@ class JellyPlayNotificationProvider(
     @Volatile private var cachedBitmap: Bitmap? = null
     private var cachedArtworkUri: String? = null
     @Volatile private var cachedAccentColor: Int = FALLBACK_COLOR
+    @Volatile private var cachedContentIntent: PendingIntent? = null
 
     fun release() {
         scope.cancel()
@@ -61,6 +62,7 @@ class JellyPlayNotificationProvider(
             cachedBitmap = null
             cachedArtworkUri = null
         }
+        cachedContentIntent = null
     }
 
     init {
@@ -218,21 +220,27 @@ class JellyPlayNotificationProvider(
     // ── Intents ──────────────────────────────────────────────────────
 
     private fun buildContentIntent(): PendingIntent {
+        cachedContentIntent?.let { return it }
         val intent = appContext.packageManager
             .getLaunchIntentForPackage(appContext.packageName)
             ?.addFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP or Intent.FLAG_ACTIVITY_CLEAR_TOP)
-            ?: return PendingIntent.getActivity(
+        val pending = if (intent != null) {
+            PendingIntent.getActivity(
+                appContext,
+                CONTENT_REQUEST_CODE,
+                intent,
+                PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
+            )
+        } else {
+            PendingIntent.getActivity(
                 appContext,
                 CONTENT_REQUEST_CODE,
                 Intent().apply { setPackage(appContext.packageName) },
                 PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
             )
-        return PendingIntent.getActivity(
-            appContext,
-            CONTENT_REQUEST_CODE,
-            intent,
-            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
-        )
+        }
+        cachedContentIntent = pending
+        return pending
     }
 
     // ── Channel ──────────────────────────────────────────────────────

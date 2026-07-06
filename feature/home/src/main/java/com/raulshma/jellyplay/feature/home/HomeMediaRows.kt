@@ -277,7 +277,7 @@ fun WideMediaCard(
             Box {
                 MediaImage(
                     url = backdropUrl,
-                    fallbackUrls = listOf(imageUrl).filter { it.isNotBlank() },
+                    fallbackUrls = remember(imageUrl) { if (imageUrl.isNotBlank()) listOf(imageUrl) else emptyList() },
                     contentDescription = item.name,
                     blurHash = item.blurHashes.backdrop,
                     modifier = imageModifier,
