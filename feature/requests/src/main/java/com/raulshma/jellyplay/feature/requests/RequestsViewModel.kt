@@ -2,7 +2,15 @@ package com.raulshma.jellyplay.feature.requests
 
 import androidx.compose.runtime.Immutable
 import androidx.compose.runtime.State
+import com.raulshma.jellyplay.core.data.repository.ArrRepository
 import com.raulshma.jellyplay.core.data.repository.SeerrRepository
+import com.raulshma.jellyplay.core.datastore.UserPreferencesStore
+import com.raulshma.jellyplay.core.model.ExperimentalFeature
+import com.raulshma.jellyplay.core.model.arr.ArrDownloadSummary
+import com.raulshma.jellyplay.core.model.arr.ArrQueueDeleteOptions
+import com.raulshma.jellyplay.core.model.arr.ArrQueueItem
+import com.raulshma.jellyplay.core.model.arr.ArrServiceKind
+import com.raulshma.jellyplay.core.model.isExperimentalEnabled
 import com.raulshma.jellyplay.core.model.seerr.SeerrCurrentUser
 import com.raulshma.jellyplay.core.model.seerr.SeerrRequestFilter
 import com.raulshma.jellyplay.core.model.seerr.SeerrRequestItem
@@ -11,6 +19,7 @@ import com.raulshma.jellyplay.core.ui.viewmodel.JellyPlayViewModel
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.sync.Semaphore
 import kotlinx.coroutines.sync.withPermit
@@ -27,6 +36,10 @@ data class RequestMediaInfo(
 data class RequestsUiState(
     val requests: List<SeerrRequestItem> = emptyList(),
     val mediaInfo: Map<Int, RequestMediaInfo> = emptyMap(),
+    /** Direct *arr download progress, keyed by Seerr request `media.tmdbId`. Empty when the feature flag is off or no *arr is configured. */
+    val downloadProgress: Map<Int, ArrDownloadSummary> = emptyMap(),
+    /** Full queue items (for management actions), keyed by tmdbId. */
+    val queueItems: Map<Int, ArrQueueItem> = emptyMap(),
     val isLoading: Boolean = false,
     val error: String? = null,
     val currentPage: Int = 1,
@@ -45,12 +58,27 @@ data class RequestsUiState(
 @HiltViewModel
 class RequestsViewModel @Inject constructor(
     private val seerrRepository: SeerrRepository,
+    private val arrRepository: ArrRepository,
+    private val userPreferencesStore: UserPreferencesStore,
 ) : JellyPlayViewModel() {
 
     private val _state = composeState(RequestsUiState())
     val state: State<RequestsUiState> = _state.asState()
 
     private val enrichSemaphore = Semaphore(4)
+
+    /**
+     * Whether the Direct *arr Integration experimental flag is enabled.
+     *
+     * Eagerly shared (not `WhileSubscribed`) because [enrichDownloadProgress]
+     * reads it via `.value` without holding a collector; under
+     * `WhileSubscribed` the upstream preferences Flow would never start and
+     * `.value` would stay `false` forever, leaving the entire *arr
+     * download-progress + queue-management feature unreachable.
+     */
+    private val directArrEnabled: StateFlow<Boolean> = userPreferencesStore.preferences
+        .map { it.isExperimentalEnabled(ExperimentalFeature.DIRECT_ARR_INTEGRATION) }
+        .stateIn(scope, SharingStarted.Eagerly, false)
 
     val currentUser: StateFlow<SeerrCurrentUser?> = seerrRepository.currentUser
         .stateIn(scope, SharingStarted.WhileSubscribed(5_000), null)
@@ -107,6 +135,8 @@ class RequestsViewModel @Inject constructor(
                     isLoading = false,
                 )
                 enrichRequests(response.results)
+                // Direct *arr download progress (no-op when flag off or unconfigured).
+                enrichDownloadProgress(response.results)
             }.onFailure {
                 _state.value = _state.value.copy(
                     isLoading = false,
@@ -150,6 +180,85 @@ class RequestsViewModel @Inject constructor(
                     }
                 }
             }
+        }
+    }
+
+    /**
+     * Enriches each request with its direct *arr download progress, mirroring
+     * [enrichRequests]'s semaphore-bounded pattern. No-op when the
+     * [ExperimentalFeature.DIRECT_ARR_INTEGRATION] flag is off. Per-tmdb
+     * failures are swallowed (the *arr repository already degrades to null);
+     * a missing download simply leaves the map untouched and the bottom sheet
+     * falls back to Seerr's raw `downloadStatus` text.
+     */
+    private fun enrichDownloadProgress(requests: List<SeerrRequestItem>) {
+        if (!directArrEnabled.value) return
+        val distinctTmdbIds = requests.mapNotNull { it.media.tmdbId.takeIf { id -> id != 0 } }.distinct()
+        if (distinctTmdbIds.isEmpty()) return
+
+        distinctTmdbIds.forEach { tmdbId ->
+            launch {
+                enrichSemaphore.withPermit {
+                    val item = arrRepository.getQueueForTmdb(tmdbId) ?: return@withPermit
+                    val summary = ArrDownloadSummary(
+                        status = item.status,
+                        percent = item.percent,
+                        sizeLeft = item.sizeLeft,
+                        timeLeft = item.timeLeft,
+                    )
+                    _state.value = _state.value.let { s ->
+                        s.copy(
+                            downloadProgress = s.downloadProgress + (tmdbId to summary),
+                            queueItems = s.queueItems + (tmdbId to item),
+                        )
+                    }
+                }
+            }
+        }
+    }
+
+    /**
+     * Removes the *arr queue row for [tmdbId]. When [blocklist] is true the
+     * release is added to the *arr blocklist (won't be grabbed again). When
+     * [searchAgain] is true a fresh search command is queued after removal.
+     * Updates UI state + triggers a queue refresh on success.
+     */
+    fun removeQueueItem(tmdbId: Int, blocklist: Boolean, searchAgain: Boolean) {
+        val item = _state.value.queueItems[tmdbId] ?: return
+        val kind = item.serverKind
+        launch {
+            _state.value = _state.value.copy(actionInProgress = true, actionError = null)
+            val options = ArrQueueDeleteOptions(
+                removeFromClient = true,
+                blocklist = blocklist,
+                skipRedownload = !searchAgain,
+            )
+            arrRepository.deleteQueueItem(item, options)
+                .onSuccess {
+                    if (searchAgain) {
+                        arrRepository.searchForTmdb(tmdbId, kind)
+                    }
+                    // Drop the cached progress + item; refresh re-populates if still present.
+                    _state.value = _state.value.let { s ->
+                        s.copy(
+                            downloadProgress = s.downloadProgress - tmdbId,
+                            queueItems = s.queueItems - tmdbId,
+                        )
+                    }
+                    loadRequests(refresh = true)
+                }
+                .onFailure { _state.value = _state.value.copy(actionError = it.message) }
+            _state.value = _state.value.copy(actionInProgress = false)
+        }
+    }
+
+    /** Queues a fresh search for [tmdbId] without removing anything. */
+    fun searchAgainForTmdb(tmdbId: Int, kind: ArrServiceKind) {
+        launch {
+            _state.value = _state.value.copy(actionInProgress = true, actionError = null)
+            arrRepository.searchForTmdb(tmdbId, kind)
+                .onFailure { _state.value = _state.value.copy(actionError = it.message) }
+            _state.value = _state.value.copy(actionInProgress = false)
         }
     }
 

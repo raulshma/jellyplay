@@ -1,14 +1,14 @@
 package com.raulshma.jellyplay.core.data.network
 
 import com.raulshma.jellyplay.core.datastore.UserPreferencesStore
+import com.raulshma.jellyplay.core.datastore.di.ApplicationScope
 import com.raulshma.jellyplay.core.model.NetworkTimeoutPreset
 import com.raulshma.jellyplay.core.network.config.OkHttpConfig
 import com.raulshma.jellyplay.core.network.config.OkHttpConfigProvider
 import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import javax.inject.Inject
@@ -22,17 +22,30 @@ import javax.inject.Singleton
  * verbose-logging settings without taking a direct dependency on
  * `core:datastore` (which would invert the layered dependency rule).
  *
- * Eager sharing starts collection immediately so the [config] StateFlow has a
- * current value available as soon as Hilt materialises the singleton (the
- * underlying `UserPreferencesStore.preferences` is itself a StateFlow backed by
- * DataStore, so the first emission arrives quickly on a background thread).
+ * Uses the Hilt-provided `@ApplicationScope CoroutineScope` rather than
+ * spinning its own private scope — there is already a single process-wide
+ * SupervisorJob tree (`CoroutineScopeModule`) doing this kind of work, so a
+ * parallel scope would mean two independent SupervisorJob trees and two
+ * dispatcher pools for the same purpose (and the private scope was never
+ * cancelled).
+ *
+ * [config] is shared with `SharingStarted.Eagerly` (not `WhileSubscribed`)
+ * because its sole reader — the OkHttp interceptor at the network layer — reads
+ * it synchronously via `StateFlow.value`, which does NOT register a collector.
+ * Under `WhileSubscribed`, the upstream DataStore subscription would stop once
+ * the init-time `.first()` reader unsubscribes and the 5 s grace window
+ * expired, freezing `.value` at the last cached config forever: runtime
+ * changes to the network-timeout preset or verbose-logging toggle would never
+ * propagate. Eager sharing keeps the upstream subscription alive for the life
+ * of the process so `.value` stays live. `.distinctUntilChanged()` suppresses
+ * redundant re-emits on unrelated preference writes (`OkHttpConfig` is a data
+ * class).
  */
 @Singleton
 class OkHttpConfigProviderImpl @Inject constructor(
     userPreferencesStore: UserPreferencesStore,
+    @ApplicationScope private val scope: CoroutineScope,
 ) : OkHttpConfigProvider {
-
-    private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
 
     override val config: StateFlow<OkHttpConfig> =
         userPreferencesStore.preferences
@@ -43,6 +56,7 @@ class OkHttpConfigProviderImpl @Inject constructor(
                     verboseNetworkLogging = prefs.verboseNetworkLogging,
                 )
             }
+            .distinctUntilChanged()
             .stateIn(
                 scope = scope,
                 started = SharingStarted.Eagerly,

@@ -11,6 +11,7 @@ object LrcParser {
     private val TIME_REGEX = Regex("""\[(\d{1,2}):(\d{2}\.\d{2,3})]""")
     private val OFFSET_REGEX = Regex("""\[offset:([+-]?\d+)]""")
     private val WHITESPACE_SPLIT = Regex("""\s+""")
+    private val METADATA_TAG_REGEX = Regex("""^\[\w+:.+]$""")
 
     fun parse(lrcContent: String): LyricsResult {
         val lines = mutableListOf<LyricsLine>()
@@ -26,7 +27,7 @@ object LrcParser {
                 return@forEach
             }
 
-            if (line.matches(Regex("""^\[\w+:.+]$""")) && !line.matches(TIME_REGEX)) {
+            if (line.matches(METADATA_TAG_REGEX) && !line.matches(TIME_REGEX)) {
                 return@forEach
             }
 

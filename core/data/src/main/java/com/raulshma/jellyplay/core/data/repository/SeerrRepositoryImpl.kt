@@ -40,6 +40,12 @@ class SeerrRepositoryImpl @Inject constructor(
     private val _pendingRequestCount = MutableStateFlow(0)
     override val pendingRequestCount: StateFlow<Int> = _pendingRequestCount
 
+    // NOTE: kept on SharingStarted.Eagerly (not WhileSubscribed) deliberately.
+    // cachedPrefs.value is read synchronously by serverUrl() below with NO
+    // .first() fallback, so it must be warm from the moment the singleton is
+    // materialised. The other two singletons in the F-H1 fix
+    // (OkHttpConfigProviderImpl, FloatingPlayerState) are safe to switch to
+    // WhileSubscribed because their .value readers all have fallbacks.
     private val cachedPrefs = seerrPreferencesStore.preferences
         .stateIn(cacheScope, SharingStarted.Eagerly, null)
 
@@ -51,7 +57,6 @@ class SeerrRepositoryImpl @Inject constructor(
     }
 
     private fun putCached(key: String, value: Any) {
-        detailCache.evictExpired()
         detailCache.put(key, value)
     }
 

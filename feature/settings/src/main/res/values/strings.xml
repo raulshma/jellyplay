@@ -70,6 +70,8 @@
     <string name="settings_experimental">Experimental</string>
     <string name="settings_about">About</string>
     <string name="settings_about_subtitle">App version and licenses</string>
+    <string name="settings_integrations">Integrations</string>
+    <string name="settings_integrations_subtitle">Radarr &amp; Sonarr servers</string>
     <string name="settings_sign_out_confirm_title_server">Sign Out from Server?</string>
     <string name="settings_sign_out_confirm_title">Sign Out?</string>
     <string name="settings_sign_out_confirm_message_server">This will revoke this device\'s session on the server. You\'ll need to sign in again to use the app.</string>
@@ -249,6 +251,13 @@
     <string name="settings_seerr_jellyfin_method">Jellyfin</string>
     <string name="settings_seerr_local_method">Local</string>
     <string name="settings_test_connection">Test Connection</string>
+
+    <!-- ArrSettingsScreen.kt -->
+    <string name="settings_arr_test">Test</string>
+    <string name="settings_arr_test_all">Test all</string>
+    <string name="settings_arr_connected">Connected</string>
+    <string name="settings_arr_no_servers_hint">No servers detected. Enable Auto-discover via Seerr (and make sure Seerr is connected), or add a manual server below.</string>
+    <string name="settings_arr_no_admin_hint">Auto-discover needs a Seerr account with Admin permission (the server list comes from Seerr\'s admin-only settings). Use an API key from an admin user, then retry — or add a manual server below.</string>
     <string name="settings_seerr_sign_in">Sign In</string>
     <string name="settings_disconnect">Disconnect</string>
     <string name="settings_integration_features">Integration Features</string>

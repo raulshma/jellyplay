@@ -20,6 +20,8 @@ import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 
+private val ORDERED_LIST_CAPTURE = Regex("^(\\d+)\\.\\s(.*)")
+
 @Composable
 fun MarkdownText(
     text: String,
@@ -67,8 +69,8 @@ fun MarkdownText(
                         modifier = Modifier.padding(start = 8.dp),
                     )
                 }
-                trimmed.matches(Regex("^\\d+\\.\\s.*")) -> {
-                    val matchResult = Regex("^(\\d+)\\.\\s(.*)").find(trimmed)
+                ORDERED_LIST_CAPTURE.matches(trimmed) -> {
+                    val matchResult = ORDERED_LIST_CAPTURE.find(trimmed)
                     if (matchResult != null) {
                         val (num, content) = matchResult.destructured
                         Text(

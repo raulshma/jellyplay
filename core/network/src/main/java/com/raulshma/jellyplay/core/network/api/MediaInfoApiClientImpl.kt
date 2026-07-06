@@ -15,6 +15,7 @@ import com.raulshma.jellyplay.core.model.StaleMediaItem
 import com.raulshma.jellyplay.core.model.TtlCache
 import com.raulshma.jellyplay.core.model.WatchedMediaItem
 import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.coroutineScope
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonPrimitive
@@ -58,18 +59,38 @@ class MediaInfoApiClientImpl @Inject constructor(
             val recentlyAdded = async {
                 try {
                     val folders = engine.requireApi().libraryApi.getMediaFolders().content?.items ?: emptyList()
-                    folders.filter { folder ->
+                    val candidateFolders = folders.filter { folder ->
                         folder.collectionType?.serialName != "music"
-                    }.flatMap { folder ->
-                        engine.requireApi().userLibraryApi.getLatestMedia(
-                            parentId = folder.id,
-                            limit = limit,
-                            fields = listOf(
-                                ItemFields.OVERVIEW,
-                                ItemFields.PRIMARY_IMAGE_ASPECT_RATIO,
-                            ),
-                        ).content ?: emptyList()
-                    }.map { it.toMediaItem() }.distinctBy { it.id }.take(limit)
+                    }
+                    // Bound the per-folder getLatestMedia concurrency with a
+                    // Semaphore(4), mirroring LibraryApiClientImpl.getHomeSections.
+                    // Without this the previous flatMap fired all
+                    // getLatestMedia calls concurrently with no upper bound —
+                    // on a server with 30+ libraries that was 30 simultaneous
+                    // HTTP requests against a single Jellyfin instance, which
+                    // often has a per-connection thread cap and degrades
+                    // everyone's experience.
+                    val semaphore = kotlinx.coroutines.sync.Semaphore(4)
+                    candidateFolders
+                        .map { folder ->
+                            async {
+                                semaphore.acquire()
+                                try {
+                                    engine.requireApi().userLibraryApi.getLatestMedia(
+                                        parentId = folder.id,
+                                        limit = limit,
+                                        fields = listOf(
+                                            ItemFields.OVERVIEW,
+                                            ItemFields.PRIMARY_IMAGE_ASPECT_RATIO,
+                                        ),
+                                    ).content ?: emptyList()
+                                } finally {
+                                    semaphore.release()
+                                }
+                            }
+                        }.awaitAll()
+                        .flatMap { it }
+                        .map { it.toMediaItem() }.distinctBy { it.id }.take(limit)
                 } catch (_: Exception) { emptyList() }
             }
             val activityDigest = async {

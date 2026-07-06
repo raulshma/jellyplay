@@ -163,4 +163,10 @@ interface LibraryApiClient {
         parentId: String,
         limit: Int = 4,
     ): List<String>
+
+    /**
+     * Drops any in-memory favorite-flag cache. Used on server switch / disconnect
+     * so stale flags from the previous server can't leak through.
+     */
+    fun clearFavoriteCache()
 }

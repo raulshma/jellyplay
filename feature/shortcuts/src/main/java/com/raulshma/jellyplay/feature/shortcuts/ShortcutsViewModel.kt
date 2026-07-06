@@ -98,6 +98,20 @@ class ShortcutsViewModel @Inject constructor(
             category = ShortcutCategory.SERVICES,
         ),
         ShortcutItem(
+            title = "Activity Queue",
+            description = "Combined Radarr/Sonarr download queue and management.",
+            icon = Tabler.Outline.Database,
+            route = Route.ArrQueue,
+            category = ShortcutCategory.SERVICES,
+        ),
+        ShortcutItem(
+            title = "Radarr / Sonarr",
+            description = "Direct *arr server connections and overrides.",
+            icon = Tabler.Outline.Movie,
+            route = Route.ArrSettings(),
+            category = ShortcutCategory.SERVICES,
+        ),
+        ShortcutItem(
             title = "Settings",
             description = "Appearance, playback, audio, and app options.",
             icon = Tabler.Outline.Settings,

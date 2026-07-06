@@ -338,17 +338,11 @@ class AuthRepositoryImpl @Inject constructor(
     override suspend fun removeUser(userId: String) {
         database.withTransaction {
             userDao.deleteUserById(userId)
-            val servers = serverDao.getAllServers().first()
-            servers.forEach { server ->
-                if (server.userId == userId) {
-                    serverDao.updateServer(
-                        server.copy(
-                            userId = null,
-                            accessToken = null
-                        )
-                    )
-                }
-            }
+            // Single bulk UPDATE replaces the previous per-row read-modify-
+            // write loop (an N+1 write that issued a separate UPDATE per
+            // matching server). Same effect — every server row bound to this
+            // user has its userId + accessToken cleared.
+            serverDao.clearUserFromServers(userId)
         }
         val currentUserId = apiClient.currentUser.first()?.id
         if (currentUserId == userId) {

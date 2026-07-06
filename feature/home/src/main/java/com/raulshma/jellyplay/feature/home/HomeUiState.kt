@@ -40,6 +40,10 @@ data class HomeUiState(
     val seerrRequestState: SeerrRequestState = SeerrRequestState(),
     val newsletterBannerVisible: Boolean = false,
     val experimentalCardClippingEnabled: Boolean = false,
+    /** Direct *arr "Recently Grabbed / Coming Soon" calendar row; empty when the flag is off or no *arr is configured. */
+    val recentlyGrabbed: List<SeerrSearchItem> = emptyList(),
+    /** Whether the DIRECT_ARR_INTEGRATION experimental flag is enabled. */
+    val directArrEnabled: Boolean = false,
     val currentUser: UserInfo? = null,
 )
 
