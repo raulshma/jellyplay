@@ -63,8 +63,20 @@ interface SonarrApiClient {
     /** `POST /api/v3/queue/grab/{id}` — force-send a queued release to the download client. */
     suspend fun grabQueueItem(baseUrl: String, apiKey: String, id: Int): Result<Unit>
 
-    /** `POST /api/v3/queue/import/{id}` — force an already-importable release to import now. */
-    suspend fun importQueueItem(baseUrl: String, apiKey: String, id: Int): Result<Unit>
+    /**
+     * Force-imports an already-importable release via the documented 2-step
+     * manualimport flow (the *arr v3 spec exposes no `queue/import/{id}`
+     * endpoint):
+     *
+     * 1. `GET /api/v3/manualimport?downloadId={downloadId}` — discover the
+     *    candidate file rows Sonarr has identified as importable.
+     * 2. `POST /api/v3/manualimport` — re-post those rows verbatim to trigger
+     *    the import.
+     *
+     * [downloadId] is the download-client guid from the queue row (NOT the
+     * queue id). Fails with a friendly 404 when no importable files are found.
+     */
+    suspend fun importQueueItem(baseUrl: String, apiKey: String, downloadId: String): Result<Unit>
 
     /**
      * `GET /api/v3/calendar?start=...&end=...` — one row per airing episode.

@@ -97,6 +97,28 @@ class DownloadRepositoryImpl @Inject constructor(
         episodeNumber: Int?,
         seasonNumber: Int?,
         container: String?,
+    ): Result<DownloadItem> = startDownloadInternal(
+        mediaItemId, name, mediaType, mediaSourceId, downloadUrl,
+        imageUrl, imageBlurHash, seriesId, seasonId, seriesName, seasonName,
+        episodeNumber, seasonNumber, container, precomputedCurrentBytes = null,
+    )
+
+    private suspend fun startDownloadInternal(
+        mediaItemId: String,
+        name: String,
+        mediaType: String,
+        mediaSourceId: String?,
+        downloadUrl: String,
+        imageUrl: String?,
+        imageBlurHash: String?,
+        seriesId: String?,
+        seasonId: String?,
+        seriesName: String?,
+        seasonName: String?,
+        episodeNumber: Int?,
+        seasonNumber: Int?,
+        container: String?,
+        precomputedCurrentBytes: Long?,
     ): Result<DownloadItem> = runCatching {
         val existing = downloadDao.getDownloadByMediaItemId(mediaItemId)
         if (existing != null) {
@@ -122,7 +144,7 @@ class DownloadRepositoryImpl @Inject constructor(
         // Compute the current downloaded bytes once and compare against both
         // caps (was two identical SUM queries back-to-back when both caps set).
         if (maxBytes > 0 || maxBytesFromGb > 0) {
-            val currentBytes = downloadDao.getTotalDownloadedBytes()
+            val currentBytes = precomputedCurrentBytes ?: downloadDao.getTotalDownloadedBytes()
             if (maxBytes > 0 && currentBytes >= maxBytes) {
                 throw IllegalStateException("Download limit reached (${prefs.maxCacheSizeMb} MB). Free up space in Settings › Storage or increase the limit.")
             }
@@ -313,6 +335,25 @@ class DownloadRepositoryImpl @Inject constructor(
     ): Result<List<String>> = runCatching {
         withContext(Dispatchers.IO) {
             val prefs = preferencesStore.preferences.first()
+            // The storage cap only needs to be evaluated once for the whole
+            // enqueue batch: no bytes are actually downloaded here (the
+            // DownloadWorker runs later), so every per-episode SUM(downloadedBytes)
+            // would return an identical value. Computing it up-front turns N
+            // redundant aggregate queries into one and fails fast when over cap.
+            val maxBytesBatch = prefs.maxCacheSizeMb.toLong() * 1024 * 1024
+            val maxBytesFromGbBatch = prefs.maxDownloadStorageGb.toLong() * 1024L * 1024L * 1024L
+            val batchCurrentBytes = if (maxBytesBatch > 0 || maxBytesFromGbBatch > 0) {
+                downloadDao.getTotalDownloadedBytes()
+            } else -1L
+            if (batchCurrentBytes >= 0) {
+                if (maxBytesBatch > 0 && batchCurrentBytes >= maxBytesBatch) {
+                    throw IllegalStateException("Download limit reached (${prefs.maxCacheSizeMb} MB). Free up space in Settings › Storage or increase the limit.")
+                }
+                if (maxBytesFromGbBatch > 0 && batchCurrentBytes >= maxBytesFromGbBatch) {
+                    throw IllegalStateException("Download storage limit reached (${prefs.maxDownloadStorageGb} GB). Free up space in Settings › Storage or increase the limit.")
+                }
+            }
+
             val detail = mediaRepository.getMediaDetail(seriesId).getOrThrow()
             val seriesItem = detail.item
             val imageUrl = playbackRepository.getImageUrl(seriesId, maxWidth = 300)
@@ -380,7 +421,7 @@ class DownloadRepositoryImpl @Inject constructor(
                                         episode.toOfflineMediaEntity(epImageUrl, null)
                                     }
 
-                                    val download = startDownload(
+                                    val download = startDownloadInternal(
                                         mediaItemId = episode.id,
                                         name = episode.name,
                                         mediaType = MediaType.EPISODE.name,
@@ -395,6 +436,7 @@ class DownloadRepositoryImpl @Inject constructor(
                                         episodeNumber = episode.episodeNumber,
                                         seasonNumber = episode.seasonNumber,
                                         container = source?.container,
+                                        precomputedCurrentBytes = if (batchCurrentBytes >= 0) batchCurrentBytes else null,
                                     ).getOrNull()
 
                                     if (download != null) {

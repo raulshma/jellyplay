@@ -704,7 +704,10 @@ class ExoPlayerEngine(
             isCurrentlyPlaying = { p.isPlaying },
             onActive = {
                 trySend(p.currentPosition)
-                _bufferedPositionMs.value = p.bufferedPosition.coerceAtLeast(0L)
+                val buffered = p.bufferedPosition.coerceAtLeast(0L)
+                if (buffered != _bufferedPositionMs.value) {
+                    _bufferedPositionMs.value = buffered
+                }
                 if (_videoStatsEnabled.value) {
                     updateVideoStats()
                 }

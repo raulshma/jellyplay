@@ -3,15 +3,16 @@ package com.raulshma.jellyplay.core.data.repository
 import com.raulshma.jellyplay.core.datastore.ArrPreferencesStore
 import com.raulshma.jellyplay.core.model.arr.ArrBlocklistItem
 import com.raulshma.jellyplay.core.model.arr.ArrCommandName
+import com.raulshma.jellyplay.core.model.arr.ArrDiscoveryError
 import com.raulshma.jellyplay.core.model.arr.ArrDownloadStatus
 import com.raulshma.jellyplay.core.model.arr.ArrPreferences
 import com.raulshma.jellyplay.core.model.arr.ArrQueueDeleteOptions
 import com.raulshma.jellyplay.core.model.arr.ArrQueueItem
 import com.raulshma.jellyplay.core.model.arr.ArrServerConfig
 import com.raulshma.jellyplay.core.model.arr.ArrServiceKind
-import com.raulshma.jellyplay.core.model.seerr.SeerrRadarrServiceDetail
-import com.raulshma.jellyplay.core.model.seerr.SeerrServiceServer
-import com.raulshma.jellyplay.core.model.seerr.SeerrSonarrServiceDetail
+import com.raulshma.jellyplay.core.model.seerr.SeerrRadarrSettings
+import com.raulshma.jellyplay.core.model.seerr.SeerrSonarrSettings
+import com.raulshma.jellyplay.core.network.api.ApiException
 import com.raulshma.jellyplay.core.network.arr.RadarrApiClient
 import com.raulshma.jellyplay.core.network.arr.SonarrApiClient
 import io.mockk.coEvery
@@ -22,6 +23,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Before
@@ -40,8 +42,8 @@ class ArrRepositoryImplTest {
     @Before
     fun setup() {
         every { arrPreferencesStore.preferences } returns MutableStateFlow(ArrPreferences())
-        coEvery { seerrRepository.getServiceRadarrServers() } returns Result.success(emptyList())
-        coEvery { seerrRepository.getServiceSonarrServers() } returns Result.success(emptyList())
+        coEvery { seerrRepository.getRadarrSettings() } returns Result.success(emptyList())
+        coEvery { seerrRepository.getSonarrSettings() } returns Result.success(emptyList())
         repository = ArrRepositoryImpl(radarrApiClient, sonarrApiClient, seerrRepository, arrPreferencesStore)
     }
 
@@ -82,11 +84,8 @@ class ArrRepositoryImplTest {
         every { arrPreferencesStore.preferences } returns MutableStateFlow(
             ArrPreferences(useSeerrDiscovery = true, manualServers = listOf(manual)),
         )
-        coEvery { seerrRepository.getServiceRadarrServers() } returns Result.success(
-            listOf(SeerrServiceServer(id = 1, name = "Discovered", isDefault = true)),
-        )
-        coEvery { seerrRepository.getServiceRadarrDetail(1) } returns Result.success(
-            radarrDetail(id = 1, hostname = "radarr.local", apiKey = "discovered-key"),
+        coEvery { seerrRepository.getRadarrSettings() } returns Result.success(
+            listOf(radarrSettings(id = 1, hostname = "radarr.local", apiKey = "discovered-key")),
         )
 
         val summary = repository.resolveServers().getOrThrow()
@@ -94,6 +93,8 @@ class ArrRepositoryImplTest {
         // Manual first in the concat order, so dedup keeps it.
         assertEquals("manual-x", summary.radarrServers[0].id)
         assertEquals("manual-key", summary.radarrServers[0].apiKey)
+        // Successful discovery → no error surfaced.
+        assertNull(summary.discoveryError)
     }
 
     @Test
@@ -101,15 +102,65 @@ class ArrRepositoryImplTest {
         every { arrPreferencesStore.preferences } returns MutableStateFlow(
             ArrPreferences(useSeerrDiscovery = true),
         )
-        coEvery { seerrRepository.getServiceRadarrServers() } returns Result.success(
-            listOf(SeerrServiceServer(id = 2, name = "Bad")),
-        )
-        coEvery { seerrRepository.getServiceRadarrDetail(2) } returns Result.success(
-            radarrDetail(id = 2, hostname = "radarr2.local", apiKey = ""),
+        coEvery { seerrRepository.getRadarrSettings() } returns Result.success(
+            listOf(radarrSettings(id = 2, hostname = "radarr2.local", apiKey = "")),
         )
 
         val summary = repository.resolveServers().getOrThrow()
         assertTrue(summary.radarrServers.isEmpty())
+        // Blank apiKey is a data problem, not a discovery failure.
+        assertNull(summary.discoveryError)
+    }
+
+    @Test
+    fun `resolveServers sets discoveryError NoAdminPermission when Seerr returns 403`() = runTest {
+        every { arrPreferencesStore.preferences } returns MutableStateFlow(
+            ArrPreferences(useSeerrDiscovery = true),
+        )
+        // /settings/* is admin-only; a non-admin Seerr account gets 403.
+        coEvery { seerrRepository.getRadarrSettings() } returns Result.failure(
+            ApiException.fromSeerrHttp(httpCode = 403, message = "HTTP 403: Forbidden"),
+        )
+
+        val summary = repository.resolveServers().getOrThrow()
+        assertTrue(summary.radarrServers.isEmpty())
+        assertEquals(ArrDiscoveryError.NoAdminPermission, summary.discoveryError)
+    }
+
+    @Test
+    fun `resolveServers sets discoveryError Other when Seerr call throws non-auth error`() = runTest {
+        every { arrPreferencesStore.preferences } returns MutableStateFlow(
+            ArrPreferences(useSeerrDiscovery = true),
+        )
+        coEvery { seerrRepository.getRadarrSettings() } returns Result.failure(
+            ApiException.fromSeerrHttp(httpCode = 500, message = "HTTP 500: boom"),
+        )
+
+        val summary = repository.resolveServers().getOrThrow()
+        assertTrue(summary.radarrServers.isEmpty())
+        assertTrue(summary.discoveryError is ArrDiscoveryError.Other)
+        assertEquals("HTTP 500: boom", (summary.discoveryError as ArrDiscoveryError.Other).message)
+    }
+
+    @Test
+    fun `resolveServers maps full SeerrRadarrSettings to ArrServerConfig via getFullUrl`() = runTest {
+        every { arrPreferencesStore.preferences } returns MutableStateFlow(
+            ArrPreferences(useSeerrDiscovery = true),
+        )
+        coEvery { seerrRepository.getRadarrSettings() } returns Result.success(
+            listOf(radarrSettings(id = 7, hostname = "radarr.local", apiKey = "key-7", baseUrl = "/radarr")),
+        )
+
+        val summary = repository.resolveServers().getOrThrow()
+        assertEquals(1, summary.radarrServers.size)
+        val srv = summary.radarrServers[0]
+        assertEquals("radarr-7", srv.id)
+        assertEquals("https://radarr.local:7878/radarr", srv.baseUrl)
+        assertEquals("key-7", srv.apiKey)
+        assertEquals("Radarr 7", srv.name)
+        assertEquals(ArrServiceKind.RADARR, srv.kind)
+        assertFalse(srv.isManual)
+        assertNull(summary.discoveryError)
     }
 
     @Test
@@ -117,7 +168,7 @@ class ArrRepositoryImplTest {
         every { arrPreferencesStore.preferences } returns MutableStateFlow(
             ArrPreferences(useSeerrDiscovery = true),
         )
-        coEvery { seerrRepository.getServiceRadarrServers() } returns Result.failure(RuntimeException("boom"))
+        coEvery { seerrRepository.getRadarrSettings() } returns Result.failure(RuntimeException("boom"))
 
         val result = repository.resolveServers()
         assertTrue(result.isSuccess)
@@ -322,14 +373,16 @@ class ArrRepositoryImplTest {
         }
     }
 
-    private fun radarrDetail(id: Int, hostname: String, apiKey: String) = SeerrRadarrServiceDetail(
-        id = id, name = "Radarr $id", hostname = hostname, port = 7878, apiKey = apiKey,
-        useSsl = true,
-    )
+    private fun radarrSettings(id: Int, hostname: String, apiKey: String, baseUrl: String? = null) =
+        SeerrRadarrSettings(
+            id = id, name = "Radarr $id", hostname = hostname, port = 7878, apiKey = apiKey,
+            useSsl = true, baseUrl = baseUrl,
+        )
 
     @Suppress("unused")
-    private fun sonarrDetail(id: Int, hostname: String, apiKey: String) = SeerrSonarrServiceDetail(
-        id = id, name = "Sonarr $id", hostname = hostname, port = 8989, apiKey = apiKey,
-        useSsl = true,
-    )
+    private fun sonarrSettings(id: Int, hostname: String, apiKey: String, baseUrl: String? = null) =
+        SeerrSonarrSettings(
+            id = id, name = "Sonarr $id", hostname = hostname, port = 8989, apiKey = apiKey,
+            useSsl = true, baseUrl = baseUrl,
+        )
 }

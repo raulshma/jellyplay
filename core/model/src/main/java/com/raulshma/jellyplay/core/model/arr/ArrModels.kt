@@ -45,13 +45,42 @@ data class ArrServerConfig(
 /**
  * Aggregated view of all configured Radarr + Sonarr servers, produced by
  * [com.raulshma.jellyplay.core.data.repository.ArrRepository.resolveServers].
+ *
+ * [discoveryError] is non-null when Seerr auto-discovery failed for a reason
+ * the user can act on (most importantly, the Seerr account lacking Admin
+ * permission — `/settings/...` is admin-only, unlike `/service/...`). It is null
+ * when discovery succeeded (including the "Seerr has no servers configured"
+ * case, which is a successful empty result rather than an error).
  */
 @Immutable
 data class ArrServiceSummary(
     val radarrServers: List<ArrServerConfig> = emptyList(),
     val sonarrServers: List<ArrServerConfig> = emptyList(),
+    val discoveryError: ArrDiscoveryError? = null,
 ) {
     val isEmpty: Boolean get() = radarrServers.isEmpty() && sonarrServers.isEmpty()
+}
+
+/**
+ * Why Seerr auto-discovery could not resolve servers. Surfaced verbatim in the
+ * settings UI so users can tell an auth/permission problem apart from "Seerr
+ * has nothing configured".
+ */
+@Immutable
+sealed class ArrDiscoveryError {
+    /**
+     * The Seerr account JellyPlay uses lacks Admin permission. `/settings/radarr`
+     * and `/settings/sonarr` (the only endpoints returning the real apiKey +
+     * hostname) require Admin in Seerr; `/service/...` is non-sensitive and won't
+     * do. Detected via HTTP 401/403.
+     */
+    data object NoAdminPermission : ArrDiscoveryError()
+
+    /**
+     * Any other discovery failure (network, 5xx, parse). [message] is the
+     * friendly ApiException text.
+     */
+    data class Other(val message: String) : ArrDiscoveryError()
 }
 
 @Immutable
@@ -128,6 +157,14 @@ data class ArrQueueItem(
      * the name `queueId` avoids the ambiguity that led to a previous footgun.
      */
     val queueId: Int,
+    /**
+     * The download-client guid (`downloadId` on the *arr `QueueResource`).
+     * Distinct from [queueId]: this is the id the download client (qBittorrent
+     * / SABnzbd / etc.) uses, and it's what the *arr `GET /manualimport` and
+     * `POST /manualimport` endpoints key off when forcing an import. Null when
+     * the queue row lacks one (rare; legacy/untracked rows).
+     */
+    val downloadId: String? = null,
     val tmdbId: Int? = null,
     val tvdbId: Int? = null,
     val title: String,

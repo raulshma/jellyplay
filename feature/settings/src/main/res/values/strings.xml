@@ -257,6 +257,7 @@
     <string name="settings_arr_test_all">Test all</string>
     <string name="settings_arr_connected">Connected</string>
     <string name="settings_arr_no_servers_hint">No servers detected. Enable Auto-discover via Seerr (and make sure Seerr is connected), or add a manual server below.</string>
+    <string name="settings_arr_no_admin_hint">Auto-discover needs a Seerr account with Admin permission (the server list comes from Seerr\'s admin-only settings). Use an API key from an admin user, then retry — or add a manual server below.</string>
     <string name="settings_seerr_sign_in">Sign In</string>
     <string name="settings_disconnect">Disconnect</string>
     <string name="settings_integration_features">Integration Features</string>
