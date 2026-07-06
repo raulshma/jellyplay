@@ -792,8 +792,9 @@ class MpvPlayerEngine(
             isPlayingFlow = _isPlaying,
             isCurrentlyPlaying = { _isPlaying.value },
             onActive = {
-                trySend(currentPositionMs)
-                updateBufferPosition()
+                val posMs = currentPositionMs
+                trySend(posMs)
+                updateBufferPosition(posMs)
                 if (_videoStatsEnabled.value) {
                     updateVideoStatsOnly()
                 }
@@ -802,7 +803,7 @@ class MpvPlayerEngine(
         awaitClose { ticker.cancel() }
     }
 
-    private fun updateBufferPosition() {
+    private fun updateBufferPosition(posMs: Long) {
         val m = mpvView?.mpv ?: return
         try {
             val duration = (m.getPropertyDouble("duration") ?: 0.0) * 1000.0
@@ -810,7 +811,6 @@ class MpvPlayerEngine(
                 val cacheDuration = try {
                     m.getPropertyDouble("demuxer-cache-duration") ?: 0.0
                 } catch (_: Exception) { 0.0 }
-                val posMs = currentPositionMs
                 _bufferedPositionMs.value = (posMs + (cacheDuration * 1000.0)).toLong().coerceAtMost(duration.toLong())
             }
         } catch (_: Exception) {}

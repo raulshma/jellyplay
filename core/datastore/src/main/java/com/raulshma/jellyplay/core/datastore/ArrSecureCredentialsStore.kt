@@ -32,17 +32,18 @@ import javax.inject.Singleton
 class ArrSecureCredentialsStore @Inject constructor(
     @ApplicationContext private val context: Context,
 ) {
-    private val masterKey = MasterKey.Builder(context)
-        .setKeyScheme(MasterKey.KeyScheme.AES256_GCM)
-        .build()
-
-    private val prefs: SharedPreferences = EncryptedSharedPreferences.create(
-        context,
-        "arr_secure_prefs",
-        masterKey,
-        EncryptedSharedPreferences.PrefKeyEncryptionScheme.AES256_SIV,
-        EncryptedSharedPreferences.PrefValueEncryptionScheme.AES256_GCM,
-    )
+    private val prefs: SharedPreferences by lazy {
+        val masterKey = MasterKey.Builder(context)
+            .setKeyScheme(MasterKey.KeyScheme.AES256_GCM)
+            .build()
+        EncryptedSharedPreferences.create(
+            context,
+            "arr_secure_prefs",
+            masterKey,
+            EncryptedSharedPreferences.PrefKeyEncryptionScheme.AES256_SIV,
+            EncryptedSharedPreferences.PrefValueEncryptionScheme.AES256_GCM,
+        )
+    }
 
     // A lenient Json is sufficient here — the model is internally controlled
     // (we both write and read it), but leniency protects against future field

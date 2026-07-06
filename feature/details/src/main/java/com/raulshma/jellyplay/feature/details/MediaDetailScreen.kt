@@ -811,21 +811,23 @@ private fun DetailContent(
             item { Spacer(modifier = Modifier.height(baseBackdropHeight - 150.dp)) }
 
             item {
+            val gradientEndPx = with(LocalDensity.current) { 150.dp.toPx() }
+            val fadeBrush = remember(backgroundColor, gradientEndPx) {
+                Brush.verticalGradient(
+                    colors = listOf(
+                        Color.Transparent,
+                        backgroundColor.copy(alpha = 0.9f),
+                        backgroundColor,
+                    ),
+                    startY = 0f,
+                    endY = gradientEndPx,
+                )
+            }
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
                     .drawBehind {
-                        drawRect(
-                            Brush.verticalGradient(
-                                colors = listOf(
-                                    Color.Transparent,
-                                    backgroundColor.copy(alpha = 0.9f),
-                                    backgroundColor,
-                                ),
-                                startY = 0f,
-                                endY = 150.dp.toPx()
-                            )
-                        )
+                        drawRect(fadeBrush)
                     }
             ) {
                 if (isExpanded && adaptiveInfo.isLandscape) {
@@ -850,6 +852,18 @@ private fun DetailContent(
                                 horizontalAlignment = Alignment.CenterHorizontally,
                             ) {
                                 FadingItem {
+                                    val sharedTransitionScope = LocalSharedTransitionScope.current
+                                    val animatedVisibilityScope = LocalAnimatedVisibilityScope.current
+                                    @OptIn(androidx.compose.animation.ExperimentalSharedTransitionApi::class)
+                                    val sharedPosterModifier =
+                                        if (sharedTransitionScope != null && animatedVisibilityScope != null) {
+                                            with(sharedTransitionScope) {
+                                                Modifier.sharedElement(
+                                                    rememberSharedContentState(key = "poster_$itemId"),
+                                                    animatedVisibilityScope = animatedVisibilityScope,
+                                                )
+                                            }
+                                        } else Modifier
                                     MediaImage(
                                         url = getImageUrl(itemId),
                                         contentDescription = null,
@@ -863,23 +877,9 @@ private fun DetailContent(
                                             .aspectRatio(2f / 3f)
                                             .clip(ShapeCache.smooth12)
                                             .graphicsLayer { alpha = contentAlpha }
-                                        .then(
-                                            run {
-                                                val sharedTransitionScope = LocalSharedTransitionScope.current
-                                                val animatedVisibilityScope = LocalAnimatedVisibilityScope.current
-                                                @OptIn(androidx.compose.animation.ExperimentalSharedTransitionApi::class)
-                                                if (sharedTransitionScope != null && animatedVisibilityScope != null) {
-                                                    with(sharedTransitionScope) {
-                                                        Modifier.sharedElement(
-                                                            rememberSharedContentState(key = "poster_$itemId"),
-                                                            animatedVisibilityScope = animatedVisibilityScope,
-                                                        )
-                                                    }
-                                                } else Modifier
-                                            }
-                                        ),
-                                    contentScale = ContentScale.Crop,
-                                )
+                                            .then(sharedPosterModifier),
+                                        contentScale = ContentScale.Crop,
+                                    )
                                 }
                                 if (detail != null && item != null) {
                                     DetailActionButtons(

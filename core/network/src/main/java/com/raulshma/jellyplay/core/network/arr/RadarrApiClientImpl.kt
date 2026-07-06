@@ -19,6 +19,7 @@ import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonArray
 import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.MediaType.Companion.toMediaType
@@ -193,8 +194,31 @@ class RadarrApiClientImpl @Inject constructor(
     override suspend fun grabQueueItem(baseUrl: String, apiKey: String, id: Int): Result<Unit> =
         postEmpty(baseUrl, apiKey, "/queue/grab/$id")
 
-    override suspend fun importQueueItem(baseUrl: String, apiKey: String, id: Int): Result<Unit> =
-        postEmpty(baseUrl, apiKey, "/queue/import/$id")
+    override suspend fun importQueueItem(baseUrl: String, apiKey: String, downloadId: String): Result<Unit> {
+        // 2-step manualimport flow (the *arr v3 spec has no queue/import/{id}):
+        // 1) GET the candidate import rows for this download-client guid.
+        val getUrl = buildUrl(baseUrl, "/manualimport").newBuilder()
+            .addQueryParameter("downloadId", downloadId)
+            .build()
+        val getRequest = Request.Builder().url(getUrl).withApiKey(apiKey).get().build()
+        val rows = executeRequest(getRequest).mapCatching { json.decodeFromString<JsonArray>(it) }
+        val rowList = rows.getOrElse { return Result.failure(it) }
+        if (rowList.isEmpty()) {
+            return Result.failure(
+                ApiException.fromHttp(404, "No importable files found for this download in Radarr.")
+            )
+        }
+        // 2) Re-post the rows verbatim to trigger the import. The POST body
+        // schema is undocumented in the OpenAPI spec; passing the GET array
+        // through unchanged is both the documented usage and immune to schema
+        // drift on the 16-field ManualImportResource.
+        val postRequest = Request.Builder()
+            .url(buildUrl(baseUrl, "/manualimport"))
+            .withApiKey(apiKey)
+            .post(rowList.toString().toRequestBody("application/json".toMediaType()))
+            .build()
+        return executeRequest(postRequest).map { }
+    }
 
     override suspend fun getCalendar(
         baseUrl: String,
@@ -218,6 +242,9 @@ class RadarrApiClientImpl @Inject constructor(
         eventType: Int?,
     ): Result<List<ArrHistoryItem>> {
         val builder = buildUrl(baseUrl, "/history").newBuilder()
+        // includeMovie defaults to false; toModel() reads movie.tmdbId + title,
+        // so request the sub-object or history rows lose their movie identity.
+        builder.addQueryParameter("includeMovie", "true")
         if (eventType != null) builder.addQueryParameter("eventType", eventType.toString())
         val request = Request.Builder().url(builder.build()).withApiKey(apiKey).get().build()
         return parseAndMap<RadarrHistoryResponse>(executeRequest(request))
@@ -319,6 +346,7 @@ class RadarrApiClientImpl @Inject constructor(
     @Serializable
     private data class RadarrQueueResource(
         val id: Int = 0,
+        val downloadId: String? = null,
         val size: Double? = null,
         val sizeleft: Double? = null,
         val timeleft: String? = null,
@@ -448,6 +476,7 @@ class RadarrApiClientImpl @Inject constructor(
         } else 0f
         return ArrQueueItem(
             queueId = id,
+            downloadId = downloadId,
             tmdbId = movie?.tmdbId,
             title = movie?.title ?: "Unknown",
             status = ArrDownloadStatus.fromApi(status, trackedDownloadStatus, trackedDownloadState),

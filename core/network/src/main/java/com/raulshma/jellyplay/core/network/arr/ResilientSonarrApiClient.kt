@@ -48,8 +48,8 @@ class ResilientSonarrApiClient @Inject constructor(
     override suspend fun grabQueueItem(baseUrl: String, apiKey: String, id: Int): Result<Unit> =
         req { delegate.grabQueueItem(baseUrl, apiKey, id) }
 
-    override suspend fun importQueueItem(baseUrl: String, apiKey: String, id: Int): Result<Unit> =
-        req { delegate.importQueueItem(baseUrl, apiKey, id) }
+    override suspend fun importQueueItem(baseUrl: String, apiKey: String, downloadId: String): Result<Unit> =
+        req { delegate.importQueueItem(baseUrl, apiKey, downloadId) }
 
     override suspend fun getCalendar(
         baseUrl: String, apiKey: String, start: String, end: String,

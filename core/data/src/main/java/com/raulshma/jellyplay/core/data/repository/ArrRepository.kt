@@ -129,7 +129,12 @@ interface ArrRepository {
     /** Force-sends a queued release to its download client. */
     suspend fun grabQueueItem(item: ArrQueueItem): Result<Unit>
 
-    /** Forces an already-importable release to import now. */
+    /**
+     * Forces an already-importable release to import now via the *arr
+     * `manualimport` flow (GET candidate rows by download-client guid, then
+     * POST them back). Requires [ArrQueueItem.downloadId]; rows without one
+     * cannot be force-imported through this path.
+     */
     suspend fun importQueueItem(item: ArrQueueItem): Result<Unit>
 
     /** Removes a blocklist entry from its owning server (re-enables search). */
