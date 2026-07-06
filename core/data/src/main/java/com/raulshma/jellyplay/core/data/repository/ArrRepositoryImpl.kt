@@ -246,6 +246,15 @@ class ArrRepositoryImpl @Inject constructor(
         Result.success(Unit)
     }
 
+    override suspend fun testServer(server: ArrServerConfig): Result<Unit> =
+        withContext(cacheScope.coroutineContext) {
+            if (server.kind == ArrServiceKind.RADARR) {
+                radarrApiClient.testConnection(server.baseUrl, server.apiKey)
+            } else {
+                sonarrApiClient.testConnection(server.baseUrl, server.apiKey)
+            }
+        }
+
     // ── Management actions ─────────────────────────────────────────────────
 
     override suspend fun deleteQueueItem(item: ArrQueueItem, options: ArrQueueDeleteOptions): Result<Unit> =

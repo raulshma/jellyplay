@@ -7,6 +7,7 @@ import com.raulshma.jellyplay.core.model.arr.ArrCommandName
 import com.raulshma.jellyplay.core.model.arr.ArrDownloadSummary
 import com.raulshma.jellyplay.core.model.arr.ArrQueueDeleteOptions
 import com.raulshma.jellyplay.core.model.arr.ArrQueueItem
+import com.raulshma.jellyplay.core.model.arr.ArrServerConfig
 import com.raulshma.jellyplay.core.model.arr.ArrServiceKind
 import com.raulshma.jellyplay.core.model.arr.ArrServiceSummary
 import com.raulshma.jellyplay.core.model.arr.ArrWantedItem
@@ -98,6 +99,18 @@ interface ArrRepository {
      * for a single tmdbId. Null when no queue item exists.
      */
     suspend fun getDownloadSummaryForTmdb(tmdbId: Int): ArrDownloadSummary?
+
+    /**
+     * Probes a single server's reachability via `GET /api/v3/system/status`.
+     * Routes to Radarr or Sonarr by [ArrServerConfig.kind]. Succeeds iff 2xx;
+     * failure carries a friendly [com.raulshma.jellyplay.core.network.api.ApiException]
+     * message (DNS / connect / timeout / HTTP) suitable for direct UI display.
+     *
+     * Does not mutate any cache or flow — pure one-shot probe. Safe to call on
+     * servers from a freshly resolved [ArrServiceSummary] regardless of
+     * `isManual` (both discovered + manual entries expose `baseUrl` + `apiKey`).
+     */
+    suspend fun testServer(server: ArrServerConfig): Result<Unit>
 
     // ── Management actions ────────────────────────────────────────────────
 

@@ -51,6 +51,15 @@ class ArrSettingsViewModel @Inject constructor(
     private val _isRefreshing = MutableStateFlow(false)
     val isRefreshing: StateFlow<Boolean> = _isRefreshing.asStateFlow()
 
+    /**
+     * Per-server reachability status keyed by [ArrServerConfig.id]. Populated
+     * by [testServer] / [testAllServers]; reset to [ServerConnectionStatus.Idle]
+     * whenever the server set mutates (add/remove/discovery toggle) so stale
+     * entries never linger. Consumers read via [serverStatus].
+     */
+    private val _serverStatus = MutableStateFlow<Map<String, ServerConnectionStatus>>(emptyMap())
+    val serverStatus: StateFlow<Map<String, ServerConnectionStatus>> = _serverStatus.asStateFlow()
+
     init {
         refreshServers()
     }
@@ -60,9 +69,43 @@ class ArrSettingsViewModel @Inject constructor(
             _isRefreshing.value = true
             // resolveServers degrades gracefully to an empty summary on failure,
             // so no try/catch needed here.
-            _servers.value = arrRepository.resolveServers().getOrDefault(ArrServiceSummary())
+            val summary = arrRepository.resolveServers().getOrDefault(ArrServiceSummary())
+            _servers.value = summary
+            // Drop status for servers no longer present; seed the rest as Idle so
+            // a resolved set that lost an entry doesn't keep a stale Error on screen.
+            val liveIds = (summary.radarrServers + summary.sonarrServers).map { it.id }.toSet()
+            _serverStatus.value = _serverStatus.value.filterKeys { it in liveIds }
             _isRefreshing.value = false
+            // Auto-probe so the user sees reachability on entry instead of having
+            // to click Test. Skipped when empty (nothing to test).
+            if (!summary.isEmpty) testAllServers(summary)
         }
+    }
+
+    /**
+     * Probes a single resolved server and pushes the result into [serverStatus].
+     * Concurrent-safe: each call writes only its own key, so [testAllServers]
+     * fans these out without a coordinating lock.
+     */
+    fun testServer(server: ArrServerConfig) {
+        launch {
+            _serverStatus.value = _serverStatus.value + (server.id to ServerConnectionStatus.Testing)
+            val result = arrRepository.testServer(server)
+            _serverStatus.value = _serverStatus.value + (server.id to result.fold(
+                onSuccess = { ServerConnectionStatus.Connected },
+                onFailure = { ServerConnectionStatus.Error(it.message ?: "Connection failed") },
+            ))
+        }
+    }
+
+    /**
+     * Probes every server in [summary] (or the current [_servers] value when
+     * null) concurrently. Each server's status updates independently as its
+     * probe resolves, so a slow host doesn't block the rest of the UI.
+     */
+    fun testAllServers(summary: ArrServiceSummary? = null) {
+        val targets = summary ?: _servers.value
+        (targets.radarrServers + targets.sonarrServers).forEach { testServer(it) }
     }
 
     fun setUseSeerrDiscovery(enabled: Boolean) {
@@ -109,5 +152,22 @@ class ArrSettingsViewModel @Inject constructor(
     private suspend fun invalidateAndRefresh() {
         arrRepository.invalidateServers()
         refreshServers()
+    }
+
+    /**
+     * Reachability state for a single resolved *arr server, surfaced in the
+     * settings list so the user can tell at a glance whether the Coming Soon
+     * calendar / queue features will be able to reach that instance. Mirrors
+     * the [SeerrSettingsViewModel.ConnectionStatus] shape.
+     */
+    sealed class ServerConnectionStatus {
+        /** Not yet probed (or the server set just changed). */
+        data object Idle : ServerConnectionStatus()
+        /** Probe in flight. */
+        data object Testing : ServerConnectionStatus()
+        /** `GET /api/v3/system/status` returned 2xx. */
+        data object Connected : ServerConnectionStatus()
+        /** Probe failed; [message] is the friendly ApiException text. */
+        data class Error(val message: String) : ServerConnectionStatus()
     }
 }
