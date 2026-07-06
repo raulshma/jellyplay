@@ -57,6 +57,7 @@ benchmarkMacro = "1.5.0-alpha07"
 # and benchmark-macro-junit4 share the androidx.benchmark release train, so the
 # same version.ref is used for both.
 baselineprofile = "1.5.0-alpha07"
+aboutLibraries = "15.0.3"
 
 [libraries]
 # AndroidX Core
@@ -186,6 +187,9 @@ security-crypto = { group = "androidx.security", name = "security-crypto", versi
 sentry-android = { group = "io.sentry", name = "sentry-android", version.ref = "sentry" }
 benchmark-macro-junit4 = { group = "androidx.benchmark", name = "benchmark-macro-junit4", version.ref = "benchmarkMacro" }
 
+# AboutLibraries (auto-collected open-source license metadata at build time)
+aboutlibraries-core = { group = "com.mikepenz", name = "aboutlibraries-core", version.ref = "aboutLibraries" }
+
 [plugins]
 android-application = { id = "com.android.application", version.ref = "agp" }
 android-library = { id = "com.android.library", version.ref = "agp" }
@@ -201,3 +205,4 @@ kotlin-serialization = { id = "org.jetbrains.kotlin.plugin.serialization", versi
 ksp = { id = "com.google.devtools.ksp", version.ref = "ksp" }
 hilt = { id = "com.google.dagger.hilt.android", version.ref = "hilt" }
 kover = { id = "org.jetbrains.kotlinx.kover", version.ref = "kover" }
+aboutLibraries = { id = "com.mikepenz.aboutlibraries.plugin", version.ref = "aboutLibraries" }

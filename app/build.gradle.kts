@@ -5,6 +5,7 @@ plugins {
     alias(libs.plugins.ksp)
     alias(libs.plugins.hilt)
     alias(libs.plugins.androidx.baselineprofile)
+    alias(libs.plugins.aboutLibraries)
 }
 
 android {
@@ -94,6 +95,24 @@ android {
             )
         }
     }
+}
+
+// AboutLibraries — collect the full runtime dependency graph (this is the only
+// module that aggregates every :core:* and :feature:* project) and export the
+// SPDX license metadata into assets. Parsed at runtime by :feature:settings.
+// phoneRelease is the canonical list; the TV flavor adds no new dependencies.
+aboutLibraries {
+    collect { includePlatform = false }
+    export {
+        outputFile = file("src/main/assets/aboutlibraries.json")
+        excludeFields.addAll("funding", "developers")
+        prettyPrint = false
+    }
+}
+
+// Keep the generated asset in sync with the dependency graph on every build.
+tasks.matching { it.name == "preBuild" }.configureEach {
+    dependsOn("exportLibraryDefinitions")
 }
 
 if (project.hasProperty("enableComposeMetrics")) {
