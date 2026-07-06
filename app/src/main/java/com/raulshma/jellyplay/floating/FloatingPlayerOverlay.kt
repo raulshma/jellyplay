@@ -19,13 +19,16 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import coil3.compose.AsyncImage
+import coil3.request.ImageRequest
 import com.composables.icons.tabler.Tabler
 import com.composables.icons.tabler.outline.PlayerPause
 import com.composables.icons.tabler.outline.PlayerPlay
@@ -76,8 +79,15 @@ fun FloatingPlayerOverlay(
                     .background(MaterialTheme.colorScheme.surfaceContainerHighest),
             ) {
                 if (artworkUrl != null) {
+                    val context = LocalContext.current
+                    val artworkRequest = remember(artworkUrl) {
+                        ImageRequest.Builder(context)
+                            .data(artworkUrl)
+                            .size(168, 168)
+                            .build()
+                    }
                     AsyncImage(
-                        model = artworkUrl,
+                        model = artworkRequest,
                         contentDescription = null,
                         modifier = Modifier.fillMaxSize(),
                     )

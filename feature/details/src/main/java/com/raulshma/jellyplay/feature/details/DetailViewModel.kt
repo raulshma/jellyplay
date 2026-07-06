@@ -44,6 +44,8 @@ import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import javax.inject.Inject
 
+private val TMDB_ID_REGEX = Regex("""/(\d+)(?:$|/|\?)""")
+
 @OptIn(ExperimentalCoroutinesApi::class)
 @HiltViewModel
 class DetailViewModel @Inject constructor(
@@ -875,8 +877,7 @@ class DetailViewModel @Inject constructor(
 
         for (url in detail.externalUrls) {
             if (url.url.contains("themoviedb.org") || url.url.contains("themoviedb")) {
-                val regex = Regex("""/(\d+)(?:$|/|\?)""")
-                val match = regex.find(url.url)
+                val match = TMDB_ID_REGEX.find(url.url)
                 if (match != null) {
                     return match.groupValues[1].toIntOrNull()
                 }
