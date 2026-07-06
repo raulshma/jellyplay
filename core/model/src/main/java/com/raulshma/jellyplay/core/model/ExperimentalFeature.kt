@@ -33,6 +33,19 @@ enum class ExperimentalFeature {
      * Phone-only regardless of this setting.
      */
     MEDIA_CARD_PEEK,
+
+    /**
+     * Direct Radarr / Sonarr integration. When enabled, JellyPlay contacts the
+     * configured *arr instances directly (in addition to the existing Seerr
+     * proxy) to surface download-queue progress on Requests and a
+     * "Recently Grabbed" calendar row on Home — closing the gap between
+     * "request approved" and "available in Jellyfin."
+     *
+     * Server credentials are auto-discovered from Seerr's `/service/` endpoints
+     * and may be overridden manually under Settings → *arr. Off by default
+     * while the integration stabilizes; never rename (persisted by [name]).
+     */
+    DIRECT_ARR_INTEGRATION,
 }
 
 /**

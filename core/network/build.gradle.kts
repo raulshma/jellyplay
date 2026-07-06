@@ -1,5 +1,6 @@
 plugins {
     alias(libs.plugins.android.library)
+    alias(libs.plugins.kotlin.serialization)
     alias(libs.plugins.ksp)
     alias(libs.plugins.hilt)
 }
@@ -19,6 +20,13 @@ android {
     buildFeatures {
         buildConfig = false
         resValues = false
+    }
+    testOptions {
+        unitTests {
+            // android.util.Log / other android-stub calls return defaults
+            // instead of throwing, so OkHttp's logging path stays unit-testable.
+            isReturnDefaultValues = true
+        }
     }
 }
 

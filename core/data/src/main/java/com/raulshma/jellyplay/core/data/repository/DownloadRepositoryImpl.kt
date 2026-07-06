@@ -38,6 +38,7 @@ import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.sync.Semaphore
@@ -70,7 +71,7 @@ class DownloadRepositoryImpl @Inject constructor(
     override fun getAllDownloads(): Flow<List<DownloadItem>> =
         downloadDao.getAllDownloads().map { entities ->
             entities.map { it.toDownloadItem() }
-        }
+        }.distinctUntilChanged()
 
     override fun getDownloadByMediaItemIdFlow(mediaItemId: String): Flow<DownloadItem?> =
         downloadDao.getDownloadByMediaItemIdFlow(mediaItemId).map { it?.toDownloadItem() }

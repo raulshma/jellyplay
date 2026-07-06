@@ -2,6 +2,7 @@ package com.raulshma.jellyplay.feature.player.video.engine
 
 import android.content.Context
 import android.view.View
+import androidx.compose.runtime.Immutable
 import androidx.compose.runtime.Stable
 import com.raulshma.jellyplay.core.data.playback.PlayerLifecycleCallbacks
 import com.raulshma.jellyplay.core.model.AudioNormalizationMode
@@ -121,6 +122,7 @@ data class MediaTrack(
     val type: TrackType,
 )
 
+@Immutable
 data class EngineVideoStats(
     val videoCodec: String? = null,
     val videoDecoder: String? = null,
@@ -139,6 +141,22 @@ data class EngineVideoStats(
     val totalVideoFrames: Long = 0,
     val bufferedPositionMs: Long = 0,
     val bufferSizeBytes: Long = 0,
+)
+
+/**
+ * Static codec/resolution/HDR/audio-channel slice of [EngineVideoStats] — the
+ * only fields [com.raulshma.jellyplay.feature.player.video.components.PlaybackMetadataRow]
+ * actually reads. Projecting these out via `derivedStateOf` insulates the row
+ * from the high-churn fields (droppedFrames, bufferedPositionMs, videoBitrate,
+ * estimatedBandwidthBps) that tick multiple times per second during playback,
+ * so the metadata row recomposes only when a displayed field actually changes.
+ */
+@Immutable
+data class PlaybackMetadataSnapshot(
+    val videoCodec: String? = null,
+    val videoHdrType: String? = null,
+    val audioCodec: String? = null,
+    val audioChannels: Int? = null,
 )
 
 /**

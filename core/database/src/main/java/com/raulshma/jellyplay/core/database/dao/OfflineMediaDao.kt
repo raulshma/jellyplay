@@ -11,7 +11,7 @@ import kotlinx.coroutines.flow.Flow
 @Dao
 interface OfflineMediaDao {
 
-    @Query("SELECT * FROM offline_media WHERE mediaType IN ('SERIES', 'MOVIE', 'AUDIO', 'MUSIC') ORDER BY createdAt DESC")
+    @Query("SELECT * FROM offline_media WHERE mediaType IN ('SERIES', 'MOVIE', 'AUDIO', 'MUSIC') ORDER BY createdAt DESC LIMIT 500")
     fun getTopLevelItems(): Flow<List<OfflineMediaEntity>>
 
     @Query("SELECT * FROM offline_media WHERE seriesId = :seriesId AND mediaType = 'SEASON' ORDER BY seasonNumber ASC")

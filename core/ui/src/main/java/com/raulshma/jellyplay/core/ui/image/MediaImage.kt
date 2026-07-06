@@ -36,7 +36,12 @@ fun MediaImage(
     fallbackUrls: List<String> = emptyList(),
     blurHash: String? = null,
     crossfade: Boolean = true,
-    size: CoilSize = CoilSize(512, 512),
+    // Default decode size lowered from 512² to 384² — visually
+    // indistinguishable for posters and ~30% less decode memory. At lower
+    // densities / TV (where isTv() is true and grids are denser) 512² was
+    // roughly 2× over-sampling, doubling decode time and memory for each card
+    // visible in a horizontal row of 8.
+    size: CoilSize = CoilSize(384, 384),
     colorFilter: ColorFilter? = null,
     placeholderIcon: ImageVector = Tabler.Outline.User,
 ) {

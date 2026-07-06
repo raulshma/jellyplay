@@ -431,7 +431,6 @@ fun VideoPlayerScreen(
     val isCastConnected by viewModel.isConnectedFlow.collectAsStateWithLifecycle(initialValue = false)
     val isCastConnecting by viewModel.isConnectingFlow.collectAsStateWithLifecycle(initialValue = false)
     val castIsPlaying by viewModel.castIsPlaying.collectAsStateWithLifecycle(initialValue = false)
-    val castPosition by viewModel.castPositionMs.collectAsStateWithLifecycle(initialValue = 0L)
     val castDuration by viewModel.castDurationMs.collectAsStateWithLifecycle(initialValue = 0L)
     val castVolume by viewModel.castVolumeFlow.collectAsStateWithLifecycle(initialValue = 1f)
 
@@ -609,7 +608,7 @@ fun VideoPlayerScreen(
             lyricsLines = uiState.lyricsLines,
             artworkUrl = uiState.artworkUrl,
             isPlaying = isPlaying,
-            currentPositionMs = castPosition,
+            castPositionFlow = viewModel.castPositionMs,
             durationMs = duration,
             volume = castVolume,
             isConnecting = isCastConnecting,

@@ -23,7 +23,7 @@ import com.raulshma.jellyplay.core.designsystem.theme.playerScrimColor
 import com.raulshma.jellyplay.core.model.MediaStream
 import com.raulshma.jellyplay.core.model.StreamType
 import com.raulshma.jellyplay.feature.player.video.TrackOption
-import com.raulshma.jellyplay.feature.player.video.engine.EngineVideoStats
+import com.raulshma.jellyplay.feature.player.video.engine.PlaybackMetadataSnapshot
 
 /**
  * The play-method / codec / HDR / audio / channels badge row shown beneath the
@@ -39,7 +39,7 @@ internal fun PlaybackMetadataRow(
     isDirectPlayForced: Boolean,
     hdrType: String?,
     mediaStreams: List<MediaStream>,
-    videoStats: EngineVideoStats,
+    videoStats: PlaybackMetadataSnapshot,
     audioTracks: List<TrackOption>,
     modifier: Modifier = Modifier,
 ) {

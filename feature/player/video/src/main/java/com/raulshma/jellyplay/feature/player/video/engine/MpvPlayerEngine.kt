@@ -95,7 +95,6 @@ class MpvPlayerEngine(
     private var mpvView: PlayerMPVView? = null
     private var pendingRequest: PlaybackRequest? = null
     @Volatile private var pendingSubtitles: List<SubtitleSource> = emptyList()
-    @Volatile private var lastLoggedSubtitleText: String? = null
     // Android audio session id generated via AudioManager and pushed into
     // mpv's audiotrack/aaudio outputs so Android AudioEffects (dialogue
     // boost, night mode) can bind to mpv's output. Previously read back
@@ -152,12 +151,6 @@ class MpvPlayerEngine(
                 if (property == "sid" || property == "aid") {
                     Log.d(TAG, "MPV $property changed to ${redactSensitive(value)}")
                     refreshTracks("property:$property")
-                }
-                if (property == "sub-text" && value != lastLoggedSubtitleText) {
-                    lastLoggedSubtitleText = value
-                    if (value.isNotBlank()) {
-                        Log.v(TAG, "MPV active subtitle text: ${value.take(120)}")
-                    }
                 }
             }
             override fun eventProperty(property: String, value: MPVNode) {
@@ -307,7 +300,6 @@ class MpvPlayerEngine(
             mpv.observeProperty("sid", MPV.mpvFormat.MPV_FORMAT_STRING)
             mpv.observeProperty("aid", MPV.mpvFormat.MPV_FORMAT_STRING)
             mpv.observeProperty("track-list", MPV.mpvFormat.MPV_FORMAT_NODE)
-            mpv.observeProperty("sub-text", MPV.mpvFormat.MPV_FORMAT_STRING)
             mpv.observeProperty("sub-visibility", MPV.mpvFormat.MPV_FORMAT_FLAG)
             assignAudioSessionId()
         }
@@ -371,7 +363,6 @@ class MpvPlayerEngine(
     override fun release() {
         pendingRequest = null
         pendingSubtitles = emptyList()
-        lastLoggedSubtitleText = null
         generatedAudioSessionId = 0
         mainHandler.removeCallbacksAndMessages(null)
         dialogueBoost.detach()
@@ -614,7 +605,6 @@ class MpvPlayerEngine(
             } else {
                 Log.d(TAG, "Selecting MPV subtitle track id=$index")
                 if (index < 0) {
-                    lastLoggedSubtitleText = null
                     m.setPropertyString("sid", "no")
                 } else {
                     try {
@@ -1004,7 +994,14 @@ class MpvPlayerEngine(
             try {
                 val tracks = buildTracks()
                 val previous = _availableTracks.value
-                _availableTracks.value = tracks
+                // Only assign when changed — _availableTracks is a StateFlow so
+                // a no-op set still triggers a distinctUntilChanged comparison
+                // downstream plus the assignment itself. mpv emits track-list
+                // node updates frequently during initial load and on internal
+                // re-selection, so skipping identical rebuilds avoids that churn.
+                if (tracks != previous) {
+                    _availableTracks.value = tracks
+                }
                 if (tracks != previous || reason.startsWith("select")) {
                     Log.d(TAG, "MPV tracks refreshed ($reason): ${describeTracks(tracks)}")
                     logSubtitleRenderState(reason)
@@ -1139,7 +1136,22 @@ class MpvPlayerEngine(
     private fun colorToMpvHex(color: Int, opacity: Float): String {
         val alpha = (opacity.coerceIn(0f, 1f) * 255).toInt().coerceIn(0, 255)
         val rgb = color and 0x00FFFFFF
-        return String.format("#%02X%06X", alpha, rgb)
+        // Manual hex construction (allocation-free) — byte-identical to
+        // String.format("#%02X%06X", alpha, rgb). Avoids Formatter +
+        // StringBuilder churn on the subtitle-style-apply path (4× per
+        // subtitleStyleValues() invocation, fired on every style change and at
+        // load). Mirrors the formatFixed(:423) mitigation of the same pattern.
+        val chars = "0123456789ABCDEF"
+        val s = CharArray(9)
+        s[0] = '#'
+        s[1] = chars[(alpha shr 4) and 0xF]
+        s[2] = chars[alpha and 0xF]
+        var v = rgb
+        for (i in 8 downTo 3) {
+            s[i] = chars[v and 0xF]
+            v = v shr 4
+        }
+        return String(s)
     }
 
     private fun buildTrackLabel(
