@@ -73,6 +73,13 @@ sealed class Route : NavKey {
     @Serializable data class BackupSettings(val highlightSettingId: String? = null) : Route()
     @Serializable data class ExperimentalSettings(val highlightSettingId: String? = null) : Route()
 
+    /**
+     * Direct Radarr/Sonarr integration settings — manual server override +
+     * Seerr auto-discovery toggle. Gated by
+     * [com.raulshma.jellyplay.core.model.ExperimentalFeature.DIRECT_ARR_INTEGRATION].
+     */
+    @Serializable data class ArrSettings(val highlightSettingId: String? = null) : Route()
+
     @Serializable data object Artists : Route()
     @Serializable data object Albums : Route()
     @Serializable data object Tracks : Route()
@@ -151,6 +158,8 @@ sealed class Route : NavKey {
 
     @Serializable data object Requests : Route()
 
+    @Serializable data object ArrQueue : Route()
+
     @Serializable data object Shortcuts : Route()
 }
 
@@ -185,11 +194,13 @@ val Route.isModal: Boolean
         Route.Downloads,
         Route.SyncPlay,
         Route.SeerrSettings,
+        Route.ArrSettings,
         Route.AdminDashboard,
         Route.ScheduledTasks,
         Route.Devices,
         Route.Logs,
         Route.Requests -> true
+        Route.ArrQueue -> true
         else -> false
     }
 

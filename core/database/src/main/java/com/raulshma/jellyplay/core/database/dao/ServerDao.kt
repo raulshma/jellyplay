@@ -32,4 +32,13 @@ interface ServerDao {
 
     @Query("DELETE FROM servers WHERE id = :id")
     suspend fun deleteServerById(id: String)
+
+    /**
+     * Clears the user binding (userId + accessToken) from every server row
+     * currently bound to [userId]. Single bulk UPDATE — replaces the per-row
+     * read-modify-write loop in `AuthRepositoryImpl.removeUser` (N+1 write).
+     * No schema change, no migration.
+     */
+    @Query("UPDATE servers SET userId = NULL, accessToken = NULL WHERE userId = :userId")
+    suspend fun clearUserFromServers(userId: String)
 }

@@ -85,9 +85,16 @@ class AppShortcutManager @Inject constructor(
         val artworkUrl = audioPlaybackManager.albumArtUrl.value
         if (artworkUrl.isNullOrBlank()) return createDefaultIcon()
 
+        // ShortcutManagerCompat renders the icon at the system shortcut size
+        // (~48–96 dp × density, i.e. ≤ ~288 px on xxxhdpi). Decoding at 1080²
+        // allocated a ~4.5 MB bitmap (ARGB_8888) for a ≤0.3 MB target — wasted
+        // heap + extra decode time on a path that runs on every audio shortcut
+        // push (often during playback transitions). 192 px covers the largest
+        // rendered size; the framework downscales anyway, this just avoids the
+        // over-decode.
         val request = ImageRequest.Builder(context)
             .data(artworkUrl)
-            .size(1080)
+            .size(192)
             .build()
         val result = context.imageLoader.execute(request)
         val bitmap = result.image?.toBitmap() ?: return createDefaultIcon()

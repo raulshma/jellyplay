@@ -157,6 +157,7 @@ data class HomeCallbacks(
     val onAboutClick: () -> Unit = {},
     val onWatchProgressHeatmapClick: () -> Unit = {},
     val onRequestsClick: () -> Unit = {},
+    val onActivityQueueClick: () -> Unit = {},
 )
 
 @Composable
@@ -571,6 +572,7 @@ private fun MainHomeContent(
                             seerrCardLoadingState = seerrCardLoadingState,
                             seerrPrefetch = seerrPrefetch,
                             onSeerrItemClick = callbacks.onSeerrItemClick,
+                            recentlyGrabbed = state.recentlyGrabbed,
                             onOfflineLibraryClick = callbacks.onOfflineLibraryClick,
                             onItemClick = onContentItemClick,
                             onFocusChange = onFocusChange,
@@ -614,6 +616,25 @@ private fun MainHomeContent(
                 }
                 val searchOnClearHistory = remember(viewModel) { { viewModel.clearSearchHistory() } }
 
+                // Lift the HomeTopDock lambdas too. MainHomeContent recomposes
+                // on every keystroke (state.searchState.query is read above),
+                // so without hoisting HomeTopDock receives fresh lambdas each
+                // time, defeating skippability. `isSearchExpanded` is a
+                // MutableState delegate and stable across recompositions.
+                val dockOnSearchExpanded = remember { { v: Boolean -> isSearchExpanded = v } }
+                val dockOnSearchQueryChange = remember(viewModel) {
+                    { q: String -> viewModel.onEvent(HomeUiEvent.UpdateSearchQuery(q)) }
+                }
+                val dockOnClearSearch = remember(viewModel) {
+                    {
+                        isSearchExpanded = false
+                        viewModel.onEvent(HomeUiEvent.ClearSearch)
+                    }
+                }
+                val dockOnToggleOffline = remember(viewModel) {
+                    { viewModel.onEvent(HomeUiEvent.ToggleOfflineMode) }
+                }
+
                 HomeTopDock(
                     appBarIconColor = appBarIconColor,
                     appBarIconColorFaded = appBarIconColorFaded,
@@ -625,13 +646,10 @@ private fun MainHomeContent(
                     activeDownloadCount = activeDownloadCount,
                     showClock = state.showClock,
                     onModeChange = callbacks.onModeChange,
-                    onSearchExpanded = { isSearchExpanded = it },
-                    onSearchQueryChange = { viewModel.onEvent(HomeUiEvent.UpdateSearchQuery(it)) },
-                    onClearSearch = {
-                        isSearchExpanded = false
-                        viewModel.onEvent(HomeUiEvent.ClearSearch)
-                    },
-                    onToggleOffline = { viewModel.onEvent(HomeUiEvent.ToggleOfflineMode) },
+                    onSearchExpanded = dockOnSearchExpanded,
+                    onSearchQueryChange = dockOnSearchQueryChange,
+                    onClearSearch = dockOnClearSearch,
+                    onToggleOffline = dockOnToggleOffline,
                     searchResultsContent = {
                         if (state.searchState.query.isNotBlank() || searchHistory.isNotEmpty()) {
                             HomeSearchResultsOverlay(
@@ -681,7 +699,7 @@ private fun MainHomeContent(
                             .padding(bottom = 64.dp + WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding())
                             .offset {
                                 val maxOffset = com.raulshma.jellyplay.core.designsystem.theme.Dimensions.floatingNavHeight.toPx()
-                                val yOffset = (-navOffsetPx).coerceAtMost(maxOffset)
+                                val yOffset = (-navOffsetPx()).coerceAtMost(maxOffset)
                                 androidx.compose.ui.unit.IntOffset(x = 0, y = yOffset.toInt())
                             },
                     )
@@ -787,6 +805,7 @@ private fun HomeContentList(
     onItemClick: (String) -> Unit,
     onFocusChange: (Boolean) -> Unit,
     onSeerrRequest: (SeerrSearchItem) -> Unit,
+    recentlyGrabbed: List<SeerrSearchItem> = emptyList(),
     onNewsletterClick: () -> Unit = {},
     photoFolderChildUrls: Map<String, List<String>> = emptyMap(),
     heroFocusRequester: FocusRequester? = null,
@@ -1036,7 +1055,9 @@ private fun HomeContentList(
                         LocalSeerrCardLoadingState provides seerrCardLoadingState,
                         LocalSeerrPrefetch provides seerrPrefetch,
                     ) {
-                        val itemWidth = (discoverRowWidth - discoverSpacing * (targetSize - 1)) / targetSize.toFloat()
+                        val itemWidth = remember(discoverRowWidth, discoverSpacing, targetSize) {
+                            (discoverRowWidth - discoverSpacing * (targetSize - 1)) / targetSize.toFloat()
+                        }
                         LazyRow(
                             modifier = Modifier
                                 .fillMaxWidth()
@@ -1052,6 +1073,72 @@ private fun HomeContentList(
                                 contentType = { "seerrCard" },
                             ) { idx ->
                                 val seerrItem = rowItems[idx]
+                                SeerrMediaCard(
+                                    item = seerrItem,
+                                    imageUrl = seerrItem.posterUrl,
+                                    isLoading = seerrCardLoadingState.isLoading(seerrItem.id),
+                                    clipToShape = experimentalCardClippingEnabled,
+                                    onClick = {
+                                        val mediaType = when {
+                                            seerrItem.mediaType.equals("movie", ignoreCase = true) -> "movie"
+                                            seerrItem.mediaType.equals("tv", ignoreCase = true) -> "tv"
+                                            else -> seerrItem.mediaType
+                                        }
+                                        seerrCardLoadingState.startLoading(seerrItem.id)
+                                        seerrPrefetch(seerrItem.id, mediaType) {
+                                            seerrCardLoadingState.stopLoading(seerrItem.id)
+                                            onSeerrItemClick(seerrItem.id, mediaType)
+                                        }
+                                    },
+                                    onRequestClick = { onSeerrRequest(seerrItem) },
+                                    modifier = Modifier.width(itemWidth),
+                                )
+                            }
+                        }
+                    }
+                }
+            }
+
+            // ── Direct *arr "Recently Grabbed / Coming Soon" calendar row ──
+            // Reuses SeerrMediaCard (TMDB-keyed) so no new card UI is needed.
+            // Empty (and thus hidden) when the DIRECT_ARR_INTEGRATION flag is
+            // off, no *arr is configured, or the calendar window is empty.
+            if (recentlyGrabbed.isNotEmpty()) {
+                item(key = "arr_recently_grabbed_header") {
+                    Text(
+                        text = "Coming Soon",
+                        style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.SemiBold),
+                        color = MaterialTheme.colorScheme.onSurface,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .background(backgroundColor)
+                            .padding(start = contentPad, top = 24.dp, bottom = 8.dp),
+                    )
+                }
+                item(key = "arr_recently_grabbed_row") {
+                    CompositionLocalProvider(
+                        LocalSeerrCardLoadingState provides seerrCardLoadingState,
+                        LocalSeerrPrefetch provides seerrPrefetch,
+                    ) {
+                        val targetSize = discoverPattern[0]
+                        val itemWidth = remember(discoverRowWidth, discoverSpacing, targetSize) {
+                            (discoverRowWidth - discoverSpacing * (targetSize - 1)) / targetSize.toFloat()
+                        }
+                        LazyRow(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .then(if (experimentalCardClippingEnabled) Modifier.clipToBounds() else Modifier)
+                                .background(backgroundColor)
+                                .padding(horizontal = contentPad, vertical = discoverSpacing / 2),
+                            horizontalArrangement = Arrangement.spacedBy(discoverSpacing),
+                            userScrollEnabled = false,
+                        ) {
+                            items(
+                                count = recentlyGrabbed.size,
+                                key = { idx -> "arr_${recentlyGrabbed[idx].id}" },
+                                contentType = { "seerrCard" },
+                            ) { idx ->
+                                val seerrItem = recentlyGrabbed[idx]
                                 SeerrMediaCard(
                                     item = seerrItem,
                                     imageUrl = seerrItem.posterUrl,

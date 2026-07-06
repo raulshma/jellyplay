@@ -104,6 +104,7 @@ fun rememberDominantColor(
                     .data(imageUrl)
                     .size(CoilSize(64, 64))
                     .allowHardware(false)
+                    .memoryCacheKey(imageUrl)
                     .build()
                 val result = loader.execute(request)
                 if (result is SuccessResult) {
@@ -176,6 +177,10 @@ fun PlayButtonWithProgress(
                 )
         )
 
+        val outlinePath = remember { androidx.compose.ui.graphics.Path() }
+        val progressPath = remember { androidx.compose.ui.graphics.Path() }
+        val pathMeasure = remember { androidx.compose.ui.graphics.PathMeasure() }
+
         Canvas(modifier = Modifier.fillMaxSize()) {
             val strokeWidth = 2.5.dp.toPx()
             val halfStroke = strokeWidth / 2f
@@ -190,51 +195,50 @@ fun PlayButtonWithProgress(
             )
 
             if (progressPercent > 0f) {
-                val path = androidx.compose.ui.graphics.Path()
                 val w = size.width - strokeWidth
                 val h = size.height - strokeWidth
                 val r = cornerRadius.coerceAtMost(minOf(w, h) / 2f)
                 val ox = halfStroke
                 val oy = halfStroke
 
-                path.moveTo(ox + w / 2f, oy)
-                path.lineTo(ox + w - r, oy)
-                path.arcTo(
+                outlinePath.rewind()
+                outlinePath.moveTo(ox + w / 2f, oy)
+                outlinePath.lineTo(ox + w - r, oy)
+                outlinePath.arcTo(
                     rect = androidx.compose.ui.geometry.Rect(ox + w - 2 * r, oy, ox + w, oy + 2 * r),
                     startAngleDegrees = -90f,
                     sweepAngleDegrees = 90f,
                     forceMoveTo = false,
                 )
-                path.lineTo(ox + w, oy + h - r)
-                path.arcTo(
+                outlinePath.lineTo(ox + w, oy + h - r)
+                outlinePath.arcTo(
                     rect = androidx.compose.ui.geometry.Rect(ox + w - 2 * r, oy + h - 2 * r, ox + w, oy + h),
                     startAngleDegrees = 0f,
                     sweepAngleDegrees = 90f,
                     forceMoveTo = false,
                 )
-                path.lineTo(ox + r, oy + h)
-                path.arcTo(
+                outlinePath.lineTo(ox + r, oy + h)
+                outlinePath.arcTo(
                     rect = androidx.compose.ui.geometry.Rect(ox, oy + h - 2 * r, ox + 2 * r, oy + h),
                     startAngleDegrees = 90f,
                     sweepAngleDegrees = 90f,
                     forceMoveTo = false,
                 )
-                path.lineTo(ox, oy + r)
-                path.arcTo(
+                outlinePath.lineTo(ox, oy + r)
+                outlinePath.arcTo(
                     rect = androidx.compose.ui.geometry.Rect(ox, oy, ox + 2 * r, oy + 2 * r),
                     startAngleDegrees = 180f,
                     sweepAngleDegrees = 90f,
                     forceMoveTo = false,
                 )
-                path.lineTo(ox + w / 2f, oy)
+                outlinePath.lineTo(ox + w / 2f, oy)
 
-                val measure = androidx.compose.ui.graphics.PathMeasure()
-                measure.setPath(path, false)
-                val totalLength = measure.length
+                pathMeasure.setPath(outlinePath, false)
+                val totalLength = pathMeasure.length
                 val progressLength = totalLength * progressPercent.coerceIn(0f, 1f)
 
-                val progressPath = androidx.compose.ui.graphics.Path()
-                measure.getSegment(0f, progressLength, progressPath, true)
+                progressPath.rewind()
+                pathMeasure.getSegment(0f, progressLength, progressPath, true)
 
                 drawPath(
                     path = progressPath,

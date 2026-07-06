@@ -51,7 +51,7 @@ class FloatingPlayerState @Inject constructor(
     /** Whether playback is currently active (playing, not paused). */
     val isPlaying: StateFlow<Boolean> = activePlayerController.activeEngine
         .map { it?.isPlaying?.value ?: false }
-        .stateIn(scope, SharingStarted.Eagerly, false)
+        .stateIn(scope, SharingStarted.WhileSubscribed(5_000), false)
 
     /** The current item being played, if any. */
     val itemId: StateFlow<String?> = miniPlayerState.itemId

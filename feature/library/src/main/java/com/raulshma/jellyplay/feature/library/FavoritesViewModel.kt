@@ -9,9 +9,16 @@ import com.raulshma.jellyplay.core.model.MediaType
 import com.raulshma.jellyplay.core.ui.viewmodel.JellyPlayViewModel
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flatMapLatest
+import kotlinx.coroutines.sync.Semaphore
+import kotlinx.coroutines.sync.withPermit
 import javax.inject.Inject
+
+private const val PHOTO_FOLDER_PREFETCH_CONCURRENCY = 4
 
 @HiltViewModel
 class FavoritesViewModel @Inject constructor(
@@ -43,11 +50,17 @@ class FavoritesViewModel @Inject constructor(
     fun prefetchPhotoFolderChildUrls(items: List<MediaItem>) {
         launch {
             val current = _photoFolderChildUrls.value
-            items.filter { it.mediaType == MediaType.PHOTO_FOLDER && it.id !in current }
-                .forEach { folder ->
-                    val urls = mediaRepository.getPhotoFolderChildImageUrls(folder.id)
-                    _photoFolderChildUrls.set(_photoFolderChildUrls.value + (folder.id to urls))
-                }
+            val toFetch = items.filter { it.mediaType == MediaType.PHOTO_FOLDER && it.id !in current }
+            if (toFetch.isEmpty()) return@launch
+            val permits = Semaphore(PHOTO_FOLDER_PREFETCH_CONCURRENCY)
+            val results = coroutineScope {
+                toFetch.map { folder ->
+                    async {
+                        permits.withPermit { folder.id to mediaRepository.getPhotoFolderChildImageUrls(folder.id) }
+                    }
+                }.awaitAll()
+            }
+            _photoFolderChildUrls.set(_photoFolderChildUrls.value + results)
         }
     }
 }

@@ -5,6 +5,7 @@ import com.raulshma.jellyplay.core.model.QuickConnectInfo
 import com.raulshma.jellyplay.core.model.QuickConnectState
 import com.raulshma.jellyplay.core.model.ServerInfo
 import com.raulshma.jellyplay.core.model.UserInfo
+import com.raulshma.jellyplay.core.network.RetryPolicy
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.sync.withLock
@@ -20,47 +21,62 @@ import javax.inject.Singleton
 @Singleton
 class AuthApiClientImpl @Inject constructor(
     private val engine: JellyfinApiEngine,
+    private val libraryClient: LibraryApiClient,
 ) : AuthApiClient {
 
     override val currentServer: Flow<ServerInfo?> = engine.currentServer
     override val currentUser: Flow<UserInfo?> = engine.currentUser
 
-    override suspend fun connectToServer(address: String): Result<ServerInfo> = runCatching {
+    override suspend fun connectToServer(address: String): Result<ServerInfo> {
         val normalizedAddress = address.trim().trimEnd('/').let {
             if (it.startsWith("http://") || it.startsWith("https://")) it
             else "https://$it"
         }
-        withContext(Dispatchers.IO) {
-            try {
-                val client = engine.jellyfin.createApi(normalizedAddress)
-                val systemInfo = client.systemApi.getPublicSystemInfo().content
-                val info = ServerInfo(
-                    id = systemInfo.id?.toString() ?: java.util.UUID.randomUUID().toString(),
-                    name = systemInfo.serverName ?: "Jellyfin Server",
-                    address = normalizedAddress,
-                )
-                engine.authMutex.withLock { engine.updateServer(info) }
-                info
-            } catch (e: Exception) {
-                Log.e("JellyfinApi", "connectToServer failed for $normalizedAddress", e)
-                throw e
+        // Wrap the discovery call in RetryPolicy (max 2 retries) — every other
+        // read path uses apiResultWithRetry, but discovery previously used bare
+        // runCatching. A single transient socket timeout during server
+        // discovery — exactly when users are most likely on a flaky LAN —
+        // surfaced as a hard failure and prompted re-taps that each fired N
+        // independent discovery HTTP calls instead of one call with backoff.
+        return RetryPolicy.executeWithRetry(maxRetries = 2) {
+            runCatching {
+                withContext(Dispatchers.IO) {
+                    try {
+                        val client = engine.jellyfin.createApi(normalizedAddress)
+                        val systemInfo = client.systemApi.getPublicSystemInfo().content
+                        val info = ServerInfo(
+                            id = systemInfo.id?.toString() ?: java.util.UUID.randomUUID().toString(),
+                            name = systemInfo.serverName ?: "Jellyfin Server",
+                            address = normalizedAddress,
+                        )
+                        engine.authMutex.withLock { engine.updateServer(info) }
+                        info
+                    } catch (e: Exception) {
+                        Log.e("JellyfinApi", "connectToServer failed for $normalizedAddress", e)
+                        throw e
+                    }
+                }
             }
         }
     }
 
-    override suspend fun getServerInfo(address: String): Result<ServerInfo> = runCatching {
+    override suspend fun getServerInfo(address: String): Result<ServerInfo> {
         val normalizedAddress = address.trim().trimEnd('/').let {
             if (it.startsWith("http://") || it.startsWith("https://")) it
             else "https://$it"
         }
-        withContext(Dispatchers.IO) {
-            val client = engine.jellyfin.createApi(normalizedAddress)
-            val systemInfo = client.systemApi.getPublicSystemInfo().content
-            ServerInfo(
-                id = systemInfo.id?.toString() ?: java.util.UUID.randomUUID().toString(),
-                name = systemInfo.serverName ?: "Jellyfin Server",
-                address = normalizedAddress,
-            )
+        return RetryPolicy.executeWithRetry(maxRetries = 2) {
+            runCatching {
+                withContext(Dispatchers.IO) {
+                    val client = engine.jellyfin.createApi(normalizedAddress)
+                    val systemInfo = client.systemApi.getPublicSystemInfo().content
+                    ServerInfo(
+                        id = systemInfo.id?.toString() ?: java.util.UUID.randomUUID().toString(),
+                        name = systemInfo.serverName ?: "Jellyfin Server",
+                        address = normalizedAddress,
+                    )
+                }
+            }
         }
     }
 
@@ -138,6 +154,10 @@ class AuthApiClientImpl @Inject constructor(
             engine.updateUser(null)
             engine.updateServer(null)
         }
+        // Defensive: clear any stale favorite flags cached against the previous
+        // server so a server switch can't surface them. No behavior change in
+        // normal use (the cache is eventually-consistent via API reads).
+        libraryClient.clearFavoriteCache()
     }
 
     override suspend fun isQuickConnectEnabled(): Result<Boolean> = engine.apiResultWithRetry {

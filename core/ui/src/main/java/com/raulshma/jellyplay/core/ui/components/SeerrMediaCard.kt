@@ -218,6 +218,22 @@ fun SeerrMediaCard(
     val cardShape = ShapeCache.smooth12
     val glowColor = MaterialTheme.colorScheme.primary
 
+    val glowBorderColors = remember(glowColor, effectiveGlowAlpha) {
+        listOf(
+            glowColor.copy(alpha = effectiveGlowAlpha * 0.6f),
+            glowColor.copy(alpha = effectiveGlowAlpha),
+            glowColor.copy(alpha = effectiveGlowAlpha * 0.6f),
+        )
+    }
+    val shimmerBaseColor = MaterialTheme.colorScheme.onSurface
+    val shimmerColors = remember(shimmerBaseColor) {
+        listOf(
+            shimmerBaseColor.copy(alpha = 0.0f),
+            shimmerBaseColor.copy(alpha = 0.18f),
+            shimmerBaseColor.copy(alpha = 0.0f),
+        )
+    }
+
     val imageModifier = Modifier
         .fillMaxWidth()
         .aspectRatio(2f / 3f)
@@ -262,11 +278,7 @@ fun SeerrMediaCard(
                         Modifier.border(
                             width = (1.5).dp,
                             brush = Brush.linearGradient(
-                                colors = listOf(
-                                    glowColor.copy(alpha = effectiveGlowAlpha * 0.6f),
-                                    glowColor.copy(alpha = effectiveGlowAlpha),
-                                    glowColor.copy(alpha = effectiveGlowAlpha * 0.6f),
-                                ),
+                                colors = glowBorderColors,
                                 start = Offset.Zero,
                                 end = Offset(1000f, 1500f),
                             ),
@@ -328,11 +340,7 @@ fun SeerrMediaCard(
 
                 if (isLoading) {
                     val shimmerBrush = Brush.linearGradient(
-                        colors = listOf(
-                            MaterialTheme.colorScheme.onSurface.copy(alpha = 0.0f),
-                            MaterialTheme.colorScheme.onSurface.copy(alpha = 0.18f),
-                            MaterialTheme.colorScheme.onSurface.copy(alpha = 0.0f),
-                        ),
+                        colors = shimmerColors,
                         start = Offset(effectiveShimmerOffset, 0f),
                         end = Offset(effectiveShimmerOffset + 400f, 400f),
                     )

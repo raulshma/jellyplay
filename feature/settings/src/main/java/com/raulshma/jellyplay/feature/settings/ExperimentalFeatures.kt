@@ -35,6 +35,12 @@ object ExperimentalFeatures {
             subtitle = "Long-press a media card to peek a blurred detail preview; release to dismiss",
             icon = Tabler.Outline.Eye,
         ),
+        ExperimentalFeatureInfo(
+            feature = ExperimentalFeature.DIRECT_ARR_INTEGRATION,
+            title = "Direct *arr Integration",
+            subtitle = "Show download-queue progress on Requests and a coming-soon calendar on Home from your Radarr/Sonarr. Server details are auto-discovered from Seerr; manual override in *arr settings",
+            icon = Tabler.Outline.Download,
+        ),
     )
 
     /**

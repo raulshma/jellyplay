@@ -49,10 +49,24 @@ class ApiException(
         }
 
         /**
-         * Classify a raw network throwable thrown by OkHttp on the **Seerr** path.
-         * HTTP-status failures should use [seerrHttp] instead.
+         * Build an [ApiException] for an HTTP-status failure (response received but
+         * status code indicates an error). Retryable for 429 and any 5xx.
+         *
+         * Service-agnostic; the `fromSeerrHttp` alias below delegates here.
          */
-        fun fromSeerrNetwork(throwable: Throwable, friendlyMessage: String): ApiException {
+        fun fromHttp(httpCode: Int, message: String): ApiException = ApiException(
+            isRetryable = httpCode in com.raulshma.jellyplay.core.network.RetryPolicy.RETRYABLE_STATUS_CODES,
+            httpCode = httpCode,
+            message = message,
+        )
+
+        /**
+         * Classify a raw network throwable thrown by OkHttp into an [ApiException].
+         * HTTP-status failures should use [fromHttp] instead.
+         *
+         * Service-agnostic; the `fromSeerrNetwork` alias below delegates here.
+         */
+        fun fromNetwork(throwable: Throwable, friendlyMessage: String): ApiException {
             val retryable = classifyNetwork(throwable)
             return ApiException(
                 isRetryable = retryable,
@@ -63,13 +77,16 @@ class ApiException(
 
         /**
          * Build an [ApiException] for a Seerr HTTP-status failure (response received but
-         * status code indicates an error).
+         * status code indicates an error). Delegates to [fromHttp].
          */
-        fun fromSeerrHttp(httpCode: Int, message: String): ApiException = ApiException(
-            isRetryable = httpCode in com.raulshma.jellyplay.core.network.RetryPolicy.RETRYABLE_STATUS_CODES,
-            httpCode = httpCode,
-            message = message,
-        )
+        fun fromSeerrHttp(httpCode: Int, message: String): ApiException = fromHttp(httpCode, message)
+
+        /**
+         * Classify a raw network throwable thrown by OkHttp on the **Seerr** path.
+         * HTTP-status failures should use [fromSeerrHttp] instead. Delegates to [fromNetwork].
+         */
+        fun fromSeerrNetwork(throwable: Throwable, friendlyMessage: String): ApiException =
+            fromNetwork(throwable, friendlyMessage)
 
         internal fun classifyJellyfin(throwable: Throwable): Pair<Boolean, Int?> {
             // SDK InvalidStatusException carries the HTTP code on the exception itself.
