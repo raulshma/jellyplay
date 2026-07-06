@@ -2081,6 +2081,24 @@ object SettingsSearchRegistry {
             keywords = listOf("clipping", "clip", "rounded", "corners", "cards", "home", "shadow", "elevation"),
             route = Route.ExperimentalSettings(),
             icon = Tabler.Outline.Crop
+        ),
+        SettingsSearchItem(
+            id = "DIRECT_ARR_INTEGRATION",
+            title = "Direct *arr Integration",
+            subtitle = "Download-queue progress and a coming-soon calendar from your Radarr/Sonarr",
+            category = "Experimental",
+            keywords = listOf("radarr", "sonarr", "arr", "download", "queue", "calendar", "coming soon", "grabbed", "imported"),
+            route = Route.ExperimentalSettings(),
+            icon = Tabler.Outline.Download
+        ),
+        SettingsSearchItem(
+            id = "arr_settings",
+            title = "Radarr / Sonarr Servers",
+            subtitle = "Configure direct Radarr/Sonarr server connections",
+            category = "Integrations",
+            keywords = listOf("radarr", "sonarr", "arr", "servers", "api key", "integration"),
+            route = Route.ArrSettings(),
+            icon = Tabler.Outline.Download
         )
     )
 }

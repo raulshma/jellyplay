@@ -1,11 +1,6 @@
 package com.raulshma.jellyplay.widget
 
 import android.content.Context
-import androidx.datastore.core.DataStore
-import androidx.datastore.preferences.core.Preferences
-import androidx.datastore.preferences.core.edit
-import androidx.datastore.preferences.core.longPreferencesKey
-import androidx.datastore.preferences.preferencesDataStore
 import androidx.work.Constraints
 import androidx.work.ExistingPeriodicWorkPolicy
 import androidx.work.ExistingWorkPolicy
@@ -14,7 +9,6 @@ import androidx.work.OneTimeWorkRequestBuilder
 import androidx.work.PeriodicWorkRequestBuilder
 import androidx.work.WorkManager
 import dagger.hilt.android.qualifiers.ApplicationContext
-import kotlinx.coroutines.flow.first
 import java.time.Duration
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -49,7 +43,32 @@ class WidgetWorkSchedulerImpl @Inject constructor(
     @ApplicationContext private val context: Context,
 ) : WidgetWorkScheduler {
 
+    // In-process cooldown timestamps for the manual refresh entry points.
+    // Previously these were persisted in a second DataStore file
+    // (`widget_cooldown`); the rest of the app uses a single UserPreferences
+    // DataStore, so the second file doubled the DataStore actor/IO machinery
+    // for what amounts to two Long timestamps. The 5-second cooldown only
+    // matters within the live process — losing it across process death just
+    // means one extra refresh is allowed, which is acceptable.
+    private val lastLibraryRefreshAt = java.util.concurrent.atomic.AtomicLong(0L)
+    private val lastSeerrRefreshAt = java.util.concurrent.atomic.AtomicLong(0L)
+
     override fun enqueuePeriodic() {
+        // Skip the periodic schedule when no widget of either kind is bound.
+        // With ExistingPeriodicWorkPolicy.KEEP the schedule never changes
+        // after the first run, so re-enqueueing on every cold start is pure
+        // overhead (2 WorkManager DB writes + 2 scheduler reads). On devices
+        // with no widgets installed this avoids scheduling two periodic
+        // workers that would otherwise fire every 6 h for nothing.
+        val appWidgetManager = android.appwidget.AppWidgetManager.getInstance(context)
+        val hasLibraryWidget = appWidgetManager
+            .getAppWidgetIds(android.content.ComponentName(context, LibraryRecommendationsWidget::class.java))
+            .isNotEmpty()
+        val hasSeerrWidget = appWidgetManager
+            .getAppWidgetIds(android.content.ComponentName(context, SeerrRecommendationsWidget::class.java))
+            .isNotEmpty()
+        if (!hasLibraryWidget && !hasSeerrWidget) return
+
         val constraints = Constraints.Builder()
             .setRequiredNetworkType(NetworkType.CONNECTED)
             .setRequiresBatteryNotLow(true)
@@ -66,21 +85,25 @@ class WidgetWorkSchedulerImpl @Inject constructor(
             .build()
 
         WorkManager.getInstance(context).apply {
-            enqueueUniquePeriodicWork(
-                LibraryRecommendationsWidgetWorker.UNIQUE_PERIODIC_NAME,
-                ExistingPeriodicWorkPolicy.KEEP,
-                libraryRequest,
-            )
-            enqueueUniquePeriodicWork(
-                SeerrRecommendationsWidgetWorker.UNIQUE_PERIODIC_NAME,
-                ExistingPeriodicWorkPolicy.KEEP,
-                seerrRequest,
-            )
+            if (hasLibraryWidget) {
+                enqueueUniquePeriodicWork(
+                    LibraryRecommendationsWidgetWorker.UNIQUE_PERIODIC_NAME,
+                    ExistingPeriodicWorkPolicy.KEEP,
+                    libraryRequest,
+                )
+            }
+            if (hasSeerrWidget) {
+                enqueueUniquePeriodicWork(
+                    SeerrRecommendationsWidgetWorker.UNIQUE_PERIODIC_NAME,
+                    ExistingPeriodicWorkPolicy.KEEP,
+                    seerrRequest,
+                )
+            }
         }
     }
 
     override suspend fun refreshLibraryNow(): Boolean {
-        if (!claimRefreshSlot(LAST_LIBRARY_REFRESH_KEY)) return false
+        if (!claimRefreshSlot(lastLibraryRefreshAt)) return false
         val constraints = Constraints.Builder()
             .setRequiredNetworkType(NetworkType.CONNECTED)
             .build()
@@ -97,7 +120,7 @@ class WidgetWorkSchedulerImpl @Inject constructor(
     }
 
     override suspend fun refreshSeerrNow(): Boolean {
-        if (!claimRefreshSlot(LAST_SEERR_REFRESH_KEY)) return false
+        if (!claimRefreshSlot(lastSeerrRefreshAt)) return false
         val constraints = Constraints.Builder()
             .setRequiredNetworkType(NetworkType.CONNECTED)
             .build()
@@ -113,12 +136,11 @@ class WidgetWorkSchedulerImpl @Inject constructor(
         return true
     }
 
-    private suspend fun claimRefreshSlot(key: Preferences.Key<Long>): Boolean {
+    private suspend fun claimRefreshSlot(lastRefreshAt: java.util.concurrent.atomic.AtomicLong): Boolean {
         val now = System.currentTimeMillis()
-        val store = context.widgetCooldownStore
-        val last = store.data.first()[key] ?: 0L
+        val last = lastRefreshAt.get()
         if (last > 0L && now - last < COOLDOWN_MS) return false
-        store.edit { it[key] = now }
+        lastRefreshAt.set(now)
         return true
     }
 
@@ -126,10 +148,5 @@ class WidgetWorkSchedulerImpl @Inject constructor(
         private val REFRESH_PERIOD: Duration = Duration.ofHours(6)
         private val REFRESH_FLEX: Duration = Duration.ofMinutes(30)
         private const val COOLDOWN_MS = 5_000L
-
-        private val LAST_LIBRARY_REFRESH_KEY = longPreferencesKey("widget_library_last_refresh_ms")
-        private val LAST_SEERR_REFRESH_KEY = longPreferencesKey("widget_seerr_last_refresh_ms")
     }
 }
-
-private val Context.widgetCooldownStore: DataStore<Preferences> by preferencesDataStore(name = "widget_cooldown")

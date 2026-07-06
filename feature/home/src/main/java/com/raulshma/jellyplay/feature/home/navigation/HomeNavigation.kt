@@ -72,6 +72,7 @@ fun EntryProviderScope<NavKey>.homeSection(
                 onAboutClick = { navigator.navigate(Route.About) },
                 onWatchProgressHeatmapClick = { navigator.navigate(Route.WatchProgressHeatmap) },
                 onRequestsClick = { navigator.navigate(Route.Requests) },
+                onActivityQueueClick = { navigator.navigate(Route.ArrQueue) },
             )
         }
         HomeScreen(

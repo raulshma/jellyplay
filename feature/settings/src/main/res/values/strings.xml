@@ -70,6 +70,8 @@
     <string name="settings_experimental">Experimental</string>
     <string name="settings_about">About</string>
     <string name="settings_about_subtitle">App version and licenses</string>
+    <string name="settings_integrations">Integrations</string>
+    <string name="settings_integrations_subtitle">Radarr &amp; Sonarr servers</string>
     <string name="settings_sign_out_confirm_title_server">Sign Out from Server?</string>
     <string name="settings_sign_out_confirm_title">Sign Out?</string>
     <string name="settings_sign_out_confirm_message_server">This will revoke this device\'s session on the server. You\'ll need to sign in again to use the app.</string>

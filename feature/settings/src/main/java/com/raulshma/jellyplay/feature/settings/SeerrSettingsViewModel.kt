@@ -160,11 +160,13 @@ class SeerrSettingsViewModel @Inject constructor(
         launch {
             _isTesting.value = true
             try {
-                // Persist credentials only after a successful login so failed attempts
-                // don't leave bad credentials saved.
+                // Persist the server URL up-front: the repository resolves it from
+                // the saved preferences when making the login request, so it must be
+                // written before the call. Credentials stay deferred to success so
+                // failed attempts don't leave bad credentials saved.
+                seerrPreferencesStore.setServerUrl(serverUrl)
                 seerrRepository.loginJellyfin(username, password)
                     .onSuccess { response ->
-                        seerrPreferencesStore.setServerUrl(serverUrl)
                         seerrPreferencesStore.setAuthMethod(SeerrAuthMethod.JELLYFIN)
                         seerrPreferencesStore.setUsername(username)
                         secureCredentialsStore.setPassword(password)
@@ -192,11 +194,13 @@ class SeerrSettingsViewModel @Inject constructor(
         launch {
             _isTesting.value = true
             try {
-                // Persist credentials only after a successful login so failed attempts
-                // don't leave bad credentials saved.
+                // Persist the server URL up-front: the repository resolves it from
+                // the saved preferences when making the login request, so it must be
+                // written before the call. Credentials stay deferred to success so
+                // failed attempts don't leave bad credentials saved.
+                seerrPreferencesStore.setServerUrl(serverUrl)
                 seerrRepository.loginLocal(email, password)
                     .onSuccess { response ->
-                        seerrPreferencesStore.setServerUrl(serverUrl)
                         seerrPreferencesStore.setAuthMethod(SeerrAuthMethod.LOCAL)
                         seerrPreferencesStore.setEmail(email)
                         secureCredentialsStore.setPassword(password)

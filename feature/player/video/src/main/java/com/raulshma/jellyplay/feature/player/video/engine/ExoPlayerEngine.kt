@@ -306,13 +306,23 @@ class ExoPlayerEngine(
             .setUsage(C.USAGE_MEDIA)
             .build()
 
+        // WAKE_MODE_NETWORK additionally acquires a Wi-Fi multicast lock so the
+        // CPU/Wi-Fi stay awake during backgrounded HTTP streaming playback (the
+        // common JellyPlay case — request carries serverUrl/authToken/headers).
+        // WAKE_MODE_LOCAL is intended for local file playback. Using LOCAL for
+        // HTTP streams risks buffering/drops when the screen is off on battery-
+        // conscious devices. Requires android.permission.WAKE_LOCK to take
+        // effect (declared in the manifest).
+        val isNetworkStream = request.uri.startsWith("http", ignoreCase = true) ||
+            request.uri.startsWith("rtmp", ignoreCase = true)
+
         val exo = ExoPlayer.Builder(context)
             .setRenderersFactory(renderersFactory)
             .setMediaSourceFactory(msf)
             .setTrackSelector(selector)
             .setLoadControl(loadControl)
             .setAudioAttributes(audioAttrs, currentConfig.pauseOnAudioFocusLoss)
-            .setWakeMode(C.WAKE_MODE_LOCAL)
+            .setWakeMode(if (isNetworkStream) C.WAKE_MODE_NETWORK else C.WAKE_MODE_LOCAL)
             .setBandwidthMeter(bandwidthMeter)
             .setVideoScalingMode(exoCfg.videoScalingMode.value)
             .setVideoChangeFrameRateStrategy(exoCfg.frameRateStrategy.value)
@@ -674,9 +684,12 @@ class ExoPlayerEngine(
             override fun onPositionDiscontinuity(oldPosition: Player.PositionInfo, newPosition: Player.PositionInfo, reason: Int) {
                 runCatching { trySend(p.currentPosition) }
             }
-            override fun onPlaybackStateChanged(playbackState: Int) {
-                runCatching { trySend(p.currentPosition) }
-            }
+            // Note: onPlaybackStateChanged intentionally NOT overridden here.
+            // The engine's primary listener and EnginePositionTicker already
+            // translate state into _playbackState and emit on the play↔pause
+            // edge; the previous redundant override only added trySend traffic
+            // (Runnable/continuation allocations) on every state change for no
+            // net benefit. onPositionDiscontinuity is retained for seeks.
         }
         p.addListener(posListener)
         trySend(p.currentPosition)

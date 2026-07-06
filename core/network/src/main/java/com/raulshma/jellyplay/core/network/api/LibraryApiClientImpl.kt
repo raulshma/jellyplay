@@ -981,6 +981,15 @@ class LibraryApiClientImpl @Inject constructor(
 
     private val favoriteCache = androidx.collection.LruCache<UUID, Boolean>(200)
 
+    /**
+     * Clears the in-memory favorite cache. Called on disconnect / server switch
+     * so stale favorite flags from a previous server don't linger until evicted
+     * by access count. Defensive; no behavior change in normal use.
+     */
+    override fun clearFavoriteCache() {
+        favoriteCache.evictAll()
+    }
+
     override fun getImageUrl(itemId: String, imageType: String, maxWidth: Int?, imageIndex: Int?, tag: String?): String {
         val api = engine.api ?: return ""
         val imageTypeEnum = org.jellyfin.sdk.model.api.ImageType.fromNameOrNull(imageType)

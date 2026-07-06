@@ -5,6 +5,7 @@ import androidx.navigation3.runtime.NavKey
 import com.raulshma.jellyplay.core.ui.navigation.Navigator
 import com.raulshma.jellyplay.core.ui.navigation.Route
 import com.raulshma.jellyplay.feature.settings.AboutScreen
+import com.raulshma.jellyplay.feature.settings.ArrSettingsScreen
 import com.raulshma.jellyplay.feature.settings.AppearanceSettingsScreen
 import com.raulshma.jellyplay.feature.settings.AudioSettingsScreen
 import com.raulshma.jellyplay.feature.settings.BackupSettingsScreen
@@ -34,6 +35,7 @@ fun EntryProviderScope<NavKey>.settingsSection(
             onServerManagement = { id -> navigator.navigate(Route.ServerManagement(id)) },
             onUserManagement = { id -> navigator.navigate(Route.UserManagement(id)) },
             onSeerrSettings = { id -> navigator.navigate(Route.SeerrSettings(id)) },
+            onArrSettings = { id -> navigator.navigate(Route.ArrSettings(id)) },
             onAdminDashboard = { navigator.navigate(Route.AdminDashboard) },
             onSetupWizard = onSetupWizard,
             onNewsletterClick = { navigator.navigate(Route.Newsletter) },
@@ -152,6 +154,13 @@ fun EntryProviderScope<NavKey>.settingsSection(
 
     entry<Route.ExperimentalSettings> { entry ->
         ExperimentalSettingsScreen(
+            onBack = { navigator.goBack() },
+            highlightSettingId = entry.highlightSettingId,
+        )
+    }
+
+    entry<Route.ArrSettings> { entry ->
+        ArrSettingsScreen(
             onBack = { navigator.goBack() },
             highlightSettingId = entry.highlightSettingId,
         )

@@ -486,6 +486,14 @@ class AdminStatisticsRepositoryImpl @Inject constructor(
     private suspend fun runWatchedMediaScan(scanId: String, config: MediaCleanupConfig) {
         try {
             val allResults = mutableListOf<MediaItemStub>()
+            // Seen-id set alongside allResults so dedup is O(1) per item instead
+            // of O(n) via allResults.any{}. Without this the .mapNotNull below
+            // is O(total_watched_items²) because allResults grows every
+            // iteration. First-occurrence wins, identical to the previous
+            // allResults.any{} semantics — output ordering is irrelevant here
+            // (results are persisted as JSON and the UI doesn't depend on
+            // insertion order).
+            val seenItemIds = HashSet<String>()
             val users = apiClient.getUsers().getOrDefault(emptyList())
             val pageSize = 200
 
@@ -506,7 +514,7 @@ class AdminStatisticsRepositoryImpl @Inject constructor(
                     val items = result.second
                         .filter { if (!config.includePartiallyWatched) it.completionPct >= 0.9f else true }
                         .mapNotNull { watched ->
-                            if (allResults.any { it.itemId == watched.itemId }) return@mapNotNull null
+                            if (!seenItemIds.add(watched.itemId)) return@mapNotNull null
                             val lastPlayedStr = watched.lastPlayedDate?.take(10)
                             MediaItemStub(
                                 itemId = watched.itemId,

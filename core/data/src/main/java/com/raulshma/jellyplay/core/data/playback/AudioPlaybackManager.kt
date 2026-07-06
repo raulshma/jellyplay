@@ -200,6 +200,7 @@ class AudioPlaybackManager @Inject constructor(
         onCrossfadeTransition = { secondary, nextIndex, nextItem ->
             onCrossfadeTransition(secondary, nextIndex, nextItem)
         },
+        detachPrimaryListener = { primary -> primary.removeListener(playerListener) },
     )
 
     @Volatile

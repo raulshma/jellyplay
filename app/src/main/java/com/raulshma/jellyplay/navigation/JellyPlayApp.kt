@@ -183,6 +183,7 @@ import com.raulshma.jellyplay.feature.syncplay.navigation.syncPlaySection
 import com.raulshma.jellyplay.feature.onboarding.navigation.onboardingSection
 import com.raulshma.jellyplay.feature.newsletter.navigation.newsletterSection
 import com.raulshma.jellyplay.feature.requests.navigation.requestsSection
+import com.raulshma.jellyplay.feature.arrqueue.navigation.arrQueueSection
 import com.raulshma.jellyplay.feature.shortcuts.navigation.shortcutsSection
 import kotlinx.coroutines.launch
 import com.composables.icons.tabler.Tabler
@@ -611,8 +612,29 @@ private fun MainContent(
         bottomNavOffsetHeightPx.floatValue = animatedBottomNavOffset
     }
 
+    // Stable getter for the floating-nav offset. Reading
+    // `bottomNavOffsetHeightPx.floatValue` here would force `MainContent` to
+    // recompose on every animation frame of the nav-bar slide (which re-runs
+    // the whole TV/Phone/FullScreen branch dispatch). Exposing a `() -> Float`
+    // instead lets leaf consumers read the value inside Modifier.offset { … }
+    // (layout phase) — no recomposition at all, just relayout.
+    val floatingNavOffset: () -> Float = remember(bottomNavOffsetHeightPx) {
+        { bottomNavOffsetHeightPx.floatValue }
+    }
+
+    // Stable lambdas for CompositionLocalProvider — `provides` compares by ==,
+    // so a fresh lambda per recomposition forces downstream invalidation even
+    // when the captured state hasn't changed. MainContent recomposes often
+    // (audio metadata, nav color, mini-player), so hoist these out.
+    val openDrawer: () -> Unit = remember(drawerScope, drawerState) {
+        { drawerScope.launch { drawerState.open() } }
+    }
+    val consumeSearchQuery: () -> Unit = remember(viewModel) {
+        { viewModel.consumePendingSearchQuery() }
+    }
+
     CompositionLocalProvider(
-        LocalDrawerOpener provides { drawerScope.launch { drawerState.open() } },
+        LocalDrawerOpener provides openDrawer,
         LocalTvMode provides isTv,
         LocalAdaptiveInfo provides adaptiveInfo,
         LocalJellyPlayUi provides uiEnvironment,
@@ -637,9 +659,9 @@ private fun MainContent(
             CompositionLocalProvider(
                 com.raulshma.jellyplay.core.ui.components.LocalSharedTransitionScope provides if (preferences.performanceMode) null else this,
                 LocalNavigationBarColor provides navBarColorState,
-                com.raulshma.jellyplay.core.ui.components.LocalFloatingNavOffset provides (if (!isExpanded && !isFullScreenRoute) bottomNavOffsetHeightPx.floatValue else 0f),
+                com.raulshma.jellyplay.core.ui.components.LocalFloatingNavOffset provides (if (!isExpanded && !isFullScreenRoute) floatingNavOffset else ({ 0f })),
                 com.raulshma.jellyplay.feature.search.LocalPendingSearchQuery provides pendingSearchQuery,
-                com.raulshma.jellyplay.feature.search.LocalConsumeSearchQuery provides { viewModel.consumePendingSearchQuery() },
+                com.raulshma.jellyplay.feature.search.LocalConsumeSearchQuery provides consumeSearchQuery,
             ) {
             // Hoist the saveable-state holder above the isTv/isFullScreenRoute branches so that
             // navigation-entry saveable state (scroll position, form fields, etc.) survives
@@ -901,12 +923,19 @@ private fun TvContent(
             val tvCurrentRoute = navigationState.backStacks[currentTopLevel]?.lastOrNull()
             val tvIsSubPage = tvCurrentRoute != null && tvCurrentRoute !in activeTopLevelRoutes.keys
 
-            val primaryNavItems = activeTopLevelRoutes.entries.map { (route, label) ->
-                TvNavItem(
-                    route = route,
-                    label = label,
-                    icon = routeToIcon(route),
-                )
+            // Hoist the nav-item list so it is only reallocated when the route
+            // set changes, not on every MainContent recomposition (which fires
+            // frequently — it reads audio title/artist/artwork for the mini-
+            // player). Re-running .map{} here would allocate a fresh list + N
+            // fresh TvNavItem instances each time, invalidating the drawer.
+            val primaryNavItems = remember(activeTopLevelRoutes) {
+                activeTopLevelRoutes.entries.map { (route, label) ->
+                    TvNavItem(
+                        route = route,
+                        label = label,
+                        icon = routeToIcon(route),
+                    )
+                }
             }
             TvNavigationDrawer(
                 primaryItems = primaryNavItems,
@@ -1017,6 +1046,14 @@ private fun PhoneContent(
                         },
                     )
                     DrawerItem(
+                        icon = Tabler.Outline.Database,
+                        label = "Activity Queue",
+                        onClick = {
+                            navigator.navigate(Route.ArrQueue)
+                            drawerScope.launch { drawerState.close() }
+                        },
+                    )
+                    DrawerItem(
                         icon = Tabler.Outline.Settings,
                         label = "Settings",
                         onClick = {
@@ -1061,12 +1098,16 @@ private fun PhoneContent(
             navigationSuiteType = if (!isExpanded) NavigationSuiteType.None else NavigationSuiteType.NavigationRail,
             navigationItems = {
                 activeTopLevelRoutes.forEach { (route, label) ->
-                    NavigationSuiteItem(
-                        selected = route == currentTopLevel,
-                        onClick = { navigator.navigate(route) },
-                        icon = { NavIcon(route, label, selected = route == currentTopLevel) },
-                        label = { Text(label) },
-                    )
+                    // Wrap in key(route) so per-item slot identity survives
+                    // route reordering instead of being positional only.
+                    androidx.compose.runtime.key(route) {
+                        NavigationSuiteItem(
+                            selected = route == currentTopLevel,
+                            onClick = { navigator.navigate(route) },
+                            icon = { NavIcon(route, label, selected = route == currentTopLevel) },
+                            label = { Text(label) },
+                        )
+                    }
                 }
             },
             navigationSuiteColors = NavigationSuiteDefaults.colors(
@@ -1406,6 +1447,7 @@ private fun MainNavDisplay(
         newsletterSection(navigator)
         insightsSection(navigator)
         requestsSection(navigator)
+        arrQueueSection(navigator)
         shortcutsSection(navigator)
     }
 
@@ -1580,30 +1622,35 @@ private fun FloatingNavigationBar(
             verticalAlignment = Alignment.CenterVertically
         ) {
             routes.forEach { (route, label) ->
-                val selected = route == currentTopLevel
-                val tint = if (selected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
-                Row(
-                    modifier = Modifier
-                        .animateContentSize(animationSpec = MaterialTheme.motionScheme.defaultSpatialSpec())
-                        .focusIndicator(androidx.compose.foundation.shape.CircleShape)
-                        .clickable(
-                            interactionSource = remember { androidx.compose.foundation.interaction.MutableInteractionSource() },
-                            indication = null,
-                            onClick = { onNavigate(route) }
-                        ),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(6.dp)
-                ) {
-                    NavIcon(route, label, selected = selected, tint = tint)
-                    if (selected && showLabels) {
-                        Text(
-                            text = label,
-                            color = tint,
-                            style = MaterialTheme.typography.labelMedium,
-                            fontWeight = FontWeight.Bold,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis
-                        )
+                // Wrap in key(route) so per-item slot identity (and the
+                // remember-ed MutableInteractionSource inside) survives route
+                // reordering instead of being positional only.
+                androidx.compose.runtime.key(route) {
+                    val selected = route == currentTopLevel
+                    val tint = if (selected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
+                    Row(
+                        modifier = Modifier
+                            .animateContentSize(animationSpec = MaterialTheme.motionScheme.defaultSpatialSpec())
+                            .focusIndicator(androidx.compose.foundation.shape.CircleShape)
+                            .clickable(
+                                interactionSource = remember { androidx.compose.foundation.interaction.MutableInteractionSource() },
+                                indication = null,
+                                onClick = { onNavigate(route) }
+                            ),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(6.dp)
+                    ) {
+                        NavIcon(route, label, selected = selected, tint = tint)
+                        if (selected && showLabels) {
+                            Text(
+                                text = label,
+                                color = tint,
+                                style = MaterialTheme.typography.labelMedium,
+                                fontWeight = FontWeight.Bold,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis
+                            )
+                        }
                     }
                 }
             }
