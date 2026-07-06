@@ -23,6 +23,7 @@ import coil3.compose.AsyncImage
 import coil3.compose.AsyncImagePainter
 import coil3.request.ImageRequest
 import coil3.request.crossfade
+import coil3.size.isOriginal
 import coil3.size.Size as CoilSize
 import com.composables.icons.tabler.Tabler
 import com.composables.icons.tabler.outline.*
@@ -46,7 +47,15 @@ fun MediaImage(
     placeholderIcon: ImageVector = Tabler.Outline.User,
 ) {
     val performanceMode = com.raulshma.jellyplay.core.ui.components.LocalPerformanceMode.current
-    val effectiveSize = if (performanceMode) CoilSize(256, 256) else size
+    // Performance mode lowers decode size to save memory, but callers that
+    // explicitly request [Size.ORIGINAL] (e.g. the full-screen photo viewer)
+    // need the unmodified resolution — capping them to 256² produces blurry
+    // photos. Clamp only the fixed-pixel defaults, never ORIGINAL.
+    val effectiveSize = when {
+        size.isOriginal -> size
+        performanceMode -> CoilSize(256, 256)
+        else -> size
+    }
     val effectiveBlurHash = if (performanceMode) null else blurHash
     val effectiveCrossfade = if (performanceMode) false else crossfade
     val context = LocalContext.current
