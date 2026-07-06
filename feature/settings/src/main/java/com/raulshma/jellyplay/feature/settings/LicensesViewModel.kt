@@ -30,6 +30,8 @@ class LicensesViewModel @Inject constructor(
     @ApplicationContext private val context: Context,
 ) : JellyPlayViewModel() {
 
+    private val json = Json { ignoreUnknownKeys = true }
+
     var licenses by composeState<List<LicenseEntry>>(emptyList())
         private set
 
@@ -48,10 +50,10 @@ class LicensesViewModel @Inject constructor(
             isLoading = true
             error = null
             try {
-                val json = withContext(Dispatchers.IO) {
+                val jsonText = withContext(Dispatchers.IO) {
                     context.assets.open("licenses.json").bufferedReader().use { it.readText() }
                 }
-                val parsed = Json { ignoreUnknownKeys = true }.decodeFromString<LicensesFile>(json)
+                val parsed = json.decodeFromString<LicensesFile>(jsonText)
                 licenses = parsed.dependencies.sortedBy { it.name.lowercase() }
             } catch (_: Exception) {
                 licenses = emptyList()

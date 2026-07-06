@@ -57,7 +57,6 @@ class SeerrRepositoryImpl @Inject constructor(
     }
 
     private fun putCached(key: String, value: Any) {
-        detailCache.evictExpired()
         detailCache.put(key, value)
     }
 

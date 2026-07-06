@@ -17,6 +17,8 @@ import com.raulshma.jellyplay.core.ui.viewmodel.JellyPlayViewModel
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.async
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.stateIn
@@ -97,17 +99,21 @@ class EditorViewModel @Inject constructor(
         launch {
             _uiState.update { it.copy(isLoading = true, error = null) }
             try {
-                val detailResult = apiClient.getMediaDetail(itemId)
-                val detail = detailResult.getOrThrow()
+                val detail: MediaDetail
+                val editorInfo: MetadataEditorInfo?
+                val imageInfos: List<ImageInfo>
+                val providers: List<ImageProviderInfo>
+                coroutineScope {
+                    val detailDeferred = async { apiClient.getMediaDetail(itemId) }
+                    val editorInfoDeferred = async { apiClient.getMetadataEditorInfo(itemId).getOrNull() }
+                    val imageInfoDeferred = async { apiClient.getItemImageInfo(itemId).getOrNull() }
+                    val providersDeferred = async { apiClient.getRemoteImageProviders(itemId).getOrNull() }
 
-                val editorInfoResult = apiClient.getMetadataEditorInfo(itemId)
-                val editorInfo = editorInfoResult.getOrNull()
-
-                val imageInfoResult = apiClient.getItemImageInfo(itemId)
-                val imageInfos = imageInfoResult.getOrNull() ?: emptyList()
-
-                val providersResult = apiClient.getRemoteImageProviders(itemId)
-                val providers = providersResult.getOrNull() ?: emptyList()
+                    detail = detailDeferred.await().getOrThrow()
+                    editorInfo = editorInfoDeferred.await()
+                    imageInfos = imageInfoDeferred.await() ?: emptyList()
+                    providers = providersDeferred.await() ?: emptyList()
+                }
 
                 val item = detail.item
                 val runtimeMinutes = detail.item.runTimeTicks?.let { (it / 600_000_000).toString() } ?: ""

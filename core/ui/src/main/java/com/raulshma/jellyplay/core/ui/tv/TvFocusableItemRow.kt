@@ -45,6 +45,7 @@ fun <T> TvFocusableItemRow(
     focusRequester: FocusRequester? = null,
     onRowFocused: (() -> Unit)? = null,
     clipToBounds: Boolean = false,
+    contentType: (index: Int, item: T) -> Any? = { _, _ -> null },
     itemContent: @Composable (
         index: Int,
         item: T,
@@ -107,6 +108,7 @@ fun <T> TvFocusableItemRow(
         itemsIndexed(
             items = items,
             key = { _, item -> key(item) },
+            contentType = { index, item -> contentType(index, item) },
         ) { index, item ->
             val itemModifier = if (isTv) {
                 Modifier

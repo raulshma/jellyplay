@@ -58,12 +58,25 @@ class OfflineLibraryViewModel @Inject constructor(
     fun setFilter(value: OfflineLibraryFilter) { _filter.value = value }
 
     /**
+     * Single subscription to the raw offline library; both [offlineLibrary] and
+     * [storageSummary] derive from this shared upstream so the Room query and
+     * the per-entity mapping run once per change instead of twice.
+     */
+    private val rawLibrary: StateFlow<List<OfflineMediaItem>> =
+        offlineRepository.getOfflineLibrary()
+            .stateIn(
+                scope = scope,
+                started = SharingStarted.WhileSubscribed(5_000),
+                initialValue = emptyList(),
+            )
+
+    /**
      * Library items after applying the active search query, filter and sort.
      * The query is debounced so typing doesn't re-filter on every keystroke.
      */
     val offlineLibrary: StateFlow<List<OfflineMediaItem>> =
         combine(
-            offlineRepository.getOfflineLibrary(),
+            rawLibrary,
             _query.debounce(180),
             combine(_sort, _filter) { s, f -> s to f },
         ) { items, query, (sort, filter) ->
@@ -75,9 +88,9 @@ class OfflineLibraryViewModel @Inject constructor(
             initialValue = emptyList(),
         )
 
-    /** Total storage used by completed downloads, plus the item count. */
+    /** Total storage used by all completed downloads, plus the item count. */
     val storageSummary: StateFlow<StorageSummary> =
-        offlineRepository.getOfflineLibrary().map { items ->
+        rawLibrary.map { items ->
             StorageSummary(totalBytes = items.sumOf { it.totalSizeBytes }, itemCount = items.size)
         }.stateIn(
             scope = scope,

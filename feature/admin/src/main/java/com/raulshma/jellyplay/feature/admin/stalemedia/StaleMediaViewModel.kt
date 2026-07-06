@@ -9,6 +9,7 @@ import com.raulshma.jellyplay.core.model.MediaCleanupConfig
 import com.raulshma.jellyplay.core.model.MediaItemStub
 import com.raulshma.jellyplay.core.model.ScanPhase
 import com.raulshma.jellyplay.core.model.ScanProgress
+import com.raulshma.jellyplay.core.model.sortSizeBytes
 import com.raulshma.jellyplay.core.ui.viewmodel.JellyPlayViewModel
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.serialization.json.Json
@@ -56,22 +57,6 @@ data class StaleMediaState(
             MediaSortOption.DATE -> rawScanResults.sortedBy { it.dateText }
         }
 }
-
-private val MediaItemStub.sortSizeBytes: Long
-    get() {
-        val match = Regex("(\\d+\\.?\\d*)\\s*(B|KB|MB|GB|TB)").find(sizeText)
-        if (match != null) {
-            val num = match.groupValues[1].toDoubleOrNull() ?: return 0L
-            return when (match.groupValues[2]) {
-                "TB" -> (num * 1024 * 1024 * 1024 * 1024).toLong()
-                "GB" -> (num * 1024 * 1024 * 1024).toLong()
-                "MB" -> (num * 1024 * 1024).toLong()
-                "KB" -> (num * 1024).toLong()
-                else -> num.toLong()
-            }
-        }
-        return 0L
-    }
 
 @HiltViewModel
 class StaleMediaViewModel @Inject constructor(

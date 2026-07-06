@@ -60,12 +60,18 @@ class LogsViewModel @Inject constructor(
     private companion object {
         /** Reusable lenient Json — hoisted out of the per-WebSocket-message hot path. */
         val JSON = Json { ignoreUnknownKeys = true }
+
+        const val MAX_LIVE_ENTRIES = 200
     }
 
     private var webSocket: WebSocket? = null
     private var pollingJob: Job? = null
     private var liveCollectJob: Job? = null
     private var logFilePollingJob: Job? = null
+
+    private val liveEntriesBuffer = ArrayDeque<ActivityLogEntry>(MAX_LIVE_ENTRIES)
+    private val activityEntriesBuffer = ArrayDeque<ActivityLogEntry>(MAX_LIVE_ENTRIES)
+    private val liveEntryIdsBuffer = LinkedHashSet<Long>()
 
     init {
         loadInitialData()
@@ -77,9 +83,12 @@ class LogsViewModel @Inject constructor(
             try {
                 val logFilesResult = apiClient.getLogFiles()
                 val activityResult = apiClient.getActivityLogEntries(limit = 50)
+                val entries = activityResult.getOrNull() ?: emptyList()
+                activityEntriesBuffer.clear()
+                activityEntriesBuffer.addAll(entries)
                 _state.value = _state.value.copy(
                     logFiles = logFilesResult.getOrNull() ?: emptyList(),
-                    activityEntries = activityResult.getOrNull() ?: emptyList(),
+                    activityEntries = activityEntriesBuffer.toList(),
                     isLoading = false,
                 )
             } catch (e: Exception) {
@@ -169,16 +178,29 @@ class LogsViewModel @Inject constructor(
     fun startLiveStream() {
         val serverUrl = apiClient.getServerUrl() ?: return
         val token = apiClient.getAccessToken() ?: return
-        _state.value = _state.value.copy(isLiveStreamActive = true, liveEntries = emptyList())
+        _state.value = _state.value.copy(
+            isLiveStreamActive = true,
+            liveEntries = emptyList(),
+        )
+        liveEntriesBuffer.clear()
 
         liveCollectJob?.cancel()
         liveCollectJob = launch {
             liveEvents.collect { entry ->
-                val current = _state.value
-                _state.value = current.copy(
-                    liveEntries = (listOf(entry) + current.liveEntries).take(200),
-                    liveEntryIds = current.liveEntryIds + entry.id,
-                    activityEntries = (listOf(entry) + current.activityEntries).take(200),
+                if (entry.id in liveEntryIdsBuffer) return@collect
+                liveEntryIdsBuffer.add(entry.id)
+                liveEntriesBuffer.addFirst(entry)
+                activityEntriesBuffer.addFirst(entry)
+                while (liveEntriesBuffer.size > MAX_LIVE_ENTRIES) {
+                    liveEntriesBuffer.removeLast()
+                }
+                while (activityEntriesBuffer.size > MAX_LIVE_ENTRIES) {
+                    activityEntriesBuffer.removeLast()
+                }
+                _state.value = _state.value.copy(
+                    liveEntries = liveEntriesBuffer.toList(),
+                    liveEntryIds = liveEntryIdsBuffer.toSet(),
+                    activityEntries = activityEntriesBuffer.toList(),
                 )
             }
         }
@@ -241,8 +263,9 @@ class LogsViewModel @Inject constructor(
             val currentSize = _state.value.activityEntries.size
             val result = apiClient.getActivityLogEntries(startIndex = currentSize, limit = 50)
             result.onSuccess { more ->
+                activityEntriesBuffer.addAll(more)
                 _state.value = _state.value.copy(
-                    activityEntries = _state.value.activityEntries + more,
+                    activityEntries = activityEntriesBuffer.toList(),
                 )
             }
         }
