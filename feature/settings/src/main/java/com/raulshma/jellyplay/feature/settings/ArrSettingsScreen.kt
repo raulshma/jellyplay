@@ -1,5 +1,6 @@
 package com.raulshma.jellyplay.feature.settings
 
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -9,9 +10,11 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
@@ -37,6 +40,9 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -73,6 +79,7 @@ fun ArrSettingsScreen(
     val preferences by viewModel.preferences.collectAsStateWithLifecycle()
     val servers by viewModel.servers.collectAsStateWithLifecycle()
     val isRefreshing by viewModel.isRefreshing.collectAsStateWithLifecycle()
+    val serverStatus by viewModel.serverStatus.collectAsStateWithLifecycle()
 
     var showAddDialog by remember { mutableStateOf(false) }
 
@@ -144,26 +151,45 @@ fun ArrSettingsScreen(
             }
 
             item {
-                Text(
-                    "Servers",
-                    style = MaterialTheme.typography.titleSmall,
-                    fontWeight = FontWeight.SemiBold,
-                    modifier = Modifier.padding(top = 8.dp),
-                )
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Text(
+                        "Servers",
+                        style = MaterialTheme.typography.titleSmall,
+                        fontWeight = FontWeight.SemiBold,
+                        modifier = Modifier
+                            .padding(top = 8.dp)
+                            .weight(1f),
+                    )
+                    val allServers = (servers.radarrServers + servers.sonarrServers)
+                    if (allServers.isNotEmpty()) {
+                        TextButton(onClick = { viewModel.testAllServers() }) {
+                            Text("Test all")
+                        }
+                    }
+                }
             }
 
             val allServers = (servers.radarrServers + servers.sonarrServers)
             if (allServers.isEmpty()) {
                 item {
                     Text(
-                        if (isRefreshing) "Resolving servers…" else "No servers configured.",
+                        if (isRefreshing) "Resolving servers…" else stringResource(R.string.settings_arr_no_servers_hint),
                         style = MaterialTheme.typography.bodyMedium,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
                 }
             } else {
                 items(allServers, key = { it.id }) { server ->
-                    ServerRow(server = server, onRemove = { viewModel.removeManualServer(server) })
+                    ServerRow(
+                        server = server,
+                        status = serverStatus[server.id]
+                            ?: ArrSettingsViewModel.ServerConnectionStatus.Idle,
+                        onTest = { viewModel.testServer(server) },
+                        onRemove = { viewModel.removeManualServer(server) },
+                    )
                 }
             }
 
@@ -192,42 +218,94 @@ fun ArrSettingsScreen(
 }
 
 @Composable
-private fun ServerRow(server: ArrServerConfig, onRemove: (ArrServerConfig) -> Unit) {
+private fun ServerRow(
+    server: ArrServerConfig,
+    status: ArrSettingsViewModel.ServerConnectionStatus,
+    onTest: () -> Unit,
+    onRemove: (ArrServerConfig) -> Unit,
+) {
+    val isTesting = status is ArrSettingsViewModel.ServerConnectionStatus.Testing
     Card(modifier = Modifier.fillMaxWidth(), colors = CardDefaults.cardColors()) {
-        Row(
+        Column(
             modifier = Modifier
                 .fillMaxWidth()
                 .padding(16.dp),
-            verticalAlignment = Alignment.CenterVertically,
+            verticalArrangement = Arrangement.spacedBy(6.dp),
         ) {
-            Column(modifier = Modifier.weight(1f)) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Text(server.name, style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.SemiBold)
-                    Spacer(Modifier.width(8.dp))
-                    val tagText = when {
-                        server.isManual -> "Manual"
-                        server.kind == ArrServiceKind.RADARR -> "Radarr · Seerr"
-                        else -> "Sonarr · Seerr"
-                    }
-                    Text(
-                        tagText,
-                        style = MaterialTheme.typography.labelSmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                StatusDot(status)
+                Spacer(Modifier.width(8.dp))
+                Text(server.name, style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.SemiBold)
+                Spacer(Modifier.width(8.dp))
+                val tagText = when {
+                    server.isManual -> "Manual"
+                    server.kind == ArrServiceKind.RADARR -> "Radarr · Seerr"
+                    else -> "Sonarr · Seerr"
                 }
                 Text(
-                    server.baseUrl,
-                    style = MaterialTheme.typography.bodySmall,
+                    tagText,
+                    style = MaterialTheme.typography.labelSmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
             }
-            if (server.isManual) {
-                IconButton(onClick = { onRemove(server) }) {
-                    Icon(Tabler.Outline.Trash, contentDescription = "Remove manual server")
+            Text(
+                server.baseUrl,
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            // Status label + error detail. Connected is shown only briefly via the
+            // green dot; an explicit "Connected" line would crowd every healthy row.
+            when (status) {
+                is ArrSettingsViewModel.ServerConnectionStatus.Error -> Text(
+                    status.message,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.error,
+                )
+                is ArrSettingsViewModel.ServerConnectionStatus.Testing -> Text(
+                    stringResource(R.string.settings_connecting),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                else -> Unit
+            }
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.End,
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                OutlinedButton(onClick = onTest, enabled = !isTesting) {
+                    Text(stringResource(R.string.settings_arr_test))
+                }
+                Spacer(Modifier.width(8.dp))
+                if (server.isManual) {
+                    IconButton(onClick = { onRemove(server) }) {
+                        Icon(Tabler.Outline.Trash, contentDescription = "Remove manual server")
+                    }
                 }
             }
         }
     }
+}
+
+/**
+ * Colored dot indicating per-server reachability. Green = reachable, amber =
+ * probe in flight, red = last probe failed, gray = not yet probed. Kept tiny
+ * (10.dp) so it reads as a status pip next to the server name.
+ */
+@Composable
+private fun StatusDot(status: ArrSettingsViewModel.ServerConnectionStatus) {
+    val color = when (status) {
+        is ArrSettingsViewModel.ServerConnectionStatus.Connected -> Color(0xFF4CAF50)
+        is ArrSettingsViewModel.ServerConnectionStatus.Testing -> Color(0xFFFFA000)
+        is ArrSettingsViewModel.ServerConnectionStatus.Error -> MaterialTheme.colorScheme.error
+        is ArrSettingsViewModel.ServerConnectionStatus.Idle -> MaterialTheme.colorScheme.outline
+    }
+    Box(
+        modifier = Modifier
+            .size(10.dp)
+            .clip(CircleShape)
+            .background(color),
+    )
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
