@@ -261,6 +261,10 @@ fun RequestsScreen(
                     request = request,
                     mediaInfo = state.mediaInfo[request.media.tmdbId],
                     isAdmin = isAdmin,
+                    downloadProgress = state.downloadProgress[request.media.tmdbId],
+                    onRemoveFromQueue = { b, s ->
+                        viewModel.removeQueueItem(request.media.tmdbId, b, s)
+                    },
                     onDismiss = { selectedRequest = null },
                     onApprove = {
                         viewModel.approveRequest(request.id)

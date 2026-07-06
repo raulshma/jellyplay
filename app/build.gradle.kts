@@ -134,6 +134,7 @@ dependencies {
     implementation(project(":feature:insights"))
     implementation(project(":feature:requests"))
     implementation(project(":feature:shortcuts"))
+    implementation(project(":feature:arrqueue"))
 
     implementation(libs.androidx.core.ktx)
     implementation(libs.androidx.core.splashscreen)

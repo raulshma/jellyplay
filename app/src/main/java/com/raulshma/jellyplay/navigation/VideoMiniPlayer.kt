@@ -124,22 +124,31 @@ fun VideoMiniPlayer(
             else -> null
         }
 
-        val shape = when {
-            isSynthwave -> RoundedCornerShape(0.dp)
-            isSoothing -> ShapeCache.smooth16
-            else -> ShapeCache.smooth12
+        // Wrap the shape when-chains in remember so the RoundedCornerShape
+        // instances aren't rebuilt on every recomposition. The branches only
+        // depend on isSynthwave / isSoothing.
+        val shape = remember(isSynthwave, isSoothing) {
+            when {
+                isSynthwave -> RoundedCornerShape(0.dp)
+                isSoothing -> ShapeCache.smooth16
+                else -> ShapeCache.smooth12
+            }
         }
 
-        val videoShape = when {
-            isSynthwave -> RoundedCornerShape(0.dp)
-            isSoothing -> RoundedCornerShape(topStart = 16.dp, topEnd = 16.dp)
-            else -> RoundedCornerShape(topStart = 12.dp, topEnd = 12.dp)
+        val videoShape = remember(isSynthwave, isSoothing) {
+            when {
+                isSynthwave -> RoundedCornerShape(0.dp)
+                isSoothing -> RoundedCornerShape(topStart = 16.dp, topEnd = 16.dp)
+                else -> RoundedCornerShape(topStart = 12.dp, topEnd = 12.dp)
+            }
         }
 
-        val bottomShape = when {
-            isSynthwave -> RoundedCornerShape(0.dp)
-            isSoothing -> RoundedCornerShape(bottomStart = 16.dp, bottomEnd = 16.dp)
-            else -> RoundedCornerShape(bottomStart = 12.dp, bottomEnd = 12.dp)
+        val bottomShape = remember(isSynthwave, isSoothing) {
+            when {
+                isSynthwave -> RoundedCornerShape(0.dp)
+                isSoothing -> RoundedCornerShape(bottomStart = 16.dp, bottomEnd = 16.dp)
+                else -> RoundedCornerShape(bottomStart = 12.dp, bottomEnd = 12.dp)
+            }
         }
 
         Surface(

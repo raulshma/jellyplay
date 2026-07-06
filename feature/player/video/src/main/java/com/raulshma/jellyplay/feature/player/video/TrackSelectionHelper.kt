@@ -1,5 +1,6 @@
 package com.raulshma.jellyplay.feature.player.video
 
+import androidx.compose.runtime.Immutable
 import com.raulshma.jellyplay.core.datastore.UserPreferencesStore
 import com.raulshma.jellyplay.core.model.MediaStream
 import com.raulshma.jellyplay.core.model.StreamType
@@ -9,6 +10,7 @@ import com.raulshma.jellyplay.feature.player.video.engine.MediaEngine
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.launch
 
+@Immutable
 data class TrackOption(
     val index: Int,
     val label: String,

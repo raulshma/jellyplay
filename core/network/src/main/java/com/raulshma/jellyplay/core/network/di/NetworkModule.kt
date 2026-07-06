@@ -2,6 +2,8 @@ package com.raulshma.jellyplay.core.network.di
 
 import android.content.Context
 import android.net.ConnectivityManager
+import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.runBlocking
 import com.raulshma.jellyplay.core.network.JellyfinApiClient
 import com.raulshma.jellyplay.core.network.JellyfinApiClientImpl
 import com.raulshma.jellyplay.core.network.config.OkHttpConfigProvider
@@ -23,6 +25,12 @@ import com.raulshma.jellyplay.core.network.api.PluginApiClient
 import com.raulshma.jellyplay.core.network.api.PluginApiClientImpl
 import com.raulshma.jellyplay.core.network.api.SyncPlayApiClient
 import com.raulshma.jellyplay.core.network.api.SyncPlayApiClientImpl
+import com.raulshma.jellyplay.core.network.arr.RadarrApiClient
+import com.raulshma.jellyplay.core.network.arr.RadarrApiClientImpl
+import com.raulshma.jellyplay.core.network.arr.ResilientRadarrApiClient
+import com.raulshma.jellyplay.core.network.arr.ResilientSonarrApiClient
+import com.raulshma.jellyplay.core.network.arr.SonarrApiClient
+import com.raulshma.jellyplay.core.network.arr.SonarrApiClientImpl
 import com.raulshma.jellyplay.core.network.seerr.ResilientSeerrApiClient
 import com.raulshma.jellyplay.core.network.api.TmdbApiClient
 import com.raulshma.jellyplay.core.network.api.TmdbApiClientImpl
@@ -106,6 +114,18 @@ abstract class NetworkModule {
         impl: TmdbApiClientImpl,
     ): TmdbApiClient
 
+    @Binds
+    @Singleton
+    abstract fun bindRadarrApiClient(
+        impl: ResilientRadarrApiClient,
+    ): RadarrApiClient
+
+    @Binds
+    @Singleton
+    abstract fun bindSonarrApiClient(
+        impl: ResilientSonarrApiClient,
+    ): SonarrApiClient
+
     companion object {
         // Hoisted so the pattern compiles once at class load rather than on each
         // OkHttp client construction (low impact since the provider is @Singleton,
@@ -113,6 +133,15 @@ abstract class NetworkModule {
         val TOKEN_PARAM_PATTERN = Regex(
             "(?i)(\\?|&)(api_key|apikey|token|x-emby-token|accesstoken)=[^&\\s]+",
         )
+
+        // Derived-client timeout constants. Hoisted as named constants so a
+        // tune of the base preset (or these derived values) only has to touch
+        // one place — the streaming/download clients previously re-declared
+        // 30/60/30 second literals independently of the base preset.
+        private const val STREAMING_MIN_READ_TIMEOUT_SEC = 30L
+        private const val DOWNLOAD_CONNECT_TIMEOUT_SEC = 30L
+        private const val DOWNLOAD_READ_TIMEOUT_SEC = 60L
+        private const val DOWNLOAD_WRITE_TIMEOUT_SEC = 30L
 
         @Provides
         @Singleton
@@ -143,7 +172,15 @@ abstract class NetworkModule {
             okHttpConfigProvider: OkHttpConfigProvider,
             bandwidthInterceptor: BandwidthInterceptor,
         ): OkHttpClient {
-            val initialConfig = okHttpConfigProvider.config.value
+            // Suspend on the first *real* emission of okHttpConfigProvider.config
+            // before building the cache. The StateFlow's initialValue reports
+            // maxCacheSizeMb = 0 (sentinel), and OkHttp's Cache is not dynamically
+            // resizable — so reading .value used to build the cache with the 50 MB
+            // fallback and never re-size it (if the user picked e.g. 500 MB they
+            // got 50 MB until process restart). .first() blocks (Hilt providers
+            // run on a background thread during init) until the real preference
+            // arrives ~tens of ms later, sizing the cache correctly from start.
+            val initialConfig = runBlocking { okHttpConfigProvider.config.first() }
             val cacheDir = File(context.cacheDir, "http_cache")
             cacheDir.mkdirs()
             val cacheMb = initialConfig.maxCacheSizeMb
@@ -242,7 +279,7 @@ abstract class NetworkModule {
             okHttpClient: OkHttpClient,
         ): OkHttpClient {
             val baseReadSec = okHttpClient.readTimeoutMillis.toLong() / 1000L
-            val streamingReadSec = maxOf(baseReadSec, 30L)
+            val streamingReadSec = maxOf(baseReadSec, STREAMING_MIN_READ_TIMEOUT_SEC)
             return okHttpClient.newBuilder()
                 .readTimeout(streamingReadSec, TimeUnit.SECONDS)
                 .build()
@@ -264,9 +301,9 @@ abstract class NetworkModule {
         fun provideDownloadOkHttpClient(
             okHttpClient: OkHttpClient,
         ): OkHttpClient = okHttpClient.newBuilder()
-            .connectTimeout(30, TimeUnit.SECONDS)
-            .readTimeout(60, TimeUnit.SECONDS)
-            .writeTimeout(30, TimeUnit.SECONDS)
+            .connectTimeout(DOWNLOAD_CONNECT_TIMEOUT_SEC, TimeUnit.SECONDS)
+            .readTimeout(DOWNLOAD_READ_TIMEOUT_SEC, TimeUnit.SECONDS)
+            .writeTimeout(DOWNLOAD_WRITE_TIMEOUT_SEC, TimeUnit.SECONDS)
             .build()
     }
 }

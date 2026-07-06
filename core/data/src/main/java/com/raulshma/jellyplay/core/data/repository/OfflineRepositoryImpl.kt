@@ -98,7 +98,7 @@ class OfflineRepositoryImpl @Inject constructor(
     override fun getSeasonsForSeries(seriesId: String): Flow<List<OfflineMediaItem>> =
         offlineMediaDao.getSeasonsForSeries(seriesId).map { entities ->
             entities.map { it.toOfflineMediaItem() }
-        }
+        }.distinctUntilChanged()
 
     override fun getEpisodesForSeason(seasonId: String): Flow<List<OfflineMediaItem>> =
         offlineMediaDao.getEpisodesForSeason(seasonId).flatMapLatest { episodes ->

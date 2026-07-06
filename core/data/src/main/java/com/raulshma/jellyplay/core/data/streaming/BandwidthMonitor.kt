@@ -38,7 +38,15 @@ class BandwidthMonitor @Inject constructor() {
             }
             _totalBytes.value = _totalBytes.value + bytesTransferred
             _totalElapsedMs.value = _totalElapsedMs.value + elapsedMs
-            _estimatedBandwidthKbps.value = computeAverageKbpsInternal()
+            // Suppress redundant emissions: addSample is fed from the audio
+            // position tracker every ~20 ticks, so without this guard every
+            // collector of estimatedBandwidthKbps (the AdaptiveBitrateSelector)
+            // wakes even when the recomputed kbps is bit-identical to the last
+            // emission (common when samples plateau).
+            val newKbps = computeAverageKbpsInternal()
+            if (newKbps != _estimatedBandwidthKbps.value) {
+                _estimatedBandwidthKbps.value = newKbps
+            }
         }
     }
 

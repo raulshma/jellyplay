@@ -67,6 +67,7 @@ class HomeViewModel @Inject constructor(
     private val seerrRequestDelegate: SeerrRequestDelegate,
     private val seerrPreferencesStore: SeerrPreferencesStore,
     private val authRepository: AuthRepository,
+    private val arrRepository: com.raulshma.jellyplay.core.data.repository.ArrRepository,
     private val tvWatchNextScheduler: TvWatchNextScheduler,
     @param:dagger.hilt.android.qualifiers.ApplicationContext private val context: android.content.Context,
 ) : JellyPlayViewModel(), DefaultLifecycleObserver {
@@ -185,6 +186,7 @@ class HomeViewModel @Inject constructor(
                     showClock = prefs.showClockOnHome,
                     continueWatchingClickBehavior = prefs.continueWatchingClickBehavior,
                     experimentalCardClippingEnabled = com.raulshma.jellyplay.core.model.ExperimentalFeature.HOME_CARD_CLIPPING in prefs.enabledExperimentalFeatures,
+                    directArrEnabled = com.raulshma.jellyplay.core.model.ExperimentalFeature.DIRECT_ARR_INTEGRATION in prefs.enabledExperimentalFeatures,
                 ) }
 
                 if (homeSectionPrefsChanged) {
@@ -559,10 +561,31 @@ class HomeViewModel @Inject constructor(
             if (_uiState.value.discoverEnabled) {
                 fetchDiscoverSections(seerrPreferences)
             }
+            // Direct *arr "Recently Grabbed" calendar — gated by the
+            // DIRECT_ARR_INTEGRATION flag and the same TTL gate as discover
+            // sections so it never adds extra round-trips on every refresh.
+            if (_uiState.value.directArrEnabled) {
+                fetchRecentlyGrabbed()
+            }
         } finally {
             _uiState.update { it.copy(isLoading = false, isRefreshing = false) }
             refreshMutex.unlock()
         }
+    }
+
+    /**
+     * Refreshes the *arr calendar window and pushes the merged list into
+     * [HomeUiState.recentlyGrabbed] as [SeerrSearchItem]s (reusing the TMDB
+     * card model so no new card UI is needed). Window is now → +30 days so
+     * "coming soon" + freshly-grabbed items both surface. Failures degrade to
+     * empty; the *arr repository already swallows per-server errors.
+     */
+    private suspend fun fetchRecentlyGrabbed() {
+        val now = java.time.LocalDate.now(java.time.ZoneOffset.systemDefault())
+        val end = now.plusDays(30)
+        arrRepository.refreshCalendar(now, end)
+        val items = arrRepository.calendar(now, end).first()
+        _uiState.update { it.copy(recentlyGrabbed = items.map { it.toSeerrSearchItem() }) }
     }
 
     private suspend fun fetchDiscoverSections(prefs: SeerrPreferences) {

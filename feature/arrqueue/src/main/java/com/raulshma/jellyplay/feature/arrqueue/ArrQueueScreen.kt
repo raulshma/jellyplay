@@ -1,0 +1,617 @@
+package com.raulshma.jellyplay.feature.arrqueue
+
+import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.foundation.combinedClickable
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.Card
+import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.Checkbox
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.FilledTonalButton
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
+import androidx.compose.material3.LinearProgressIndicator
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.Surface
+import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
+import androidx.compose.material3.pulltorefresh.PullToRefreshBox
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.dp
+import androidx.hilt.navigation.compose.hiltViewModel
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.composables.icons.tabler.Tabler
+import com.composables.icons.tabler.outline.ArrowLeft
+import com.composables.icons.tabler.outline.Ban
+import com.composables.icons.tabler.outline.Check
+import com.composables.icons.tabler.outline.Database
+import com.composables.icons.tabler.outline.Download
+import com.composables.icons.tabler.outline.PlayerPlay
+import com.composables.icons.tabler.outline.Refresh
+import com.composables.icons.tabler.outline.Search
+import com.composables.icons.tabler.outline.Settings
+import com.composables.icons.tabler.outline.Trash
+import com.composables.icons.tabler.outline.X
+import com.raulshma.jellyplay.core.designsystem.theme.ShapeCache
+import com.raulshma.jellyplay.core.designsystem.theme.StatusColors
+import com.raulshma.jellyplay.core.model.arr.ArrDownloadStatus
+import com.raulshma.jellyplay.core.model.arr.ArrQueueItem
+import com.raulshma.jellyplay.core.model.arr.ArrServiceKind
+import com.raulshma.jellyplay.core.ui.components.JellyPlayCircularProgressIndicator
+import com.raulshma.jellyplay.core.ui.components.JellyPlayScreenScaffold
+
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalFoundationApi::class)
+@Composable
+fun ArrQueueScreen(
+    onBack: () -> Unit,
+    onOpenArrSettings: () -> Unit = {},
+    viewModel: ArrQueueViewModel = hiltViewModel(),
+) {
+    val state by viewModel.state
+    val featureEnabled by viewModel.featureEnabled.collectAsStateWithLifecycle()
+
+    JellyPlayScreenScaffold(
+        title = "Activity Queue",
+        onBack = onBack,
+        actions = {
+            IconButton(onClick = { viewModel.refresh() }, enabled = !state.isLoading) {
+                Icon(Tabler.Outline.Refresh, contentDescription = "Refresh")
+            }
+        },
+    ) { paddingValues ->
+        val bottomPadding = paddingValues.calculateBottomPadding()
+
+        Box(modifier = Modifier.fillMaxSize()) {
+            when {
+                !featureEnabled -> FeatureDisabledState(
+                    onOpenSettings = onOpenArrSettings,
+                    modifier = Modifier.fillMaxSize(),
+                )
+
+                state.isLoading && state.queue.isEmpty() -> Box(
+                    modifier = Modifier.fillMaxSize(),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    JellyPlayCircularProgressIndicator(modifier = Modifier.size(48.dp))
+                }
+
+                state.error != null && state.queue.isEmpty() -> ErrorState(
+                    message = state.error ?: "Unknown error",
+                    onRetry = { viewModel.refresh() },
+                    modifier = Modifier.fillMaxSize(),
+                )
+
+                state.queue.isEmpty() -> EmptyQueueState(modifier = Modifier.fillMaxSize())
+
+                else -> PullToRefreshBox(
+                    isRefreshing = state.isLoading && state.queue.isNotEmpty(),
+                    onRefresh = { viewModel.refresh() },
+                    modifier = Modifier.fillMaxSize(),
+                ) {
+                    LazyColumn(
+                        modifier = Modifier.fillMaxSize(),
+                        contentPadding = androidx.compose.foundation.layout.PaddingValues(
+                            start = 16.dp,
+                            top = 8.dp,
+                            end = 16.dp,
+                            bottom = if (state.selectionMode) 88.dp else (16.dp + bottomPadding),
+                        ),
+                        verticalArrangement = Arrangement.spacedBy(8.dp),
+                    ) {
+                        items(state.queue, key = { "${it.serverKind}|${it.queueId}|${it.serverId}" }) { item ->
+                            QueueRow(
+                                item = item,
+                                selected = item.rowKey in state.selectedIds,
+                                selectionMode = state.selectionMode,
+                                actionInProgress = state.actionInProgress,
+                                onClick = {
+                                    if (state.selectionMode) viewModel.toggleSelection(item)
+                                },
+                                onLongClick = { viewModel.toggleSelection(item) },
+                                onDelete = { viewModel.showDeleteDialog(item) },
+                                onGrab = { viewModel.showGrabDialog(item) },
+                                onImport = { viewModel.showImportDialog(item) },
+                            )
+                        }
+                    }
+                }
+            }
+
+            // Selection-mode bottom action bar.
+            if (state.selectionMode) {
+                SelectionActionBar(
+                    selectedCount = state.selectedIds.size,
+                    actionInProgress = state.actionInProgress,
+                    onSelectAll = { viewModel.selectAll() },
+                    onClear = { viewModel.clearSelection() },
+                    onBulkDelete = {
+                        // Reuse the single-item delete dialog via the first
+                        // selected item as a stand-in; the actual bulk path
+                        // fires through deleteSelected.
+                        viewModel.deleteSelected(blocklist = false, searchAgain = false)
+                    },
+                    modifier = Modifier
+                        .align(Alignment.BottomCenter)
+                        .fillMaxWidth()
+                        .padding(16.dp),
+                )
+            }
+
+            // Inline action error toast-ish row.
+            val actionError = state.actionError
+            if (actionError != null) {
+                Surface(
+                    modifier = Modifier
+                        .align(Alignment.BottomCenter)
+                        .padding(16.dp),
+                    color = MaterialTheme.colorScheme.errorContainer,
+                    shape = ShapeCache.smooth12,
+                ) {
+                    Row(
+                        modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Text(
+                            text = actionError,
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onErrorContainer,
+                            modifier = Modifier.weight(1f),
+                        )
+                        TextButton(onClick = { viewModel.clearActionError() }) {
+                            Text("Dismiss")
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    // Inline action dialogs.
+    state.pendingAction?.let { action ->
+        when (action) {
+            is ArrQueueAction.Delete -> DeleteActionDialog(
+                item = action.item,
+                bulk = false,
+                onDismiss = { viewModel.dismissAction() },
+                onConfirm = { blocklist, searchAgain ->
+                    viewModel.deleteItem(action.item, blocklist, searchAgain)
+                },
+            )
+            is ArrQueueAction.Grab -> ConfirmActionDialog(
+                title = "Force-grab release",
+                message = "Send \"${action.item.title}\" to its download client now?",
+                confirmLabel = "Grab",
+                onDismiss = { viewModel.dismissAction() },
+                onConfirm = { viewModel.grabItem(action.item) },
+            )
+            is ArrQueueAction.Import -> ConfirmActionDialog(
+                title = "Force import",
+                message = "Import \"${action.item.title}\" into ${serviceName(action.item.serverKind)} now?",
+                confirmLabel = "Import",
+                onDismiss = { viewModel.dismissAction() },
+                onConfirm = { viewModel.importItem(action.item) },
+            )
+        }
+    }
+}
+
+// ── Rows ──────────────────────────────────────────────────────────────────
+
+@OptIn(ExperimentalFoundationApi::class)
+@Composable
+private fun QueueRow(
+    item: ArrQueueItem,
+    selected: Boolean,
+    selectionMode: Boolean,
+    actionInProgress: Boolean,
+    onClick: () -> Unit,
+    onLongClick: () -> Unit,
+    onDelete: () -> Unit,
+    onGrab: () -> Unit,
+    onImport: () -> Unit,
+) {
+    Card(
+        modifier = Modifier
+            .fillMaxWidth()
+            .combinedClickable(onClick = onClick, onLongClick = onLongClick),
+        shape = ShapeCache.smooth12,
+        colors = CardDefaults.cardColors(
+            containerColor = if (selected) {
+                MaterialTheme.colorScheme.primaryContainer
+            } else {
+                MaterialTheme.colorScheme.surfaceContainerLow
+            },
+        ),
+    ) {
+        Column(modifier = Modifier.padding(16.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                if (selectionMode) {
+                    Checkbox(
+                        checked = selected,
+                        onCheckedChange = { onClick() },
+                    )
+                    Spacer(Modifier.width(8.dp))
+                }
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        text = item.title,
+                        style = MaterialTheme.typography.titleSmall,
+                        fontWeight = FontWeight.SemiBold,
+                        maxLines = 2,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                    Spacer(Modifier.height(4.dp))
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        ServiceBadge(kind = item.serverKind)
+                        Spacer(Modifier.width(8.dp))
+                        StatusChip(status = item.status)
+                    }
+                }
+            }
+
+            Spacer(Modifier.height(12.dp))
+
+            // Progress bar. Hide when there's no progress signal (e.g. QUEUED).
+            if (item.status == ArrDownloadStatus.DOWNLOADING ||
+                item.status == ArrDownloadStatus.PAUSED ||
+                item.status == ArrDownloadStatus.COMPLETED
+            ) {
+                LinearProgressIndicator(
+                    progress = { item.percent / 100f },
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(6.dp),
+                    color = progressColor(item.status),
+                    trackColor = MaterialTheme.colorScheme.surfaceContainerHighest,
+                )
+                Spacer(Modifier.height(6.dp))
+            }
+
+            // Subtitle: percent · size left · time left · quality.
+            val subtitle = buildString {
+                if (item.percent in 1..99) append("${item.percent}%")
+                item.sizeLeft?.toReadableBytes()?.let { if (isNotEmpty()) append(" · "); append(it) }
+                item.timeLeft?.takeIf { it.isNotBlank() }?.let { if (isNotEmpty()) append(" · "); append(it) }
+                item.quality?.takeIf { it.isNotBlank() }?.let { if (isNotEmpty()) append(" · "); append(it) }
+            }
+            if (subtitle.isNotBlank()) {
+                Text(
+                    text = subtitle,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+
+            // Attention messages (stuck/import warnings).
+            if (item.messages.isNotEmpty()) {
+                Spacer(Modifier.height(6.dp))
+                item.messages.take(2).forEach { msg ->
+                    Text(
+                        text = msg.message,
+                        style = MaterialTheme.typography.labelSmall,
+                        color = if (item.needsAttention) StatusColors.error else MaterialTheme.colorScheme.onSurfaceVariant,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                }
+            }
+
+            if (!selectionMode) {
+                Spacer(Modifier.height(12.dp))
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
+                    OutlinedButton(
+                        onClick = onDelete,
+                        enabled = !actionInProgress,
+                        modifier = Modifier.weight(1f),
+                        shape = ShapeCache.smooth12,
+                        colors = ButtonDefaults.outlinedButtonColors(
+                            contentColor = MaterialTheme.colorScheme.error,
+                        ),
+                    ) {
+                        Icon(Tabler.Outline.Trash, contentDescription = null, modifier = Modifier.size(16.dp))
+                        Spacer(Modifier.width(6.dp))
+                        Text("Delete")
+                    }
+                    OutlinedButton(
+                        onClick = onGrab,
+                        enabled = !actionInProgress,
+                        modifier = Modifier.weight(1f),
+                        shape = ShapeCache.smooth12,
+                    ) {
+                        Icon(Tabler.Outline.PlayerPlay, contentDescription = null, modifier = Modifier.size(16.dp))
+                        Spacer(Modifier.width(6.dp))
+                        Text("Grab")
+                    }
+                    OutlinedButton(
+                        onClick = onImport,
+                        enabled = !actionInProgress,
+                        modifier = Modifier.weight(1f),
+                        shape = ShapeCache.smooth12,
+                    ) {
+                        Icon(Tabler.Outline.Download, contentDescription = null, modifier = Modifier.size(16.dp))
+                        Spacer(Modifier.width(6.dp))
+                        Text("Import")
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun ServiceBadge(kind: ArrServiceKind) {
+    val (label, color) = when (kind) {
+        ArrServiceKind.RADARR -> "Radarr" to StatusColors.requested
+        ArrServiceKind.SONARR -> "Sonarr" to StatusColors.pending
+    }
+    Surface(
+        shape = RoundedCornerShape(6.dp),
+        color = color.copy(alpha = 0.15f),
+    ) {
+        Text(
+            text = label,
+            style = MaterialTheme.typography.labelSmall,
+            color = color,
+            modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
+            fontWeight = FontWeight.Medium,
+        )
+    }
+}
+
+@Composable
+private fun StatusChip(status: ArrDownloadStatus) {
+    val (label, color) = when (status) {
+        ArrDownloadStatus.DOWNLOADING -> "Downloading" to StatusColors.available
+        ArrDownloadStatus.QUEUED -> "Queued" to StatusColors.info
+        ArrDownloadStatus.PAUSED -> "Paused" to StatusColors.pending
+        ArrDownloadStatus.COMPLETED -> "Completed" to StatusColors.available
+        ArrDownloadStatus.IMPORTED -> "Imported" to StatusColors.success
+        ArrDownloadStatus.FAILED -> "Failed" to StatusColors.error
+        ArrDownloadStatus.WARNING -> "Warning" to StatusColors.warning
+        ArrDownloadStatus.UNKNOWN -> "Unknown" to StatusColors.debug
+    }
+    Surface(
+        shape = RoundedCornerShape(6.dp),
+        color = color.copy(alpha = 0.15f),
+    ) {
+        Text(
+            text = label,
+            style = MaterialTheme.typography.labelSmall,
+            color = color,
+            modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
+        )
+    }
+}
+
+private fun progressColor(status: ArrDownloadStatus): Color = when (status) {
+    ArrDownloadStatus.COMPLETED -> StatusColors.available
+    ArrDownloadStatus.PAUSED -> StatusColors.pending
+    ArrDownloadStatus.DOWNLOADING -> Color(0xFF42A5F5) // matches StatusColors.requested/info blue
+    else -> StatusColors.info
+}
+
+// ── States ────────────────────────────────────────────────────────────────
+
+@Composable
+private fun FeatureDisabledState(onOpenSettings: () -> Unit, modifier: Modifier = Modifier) {
+    Box(modifier = modifier, contentAlignment = Alignment.Center) {
+        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+            Icon(
+                Tabler.Outline.Database,
+                contentDescription = null,
+                modifier = Modifier.size(64.dp),
+                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            Spacer(Modifier.height(16.dp))
+            Text(
+                "Direct *arr Integration is off",
+                style = MaterialTheme.typography.titleMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            Spacer(Modifier.height(4.dp))
+            Text(
+                "Enable it in Settings → Integrations to view the combined download queue.",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            Spacer(Modifier.height(16.dp))
+            Button(onClick = onOpenSettings, shape = ShapeCache.smooth12) {
+                Icon(Tabler.Outline.Settings, contentDescription = null, modifier = Modifier.size(18.dp))
+                Spacer(Modifier.width(8.dp))
+                Text("Open *arr Settings")
+            }
+        }
+    }
+}
+
+@Composable
+private fun EmptyQueueState(modifier: Modifier = Modifier) {
+    Box(modifier = modifier, contentAlignment = Alignment.Center) {
+        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+            Icon(
+                Tabler.Outline.Download,
+                contentDescription = null,
+                modifier = Modifier.size(64.dp),
+                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            Spacer(Modifier.height(16.dp))
+            Text(
+                "Queue is empty",
+                style = MaterialTheme.typography.titleMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            Spacer(Modifier.height(4.dp))
+            Text(
+                "Nothing downloading across Radarr / Sonarr.",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+    }
+}
+
+@Composable
+private fun ErrorState(message: String, onRetry: () -> Unit, modifier: Modifier = Modifier) {
+    Box(modifier = modifier, contentAlignment = Alignment.Center) {
+        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+            Text(
+                message,
+                style = MaterialTheme.typography.bodyLarge,
+                color = MaterialTheme.colorScheme.error,
+            )
+            Spacer(Modifier.height(12.dp))
+            TextButton(onClick = onRetry) { Text("Retry") }
+        }
+    }
+}
+
+@Composable
+private fun SelectionActionBar(
+    selectedCount: Int,
+    actionInProgress: Boolean,
+    onSelectAll: () -> Unit,
+    onClear: () -> Unit,
+    onBulkDelete: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    Surface(
+        modifier = modifier,
+        shape = ShapeCache.smooth12,
+        color = MaterialTheme.colorScheme.surfaceContainerHigh,
+        shadowElevation = 8.dp,
+    ) {
+        Row(
+            modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Text(
+                "$selectedCount selected",
+                style = MaterialTheme.typography.labelLarge,
+                modifier = Modifier.weight(1f),
+            )
+            IconButton(onClick = onSelectAll, enabled = !actionInProgress) {
+                Icon(Tabler.Outline.Check, contentDescription = "Select all")
+            }
+            IconButton(onClick = onClear, enabled = !actionInProgress) {
+                Icon(Tabler.Outline.X, contentDescription = "Clear selection")
+            }
+            FilledTonalButton(
+                onClick = onBulkDelete,
+                enabled = !actionInProgress && selectedCount > 0,
+                shape = ShapeCache.smooth12,
+                colors = ButtonDefaults.filledTonalButtonColors(
+                    contentColor = MaterialTheme.colorScheme.error,
+                ),
+            ) {
+                Icon(Tabler.Outline.Trash, contentDescription = null, modifier = Modifier.size(18.dp))
+                Spacer(Modifier.width(6.dp))
+                Text("Delete")
+            }
+        }
+    }
+}
+
+// ── Dialogs ───────────────────────────────────────────────────────────────
+
+@Composable
+private fun DeleteActionDialog(
+    item: ArrQueueItem,
+    bulk: Boolean,
+    onDismiss: () -> Unit,
+    onConfirm: (blocklist: Boolean, searchAgain: Boolean) -> Unit,
+) {
+    val title = if (bulk) "Remove selected?" else "Remove \"${item.title}\"?"
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text(title) },
+        text = {
+            Column {
+                Text(
+                    "Choose how ${if (bulk) "these items" else "this item"} should be removed from the queue.",
+                    style = MaterialTheme.typography.bodyMedium,
+                )
+            }
+        },
+        confirmButton = {
+            Column(horizontalAlignment = Alignment.End) {
+                TextButton(onClick = { onConfirm(false, false) }) {
+                    Text("Remove only")
+                }
+                TextButton(onClick = { onConfirm(false, true) }) {
+                    Icon(Tabler.Outline.Search, contentDescription = null, modifier = Modifier.size(16.dp))
+                    Spacer(Modifier.width(4.dp))
+                    Text("Remove & search again")
+                }
+                TextButton(onClick = { onConfirm(true, true) }) {
+                    Icon(Tabler.Outline.Ban, contentDescription = null, modifier = Modifier.size(16.dp))
+                    Spacer(Modifier.width(4.dp))
+                    Text("Blocklist & search")
+                }
+            }
+        },
+        dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel") } },
+    )
+}
+
+@Composable
+private fun ConfirmActionDialog(
+    title: String,
+    message: String,
+    confirmLabel: String,
+    onDismiss: () -> Unit,
+    onConfirm: () -> Unit,
+) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text(title) },
+        text = { Text(message, style = MaterialTheme.typography.bodyMedium) },
+        confirmButton = {
+            TextButton(onClick = onConfirm) { Text(confirmLabel) }
+        },
+        dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel") } },
+    )
+}
+
+// ── Helpers ───────────────────────────────────────────────────────────────
+
+private fun serviceName(kind: ArrServiceKind): String = when (kind) {
+    ArrServiceKind.RADARR -> "Radarr"
+    ArrServiceKind.SONARR -> "Sonarr"
+}
+
+private fun Long.toReadableBytes(): String = when {
+    this >= 1_073_741_824 -> "%.1f GB".format(this / 1_073_741_824.0)
+    this >= 1_048_576 -> "%.1f MB".format(this / 1_048_576.0)
+    this >= 1024 -> "%.0f KB".format(this / 1024.0)
+    else -> "$this B"
+}
+
+private val ArrQueueItem.rowKey: String
+    get() = "${serverKind.name}|$queueId|${serverId.ifEmpty { "_" }}"

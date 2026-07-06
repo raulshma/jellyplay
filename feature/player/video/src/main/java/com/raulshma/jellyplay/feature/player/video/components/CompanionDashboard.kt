@@ -1,6 +1,7 @@
 package com.raulshma.jellyplay.feature.player.video.components
 
 import androidx.compose.animation.AnimatedVisibility
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.LinearOutSlowInEasing
 import androidx.compose.animation.core.animateFloatAsState
@@ -45,6 +46,7 @@ import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.material3.TabRowDefaults.tabIndicatorOffset
 import com.raulshma.jellyplay.feature.player.video.TrackOption
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -57,7 +59,13 @@ fun CompanionDashboard(
     lyricsLines: List<LyricsLine>,
     artworkUrl: String?,
     isPlaying: Boolean,
-    currentPositionMs: Long,
+    // StateFlow rather than a collected Long so the cast position tick (multiple
+    // times per second during playback) is collected *inside* the leaf consumers
+    // (CompanionControlBar + SubtitlesTabContent) instead of at the dashboard
+    // root. Threading a raw Long here forced the whole ~850-line composable
+    // (header, poster, tabs, tab content) to recompose per tick; only the slider
+    // + two time labels and the lyrics active-line index actually need it.
+    castPositionFlow: StateFlow<Long>,
     durationMs: Long,
     volume: Float,
     isConnecting: Boolean,
@@ -264,7 +272,7 @@ fun CompanionDashboard(
                     ) {
                         CompanionControlBar(
                             isPlaying = isPlaying,
-                            currentPositionMs = currentPositionMs,
+                            castPositionFlow = castPositionFlow,
                             durationMs = durationMs,
                             volume = volume,
                             onPlayPause = onPlayPause,
@@ -320,7 +328,7 @@ fun CompanionDashboard(
                             0 -> OverviewTabContent(overview = overview, people = people, getImageUrl = getImageUrl)
                             1 -> SubtitlesTabContent(
                                 lyricsLines = lyricsLines,
-                                currentPositionMs = currentPositionMs,
+                                castPositionFlow = castPositionFlow,
                                 audioTracks = audioTracks,
                                 subtitleTracks = subtitleTracks,
                                 onSelectAudioTrack = onSelectAudioTrack,
@@ -502,7 +510,7 @@ fun CompanionDashboard(
                         0 -> OverviewTabContent(overview = overview, people = people, getImageUrl = getImageUrl)
                         1 -> SubtitlesTabContent(
                             lyricsLines = lyricsLines,
-                            currentPositionMs = currentPositionMs,
+                            castPositionFlow = castPositionFlow,
                             audioTracks = audioTracks,
                             subtitleTracks = subtitleTracks,
                             onSelectAudioTrack = onSelectAudioTrack,
@@ -515,7 +523,7 @@ fun CompanionDashboard(
                 // Playback Controls Panel
                 CompanionControlBar(
                     isPlaying = isPlaying,
-                    currentPositionMs = currentPositionMs,
+                    castPositionFlow = castPositionFlow,
                     durationMs = durationMs,
                     volume = volume,
                     onPlayPause = onPlayPause,
@@ -619,12 +627,17 @@ fun OverviewTabContent(
 @Composable
 fun SubtitlesTabContent(
     lyricsLines: List<LyricsLine>,
-    currentPositionMs: Long,
+    castPositionFlow: StateFlow<Long>,
     audioTracks: List<TrackOption>,
     subtitleTracks: List<TrackOption>,
     onSelectAudioTrack: (TrackOption) -> Unit,
     onSelectSubtitleTrack: (TrackOption) -> Unit,
 ) {
+    // Collect the cast position tick at this leaf — the derivedStateOf below
+    // already gates recomposition to active-line crossings, but receiving the
+    // raw Long from the dashboard root would still force the dashboard itself
+    // to recompose on every tick.
+    val currentPositionMs by castPositionFlow.collectAsStateWithLifecycle()
     var subTabSelected by remember { mutableIntStateOf(if (lyricsLines.isNotEmpty()) 0 else 1) }
 
     Column(modifier = Modifier.fillMaxSize()) {
@@ -856,7 +869,7 @@ fun EpisodesTabContent(
 @Composable
 fun CompanionControlBar(
     isPlaying: Boolean,
-    currentPositionMs: Long,
+    castPositionFlow: StateFlow<Long>,
     durationMs: Long,
     volume: Float,
     onPlayPause: () -> Unit,
@@ -865,6 +878,13 @@ fun CompanionControlBar(
     onSeekTo: (Long) -> Unit,
     onVolumeChange: (Float) -> Unit,
 ) {
+    // Collect the high-frequency cast position tick here, at the leaf that
+    // actually renders the slider + time labels, instead of receiving a
+    // pre-collected Long from the dashboard root. This confines the per-tick
+    // recomposition to CompanionControlBar (and the lyrics tab via its own
+    // derivedStateOf) and stops the entire CompanionDashboard tree from
+    // recomposing on every position update.
+    val currentPositionMs by castPositionFlow.collectAsStateWithLifecycle()
     Column(
         modifier = Modifier
             .fillMaxWidth()

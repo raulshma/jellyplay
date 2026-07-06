@@ -41,7 +41,8 @@ class AuthApiClientImplTest {
             okHttpClient = okHttpClient,
             deviceProfileProvider = DeviceProfileProvider(DeviceCodecCapabilities()),
         )
-        authClient = AuthApiClientImpl(engine)
+        val libraryClient = LibraryApiClientImpl(engine, mockk(relaxed = true))
+        authClient = AuthApiClientImpl(engine, libraryClient)
     }
 
     @Test
