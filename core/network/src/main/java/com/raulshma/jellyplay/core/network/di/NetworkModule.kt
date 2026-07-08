@@ -32,6 +32,7 @@ import com.raulshma.jellyplay.core.network.arr.ResilientSonarrApiClient
 import com.raulshma.jellyplay.core.network.arr.SonarrApiClient
 import com.raulshma.jellyplay.core.network.arr.SonarrApiClientImpl
 import com.raulshma.jellyplay.core.network.seerr.ResilientSeerrApiClient
+import com.raulshma.jellyplay.core.network.api.ResilientTmdbApiClient
 import com.raulshma.jellyplay.core.network.api.TmdbApiClient
 import com.raulshma.jellyplay.core.network.api.TmdbApiClientImpl
 import com.raulshma.jellyplay.core.network.seerr.SeerrApiClient
@@ -111,7 +112,7 @@ abstract class NetworkModule {
     @Binds
     @Singleton
     abstract fun bindTmdbApiClient(
-        impl: TmdbApiClientImpl,
+        impl: ResilientTmdbApiClient,
     ): TmdbApiClient
 
     @Binds
@@ -149,6 +150,22 @@ abstract class NetworkModule {
             @ApplicationContext context: Context,
         ): ConnectivityManager =
             context.getSystemService(Context.CONNECTIVITY_SERVICE) as ConnectivityManager
+
+        /**
+         * Shared lenient `Json` for ad-hoc (de)serialization across the data and
+         * network layers (repository JSON columns, REST DTO decoding). Centralized
+         * here so every site shares one configured instance instead of re-declaring
+         * `Json { ignoreUnknownKeys = true }`. `Json` is thread-safe for
+         * parse/encode; a single process-wide instance is fine.
+         *
+         * Note: `JellyfinApiEngine.sharedJson` is the same configuration kept as a
+         * companion `val` for code paths that cannot use DI (e.g. object
+         * companions). Prefer this injected instance where a Hilt graph is available.
+         */
+        @Provides
+        @Singleton
+        fun provideJson(): kotlinx.serialization.json.Json =
+            kotlinx.serialization.json.Json { ignoreUnknownKeys = true }
 
         @Provides
         @Singleton

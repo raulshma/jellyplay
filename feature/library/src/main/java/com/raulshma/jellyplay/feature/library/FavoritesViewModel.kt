@@ -3,7 +3,7 @@ package com.raulshma.jellyplay.feature.library
 import androidx.paging.PagingData
 import androidx.paging.cachedIn
 import com.raulshma.jellyplay.core.data.repository.MediaRepository
-import com.raulshma.jellyplay.core.data.repository.PlaybackRepository
+import com.raulshma.jellyplay.core.data.util.ImageUrlProvider
 import com.raulshma.jellyplay.core.model.MediaItem
 import com.raulshma.jellyplay.core.model.MediaType
 import com.raulshma.jellyplay.core.ui.viewmodel.JellyPlayViewModel
@@ -23,7 +23,7 @@ private const val PHOTO_FOLDER_PREFETCH_CONCURRENCY = 4
 @HiltViewModel
 class FavoritesViewModel @Inject constructor(
     private val mediaRepository: MediaRepository,
-    private val playbackRepository: PlaybackRepository,
+    private val imageUrlProvider: ImageUrlProvider,
 ) : JellyPlayViewModel() {
 
     private val _mediaTypeFilter = stateFlow<MediaType?>(null)
@@ -45,7 +45,7 @@ class FavoritesViewModel @Inject constructor(
     }
 
     fun getImageUrl(itemId: String): String =
-        playbackRepository.getImageUrl(itemId, maxWidth = 400)
+        imageUrlProvider.getImageUrl(itemId)
 
     fun prefetchPhotoFolderChildUrls(items: List<MediaItem>) {
         launch {

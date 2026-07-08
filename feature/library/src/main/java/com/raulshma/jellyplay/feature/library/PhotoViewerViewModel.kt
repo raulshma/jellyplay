@@ -14,7 +14,7 @@ import coil3.request.ImageRequest
 import coil3.request.allowHardware
 import coil3.toBitmap
 import com.raulshma.jellyplay.core.data.repository.MediaRepository
-import com.raulshma.jellyplay.core.data.repository.PlaybackRepository
+import com.raulshma.jellyplay.core.data.util.ImageUrlProvider
 import com.raulshma.jellyplay.core.model.MediaDetail
 import com.raulshma.jellyplay.core.model.MediaItem
 import com.raulshma.jellyplay.core.model.MediaType
@@ -31,7 +31,7 @@ import javax.inject.Inject
 @HiltViewModel
 class PhotoViewerViewModel @Inject constructor(
     private val mediaRepository: MediaRepository,
-    private val playbackRepository: PlaybackRepository,
+    private val imageUrlProvider: ImageUrlProvider,
     @ApplicationContext private val appContext: Context,
 ) : JellyPlayViewModel() {
 
@@ -136,10 +136,10 @@ class PhotoViewerViewModel @Inject constructor(
     fun hasPrevious(): Boolean = _currentIndex.value > 0
 
     fun getImageUrl(itemId: String, maxWidth: Int? = null): String =
-        playbackRepository.getImageUrl(itemId, maxWidth = maxWidth)
+        imageUrlProvider.getImageUrl(itemId, maxWidth = maxWidth ?: ImageUrlProvider.DEFAULT_MAX_WIDTH)
 
     fun getThumbnailUrl(itemId: String): String =
-        playbackRepository.getImageUrl(itemId, maxWidth = 200)
+        imageUrlProvider.getImageUrl(itemId, maxWidth = 200)
 
     fun toggleSlideshow() {
         if (_isSlideshowActive.value) {

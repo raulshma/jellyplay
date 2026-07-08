@@ -8,6 +8,7 @@ import com.raulshma.jellyplay.core.data.repository.MediaRepository
 import com.raulshma.jellyplay.core.data.repository.PlaybackRepository
 import com.raulshma.jellyplay.core.data.repository.SeerrRepository
 import com.raulshma.jellyplay.core.data.seerr.SeerrRequestDelegate
+import com.raulshma.jellyplay.core.data.util.ImageUrlProvider
 import com.raulshma.jellyplay.core.datastore.UserPreferencesStore
 import com.raulshma.jellyplay.core.model.DownloadQuality
 import com.raulshma.jellyplay.core.model.MediaDetail
@@ -52,6 +53,7 @@ class DetailViewModel @Inject constructor(
     @ApplicationContext private val context: Context,
     private val mediaRepository: MediaRepository,
     private val playbackRepository: PlaybackRepository,
+    private val imageUrlProvider: ImageUrlProvider,
     private val downloadRepository: DownloadRepository,
     private val preferencesStore: UserPreferencesStore,
     private val offlineModeManager: OfflineModeManager,
@@ -709,7 +711,7 @@ class DetailViewModel @Inject constructor(
     }
 
     fun getImageUrl(itemId: String): String =
-        playbackRepository.getImageUrl(itemId, maxWidth = 400)
+        imageUrlProvider.getImageUrl(itemId)
 
     fun downloadSeries(episodeIds: Map<String, List<String>>? = null) {
         val detail = _uiState.value.detail ?: run {
@@ -783,7 +785,7 @@ class DetailViewModel @Inject constructor(
     }
 
     fun getBackdropUrl(itemId: String): String =
-        playbackRepository.getBackdropUrl(itemId, maxWidth = 1280)
+        imageUrlProvider.getBackdropUrl(itemId)
 
     private fun enqueueDownloadWorker(downloadId: String) {
         downloadRepository.enqueueDownload(downloadId)

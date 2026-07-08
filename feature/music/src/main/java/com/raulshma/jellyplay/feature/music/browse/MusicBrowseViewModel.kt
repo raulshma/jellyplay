@@ -3,7 +3,7 @@ package com.raulshma.jellyplay.feature.music.browse
 import androidx.paging.PagingData
 import androidx.paging.cachedIn
 import com.raulshma.jellyplay.core.data.repository.MediaRepository
-import com.raulshma.jellyplay.core.data.repository.PlaybackRepository
+import com.raulshma.jellyplay.core.data.util.ImageUrlProvider
 import com.raulshma.jellyplay.core.model.Genre
 import com.raulshma.jellyplay.core.model.MediaItem
 import com.raulshma.jellyplay.core.model.MediaType
@@ -16,7 +16,7 @@ import javax.inject.Inject
 @HiltViewModel
 class MusicBrowseViewModel @Inject constructor(
     private val mediaRepository: MediaRepository,
-    private val playbackRepository: PlaybackRepository,
+    private val imageUrlProvider: ImageUrlProvider,
 ) : JellyPlayViewModel() {
 
     val artists: Flow<PagingData<MediaItem>> = mediaRepository.getMediaItemsPaged(
@@ -52,5 +52,5 @@ class MusicBrowseViewModel @Inject constructor(
     }
 
     fun getImageUrl(itemId: String): String =
-        playbackRepository.getImageUrl(itemId, maxWidth = 300)
+        imageUrlProvider.getImageUrl(itemId, maxWidth = ImageUrlProvider.MUSIC_MAX_WIDTH)
 }

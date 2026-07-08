@@ -2,10 +2,10 @@ package com.raulshma.jellyplay.feature.search
 
 import com.raulshma.jellyplay.core.data.repository.MediaRepository
 import com.raulshma.jellyplay.core.data.repository.OfflineRepository
-import com.raulshma.jellyplay.core.data.repository.PlaybackRepository
 import com.raulshma.jellyplay.core.data.repository.SearchHistoryRepository
 import com.raulshma.jellyplay.core.data.repository.SeerrRepository
 import com.raulshma.jellyplay.core.data.seerr.SeerrRequestDelegate
+import com.raulshma.jellyplay.core.data.util.ImageUrlProvider
 import com.raulshma.jellyplay.core.datastore.UserPreferencesStore
 import com.raulshma.jellyplay.core.model.UserPreferences
 import com.raulshma.jellyplay.core.testing.MainDispatcherRule
@@ -29,7 +29,7 @@ class SearchViewModelHistoryTest {
     val mainDispatcherRule = MainDispatcherRule()
 
     private lateinit var mediaRepository: MediaRepository
-    private lateinit var playbackRepository: PlaybackRepository
+    private lateinit var imageUrlProvider: ImageUrlProvider
     private lateinit var seerrRepository: SeerrRepository
     private lateinit var seerrRequestDelegate: SeerrRequestDelegate
     private lateinit var searchHistoryRepository: SearchHistoryRepository
@@ -41,7 +41,7 @@ class SearchViewModelHistoryTest {
     @Before
     fun setUp() {
         mediaRepository = mockk(relaxed = true)
-        playbackRepository = mockk(relaxed = true)
+        imageUrlProvider = mockk(relaxed = true)
         seerrRepository = mockk(relaxed = true)
         seerrRequestDelegate = mockk(relaxed = true)
         searchHistoryRepository = mockk(relaxed = true)
@@ -66,7 +66,7 @@ class SearchViewModelHistoryTest {
 
         viewModel = SearchViewModel(
             mediaRepository,
-            playbackRepository,
+            imageUrlProvider,
             seerrRepository,
             seerrRequestDelegate,
             searchHistoryRepository,

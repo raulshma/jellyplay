@@ -19,6 +19,7 @@ import com.raulshma.jellyplay.core.data.repository.DownloadRepository
 import com.raulshma.jellyplay.core.data.repository.MediaRepository
 import com.raulshma.jellyplay.core.data.repository.OfflineRepository
 import com.raulshma.jellyplay.core.data.repository.PlaybackRepository
+import com.raulshma.jellyplay.core.data.util.ImageUrlProvider
 import com.raulshma.jellyplay.core.model.AudioNormalizationMode
 import com.raulshma.jellyplay.core.model.EffectStrength
 import com.raulshma.jellyplay.core.model.EqualizerPreset
@@ -67,6 +68,7 @@ class AudioPlaybackManager @Inject constructor(
     @ApplicationContext private val context: Context,
     private val mediaRepository: MediaRepository,
     private val playbackRepository: PlaybackRepository,
+    private val imageUrlProvider: ImageUrlProvider,
     private val downloadRepository: DownloadRepository,
     private val offlineRepository: OfflineRepository,
     private val sessionManager: PlaybackSessionManager,
@@ -1170,7 +1172,7 @@ class AudioPlaybackManager @Inject constructor(
     }
 
     fun getImageUrl(itemId: String): String =
-        playbackRepository.getImageUrl(itemId, maxWidth = 400)
+        imageUrlProvider.getImageUrl(itemId)
 
     override fun setEqualizerPreset(preset: EqualizerPreset) {
         effectsProcessor.setEqualizerPreset(preset)

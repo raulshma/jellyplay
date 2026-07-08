@@ -41,10 +41,10 @@ class AdminStatisticsRepositoryImpl @Inject constructor(
     private val apiClient: JellyfinApiClient,
     private val auditLogDao: AuditLogDao,
     private val scanStateDao: ScanStateDao,
+    private val json: Json,
 ) : AdminStatisticsRepository {
 
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
-    private val json = Json { ignoreUnknownKeys = true }
 
     private val _pluginStatus = MutableStateFlow(PlaybackReportingStatus.UNKNOWN)
     override fun getPlaybackReportingStatus() = _pluginStatus.asStateFlow()

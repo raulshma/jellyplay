@@ -2,7 +2,7 @@ package com.raulshma.jellyplay.feature.library
 
 import androidx.lifecycle.SavedStateHandle
 import com.raulshma.jellyplay.core.data.repository.MediaRepository
-import com.raulshma.jellyplay.core.data.repository.PlaybackRepository
+import com.raulshma.jellyplay.core.data.util.ImageUrlProvider
 import com.raulshma.jellyplay.core.ui.navigation.Route
 import com.raulshma.jellyplay.core.testing.MainDispatcherRule
 import io.mockk.every
@@ -20,14 +20,14 @@ class StudioDetailViewModelTest {
     val mainDispatcherRule = MainDispatcherRule()
 
     private lateinit var mediaRepository: MediaRepository
-    private lateinit var playbackRepository: PlaybackRepository
+    private lateinit var imageUrlProvider: ImageUrlProvider
 
     @Before
     fun setUp() {
         mediaRepository = mockk(relaxed = true)
-        playbackRepository = mockk(relaxed = true)
+        imageUrlProvider = mockk(relaxed = true)
 
-        every { playbackRepository.getImageUrl(any(), any()) } returns "https://example.com/image.jpg"
+        every { imageUrlProvider.getImageUrl(any(), any()) } returns "https://example.com/image.jpg"
     }
 
     private fun createViewModel(
@@ -43,7 +43,7 @@ class StudioDetailViewModelTest {
         return StudioDetailViewModel(
             savedStateHandle = savedStateHandle,
             mediaRepository = mediaRepository,
-            playbackRepository = playbackRepository,
+            imageUrlProvider = imageUrlProvider,
         )
     }
 
@@ -61,11 +61,11 @@ class StudioDetailViewModelTest {
     }
 
     @Test
-    fun `getImageUrl delegates to playbackRepository with correct params`() {
+    fun `getImageUrl delegates to imageUrlProvider with correct params`() {
         val viewModel = createViewModel()
         val imageUrl = viewModel.getImageUrl("item-1")
 
-        verify { playbackRepository.getImageUrl("item-1", maxWidth = 400) }
+        verify { imageUrlProvider.getImageUrl("item-1") }
         assertEquals("https://example.com/image.jpg", imageUrl)
     }
 

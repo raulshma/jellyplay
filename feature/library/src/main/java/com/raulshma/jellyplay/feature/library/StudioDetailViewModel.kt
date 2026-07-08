@@ -4,7 +4,7 @@ import androidx.lifecycle.SavedStateHandle
 import androidx.paging.PagingData
 import androidx.paging.cachedIn
 import com.raulshma.jellyplay.core.data.repository.MediaRepository
-import com.raulshma.jellyplay.core.data.repository.PlaybackRepository
+import com.raulshma.jellyplay.core.data.util.ImageUrlProvider
 import com.raulshma.jellyplay.core.model.MediaItem
 import com.raulshma.jellyplay.core.ui.navigation.Route
 import com.raulshma.jellyplay.core.ui.viewmodel.JellyPlayViewModel
@@ -16,7 +16,7 @@ import javax.inject.Inject
 class StudioDetailViewModel @Inject constructor(
     savedStateHandle: SavedStateHandle,
     private val mediaRepository: MediaRepository,
-    private val playbackRepository: PlaybackRepository,
+    private val imageUrlProvider: ImageUrlProvider,
 ) : JellyPlayViewModel() {
 
     private val studioId: String = savedStateHandle[Route.StudioDetail::studioId.name] ?: ""
@@ -28,5 +28,5 @@ class StudioDetailViewModel @Inject constructor(
     ).cachedIn(scope)
 
     fun getImageUrl(itemId: String): String =
-        playbackRepository.getImageUrl(itemId, maxWidth = 400)
+        imageUrlProvider.getImageUrl(itemId)
 }

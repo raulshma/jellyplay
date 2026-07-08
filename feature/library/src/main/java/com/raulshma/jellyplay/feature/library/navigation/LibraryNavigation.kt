@@ -2,28 +2,14 @@ package com.raulshma.jellyplay.feature.library.navigation
 
 import androidx.navigation3.runtime.EntryProviderScope
 import androidx.navigation3.runtime.NavKey
-import com.raulshma.jellyplay.core.model.MediaType
-import com.raulshma.jellyplay.core.model.isPhotoType
 import com.raulshma.jellyplay.core.ui.navigation.Navigator
 import com.raulshma.jellyplay.core.ui.navigation.Route
+import com.raulshma.jellyplay.core.ui.navigation.navigatePhotoAware
 import com.raulshma.jellyplay.feature.library.FavoritesScreen
 import com.raulshma.jellyplay.feature.library.LibraryScreen
 import com.raulshma.jellyplay.feature.library.PhotoAlbumScreen
 import com.raulshma.jellyplay.feature.library.PhotoViewerScreen
 import com.raulshma.jellyplay.feature.library.StudioDetailScreen
-
-private fun Navigator.navigatePhotoAware(
-    itemId: String,
-    mediaType: MediaType,
-    parentId: String?,
-    itemName: String = "",
-) {
-    when (mediaType) {
-        MediaType.PHOTO_FOLDER -> navigate(Route.PhotoAlbum(parentId = itemId, folderName = itemName))
-        MediaType.PHOTO -> navigate(Route.PhotoViewer(itemId, parentId))
-        else -> navigate(Route.MediaDetail(itemId))
-    }
-}
 
 fun EntryProviderScope<NavKey>.librarySection(navigator: Navigator) {
     entry<Route.Library> {
