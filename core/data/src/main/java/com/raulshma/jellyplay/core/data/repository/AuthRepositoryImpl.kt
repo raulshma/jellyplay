@@ -40,12 +40,12 @@ class AuthRepositoryImpl @Inject constructor(
     private val userDao: UserDao,
     private val preferencesStore: UserPreferencesStore,
     private val tokenCipher: TokenCipher,
+    private val json: Json,
 ) : AuthRepository {
 
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
 
     private companion object {
-        val json = Json { ignoreUnknownKeys = true }
         private val folderIdsCache = LruCache<String, List<String>>(16)
     }
 

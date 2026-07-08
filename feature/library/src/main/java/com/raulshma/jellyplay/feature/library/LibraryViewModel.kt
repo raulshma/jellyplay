@@ -4,7 +4,8 @@ import androidx.compose.runtime.Immutable
 import androidx.paging.PagingData
 import androidx.paging.cachedIn
 import com.raulshma.jellyplay.core.data.repository.MediaRepository
-import com.raulshma.jellyplay.core.data.repository.PlaybackRepository
+import com.raulshma.jellyplay.core.data.util.ImageUrlProvider
+import com.raulshma.jellyplay.core.data.util.PhotoFolderPrefetcher
 import com.raulshma.jellyplay.core.datastore.UserPreferencesStore
 import com.raulshma.jellyplay.core.model.Genre
 import com.raulshma.jellyplay.core.model.LibraryFolder
@@ -14,16 +15,11 @@ import com.raulshma.jellyplay.core.model.MediaType
 import com.raulshma.jellyplay.core.ui.viewmodel.JellyPlayViewModel
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.ExperimentalCoroutinesApi
-import kotlinx.coroutines.async
-import kotlinx.coroutines.awaitAll
-import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.map
-import kotlinx.coroutines.sync.Semaphore
-import kotlinx.coroutines.sync.withPermit
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
 import javax.inject.Inject
@@ -67,19 +63,23 @@ enum class PlayedStatus(val displayName: String) {
     UNPLAYED("Unplayed"),
 }
 
-/** Max concurrent requests when prefetching photo-folder child image URLs. */
-private const val PHOTO_FOLDER_PREFETCH_CONCURRENCY = 4
-
 /** Projected slice of [UserPreferences] used to derive the active library view mode. */
 private data class ViewModePrefs(
     val libraryViewMode: LibraryViewMode,
     val libraryViewModes: Map<String, String>,
 )
 
+/**
+ * Delay before a single retry of the genre/tag filter lookups. A transient
+ * network blip shouldn't leave the filter sheet permanently missing a section.
+ */
+private const val FILTER_RETRY_DELAY_MS: Long = 800
+
 @HiltViewModel
 class LibraryViewModel @Inject constructor(
     private val mediaRepository: MediaRepository,
-    private val playbackRepository: PlaybackRepository,
+    private val imageUrlProvider: ImageUrlProvider,
+    private val photoFolderPrefetcher: PhotoFolderPrefetcher,
     private val preferencesStore: UserPreferencesStore,
 ) : JellyPlayViewModel() {
 
@@ -199,32 +199,31 @@ class LibraryViewModel @Inject constructor(
         launch {
             // Retry once after a short delay so a transient network blip doesn't
             // leave the filter sheet permanently missing its Genres section.
-            loadGenresWithRetry()
+            loadListWithRetry(mediaRepository::getGenres) { _genres.set(it) }
         }
-    }
-
-    private suspend fun loadGenresWithRetry(retries: Int = 1) {
-        var result = mediaRepository.getGenres()
-        if (retries > 0 && result.isFailure) {
-            kotlinx.coroutines.delay(800)
-            result = mediaRepository.getGenres()
-        }
-        result.onSuccess { _genres.set(it) }
     }
 
     private fun loadTags() {
         launch {
-            loadTagsWithRetry()
+            loadListWithRetry(mediaRepository::getTags) { _tags.set(it) }
         }
     }
 
-    private suspend fun loadTagsWithRetry(retries: Int = 1) {
-        var result = mediaRepository.getTags()
-        if (retries > 0 && result.isFailure) {
-            kotlinx.coroutines.delay(800)
-            result = mediaRepository.getTags()
+    /**
+     * Fetches [fetch] and publishes the result via [onResult]. On failure, retries
+     * once after [FILTER_RETRY_DELAY_MS] so a transient network blip doesn't leave
+     * a filter section permanently empty.
+     */
+    private suspend fun <T> loadListWithRetry(
+        fetch: suspend () -> Result<List<T>>,
+        onResult: (List<T>) -> Unit,
+    ) {
+        var result = fetch()
+        if (result.isFailure) {
+            kotlinx.coroutines.delay(FILTER_RETRY_DELAY_MS)
+            result = fetch()
         }
-        result.onSuccess { _tags.set(it) }
+        result.onSuccess(onResult)
     }
 
     fun selectFolder(folder: LibraryFolder?) {
@@ -319,26 +318,15 @@ class LibraryViewModel @Inject constructor(
     }
 
     fun getImageUrl(itemId: String): String =
-        playbackRepository.getImageUrl(itemId, maxWidth = 400)
+        imageUrlProvider.getImageUrl(itemId)
 
     fun prefetchPhotoFolderChildUrls(items: List<MediaItem>) {
         launch {
             val current = _photoFolderChildUrls.value
-            val toFetch = items.filter { it.mediaType == MediaType.PHOTO_FOLDER && it.id !in current }
-            if (toFetch.isEmpty()) return@launch
-            // Parallelize the per-folder network calls with a bounded semaphore
-            // (was a sequential forEach → N× per-request latency) and emit the
-            // combined result once at the end instead of doing an O(N) map
-            // rebuild + StateFlow re-emit per folder.
-            val permits = Semaphore(PHOTO_FOLDER_PREFETCH_CONCURRENCY)
-            val results = coroutineScope {
-                toFetch.map { folder ->
-                    async {
-                        permits.withPermit { folder.id to mediaRepository.getPhotoFolderChildImageUrls(folder.id) }
-                    }
-                }.awaitAll()
+            val results = photoFolderPrefetcher.prefetch(items, alreadyFetched = current.keys)
+            if (results.isNotEmpty()) {
+                _photoFolderChildUrls.set(_photoFolderChildUrls.value + results)
             }
-            _photoFolderChildUrls.set(_photoFolderChildUrls.value + results)
         }
     }
 }

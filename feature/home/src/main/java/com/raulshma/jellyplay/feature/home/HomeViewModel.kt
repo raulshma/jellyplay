@@ -7,12 +7,13 @@ import com.raulshma.jellyplay.core.data.repository.MediaRepository
 import com.raulshma.jellyplay.core.data.repository.OfflineRepository
 import com.raulshma.jellyplay.core.data.offline.OfflineModeManager
 import com.raulshma.jellyplay.core.data.newsletter.NewsletterTriggerManager
-import com.raulshma.jellyplay.core.data.repository.PlaybackRepository
 import com.raulshma.jellyplay.core.data.repository.SearchHistoryItem
 import com.raulshma.jellyplay.core.data.repository.SearchHistoryRepository
 import com.raulshma.jellyplay.core.data.repository.SeerrRepository
 import com.raulshma.jellyplay.core.data.repository.DownloadRepository
 import com.raulshma.jellyplay.core.data.seerr.SeerrRequestDelegate
+import com.raulshma.jellyplay.core.data.util.ImageUrlProvider
+import com.raulshma.jellyplay.core.data.util.PhotoFolderPrefetcher
 import com.raulshma.jellyplay.core.datastore.SeerrPreferencesStore
 import com.raulshma.jellyplay.core.datastore.UserPreferencesStore
 import com.raulshma.jellyplay.core.data.repository.AuthRepository
@@ -32,7 +33,6 @@ import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.FlowPreview
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.async
-import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
@@ -46,8 +46,6 @@ import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.sync.Mutex
-import kotlinx.coroutines.sync.Semaphore
-import kotlinx.coroutines.sync.withPermit
 import java.time.LocalDate
 import java.time.ZoneOffset
 import javax.inject.Inject
@@ -56,7 +54,8 @@ import dagger.hilt.android.lifecycle.HiltViewModel
 @HiltViewModel
 class HomeViewModel @Inject constructor(
     private val mediaRepository: MediaRepository,
-    private val playbackRepository: PlaybackRepository,
+    private val imageUrlProvider: ImageUrlProvider,
+    private val photoFolderPrefetcher: PhotoFolderPrefetcher,
     private val downloadRepository: DownloadRepository,
     private val offlineRepository: OfflineRepository,
     private val offlineModeManager: OfflineModeManager,
@@ -83,8 +82,6 @@ class HomeViewModel @Inject constructor(
         // interval costs nothing in freshness.
         private const val REFRESH_INTERVAL_BACKGROUND_MS = 15 * 60_000L
         private const val MIN_REFRESH_INTERVAL_MS = 30_000L
-        /** Max concurrent requests when prefetching photo-folder child image URLs. */
-        private const val PHOTO_FOLDER_PREFETCH_CONCURRENCY = 4
         /** TTL for Seerr discover sections (trending/popular change slowly). */
         private const val DISCOVER_TTL_MS = 10 * 60_000L
     }
@@ -275,10 +272,10 @@ class HomeViewModel @Inject constructor(
     }
 
     fun getImageUrl(itemId: String): String =
-        playbackRepository.getImageUrl(itemId, maxWidth = 400)
+        imageUrlProvider.getImageUrl(itemId)
 
     fun getBackdropUrl(itemId: String): String =
-        playbackRepository.getBackdropUrl(itemId, maxWidth = 1280)
+        imageUrlProvider.getBackdropUrl(itemId)
 
     private val _photoFolderChildUrls = MutableStateFlow<Map<String, List<String>>>(emptyMap())
     val photoFolderChildUrls: StateFlow<Map<String, List<String>>> = _photoFolderChildUrls
@@ -286,23 +283,10 @@ class HomeViewModel @Inject constructor(
     fun prefetchPhotoFolderChildUrls(items: List<com.raulshma.jellyplay.core.model.MediaItem>) {
         launch {
             val current = _photoFolderChildUrls.value
-            val toFetch = items.filter {
-                it.mediaType == com.raulshma.jellyplay.core.model.MediaType.PHOTO_FOLDER && it.id !in current
+            val results = photoFolderPrefetcher.prefetch(items, alreadyFetched = current.keys)
+            if (results.isNotEmpty()) {
+                _photoFolderChildUrls.value = _photoFolderChildUrls.value + results
             }
-            if (toFetch.isEmpty()) return@launch
-            // Parallelize the per-folder network calls with a bounded semaphore
-            // (was a sequential forEach → N× per-request latency) and emit the
-            // combined result once at the end instead of doing an O(N) map
-            // rebuild + StateFlow re-emit per folder.
-            val permits = Semaphore(PHOTO_FOLDER_PREFETCH_CONCURRENCY)
-            val results = coroutineScope {
-                toFetch.map { folder ->
-                    async {
-                        permits.withPermit { folder.id to mediaRepository.getPhotoFolderChildImageUrls(folder.id) }
-                    }
-                }.awaitAll()
-            }
-            _photoFolderChildUrls.value = _photoFolderChildUrls.value + results
         }
     }
 

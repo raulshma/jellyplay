@@ -1,14 +1,12 @@
 package com.raulshma.jellyplay.core.network
 
-import com.raulshma.jellyplay.core.network.api.JellyfinApiEngine
 import com.raulshma.jellyplay.core.model.LrcLibTrack
+import com.raulshma.jellyplay.core.network.api.JellyfinApiEngine
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
-import kotlinx.serialization.json.JsonArray
-import kotlinx.serialization.json.JsonObject
-import kotlinx.serialization.json.JsonPrimitive
-import kotlinx.serialization.json.doubleOrNull
-import kotlinx.serialization.json.longOrNull
+import kotlinx.serialization.SerialName
+import kotlinx.serialization.Serializable
+import kotlinx.serialization.builtins.ListSerializer
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import javax.inject.Inject
@@ -19,6 +17,35 @@ class LrcLibApi @Inject constructor(
     private val client: OkHttpClient,
 ) {
     private val json = JellyfinApiEngine.sharedJson
+
+    /**
+     * On-the-wire shape returned by lrclib.net. `instrumental` arrives as a
+     * JSON string ("true"/"false") rather than a boolean, so it is decoded as
+     * [String] here and normalized in [toDomain]. Lyrics fields are blank for
+     * absent lyrics and collapsed to null on the domain model.
+     */
+    @Serializable
+    private data class LrcLibTrackDto(
+        val id: Long = 0L,
+        @SerialName("trackName") val trackName: String = "",
+        @SerialName("artistName") val artistName: String = "",
+        @SerialName("albumName") val albumName: String = "",
+        val duration: Double = 0.0,
+        val instrumental: String = "false",
+        @SerialName("plainLyrics") val plainLyrics: String? = null,
+        @SerialName("syncedLyrics") val syncedLyrics: String? = null,
+    ) {
+        fun toDomain(): LrcLibTrack = LrcLibTrack(
+            id = id,
+            trackName = trackName,
+            artistName = artistName,
+            albumName = albumName,
+            duration = duration,
+            instrumental = instrumental.equals("true", ignoreCase = true),
+            plainLyrics = plainLyrics?.takeIf { it.isNotBlank() },
+            syncedLyrics = syncedLyrics?.takeIf { it.isNotBlank() },
+        )
+    }
 
     private suspend fun executeAndReadBody(client: OkHttpClient, request: Request): String =
         withContext(Dispatchers.IO) {
@@ -48,7 +75,7 @@ class LrcLibApi @Inject constructor(
             .header("User-Agent", "JellyPlay")
             .get()
             .build()
-        parseTrack(executeAndReadBody(client, request))
+        json.decodeFromString<LrcLibTrackDto>(executeAndReadBody(client, request)).toDomain()
     }
 
     suspend fun search(query: String): Result<List<LrcLibTrack>> = runCatching {
@@ -59,8 +86,7 @@ class LrcLibApi @Inject constructor(
             .get()
             .build()
         val body = executeAndReadBody(client, request)
-        val array = json.parseToJsonElement(body) as JsonArray
-        array.map { element -> parseTrackFromJson(element as JsonObject) }
+        json.decodeFromString(ListSerializer(LrcLibTrackDto.serializer()), body).map { it.toDomain() }
     }
 
     suspend fun getById(id: Long): Result<LrcLibTrack> = runCatching {
@@ -69,25 +95,7 @@ class LrcLibApi @Inject constructor(
             .header("User-Agent", "JellyPlay")
             .get()
             .build()
-        parseTrack(executeAndReadBody(client, request))
-    }
-
-    private fun parseTrack(body: String): LrcLibTrack {
-        val element = json.parseToJsonElement(body) as JsonObject
-        return parseTrackFromJson(element)
-    }
-
-    private fun parseTrackFromJson(obj: JsonObject): LrcLibTrack {
-        return LrcLibTrack(
-            id = obj["id"]?.let { (it as JsonPrimitive).longOrNull ?: 0L } ?: 0L,
-            trackName = obj["trackName"]?.let { (it as JsonPrimitive).content } ?: "",
-            artistName = obj["artistName"]?.let { (it as JsonPrimitive).content } ?: "",
-            albumName = obj["albumName"]?.let { (it as JsonPrimitive).content } ?: "",
-            duration = obj["duration"]?.let { (it as JsonPrimitive).doubleOrNull ?: 0.0 } ?: 0.0,
-            instrumental = obj["instrumental"]?.let { (it as JsonPrimitive).content == "true" } ?: false,
-            plainLyrics = obj["plainLyrics"]?.let { (it as JsonPrimitive).content.ifBlank { null } },
-            syncedLyrics = obj["syncedLyrics"]?.let { (it as JsonPrimitive).content.ifBlank { null } },
-        )
+        json.decodeFromString<LrcLibTrackDto>(executeAndReadBody(client, request)).toDomain()
     }
 
     companion object {

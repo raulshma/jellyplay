@@ -1,4 +1,4 @@
-package com.raulshma.jellyplay.core.data.work
+package com.raulshma.jellyplay.core.data.worker
 
 import com.raulshma.jellyplay.core.database.dao.ScanStateDao
 import com.raulshma.jellyplay.core.database.entity.ScanStateEntity

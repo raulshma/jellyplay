@@ -1,4 +1,4 @@
-package com.raulshma.jellyplay.core.data.work
+package com.raulshma.jellyplay.core.data.worker
 
 import android.content.Context
 import android.util.Log
@@ -11,10 +11,11 @@ import com.raulshma.jellyplay.core.network.JellyfinApiClient
 import dagger.assisted.Assisted
 import dagger.assisted.AssistedInject
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.flow.first
 import java.io.IOException
 
 @HiltWorker
-class StaleMediaScanWorker @AssistedInject constructor(
+class WatchedMediaScanWorker @AssistedInject constructor(
     @Assisted appContext: Context,
     @Assisted workerParams: WorkerParameters,
     private val apiClient: JellyfinApiClient,
@@ -27,6 +28,7 @@ class StaleMediaScanWorker @AssistedInject constructor(
 
         return try {
             val config = ScanWorkerHelper.json.decodeFromString<MediaCleanupConfig>(entity.configJson)
+            val adminUserId = apiClient.currentUser.first()?.id ?: return Result.failure()
 
             ScanWorkerHelper.executePaginatedScan(
                 scanId = scanId,
@@ -34,10 +36,11 @@ class StaleMediaScanWorker @AssistedInject constructor(
                 entity = entity,
                 isStopped = { isStopped },
                 fetchPage = { startIndex, limit ->
-                    apiClient.getStaleItems(
-                        daysThreshold = config.daysThreshold,
-                        includeNeverPlayed = config.includeNeverPlayed,
+                    apiClient.getWatchedItems(
+                        userId = adminUserId,
                         includeItemTypes = config.includeItemTypes.toList(),
+                        minDaysSincePlayed = config.minDaysSinceWatched,
+                        keepFavorites = config.keepFavorites,
                         parentId = config.libraryIds.firstOrNull(),
                         startIndex = startIndex,
                         limit = limit,
@@ -48,30 +51,26 @@ class StaleMediaScanWorker @AssistedInject constructor(
                         itemId = item.itemId,
                         name = item.name,
                         type = item.type,
-                        sizeText = item.sizeText,
-                        detail = if (item.daysSincePlay > 0) "${item.daysSincePlay} days ago" else "Never played",
+                        sizeText = "",
+                        detail = "Played ${item.playCount}x",
                     )
                 },
             )
             Result.success()
         } catch (ce: CancellationException) {
-            // Honour structured concurrency — never swallow cancellation.
             throw ce
         } catch (e: IOException) {
-            // Transient network failure on page N of M: the helper persists
-            // progress per batch so a retry resumes cleanly rather than
-            // re-scanning from page 0.
-            Log.w(TAG, "Stale media scan hit transient IO failure (attempt ${runAttemptCount + 1})", e)
+            Log.w(TAG, "Watched media scan hit transient IO failure (attempt ${runAttemptCount + 1})", e)
             ScanWorkerHelper.markFailed(scanStateDao, entity)
             Result.retry()
         } catch (e: Exception) {
-            Log.w(TAG, "Stale media scan failed permanently", e)
+            Log.w(TAG, "Watched media scan failed permanently", e)
             ScanWorkerHelper.markFailed(scanStateDao, entity)
             Result.failure()
         }
     }
 
     companion object {
-        private const val TAG = "StaleMediaScanWorker"
+        private const val TAG = "WatchedMediaScanWorker"
     }
 }

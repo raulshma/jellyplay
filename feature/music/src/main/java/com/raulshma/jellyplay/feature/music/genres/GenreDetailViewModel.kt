@@ -6,7 +6,7 @@ import androidx.paging.cachedIn
 import com.raulshma.jellyplay.core.data.playback.AudioPlaybackManager
 import com.raulshma.jellyplay.core.data.playback.toAudioQueueItem
 import com.raulshma.jellyplay.core.data.repository.MediaRepository
-import com.raulshma.jellyplay.core.data.repository.PlaybackRepository
+import com.raulshma.jellyplay.core.data.util.ImageUrlProvider
 import com.raulshma.jellyplay.core.model.MediaItem
 import com.raulshma.jellyplay.core.model.MediaType
 import com.raulshma.jellyplay.core.ui.navigation.Route
@@ -19,7 +19,7 @@ import javax.inject.Inject
 class GenreDetailViewModel @Inject constructor(
     savedStateHandle: SavedStateHandle,
     private val mediaRepository: MediaRepository,
-    private val playbackRepository: PlaybackRepository,
+    private val imageUrlProvider: ImageUrlProvider,
     val audioPlaybackManager: AudioPlaybackManager,
 ) : JellyPlayViewModel() {
 
@@ -33,7 +33,7 @@ class GenreDetailViewModel @Inject constructor(
     ).cachedIn(scope)
 
     fun getImageUrl(itemId: String): String =
-        playbackRepository.getImageUrl(itemId, maxWidth = 300)
+        imageUrlProvider.getImageUrl(itemId, maxWidth = ImageUrlProvider.MUSIC_MAX_WIDTH)
 
     fun addToQueue(track: MediaItem) {
         launch {
