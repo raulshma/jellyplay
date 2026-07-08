@@ -136,7 +136,7 @@ class PhotoViewerViewModel @Inject constructor(
     fun hasPrevious(): Boolean = _currentIndex.value > 0
 
     fun getImageUrl(itemId: String, maxWidth: Int? = null): String =
-        imageUrlProvider.getImageUrl(itemId, maxWidth = maxWidth ?: ImageUrlProvider.DEFAULT_MAX_WIDTH)
+        imageUrlProvider.getImageUrl(itemId, maxWidth = maxWidth)
 
     fun getThumbnailUrl(itemId: String): String =
         imageUrlProvider.getImageUrl(itemId, maxWidth = 200)

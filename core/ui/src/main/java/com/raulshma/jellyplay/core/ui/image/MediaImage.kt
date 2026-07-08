@@ -45,6 +45,11 @@ fun MediaImage(
     size: CoilSize = CoilSize(384, 384),
     colorFilter: ColorFilter? = null,
     placeholderIcon: ImageVector = Tabler.Outline.User,
+    // Performance mode lowers decode size to save memory. Full-screen images
+    // (hero, detail backdrop) opt out via performanceModeAware = false — capping
+    // a single full-bleed image to 256² looks badly blurry, and there is only
+    // ever one such image on screen so the memory saving is negligible.
+    performanceModeAware: Boolean = true,
 ) {
     val performanceMode = com.raulshma.jellyplay.core.ui.components.LocalPerformanceMode.current
     // Performance mode lowers decode size to save memory, but callers that
@@ -53,7 +58,7 @@ fun MediaImage(
     // photos. Clamp only the fixed-pixel defaults, never ORIGINAL.
     val effectiveSize = when {
         size.isOriginal -> size
-        performanceMode -> CoilSize(256, 256)
+        performanceMode && performanceModeAware -> CoilSize(256, 256)
         else -> size
     }
     val effectiveBlurHash = if (performanceMode) null else blurHash

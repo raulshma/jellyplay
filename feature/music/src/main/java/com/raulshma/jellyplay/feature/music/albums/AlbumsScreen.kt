@@ -54,6 +54,7 @@ fun AlbumsScreen(
 ) {
     val albums = viewModel.albums.collectAsLazyPagingItems()
     val networkStatus by LocalNetworkStatus.current.collectAsStateWithLifecycle()
+    val selectedSort by viewModel.selectedSort.collectAsStateWithLifecycle()
     val headerStatus = resolveHeaderStatus(
         isLoading = albums.loadState.refresh is LoadState.Loading,
         hasError = albums.loadState.refresh is LoadState.Error,
@@ -72,7 +73,7 @@ fun AlbumsScreen(
                     modifier = Modifier.then(sortFocusState.focusModifier).tvFocusIndicator(sortFocusState, CircleShape),
                 ) {
                     Text(
-                        text = viewModel.selectedSort.label,
+                        text = selectedSort.label,
                         style = MaterialTheme.typography.labelMedium,
                         color = MaterialTheme.colorScheme.onSurface,
                     )

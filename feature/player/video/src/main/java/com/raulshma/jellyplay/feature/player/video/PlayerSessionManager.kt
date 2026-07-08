@@ -292,7 +292,14 @@ class PlayerSessionManager(
         playMethod: PlayMethod = PlayMethod.DIRECT_PLAY,
         mimeType: String? = null,
     ) {
-        _engine.value?.release()
+        // Release the outgoing engine and null the reference before creating the
+        // replacement, so a failure in create()/setup can never leave the field
+        // pointing at an already-released engine.
+        try {
+            _engine.value?.release()
+        } finally {
+            _engine.value = null
+        }
         val eng = playerEngineFactory.create(playerType)
         _engine.value = eng
         lastPlayerType = playerType
@@ -431,8 +438,11 @@ class PlayerSessionManager(
         val last = lastPlaybackRequest ?: return
         val prefs = preferencesStore.preferences.first()
 
-        _engine.value?.release()
-        _engine.value = null
+        try {
+            _engine.value?.release()
+        } finally {
+            _engine.value = null
+        }
 
         val eng = playerEngineFactory.create(playerType)
         _engine.value = eng
