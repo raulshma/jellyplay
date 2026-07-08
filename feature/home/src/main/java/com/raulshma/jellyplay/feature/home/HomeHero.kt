@@ -61,6 +61,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import coil3.size.Size as CoilSize
 import com.raulshma.jellyplay.core.designsystem.theme.AlphaEasing
 import com.raulshma.jellyplay.core.designsystem.theme.FancyTransitionEasing
 import com.raulshma.jellyplay.core.designsystem.theme.ShapeCache
@@ -324,6 +325,14 @@ fun HeroHeader(
                     scaleY = breathScale
                 },
             contentScale = ContentScale.Crop,
+            // Full-bleed hero: decode large enough to stay sharp on a 4K TV.
+            // The default 384² is a poster thumbnail size — upscaled full-screen
+            // it looks soft. Backdrop URL is now 1920px wide (see
+            // ImageUrlProvider.DEFAULT_BACKDROP_WIDTH), so decode matches source.
+            // performanceModeAware = false: a single full-screen image isn't worth
+            // the perf-mode memory clamp, which would crush it to 256².
+            size = CoilSize(1920, 1080),
+            performanceModeAware = false,
         )
 
         Box(

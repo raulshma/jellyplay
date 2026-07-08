@@ -319,7 +319,10 @@ val MIGRATION_15_16 = object : Migration(15, 16) {
 
 val MIGRATION_16_17 = object : Migration(16, 17) {
     override fun migrate(db: SupportSQLiteDatabase) {
-        db.execSQL("CREATE UNIQUE INDEX IF NOT EXISTS index_servers_address ON servers(address)")
+        // No-op: the servers(address) unique index was already created by
+        // MIGRATION_15_16. This migration object is retained so Room's
+        // 16→17 step still resolves. (Previously it re-ran the same idempotent
+        // CREATE UNIQUE INDEX IF NOT EXISTS — harmless copy-paste residue.)
     }
 }
 
@@ -563,36 +566,46 @@ val MIGRATION_32_33 = object : Migration(32, 33) {
     }
 }
 
-val ALL_MIGRATIONS = listOf(
-    MIGRATION_1_2,
-    MIGRATION_2_3,
-    MIGRATION_3_4,
-    MIGRATION_4_5,
-    MIGRATION_5_6,
-    MIGRATION_6_7,
-    MIGRATION_7_8,
-    MIGRATION_8_9,
-    MIGRATION_9_10,
-    MIGRATION_10_11,
-    MIGRATION_11_12,
-    MIGRATION_12_13,
-    MIGRATION_13_14,
-    MIGRATION_14_15,
-    MIGRATION_15_16,
-    MIGRATION_16_17,
-    MIGRATION_17_18,
-    MIGRATION_18_19,
-    MIGRATION_19_20,
-    MIGRATION_20_21,
-    MIGRATION_21_22,
-    MIGRATION_22_23,
-    MIGRATION_23_24,
-    MIGRATION_25_26,
-    MIGRATION_26_27,
-    MIGRATION_27_28,
-    MIGRATION_28_29,
-    MIGRATION_29_30,
-    MIGRATION_30_31,
-    MIGRATION_31_32,
-    MIGRATION_32_33,
-)
+/**
+ * The complete, correctly-ordered v1→v33 migration chain, with the
+ * token-encrypting [Migration24To25] (which needs a [TokenCipher]) inserted at
+ * its true position between v23→v24 and v25→v26. Room matches migrations by
+ * start/end version regardless of list order, but keeping the chain in strict
+ * ascending order here makes the source a reliable map of the upgrade path and
+ * lets [MigrationTest] assert contiguity.
+ */
+fun allMigrations(tokenCipher: TokenCipher): List<Migration> =
+    listOf(
+        MIGRATION_1_2,
+        MIGRATION_2_3,
+        MIGRATION_3_4,
+        MIGRATION_4_5,
+        MIGRATION_5_6,
+        MIGRATION_6_7,
+        MIGRATION_7_8,
+        MIGRATION_8_9,
+        MIGRATION_9_10,
+        MIGRATION_10_11,
+        MIGRATION_11_12,
+        MIGRATION_12_13,
+        MIGRATION_13_14,
+        MIGRATION_14_15,
+        MIGRATION_15_16,
+        MIGRATION_16_17,
+        MIGRATION_17_18,
+        MIGRATION_18_19,
+        MIGRATION_19_20,
+        MIGRATION_20_21,
+        MIGRATION_21_22,
+        MIGRATION_22_23,
+        MIGRATION_23_24,
+        Migration24To25(tokenCipher),
+        MIGRATION_25_26,
+        MIGRATION_26_27,
+        MIGRATION_27_28,
+        MIGRATION_28_29,
+        MIGRATION_29_30,
+        MIGRATION_30_31,
+        MIGRATION_31_32,
+        MIGRATION_32_33,
+    )

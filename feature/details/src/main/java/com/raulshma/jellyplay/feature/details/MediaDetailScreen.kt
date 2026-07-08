@@ -753,8 +753,11 @@ private fun DetailContent(
                     modifier = backdropModifier,
                     contentScale = ContentScale.Crop,
                     // Full-bleed hero backdrop: decode large enough for 4K TV width
-                    // (3840 px). The default 512×512 produces visible blur on TV.
+                    // (3840 px). The default 384² produces visible blur on TV.
+                    // performanceModeAware = false keeps the clamp from crushing
+                    // this single full-screen image to 256² in performance mode.
                     size = CoilSize(1920, 1080),
+                    performanceModeAware = false,
                 )
             }
 

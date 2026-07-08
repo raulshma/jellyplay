@@ -124,6 +124,9 @@ class ExoPlayerEngine(
     private var player: ExoPlayer? = null
     private var trackSelector: DefaultTrackSelector? = null
     private var playerView: PlayerView? = null
+    private var frameSizeListener: android.view.View.OnLayoutChangeListener? = null
+    private var lastFrameW = -1
+    private var lastFrameH = -1
     private var currentMediaItem: MediaItem? = null
     private val bandwidthMeter = bandwidthMeter ?: DefaultBandwidthMeter.Builder(context).build()
     private val currentSubtitleConfigs = mutableListOf<MediaItem.SubtitleConfiguration>()
@@ -406,6 +409,8 @@ class ExoPlayerEngine(
         engineScope.cancel()
         player?.removeListener(listener)
         player?.removeAnalyticsListener(decoderCountersListener)
+        frameSizeListener?.let { playerView?.removeOnLayoutChangeListener(it) }
+        frameSizeListener = null
         playerView?.player = null
         playerView = null
         player?.release()
@@ -568,16 +573,18 @@ class ExoPlayerEngine(
         // Layout passes fire frequently during playback (controls show/hide,
         // seekbar interaction, immersive transitions, video-size callbacks);
         // only reparent on genuine geometry changes to suppress no-op work.
-        var lastFrameW = -1
-        var lastFrameH = -1
-        pv.addOnLayoutChangeListener { _, left, top, right, bottom, _, _, _, _ ->
+        lastFrameW = -1
+        lastFrameH = -1
+        val layoutListener = android.view.View.OnLayoutChangeListener { _, left, top, right, bottom, _, _, _, _ ->
             val w = right - left
             val h = bottom - top
-            if (w == lastFrameW && h == lastFrameH) return@addOnLayoutChangeListener
+            if (w == lastFrameW && h == lastFrameH) return@OnLayoutChangeListener
             lastFrameW = w
             lastFrameH = h
             pv.post { reparentSubtitleViewIntoVideoFrame(pv) }
         }
+        frameSizeListener = layoutListener
+        pv.addOnLayoutChangeListener(layoutListener)
         playerView = pv
         applySubtitleStyleToView(pv, currentConfig.subtitleStyle)
         return pv
