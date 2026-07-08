@@ -160,6 +160,13 @@ sealed class Route : NavKey {
 
     @Serializable data object ArrQueue : Route()
 
+    /**
+     * Combined Sonarr + Radarr upcoming-releases calendar. Modal entry gated
+     * by [com.raulshma.jellyplay.core.model.ExperimentalFeature.DIRECT_ARR_INTEGRATION],
+     * mirroring [ArrQueue] / [Requests].
+     */
+    @Serializable data object UpcomingCalendar : Route()
+
     @Serializable data object Shortcuts : Route()
 }
 
@@ -201,6 +208,7 @@ val Route.isModal: Boolean
         Route.Logs,
         Route.Requests -> true
         Route.ArrQueue -> true
+        Route.UpcomingCalendar -> true
         else -> false
     }
 

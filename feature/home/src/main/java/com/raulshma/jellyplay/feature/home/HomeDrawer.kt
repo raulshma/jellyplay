@@ -31,6 +31,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.composables.icons.tabler.Tabler
+import com.composables.icons.tabler.outline.CalendarEvent
 import com.composables.icons.tabler.outline.ChartBar
 import com.composables.icons.tabler.outline.Database
 import com.composables.icons.tabler.outline.Heart
@@ -114,6 +115,13 @@ internal fun HomeDrawerBody(
                 drawerState = drawerState,
                 scope = scope,
                 onClick = callbacks.onActivityQueueClick,
+            )
+            DrawerItem(
+                icon = Tabler.Outline.CalendarEvent,
+                label = "Upcoming",
+                drawerState = drawerState,
+                scope = scope,
+                onClick = callbacks.onUpcomingClick,
             )
             // NOTE: "Seerr Requests" and "About" previously duplicated
             // here were removed — they live in the app-level drawer to keep a single
