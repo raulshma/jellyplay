@@ -1,6 +1,7 @@
 package com.raulshma.jellyplay.core.data.util
 
 import com.raulshma.jellyplay.core.data.repository.PlaybackRepository
+import com.raulshma.jellyplay.core.datastore.UserPreferencesStore
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -22,10 +23,32 @@ interface ImageUrlProvider {
 @Singleton
 class ImageUrlProviderImpl @Inject constructor(
     private val playbackRepository: PlaybackRepository,
+    private val userPreferencesStore: UserPreferencesStore,
 ) : ImageUrlProvider {
 
-    override fun getImageUrl(itemId: String, maxWidth: Int?): String =
-        playbackRepository.getImageUrl(itemId, maxWidth = maxWidth)
+    // True when performance mode is on. StateFlow.value is safe to read
+    // synchronously on any thread once the flow has been collected; the store
+    // seeds it from disk so this is never stale on the main thread.
+    private val performanceMode: Boolean get() =
+        userPreferencesStore.preferences.value.performanceMode
+
+    override fun getImageUrl(itemId: String, maxWidth: Int?): String {
+        // Original-resolution requests (null) stay as-is; explicit widths are
+        // honored as the caller's minimum, default is perf-aware.
+        val effectiveWidth = when {
+            maxWidth != null -> maxWidth
+            performanceMode -> PERF_MAX_WIDTH
+            else -> ImageUrlProvider.DEFAULT_MAX_WIDTH
+        }
+        return playbackRepository.getImageUrl(itemId, maxWidth = effectiveWidth)
+    }
+
+    private companion object {
+        // Performance mode lowers the *download* width so slow networks don't
+        // fetch a 400px JPEG only to decode it at 256px. Posters decode-clamp to
+        // 256² (see MediaImage), so a 300px source covers that without waste.
+        const val PERF_MAX_WIDTH = 300
+    }
 
     override fun getBackdropUrl(itemId: String, maxWidth: Int): String =
         playbackRepository.getBackdropUrl(itemId, maxWidth = maxWidth)
