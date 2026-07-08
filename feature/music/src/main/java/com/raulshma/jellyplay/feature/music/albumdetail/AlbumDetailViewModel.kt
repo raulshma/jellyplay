@@ -5,6 +5,7 @@ import com.raulshma.jellyplay.core.data.playback.toAudioQueueItem
 import com.raulshma.jellyplay.core.data.repository.DownloadRepository
 import com.raulshma.jellyplay.core.data.repository.MediaRepository
 import com.raulshma.jellyplay.core.data.repository.PlaybackRepository
+import com.raulshma.jellyplay.core.data.util.ImageUrlProvider
 import com.raulshma.jellyplay.core.model.DownloadItem
 import com.raulshma.jellyplay.core.model.DownloadStatus
 import com.raulshma.jellyplay.core.model.MediaDetail
@@ -21,6 +22,7 @@ import javax.inject.Inject
 class AlbumDetailViewModel @Inject constructor(
     private val mediaRepository: MediaRepository,
     private val playbackRepository: PlaybackRepository,
+    private val imageUrlProvider: ImageUrlProvider,
     private val audioPlaybackManager: AudioPlaybackManager,
     private val downloadRepository: DownloadRepository,
 ) : JellyPlayViewModel() {
@@ -112,10 +114,10 @@ class AlbumDetailViewModel @Inject constructor(
     }
 
     fun getImageUrl(itemId: String): String =
-        playbackRepository.getImageUrl(itemId, maxWidth = 400)
+        imageUrlProvider.getImageUrl(itemId)
 
     fun getBackdropUrl(itemId: String): String =
-        playbackRepository.getBackdropUrl(itemId, maxWidth = 1280)
+        imageUrlProvider.getBackdropUrl(itemId)
 
     val trackDownloads: StateFlow<Map<String, DownloadItem>> = downloadRepository.getAllDownloads()
         .map { downloads -> downloads.associateBy { it.mediaItemId } }

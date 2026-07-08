@@ -28,6 +28,7 @@ import com.raulshma.jellyplay.core.data.repository.MediaRepository
 import com.raulshma.jellyplay.core.data.repository.OfflineRepository
 import com.raulshma.jellyplay.core.data.repository.PlaybackRepository
 import com.raulshma.jellyplay.core.data.syncplay.SyncPlayManager
+import com.raulshma.jellyplay.core.data.util.ImageUrlProvider
 import com.raulshma.jellyplay.core.model.SyncPlayRepeatMode
 import com.raulshma.jellyplay.core.model.SyncPlayShuffleMode
 import com.raulshma.jellyplay.core.datastore.UserPreferencesStore
@@ -178,6 +179,7 @@ class VideoPlayerViewModel @Inject constructor(
     @ApplicationContext private val context: Context,
     private val mediaRepository: MediaRepository,
     private val playbackRepository: PlaybackRepository,
+    private val imageUrlProvider: ImageUrlProvider,
     private val downloadRepository: DownloadRepository,
     private val offlineRepository: OfflineRepository,
     private val itemPlaybackPreferenceRepository: ItemPlaybackPreferenceRepository,
@@ -2088,7 +2090,7 @@ class VideoPlayerViewModel @Inject constructor(
     }
 
     fun getImageUrl(itemId: String, maxWidth: Int = 400): String =
-        playbackRepository.getImageUrl(itemId, "Primary", maxWidth)
+        imageUrlProvider.getImageUrl(itemId, maxWidth = maxWidth)
 
     // region Subtitle Manager — delegates to [subtitleManager] (extracted collaborator)
 

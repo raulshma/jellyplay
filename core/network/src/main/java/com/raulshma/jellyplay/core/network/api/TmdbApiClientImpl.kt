@@ -2,12 +2,13 @@ package com.raulshma.jellyplay.core.network.api
 
 import com.raulshma.jellyplay.core.model.seerr.SeerrRelatedVideo
 import com.raulshma.jellyplay.core.network.seerr.SeerrApiClientImpl
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.Serializable
-import kotlinx.serialization.json.Json
 import okhttp3.OkHttpClient
 import okhttp3.Request
+import java.io.IOException
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -45,11 +46,22 @@ class TmdbApiClientImpl @Inject constructor(
         return try {
             withContext(Dispatchers.IO) {
                 okHttpClient.newCall(request).execute().use { response ->
-                    val body = response.body?.string() ?: return@withContext Result.failure<List<SeerrRelatedVideo>>(
-                        Exception("Empty response from TMDB")
-                    )
+                    val body = response.body?.string()
+                    if (body.isNullOrBlank()) {
+                        return@withContext Result.failure<List<SeerrRelatedVideo>>(
+                            ApiException.fromNetwork(
+                                IOException("Empty response from TMDB"),
+                                "Empty response from TMDB",
+                            )
+                        )
+                    }
                     if (!response.isSuccessful) {
-                        return@withContext Result.failure(Exception("TMDB request failed: ${response.code}"))
+                        return@withContext Result.failure(
+                            ApiException.fromHttp(
+                                httpCode = response.code,
+                                message = "TMDB request failed: ${response.code}",
+                            )
+                        )
                     }
                     val tmdbResponse = json.decodeFromString<TmdbVideosResponse>(body)
                     val videos = tmdbResponse.results.map {
@@ -65,8 +77,18 @@ class TmdbApiClientImpl @Inject constructor(
                     Result.success(videos)
                 }
             }
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: IOException) {
+            Result.failure(ApiException.fromNetwork(e, "TMDB network error: ${e.message ?: ""}"))
         } catch (e: Exception) {
-            Result.failure(e)
+            Result.failure(
+                ApiException(
+                    isRetryable = false,
+                    message = "TMDB parse error: ${e.message ?: ""}",
+                    cause = e,
+                )
+            )
         }
     }
 }

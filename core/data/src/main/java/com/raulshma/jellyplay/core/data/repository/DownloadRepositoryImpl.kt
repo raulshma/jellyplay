@@ -18,6 +18,7 @@ import com.raulshma.jellyplay.core.database.dao.OfflineMediaDao
 import com.raulshma.jellyplay.core.database.entity.DownloadEntity
 import com.raulshma.jellyplay.core.database.entity.OfflineMediaEntity
 import com.raulshma.jellyplay.core.data.worker.DownloadWorker
+import com.raulshma.jellyplay.core.data.worker.awaitResponse
 import com.raulshma.jellyplay.core.model.DownloadItem
 import com.raulshma.jellyplay.core.model.DownloadQuality
 import com.raulshma.jellyplay.core.model.DownloadStatus
@@ -62,6 +63,7 @@ class DownloadRepositoryImpl @Inject constructor(
     private val playbackRepository: PlaybackRepository,
     private val httpClient: OkHttpClient,
     private val preferencesStore: com.raulshma.jellyplay.core.datastore.UserPreferencesStore,
+    private val json: Json,
 ) : DownloadRepository {
 
     // Caps the number of episodes processed concurrently when queueing a series
@@ -640,15 +642,17 @@ class DownloadRepositoryImpl @Inject constructor(
         else -> "srt"
     }
 
-    private fun downloadToFile(url: String, target: File): Boolean {
+    private suspend fun downloadToFile(url: String, target: File): Boolean {
         return try {
-            httpClient.newCall(Request.Builder().url(url).build()).execute().use { resp ->
+            httpClient.newCall(Request.Builder().url(url).build()).awaitResponse().use { resp ->
                 if (!resp.isSuccessful) return@use false
                 resp.body?.byteStream()?.use { input ->
                     target.outputStream().use { output -> input.copyTo(output) }
                 }
                 target.exists() && target.length() > 0
             }
+        } catch (e: CancellationException) {
+            throw e
         } catch (e: Exception) {
             Log.d(TAG, "Failed to download file from $url", e)
             false
@@ -890,6 +894,5 @@ class DownloadRepositoryImpl @Inject constructor(
         // never leak into the on-disk filename; the caller falls back to the
         // legacy mp4/mp3 default otherwise.
         private val FILENAME_CONTAINER_REGEX = Regex("[A-Za-z0-9]{2,8}")
-        private val json = Json { ignoreUnknownKeys = true }
     }
 }

@@ -24,9 +24,8 @@ import javax.inject.Singleton
 @Singleton
 class SmartPlaylistRepository @Inject constructor(
     private val smartPlaylistDao: SmartPlaylistDao,
+    private val json: Json,
 ) {
-    private val json = Json { ignoreUnknownKeys = true }
-
     fun observeSmartPlaylists(): Flow<List<SmartPlaylist>> =
         smartPlaylistDao.observeAll().map { list -> list.map { it.toDomain() } }
 
@@ -72,9 +71,8 @@ class SmartPlaylistRepository @Inject constructor(
 @Singleton
 class MoodPlaylistRepository @Inject constructor(
     private val moodPlaylistDao: MoodPlaylistDao,
+    private val json: Json,
 ) {
-    private val json = Json { ignoreUnknownKeys = true }
-
     fun observeMoodPlaylists(): Flow<List<MoodPlaylist>> =
         moodPlaylistDao.observeAll().map { list -> list.map { it.toDomain() } }
 

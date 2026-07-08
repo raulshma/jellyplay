@@ -9,16 +9,9 @@ import com.raulshma.jellyplay.core.model.MediaType
 import com.raulshma.jellyplay.core.model.isPhotoType
 import com.raulshma.jellyplay.core.ui.navigation.Navigator
 import com.raulshma.jellyplay.core.ui.navigation.Route
+import com.raulshma.jellyplay.core.ui.navigation.navigatePhotoAware
 import com.raulshma.jellyplay.feature.home.HomeCallbacks
 import com.raulshma.jellyplay.feature.home.HomeScreen
-
-private fun Navigator.navigatePhotoAware(itemId: String, mediaType: MediaType, parentId: String?, itemName: String = "") {
-    when (mediaType) {
-        MediaType.PHOTO_FOLDER -> navigate(Route.PhotoAlbum(parentId = itemId, folderName = itemName))
-        MediaType.PHOTO -> navigate(Route.PhotoViewer(itemId, parentId))
-        else -> navigate(Route.MediaDetail(itemId))
-    }
-}
 
 fun EntryProviderScope<NavKey>.homeSection(
     navigator: Navigator,
