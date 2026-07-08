@@ -11,6 +11,7 @@ import androidx.compose.animation.core.tween
 import androidx.compose.animation.core.animateFloat
 import com.raulshma.jellyplay.core.designsystem.theme.playerOnScrim
 import com.raulshma.jellyplay.core.designsystem.theme.ShapeCache
+import com.raulshma.jellyplay.core.ui.components.LocalPerformanceMode
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.scaleIn
@@ -226,17 +227,23 @@ private fun SeekCircleOverlay(
     modifier: Modifier = Modifier,
 ) {
     val primaryColor = MaterialTheme.colorScheme.primary
+    val performanceMode = LocalPerformanceMode.current
 
-    val infiniteTransition = rememberInfiniteTransition(label = "seek_ripple")
-    val rippleAnim by infiniteTransition.animateFloat(
-        initialValue = 0f,
-        targetValue = 1f,
-        animationSpec = infiniteRepeatable(
-            animation = tween(durationMillis = 900, easing = FastOutSlowInEasing),
-            repeatMode = RepeatMode.Restart,
-        ),
-        label = "seek_ripple_progress",
-    )
+    // Seek-scrub ripple. Only visible mid-gesture, but still spins a redraw
+    // coroutine. Freeze at a single ring in performance mode.
+    val rippleAnim = if (!performanceMode) {
+        rememberInfiniteTransition(label = "seek_ripple").animateFloat(
+            initialValue = 0f,
+            targetValue = 1f,
+            animationSpec = infiniteRepeatable(
+                animation = tween(durationMillis = 900, easing = FastOutSlowInEasing),
+                repeatMode = RepeatMode.Restart,
+            ),
+            label = "seek_ripple_progress",
+        ).value
+    } else {
+        0.5f
+    }
 
     AnimatedVisibility(
         visible = true,

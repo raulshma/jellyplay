@@ -46,6 +46,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.raulshma.jellyplay.core.designsystem.theme.AlphaEasing
 import com.raulshma.jellyplay.core.ui.animation.AnimationTokens
+import com.raulshma.jellyplay.core.ui.components.LocalPerformanceMode
 import com.raulshma.jellyplay.core.ui.image.MediaImage
 import com.raulshma.jellyplay.core.designsystem.theme.FancyTransitionEasing
 
@@ -58,6 +59,7 @@ fun ArtistCard(
     blurHash: String? = null,
 ) {
     val isTv = LocalTvMode.current
+    val performanceMode = LocalPerformanceMode.current
     val tvFocusState = rememberTvFocusState(focusedScale = 1.1f)
     val interactionSource = remember { MutableInteractionSource() }
     val isPressed by interactionSource.collectIsPressedAsState()
@@ -95,26 +97,35 @@ fun ArtistCard(
         label = "ringMorph"
     )
 
-    val ringTransition = rememberInfiniteTransition(label = "artist_ring")
-    val ringRotation by ringTransition.animateFloat(
-        initialValue = 0f,
-        targetValue = if (isPressed) 360f else 0f,
-        animationSpec = infiniteRepeatable(
-            animation = tween(6000, easing = LinearEasing),
-            repeatMode = RepeatMode.Restart
-        ),
-        label = "rotation"
-    )
-
-    val ringPulse by ringTransition.animateFloat(
-        initialValue = 2.dp.value,
-        targetValue = 3.5.dp.value,
-        animationSpec = infiniteRepeatable(
-            animation = tween(2000, easing = FancyTransitionEasing),
-            repeatMode = RepeatMode.Reverse
-        ),
-        label = "pulse"
-    )
+    // The ring runs two infinite animations (rotation + pulse). On low-end
+    // devices these drive a continuous redraw coroutine per card, and artist
+    // grids show dozens at once — collapse to static values in performance mode.
+    val ringRotation: Float
+    val ringPulse: Float
+    if (!performanceMode) {
+        val ringTransition = rememberInfiniteTransition(label = "artist_ring")
+        ringRotation = ringTransition.animateFloat(
+            initialValue = 0f,
+            targetValue = if (isPressed) 360f else 0f,
+            animationSpec = infiniteRepeatable(
+                animation = tween(6000, easing = LinearEasing),
+                repeatMode = RepeatMode.Restart
+            ),
+            label = "rotation"
+        ).value
+        ringPulse = ringTransition.animateFloat(
+            initialValue = 2.dp.value,
+            targetValue = 3.5.dp.value,
+            animationSpec = infiniteRepeatable(
+                animation = tween(2000, easing = FancyTransitionEasing),
+                repeatMode = RepeatMode.Reverse
+            ),
+            label = "pulse"
+        ).value
+    } else {
+        ringRotation = if (isPressed) 180f else 0f
+        ringPulse = 2.dp.value
+    }
 
     Column(
         modifier = modifier

@@ -1420,45 +1420,59 @@ private fun MainNavDisplay(
     val defaultSpatial = motionScheme.defaultSpatialSpec<Float>()
     val defaultSpatialOffset = motionScheme.defaultSpatialSpec<androidx.compose.ui.unit.IntOffset>()
 
-    val sharedEntryProvider = entryProvider {
-        homeSection(
-            navigator = navigator,
-            homeMode = homeMode,
-            onModeChange = onModeChange,
-            musicContent = {
-                MusicHomeScreen(
-                    onItemClick = { itemId -> navigator.navigate(Route.MediaDetail(itemId)) },
-                    onAlbumClick = { albumId -> navigator.navigate(Route.AlbumDetail(albumId)) },
-                    onArtistsClick = { navigator.navigate(Route.Artists) },
-                    onAlbumsClick = { navigator.navigate(Route.Albums) },
-                    onTracksClick = { navigator.navigate(Route.Tracks) },
-                    onGenresClick = { navigator.navigate(Route.Genres) },
-                    onPlaylistsClick = { navigator.navigate(Route.Playlists) },
-                    onNowPlayingClick = onNowPlayingClick,
-                    onAmbientClick = onAmbientClick,
-                )
-            },
-        )
-        librarySection(navigator)
-        searchSection(navigator)
-        liveTvSection(navigator)
-        detailsSection(navigator)
-        editorSection(navigator)
-        videoPlayerSection(navigator, onEnterPip = enterPip, onEnterMiniMode = enterVideoMiniMode)
-        audioPlayerSection(navigator)
-        downloadsSection(navigator)
-        authSection(navigator) { navigator.goBack() }
-        settingsSection(navigator, onLogout) { navigator.navigate(Route.Onboarding) }
-        adminSection(navigator)
-        musicSection(navigator)
-        syncPlaySection(navigator)
-        onboardingSection { navigator.goBack() }
-        newsletterSection(navigator)
-        insightsSection(navigator)
-        requestsSection(navigator)
-        arrQueueSection(navigator)
-        calendarSection(navigator)
-        shortcutsSection(navigator)
+    // Remember the entry provider graph so the ~25 section builders aren't
+    // re-invoked (allocating fresh lambdas + entry objects) on every
+    // MainNavDisplay recomposition. Re-key on the values it captures.
+    val sharedEntryProvider = remember(
+        navigator,
+        homeMode,
+        onModeChange,
+        onNowPlayingClick,
+        onAmbientClick,
+        enterPip,
+        enterVideoMiniMode,
+        onLogout,
+    ) {
+        entryProvider {
+            homeSection(
+                navigator = navigator,
+                homeMode = homeMode,
+                onModeChange = onModeChange,
+                musicContent = {
+                    MusicHomeScreen(
+                        onItemClick = { itemId -> navigator.navigate(Route.MediaDetail(itemId)) },
+                        onAlbumClick = { albumId -> navigator.navigate(Route.AlbumDetail(albumId)) },
+                        onArtistsClick = { navigator.navigate(Route.Artists) },
+                        onAlbumsClick = { navigator.navigate(Route.Albums) },
+                        onTracksClick = { navigator.navigate(Route.Tracks) },
+                        onGenresClick = { navigator.navigate(Route.Genres) },
+                        onPlaylistsClick = { navigator.navigate(Route.Playlists) },
+                        onNowPlayingClick = onNowPlayingClick,
+                        onAmbientClick = onAmbientClick,
+                    )
+                },
+            )
+            librarySection(navigator)
+            searchSection(navigator)
+            liveTvSection(navigator)
+            detailsSection(navigator)
+            editorSection(navigator)
+            videoPlayerSection(navigator, onEnterPip = enterPip, onEnterMiniMode = enterVideoMiniMode)
+            audioPlayerSection(navigator)
+            downloadsSection(navigator)
+            authSection(navigator) { navigator.goBack() }
+            settingsSection(navigator, onLogout) { navigator.navigate(Route.Onboarding) }
+            adminSection(navigator)
+            musicSection(navigator)
+            syncPlaySection(navigator)
+            onboardingSection { navigator.goBack() }
+            newsletterSection(navigator)
+            insightsSection(navigator)
+            requestsSection(navigator)
+            arrQueueSection(navigator)
+            calendarSection(navigator)
+            shortcutsSection(navigator)
+        }
     }
 
     NavDisplay(

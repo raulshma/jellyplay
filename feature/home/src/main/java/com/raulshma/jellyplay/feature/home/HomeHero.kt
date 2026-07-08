@@ -69,6 +69,7 @@ import com.raulshma.jellyplay.core.model.MediaItem
 import com.raulshma.jellyplay.core.model.formatFixed
 import com.raulshma.jellyplay.core.ui.adaptive.LocalAdaptiveInfo
 import com.raulshma.jellyplay.core.ui.adaptive.WindowSizeClass
+import com.raulshma.jellyplay.core.ui.components.LocalPerformanceMode
 import com.raulshma.jellyplay.core.ui.image.MediaImage
 import com.raulshma.jellyplay.core.ui.tv.LocalTvMode
 import com.raulshma.jellyplay.core.ui.tv.ifElse
@@ -181,6 +182,11 @@ fun HeroHeader(
 ) {
     val isTv = LocalTvMode.current
     val adaptiveInfo = LocalAdaptiveInfo.current
+    // Performance mode collapses the four simultaneous hero infinite
+    // animations (breath, play pulse scale/alpha, rating pulse) to their
+    // static else-branch values — the hero otherwise drives a continuous
+    // redraw loop on top of the 1920×1080 backdrop decode.
+    val performanceMode = LocalPerformanceMode.current
 
     val interactionSource = remember { MutableInteractionSource() }
     val isPressed by interactionSource.collectIsPressedAsState()
@@ -229,7 +235,7 @@ fun HeroHeader(
     val playPulseAlpha: Float
     val ratingPulse: Float
 
-    if (isVisible) {
+    if (isVisible && !performanceMode) {
         val heroTransition = rememberInfiniteTransition(label = "hero_animations")
         val rawBreathScale by heroTransition.animateFloat(
             initialValue = 1.0f,
@@ -329,10 +335,10 @@ fun HeroHeader(
             // The default 384² is a poster thumbnail size — upscaled full-screen
             // it looks soft. Backdrop URL is now 1920px wide (see
             // ImageUrlProvider.DEFAULT_BACKDROP_WIDTH), so decode matches source.
-            // performanceModeAware = false: a single full-screen image isn't worth
-            // the perf-mode memory clamp, which would crush it to 256².
+            // performanceModeAware stays true: MediaImage now tiers the clamp so
+            // a ≥1080 request decodes at 768² in performance mode (still crisp
+            // full-screen on phones) instead of the poster 256² tier.
             size = CoilSize(1920, 1080),
-            performanceModeAware = false,
         )
 
         Box(

@@ -754,10 +754,10 @@ private fun DetailContent(
                     contentScale = ContentScale.Crop,
                     // Full-bleed hero backdrop: decode large enough for 4K TV width
                     // (3840 px). The default 384² produces visible blur on TV.
-                    // performanceModeAware = false keeps the clamp from crushing
-                    // this single full-screen image to 256² in performance mode.
+                    // performanceModeAware stays true: MediaImage now tiers the
+                    // clamp so a ≥1080 request decodes at 768² in performance mode
+                    // (crisp full-screen on phones) instead of 256².
                     size = CoilSize(1920, 1080),
-                    performanceModeAware = false,
                 )
             }
 
