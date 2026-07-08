@@ -13,6 +13,8 @@ navigation3 = "1.1.1"
 lifecycleViewmodelNav3 = "2.11.0-beta01"
 jellyfinSdk = "1.8.8"
 media3 = "1.10.1"
+media3FfmpegDecoder = "1.9.0+1"
+androidDesugarJdkLibs = "2.1.5"
 coil = "3.4.0"
 room = "2.8.4"
 datastore = "1.2.1"
@@ -114,6 +116,13 @@ media3-exoplayer-dash = { group = "androidx.media3", name = "media3-exoplayer-da
 media3-extractor = { group = "androidx.media3", name = "media3-extractor", version.ref = "media3" }
 media3-cast = { group = "androidx.media3", name = "media3-cast", version.ref = "media3" }
 media3-datasource = { group = "androidx.media3", name = "media3-datasource", version.ref = "media3" }
+# Prebuilt FFmpeg audio decoder (native .so included) for codecs MediaCodec
+# lacks on most devices (DTS, MLP, TrueHD, etc.). Auto-loaded by
+# DefaultRenderersFactory via reflection when EXTENSION_RENDERER_MODE is ON.
+media3-ffmpeg-decoder = { group = "org.jellyfin.media3", name = "media3-ffmpeg-decoder", version.ref = "media3FfmpegDecoder" }
+
+# Core library desugaring (required by media3-ffmpeg-decoder)
+android-desugar-jdk = { group = "com.android.tools", name = "desugar_jdk_libs", version.ref = "androidDesugarJdkLibs" }
 
 # Coil
 coil-compose = { group = "io.coil-kt.coil3", name = "coil-compose", version.ref = "coil" }

@@ -14,6 +14,7 @@ android {
     }
 
     compileOptions {
+        isCoreLibraryDesugaringEnabled = true
         sourceCompatibility = JavaVersion.VERSION_17
         targetCompatibility = JavaVersion.VERSION_17
     }
@@ -58,6 +59,12 @@ dependencies {
 
     implementation(libs.media3.cast)
     implementation(libs.media3.datasource)
+    // FFmpeg software audio decoder for codecs the platform can't decode
+    // (DTS, MLP/TrueHD, EAC3, etc.). DefaultRenderersFactory loads it via
+    // reflection when EXTENSION_RENDERER_MODE is ON (the default HW_PREFERRED
+    // decoder mode), so no engine wiring is needed.
+    implementation(libs.media3.ffmpeg.decoder)
+    coreLibraryDesugaring(libs.android.desugar.jdk)
     implementation(libs.play.services.cast.framework)
     implementation(libs.mediarouter)
 
