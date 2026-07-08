@@ -77,6 +77,7 @@ android {
         }
     }
     compileOptions {
+        isCoreLibraryDesugaringEnabled = true
         sourceCompatibility = JavaVersion.VERSION_17
         targetCompatibility = JavaVersion.VERSION_17
     }
@@ -187,6 +188,10 @@ dependencies {
     implementation(libs.hilt.navigation.compose)
 
     implementation(libs.play.services.cast.framework)
+
+    // Required by the media3-ffmpeg-decoder native extension (pulled in via
+    // :feature:player:video). Must also be enabled at the app dex entry point.
+    coreLibraryDesugaring(libs.android.desugar.jdk)
 
     implementation(libs.media3.session)
 
