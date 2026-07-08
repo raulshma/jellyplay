@@ -158,6 +158,7 @@ data class HomeCallbacks(
     val onWatchProgressHeatmapClick: () -> Unit = {},
     val onRequestsClick: () -> Unit = {},
     val onActivityQueueClick: () -> Unit = {},
+    val onUpcomingClick: () -> Unit = {},
 )
 
 @Composable
