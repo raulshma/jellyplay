@@ -184,6 +184,7 @@ import com.raulshma.jellyplay.feature.onboarding.navigation.onboardingSection
 import com.raulshma.jellyplay.feature.newsletter.navigation.newsletterSection
 import com.raulshma.jellyplay.feature.requests.navigation.requestsSection
 import com.raulshma.jellyplay.feature.arrqueue.navigation.arrQueueSection
+import com.raulshma.jellyplay.feature.calendar.navigation.calendarSection
 import com.raulshma.jellyplay.feature.shortcuts.navigation.shortcutsSection
 import kotlinx.coroutines.launch
 import com.composables.icons.tabler.Tabler
@@ -1054,6 +1055,14 @@ private fun PhoneContent(
                         },
                     )
                     DrawerItem(
+                        icon = Tabler.Outline.Calendar,
+                        label = "Upcoming",
+                        onClick = {
+                            navigator.navigate(Route.UpcomingCalendar)
+                            drawerScope.launch { drawerState.close() }
+                        },
+                    )
+                    DrawerItem(
                         icon = Tabler.Outline.Settings,
                         label = "Settings",
                         onClick = {
@@ -1448,6 +1457,7 @@ private fun MainNavDisplay(
         insightsSection(navigator)
         requestsSection(navigator)
         arrQueueSection(navigator)
+        calendarSection(navigator)
         shortcutsSection(navigator)
     }
 

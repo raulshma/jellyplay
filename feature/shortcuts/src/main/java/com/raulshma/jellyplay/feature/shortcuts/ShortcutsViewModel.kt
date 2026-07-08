@@ -105,6 +105,13 @@ class ShortcutsViewModel @Inject constructor(
             category = ShortcutCategory.SERVICES,
         ),
         ShortcutItem(
+            title = "Upcoming",
+            description = "Combined Sonarr/Radarr release calendar.",
+            icon = Tabler.Outline.CalendarEvent,
+            route = Route.UpcomingCalendar,
+            category = ShortcutCategory.SERVICES,
+        ),
+        ShortcutItem(
             title = "Radarr / Sonarr",
             description = "Direct *arr server connections and overrides.",
             icon = Tabler.Outline.Movie,
