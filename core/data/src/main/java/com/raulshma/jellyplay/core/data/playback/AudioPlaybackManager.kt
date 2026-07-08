@@ -8,6 +8,7 @@ import androidx.media3.common.C
 import androidx.media3.common.MediaItem
 import androidx.media3.common.MediaMetadata
 import androidx.media3.common.Player
+import androidx.media3.common.PlaybackException
 import androidx.media3.exoplayer.DefaultLoadControl
 import androidx.media3.exoplayer.DefaultRenderersFactory
 import androidx.media3.exoplayer.ExoPlayer
@@ -203,6 +204,7 @@ class AudioPlaybackManager @Inject constructor(
             onCrossfadeTransition(secondary, nextIndex, nextItem)
         },
         detachPrimaryListener = { primary -> primary.removeListener(playerListener) },
+        onCrossfadeError = { error -> playerListener.onPlayerError(error) },
     )
 
     @Volatile
@@ -285,6 +287,14 @@ class AudioPlaybackManager @Inject constructor(
     private val playerListener = object : Player.Listener {
         override fun onIsPlayingChanged(isPlaying: Boolean) {
             _isPlaying.value = isPlaying
+        }
+
+        override fun onPlayerError(error: PlaybackException) {
+            // Surface decode/init failures (e.g. MediaCodecAudioRenderer on an
+            // undecodable codec) into the same playbackError flow the UI shows
+            // for metadata-load failures. Without this, a renderer error leaves
+            // the player silently in STATE_IDLE.
+            _playbackError.value = error.message ?: "Playback error"
         }
 
         override fun onAudioSessionIdChanged(audioSessionId: Int) {
@@ -432,6 +442,14 @@ class AudioPlaybackManager @Inject constructor(
             .build()
 
         val renderersFactory = object : DefaultRenderersFactory(context) {
+            init {
+                // Mirror the video engine: allow the FFmpeg extension renderer
+                // (software decode for DTS/TrueHD/etc. that the hardware audio
+                // decoder can't handle) and fall back across MediaCodec decoders.
+                setExtensionRendererMode(DefaultRenderersFactory.EXTENSION_RENDERER_MODE_ON)
+                setEnableDecoderFallback(true)
+            }
+
             override fun buildAudioSink(
                 context: android.content.Context,
                 enableFloatOutput: Boolean,
