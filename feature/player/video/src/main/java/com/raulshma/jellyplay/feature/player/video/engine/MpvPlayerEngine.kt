@@ -547,7 +547,9 @@ class MpvPlayerEngine(
                     nightMode.setEnabled(newAudioFx.nightModeEnabled)
                 }
             }
-        } catch (_: Exception) {}
+        } catch (e: Exception) {
+            Log.w(TAG, "Failed to reconfigure MPV audio effects", e)
+        }
     }
 
     private fun applyVideoFilters(effects: VideoEffectsConfig) {
@@ -585,7 +587,9 @@ class MpvPlayerEngine(
             } else {
                 mpvView?.mpv?.command("vf", "clr", "")
             }
-        } catch (_: Exception) {}
+        } catch (e: Exception) {
+            Log.w(TAG, "Failed to apply MPV video filters", e)
+        }
     }
 
     override fun selectTrack(type: TrackType, index: Int) {
@@ -813,7 +817,9 @@ class MpvPlayerEngine(
                 } catch (_: Exception) { 0.0 }
                 _bufferedPositionMs.value = (posMs + (cacheDuration * 1000.0)).toLong().coerceAtMost(duration.toLong())
             }
-        } catch (_: Exception) {}
+        } catch (e: Exception) {
+            Log.w(TAG, "Failed to read MPV buffer position", e)
+        }
     }
 
     private fun updateVideoStatsOnly() {
@@ -872,7 +878,9 @@ class MpvPlayerEngine(
             if (newStats != currentStats) {
                 _videoStats.value = newStats
             }
-        } catch (_: Exception) {}
+        } catch (e: Exception) {
+            Log.w(TAG, "Failed to read MPV video stats", e)
+        }
     }
 
     private fun buildTracks(): List<MediaTrack> {
