@@ -24,6 +24,7 @@ import coil3.compose.AsyncImagePainter
 import coil3.request.ImageRequest
 import coil3.request.crossfade
 import coil3.size.isOriginal
+import coil3.size.pxOrElse
 import coil3.size.Size as CoilSize
 import com.composables.icons.tabler.Tabler
 import com.composables.icons.tabler.outline.*
@@ -58,7 +59,16 @@ fun MediaImage(
     // photos. Clamp only the fixed-pixel defaults, never ORIGINAL.
     val effectiveSize = when {
         size.isOriginal -> size
-        performanceMode && performanceModeAware -> CoilSize(256, 256)
+        performanceMode && performanceModeAware -> {
+            // Performance mode clamp, tiered by the requested size so full-bleed
+            // callers (hero, detail backdrop) still get a sharp-enough decode
+            // instead of being crushed to poster-thumbnail resolution.
+            val largest = maxOf(
+                size.width.pxOrElse { 0 },
+                size.height.pxOrElse { 0 },
+            )
+            if (largest >= 1080) CoilSize(768, 768) else CoilSize(256, 256)
+        }
         else -> size
     }
     val effectiveBlurHash = if (performanceMode) null else blurHash
@@ -117,6 +127,20 @@ private fun FallbackAsyncImage(
     var currentIndex by remember(primaryRequest.data, fallbackKey) { mutableIntStateOf(0) }
     var isError by remember(primaryRequest.data, fallbackKey) { mutableStateOf(false) }
 
+    // Hoist the onState lambda out of the AsyncImage call so a fresh closure
+    // isn't allocated on every recomposition of this (very common) subtree.
+    // currentIndex/isError are MutableState delegates, so reading them inside a
+    // stable lambda still observes changes correctly.
+    val onState = remember(allUrls.size) { { state: AsyncImagePainter.State ->
+        if (state is AsyncImagePainter.State.Error) {
+            if (currentIndex < allUrls.size - 1) {
+                currentIndex++
+            } else {
+                isError = true
+            }
+        }
+    } }
+
     if (!isError && currentIndex < allUrls.size) {
         val currentRequest = if (currentIndex == 0) {
             primaryRequest
@@ -135,15 +159,7 @@ private fun FallbackAsyncImage(
             modifier = Modifier.fillMaxSize(),
             contentScale = contentScale,
             colorFilter = colorFilter,
-            onState = { state ->
-                if (state is AsyncImagePainter.State.Error) {
-                    if (currentIndex < allUrls.size - 1) {
-                        currentIndex++
-                    } else {
-                        isError = true
-                    }
-                }
-            }
+            onState = onState,
         )
     } else if (showPlaceholder) {
         Box(

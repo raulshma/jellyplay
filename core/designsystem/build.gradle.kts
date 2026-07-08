@@ -30,6 +30,15 @@ android {
     }
 }
 
+// Compose compiler stability reports + metrics. See :app for the flag:
+//   ./gradlew assemblePhoneRelease -PenableComposeMetrics
+if (project.hasProperty("enableComposeMetrics")) {
+    composeCompiler {
+        metricsDestination = layout.buildDirectory.dir("compose-metrics")
+        reportsDestination = layout.buildDirectory.dir("compose-reports")
+    }
+}
+
 dependencies {
     implementation(platform(libs.compose.bom))
     implementation(libs.compose.ui)

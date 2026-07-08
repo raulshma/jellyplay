@@ -153,6 +153,19 @@ fun TracksScreen(
                             ) { index ->
                                 val track = tracks[index]
                                 if (track != null) {
+                                    // Memoize per-item so getImageUrl + the click
+                                    // lambdas aren't rebuilt on every recomposition
+                                    // of this visible row (matches Search/Library).
+                                    val imageUrl = remember(track.id) { viewModel.getImageUrl(track.id) }
+                                    val onClick = remember(track.id) {
+                                        {
+                                            val loadedTracks = tracks.itemSnapshotList.items
+                                            val clickIndex = loadedTracks.indexOfFirst { it.id == track.id }
+                                            viewModel.playAll(loadedTracks, if (clickIndex >= 0) clickIndex else 0)
+                                            onItemClick(track.id)
+                                        }
+                                    }
+                                    val onAddToQueue = remember(track.id) { { viewModel.addToQueue(track) } }
                                     TrackRow(
                                         name = track.name,
                                         artist = track.albumArtist,
@@ -160,14 +173,9 @@ fun TracksScreen(
                                         duration = track.runTimeTicks?.let { ticks ->
                                             com.raulshma.jellyplay.core.ui.components.formatDurationMs(ticks / 10_000)
                                         },
-                                        imageUrl = viewModel.getImageUrl(track.id),
-                                        onClick = {
-                                            val loadedTracks = tracks.itemSnapshotList.items
-                                            val clickIndex = loadedTracks.indexOfFirst { it.id == track.id }
-                                            viewModel.playAll(loadedTracks, if (clickIndex >= 0) clickIndex else 0)
-                                            onItemClick(track.id)
-                                        },
-                                        onAddToQueue = { viewModel.addToQueue(track) },
+                                        imageUrl = imageUrl,
+                                        onClick = onClick,
+                                        onAddToQueue = onAddToQueue,
                                         blurHash = track.blurHashes.primary,
                                     )
                                 }

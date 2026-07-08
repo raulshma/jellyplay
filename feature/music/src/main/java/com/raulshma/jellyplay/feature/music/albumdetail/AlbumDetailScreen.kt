@@ -352,14 +352,20 @@ private fun AlbumDetailContent(
             }
 
             itemsIndexed(tracks, key = { _, track -> track.id }, contentType = { _, _ -> "mediaItem" }) { index, track ->
+                // Memoize per-track so getImageUrl + click lambdas aren't rebuilt
+                // on every recomposition of the visible row.
+                val imageUrl = remember(track.id) { getImageUrl(track.id) }
+                val onClick = remember(track.id) { { onTrackClick(track.id) } }
+                val onAddToQueue = remember(track.id) { { onAddToQueue(track) } }
+                val onDownloadClick = remember(track.id) { { onDownloadTrack(track) } }
                 TrackItem(
                     track = track,
                     index = index + 1,
-                    imageUrl = getImageUrl(track.id),
+                    imageUrl = imageUrl,
                     downloadItem = trackDownloads[track.id],
-                    onClick = { onTrackClick(track.id) },
-                    onAddToQueue = { onAddToQueue(track) },
-                    onDownloadClick = { onDownloadTrack(track) },
+                    onClick = onClick,
+                    onAddToQueue = onAddToQueue,
+                    onDownloadClick = onDownloadClick,
                 )
             }
 
