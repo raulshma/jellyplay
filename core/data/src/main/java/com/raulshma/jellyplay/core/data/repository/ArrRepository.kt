@@ -6,6 +6,7 @@ import com.raulshma.jellyplay.core.model.arr.ArrCommand
 import com.raulshma.jellyplay.core.model.arr.ArrCommandName
 import com.raulshma.jellyplay.core.model.arr.ArrDownloadSummary
 import com.raulshma.jellyplay.core.model.arr.ArrQueueDeleteOptions
+import com.raulshma.jellyplay.core.model.arr.ArrRedownloadResult
 import com.raulshma.jellyplay.core.model.arr.ArrQueueItem
 import com.raulshma.jellyplay.core.model.arr.ArrServerConfig
 import com.raulshma.jellyplay.core.model.arr.ArrServiceKind
@@ -150,6 +151,35 @@ interface ArrRepository {
      * is configured.
      */
     suspend fun searchForTmdb(tmdbId: Int, kind: ArrServiceKind): Result<List<ArrCommand>>
+
+    /**
+     * Re-marks an item monitored and triggers a fresh search across the
+     * relevant servers — the *arr half of the delete & re-download flow.
+     * *arr unmonitors an item when its file is deleted, so without this step a
+     * re-download would never trigger.
+     *
+     * - **Movies** ([kind] = RADARR): per Radarr server → resolve tmdbId →
+     *   internal movie id → `PUT /movie/monitor` → `SearchMovie`.
+     * - **Episodes** ([kind] = SONARR): per Sonarr server → resolve [tvdbId]
+     *   → series id → episode id (via [seasonNumber]/[episodeNumber]) →
+     *   `PUT /episode/monitor` → `EpisodeSearch`.
+     *
+     * Returns an [ArrRedownloadResult] accumulating the best outcome across
+     * servers (any server succeeding counts as success). Best-effort: a monitor
+     * failure on one server does not abort the search on others. When the item
+     * isn't tracked by *arr (id lookup returns null) the result records a
+     * [com.raulshma.jellyplay.core.model.arr.ArrRedownloadStep.MONITOR] failure.
+     *
+     * [tvdbId], [seasonNumber], [episodeNumber] are required for SONARR and
+     * ignored for RADARR.
+     */
+    suspend fun monitorAndSearch(
+        tmdbId: Int,
+        kind: ArrServiceKind,
+        tvdbId: Int? = null,
+        seasonNumber: Int? = null,
+        episodeNumber: Int? = null,
+    ): Result<ArrRedownloadResult>
 
     companion object {
         /** TTL for the resolved-servers cache. */

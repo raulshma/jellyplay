@@ -54,8 +54,13 @@ class PlaybackRepositoryImpl @Inject constructor(
     override fun getBackdropUrl(itemId: String, maxWidth: Int): String =
         apiClient.getBackdropImageUrl(itemId, maxWidth)
 
-    override fun getStreamUrl(itemId: String, mediaSourceId: String, startTimeTicks: Long): String =
-        apiClient.getStreamUrl(itemId, mediaSourceId, startTimeTicks)
+    override fun getStreamUrl(
+        itemId: String,
+        mediaSourceId: String,
+        startTimeTicks: Long,
+        liveStreamId: String?,
+    ): String =
+        apiClient.getStreamUrl(itemId, mediaSourceId, startTimeTicks, liveStreamId = liveStreamId)
 
     override suspend fun fetchPlaybackInfo(
         itemId: String,
@@ -102,7 +107,28 @@ class PlaybackRepositoryImpl @Inject constructor(
             ?: result.mediaSources.firstOrNull()
             ?: return null
 
+        // Live TV channels carry a server-issued liveStreamId; the stream URL
+        // must echo it back as `LiveStreamId` so the tuner opens a live
+        // session. Static direct-play (`/Videos/{id}/stream?static=true`) does
+        // not work for live sources, so route them through direct stream.
+        val isLiveStream = source.liveStreamId != null || source.requiresOpening
+
         val (url, method) = when {
+            isLiveStream -> {
+                // The SDK does not surface a DirectStreamUrl; the client
+                // constructs `/Videos/{id}/stream` and appends LiveStreamId.
+                // Transcode is the fallback when direct stream is unsupported.
+                val liveId = source.liveStreamId
+                val base = if (source.supportsDirectStream || source.supportsDirectPlay) {
+                    getStreamUrl(itemId, source.id, startTimeTicks, liveStreamId = liveId)
+                } else {
+                    resolveTranscodeUrl(source.transcodeUrl)
+                }
+                val resolvedMethod = if (source.supportsDirectStream) PlayMethod.DIRECT_STREAM
+                    else if (source.supportsTranscoding) PlayMethod.TRANSCODE
+                    else PlayMethod.DIRECT_STREAM
+                base to resolvedMethod
+            }
             source.supportsDirectPlay ->
                 getStreamUrl(itemId, source.id, startTimeTicks) to PlayMethod.DIRECT_PLAY
             source.supportsDirectStream ->
@@ -140,12 +166,14 @@ class PlaybackRepositoryImpl @Inject constructor(
         startTimeTicks: Long,
         maxBitrate: Int?,
         useAudioEndpoint: Boolean,
+        liveStreamId: String?,
     ): String = apiClient.getStreamUrl(
         itemId = itemId,
         mediaSourceId = mediaSourceId,
         startTimeTicks = startTimeTicks,
         maxBitrate = maxBitrate,
         useAudioEndpoint = useAudioEndpoint,
+        liveStreamId = liveStreamId,
     )
 
     override fun getSubtitleDeliveryUrl(deliveryUrl: String): String =

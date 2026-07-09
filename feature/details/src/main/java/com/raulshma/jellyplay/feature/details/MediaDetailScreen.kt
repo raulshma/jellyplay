@@ -37,6 +37,8 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -172,6 +174,10 @@ fun MediaDetailScreen(
     val downloadError = uiState.downloadError
     val userMessage = uiState.userMessage
     val cellularDownloadWarningMb = uiState.cellularDownloadWarningMb
+    val canRedownload by viewModel.canRedownload.collectAsStateWithLifecycle()
+    val showRedownloadDialog = uiState.showRedownloadDialog
+    val isRedownloading = uiState.isRedownloading
+    val redownloadResult = uiState.redownloadResult
     val seerrTvSeasons = uiState.seerrTvSeasons
     LaunchedEffect(detail?.item?.id) {
         detail?.let {
@@ -374,6 +380,13 @@ fun MediaDetailScreen(
             preferences = preferences,
             onHideFromNextUp = remember(viewModel) { { viewModel.hideFromNextUp() } },
             onHideFromContinueWatching = remember(viewModel) { { viewModel.hideFromContinueWatching() } },
+            canRedownload = canRedownload,
+            showRedownloadDialog = showRedownloadDialog,
+            isRedownloading = isRedownloading,
+            redownloadResult = redownloadResult,
+            onRequestRedownload = remember(viewModel) { { viewModel.requestRedownload() } },
+            onConfirmRedownload = remember(viewModel) { { viewModel.confirmRedownload() } },
+            onDismissRedownloadDialog = remember(viewModel) { { viewModel.dismissRedownloadDialog() } },
         )
 
         // Seerr request dialog
@@ -530,6 +543,13 @@ private fun DetailContent(
     preferences: UserPreferences,
     onHideFromNextUp: () -> Unit = {},
     onHideFromContinueWatching: () -> Unit = {},
+    canRedownload: Boolean = false,
+    showRedownloadDialog: Boolean = false,
+    isRedownloading: Boolean = false,
+    redownloadResult: DetailUiState.RedownloadOutcome? = null,
+    onRequestRedownload: () -> Unit = {},
+    onConfirmRedownload: () -> Unit = {},
+    onDismissRedownloadDialog: () -> Unit = {},
 ) {
     val item = detail?.item
     val listState = rememberLazyListState()
@@ -576,6 +596,7 @@ private fun DetailContent(
         activeDownload = activeDownload,
         isDownloading = isDownloading,
         isDownloadingSeries = isDownloadingSeries,
+        canRedownload = canRedownload,
         onClose = { /* menus close themselves */ },
         onEditClick = onEditClick,
         onShare = shareMedia,
@@ -583,6 +604,7 @@ private fun DetailContent(
         onDownloadSeries = onDownloadSeriesClick,
         onHideFromNextUp = onHideFromNextUp,
         onHideFromContinueWatching = onHideFromContinueWatching,
+        onRedownload = onRequestRedownload,
         onTechnicalInfo = { onNavigate(com.raulshma.jellyplay.core.ui.navigation.Route.MediaInfo(itemId)) },
     )
 
@@ -1211,6 +1233,103 @@ private fun DetailContent(
                 TextButton(onClick = { showDownloadDialog = false }) {
                     Text(stringResource(R.string.detail_cancel))
                 }
+            },
+        )
+    }
+
+    // Delete & re-download: confirmation → progress → result. Gated entirely
+    // by [showRedownloadDialog]; the in-progress/result states are driven by
+    // [redownloadResult] so the dialog stays open across the async flow.
+    if (showRedownloadDialog) {
+        val item0 = detail?.item
+        val isMovie = item0?.mediaType == MediaType.MOVIE
+        val outcome = redownloadResult
+        AlertDialog(
+            onDismissRequest = {
+                // Don't allow dismissing mid-operation (the file is being
+                // deleted); only allow cancel before confirming.
+                if (!isRedownloading && outcome == null) onDismissRedownloadDialog()
+            },
+            icon = { Icon(Tabler.Outline.Trash, contentDescription = null) },
+            title = { Text(stringResource(R.string.detail_redownload_title)) },
+            text = {
+                Column {
+                    when (outcome) {
+                        null -> {
+                            // Confirmation state.
+                            Text(
+                                if (isMovie) {
+                                    stringResource(R.string.detail_redownload_movie_message, item0?.name ?: "")
+                                } else {
+                                    stringResource(R.string.detail_redownload_episode_message)
+                                },
+                            )
+                        }
+                        DetailUiState.RedownloadOutcome.InProgress -> {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                CircularProgressIndicator(
+                                    modifier = Modifier.size(20.dp),
+                                    strokeWidth = 2.dp,
+                                )
+                                Spacer(Modifier.width(12.dp))
+                                Text(stringResource(R.string.detail_redownload_in_progress))
+                            }
+                        }
+                        is DetailUiState.RedownloadOutcome.Success -> {
+                            Text(outcome.message)
+                        }
+                        is DetailUiState.RedownloadOutcome.PartialFailure -> {
+                            Text(
+                                outcome.message,
+                                color = MaterialTheme.colorScheme.error,
+                            )
+                        }
+                        is DetailUiState.RedownloadOutcome.DeleteFailed -> {
+                            Text(
+                                outcome.message,
+                                color = MaterialTheme.colorScheme.error,
+                            )
+                        }
+                    }
+                }
+            },
+            confirmButton = {
+                when (outcome) {
+                    null -> TextButton(
+                        onClick = onConfirmRedownload,
+                        enabled = !isRedownloading,
+                        colors = ButtonDefaults.textButtonColors(
+                            contentColor = MaterialTheme.colorScheme.error,
+                        ),
+                    ) {
+                        Text(stringResource(R.string.detail_redownload_confirm))
+                    }
+                    DetailUiState.RedownloadOutcome.InProgress -> { /* no button while running */ }
+                    is DetailUiState.RedownloadOutcome.DeleteFailed -> TextButton(
+                        onClick = onDismissRedownloadDialog,
+                    ) {
+                        Text(stringResource(R.string.detail_cancel))
+                    }
+                    // Success + PartialFailure: the file is gone, so "Done"
+                    // closes the dialog and navigates back (the screen observes
+                    // the detail is deleted and pops via onBack).
+                    else -> TextButton(onClick = {
+                        onDismissRedownloadDialog()
+                        onBack()
+                    }) {
+                        Text(stringResource(R.string.detail_redownload_done))
+                    }
+                }
+            },
+            dismissButton = when (outcome) {
+                null -> {
+                    {
+                        TextButton(onClick = onDismissRedownloadDialog) {
+                            Text(stringResource(R.string.detail_cancel))
+                        }
+                    }
+                }
+                else -> null
             },
         )
     }

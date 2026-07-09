@@ -390,6 +390,44 @@ enum class ArrCommandName(val serialName: String) {
 }
 
 /**
+ * Which step of a delete & re-download flow failed (if any). Surfaced in
+ * [ArrRedownloadResult] so the UI can tell the user precisely what happened
+ * ("file deleted, but Sonarr search failed: ...") rather than a blanket error.
+ */
+@Immutable
+enum class ArrRedownloadStep {
+    /** Re-marking the item monitored in *arr failed. */
+    MONITOR,
+    /** Queueing the search command in *arr failed. */
+    SEARCH,
+}
+
+/**
+ * Outcome of a "delete & re-download" flow's *arr half (monitor + search). The
+ * Jellyfin file delete is handled separately by `MediaRepository.deleteMediaItem`;
+ * this result captures only the *arr management steps.
+ *
+ * - [monitored]: true when the monitor PUT succeeded on at least one server.
+ * - [searchStarted]: true when at least one search command was queued.
+ * - [commands]: the queued [ArrCommand]s (one per matching server).
+ * - [failureStep] / [errorMessage]: set when a step failed across all servers,
+ *   so the UI can show a partial-failure message. Null when everything
+ *   succeeded.
+ *
+ * The flow is best-effort across servers: a monitor failure on one server does
+ * not abort the search on others, mirroring [com.raulshma.jellyplay.core.data.repository.ArrRepository.searchForTmdb]'s
+ * fan-out-with-swallowed-failures contract.
+ */
+@Immutable
+data class ArrRedownloadResult(
+    val monitored: Boolean = false,
+    val searchStarted: Boolean = false,
+    val commands: List<ArrCommand> = emptyList(),
+    val failureStep: ArrRedownloadStep? = null,
+    val errorMessage: String? = null,
+)
+
+/**
  * Lightweight display-oriented summary written into RequestsUiState so the
  * bottom sheet does not need to carry the full [ArrQueueItem] (which exposes
  * raw client status strings used nowhere else in the UI).

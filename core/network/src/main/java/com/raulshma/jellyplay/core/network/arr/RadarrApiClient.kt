@@ -140,6 +140,19 @@ interface RadarrApiClient {
     suspend fun findMovieIdByTmdb(baseUrl: String, apiKey: String, tmdbId: Int): Result<Int?>
 
     /**
+     * `PUT /api/v3/movie/monitor` — toggles the monitored flag on one or more
+     * movies. Used by the delete & re-download flow to re-mark a movie
+     * monitored after a delete, since Radarr may unmonitor movies whose file is
+     * deleted (so it won't re-grab them otherwise). Idempotent.
+     */
+    suspend fun monitorMovies(
+        baseUrl: String,
+        apiKey: String,
+        movieIds: List<Int>,
+        monitored: Boolean,
+    ): Result<Unit>
+
+    /**
      * `GET /api/v3/system/status` — connection probe. Succeeds iff 2xx.
      */
     suspend fun testConnection(baseUrl: String, apiKey: String): Result<Unit>

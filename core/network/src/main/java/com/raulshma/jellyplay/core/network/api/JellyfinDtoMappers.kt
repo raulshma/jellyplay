@@ -37,6 +37,9 @@ import org.jellyfin.sdk.model.api.MediaStreamType
 import org.jellyfin.sdk.model.api.RecordingStatus
 import org.jellyfin.sdk.model.api.TrickplayInfoDto
 import org.jellyfin.sdk.model.serializer.toUUID
+import org.jellyfin.sdk.model.DateTime
+import java.time.ZoneId
+import java.time.format.DateTimeFormatter
 
 internal fun BaseItemDto.toMediaItem() = MediaItem(
     id = id.toString(),
@@ -140,6 +143,8 @@ internal fun MediaSourceInfo.toMediaSource(
     supportsDirectStream = supportsDirectStream,
     supportsDirectPlay = supportsDirectPlay,
     transcodeUrl = transcodingUrl,
+    liveStreamId = liveStreamId,
+    requiresOpening = requiresOpening,
     path = path,
     mediaStreams = mediaStreams?.map { it.toMediaStream() } ?: emptyList(),
     trickplayInfo = trickplayInfo,
@@ -188,8 +193,8 @@ internal fun BaseItemDto.toLiveTvProgram() = LiveTvProgram(
     overview = overview,
     channelId = channelId?.toString() ?: "",
     channelName = channelName,
-    startDate = startDate?.toString(),
-    endDate = endDate?.toString(),
+    startDate = startDate?.toIsoInstantString(),
+    endDate = endDate?.toIsoInstantString(),
     durationTicks = runTimeTicks,
     episodeTitle = episodeTitle,
     officialRating = officialRating,
@@ -215,8 +220,8 @@ internal fun BaseItemDto.toLiveTvRecording() = LiveTvRecording(
     overview = overview,
     channelId = channelId?.toString(),
     channelName = channelName,
-    startDate = startDate?.toString(),
-    endDate = endDate?.toString(),
+    startDate = startDate?.toIsoInstantString(),
+    endDate = endDate?.toIsoInstantString(),
     runTimeTicks = runTimeTicks,
     imageTag = imageTags?.get(ImageType.PRIMARY)?.toString(),
     seriesTimerId = seriesTimerId?.toString(),
@@ -229,14 +234,31 @@ internal fun BaseItemDto.toRecordingFolder() = RecordingFolder(
     collectionType = collectionType?.serialName,
 )
 
+/**
+ * Convert a Jellyfin SDK [DateTime] into a zone-carrying ISO-8601 string.
+ *
+ * The SDK serializes date-times as [ZonedDateTime] but deserializes them into
+ * a [DateTime] (a `java.time.LocalDateTime` typealias on JVM) by shifting to
+ * the system zone and dropping the offset — see
+ * `DateTimeSerializer.deserialize`. A plain `.toString()` therefore emits a
+ * bare `LocalDateTime` with no offset, which downstream consumers (e.g. the
+ * EPG grid) would misread as UTC, shifting every program by the local offset
+ * and dropping most outside the visible window.
+ *
+ * Re-attach the system zone here so callers get an unambiguous ISO instant
+ * (`...Z` / `+HH:MM`) regardless of device timezone.
+ */
+internal fun DateTime.toIsoInstantString(): String =
+    atZone(ZoneId.systemDefault()).format(DateTimeFormatter.ISO_OFFSET_DATE_TIME)
+
 internal fun org.jellyfin.sdk.model.api.TimerInfoDto.toDvrTimer() = DvrTimer(
     id = id?.toString() ?: java.util.UUID.randomUUID().toString(),
     programId = programId?.toString() ?: "",
     programName = name ?: "",
     channelId = channelId?.toString() ?: "",
     channelName = channelName ?: "",
-    startDate = startDate?.toString(),
-    endDate = endDate?.toString(),
+    startDate = startDate?.toIsoInstantString(),
+    endDate = endDate?.toIsoInstantString(),
     status = when (status) {
         RecordingStatus.NEW -> DvrTimerStatus.NEW
         RecordingStatus.IN_PROGRESS -> DvrTimerStatus.RECORDING

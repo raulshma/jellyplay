@@ -128,4 +128,21 @@
     <string name="detail_error_download_failed">Download failed</string>
     <string name="detail_error_not_a_series">This is not a series</string>
     <string name="detail_error_queue_failed">Failed to queue downloads</string>
+
+    <!-- ── Delete & re-download (DIRECT_ARR_INTEGRATION) ───────────────── -->
+    <string name="detail_option_redownload">Delete &amp; Re-download</string>
+    <string name="detail_redownload_title">Delete &amp; Re-download</string>
+    <string name="detail_redownload_movie_message">This will permanently delete \"%1$s\" from Jellyfin, mark it monitored in Radarr, and search for a new download.</string>
+    <string name="detail_redownload_episode_message">This will permanently delete this episode from Jellyfin, mark it monitored in Sonarr, and search for a new download.</string>
+    <string name="detail_redownload_in_progress">Deleting and searching…</string>
+    <string name="detail_redownload_success_movie">Deleted. Radarr is searching for a new download.</string>
+    <string name="detail_redownload_success_episode">Deleted. Sonarr is searching for a new download.</string>
+    <string name="detail_redownload_partial_monitor">File deleted, but monitoring failed: %1$s</string>
+    <string name="detail_redownload_partial_search">File deleted and re-monitored, but the search command failed.</string>
+    <string name="detail_redownload_delete_failed">Couldn\'t delete: %1$s</string>
+    <string name="detail_redownload_missing_id_movie">This movie has no TMDB id, so Radarr can\'t look it up.</string>
+    <string name="detail_redownload_missing_id_episode">This episode is missing a TVDB id or season/episode number, so Sonarr can\'t look it up.</string>
+    <string name="detail_redownload_generic_error">Unknown error.</string>
+    <string name="detail_redownload_confirm">Delete &amp; Re-download</string>
+    <string name="detail_redownload_done">Done</string>
 </resources>

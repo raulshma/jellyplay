@@ -62,7 +62,6 @@ internal class PlaybackProgressReporter(
                     cachedDurationMs = dur
                 }
                 val buffered = engine.bufferedPositionMs.value
-                val stats = engine.videoStats.value
                 if (pos != lastPos || dur != lastDur) {
                     lastPos = pos
                     lastDur = dur
@@ -71,6 +70,7 @@ internal class PlaybackProgressReporter(
                     // not invalidated at 4 Hz. The segment auto-skip logic
                     // below operates on the raw `pos` directly, decoupled from
                     // uiState.currentPosition, so behavior is unchanged.
+                    val stats = engine.videoStats.value
                     onEnginePositionUpdate(pos, dur, buffered, stats)
                     onPositionPersisted(pos)
                 }

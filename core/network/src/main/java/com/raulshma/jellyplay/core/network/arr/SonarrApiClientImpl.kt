@@ -20,6 +20,7 @@ import kotlinx.serialization.Serializable
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonArray
+import kotlinx.serialization.json.decodeFromJsonElement
 import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.MediaType.Companion.toMediaType
@@ -312,6 +313,62 @@ class SonarrApiClientImpl @Inject constructor(
         return parseAndMap<SonarrCommandResource>(result).map { it.toModel() }
     }
 
+    override suspend fun findSeriesByTvdb(baseUrl: String, apiKey: String, tvdbId: Int): Result<Int?> {
+        val url = buildUrl(baseUrl, "/series").newBuilder()
+            .addQueryParameter("tvdbId", tvdbId.toString())
+            .build()
+        val request = Request.Builder().url(url).withApiKey(apiKey).get().build()
+        // /series?tvdbId=X returns an array (0 or 1 element in practice). Parse
+        // raw JSON array to avoid coupling to the full SeriesResource DTO — only
+        // the id is needed here.
+        return executeRequest(request).mapCatching { body ->
+            val arr = json.decodeFromString<JsonArray>(body)
+            arr.firstOrNull()
+                ?.let { json.decodeFromJsonElement(SonarrSeriesResource.serializer(), it) }
+                ?.id
+        }
+    }
+
+    override suspend fun getEpisodeIds(
+        baseUrl: String,
+        apiKey: String,
+        seriesId: Int,
+        seasonNumber: Int,
+        episodeNumber: Int,
+    ): Result<List<Int>> {
+        val url = buildUrl(baseUrl, "/episode").newBuilder()
+            .addQueryParameter("seriesId", seriesId.toString())
+            .addQueryParameter("seasonNumber", seasonNumber.toString())
+            .addQueryParameter("episodeNumber", episodeNumber.toString())
+            .build()
+        val request = Request.Builder().url(url).withApiKey(apiKey).get().build()
+        // /episode returns an array of EpisodeResource; only id is needed here.
+        return executeRequest(request).mapCatching { body ->
+            val arr = json.decodeFromString<JsonArray>(body)
+            arr.mapNotNull { el ->
+                json.decodeFromJsonElement(SonarrEpisodeLookupResource.serializer(), el).id
+            }
+        }
+    }
+
+    override suspend fun monitorEpisodes(
+        baseUrl: String,
+        apiKey: String,
+        episodeIds: List<Int>,
+        monitored: Boolean,
+    ): Result<Unit> {
+        if (episodeIds.isEmpty()) return Result.success(Unit)
+        val body = json.encodeToString(
+            SonarrEpisodeMonitorRequest(episodeIds = episodeIds, monitored = monitored),
+        )
+        val request = Request.Builder()
+            .url(buildUrl(baseUrl, "/episode/monitor"))
+            .withApiKey(apiKey)
+            .put(body.toRequestBody("application/json".toMediaType()))
+            .build()
+        return executeRequest(request).map { }
+    }
+
     override suspend fun testConnection(baseUrl: String, apiKey: String): Result<Unit> {
         val request = Request.Builder()
             .url(buildUrl(baseUrl, "/system/status"))
@@ -417,6 +474,21 @@ class SonarrApiClientImpl @Inject constructor(
 
     @Serializable
     private data class SonarrIdsBulkRequest(val ids: List<Int>)
+
+    /** Body for `PUT /api/v3/episode/monitor`. */
+    @Serializable
+    private data class SonarrEpisodeMonitorRequest(
+        val episodeIds: List<Int>,
+        val monitored: Boolean,
+    )
+
+    /**
+     * Minimal projection of `/episode` rows used by [getEpisodeIds]. Only the
+     * id is consumed; the full EpisodeResource carries ~20 fields we don't need
+     * for id resolution.
+     */
+    @Serializable
+    private data class SonarrEpisodeLookupResource(val id: Int = 0)
 
     @Serializable
     private data class SonarrBlocklistResponse(
