@@ -21,9 +21,11 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.composables.icons.tabler.Tabler
 import com.composables.icons.tabler.outline.*
+import com.raulshma.jellyplay.core.data.cast.CastManager
 import com.raulshma.jellyplay.core.ui.tv.rememberTvFocusState
 import com.raulshma.jellyplay.core.ui.tv.tvFocusIndicator
 import com.raulshma.jellyplay.feature.player.audio.R
+import com.raulshma.jellyplay.feature.player.audio.components.CastButton
 
 @Composable
 internal fun PixelPlayerTopBar(
@@ -53,6 +55,7 @@ internal fun PixelPlayerTopBar(
     karaokeMode: Boolean = false,
     onKaraokeToggle: (Boolean) -> Unit = {},
     hasKaraokeLyrics: Boolean = false,
+    castManager: CastManager? = null,
 ) {
     val minimizeFocusState = rememberTvFocusState()
     val lyricsFocusState = rememberTvFocusState()
@@ -85,6 +88,9 @@ internal fun PixelPlayerTopBar(
             letterSpacing = 1.sp,
         )
         Row {
+            if (castManager != null) {
+                CastButton(castManager = castManager)
+            }
             if (hasLyrics) {
                 IconButton(
                     onClick = onLyricsClick,

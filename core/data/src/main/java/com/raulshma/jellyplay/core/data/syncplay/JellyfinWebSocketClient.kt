@@ -172,6 +172,7 @@ class JellyfinWebSocketClient @Inject constructor(
                 "Play",
                 "Playstate",
                 "GeneralCommand",
+                "Sessions",
                 "KeepAlive",
                 "GroupJoined",
                 "GroupLeft" -> {

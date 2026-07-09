@@ -1018,6 +1018,17 @@ private fun PhoneContent(
     val systemNavBarBottom = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()
     var isBottomNavVisible by isBottomNavVisibleState
 
+    // Play On (cast-to-Jellyfin-session) lives at the app shell so the mini
+    // transport persists across tabs. Owned by an activity-scoped VM.
+    val playOnViewModel: com.raulshma.jellyplay.PlayOnViewModel = androidx.hilt.navigation.compose.hiltViewModel()
+    val playOnState by playOnViewModel.uiState.collectAsStateWithLifecycle()
+    var showPlayOnSheet by remember { mutableStateOf(false) }
+    val playOnContext = LocalContext.current
+    val onPlayOnClick: () -> Unit = { showPlayOnSheet = true }
+    androidx.compose.runtime.LaunchedEffect(showPlayOnSheet) {
+        if (showPlayOnSheet) playOnViewModel.startDiscovery(playOnContext)
+    }
+
     ModalNavigationDrawer(
         drawerState = drawerState,
         drawerContent = {
@@ -1152,6 +1163,8 @@ private fun PhoneContent(
                         entryDecorator = entryDecorator,
                         onNowPlayingClick = onNowPlayingClick,
                         onAmbientClick = onAmbientClick,
+                        onPlayOnClick = onPlayOnClick,
+                        playOnStrategy = playOnViewModel.strategy,
                     )
                 }
                 if (showMiniPlayer && isExpanded) {
@@ -1245,6 +1258,42 @@ private fun PhoneContent(
                                     IntOffset.Zero
                                 }
                             },
+                    )
+                }
+                // Play On persistent transport bar — visible while a Jellyfin
+                // remote session is active. Sits above the floating nav bar.
+                if (playOnState.isConnected) {
+                    com.raulshma.jellyplay.components.PlayOnMiniBar(
+                        isVisible = playOnState.isConnected,
+                        targetDeviceName = playOnState.targetDeviceName,
+                        title = playOnState.title,
+                        subtitle = playOnState.artist,
+                        isPlaying = playOnState.isPlaying,
+                        positionMs = playOnState.positionMs,
+                        durationMs = playOnState.durationMs,
+                        volume = playOnState.volume,
+                        onPlayPause = {
+                            if (playOnState.isPlaying) playOnViewModel.castPause() else playOnViewModel.castPlay()
+                        },
+                        onSeek = { playOnViewModel.castSeekTo(it) },
+                        onVolume = { playOnViewModel.setCastVolume(it) },
+                        onDisconnect = { playOnViewModel.disconnect(playOnContext) },
+                        modifier = Modifier
+                            .align(Alignment.BottomCenter)
+                            .padding(bottom = systemNavBarBottom + (if (!isExpanded) 72.dp else 8.dp)),
+                    )
+                }
+                if (showPlayOnSheet) {
+                    com.raulshma.jellyplay.components.PlayOnDeviceSheet(
+                        devices = playOnState.devices,
+                        onSelect = { device ->
+                            playOnViewModel.connectAndFling(playOnContext, device)
+                            showPlayOnSheet = false
+                        },
+                        onDismiss = {
+                            playOnViewModel.stopDiscovery()
+                            showPlayOnSheet = false
+                        },
                     )
                 }
                 if (!isExpanded) {
@@ -1387,6 +1436,8 @@ private fun MainNavDisplay(
     modifier: Modifier = Modifier,
     onNowPlayingClick: () -> Unit = {},
     onAmbientClick: () -> Unit = {},
+    onPlayOnClick: () -> Unit = {},
+    playOnStrategy: com.raulshma.jellyplay.core.data.cast.remote.JellyfinRemotePlayCastStrategy? = null,
 ) {
     val currentBackStack = navigationState.backStacks[navigationState.topLevelRoute.value] ?: return
 
@@ -1432,12 +1483,16 @@ private fun MainNavDisplay(
         enterPip,
         enterVideoMiniMode,
         onLogout,
+        onPlayOnClick,
+        playOnStrategy,
     ) {
         entryProvider {
             homeSection(
                 navigator = navigator,
                 homeMode = homeMode,
                 onModeChange = onModeChange,
+                onPlayOnClick = onPlayOnClick,
+                playOnStrategy = playOnStrategy,
                 musicContent = {
                     MusicHomeScreen(
                         onItemClick = { itemId -> navigator.navigate(Route.MediaDetail(itemId)) },

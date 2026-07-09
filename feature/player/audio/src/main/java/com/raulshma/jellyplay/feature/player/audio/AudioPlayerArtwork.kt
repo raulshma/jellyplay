@@ -212,8 +212,8 @@ internal fun LyricsOverlay(
                                 }
                                 .padding(vertical = 6.dp, horizontal = 20.dp),
                             textAlign = TextAlign.Center,
-                            maxLines = 2,
-                            overflow = TextOverflow.Ellipsis,
+                            // Let long lines wrap instead of being cut off with an
+                            // ellipsis ("…") — the full lyric must stay readable.
                         )
                     }
                 }
