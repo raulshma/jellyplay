@@ -10,6 +10,8 @@ import com.raulshma.jellyplay.core.model.arr.ArrDiscoveryError
 import com.raulshma.jellyplay.core.model.arr.ArrDownloadSummary
 import com.raulshma.jellyplay.core.model.arr.ArrQueueDeleteOptions
 import com.raulshma.jellyplay.core.model.arr.ArrQueueItem
+import com.raulshma.jellyplay.core.model.arr.ArrRedownloadResult
+import com.raulshma.jellyplay.core.model.arr.ArrRedownloadStep
 import com.raulshma.jellyplay.core.model.arr.ArrServerConfig
 import com.raulshma.jellyplay.core.model.arr.ArrServiceKind
 import com.raulshma.jellyplay.core.model.arr.ArrServiceSummary
@@ -386,7 +388,135 @@ class ArrRepositoryImpl @Inject constructor(
                     }
                 }.awaitAll().filterNotNull()
             }.let { Result.success(it) }
+    }
+
+    override suspend fun monitorAndSearch(
+        tmdbId: Int,
+        kind: ArrServiceKind,
+        tvdbId: Int?,
+        seasonNumber: Int?,
+        episodeNumber: Int?,
+    ): Result<ArrRedownloadResult> = withContext(cacheScope.coroutineContext) {
+        val summary = resolveServers().getOrDefault(ArrServiceSummary())
+        if (summary.isEmpty) return@withContext Result.success(ArrRedownloadResult())
+        val servers = if (kind == ArrServiceKind.RADARR) summary.radarrServers else summary.sonarrServers
+        if (servers.isEmpty()) return@withContext Result.success(ArrRedownloadResult())
+
+        // Fan out across servers; accumulate the best outcome. A server
+        // succeeding on both steps counts as overall success; partial results
+        // (monitor ok but search failed, or vice-versa) are merged so the UI
+        // can show a meaningful message.
+        val outcomes = servers.map { srv ->
+            async {
+                if (kind == ArrServiceKind.RADARR) {
+                    monitorAndSearchMovie(srv, tmdbId)
+                } else {
+                    monitorAndSearchEpisode(srv, tvdbId, seasonNumber, episodeNumber)
+                }
+            }
+        }.awaitAll()
+
+        val merged = outcomes.reduce { acc, r ->
+            ArrRedownloadResult(
+                monitored = acc.monitored || r.monitored,
+                searchStarted = acc.searchStarted || r.searchStarted,
+                commands = acc.commands + r.commands,
+                // Prefer the first non-null failure so the UI surfaces it; if a
+                // later server succeeded on that step, clear it.
+                failureStep = when {
+                    acc.failureStep == null && r.failureStep == null -> null
+                    // If acc has a failure but r succeeded on that step, clear.
+                    acc.failureStep == r.failureStep -> if (stepSucceeded(r, acc.failureStep)) null else acc.failureStep
+                    r.failureStep != null && !stepSucceeded(acc, r.failureStep) -> r.failureStep
+                    else -> acc.failureStep ?: r.failureStep
+                },
+                errorMessage = acc.errorMessage ?: r.errorMessage,
+            )
         }
+        Result.success(merged)
+    }
+
+    /** True when [r] indicates the given [step] succeeded on at least one server. */
+    private fun stepSucceeded(r: ArrRedownloadResult, step: ArrRedownloadStep?): Boolean = when (step) {
+        ArrRedownloadStep.MONITOR -> r.monitored
+        ArrRedownloadStep.SEARCH -> r.searchStarted
+        null -> true
+    }
+
+    /**
+     * Movie path: resolve tmdbId → internal movie id, re-monitor, then queue a
+     * SearchMovie. Best-effort across the three steps; a monitor failure still
+     * attempts the search (the movie may already be monitored).
+     */
+    private suspend fun monitorAndSearchMovie(
+        srv: ArrServerConfig,
+        tmdbId: Int,
+    ): ArrRedownloadResult {
+        val movieId = radarrApiClient.findMovieIdByTmdb(srv.baseUrl, srv.apiKey, tmdbId).getOrNull()
+            ?: return ArrRedownloadResult(
+                failureStep = ArrRedownloadStep.MONITOR,
+                errorMessage = "Movie not tracked in Radarr.",
+            )
+        val monitored = radarrApiClient.monitorMovies(
+            srv.baseUrl, srv.apiKey, listOf(movieId), monitored = true,
+        ).isSuccess
+        val search = radarrApiClient.postCommand(
+            srv.baseUrl, srv.apiKey, ArrCommandName.SEARCH_MOVIE, movieIds = listOf(movieId),
+        ).getOrNull()
+        return ArrRedownloadResult(
+            monitored = monitored,
+            searchStarted = search != null,
+            commands = listOfNotNull(search),
+            failureStep = if (!monitored && search == null) ArrRedownloadStep.MONITOR else null,
+            errorMessage = if (!monitored && search == null) "Monitor and search failed." else null,
+        )
+    }
+
+    /**
+     * Episode path: resolve tvdbId → series id → episode id (via S/E),
+     * re-monitor the episode, then queue an EpisodeSearch. Requires tvdbId +
+     * season/episode numbers; missing any is a monitor-step failure.
+     */
+    private suspend fun monitorAndSearchEpisode(
+        srv: ArrServerConfig,
+        tvdbId: Int?,
+        seasonNumber: Int?,
+        episodeNumber: Int?,
+    ): ArrRedownloadResult {
+        if (tvdbId == null || seasonNumber == null || episodeNumber == null) {
+            return ArrRedownloadResult(
+                failureStep = ArrRedownloadStep.MONITOR,
+                errorMessage = "Missing tvdb id or season/episode number for Sonarr lookup.",
+            )
+        }
+        val seriesId = sonarrApiClient.findSeriesByTvdb(srv.baseUrl, srv.apiKey, tvdbId).getOrNull()
+            ?: return ArrRedownloadResult(
+                failureStep = ArrRedownloadStep.MONITOR,
+                errorMessage = "Series not tracked in Sonarr.",
+            )
+        val episodeIds = sonarrApiClient.getEpisodeIds(
+            srv.baseUrl, srv.apiKey, seriesId, seasonNumber, episodeNumber,
+        ).getOrNull().orEmpty()
+        if (episodeIds.isEmpty()) {
+            return ArrRedownloadResult(
+                failureStep = ArrRedownloadStep.MONITOR,
+                errorMessage = "Episode S${seasonNumber}E${episodeNumber} not found in Sonarr.",
+            )
+        }
+        val monitored = sonarrApiClient.monitorEpisodes(
+            srv.baseUrl, srv.apiKey, episodeIds, monitored = true,
+        ).isSuccess
+        val search = sonarrApiClient.postCommand(
+            srv.baseUrl, srv.apiKey, ArrCommandName.SEARCH_EPISODES, episodeIds = episodeIds,
+        ).getOrNull()
+        return ArrRedownloadResult(
+            monitored = monitored,
+            searchStarted = search != null,
+            commands = listOfNotNull(search),
+            failureStep = if (!monitored && search == null) ArrRedownloadStep.MONITOR else null,
+            errorMessage = if (!monitored && search == null) "Monitor and search failed." else null,
+        )
+    }
 
     // ── Routing helpers ────────────────────────────────────────────────────
 

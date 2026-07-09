@@ -255,7 +255,7 @@ class PlayerSessionManager(
             playerType = playerType,
         )
         val url = resolved?.streamUrl
-            ?: playbackRepository.getStreamUrl(itemId, sourceId, startPositionTicks)
+            ?: playbackRepository.getStreamUrl(itemId, sourceId, startPositionTicks, source?.liveStreamId)
         val playMethod = resolved?.playMethod ?: PlayMethod.DIRECT_PLAY
 
         _sessionState.update {

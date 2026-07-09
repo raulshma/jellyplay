@@ -23,6 +23,7 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LongState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
@@ -51,14 +52,15 @@ import com.raulshma.jellyplay.core.ui.tv.tvFocusIndicator
 /** Waveform seek bar + timestamp row — Pixel Player style. */
 @Composable
 internal fun PixelProgressSection(
-    currentPosition: Long,
+    currentPosition: LongState,
     duration: Long,
     isPlaying: Boolean,
     accentColor: Color,
     onSeek: (Float) -> Unit,
 ) {
+    val positionMs = currentPosition.value
     WaveformSeekBar(
-        progress = if (duration > 0) currentPosition.toFloat() / duration else 0f,
+        progress = if (duration > 0) positionMs.toFloat() / duration else 0f,
         isPlaying = isPlaying,
         activeColor = accentColor,
         inactiveColor = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.25f),
@@ -74,7 +76,7 @@ internal fun PixelProgressSection(
         horizontalArrangement = Arrangement.SpaceBetween,
     ) {
         Text(
-            com.raulshma.jellyplay.core.ui.components.formatDurationMs(currentPosition),
+            com.raulshma.jellyplay.core.ui.components.formatDurationMs(positionMs),
             style = MaterialTheme.typography.labelSmall,
             color = accentColor.copy(alpha = 0.8f),
         )

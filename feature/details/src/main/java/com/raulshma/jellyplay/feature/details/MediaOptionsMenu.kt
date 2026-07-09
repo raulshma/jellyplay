@@ -10,6 +10,7 @@ import com.composables.icons.tabler.outline.Download
 import com.composables.icons.tabler.outline.EyeOff
 import com.composables.icons.tabler.outline.InfoCircle
 import com.composables.icons.tabler.outline.Pencil
+import com.composables.icons.tabler.outline.Refresh
 import com.composables.icons.tabler.outline.Share
 import com.raulshma.jellyplay.core.model.DownloadItem
 import com.raulshma.jellyplay.core.model.DownloadStatus
@@ -51,6 +52,7 @@ internal fun rememberMediaOptions(
     activeDownload: DownloadItem?,
     isDownloading: Boolean,
     isDownloadingSeries: Boolean,
+    canRedownload: Boolean,
     onClose: () -> Unit,
     onEditClick: () -> Unit,
     onShare: () -> Unit,
@@ -58,6 +60,7 @@ internal fun rememberMediaOptions(
     onDownloadSeries: () -> Unit,
     onHideFromNextUp: () -> Unit,
     onHideFromContinueWatching: () -> Unit,
+    onRedownload: () -> Unit,
     onTechnicalInfo: () -> Unit,
 ): List<MediaOption> {
     // Download status / progress, resolved once for both the label and the
@@ -87,10 +90,11 @@ internal fun rememberMediaOptions(
     val labelHideFromNextUp = stringResource(R.string.detail_option_hide_from_next_up)
     val labelHideFromContinueWatching = stringResource(R.string.detail_option_hide_from_continue_watching)
     val labelTechnicalInfo = stringResource(R.string.detail_option_technical_info)
+    val labelRedownload = stringResource(R.string.detail_option_redownload)
 
     return remember(item, detail, itemId, isAudio, isSeries, seasons, preferences.showShareMediaOption,
         activeDownload, isDownloading, isDownloadingSeries, isDownloadActive, isDownloadCompleted,
-        downloadStatus, downloadProgress) {
+        downloadStatus, downloadProgress, canRedownload, labelRedownload) {
         buildList {
             add(MediaOption(labelEdit, Tabler.Outline.Pencil) {
                 onClose(); onEditClick()
@@ -140,6 +144,11 @@ internal fun rememberMediaOptions(
             add(MediaOption(labelHideFromContinueWatching, Tabler.Outline.EyeOff) {
                 onClose(); onHideFromContinueWatching()
             })
+            if (canRedownload) {
+                add(MediaOption(labelRedownload, Tabler.Outline.Refresh) {
+                    onClose(); onRedownload()
+                })
+            }
             add(MediaOption(labelTechnicalInfo, Tabler.Outline.InfoCircle) {
                 onClose(); onTechnicalInfo()
             })

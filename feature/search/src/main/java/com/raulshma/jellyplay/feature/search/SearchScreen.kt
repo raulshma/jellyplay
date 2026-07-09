@@ -1012,9 +1012,10 @@ private fun SuggestionSection(
             horizontalArrangement = Arrangement.spacedBy(spacing),
             contentPadding = PaddingValues(end = contentPadding),
         ) { _, item, itemModifier ->
+            val imageUrl = remember(item.id) { getImageUrl(item.id) }
             PosterCard(
                 item = item,
-                imageUrl = getImageUrl(item.id),
+                imageUrl = imageUrl,
                 onClick = { onItemClick(item) },
                 sharedElementKey = "suggestion_${item.id}",
                 modifier = itemModifier.width(cardWidth),

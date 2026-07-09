@@ -670,6 +670,15 @@ class MediaRepositoryImpl @Inject constructor(
         return apiClient.markUnplayed(itemId)
     }
 
+    override suspend fun deleteMediaItem(itemId: String): Result<Unit> {
+        // Drop caches so a stale snapshot isn't served after the file is gone.
+        // Home sections may surface this item (Latest / Continue Watching), so
+        // force a re-fetch there too.
+        cachedHomeSectionsTimestamp = 0L
+        invalidateDetailCache(itemId)
+        return apiClient.deleteItem(itemId)
+    }
+
     override suspend fun getLiveTvChannels(
         startIndex: Int,
         limit: Int,

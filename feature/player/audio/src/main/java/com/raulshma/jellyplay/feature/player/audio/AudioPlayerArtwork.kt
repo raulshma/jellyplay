@@ -38,6 +38,7 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.LongState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -433,7 +434,7 @@ internal fun AlbumArtwork(
     lyricsSource: com.raulshma.jellyplay.core.model.LyricsSource = com.raulshma.jellyplay.core.model.LyricsSource.UNKNOWN,
     onSearchClick: () -> Unit = {},
     karaokeMode: Boolean = false,
-    currentPositionMs: Long = 0L,
+    currentPositionMs: LongState,
     lyricsOffsetMs: Long = com.raulshma.jellyplay.core.data.playback.AudioLyricsManager.DEFAULT_OFFSET_MS,
     onLyricsOffsetChange: (Long) -> Unit = {},
 ) {
@@ -505,7 +506,7 @@ internal fun AlbumArtwork(
                 com.raulshma.jellyplay.feature.player.audio.lyrics.KaraokeLyricsView(
                     lyrics = lyrics,
                     currentIndex = currentLyricIndex,
-                    currentPositionMs = currentPositionMs,
+                    currentPositionMs = currentPositionMs.value,
                 )
             } else {
                 LyricsOverlay(

@@ -89,7 +89,7 @@ class PlaybackRepositoryImplTest {
 
     @Test
     fun `getStreamUrl delegates to apiClient`() {
-        every { apiClient.getStreamUrl("item-1", "source-1", 0L) } returns "https://test/stream"
+        every { apiClient.getStreamUrl("item-1", "source-1", 0L, liveStreamId = null) } returns "https://test/stream"
 
         val url = repository.getStreamUrl("item-1", "source-1", 0L)
 
@@ -204,7 +204,7 @@ class PlaybackRepositoryImplTest {
     @Test
     fun `resolvePlayback picks Direct Play when supported and uses static URL`() = runTest {
         stubServer()
-        every { apiClient.getStreamUrl("item-1", "source-1", 0L) } returns "https://test/stream"
+        every { apiClient.getStreamUrl("item-1", "source-1", 0L, liveStreamId = null) } returns "https://test/stream"
         coEvery {
             apiClient.fetchPlaybackInfo(any(), any(), any(), any(), any(), any(), any(), any())
         } returns Result.success(

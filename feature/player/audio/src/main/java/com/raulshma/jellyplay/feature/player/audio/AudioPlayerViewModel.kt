@@ -1,5 +1,6 @@
 package com.raulshma.jellyplay.feature.player.audio
 
+import androidx.compose.runtime.LongState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.setValue
 import androidx.media3.common.MediaItem
@@ -74,8 +75,18 @@ class AudioPlayerViewModel @Inject constructor(
      * High-frequency playback position, kept OUTSIDE [uiState] so the 250ms tick only
      * recomposes consumers that read position, rather than copying the whole UiState.
      */
-    var currentPosition by composeLongState(0L)
+    private val currentPositionHolder = composeLongState(0L)
+    var currentPosition by currentPositionHolder
         private set
+
+    /**
+     * Snapshot-state handle to playback position, meant to be read only inside
+     * the leaf composables that render it (seek bar, time labels, karaoke word
+     * highlight). Passing this instead of the plain [Long] value keeps the
+     * recomposition triggered by the 4 Hz position tick scoped to those leaves
+     * rather than invalidating the whole screen body.
+     */
+    val currentPositionState: LongState get() = currentPositionHolder.asState()
 
     /** Mirrors [AudioEffectsState.dialogueBoostStrength] for callers that read it directly. */
     val dialogueBoostStrength: EffectStrength
