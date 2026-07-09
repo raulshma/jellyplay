@@ -10,6 +10,7 @@ import android.os.Build
 import android.os.Environment
 import android.provider.MediaStore
 import androidx.core.content.FileProvider
+import coil3.request.CachePolicy
 import coil3.request.ImageRequest
 import coil3.request.allowHardware
 import coil3.toBitmap
@@ -213,6 +214,12 @@ class PhotoViewerViewModel @Inject constructor(
                 val request = ImageRequest.Builder(appContext)
                     .data(imageUrl)
                     .allowHardware(false)
+                    // Decode a private Bitmap (not the shared cache instance)
+                    // before compressing it to the gallery. Without this,
+                    // toBitmap() returns Coil's shared Bitmap, which the
+                    // BitmapPool can recycle mid-compress if the photo grid
+                    // evicts the ORIGINAL cache entry during the IO write.
+                    .memoryCachePolicy(CachePolicy.DISABLED)
                     .build()
 
                 val result = imageLoader.execute(request)
@@ -276,6 +283,8 @@ class PhotoViewerViewModel @Inject constructor(
                 val request = ImageRequest.Builder(appContext)
                     .data(imageUrl)
                     .allowHardware(false)
+                    // Private decode — see savePhotoToGallery for rationale.
+                    .memoryCachePolicy(CachePolicy.DISABLED)
                     .build()
 
                 val result = imageLoader.execute(request)

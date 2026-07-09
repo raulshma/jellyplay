@@ -109,7 +109,14 @@ fun rememberDominantColor(
                     .data(imageUrl)
                     .size(CoilSize(64, 64))
                     .allowHardware(false)
-                    .memoryCacheKey(imageUrl)
+                    // Isolate the Palette decode in its own cache slot. Sharing
+                    // the display URL's key made this 64px result evict the
+                    // larger bitmap a live AsyncImage painter was still drawing;
+                    // the BitmapPool then recycled it, crashing onDraw with
+                    // "Canvas: trying to use a recycled bitmap". Same fix class
+                    // as WidgetImageLoader (memoryCachePolicy DISABLED) but we
+                    // keep Palette results cached for scroll speed.
+                    .memoryCacheKey("${imageUrl}#palette-dominant")
                     .build()
                 val result = loader.execute(request)
                 if (result is SuccessResult) {
