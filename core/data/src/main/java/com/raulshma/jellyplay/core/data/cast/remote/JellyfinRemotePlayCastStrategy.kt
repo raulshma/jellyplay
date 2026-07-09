@@ -4,6 +4,7 @@ import android.content.Context
 import android.util.Log
 import com.raulshma.jellyplay.core.data.cast.CastDevice
 import com.raulshma.jellyplay.core.data.cast.CastStrategy
+import com.raulshma.jellyplay.core.data.util.ImageUrlProvider
 import com.raulshma.jellyplay.core.datastore.UserPreferencesStore
 import com.raulshma.jellyplay.core.model.SessionInfo
 import com.raulshma.jellyplay.core.network.api.AdminApiClient
@@ -14,9 +15,12 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.firstOrNull
+import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import kotlinx.serialization.json.Json
 import javax.inject.Inject
@@ -28,6 +32,7 @@ class JellyfinRemotePlayCastStrategy @Inject constructor(
     private val adminApiClient: AdminApiClient,
     private val preferencesStore: UserPreferencesStore,
     private val webSocketClient: com.raulshma.jellyplay.core.data.syncplay.JellyfinWebSocketClient,
+    private val imageUrlProvider: ImageUrlProvider,
 ) : CastStrategy {
 
     companion object {
@@ -84,6 +89,18 @@ class JellyfinRemotePlayCastStrategy @Inject constructor(
 
     private val _nowPlayingSubtitle = MutableStateFlow("")
     val nowPlayingSubtitle: StateFlow<String> = _nowPlayingSubtitle.asStateFlow()
+
+    // Item id of the remote session's now-playing item. Drives the artwork URL
+    // exposed below — the remote's poster is distinct from the local now-playing
+    // art, so we must resolve it from the session, not the local player.
+    private val _nowPlayingItemId = MutableStateFlow("")
+    val nowPlayingItemId: StateFlow<String> = _nowPlayingItemId.asStateFlow()
+
+    // Poster URL derived from [nowPlayingItemId]. Blank when the remote reports
+    // no now-playing item; consumers fall back to local now-playing art.
+    val nowPlayingArtworkUrl: StateFlow<String> = _nowPlayingItemId
+        .map { id -> if (id.isNotBlank()) imageUrlProvider.getImageUrl(id) else "" }
+        .stateIn(scope, SharingStarted.Eagerly, "")
 
     /** Display name of the session we are currently connected to (for UI). */
     private val _targetName = MutableStateFlow<String?>(null)
@@ -204,6 +221,7 @@ class JellyfinRemotePlayCastStrategy @Inject constructor(
         _isPlaying.value = false
         _nowPlayingTitle.value = ""
         _nowPlayingSubtitle.value = ""
+        _nowPlayingItemId.value = ""
         Log.i(TAG, "Disconnected from Jellyfin remote session")
     }
 
@@ -270,6 +288,7 @@ class JellyfinRemotePlayCastStrategy @Inject constructor(
         _volume.value = (playState?.volumeLevel ?: 100) / 100f
         _nowPlayingTitle.value = nowPlaying?.name.orEmpty()
         _nowPlayingSubtitle.value = nowPlaying?.seriesName.orEmpty()
+        _nowPlayingItemId.value = nowPlaying?.id.orEmpty()
     }
 
     fun play() {
@@ -308,6 +327,44 @@ class JellyfinRemotePlayCastStrategy @Inject constructor(
             )
             _volume.value = volume
         }
+    }
+
+    /**
+     * Jump to the next item in the connected session's play queue. Mapped by
+     * serial name inside [AdminApiClient.sendPlaystateCommand] (same enum path
+     * the local remote-control dispatchers use for PlaystateCommand.NextTrack).
+     */
+    fun nextTrack() {
+        val sessionId = connectedSessionId ?: return
+        scope.launch {
+            adminApiClient.sendPlaystateCommand(sessionId, "NextTrack")
+        }
+    }
+
+    /**
+     * Jump to the previous item in the connected session's play queue. See
+     * [nextTrack] — same playstate-command plumbing.
+     */
+    fun previousTrack() {
+        val sessionId = connectedSessionId ?: return
+        scope.launch {
+            adminApiClient.sendPlaystateCommand(sessionId, "PreviousTrack")
+        }
+    }
+
+    /**
+     * Send a `Stop` playstate command then disconnect locally. Jellyfin's Stop
+     * ends playback on the controlling client; mirroring the local dispatchers
+     * (see [com.raulshma.jellyplay.core.data.remote.AudioRemoteControlDispatcher]
+     * / VideoRemoteControlDispatcher) we treat Stop as terminal and clear our
+     * remote-session bookkeeping so local playback delegation resumes.
+     */
+    fun stop(context: Context) {
+        val sessionId = connectedSessionId ?: return
+        scope.launch {
+            adminApiClient.sendPlaystateCommand(sessionId, "Stop")
+        }
+        disconnect(context)
     }
 
     fun loadMedia(

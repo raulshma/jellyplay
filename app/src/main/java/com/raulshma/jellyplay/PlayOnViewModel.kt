@@ -92,15 +92,19 @@ class PlayOnViewModel @Inject constructor(
             targetDeviceName,
         ) { devs, connected, target -> DeviceState(devs, connected, target) },
         // transport + remote now-playing — straight off the strategy's own flows.
-        // kotlinx.coroutines `combine` caps at 5 flows, so nest the metadata pair.
+        // kotlinx.coroutines `combine` caps at 5 flows, so nest the metadata triple.
         combine(
             jellyfinStrategy.isPlaying,
             jellyfinStrategy.positionMs,
             jellyfinStrategy.durationMs,
             jellyfinStrategy.volume,
-            combine(jellyfinStrategy.nowPlayingTitle, jellyfinStrategy.nowPlayingSubtitle) { t, s -> t to s },
-        ) { playing, pos, dur, vol, (title, subtitle) ->
-            TransportState(playing, pos, dur, vol, title, subtitle)
+            combine(
+                jellyfinStrategy.nowPlayingTitle,
+                jellyfinStrategy.nowPlayingSubtitle,
+                jellyfinStrategy.nowPlayingArtworkUrl,
+            ) { t, s, art -> Triple(t, s, art) },
+        ) { playing, pos, dur, vol, (title, subtitle, art) ->
+            TransportState(playing, pos, dur, vol, title, subtitle, art)
         },
         // local now-playing metadata for the flingable item (fallback display)
         combine(
@@ -113,6 +117,9 @@ class PlayOnViewModel @Inject constructor(
         // metadata (e.g. right after a fling before the server reflects it).
         val displayTitle = transport.title.ifBlank { nowPlaying.title }
         val displaySubtitle = if (transport.title.isNotBlank()) transport.subtitle else nowPlaying.artist
+        // Remote poster takes precedence; only fall back to local art when the
+        // session hasn't reported a now-playing item yet.
+        val displayArt = transport.artworkUrl.ifBlank { nowPlaying.art }
         PlayOnUiState(
             devices = device.devices,
             isDiscovering = device.devices.isNotEmpty(),
@@ -121,7 +128,7 @@ class PlayOnViewModel @Inject constructor(
             canFling = canFling.value,
             title = displayTitle,
             artist = displaySubtitle,
-            artworkUri = nowPlaying.art,
+            artworkUri = displayArt,
             positionMs = transport.positionMs,
             durationMs = transport.durationMs,
             isPlaying = transport.playing,
@@ -164,6 +171,14 @@ class PlayOnViewModel @Inject constructor(
     fun castPause() = jellyfinStrategy.pause()
     fun castSeekTo(positionMs: Long) = jellyfinStrategy.seekTo(positionMs)
     fun setCastVolume(volume: Float) = jellyfinStrategy.setRendererVolume(volume)
+    fun castNextTrack() = jellyfinStrategy.nextTrack()
+    fun castPreviousTrack() = jellyfinStrategy.previousTrack()
+    fun castStop(context: Context) {
+        jellyfinStrategy.stop(context)
+        _targetDeviceName.value = null
+        statusPollingJob?.cancel()
+        statusPollingJob = null
+    }
     fun disconnect(context: Context) {
         jellyfinStrategy.disconnect(context)
         _targetDeviceName.value = null
@@ -205,6 +220,7 @@ class PlayOnViewModel @Inject constructor(
         val volume: Float,
         val title: String,
         val subtitle: String,
+        val artworkUrl: String,
     )
     private data class NowPlayingState(
         val title: String,
