@@ -63,10 +63,10 @@ class ShortcutsViewModel @Inject constructor(
             category = ShortcutCategory.LIBRARY,
         ),
         ShortcutItem(
-            title = "TV Guide",
-            description = "Live TV schedule and programs.",
-            icon = Tabler.Outline.Calendar,
-            route = Route.LiveTvGuide,
+            title = "Live TV",
+            description = "Live TV programs, guide, channels, and recordings.",
+            icon = Tabler.Outline.DeviceTv,
+            route = Route.LiveTv,
             category = ShortcutCategory.LIBRARY,
         ),
         ShortcutItem(

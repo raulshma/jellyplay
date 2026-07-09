@@ -4,40 +4,35 @@ import androidx.navigation3.runtime.EntryProviderScope
 import androidx.navigation3.runtime.NavKey
 import com.raulshma.jellyplay.core.ui.navigation.Navigator
 import com.raulshma.jellyplay.core.ui.navigation.Route
-import com.raulshma.jellyplay.feature.livetv.channels.ChannelsScreen
-import com.raulshma.jellyplay.feature.livetv.dvr.DvrScreen
-import com.raulshma.jellyplay.feature.livetv.epg.EpgScreen
+import com.raulshma.jellyplay.feature.livetv.LiveTvScreen
 
+/**
+ * Registers the Live TV feature's navigation entries.
+ *
+ * Live TV is a single top-level destination ([Route.LiveTv]) rendered as a
+ * 6-tab screen (Programs, Guide, Channels, Recordings, Schedule, Series) —
+ * matching jellyfin-web's Live TV collection. The previous separate
+ * [Route.LiveTvGuide] / [Route.Dvr] push destinations are subsumed by the
+ * tabs and have been removed.
+ */
 fun EntryProviderScope<NavKey>.liveTvSection(navigator: Navigator) {
     entry<Route.LiveTv> {
-        ChannelsScreen(
+        LiveTvScreen(
             onChannelClick = { channelId, channelName ->
                 navigator.navigate(Route.LiveTvChannelPlayer(channelId, channelName))
             },
-            onGuideClick = {
-                navigator.navigate(Route.LiveTvGuide)
+            onRecordingClick = { recordingId ->
+                navigator.navigate(Route.VideoPlayer(itemId = recordingId))
             },
-            onDvrClick = {
-                navigator.navigate(Route.Dvr)
-            },
-        )
-    }
-    entry<Route.LiveTvGuide> {
-        EpgScreen(
-            onProgramClick = { program ->
+            onFolderClick = { folder ->
                 navigator.navigate(
-                    Route.LiveTvChannelPlayer(program.channelId, program.name)
+                    Route.LibraryBrowse(
+                        folderId = folder.id,
+                        folderName = folder.name,
+                        collectionType = folder.collectionType,
+                    )
                 )
             },
-            onBack = { navigator.goBack() },
-            // onRecordClick defaults to the EPG's local record-confirmation dialog
-            // (EpgViewModel.requestRecord), so recording is handled in-place instead
-            // of navigating away to the DVR list.
-        )
-    }
-    entry<Route.Dvr> {
-        DvrScreen(
-            onBack = { navigator.goBack() },
         )
     }
 }

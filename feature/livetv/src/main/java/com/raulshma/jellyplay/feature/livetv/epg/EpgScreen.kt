@@ -95,6 +95,7 @@ fun EpgScreen(
         title = "Program Guide",
         onBack = onBack,
         backgroundColor = backgroundColor,
+        topBarStyle = com.raulshma.jellyplay.core.ui.components.TopBarStyle.None,
         actions = {
             HeaderStatusIndicator(
                 status = headerStatus,
