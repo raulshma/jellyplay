@@ -35,6 +35,18 @@ class JellyfinRemotePlayCastStrategy @Inject constructor(
         private const val STRATEGY_NAME = "jellyfin"
     }
 
+    /**
+     * Settings.Secure.ANDROID_ID — the device id the Jellyfin SDK defaulted to before
+     * [com.raulshma.jellyplay.core.network.di.NetworkModule.provideJellyfin] pinned the SDK
+     * id to the DataStore UUID. Read to match a possibly still-live server session.
+     */
+    @android.annotation.SuppressLint("HardwareIds")
+    private fun legacyAndroidId(): String =
+        android.provider.Settings.Secure.getString(
+            appContext.contentResolver,
+            android.provider.Settings.Secure.ANDROID_ID,
+        ) ?: ""
+
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
 
     /** Lenient decoder for the WebSocket `Sessions` push payloads. */
@@ -113,13 +125,22 @@ class JellyfinRemotePlayCastStrategy @Inject constructor(
         discoveryJob = scope.launch {
             while (discoveryActive) {
                 try {
-                    val ownDeviceId = preferencesStore.ensureDeviceId()
-                    val sessionsResult = adminApiClient.getSessions()
-                    if (sessionsResult.isSuccess) {
-                        val sessions = sessionsResult.getOrThrow()
-                        val controllableSessions = sessions.filter {
-                            it.supportsRemoteControl && it.deviceId.isNotBlank() && !it.deviceId.equals(ownDeviceId, ignoreCase = true)
-                        }
+                        val ownDeviceId = preferencesStore.ensureDeviceId()
+                        val sessionsResult = adminApiClient.getSessions()
+                        if (sessionsResult.isSuccess) {
+                            val sessions = sessionsResult.getOrThrow()
+                            // The legacy device id is Settings.Secure.ANDROID_ID, which the
+                            // Jellyfin SDK used as its default device id before we pinned it to
+                            // the DataStore UUID. Sessions registered under it may still be live
+                            // server-side and must be recognized as self too, or the app would
+                            // list its own (stale) session as a cast target.
+                            val legacyDeviceId = legacyAndroidId()
+                            val controllableSessions = sessions.filter {
+                                it.supportsRemoteControl &&
+                                    it.deviceId.isNotBlank() &&
+                                    !it.deviceId.equals(ownDeviceId, ignoreCase = true) &&
+                                    !it.deviceId.equals(legacyDeviceId, ignoreCase = true)
+                            }
                         _discoveredDevices.value = controllableSessions.map { session ->
                             val displayName = buildString {
                                 val devName = session.deviceName.ifBlank { session.client }
