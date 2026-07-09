@@ -1025,6 +1025,11 @@ private fun PhoneContent(
     var showPlayOnSheet by remember { mutableStateOf(false) }
     val playOnContext = LocalContext.current
     val onPlayOnClick: () -> Unit = { showPlayOnSheet = true }
+    // Current top-of-stack route — used to hide the persistent Play On mini bar
+    // while its full-screen companion is open (avoid a bar floating over its own
+    // expanded view).
+    val currentRoute = navigationState.backStacks[navigationState.topLevelRoute.value]?.lastOrNull()
+    val isPlayOnCompanionOpen = currentRoute is Route.PlayOnCompanion
     androidx.compose.runtime.LaunchedEffect(showPlayOnSheet) {
         if (showPlayOnSheet) playOnViewModel.startDiscovery(playOnContext)
     }
@@ -1261,8 +1266,9 @@ private fun PhoneContent(
                     )
                 }
                 // Play On persistent transport bar — visible while a Jellyfin
-                // remote session is active. Sits above the floating nav bar.
-                if (playOnState.isConnected) {
+                // remote session is active and the full-screen companion is not
+                // already open. Sits above the floating nav bar.
+                if (playOnState.isConnected && !isPlayOnCompanionOpen) {
                     com.raulshma.jellyplay.components.PlayOnMiniBar(
                         isVisible = playOnState.isConnected,
                         targetDeviceName = playOnState.targetDeviceName,
@@ -1278,6 +1284,7 @@ private fun PhoneContent(
                         onSeek = { playOnViewModel.castSeekTo(it) },
                         onVolume = { playOnViewModel.setCastVolume(it) },
                         onDisconnect = { playOnViewModel.disconnect(playOnContext) },
+                        onExpand = { navigator.navigate(Route.PlayOnCompanion) },
                         modifier = Modifier
                             .align(Alignment.BottomCenter)
                             .padding(bottom = systemNavBarBottom + (if (!isExpanded) 72.dp else 8.dp)),
@@ -1527,6 +1534,15 @@ private fun MainNavDisplay(
             arrQueueSection(navigator)
             calendarSection(navigator)
             shortcutsSection(navigator)
+            // Play On companion — full-screen remote-control surface reached by
+            // tapping the persistent PlayOnMiniBar. Reuses the activity-scoped
+            // PlayOnViewModel (same instance the mini bar holds), so state stays
+            // in sync without threading the VM through params.
+            entry<Route.PlayOnCompanion> {
+                com.raulshma.jellyplay.components.PlayOnCompanionScreen(
+                    onBack = { navigator.goBack() },
+                )
+            }
         }
     }
 

@@ -43,6 +43,13 @@ sealed class Route : NavKey {
 
     @Serializable data class AudioPlayer(val itemId: String) : Route()
 
+    /**
+     * Full-screen remote-control overlay for an active "Play On" (Jellyfin
+     * remote session) cast. Reached by tapping the persistent [PlayOnMiniBar].
+     * Modal — transient control surface, not a drill-in detail destination.
+     */
+    @Serializable data object PlayOnCompanion : Route()
+
     @Serializable data object Downloads : Route()
 
     @Serializable data object OfflineLibrary : Route()
@@ -200,6 +207,7 @@ val Route.isModal: Boolean
         Route.Settings,
         Route.Downloads,
         Route.SyncPlay,
+        Route.PlayOnCompanion,
         Route.SeerrSettings,
         Route.ArrSettings,
         Route.AdminDashboard,
