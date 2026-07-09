@@ -41,10 +41,16 @@ class AutoDownloadWorker @AssistedInject constructor(
         val seriesIds = downloadRepository.getDownloadedSeriesIds()
         if (seriesIds.isEmpty()) return Result.success()
 
+        // Fetch every series' downloaded episode ids in a single 2-column query
+        // (grouped by seriesId) instead of issuing one full-row query per series
+        // inside the loop below. A 100-episode series previously decoded ~100
+        // rows × 23 columns per iteration; this reads 2 columns, once.
+        val downloadedEpisodeIdsBySeries = downloadRepository.getDownloadedEpisodeIdsBySeries()
+
         var hadTransientFailure = false
         for (seriesId in seriesIds) {
             if (isStopped) break
-            val alreadyDownloaded = downloadRepository.getDownloadedEpisodeIdsForSeries(seriesId)
+            val alreadyDownloaded = downloadedEpisodeIdsBySeries[seriesId].orEmpty()
             val seasons = mediaRepository.getSeasons(seriesId).getOrElse {
                 hadTransientFailure = true
                 emptyList()

@@ -18,8 +18,8 @@ import androidx.media3.common.TrackGroup
 import androidx.media3.common.TrackSelectionOverride
 import androidx.media3.datasource.DataSource
 import androidx.media3.datasource.DefaultDataSource
-import androidx.media3.datasource.DefaultHttpDataSource
 import androidx.media3.datasource.ResolvingDataSource
+import androidx.media3.datasource.okhttp.OkHttpDataSource
 import androidx.media3.exoplayer.DefaultLoadControl
 import androidx.media3.exoplayer.DefaultRenderersFactory
 import androidx.media3.exoplayer.DecoderCounters
@@ -65,6 +65,7 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
+import okhttp3.OkHttpClient
 
 // The position-polling bounded paused-wait (M2) now lives in [EnginePositionTicker].
 
@@ -77,6 +78,7 @@ private const val DEFAULT_SUBTITLE_SIZE_SP = 18f
 
 class ExoPlayerEngine(
     private val context: Context,
+    private val streamingOkHttpClient: OkHttpClient,
     bandwidthMeter: DefaultBandwidthMeter? = null,
 ) : MediaEngine {
 
@@ -326,6 +328,7 @@ class ExoPlayerEngine(
             .setLoadControl(loadControl)
             .setAudioAttributes(audioAttrs, currentConfig.pauseOnAudioFocusLoss)
             .setWakeMode(if (isNetworkStream) C.WAKE_MODE_NETWORK else C.WAKE_MODE_LOCAL)
+            .setHandleAudioBecomingNoisy(true)
             .setBandwidthMeter(bandwidthMeter)
             .setVideoScalingMode(exoCfg.videoScalingMode.value)
             .setVideoChangeFrameRateStrategy(exoCfg.frameRateStrategy.value)
@@ -377,17 +380,22 @@ class ExoPlayerEngine(
     }
 
     private fun createAuthenticatedDataSourceFactory(
-        serverUrl: String?, 
-        token: String?, 
+        serverUrl: String?,
+        token: String?,
         headers: Map<String, String>
     ): DataSource.Factory {
-        val httpDataSourceFactory = DefaultHttpDataSource.Factory()
+        // Route media streams through the shared app OkHttp stack rather than a
+        // standalone HttpURLConnection. The injected client carries the shared
+        // connection pool, the user-sized disk Cache, the BandwidthInterceptor
+        // that feeds adaptive bitrate selection, and HTTP/2 multiplexing — so
+        // the highest-bandwidth traffic reuses the same wiring as every other
+        // request. OkHttp follows cross-protocol redirects by default, and the
+        // "streaming" qualifier already sets a >=30s read timeout. The
+        // ResolvingDataSource auth wrapper below composes on top unchanged.
+        val httpDataSourceFactory = OkHttpDataSource.Factory(streamingOkHttpClient)
             .setUserAgent("JellyPlay")
-            .setConnectTimeoutMs(15_000)
-            .setReadTimeoutMs(30_000)
-            .setAllowCrossProtocolRedirects(true)
             .setDefaultRequestProperties(headers)
-            
+
         val baseFactory = DefaultDataSource.Factory(context, httpDataSourceFactory)
 
         val authority = serverUrl?.let { Uri.parse(it).authority }

@@ -125,7 +125,7 @@ class OfflineLibraryViewModel @Inject constructor(
         }
         return when (sort) {
             OfflineLibrarySort.RECENT -> matched.sortedByDescending { it.createdAt }
-            OfflineLibrarySort.NAME -> matched.sortedBy { it.name.lowercase() }
+            OfflineLibrarySort.NAME -> matched.sortedWith(compareBy(String.CASE_INSENSITIVE_ORDER) { it.name })
             OfflineLibrarySort.RATING -> matched.sortedByDescending { it.communityRating ?: -1f }
             OfflineLibrarySort.SIZE -> matched.sortedByDescending { it.totalSizeBytes }
         }

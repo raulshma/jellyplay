@@ -109,7 +109,7 @@ class PluginsViewModel @Inject constructor(
     private fun fetchInstalledPlugins() {
         launch {
             apiClient.getInstalledPlugins().onSuccess { plugins ->
-                _state.value = _state.value.copy(installedPlugins = plugins.sortedBy { it.name.lowercase() })
+                _state.value = _state.value.copy(installedPlugins = plugins.sortedWith(compareBy(String.CASE_INSENSITIVE_ORDER) { it.name }))
             }.onFailure { e ->
                 Log.e("Plugins", "Failed to fetch plugins", e)
                 _state.value = _state.value.copy(error = e.message)
@@ -127,7 +127,7 @@ class PluginsViewModel @Inject constructor(
             _state.value = _state.value.copy(isCatalogLoading = true)
             apiClient.getAvailablePackages().onSuccess { packages ->
                 _state.value = _state.value.copy(
-                    availablePackages = packages.sortedBy { it.name.lowercase() },
+                    availablePackages = packages.sortedWith(compareBy(String.CASE_INSENSITIVE_ORDER) { it.name }),
                     isCatalogLoading = false,
                 )
             }.onFailure { e ->

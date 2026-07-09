@@ -1,7 +1,9 @@
 package com.raulshma.jellyplay.core.data.cast
 
+import androidx.compose.runtime.Stable
 import kotlinx.coroutines.flow.StateFlow
 
+@Stable
 data class CastDevice(
     val id: String,
     val name: String,

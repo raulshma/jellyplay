@@ -121,6 +121,7 @@ internal fun SeasonsSection(
         TvFocusableItemRow(
             items = seasons,
             key = { it.id },
+            contentType = { _, _ -> "season" },
             contentPadding = PaddingValues(horizontal = 24.dp),
             horizontalArrangement = Arrangement.spacedBy(8.dp),
         ) { index, season, focusModifier ->
@@ -197,6 +198,7 @@ internal fun SeasonsSection(
                     TvFocusableItemRow(
                         items = currentEpisodes,
                         key = { "episode_${it.id}" },
+                        contentType = { _, _ -> "episode" },
                         contentPadding = PaddingValues(horizontal = 24.dp),
                         horizontalArrangement = Arrangement.spacedBy(16.dp),
                     ) { _, episode, focusModifier ->

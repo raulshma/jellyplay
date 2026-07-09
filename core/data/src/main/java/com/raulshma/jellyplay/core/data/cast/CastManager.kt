@@ -22,6 +22,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -273,11 +274,13 @@ class CastManager @Inject constructor(
         preferredRendererJob = coroutineScope.launch {
             _allDiscoveredDevices.combine(userPreferencesStore.preferences) { devices, prefs ->
                 devices to prefs.preferredRenderer
-            }            .collect { (devices, preferredName) ->
-                if (preferredName.isNullOrBlank() || isConnected) return@collect
-                val match = devices.firstOrNull { it.name == preferredName }
-                if (match != null) connect(context, match)
             }
+                .distinctUntilChanged()
+                .collect { (devices, preferredName) ->
+                    if (preferredName.isNullOrBlank() || isConnected) return@collect
+                    val match = devices.firstOrNull { it.name == preferredName }
+                    if (match != null) connect(context, match)
+                }
         }
     }
 

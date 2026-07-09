@@ -23,6 +23,7 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -30,6 +31,8 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.sync.Semaphore
+import kotlinx.coroutines.sync.withPermit
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.builtins.ListSerializer
 import kotlinx.serialization.json.Json
@@ -45,6 +48,13 @@ class AdminStatisticsRepositoryImpl @Inject constructor(
 ) : AdminStatisticsRepository {
 
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+
+    /**
+     * Bounds concurrency of the per-user statistics fan-out so a server with
+     * many users does not fire N×4 simultaneous requests. Mirrors the
+     * [kotlinx.coroutines.sync.Semaphore] pattern in `ArrRepositoryImpl`.
+     */
+    private val statsSemaphore = Semaphore(4)
 
     private val _pluginStatus = MutableStateFlow(PlaybackReportingStatus.UNKNOWN)
     override fun getPlaybackReportingStatus() = _pluginStatus.asStateFlow()
@@ -74,42 +84,56 @@ class AdminStatisticsRepositoryImpl @Inject constructor(
         } else emptyList()
         val pluginMap = pluginActivity.associateBy { it.userId }
 
-        users.map { user ->
-            val userId = user.id
-            val isActive = activeUserIds.contains(userId)
-
-            val stats = coroutineScope {
-                val movieDeferred = async { apiClient.getUserPlayedItemCount(userId, listOf("Movie")).getOrDefault(0) }
-                val episodeDeferred = async { apiClient.getUserPlayedItemCount(userId, listOf("Episode")).getOrDefault(0) }
-                val songDeferred = async { apiClient.getUserPlayedItemCount(userId, listOf("Audio")).getOrDefault(0) }
-                val movieUnplayedDeferred = async { apiClient.getUserUnplayedItemCount(userId, listOf("Movie")).getOrDefault(0) }
-                intArrayOf(movieDeferred.await(), episodeDeferred.await(), songDeferred.await(), movieUnplayedDeferred.await())
-            }
-            val moviePlayed = stats[0]
-            val episodePlayed = stats[1]
-            val songPlayed = stats[2]
-            val movieUnplayed = stats[3]
-            val movieTotal = movieUnplayed + moviePlayed
-            val completionRate = if (movieTotal > 0) moviePlayed.toFloat() / movieTotal else 0f
-
-            val pluginData = pluginMap[userId]
-            val watchTimeSec = pluginData?.totalTime ?: 0L
-
-            UserStatistics(
-                userId = userId,
-                userName = user.name,
-                userAvatarTag = user.primaryImageTag,
-                isAdmin = user.isAdmin,
-                totalPlayCount = moviePlayed + episodePlayed + songPlayed,
-                moviePlayCount = moviePlayed,
-                episodePlayCount = episodePlayed,
-                songPlayCount = songPlayed,
-                totalWatchTimeSec = watchTimeSec,
-                lastSeen = user.lastActivityDate,
-                completionRate = completionRate,
-                isCurrentlyActive = isActive,
-            )
+        coroutineScope {
+            users.map { user ->
+                async {
+                    statsSemaphore.withPermit {
+                        buildUserStatistics(
+                            user = user,
+                            isActive = activeUserIds.contains(user.id),
+                            pluginData = pluginMap[user.id],
+                        )
+                    }
+                }
+            }.awaitAll()
         }
+    }
+
+    private suspend fun buildUserStatistics(
+        user: JellyfinUser,
+        isActive: Boolean,
+        pluginData: com.raulshma.jellyplay.core.model.PlaybackReportingActivity?,
+    ): UserStatistics {
+        val userId = user.id
+
+        val stats = coroutineScope {
+            val movieDeferred = async { apiClient.getUserPlayedItemCount(userId, listOf("Movie")).getOrDefault(0) }
+            val episodeDeferred = async { apiClient.getUserPlayedItemCount(userId, listOf("Episode")).getOrDefault(0) }
+            val songDeferred = async { apiClient.getUserPlayedItemCount(userId, listOf("Audio")).getOrDefault(0) }
+            val movieUnplayedDeferred = async { apiClient.getUserUnplayedItemCount(userId, listOf("Movie")).getOrDefault(0) }
+            intArrayOf(movieDeferred.await(), episodeDeferred.await(), songDeferred.await(), movieUnplayedDeferred.await())
+        }
+        val moviePlayed = stats[0]
+        val episodePlayed = stats[1]
+        val songPlayed = stats[2]
+        val movieUnplayed = stats[3]
+        val movieTotal = movieUnplayed + moviePlayed
+        val completionRate = if (movieTotal > 0) moviePlayed.toFloat() / movieTotal else 0f
+
+        return UserStatistics(
+            userId = userId,
+            userName = user.name,
+            userAvatarTag = user.primaryImageTag,
+            isAdmin = user.isAdmin,
+            totalPlayCount = moviePlayed + episodePlayed + songPlayed,
+            moviePlayCount = moviePlayed,
+            episodePlayCount = episodePlayed,
+            songPlayCount = songPlayed,
+            totalWatchTimeSec = pluginData?.totalTime ?: 0L,
+            lastSeen = user.lastActivityDate,
+            completionRate = completionRate,
+            isCurrentlyActive = isActive,
+        )
     }
 
     override suspend fun getUserDetailStatistics(userId: String, page: Int, pageSize: Int): Result<UserDetailPage> = runCatching {

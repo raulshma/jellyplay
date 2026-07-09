@@ -328,6 +328,15 @@ class DownloadRepositoryImpl @Inject constructor(
             .mapNotNull { it.mediaItemId }
             .toSet()
 
+    override suspend fun getDownloadedEpisodeIdsBySeries(): Map<String, Set<String>> =
+        // Single 2-column query over the whole table; grouped in memory into a
+        // per-series index. Preferred over calling getDownloadedEpisodeIdsForSeries
+        // per series from the periodic auto-download worker, which would issue N
+        // full-row (23-col) queries when only mediaItemId is consumed.
+        downloadDao.getDownloadedEpisodeIdsBySeries()
+            .groupBy({ it.seriesId }, { it.mediaItemId })
+            .mapValues { (_, ids) -> ids.toSet() }
+
     override suspend fun getDownloadedSeriesIds(): List<String> =
         downloadDao.getDownloadedSeriesIds()
 

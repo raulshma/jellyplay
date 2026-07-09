@@ -378,7 +378,8 @@ fun AudioPlayerScreen(
                     onNightModeStrengthChange = { viewModel.setNightModeStrength(it) },
                     onAmbientClick = { showMenu = false; onAmbientClick(uiState.albumArtUrl.ifBlank { null }, uiState.title, uiState.artist) },
                     sleepTimerActive = sleepTimer.active,
-                    sleepTimerDisplayText = if (sleepTimer.endOfEpisode) stringResource(R.string.audio_sleep_timer_end_of_episode) else com.raulshma.jellyplay.core.ui.components.formatDurationMs(sleepTimer.remainingMs),
+                    sleepTimerEndOfEpisode = sleepTimer.endOfEpisode,
+                    sleepTimerRemainingFlow = viewModel.sleepTimerRemainingMs,
                     onSleepTimerClick = { showMenu = false; showSleepTimer = true },
                     karaokeMode = lyricsState.karaokeMode,
                     onKaraokeToggle = { viewModel.setKaraokeModeEnabled(it) },
@@ -766,10 +767,11 @@ fun AudioPlayerScreen(
     }
 
     if (showSleepTimer) {
+        val sleepTimerRemainingMs by viewModel.sleepTimerRemainingMs.collectAsStateWithLifecycle()
         AudioSleepTimerSheet(
             isActive = sleepTimer.active,
             isEndOfEpisodeMode = sleepTimer.endOfEpisode,
-            remainingMs = sleepTimer.remainingMs,
+            remainingMs = sleepTimerRemainingMs,
             lastUsedDurationMs = sleepTimer.lastUsedDurationMs,
             onSelectDuration = { viewModel.startSleepTimer(it) },
             onSelectEndOfEpisode = { viewModel.startSleepTimerEndOfEpisode() },

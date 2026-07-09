@@ -99,6 +99,7 @@ fun LicensesScreen(
                     items(
                         count = viewModel.libraries.size,
                         key = { viewModel.libraries[it].uniqueId },
+                        contentType = { "license" },
                     ) { index ->
                         val library = viewModel.libraries[index]
                         LicenseRow(

@@ -800,7 +800,7 @@ class MpvPlayerEngine(
                 trySend(posMs)
                 updateBufferPosition(posMs)
                 if (_videoStatsEnabled.value) {
-                    updateVideoStatsOnly()
+                    updateVideoStatsOnly(posMs)
                 }
             },
         ).launch()
@@ -822,7 +822,7 @@ class MpvPlayerEngine(
         }
     }
 
-    private fun updateVideoStatsOnly() {
+    private fun updateVideoStatsOnly(posMs: Long) {
         val m = mpvView?.mpv ?: return
         try {
             val videoBitrateBps = try {
@@ -836,7 +836,7 @@ class MpvPlayerEngine(
                 }
             } catch (_: Exception) { null }
             val combinedBitrate = (videoBitrateBps ?: 0) + (audioBitrateBps ?: 0)
-            val bufferHealthMs = (_bufferedPositionMs.value - currentPositionMs).coerceAtLeast(0L)
+            val bufferHealthMs = (_bufferedPositionMs.value - posMs).coerceAtLeast(0L)
             val bufferSizeBytes = if (combinedBitrate > 0) combinedBitrate * bufferHealthMs / 8000 else 0L
             val newStats = EngineVideoStats(
                 videoCodec = try { m.getPropertyString("video-format") } catch (_: Exception) { null },
