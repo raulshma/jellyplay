@@ -207,11 +207,15 @@ fun SeriesDownloadSheet(
                 val seasonEpisodes = episodes[season.id].orEmpty()
                 val isLoadingThis = season.id in loadingSeasons
 
-                val downloadedInSeason = seasonEpisodes.count { it.id in downloadedEpisodeIds }
-                val selectableInSeason = seasonEpisodes
-                    .map { it.id }
-                    .filter { it !in downloadedEpisodeIds }
-                    .toSet()
+                val downloadedInSeason = remember(seasonEpisodes, downloadedEpisodeIds) {
+                    seasonEpisodes.count { it.id in downloadedEpisodeIds }
+                }
+                val selectableInSeason = remember(seasonEpisodes, downloadedEpisodeIds) {
+                    seasonEpisodes
+                        .map { it.id }
+                        .filter { it !in downloadedEpisodeIds }
+                        .toSet()
+                }
                 val selectedInSeason = selectedEpisodeIds[season.id].orEmpty()
 
                 val triState = when {

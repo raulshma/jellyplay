@@ -67,6 +67,17 @@ data class DetailUiState(
     val downloadSheetEpisodes: Map<String, List<MediaItem>> = emptyMap(),
     val downloadSheetLoadingSeasons: Set<String> = emptySet(),
     val downloadedEpisodeIds: Set<String> = emptySet(),
+    // Delete & re-download (DIRECT_ARR_INTEGRATION). Shown only when a relevant
+    // *arr server is resolved; the dialog confirms before the destructive
+    // delete + monitor + search flow.
+    val canRedownload: Boolean = false,
+    val showRedownloadDialog: Boolean = false,
+    val isRedownloading: Boolean = false,
+    val redownloadResult: RedownloadOutcome? = null,
+    // For episodes: the parent series' provider IDs (e.g. "tvdb" → series tvdb id).
+    // Sonarr's findSeriesByTvdb lookup requires the *series* tvdb id, not the
+    // episode-level tvdb id stored in [detail.providerIds].
+    val seriesProviderIds: Map<String, String> = emptyMap(),
 ) {
     @Immutable
     data class SmartPlayTarget(
@@ -74,4 +85,17 @@ data class DetailUiState(
         val label: String,
         val startPositionTicks: Long,
     )
+
+    /**
+     * Outcome of a delete & re-download flow. Drives the result dialog:
+     * success → navigate back (item deleted); partial → the file is gone but a
+     * *arr step failed (still navigate back); delete failed → stay and report.
+     */
+    @Immutable
+    sealed class RedownloadOutcome {
+        data object InProgress : RedownloadOutcome()
+        data class Success(val message: String) : RedownloadOutcome()
+        data class PartialFailure(val message: String) : RedownloadOutcome()
+        data class DeleteFailed(val message: String) : RedownloadOutcome()
+    }
 }

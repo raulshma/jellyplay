@@ -133,6 +133,43 @@ interface SonarrApiClient {
     ): Result<ArrCommand>
 
     /**
+     * `GET /api/v3/series?tvdbId=...` — resolves the Sonarr internal series id
+     * for a tvdb id. Returns null when Sonarr has no series matching [tvdbId]
+     * (the series isn't tracked). Used by the delete & re-download flow to
+     * translate a Jellyfin episode's tvdb id → the Sonarr series id that
+     * episode + command endpoints key off.
+     */
+    suspend fun findSeriesByTvdb(baseUrl: String, apiKey: String, tvdbId: Int): Result<Int?>
+
+    /**
+     * `GET /api/v3/episode?seriesId=...&seasonNumber=...&episodeNumber=...` —
+     * resolves the Sonarr internal episode id(s) for a specific S/E within a
+     * series. Returns multiple ids when Sonarr has duplicate episodes for the
+     * same number (rare; multi-episode files). Empty when the series has no
+     * episode matching the given [seasonNumber]/[episodeNumber].
+     */
+    suspend fun getEpisodeIds(
+        baseUrl: String,
+        apiKey: String,
+        seriesId: Int,
+        seasonNumber: Int,
+        episodeNumber: Int,
+    ): Result<List<Int>>
+
+    /**
+     * `PUT /api/v3/episode/monitor` — toggles the monitored flag on one or more
+     * episodes. Used by the delete & re-download flow to re-mark an episode
+     * monitored after a delete, since Sonarr unmonitors episodes whose file is
+     * deleted (so it won't re-grab them otherwise). Idempotent.
+     */
+    suspend fun monitorEpisodes(
+        baseUrl: String,
+        apiKey: String,
+        episodeIds: List<Int>,
+        monitored: Boolean,
+    ): Result<Unit>
+
+    /**
      * `GET /api/v3/system/status` — connection probe. Succeeds iff 2xx.
      */
     suspend fun testConnection(baseUrl: String, apiKey: String): Result<Unit>

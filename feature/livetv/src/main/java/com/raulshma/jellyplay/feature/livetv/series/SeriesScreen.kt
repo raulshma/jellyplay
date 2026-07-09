@@ -110,7 +110,7 @@ private fun SeriesTimerCard(
             .fillMaxWidth()
             .padding(horizontal = contentPad, vertical = 4.dp)
             .clip(ShapeCache.smooth12)
-            .background(MaterialTheme.colorScheme.onSurface.copy(alpha = 0.05f))
+            .background(MaterialTheme.colorScheme.surfaceContainerLow)
             .clickable(onClick = onClick)
             .padding(14.dp),
         verticalAlignment = Alignment.CenterVertically,

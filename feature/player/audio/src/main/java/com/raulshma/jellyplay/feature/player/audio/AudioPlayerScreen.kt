@@ -413,7 +413,7 @@ fun AudioPlayerScreen(
                                 lyricsSource = lyricsState.lyricsSource,
                                 onSearchClick = { showLyricsSearch = true },
                                 karaokeMode = lyricsState.karaokeMode,
-                                currentPositionMs = viewModel.currentPosition,
+                                currentPositionMs = viewModel.currentPositionState,
                                 lyricsOffsetMs = lyricsState.lyricsOffsetMs,
                                 onLyricsOffsetChange = { viewModel.setLyricsOffset(it) },
                             )
@@ -434,7 +434,7 @@ fun AudioPlayerScreen(
                             )
                             Spacer(Modifier.height(28.dp))
                             PixelProgressSection(
-                                currentPosition = viewModel.currentPosition,
+                                currentPosition = viewModel.currentPositionState,
                                 duration = uiState.duration,
                                 isPlaying = uiState.isPlaying,
                                 accentColor = accentColor,
@@ -501,7 +501,7 @@ fun AudioPlayerScreen(
                         lyricsSource = lyricsState.lyricsSource,
                         onSearchClick = { showLyricsSearch = true },
                         karaokeMode = lyricsState.karaokeMode,
-                        currentPositionMs = viewModel.currentPosition,
+                        currentPositionMs = viewModel.currentPositionState,
                         lyricsOffsetMs = lyricsState.lyricsOffsetMs,
                         onLyricsOffsetChange = { viewModel.setLyricsOffset(it) },
                     )
@@ -523,7 +523,7 @@ fun AudioPlayerScreen(
                         )
                         Spacer(Modifier.height(24.dp))
                         PixelProgressSection(
-                            currentPosition = viewModel.currentPosition,
+                            currentPosition = viewModel.currentPositionState,
                             duration = uiState.duration,
                             isPlaying = uiState.isPlaying,
                             accentColor = accentColor,

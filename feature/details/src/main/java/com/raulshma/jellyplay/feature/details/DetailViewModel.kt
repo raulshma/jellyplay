@@ -3,6 +3,7 @@ package com.raulshma.jellyplay.feature.details
 import android.content.Context
 import androidx.compose.runtime.Immutable
 import com.raulshma.jellyplay.core.data.offline.OfflineModeManager
+import com.raulshma.jellyplay.core.data.repository.ArrRepository
 import com.raulshma.jellyplay.core.data.repository.DownloadRepository
 import com.raulshma.jellyplay.core.data.repository.MediaRepository
 import com.raulshma.jellyplay.core.data.repository.PlaybackRepository
@@ -11,11 +12,14 @@ import com.raulshma.jellyplay.core.data.seerr.SeerrRequestDelegate
 import com.raulshma.jellyplay.core.data.util.ImageUrlProvider
 import com.raulshma.jellyplay.core.datastore.UserPreferencesStore
 import com.raulshma.jellyplay.core.model.DownloadQuality
+import com.raulshma.jellyplay.core.model.ExperimentalFeature
 import com.raulshma.jellyplay.core.model.MediaDetail
 import com.raulshma.jellyplay.core.model.MediaItem
 import com.raulshma.jellyplay.core.model.MediaType
 import com.raulshma.jellyplay.core.model.NetworkStatus
 import com.raulshma.jellyplay.core.model.UserPreferences
+import com.raulshma.jellyplay.core.model.arr.ArrServiceKind
+import com.raulshma.jellyplay.core.model.isExperimentalEnabled
 import com.raulshma.jellyplay.core.model.seerr.SeerrRadarrServiceDetail
 import com.raulshma.jellyplay.core.model.seerr.SeerrRequestResult
 import com.raulshma.jellyplay.core.model.seerr.SeerrSearchItem
@@ -63,6 +67,7 @@ class DetailViewModel @Inject constructor(
     private val audioPlaybackManager: com.raulshma.jellyplay.core.data.playback.AudioPlaybackManager,
     private val themeMusicPlayer: com.raulshma.jellyplay.core.data.playback.ThemeMusicPlayer,
     private val tmdbApiClient: TmdbApiClient,
+    private val arrRepository: ArrRepository,
 ) : JellyPlayViewModel() {
 
     val preferences: StateFlow<UserPreferences> = preferencesStore.preferences
@@ -73,6 +78,57 @@ class DetailViewModel @Inject constructor(
     // folds in [SeerrRequestStateHolder] state via combine() so observers see a
     // single atomic snapshot.
     private val _uiState = MutableStateFlow(DetailUiState())
+
+    /**
+     * Whether the "Delete & Re-download" action should be shown. True iff:
+     * - The DIRECT_ARR_INTEGRATION experimental flag is enabled, AND
+     * - The current item is a MOVIE or EPISODE (series-level re-download is
+     *   intentionally out of scope — too destructive), AND
+     * - A relevant *arr server is resolved (Radarr for movies, Sonarr for
+     *   episodes), AND
+     * - The item has the provider id the *arr lookup needs (tmdb for movies,
+     *   tvdb for episodes).
+     *
+     * Re-evaluated whenever the detail load completes or the flag toggles.
+     * Server resolution is cached by [ArrRepository] so this is cheap.
+     */
+    val canRedownload: StateFlow<Boolean> = combine(
+        _uiState.map { it.detail?.item },
+        _uiState.map { it.seriesProviderIds },
+        preferencesStore.preferences.map { it.isExperimentalEnabled(ExperimentalFeature.DIRECT_ARR_INTEGRATION) },
+    ) { item, _, flagEnabled ->
+        if (!flagEnabled || item == null) return@combine false
+        val isEligibleType = item.mediaType == MediaType.MOVIE || item.mediaType == MediaType.EPISODE
+        if (!isEligibleType) return@combine false
+        // Resolve servers + check provider ids. Best-effort: a resolve failure
+        // simply hides the action rather than throwing.
+        val kind = if (item.mediaType == MediaType.MOVIE) ArrServiceKind.RADARR else ArrServiceKind.SONARR
+        val summary = arrRepository.resolveServers().getOrDefault(com.raulshma.jellyplay.core.model.arr.ArrServiceSummary())
+        val hasServer = if (kind == ArrServiceKind.RADARR) summary.radarrServers.isNotEmpty() else summary.sonarrServers.isNotEmpty()
+        if (!hasServer) return@combine false
+        hasRequiredProviderId(item)
+    }.stateIn(scope, SharingStarted.WhileSubscribed(5_000), false)
+
+    /**
+     * Movies need a tmdb id (Radarr resolves tmdbId → internal id); episodes
+     * need the *series* tvdb id (Sonarr resolves series tvdb → series → episode).
+     * For episodes, [DetailUiState.seriesProviderIds] holds the parent series'
+     * provider ids, which is what Sonarr's findSeriesByTvdb expects. The
+     * episode-level [MediaDetail.providerIds] holds the episode's own tvdb id,
+     * which is different and won't match the Sonarr series lookup.
+     * Provider ids are lowercased by the Jellyfin mapper.
+     */
+    private fun hasRequiredProviderId(item: MediaItem): Boolean {
+        return if (item.mediaType == MediaType.MOVIE) {
+            val providerIds = _uiState.value.detail?.providerIds.orEmpty()
+            providerIds["tmdb"]?.toIntOrNull() != null
+        } else {
+            // For episodes, use the parent series' tvdb id (from seriesProviderIds),
+            // not the episode's own tvdb id.
+            val seriesIds = _uiState.value.seriesProviderIds
+            seriesIds["tvdb"]?.toIntOrNull() != null
+        }
+    }
 
     private val seerrRequestState = com.raulshma.jellyplay.core.data.seerr.SeerrRequestStateHolder(scope, seerrRequestDelegate)
 
@@ -235,6 +291,7 @@ class DetailViewModel @Inject constructor(
                     isDownloadingSeries = false,
                     downloadError = null,
                     seriesDownloadResult = null,
+                    seriesProviderIds = emptyMap(),
                 )
             }
             episodesMap.clear()
@@ -261,6 +318,16 @@ class DetailViewModel @Inject constructor(
                         loadSeasons(itemId)
                     } else if (itemType == MediaType.EPISODE && detail.item.seriesId != null) {
                         loadSeasons(detail.item.seriesId!!)
+                        // Fetch the parent series' provider IDs so the redownload
+                        // feature can supply Sonarr with the *series* tvdb id. The
+                        // episode's own providerIds contain an episode-level tvdb id,
+                        // but findSeriesByTvdb requires the series-level one.
+                        val seriesId = detail.item.seriesId!!
+                        mediaRepository.getMediaDetail(seriesId).onSuccess { seriesDetail ->
+                            _uiState.update { state ->
+                                state.copy(seriesProviderIds = seriesDetail.providerIds)
+                            }
+                        }
                     } else if (itemType == MediaType.ALBUM) {
                         loadAlbumTracks(itemId)
                     } else if (itemType == MediaType.COLLECTION) {
@@ -589,6 +656,120 @@ class DetailViewModel @Inject constructor(
         val item = _uiState.value.detail?.item ?: return
         launch {
             preferencesStore.hideCwItem(item.id)
+        }
+    }
+
+    // ── Delete & re-download ──────────────────────────────────────────────
+
+    /** Opens the confirmation dialog (no destructive action yet). */
+    fun requestRedownload() {
+        _uiState.update {
+            it.copy(showRedownloadDialog = true, redownloadResult = null)
+        }
+    }
+
+    /** Cancels the dialog / dismisses the result. */
+    fun dismissRedownloadDialog() {
+        _uiState.update {
+            it.copy(showRedownloadDialog = false, redownloadResult = null, isRedownloading = false)
+        }
+    }
+
+    /**
+     * Runs the 3-step flow: Jellyfin delete → *arr monitor → *arr search. The
+     * delete is the only destructive step; if it succeeds, the file is gone
+     * regardless of whether the *arr steps later fail, so the result dialog
+     * always navigates back after a successful (or partially-successful) delete.
+     */
+    fun confirmRedownload() {
+        val detail = _uiState.value.detail ?: return
+        val item = detail.item
+        val providerIds = detail.providerIds
+        val kind = if (item.mediaType == MediaType.MOVIE) ArrServiceKind.RADARR else ArrServiceKind.SONARR
+
+        // Resolve ids up-front; bail with a message if the required id is
+        // missing (the action shouldn't have been visible, but guard anyway).
+        val tmdbId = providerIds["tmdb"]?.toIntOrNull()
+        // For episodes, Sonarr's findSeriesByTvdb requires the *series* tvdb id,
+        // which is stored in seriesProviderIds (fetched from the parent series item
+        // during loadItem). The episode's own providerIds["tvdb"] is episode-level.
+        val tvdbId = if (item.mediaType == MediaType.EPISODE) {
+            _uiState.value.seriesProviderIds["tvdb"]?.toIntOrNull()
+        } else {
+            providerIds["tvdb"]?.toIntOrNull()
+        }
+        if (kind == ArrServiceKind.RADARR && tmdbId == null) {
+            _uiState.update {
+                it.copy(redownloadResult = DetailUiState.RedownloadOutcome.DeleteFailed(
+                    context.getString(R.string.detail_redownload_missing_id_movie),
+                ))
+            }
+            return
+        }
+        if (kind == ArrServiceKind.SONARR && (tvdbId == null || item.seasonNumber == null || item.episodeNumber == null)) {
+            _uiState.update {
+                it.copy(redownloadResult = DetailUiState.RedownloadOutcome.DeleteFailed(
+                    context.getString(R.string.detail_redownload_missing_id_episode),
+                ))
+            }
+            return
+        }
+
+        _uiState.update {
+            it.copy(isRedownloading = true, redownloadResult = DetailUiState.RedownloadOutcome.InProgress)
+        }
+        launch {
+            // Step 1: delete the file from Jellyfin. This is the point of no
+            // return — once it succeeds, the monitor+search half is best-effort.
+            val deleteResult = mediaRepository.deleteMediaItem(item.id)
+            if (deleteResult.isFailure) {
+                _uiState.update {
+                    it.copy(
+                        isRedownloading = false,
+                        redownloadResult = DetailUiState.RedownloadOutcome.DeleteFailed(
+                            context.getString(
+                                R.string.detail_redownload_delete_failed,
+                                deleteResult.exceptionOrNull()?.message ?: "",
+                            ),
+                        ),
+                    )
+                }
+                return@launch
+            }
+
+            // Step 2 + 3: re-monitor + search in *arr.
+            val arrResult = arrRepository.monitorAndSearch(
+                tmdbId = tmdbId ?: 0,
+                kind = kind,
+                tvdbId = tvdbId,
+                seasonNumber = item.seasonNumber,
+                episodeNumber = item.episodeNumber,
+            ).getOrNull()
+
+            val outcome = when {
+                arrResult == null || (arrResult.failureStep == com.raulshma.jellyplay.core.model.arr.ArrRedownloadStep.MONITOR && !arrResult.monitored) ->
+                    DetailUiState.RedownloadOutcome.PartialFailure(
+                        context.getString(
+                            R.string.detail_redownload_partial_monitor,
+                            arrResult?.errorMessage ?: context.getString(R.string.detail_redownload_generic_error),
+                        ),
+                    )
+                arrResult.failureStep == com.raulshma.jellyplay.core.model.arr.ArrRedownloadStep.SEARCH && !arrResult.searchStarted ->
+                    DetailUiState.RedownloadOutcome.PartialFailure(
+                        context.getString(R.string.detail_redownload_partial_search),
+                    )
+                else -> {
+                    val msg = if (kind == ArrServiceKind.RADARR) {
+                        context.getString(R.string.detail_redownload_success_movie)
+                    } else {
+                        context.getString(R.string.detail_redownload_success_episode)
+                    }
+                    DetailUiState.RedownloadOutcome.Success(msg)
+                }
+            }
+            _uiState.update {
+                it.copy(isRedownloading = false, redownloadResult = outcome)
+            }
         }
     }
 

@@ -229,15 +229,12 @@ data class VideoPlayerUiState(
 
     private fun computeActiveSegmentInternal(positionMs: Long): MediaSegment? {
         val posTicks = positionMs * 10_000
-        val apiMatches = segments.filter { seg ->
-            seg.hasSegment && posTicks >= seg.startTicks && posTicks < seg.endTicks
-        }
-        if (apiMatches.isNotEmpty()) {
-            return MediaSegmentType.SEGMENT_PRIORITY.firstNotNullOfOrNull { priority ->
-                apiMatches.firstOrNull { it.type == priority }
-            } ?: apiMatches.first()
-        }
-        return detectChapterSegment(positionMs)
+        fun MediaSegment.containsPos() =
+            hasSegment && posTicks >= startTicks && posTicks < endTicks
+        val apiMatch = MediaSegmentType.SEGMENT_PRIORITY.firstNotNullOfOrNull { priority ->
+            segments.firstOrNull { it.type == priority && it.containsPos() }
+        } ?: segments.firstOrNull { it.containsPos() }
+        return apiMatch ?: detectChapterSegment(positionMs)
     }
 
     private fun detectChapterSegment(positionMs: Long): MediaSegment? {

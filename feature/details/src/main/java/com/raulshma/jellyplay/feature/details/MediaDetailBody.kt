@@ -462,11 +462,12 @@ internal fun DetailContentBody(
                     albumTracks.forEachIndexed { index, track ->
                         val trackClick = remember(track.id) { { onItemClick(track.id) } }
                         val trackPlayClick = remember(track.id, index) { { onPlayAlbumTrack(index); onItemClick(track.id) } }
+                        val trackImageUrl = remember(track.id) { getImageUrl(track.id) }
                         FadingItem {
                             AlbumTrackItem(
                                 track = track,
                                 index = index + 1,
-                                imageUrl = getImageUrl(track.id),
+                                imageUrl = trackImageUrl,
                                 onClick = trackClick,
                                 onPlayClick = trackPlayClick,
                             )

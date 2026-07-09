@@ -151,8 +151,8 @@ private fun RecordingCard(
         Box(
             modifier = Modifier
                 .size(width = 192.dp, height = 110.dp)
-                .clip(ShapeCache.smooth8)
-                .background(MaterialTheme.colorScheme.onSurface.copy(alpha = 0.08f)),
+                .clip(ShapeCache.smooth10)
+                .background(MaterialTheme.colorScheme.surfaceContainerHigh),
             contentAlignment = Alignment.Center,
         ) {
             if (imageUrl.isNotBlank()) {
@@ -189,7 +189,7 @@ private fun FolderRow(
             .fillMaxWidth()
             .padding(horizontal = contentPad, vertical = 6.dp)
             .clip(ShapeCache.smooth12)
-            .background(MaterialTheme.colorScheme.onSurface.copy(alpha = 0.05f))
+            .background(MaterialTheme.colorScheme.surfaceContainerLow)
             .clickable(onClick = onClick)
             .padding(14.dp),
         verticalAlignment = Alignment.CenterVertically,
