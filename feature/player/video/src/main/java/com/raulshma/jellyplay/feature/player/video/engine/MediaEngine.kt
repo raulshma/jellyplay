@@ -32,6 +32,14 @@ data class PlaybackRequest(
     val minBufferMs: Int = 15_000,
     val maxBufferMs: Int = 50_000,
     /**
+     * Optional per-track ReplayGain value (dB) sourced from the media
+     * item's `normalizationGain` (Jellyfin). Consumed by engines that
+     * support TRACK/ALBUM loudness normalization via an in-sink
+     * `AudioProcessor` (currently [ExoPlayerEngine]). `null` means the
+     * server provided no gain; TRACK/ALBUM then behave as a no-op.
+     */
+    val normalizationGain: Float? = null,
+    /**
      * Optional MIME type hint for the primary media item. When set, ExoPlayer
      * uses it in preference to URI-extension inference to pick the extractor,
      * which is essential for downloaded files whose on-disk extension does not

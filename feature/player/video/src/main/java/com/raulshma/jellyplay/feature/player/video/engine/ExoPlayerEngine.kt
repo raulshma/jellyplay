@@ -24,6 +24,7 @@ import androidx.media3.exoplayer.DefaultLoadControl
 import androidx.media3.exoplayer.DefaultRenderersFactory
 import androidx.media3.exoplayer.DecoderCounters
 import androidx.media3.exoplayer.ExoPlayer
+import androidx.media3.exoplayer.audio.DefaultAudioSink
 import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
 import androidx.media3.exoplayer.trackselection.DefaultTrackSelector
 import androidx.media3.exoplayer.upstream.DefaultBandwidthMeter
@@ -35,14 +36,20 @@ import androidx.media3.extractor.DefaultExtractorsFactory
 import androidx.media3.extractor.text.DefaultSubtitleParserFactory
 import com.raulshma.jellyplay.core.data.playback.AudioNormalizationHelper
 import com.raulshma.jellyplay.core.data.playback.BassBoostHelper
+import com.raulshma.jellyplay.core.data.playback.ChannelMixAudioProcessor
 import com.raulshma.jellyplay.core.data.playback.ChannelMixHelper
 import com.raulshma.jellyplay.core.data.playback.DialogueBoostHelper
+import com.raulshma.jellyplay.core.data.playback.DynamicsCompressorAudioProcessor
 import com.raulshma.jellyplay.core.data.playback.EqualizerHelper
+import com.raulshma.jellyplay.core.data.playback.HighPassFilterAudioProcessor
+import com.raulshma.jellyplay.core.data.playback.LoudnessEnhancerHelper
 import com.raulshma.jellyplay.core.data.playback.MediaStreamVolume
 import com.raulshma.jellyplay.core.data.playback.NightModeHelper
+import com.raulshma.jellyplay.core.data.playback.ReplayGainAudioProcessor
 import com.raulshma.jellyplay.core.data.playback.ReverbHelper
 import com.raulshma.jellyplay.core.data.playback.VirtualizerHelper
-import com.raulshma.jellyplay.core.data.playback.LoudnessEnhancerHelper
+import com.raulshma.jellyplay.core.model.AudioNormalizationMode
+import com.raulshma.jellyplay.core.model.ChannelMixMode
 import com.raulshma.jellyplay.core.model.DecoderMode
 import com.raulshma.jellyplay.core.model.ExoAudioOffloadMode
 import com.raulshma.jellyplay.core.model.ExoFrameRateStrategy
@@ -137,8 +144,16 @@ class ExoPlayerEngine(
     
     private var currentConfig = EngineConfig()
 
+    /**
+     * Per-track ReplayGain (dB) from the current [PlaybackRequest], used
+     * for TRACK/ALBUM loudness normalization via [replayGainProcessor].
+     * `null` until [load] is called.
+     */
+    private var currentNormalizationGain: Float? = null
+
     private val equalizerHelper = EqualizerHelper()
-    private val dialogueBoost = DialogueBoostHelper(equalizerHelper)
+    private val highPassFilter = HighPassFilterAudioProcessor()
+    private val dialogueBoost = DialogueBoostHelper(equalizerHelper, highPassFilter)
     private val nightMode = NightModeHelper()
     private val audioNormalizationHelper = AudioNormalizationHelper()
     private val channelMixHelper = ChannelMixHelper()
@@ -146,6 +161,14 @@ class ExoPlayerEngine(
     private val virtualizerHelper = VirtualizerHelper()
     private val reverbHelper = ReverbHelper()
     private val loudnessEnhancerHelper = LoudnessEnhancerHelper()
+
+    // In-sink AudioProcessors for the video ExoPlayer path — these run
+    // real DSP (channel matrixing, dynamic compression, ReplayGain,
+    // sub-bass high-pass) that the android.media.audiofx helpers above
+    // cannot do. Installed via the custom renderers factory in load().
+    private val channelMixProcessor = ChannelMixAudioProcessor()
+    private val dynamicsProcessor = DynamicsCompressorAudioProcessor()
+    private val replayGainProcessor = ReplayGainAudioProcessor()
 
     private var lastVideoStats: EngineVideoStats? = null
 
@@ -232,6 +255,8 @@ class ExoPlayerEngine(
         release()
         engineScope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
 
+        currentNormalizationGain = request.normalizationGain
+
         val exoCfg = (currentConfig.engineSpecific as? ExoPlayerEngineConfig) ?: ExoPlayerEngineConfig()
 
         val selector = DefaultTrackSelector(context)
@@ -275,9 +300,37 @@ class ExoPlayerEngine(
             DecoderMode.HW_ONLY -> DefaultRenderersFactory.EXTENSION_RENDERER_MODE_OFF
             DecoderMode.SW_ONLY -> DefaultRenderersFactory.EXTENSION_RENDERER_MODE_PREFER
         }
-        val renderersFactory = DefaultRenderersFactory(context)
-            .setExtensionRendererMode(rendererMode)
-            .setEnableDecoderFallback(exoCfg.enableDecoderFallback)
+        // Custom renderers factory injects the in-sink AudioProcessor chain
+        // (channel mix → dynamics → ReplayGain → high-pass) into the video
+        // ExoPlayer path, mirroring the audio/music player's sink. This is the
+        // single point where real DSP channel mixing and per-track loudness
+        // normalization get applied to video playback; without it those effects
+        // are silently ignored here even though the config exposes them.
+        val renderersFactory = object : DefaultRenderersFactory(context) {
+            init {
+                setExtensionRendererMode(rendererMode)
+                setEnableDecoderFallback(exoCfg.enableDecoderFallback)
+            }
+
+            override fun buildAudioSink(
+                context: android.content.Context,
+                enableFloatOutput: Boolean,
+                enableAudioTrackPlaybackParams: Boolean,
+            ): DefaultAudioSink {
+                return DefaultAudioSink.Builder(context)
+                    .setAudioProcessors(
+                        arrayOf(
+                            channelMixProcessor,
+                            dynamicsProcessor,
+                            replayGainProcessor,
+                            highPassFilter,
+                        ),
+                    )
+                    .setEnableFloatOutput(enableFloatOutput)
+                    .setEnableAudioTrackPlaybackParams(enableAudioTrackPlaybackParams)
+                    .build()
+            }
+        }
 
         val loadControl = DefaultLoadControl.Builder()
             .setBufferDurationsMs(request.minBufferMs, request.maxBufferMs, 1_000, 3_000)
@@ -841,10 +894,12 @@ class ExoPlayerEngine(
         
         dialogueBoost.setStrength(config.dialogueBoostStrength)
         dialogueBoost.setEnabled(config.dialogueBoostEnabled)
-        
+        // dialogueBoost also toggles highPassFilter (its rumble cut) —
+        // driven inside DialogueBoostHelper.setEnabled.
+
         nightMode.setStrength(config.nightModeStrength)
         nightMode.setEnabled(config.nightModeEnabled)
-        
+
         // equalizerHelper owns the single priority-0 Equalizer for this
         // session and DialogueBoostHelper overlays its vocal-band gains
         // on top via setBandOffsets (see EqualizerHelper kdoc). The
@@ -854,11 +909,44 @@ class ExoPlayerEngine(
         equalizerHelper.setSettings(config.equalizerSettings)
         equalizerHelper.setEnabled(config.equalizerEnabled || config.dialogueBoostEnabled)
 
-        audioNormalizationHelper.setMode(config.audioNormalizationMode)
-        audioNormalizationHelper.setEnabled(config.audioNormalizationEnabled)
+        // Normalization is now handled by the in-sink AudioProcessor chain
+        // rather than the legacy audiofx LoudnessEnhancer, so the three
+        // modes are consistent with the audio/music + MPV paths:
+        //  - DYNAMIC  → DSP compressor (dynamicsProcessor)
+        //  - TRACK/ALBUM → per-track ReplayGain (replayGainProcessor) when
+        //    the item has a normalizationGain, else no-op
+        //  - NONE     → both off
+        when (config.audioNormalizationMode) {
+            AudioNormalizationMode.DYNAMIC -> {
+                if (config.audioNormalizationEnabled) {
+                    dynamicsProcessor.setEnabled(true)
+                    replayGainProcessor.setGainDb(0f)
+                } else {
+                    dynamicsProcessor.setEnabled(false)
+                    replayGainProcessor.setGainDb(0f)
+                }
+            }
+            AudioNormalizationMode.TRACK, AudioNormalizationMode.ALBUM -> {
+                dynamicsProcessor.setEnabled(false)
+                val gain = currentNormalizationGain ?: 0f
+                replayGainProcessor.setGainDb(if (config.audioNormalizationEnabled) gain else 0f)
+            }
+            AudioNormalizationMode.NONE -> {
+                dynamicsProcessor.setEnabled(false)
+                replayGainProcessor.setGainDb(0f)
+            }
+        }
+        // Legacy LoudnessEnhancer is intentionally left disabled to avoid
+        // double-processing DYNAMIC mode alongside the DSP compressor.
+        audioNormalizationHelper.setMode(AudioNormalizationMode.NONE)
+        audioNormalizationHelper.setEnabled(false)
 
-        channelMixHelper.setMode(config.channelMixMode)
-        channelMixHelper.setEnabled(config.channelMixEnabled)
+        // Real channel matrix mixing via the in-sink processor; the legacy
+        // audiofx-based channelMixHelper no longer drives a mode here.
+        channelMixProcessor.setMode(config.channelMixMode)
+        channelMixProcessor.setEnabled(config.channelMixEnabled)
+        channelMixHelper.setMode(ChannelMixMode.AUTO)
+        channelMixHelper.setEnabled(false)
 
         bassBoostHelper.setStrength(config.bassBoostStrength)
         bassBoostHelper.setEnabled(config.bassBoostEnabled)
