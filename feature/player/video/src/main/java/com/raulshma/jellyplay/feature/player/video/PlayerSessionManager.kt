@@ -343,6 +343,7 @@ class PlayerSessionManager(
             authToken = token,
             minBufferMs = prefs.videoPreloadBufferSize.minBufferMs,
             maxBufferMs = prefs.videoPreloadBufferSize.maxBufferMs,
+            normalizationGain = detail.item.normalizationGain,
             mimeType = mimeType,
         )
 
