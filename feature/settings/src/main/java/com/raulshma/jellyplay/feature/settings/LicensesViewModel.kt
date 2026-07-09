@@ -37,7 +37,7 @@ class LicensesViewModel @Inject constructor(
                     context.assets.open("aboutlibraries.json").bufferedReader().use { it.readText() }
                 }
                 val parsed = Libs.Builder().withJson(jsonText).build()
-                libraries = parsed.libraries.sortedBy { it.name.lowercase() }
+                libraries = parsed.libraries.sortedWith(compareBy(String.CASE_INSENSITIVE_ORDER) { it.name })
             } catch (_: Exception) {
                 libraries = emptyList()
                 error = "Could not load license information"

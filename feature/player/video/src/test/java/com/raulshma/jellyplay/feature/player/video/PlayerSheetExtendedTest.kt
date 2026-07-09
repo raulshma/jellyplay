@@ -135,12 +135,6 @@ class SleepTimerStateTest {
     }
 
     @Test
-    fun sleepTimer_defaultRemainingMsZero() {
-        val state = VideoPlayerUiState()
-        assertEquals(0L, state.sleepTimerRemainingMs)
-    }
-
-    @Test
     fun sleepTimer_defaultLastUsedDurationMsZero() {
         val state = VideoPlayerUiState()
         assertEquals(0L, state.sleepTimerLastUsedDurationMs)
@@ -151,11 +145,10 @@ class SleepTimerStateTest {
         val durationMs = 30 * 60 * 1_000L // 30 minutes
         val state = VideoPlayerUiState().copy(
             sleepTimerActive = true,
-            sleepTimerRemainingMs = durationMs,
             sleepTimerLastUsedDurationMs = durationMs,
         )
         assertTrue(state.sleepTimerActive)
-        assertEquals(30 * 60 * 1_000L, state.sleepTimerRemainingMs)
+        assertEquals(durationMs, state.sleepTimerLastUsedDurationMs)
     }
 
     @Test
@@ -171,20 +164,9 @@ class SleepTimerStateTest {
     fun sleepTimer_deactivate_clearsState() {
         val state = VideoPlayerUiState(
             sleepTimerActive = true,
-            sleepTimerRemainingMs = 10_000L,
         ).copy(
             sleepTimerActive = false,
-            sleepTimerRemainingMs = 0L,
         )
         assertFalse(state.sleepTimerActive)
-        assertEquals(0L, state.sleepTimerRemainingMs)
-    }
-
-    @Test
-    fun sleepTimer_countdown_decrementsRemaining() {
-        val initial = 60_000L
-        val ticked = initial - 1_000L
-        val state = VideoPlayerUiState(sleepTimerRemainingMs = ticked)
-        assertEquals(59_000L, state.sleepTimerRemainingMs)
     }
 }

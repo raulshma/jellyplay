@@ -1,6 +1,7 @@
 package com.raulshma.jellyplay
 
 import android.content.Context
+import androidx.compose.runtime.Immutable
 import androidx.lifecycle.viewModelScope
 import com.raulshma.jellyplay.core.data.cast.CastDevice
 import com.raulshma.jellyplay.core.data.cast.remote.JellyfinRemotePlayCastStrategy
@@ -23,6 +24,7 @@ import javax.inject.Inject
 /**
  * State surfaced to the "Play On" sheet + persistent mini bar at the app shell.
  */
+@Immutable
 data class PlayOnUiState(
     /** Jellyfin-remote sessions only (other JellyPlay / Jellyfin clients). */
     val devices: List<CastDevice> = emptyList(),

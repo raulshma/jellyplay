@@ -221,6 +221,13 @@ class VideoPlayerViewModel @Inject constructor(
 
     private val _videoStats = MutableStateFlow(EngineVideoStats())
     val videoStats: StateFlow<EngineVideoStats> = _videoStats.asStateFlow()
+
+    // Sleep-timer countdown, sourced directly from SleepTimerManager. Kept OUT
+    // of [uiState] (mirroring the high-frequency streams above) so a 5 s tick —
+    // or the 100 ms fade-out burst — does not copy the ~95-field [uiState] and
+    // re-invalidate the screen root. Collected only by the leaf composables
+    // that render the countdown (overflow-menu label, SleepTimerSheet).
+    val sleepTimerRemainingMs: StateFlow<Long> = sleepTimerManager.remainingMs
     // ---------------------------------------------------------------------------
 
     /**
@@ -681,11 +688,6 @@ class VideoPlayerViewModel @Inject constructor(
                 } else if (!prefs.duckOnTransientFocusLoss && transientAudioFocusRequest != null) {
                     unregisterTransientFocusLossListener()
                 }
-            }
-        }
-        launch {
-            sleepTimerManager.remainingMs.collect { remaining ->
-                _uiState.update { it.copy(sleepTimerRemainingMs = remaining) }
             }
         }
         launch {
@@ -2521,7 +2523,6 @@ class VideoPlayerViewModel @Inject constructor(
                 reverbPreset = currentState.reverbPreset,
                 sleepTimerActive = currentState.sleepTimerActive,
                 sleepTimerEndOfEpisode = currentState.sleepTimerEndOfEpisode,
-                sleepTimerRemainingMs = currentState.sleepTimerRemainingMs,
                 sleepTimerLastUsedDurationMs = currentState.sleepTimerLastUsedDurationMs,
             )
         }
@@ -2545,7 +2546,6 @@ class VideoPlayerViewModel @Inject constructor(
         _uiState.update { it.copy(
             sleepTimerActive = true,
             sleepTimerEndOfEpisode = false,
-            sleepTimerRemainingMs = durationMs,
             sleepTimerLastUsedDurationMs = durationMs,
         ) }
     }
@@ -2562,7 +2562,6 @@ class VideoPlayerViewModel @Inject constructor(
         _uiState.update { it.copy(
             sleepTimerActive = true,
             sleepTimerEndOfEpisode = true,
-            sleepTimerRemainingMs = 0,
         ) }
     }
 
@@ -2576,7 +2575,6 @@ class VideoPlayerViewModel @Inject constructor(
         _uiState.update { it.copy(
             sleepTimerActive = false,
             sleepTimerEndOfEpisode = false,
-            sleepTimerRemainingMs = 0,
         ) }
     }
 

@@ -219,6 +219,7 @@ private fun ArtistDetailContent(
                     modifier = Modifier
                         .weight(0.6f)
                         .padding(top = 40.dp),
+                    contentType = { _, _ -> "album" },
                     contentPadding = PaddingValues(horizontal = 16.dp),
                     horizontalArrangement = Arrangement.spacedBy(12.dp),
                 ) { _, album, itemModifier ->
@@ -272,6 +273,7 @@ private fun ArtistDetailContent(
                         TvFocusableItemRow(
                             items = albums,
                             key = { it.id },
+                            contentType = { _, _ -> "album" },
                             contentPadding = PaddingValues(horizontal = 16.dp),
                             horizontalArrangement = Arrangement.spacedBy(12.dp),
                         ) { _, album, itemModifier ->

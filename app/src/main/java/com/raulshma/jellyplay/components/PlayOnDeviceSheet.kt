@@ -85,7 +85,7 @@ fun PlayOnDeviceSheet(
                     LazyColumn(
                         verticalArrangement = Arrangement.spacedBy(4.dp),
                     ) {
-                        items(devices, key = { it.id }) { device ->
+                        items(devices, key = { it.id }, contentType = { "playOnDevice" }) { device ->
                             DeviceRow(device = device, onClick = { onSelect(device) })
                         }
                     }

@@ -62,6 +62,15 @@ class AudioPlayerViewModel @Inject constructor(
     val uiState: StateFlow<AudioPlayerUiState> = _uiState.asStateFlow()
 
     /**
+     * Sleep-timer countdown, sourced directly from SleepTimerManager. Kept OUT
+     * of [uiState] (mirroring [currentPosition]) so a 5 s tick — or the 100 ms
+     * fade-out burst — does not copy the whole [AudioPlayerUiState] and
+     * re-invalidate the screen root. Collected only by the leaf composables
+     * that render the countdown (top-bar label, AudioSleepTimerSheet).
+     */
+    val sleepTimerRemainingMs: StateFlow<Long> = sleepTimerManager.remainingMs
+
+    /**
      * High-frequency playback position, kept OUTSIDE [uiState] so the 250ms tick only
      * recomposes consumers that read position, rather than copying the whole UiState.
      */
@@ -275,11 +284,6 @@ class AudioPlayerViewModel @Inject constructor(
                     )
                 }
             }.collect {}
-        }
-        launch {
-            sleepTimerManager.remainingMs.collect { remaining ->
-                _uiState.update { it.copy(sleepTimer = it.sleepTimer.copy(remainingMs = remaining)) }
-            }
         }
         launch {
             combine(
@@ -658,7 +662,7 @@ class AudioPlayerViewModel @Inject constructor(
     fun cancelSleepTimer() {
         sleepTimerManager.cancel()
         _uiState.update {
-            it.copy(sleepTimer = it.sleepTimer.copy(active = false, endOfEpisode = false, remainingMs = 0))
+            it.copy(sleepTimer = it.sleepTimer.copy(active = false, endOfEpisode = false))
         }
     }
 

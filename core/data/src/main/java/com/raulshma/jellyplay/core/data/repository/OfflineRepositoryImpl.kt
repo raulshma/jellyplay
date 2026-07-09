@@ -29,6 +29,9 @@ import javax.inject.Singleton
  */
 const val MIN_OFFLINE_SEARCH_LENGTH: Int = 2
 
+private val MEDIA_TYPE_BY_NAME: Map<String, MediaType> = MediaType.entries.associateBy { it.name }
+private val DOWNLOAD_STATUS_BY_NAME: Map<String, DownloadStatus> = DownloadStatus.entries.associateBy { it.name }
+
 @OptIn(ExperimentalCoroutinesApi::class)
 @Singleton
 class OfflineRepositoryImpl @Inject constructor(
@@ -222,10 +225,10 @@ class OfflineRepositoryImpl @Inject constructor(
     }
 
     private fun safeMediaTypeOf(name: String): MediaType =
-        MediaType.entries.find { it.name == name } ?: MediaType.UNKNOWN
+        MEDIA_TYPE_BY_NAME[name] ?: MediaType.UNKNOWN
 
     private fun safeDownloadStatusOf(name: String): DownloadStatus? =
-        DownloadStatus.entries.find { it.name == name }
+        DOWNLOAD_STATUS_BY_NAME[name]
 
     private fun OfflineMediaEntity.toOfflineMediaItem() = OfflineMediaItem(
         id = id,

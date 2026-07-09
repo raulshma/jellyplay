@@ -168,7 +168,6 @@ data class VideoPlayerUiState(
     val reverbPreset: ReverbPreset = ReverbPreset.NONE,
     val sleepTimerActive: Boolean = false,
     val sleepTimerEndOfEpisode: Boolean = false,
-    val sleepTimerRemainingMs: Long = 0L,
     val sleepTimerLastUsedDurationMs: Long = 0L,
     val videoEffects: VideoEffectsConfig = VideoEffectsConfig(),
     val isScreenLocked: Boolean = false,

@@ -566,8 +566,14 @@ val MIGRATION_32_33 = object : Migration(32, 33) {
     }
 }
 
+val MIGRATION_33_34 = object : Migration(33, 34) {
+    override fun migrate(db: SupportSQLiteDatabase) {
+        db.execSQL("CREATE INDEX IF NOT EXISTS index_servers_userId ON servers(userId)")
+    }
+}
+
 /**
- * The complete, correctly-ordered v1→v33 migration chain, with the
+ * The complete, correctly-ordered v1→v34 migration chain, with the
  * token-encrypting [Migration24To25] (which needs a [TokenCipher]) inserted at
  * its true position between v23→v24 and v25→v26. Room matches migrations by
  * start/end version regardless of list order, but keeping the chain in strict
@@ -608,4 +614,5 @@ fun allMigrations(tokenCipher: TokenCipher): List<Migration> =
         MIGRATION_30_31,
         MIGRATION_31_32,
         MIGRATION_32_33,
+        MIGRATION_33_34,
     )

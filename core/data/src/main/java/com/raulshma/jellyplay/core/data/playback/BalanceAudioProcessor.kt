@@ -5,6 +5,8 @@ import androidx.media3.common.audio.AudioProcessor
 import androidx.media3.common.util.UnstableApi
 import java.nio.ByteBuffer
 import java.nio.ByteOrder
+import java.nio.FloatBuffer
+import java.nio.ShortBuffer
 import kotlin.math.max
 import kotlin.math.min
 
@@ -26,6 +28,10 @@ class BalanceAudioProcessor : AudioProcessor {
     private var isInputEnded = false
     private var isActive = false
     private var channelGains: FloatArray = CHANNEL_GAINS_STEREO
+    private var combinedGains: FloatArray = channelGains
+
+    private var cachedShortBuffer: ShortBuffer? = null
+    private var cachedFloatBuffer: FloatBuffer? = null
 
     @Synchronized
     fun setBalance(balance: Float) {
@@ -45,7 +51,22 @@ class BalanceAudioProcessor : AudioProcessor {
             leftGain = 1f
             rightGain = 1f + pendingBalance
         }
+        rebuildCombinedGains()
     }
+
+    private fun rebuildCombinedGains() {
+        val channelCount = channelGains.size
+        if (combinedGains.size != channelCount) {
+            combinedGains = FloatArray(channelCount)
+        }
+        for (ch in 0 until channelCount) {
+            val balanceGain = balanceGainFor(ch)
+            combinedGains[ch] = balanceGain * channelGains[ch]
+        }
+    }
+
+    private fun balanceGainFor(ch: Int): Float =
+        if (ch == 0 || ch == 2 || ch == 4 || ch == 6) leftGain else rightGain
 
     override fun configure(inputAudioFormat: AudioProcessor.AudioFormat): AudioProcessor.AudioFormat {
         if (inputAudioFormat.encoding != C.ENCODING_PCM_16BIT &&
@@ -65,6 +86,8 @@ class BalanceAudioProcessor : AudioProcessor {
         this.inputAudioFormat = inputAudioFormat
         outputAudioFormat = inputAudioFormat
         channelGains = buildChannelGains(inputAudioFormat.channelCount)
+        cachedShortBuffer = null
+        cachedFloatBuffer = null
         updateGains()
         return inputAudioFormat
     }
@@ -112,29 +135,25 @@ class BalanceAudioProcessor : AudioProcessor {
 
         if (buffer.capacity() < remaining) {
             buffer = ByteBuffer.allocateDirect(remaining).order(ByteOrder.nativeOrder())
+            cachedShortBuffer = null
+            cachedFloatBuffer = null
         } else {
             buffer.clear()
         }
 
-        val lGain = leftGain
-        val rGain = rightGain
         val channelCount = inputAudioFormat.channelCount
-        val gains = channelGains
+        val gains = combinedGains
 
         if (inputAudioFormat.encoding == C.ENCODING_PCM_16BIT) {
-            val shortBuffer = buffer.asShortBuffer()
+            val shortBuffer = cachedShortBuffer?.apply { clear() }
+                ?: buffer.asShortBuffer().also { cachedShortBuffer = it }
             val inputShorts = inputBuffer.duplicate().order(ByteOrder.nativeOrder()).asShortBuffer()
             inputShorts.position(position / 2)
             inputShorts.limit(limit / 2)
             var ch = 0
             while (inputShorts.hasRemaining()) {
                 val sample = inputShorts.get()
-                val balanceGain = when {
-                    channelCount <= 2 -> if (ch == 0) lGain else rGain
-                    ch == 0 || ch == 2 || ch == 4 || ch == 6 -> lGain
-                    else -> rGain
-                }
-                val amplified = (sample * balanceGain * gains[ch]).toInt()
+                val amplified = (sample * gains[ch]).toInt()
                     .coerceIn(Short.MIN_VALUE.toInt(), Short.MAX_VALUE.toInt())
                 shortBuffer.put(amplified.toShort())
                 ch = (ch + 1) % channelCount
@@ -142,19 +161,15 @@ class BalanceAudioProcessor : AudioProcessor {
             buffer.position(0)
             buffer.limit(shortBuffer.position() * 2)
         } else {
-            val floatBuffer = buffer.asFloatBuffer()
+            val floatBuffer = cachedFloatBuffer?.apply { clear() }
+                ?: buffer.asFloatBuffer().also { cachedFloatBuffer = it }
             val inputFloats = inputBuffer.duplicate().order(ByteOrder.nativeOrder()).asFloatBuffer()
             inputFloats.position(position / 4)
             inputFloats.limit(limit / 4)
             var ch = 0
             while (inputFloats.hasRemaining()) {
                 val sample = inputFloats.get()
-                val balanceGain = when {
-                    channelCount <= 2 -> if (ch == 0) lGain else rGain
-                    ch == 0 || ch == 2 || ch == 4 || ch == 6 -> lGain
-                    else -> rGain
-                }
-                val amplified = (sample * balanceGain * gains[ch]).coerceIn(-1.0f, 1.0f)
+                val amplified = (sample * gains[ch]).coerceIn(-1.0f, 1.0f)
                 floatBuffer.put(amplified)
                 ch = (ch + 1) % channelCount
             }
@@ -186,6 +201,8 @@ class BalanceAudioProcessor : AudioProcessor {
     override fun reset() {
         flush()
         buffer = EMPTY_BUFFER
+        cachedShortBuffer = null
+        cachedFloatBuffer = null
         inputAudioFormat = AudioProcessor.AudioFormat.NOT_SET
         outputAudioFormat = AudioProcessor.AudioFormat.NOT_SET
     }

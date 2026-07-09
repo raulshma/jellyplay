@@ -59,6 +59,7 @@ dependencies {
 
     implementation(libs.media3.cast)
     implementation(libs.media3.datasource)
+    implementation(libs.media3.datasource.okhttp)
     // FFmpeg software audio decoder for codecs the platform can't decode
     // (DTS, MLP/TrueHD, EAC3, etc.). DefaultRenderersFactory loads it via
     // reflection when EXTENSION_RENDERER_MODE is ON (the default HW_PREFERRED

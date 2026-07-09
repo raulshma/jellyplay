@@ -404,11 +404,11 @@ class MigrationTest {
     fun allMigrations_coversContiguousRange() {
         val tokenCipher = TokenCipher.forTestingWithPersistentKey()
         val migrations = allMigrations(tokenCipher)
-        // One migration per step from v1 up to the current schema version (33),
+        // One migration per step from v1 up to the current schema version (34),
         // each handing off to the next with no gaps or duplicate starts.
         val expected = JellyPlayDatabase::class.java
             .getAnnotation(androidx.room.Database::class.java)?.version
-            ?: 33
+            ?: 34
         val startVersions = migrations.map { it.startVersion }
         assertEquals(
             "every version 1..<current must start exactly one migration",

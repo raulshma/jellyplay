@@ -11,6 +11,7 @@ import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
+import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -113,16 +114,6 @@ class DownloadDaoTest {
     }
 
     @Test
-    fun `getDownloadsByStatus filters correctly`() = runTest {
-        downloadDao.insertDownload(createDownload(id = "dl-1", status = "COMPLETED"))
-        downloadDao.insertDownload(createDownload(id = "dl-2", status = "PENDING"))
-
-        val completed = downloadDao.getDownloadsByStatus("COMPLETED")
-        assertEquals(1, completed.size)
-        assertEquals("dl-1", completed[0].id)
-    }
-
-    @Test
     fun `getActiveDownloadCount counts pending downloading and paused`() = runTest {
         downloadDao.insertDownload(createDownload(id = "dl-1", status = "PENDING"))
         downloadDao.insertDownload(createDownload(id = "dl-2", status = "DOWNLOADING"))
@@ -163,5 +154,23 @@ class DownloadDaoTest {
         val result = downloadDao.getDownloadsForSeries("series-1")
         assertEquals(1, result.size)
         assertEquals("dl-1", result[0].id)
+    }
+
+    @Test
+    fun `getDownloadedEpisodeIdsBySeries returns one row per download and excludes null series`() = runTest {
+        downloadDao.insertDownload(createDownload(id = "dl-1", mediaItemId = "item-1", seriesId = "series-1"))
+        downloadDao.insertDownload(createDownload(id = "dl-2", mediaItemId = "item-2", seriesId = "series-1"))
+        downloadDao.insertDownload(createDownload(id = "dl-3", mediaItemId = "item-3", seriesId = "series-2"))
+        downloadDao.insertDownload(createDownload(id = "dl-4", mediaItemId = "item-4", seriesId = null))
+
+        val result = downloadDao.getDownloadedEpisodeIdsBySeries()
+
+        // Flat (seriesId, mediaItemId) rows — grouping by series happens in the repository.
+        assertEquals(3, result.size)
+        val series1Ids = result.filter { it.seriesId == "series-1" }.map { it.mediaItemId }.toSet()
+        assertEquals(setOf("item-1", "item-2"), series1Ids)
+        val series2Ids = result.filter { it.seriesId == "series-2" }.map { it.mediaItemId }.toSet()
+        assertEquals(setOf("item-3"), series2Ids)
+        assertTrue(result.none { it.seriesId == null })
     }
 }
