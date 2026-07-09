@@ -66,8 +66,6 @@ import com.raulshma.jellyplay.feature.livetv.R
 @Composable
 fun ChannelsScreen(
     onChannelClick: (String, String) -> Unit,
-    onGuideClick: () -> Unit,
-    onDvrClick: () -> Unit = {},
     viewModel: ChannelsViewModel = hiltViewModel(),
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
@@ -98,28 +96,14 @@ fun ChannelsScreen(
     )
 
     JellyPlayScreenScaffold(
-        title = "Live TV",
+        title = stringResource(R.string.livetv_tab_channels),
         backgroundColor = backgroundColor,
+        topBarStyle = com.raulshma.jellyplay.core.ui.components.TopBarStyle.None,
         actions = {
             com.raulshma.jellyplay.core.ui.components.HeaderStatusIndicator(
                 status = headerStatus,
                 modifier = Modifier.padding(start = 12.dp),
             )
-            Row(
-                horizontalArrangement = Arrangement.spacedBy(4.dp),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                ExpressiveToolbarIconButton(
-                    onClick = onDvrClick,
-                    icon = Tabler.Outline.Circle,
-                    contentDescription = "Recordings",
-                )
-                ExpressiveToolbarIconButton(
-                    onClick = onGuideClick,
-                    icon = Tabler.Outline.Calendar,
-                    contentDescription = "Program Guide",
-                )
-            }
         },
     ) {
         if (uiState.error != null && uiState.channels.isEmpty()) {

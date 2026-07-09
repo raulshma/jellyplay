@@ -9,8 +9,11 @@ import com.raulshma.jellyplay.core.model.DvrSeriesTimer
 import com.raulshma.jellyplay.core.model.DvrTimer
 import com.raulshma.jellyplay.core.model.DvrTimerStatus
 import com.raulshma.jellyplay.core.model.ImageBlurHashes
+import com.raulshma.jellyplay.core.model.GuideInfo
 import com.raulshma.jellyplay.core.model.LiveTvChannel
 import com.raulshma.jellyplay.core.model.LiveTvProgram
+import com.raulshma.jellyplay.core.model.LiveTvRecording
+import com.raulshma.jellyplay.core.model.RecordingFolder
 import com.raulshma.jellyplay.core.model.LogFile
 import com.raulshma.jellyplay.core.model.MediaItem
 import com.raulshma.jellyplay.core.model.MediaType
@@ -184,6 +187,7 @@ internal fun BaseItemDto.toLiveTvProgram() = LiveTvProgram(
     name = name ?: "",
     overview = overview,
     channelId = channelId?.toString() ?: "",
+    channelName = channelName,
     startDate = startDate?.toString(),
     endDate = endDate?.toString(),
     durationTicks = runTimeTicks,
@@ -196,6 +200,33 @@ internal fun BaseItemDto.toLiveTvProgram() = LiveTvProgram(
     isLive = isLive ?: false,
     isPremiere = isPremiere ?: false,
     isSeries = isSeries ?: false,
+    isRepeat = isRepeat ?: false,
+    hasAired = endDate?.isBefore(org.jellyfin.sdk.model.DateTime.now()) ?: false,
+    indexNumber = indexNumber,
+    parentIndexNumber = parentIndexNumber,
+    imageTag = imageTags?.get(ImageType.PRIMARY)?.toString(),
+    timerId = timerId?.toString(),
+    seriesTimerId = seriesTimerId?.toString(),
+)
+
+internal fun BaseItemDto.toLiveTvRecording() = LiveTvRecording(
+    id = id.toString(),
+    name = name ?: "",
+    overview = overview,
+    channelId = channelId?.toString(),
+    channelName = channelName,
+    startDate = startDate?.toString(),
+    endDate = endDate?.toString(),
+    runTimeTicks = runTimeTicks,
+    imageTag = imageTags?.get(ImageType.PRIMARY)?.toString(),
+    seriesTimerId = seriesTimerId?.toString(),
+    status = DvrTimerStatus.COMPLETED,
+)
+
+internal fun BaseItemDto.toRecordingFolder() = RecordingFolder(
+    id = id.toString(),
+    name = name ?: "",
+    collectionType = collectionType?.serialName,
 )
 
 internal fun org.jellyfin.sdk.model.api.TimerInfoDto.toDvrTimer() = DvrTimer(

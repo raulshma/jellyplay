@@ -99,7 +99,7 @@ class EpgViewModel @Inject constructor(
         val pending = (_recordDialog.value as? RecordDialogState.Confirm)?.program ?: return
         _recordDialog.value = RecordDialogState.Requesting
         launch {
-            mediaRepository.createTimer(pending.id, pending.channelId, pending.startDate, pending.endDate)
+            mediaRepository.createTimer(pending.id)
                 .onSuccess {
                     _recordDialog.value = RecordDialogState.Success(pending.name)
                     loadGuide()
