@@ -5,7 +5,9 @@ import com.raulshma.jellyplay.core.model.EffectStrength
 
 /**
  * Boosts vocal-range frequencies (1–8 kHz) by overlaying additive
- * millibel offsets on top of the user's EQ settings.
+ * millibel offsets on top of the user's EQ settings, **and** enables a
+ * sub-bass high-pass filter ([HighPassFilterAudioProcessor]) to cut
+ * rumble below the voice band for clearer speech.
  *
  * **Threading note:** all audio-effect mutations in JellyPlay happen
  * on the playback thread; this helper is not thread-safe.
@@ -31,10 +33,28 @@ import com.raulshma.jellyplay.core.model.EffectStrength
  * `ExoPlayerEngine.applyAudioEffects` / `MpvPlayerEngine` for the
  * canonical wiring.
  *
+ * ## Voice-band de-noise
+ *
+ * When enabled, this helper also enables an optional
+ * [HighPassFilterAudioProcessor] (default 80 Hz cutoff, below the ~85 Hz
+ * fundamental of the lowest male voice). The host owns the processor
+ * instance and passes it here; `null` disables the de-noise stage while
+ * keeping the EQ boost. On the MPV path there is no in-sink processor —
+ * the host applies an equivalent `highpass=f=80` `af` filter instead.
+ *
  * The legacy `attach(audioSessionId)` / `detach()` methods are kept as
  * no-ops so existing call sites compile unchanged.
  */
-class DialogueBoostHelper(private val equalizerHelper: EqualizerHelper) {
+class DialogueBoostHelper(
+    private val equalizerHelper: EqualizerHelper,
+    /**
+     * Optional sub-bass high-pass filter owned by the host. When
+     * non-null it is enabled/disabled in lockstep with this helper to
+     * cut rumble below the voice band. `null` on paths that have no
+     * in-sink processor (e.g. MPV, which uses an `af` filter instead).
+     */
+    private val highPassFilter: HighPassFilterAudioProcessor? = null,
+) {
 
     var isEnabled: Boolean = false
         private set
@@ -60,7 +80,13 @@ class DialogueBoostHelper(private val equalizerHelper: EqualizerHelper) {
 
     fun setEnabled(enabled: Boolean) {
         isEnabled = enabled
-        if (enabled) applyOffsets() else clearOffsets()
+        if (enabled) {
+            applyOffsets()
+            highPassFilter?.setEnabled(true)
+        } else {
+            clearOffsets()
+            highPassFilter?.setEnabled(false)
+        }
     }
 
     /**
@@ -71,6 +97,7 @@ class DialogueBoostHelper(private val equalizerHelper: EqualizerHelper) {
      */
     fun detach() {
         if (isEnabled) clearOffsets()
+        highPassFilter?.setEnabled(false)
         isEnabled = false
     }
 
@@ -106,11 +133,13 @@ class DialogueBoostHelper(private val equalizerHelper: EqualizerHelper) {
             // converts to Hz before exposing, so we work in Hz here.
             // Vocal range maps to 1–4 kHz core, 4–8 kHz presence; the
             // 500 Hz–1 kHz band gets a small warmth lift to keep
-            // male voices from thinning.
+            // male voices from thinning. Ranges are non-overlapping
+            // (order-independent): the 4 kHz boundary belongs to core
+            // vocal, so harmonics start at 4_001.
             val level = when (freqHz) {
+                in 500..999 -> lowMidWarmth
                 in 1_000..4_000 -> coreVocal
-                in 4_000..8_000 -> upperHarmonics
-                in 500..1_000 -> lowMidWarmth
+                in 4_001..8_000 -> upperHarmonics
                 else -> 0
             }
             if (level != 0) result[band] = level

@@ -22,6 +22,7 @@ import com.raulshma.jellyplay.core.data.repository.OfflineRepository
 import com.raulshma.jellyplay.core.data.repository.PlaybackRepository
 import com.raulshma.jellyplay.core.data.util.ImageUrlProvider
 import com.raulshma.jellyplay.core.model.AudioNormalizationMode
+import com.raulshma.jellyplay.core.model.ChannelMixMode
 import com.raulshma.jellyplay.core.model.EffectStrength
 import com.raulshma.jellyplay.core.model.EqualizerPreset
 import com.raulshma.jellyplay.core.model.LrcLibTrack
@@ -282,6 +283,8 @@ class AudioPlaybackManager @Inject constructor(
     override val waveformData: StateFlow<ByteArray> get() = effectsProcessor.waveformData
     override val replayGainMode: StateFlow<AudioNormalizationMode> get() = effectsProcessor.replayGainMode
     override val replayGainPreAmpDb: StateFlow<Float> get() = effectsProcessor.replayGainPreAmpDb
+    override val channelMixMode: StateFlow<ChannelMixMode> get() = effectsProcessor.channelMixMode
+    override val channelMixEnabled: StateFlow<Boolean> get() = effectsProcessor.channelMixEnabled
 
     var skipPreviousThresholdMs = 3_000L
 
@@ -457,7 +460,23 @@ class AudioPlaybackManager @Inject constructor(
                 enableAudioTrackPlaybackParams: Boolean,
             ): androidx.media3.exoplayer.audio.AudioSink {
                 return DefaultAudioSink.Builder(context)
-                    .setAudioProcessors(arrayOf(effectsProcessor.replayGainProcessor, effectsProcessor.balanceProcessor))
+                    .setAudioProcessors(
+                        arrayOf(
+                            // Channel mix first: it may change the channel count,
+                            // so every downstream processor must see the remixed
+                            // layout.
+                            effectsProcessor.channelMixProcessor,
+                            // Dynamics compression (DYNAMIC normalization) and
+                            // ReplayGain (TRACK/ALBUM) are mutually exclusive at
+                            // runtime but both live in the chain.
+                            effectsProcessor.dynamicsProcessor,
+                            effectsProcessor.replayGainProcessor,
+                            // High-pass rumble cut for dialogue boost; a no-op
+                            // when boost is off.
+                            effectsProcessor.highPassProcessor,
+                            effectsProcessor.balanceProcessor,
+                        ),
+                    )
                     .setEnableFloatOutput(enableFloatOutput)
                     .setEnableAudioTrackPlaybackParams(enableAudioTrackPlaybackParams)
                     .build()
@@ -1202,6 +1221,10 @@ class AudioPlaybackManager @Inject constructor(
         val q = _queue.value
         val normalizationGain = if (currentIdx in q.indices) q[currentIdx].normalizationGain else null
         effectsProcessor.setReplayGainPreAmpDb(db, normalizationGain, _shuffleMode.value)
+    }
+
+    override fun setChannelMix(mode: ChannelMixMode, enabled: Boolean) {
+        effectsProcessor.setChannelMix(mode, enabled)
     }
 
     fun getImageUrl(itemId: String): String =

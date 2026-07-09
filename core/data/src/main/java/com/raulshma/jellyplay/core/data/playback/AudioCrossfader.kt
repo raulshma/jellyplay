@@ -98,7 +98,14 @@ class AudioCrossfader(
                 enableAudioTrackPlaybackParams: Boolean,
             ): androidx.media3.exoplayer.audio.AudioSink {
                 return DefaultAudioSink.Builder(context)
-                    .setAudioProcessors(arrayOf(effectsProcessor.crossfadeReplayGainProcessor))
+                    .setAudioProcessors(
+                        arrayOf(
+                            effectsProcessor.crossfadeChannelMixProcessor,
+                            effectsProcessor.crossfadeDynamicsProcessor,
+                            effectsProcessor.crossfadeReplayGainProcessor,
+                            effectsProcessor.crossfadeHighPassProcessor,
+                        ),
+                    )
                     .setEnableFloatOutput(enableFloatOutput)
                     .setEnableAudioTrackPlaybackParams(enableAudioTrackPlaybackParams)
                     .build()

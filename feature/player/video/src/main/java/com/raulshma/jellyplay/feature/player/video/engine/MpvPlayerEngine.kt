@@ -274,8 +274,9 @@ class MpvPlayerEngine(
                 ChannelMixMode.AUTO -> mpv.setOptionString("audio-channels", "auto")
             }
 
+            val afFilters = mutableListOf<String>()
+            // Normalization filters (DYNAMIC compression / TRACK-ALBUM loudnorm).
             if (currentConfig.audioEffects.audioNormalizationEnabled) {
-                val afFilters = mutableListOf<String>()
                 when (currentConfig.audioEffects.audioNormalizationMode) {
                     AudioNormalizationMode.DYNAMIC -> {
                         afFilters.add("acompressor=ratio=3:threshold=0.05:attack=10:release=200")
@@ -285,9 +286,16 @@ class MpvPlayerEngine(
                     }
                     AudioNormalizationMode.NONE -> {}
                 }
-                if (afFilters.isNotEmpty()) {
-                    mpv.setOptionString("af", afFilters.joinToString(","))
-                }
+            }
+            // Dialogue-boost voice-band de-noise: cut sub-bass rumble below
+            // the ~85 Hz voice fundamental. Mirrors the HighPassFilterAudioProcessor
+            // stage on the ExoPlayer path. The EQ vocal-band lift is applied
+            // separately via the EqualizerHelper overlay (no af filter needed).
+            if (currentConfig.audioEffects.dialogueBoostEnabled) {
+                afFilters.add("highpass=f=80")
+            }
+            if (afFilters.isNotEmpty()) {
+                mpv.setOptionString("af", afFilters.joinToString(","))
             }
         }
 
@@ -496,11 +504,14 @@ class MpvPlayerEngine(
 
             val oldAudioFx = oldConfig.audioEffects
             val newAudioFx = config.audioEffects
+            // Rebuild the af chain when normalization OR dialogue-boost changes,
+            // since dialogue boost contributes a highpass stage to the chain.
             if (oldAudioFx.audioNormalizationEnabled != newAudioFx.audioNormalizationEnabled ||
-                oldAudioFx.audioNormalizationMode != newAudioFx.audioNormalizationMode
+                oldAudioFx.audioNormalizationMode != newAudioFx.audioNormalizationMode ||
+                oldAudioFx.dialogueBoostEnabled != newAudioFx.dialogueBoostEnabled
             ) {
+                val afFilters = mutableListOf<String>()
                 if (newAudioFx.audioNormalizationEnabled) {
-                    val afFilters = mutableListOf<String>()
                     when (newAudioFx.audioNormalizationMode) {
                         AudioNormalizationMode.DYNAMIC -> {
                             afFilters.add("acompressor=ratio=3:threshold=0.05:attack=10:release=200")
@@ -510,12 +521,14 @@ class MpvPlayerEngine(
                         }
                         AudioNormalizationMode.NONE -> {}
                     }
-                    val filterString = afFilters.joinToString(",")
-                    if (filterString.isNotEmpty()) {
-                        mpv.setPropertyString("af", filterString)
-                    } else {
-                        mpv.command("af", "clr", "")
-                    }
+                }
+                // Dialogue-boost rumble cut (mirrors ExoPlayer HighPassFilterAudioProcessor).
+                if (newAudioFx.dialogueBoostEnabled) {
+                    afFilters.add("highpass=f=80")
+                }
+                val filterString = afFilters.joinToString(",")
+                if (filterString.isNotEmpty()) {
+                    mpv.setPropertyString("af", filterString)
                 } else {
                     mpv.command("af", "clr", "")
                 }
