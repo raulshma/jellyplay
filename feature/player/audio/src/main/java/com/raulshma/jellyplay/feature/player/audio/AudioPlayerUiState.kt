@@ -83,7 +83,6 @@ data class LyricsState(
 data class SleepTimerState(
     val active: Boolean = false,
     val endOfEpisode: Boolean = false,
-    val remainingMs: Long = 0L,
     val lastUsedDurationMs: Long = 0L,
 )
 

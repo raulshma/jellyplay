@@ -681,7 +681,7 @@ fun SubtitlesTabContent(
                 ) {
                     // Keyed by index — stable per line so slot identity survives any
                     // re-emission of the same lyrics list (e.g. a parent recomposition).
-                    itemsIndexed(lyricsLines, key = { idx, _ -> "lyric_$idx" }) { index, line ->
+                    itemsIndexed(lyricsLines, key = { idx, _ -> "lyric_$idx" }, contentType = { _, _ -> "lyric" }) { index, line ->
                         val isActive = index == activeLineIndex
                         val textColor by animateColorAsState(
                             targetValue = if (isActive) MaterialTheme.colorScheme.primary else Color.White.copy(alpha = 0.7f),

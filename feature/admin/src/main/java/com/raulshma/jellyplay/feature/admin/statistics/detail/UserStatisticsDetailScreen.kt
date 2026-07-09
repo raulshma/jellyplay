@@ -275,6 +275,7 @@ fun UserStatisticsDetailScreen(
                         items(
                             items = state.detail.topItems.drop(5),
                             key = { it.itemId },
+                            contentType = { "topItem" },
                         ) { item ->
                             TopItemRow(item)
                         }

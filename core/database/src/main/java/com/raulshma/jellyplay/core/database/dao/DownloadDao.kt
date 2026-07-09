@@ -75,9 +75,6 @@ interface DownloadDao {
     @Query("SELECT * FROM downloads WHERE mediaItemId = :mediaItemId AND status = 'COMPLETED'")
     suspend fun getCompletedDownloadByMediaItemId(mediaItemId: String): DownloadEntity?
 
-    @Query("SELECT * FROM downloads WHERE status = :status LIMIT 500")
-    suspend fun getDownloadsByStatus(status: String): List<DownloadEntity>
-
     /**
      * Cold-start recovery projection. The recovery initializer on every app
      * launch consumes only [RecoveryRow.id] (and `downloadedBytes` when
@@ -111,6 +108,18 @@ interface DownloadDao {
 
     @Query("SELECT DISTINCT seriesId FROM downloads WHERE seriesId IS NOT NULL")
     suspend fun getDownloadedSeriesIds(): List<String>
+
+    /**
+     * Single projected read of every `(seriesId, mediaItemId)` pair in the
+     * table, intended for the periodic [com.raulshma.jellyplay.core.data.worker.AutoDownloadWorker]
+     * which previously issued N per-series queries (N+1) each decoding all 23
+     * columns when only `mediaItemId` is consumed. Returning every series's
+     * rows in one round-trip lets the worker build an in-memory index once and
+     * look it up per series. Movies/standalone items (seriesId IS NULL) are
+     * excluded since they are irrelevant to the auto-download check.
+     */
+    @Query("SELECT seriesId, mediaItemId FROM downloads WHERE seriesId IS NOT NULL")
+    suspend fun getDownloadedEpisodeIdsBySeries(): List<EpisodeSeriesRow>
 }
 
 /**
@@ -121,4 +130,15 @@ interface DownloadDao {
 data class RecoveryRow(
     val id: String,
     val downloadedBytes: Long,
+)
+
+/**
+ * `(seriesId, mediaItemId)` projection used by
+ * [DownloadDao.getDownloadedEpisodeIdsBySeries] so the periodic auto-download
+ * worker can fetch all series' episode ids in a single 2-column query instead
+ * of N full-row queries.
+ */
+data class EpisodeSeriesRow(
+    val seriesId: String,
+    val mediaItemId: String,
 )

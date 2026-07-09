@@ -127,11 +127,9 @@ class DetailViewModel @Inject constructor(
     val relatedVideos: StateFlow<List<SeerrRelatedVideo>> = _uiState
         .map { it.relatedVideos }
         .stateIn(scope, SharingStarted.WhileSubscribed(5_000), emptyList())
-    val isSeerrConnected: StateFlow<Boolean> = uiState
-        .map { it.isSeerrConnected }
+    val isSeerrConnected: StateFlow<Boolean> = seerrRepository.isConnected()
         .stateIn(scope, SharingStarted.WhileSubscribed(5_000), false)
-    val isSeerrRecommendationsEnabled: StateFlow<Boolean> = uiState
-        .map { it.isSeerrRecommendationsEnabled }
+    val isSeerrRecommendationsEnabled: StateFlow<Boolean> = seerrRepository.isRecommendationsEnabled()
         .stateIn(scope, SharingStarted.WhileSubscribed(5_000), false)
     val seerrRequestResult: StateFlow<SeerrRequestResult?> get() = seerrRequestState.requestResult
     val radarrServers: StateFlow<List<SeerrRadarrServiceDetail>> get() = seerrRequestState.radarrServers
