@@ -2,6 +2,10 @@ package com.raulshma.jellyplay.feature.player.audio
 
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.setValue
+import androidx.media3.common.MediaItem
+import androidx.media3.common.Player
+import com.raulshma.jellyplay.core.data.cast.CastManager
+import com.raulshma.jellyplay.core.data.cast.CastMediaOptions
 import com.raulshma.jellyplay.core.data.playback.AudioPlaybackManager
 import com.raulshma.jellyplay.core.data.playback.AudioQueueItem
 import com.raulshma.jellyplay.core.data.playback.SleepTimerManager
@@ -34,7 +38,22 @@ class AudioPlayerViewModel @Inject constructor(
     private val downloadRepository: com.raulshma.jellyplay.core.data.repository.DownloadRepository,
     private val playbackRepository: com.raulshma.jellyplay.core.data.repository.PlaybackRepository,
     private val sleepTimerManager: SleepTimerManager,
+    private val castManager: CastManager,
 ) : JellyPlayViewModel() {
+
+    /** Exposed so the audio top bar can render a shared [com.raulshma.jellyplay.feature.player.audio.components.CastButton]. */
+    val castManagerField: CastManager = castManager
+
+    init {
+        // CastManager is a ref-counted app-wide singleton shared with the video
+        // player and the Home "Play On" entry. Acquire for this VM's lifetime.
+        castManager.acquireConsumer()
+    }
+
+    override fun onCleared() {
+        super.onCleared()
+        castManager.releaseConsumer()
+    }
 
     val preferences = preferencesStore.preferences
         .stateIn(scope, SharingStarted.WhileSubscribed(5_000), UserPreferences())
@@ -377,6 +396,35 @@ class AudioPlayerViewModel @Inject constructor(
         audioPlaybackManager.togglePlayPause()
     }
 
+    // ------------------------------------------------------------------
+    // Cast / "Play On" — fling the current track to another Jellyfin session.
+    // Mirrors VideoPlayerViewModel.castToDevice(); for audio there are no
+    // subtitle/quality variants to carry, so the cast options are empty.
+    // ------------------------------------------------------------------
+
+    fun castToDevice() {
+        val itemId = audioPlaybackManager.currentPlayingItemId.value ?: return
+        val positionMs = currentPosition
+        val mediaItem = MediaItem.Builder()
+            .setMediaId(itemId)
+            .build()
+        castManager.loadMedia(
+            mediaItem = mediaItem,
+            startPositionMs = positionMs,
+            listener = object : Player.Listener {},
+            options = CastMediaOptions(),
+        )
+        audioPlaybackManager.pause()
+    }
+
+    fun castPlay() = castManager.play()
+    fun castPause() = castManager.pause()
+    fun castSeekTo(positionMs: Long) = castManager.seekTo(positionMs)
+    fun setCastVolume(volume: Float) = castManager.setVolume(volume)
+    fun onCastDisconnected() {
+        // No local teardown needed — the singleton owns the session lifecycle.
+    }
+
     fun changePlaybackSpeed(value: Float) {
         audioPlaybackManager.changePlaybackSpeed(value)
     }
@@ -640,6 +688,11 @@ class AudioPlayerViewModel @Inject constructor(
 
     fun toggleKaraokeMode() {
         setKaraokeModeEnabled(!karaokeMode)
+    }
+
+    /** Persists the lyrics overlay visibility so it survives across sessions. */
+    fun setLyricsVisible(enabled: Boolean) {
+        launch { preferencesStore.setAudioLyricsVisible(enabled) }
     }
 
     private fun keySentinel(id: String) = "§null§$id"

@@ -18,6 +18,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.firstOrNull
 import kotlinx.coroutines.launch
+import kotlinx.serialization.json.Json
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -26,6 +27,7 @@ class JellyfinRemotePlayCastStrategy @Inject constructor(
     @ApplicationContext private val appContext: Context,
     private val adminApiClient: AdminApiClient,
     private val preferencesStore: UserPreferencesStore,
+    private val webSocketClient: com.raulshma.jellyplay.core.data.syncplay.JellyfinWebSocketClient,
 ) : CastStrategy {
 
     companion object {
@@ -34,6 +36,9 @@ class JellyfinRemotePlayCastStrategy @Inject constructor(
     }
 
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
+
+    /** Lenient decoder for the WebSocket `Sessions` push payloads. */
+    private val sessionsJson = Json { ignoreUnknownKeys = true; isLenient = true }
 
     private val _isAvailable = MutableStateFlow(false)
     override val isAvailable: StateFlow<Boolean> = _isAvailable.asStateFlow()
@@ -60,11 +65,31 @@ class JellyfinRemotePlayCastStrategy @Inject constructor(
     private val _volume = MutableStateFlow(1f)
     val volume: StateFlow<Float> = _volume.asStateFlow()
 
+    // Now-playing metadata from the connected remote session (filled by
+    // [refreshPlaybackState]). Empty until the remote session reports something.
+    private val _nowPlayingTitle = MutableStateFlow("")
+    val nowPlayingTitle: StateFlow<String> = _nowPlayingTitle.asStateFlow()
+
+    private val _nowPlayingSubtitle = MutableStateFlow("")
+    val nowPlayingSubtitle: StateFlow<String> = _nowPlayingSubtitle.asStateFlow()
+
+    /** Display name of the session we are currently connected to (for UI). */
+    private val _targetName = MutableStateFlow<String?>(null)
+    val targetName: StateFlow<String?> = _targetName.asStateFlow()
+
     @Volatile
     private var connectedSessionId: String? = null
 
     private var discoveryJob: Job? = null
     private var statusPollingJob: Job? = null
+
+    /**
+     * Subscribes to the shared [webSocketClient]'s `Sessions` push (server emits
+     * session state changes) and mirrors them onto our transport flows. This is
+     * jellyfin-web's SessionPlayer transport — real-time, no REST polling. Also
+     * auto-disconnects when the connected session disappears from the list.
+     */
+    private var sessionsObserverJob: Job? = null
 
     @Volatile
     private var discoveryActive = false
@@ -132,8 +157,14 @@ class JellyfinRemotePlayCastStrategy @Inject constructor(
         val session = device.tag as? SessionInfo ?: return
         _isConnecting.value = true
         connectedSessionId = session.id
+        _targetName.value = device.name
         _isConnected.value = true
         _isConnecting.value = false
+
+        // Real-time sync: subscribe to the server's `Sessions` WebSocket push so
+        // transport state (position / play-pause / now-playing) reflects the
+        // remote client without REST polling. Mirrors jellyfin-web SessionPlayer.
+        startSessionsObserver()
 
         Log.i(TAG, "Connected to Jellyfin remote session: ${session.userName} (${session.client})")
     }
@@ -141,13 +172,49 @@ class JellyfinRemotePlayCastStrategy @Inject constructor(
     override fun disconnect(context: Context) {
         statusPollingJob?.cancel()
         statusPollingJob = null
+        sessionsObserverJob?.cancel()
+        sessionsObserverJob = null
         connectedSessionId = null
+        _targetName.value = null
         _isConnected.value = false
         _isConnecting.value = false
         _positionMs.value = 0L
         _durationMs.value = 0L
         _isPlaying.value = false
+        _nowPlayingTitle.value = ""
+        _nowPlayingSubtitle.value = ""
         Log.i(TAG, "Disconnected from Jellyfin remote session")
+    }
+
+    /**
+     * Subscribes to [webSocketClient] `Sessions` events and applies the matching
+     * session's state to the transport flows. Auto-disconnects if the connected
+     * session vanishes (mirrors jellyfin-web SessionPlayer's auto-default-to-
+     * local behaviour).
+     */
+    private fun startSessionsObserver() {
+        sessionsObserverJob?.cancel()
+        sessionsObserverJob = scope.launch {
+            webSocketClient.events.collect { event ->
+                if (event.type != "Sessions") return@collect
+                val sessionId = connectedSessionId ?: return@collect
+                try {
+                    val sessions = sessionsJson.decodeFromString<
+                        List<com.raulshma.jellyplay.core.model.SessionInfo>>(
+                        event.data.toString(),
+                    )
+                    val current = sessions.firstOrNull { it.id == sessionId }
+                    if (current != null) {
+                        applySessionState(current)
+                    } else {
+                        // Session gone (other client closed / device offline).
+                        disconnect(appContext)
+                    }
+                } catch (e: Exception) {
+                    Log.w(TAG, "Failed to parse Sessions push", e)
+                }
+            }
+        }
     }
 
     suspend fun refreshPlaybackState() {
@@ -158,13 +225,7 @@ class JellyfinRemotePlayCastStrategy @Inject constructor(
                 val sessions = sessionsResult.getOrThrow()
                 val currentSession = sessions.find { it.id == sessionId }
                 if (currentSession != null) {
-                    val playState = currentSession.playState
-                    val nowPlaying = currentSession.nowPlayingItem
-                    
-                    _positionMs.value = (playState?.positionTicks ?: 0L) / 10000L
-                    _durationMs.value = (nowPlaying?.runTimeTicks ?: 0L) / 10000L
-                    _isPlaying.value = if (nowPlaying != null) !(playState?.isPaused ?: true) else false
-                    _volume.value = (playState?.volumeLevel ?: 100) / 100f
+                    applySessionState(currentSession)
                 } else {
                     disconnect(appContext)
                 }
@@ -172,6 +233,22 @@ class JellyfinRemotePlayCastStrategy @Inject constructor(
         } catch (e: Exception) {
             Log.e(TAG, "Error refreshing playback state", e)
         }
+    }
+
+    /**
+     * Applies a [SessionInfo]'s play state + now-playing metadata to the
+     * transport flows. Shared by the WebSocket push ([startSessionsObserver])
+     * and the REST fallback ([refreshPlaybackState]).
+     */
+    private fun applySessionState(session: SessionInfo) {
+        val playState = session.playState
+        val nowPlaying = session.nowPlayingItem
+        _positionMs.value = (playState?.positionTicks ?: 0L) / 10000L
+        _durationMs.value = (nowPlaying?.runTimeTicks ?: 0L) / 10000L
+        _isPlaying.value = if (nowPlaying != null) !(playState?.isPaused ?: true) else false
+        _volume.value = (playState?.volumeLevel ?: 100) / 100f
+        _nowPlayingTitle.value = nowPlaying?.name.orEmpty()
+        _nowPlayingSubtitle.value = nowPlaying?.seriesName.orEmpty()
     }
 
     fun play() {

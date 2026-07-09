@@ -186,6 +186,7 @@ class VideoPlayerViewModel @Inject constructor(
     private val preferencesStore: UserPreferencesStore,
     private val sessionManager: PlaybackSessionManager,
     private val castManager: CastManager,
+    private val jellyfinRemotePlayCastStrategy: com.raulshma.jellyplay.core.data.cast.remote.JellyfinRemotePlayCastStrategy,
     private val syncPlayManager: SyncPlayManager,
     private val okHttpClient: OkHttpClient,
     private val adaptiveBitrateManager: AdaptiveBitrateManager,
@@ -1034,6 +1035,24 @@ class VideoPlayerViewModel @Inject constructor(
         lastSeekPositionMs = null
         lastSeekTimestamp = 0L
         trackSelectionHelper.setPendingStreams(subtitleStreamIndex, audioStreamIndex)
+
+        // "Play On" routing: if a Jellyfin remote session is connected (via the
+        // Home FAB "Play On" entry), send the video to that session instead of
+        // playing locally — mirrors official Jellyfin clients where picking a
+        // device routes subsequent plays to it. The Home "Play On" VM uses the
+        // same strategy instance directly, so this connection is independent of
+        // the video player's own CastManager cast state.
+        if (jellyfinRemotePlayCastStrategy.isConnected.value) {
+            jellyfinRemotePlayCastStrategy.loadMedia(
+                itemId = itemId,
+                startPositionMs = startPositionTicks / 10_000,
+                mediaSourceId = mediaSourceId,
+                audioStreamIndex = audioStreamIndex,
+                subtitleStreamIndex = subtitleStreamIndex,
+            )
+            return
+        }
+
         val currentItemId = playerSessionManager.sessionState.value.currentItemId
         if (currentItemId == itemId) {
             val engine = playerSessionManager.engine

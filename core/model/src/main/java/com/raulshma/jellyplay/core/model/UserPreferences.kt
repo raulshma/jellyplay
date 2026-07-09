@@ -123,6 +123,11 @@ data class UserPreferences(
     val notificationPreferences: NotificationPreferences = NotificationPreferences(),
     val showAdvancedSettings: Boolean = false,
     val audioVisualizerEnabled: Boolean = false,
+    /**
+     * Whether the lyrics overlay is visible on the audio player. Persisted so a
+     * user who prefers to read along doesn't have to re-enable it per session.
+     */
+    val audioLyricsVisible: Boolean = false,
     val synthwaveMode: Boolean = false,
     val synthwaveAccent: String = "magenta",
     val soothingMode: Boolean = false,

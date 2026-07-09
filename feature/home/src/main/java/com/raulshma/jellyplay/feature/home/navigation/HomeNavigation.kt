@@ -17,6 +17,8 @@ fun EntryProviderScope<NavKey>.homeSection(
     navigator: Navigator,
     homeMode: HomeMode = HomeMode.VIDEO,
     onModeChange: (HomeMode) -> Unit = {},
+    onPlayOnClick: () -> Unit = {},
+    playOnStrategy: com.raulshma.jellyplay.core.data.cast.remote.JellyfinRemotePlayCastStrategy? = null,
     musicContent: @Composable () -> Unit = {},
 ) {
     entry<Route.Home> {
@@ -32,6 +34,14 @@ fun EntryProviderScope<NavKey>.homeSection(
                 onPlayClick = { itemId, mediaSourceId, startPosition, mediaType, parentId ->
                     if (mediaType.isPhotoType) {
                         navigator.navigatePhotoAware(itemId, mediaType, parentId, "")
+                    } else if (playOnStrategy?.isConnected?.value == true) {
+                        // "Play On" active: fling to the connected remote session
+                        // instead of opening the local video player. Mirrors
+                        // jellyfin-web's "remote is current player" routing.
+                        playOnStrategy.loadMedia(
+                            itemId = itemId,
+                            startPositionMs = startPosition / 10_000,
+                        )
                     } else {
                         navigator.navigate(Route.VideoPlayer(itemId, mediaSourceId, startPosition))
                     }
@@ -39,6 +49,7 @@ fun EntryProviderScope<NavKey>.homeSection(
                 onSettingsClick = { navigator.navigate(Route.Settings) },
                 onSyncPlayClick = { navigator.navigate(Route.SyncPlay) },
                 onDownloadsClick = { navigator.navigate(Route.Downloads) },
+                onPlayOnClick = onPlayOnClick,
                 onOfflineLibraryClick = { navigator.navigate(Route.OfflineLibrary) },
                 onOfflineItemClick = { itemId, mediaType ->
                     if (mediaType == MediaType.SERIES) {

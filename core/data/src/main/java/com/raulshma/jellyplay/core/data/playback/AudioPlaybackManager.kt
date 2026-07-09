@@ -82,6 +82,7 @@ class AudioPlaybackManager @Inject constructor(
     private val lyricsManager: AudioLyricsManager,
     private val effectsProcessor: AudioEffectsProcessor,
     private val sleepTimerManager: SleepTimerManager,
+    private val jellyfinRemotePlayCastStrategy: com.raulshma.jellyplay.core.data.cast.remote.JellyfinRemotePlayCastStrategy,
 ) : AudioEffectsManager, AudioQueueManager {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
 
@@ -532,6 +533,20 @@ class AudioPlaybackManager @Inject constructor(
 
     fun play(itemId: String) {
         assertMainThread("play")
+
+        // "Play On" routing (mirrors jellyfin-web's playbackManager.play(): when a
+        // remote Jellyfin session is the active player, every play delegates to it
+        // and the local engine never loads). Pause local audio so only the remote
+        // session plays.
+        if (jellyfinRemotePlayCastStrategy.isConnected.value) {
+            jellyfinRemotePlayCastStrategy.loadMedia(
+                itemId = itemId,
+                startPositionMs = 0L,
+            )
+            exoPlayer?.pause()
+            return
+        }
+
         if (currentItemId == itemId) {
             if (_isLoadingItemFlag) return
             val state = exoPlayer?.playbackState
