@@ -8,10 +8,14 @@ import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
 import androidx.compose.material3.Icon
@@ -32,6 +36,7 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.composables.icons.tabler.Tabler
 import com.composables.icons.tabler.filled.*
@@ -255,6 +260,78 @@ internal fun PixelSecondaryControls(
                     )
                 }
             },
+        )
+    }
+}
+
+/**
+ * "Up next" strip shown beneath the secondary controls row. Surfaces the next
+ * queued track and lets the user skip over it (remove it from the upcoming
+ * queue). Flat, borderless design — no card/surface container, just inline
+ * artwork, text, and a skip affordance.
+ */
+@Composable
+internal fun NextTrackBar(
+    title: String,
+    artist: String,
+    artworkUrl: String?,
+    onSkipTrack: () -> Unit,
+    modifier: Modifier = Modifier,
+    accentColor: Color,
+) {
+    Row(
+        modifier = modifier
+            .fillMaxWidth()
+            .clickable(role = androidx.compose.ui.semantics.Role.Button, onClick = onSkipTrack)
+            .padding(horizontal = 8.dp, vertical = 6.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Box(
+            modifier = Modifier
+                .size(36.dp)
+                .clip(ShapeCache.smooth8)
+                .background(MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.1f)),
+            contentAlignment = Alignment.Center,
+        ) {
+            if (!artworkUrl.isNullOrBlank()) {
+                com.raulshma.jellyplay.core.ui.image.MediaImage(
+                    url = artworkUrl,
+                    contentDescription = title,
+                    modifier = Modifier.fillMaxSize(),
+                    contentScale = androidx.compose.ui.layout.ContentScale.Crop,
+                )
+            } else {
+                Icon(
+                    Tabler.Outline.Music,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.size(18.dp),
+                )
+            }
+        }
+        Spacer(Modifier.width(12.dp))
+        Column(modifier = Modifier.weight(1f)) {
+            Text(
+                text = "Up next",
+                style = MaterialTheme.typography.labelSmall,
+                color = accentColor.copy(alpha = 0.8f),
+                maxLines = 1,
+            )
+            Text(
+                text = "$title · $artist",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
+        }
+        Spacer(Modifier.width(8.dp))
+        // Skip-over affordance: removes this upcoming track from the queue.
+        Icon(
+            Tabler.Outline.X,
+            contentDescription = stringResource(R.string.audio_controls_next),
+            tint = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.size(20.dp),
         )
     }
 }

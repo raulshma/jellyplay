@@ -90,6 +90,12 @@ class CastManager @Inject constructor(
     private val _castVolume = MutableStateFlow(1f)
     val castVolume: StateFlow<Float> = _castVolume.asStateFlow()
 
+    private val _castTitle = MutableStateFlow("")
+    val castTitle: StateFlow<String> = _castTitle.asStateFlow()
+
+    private val _castSubtitle = MutableStateFlow("")
+    val castSubtitle: StateFlow<String> = _castSubtitle.asStateFlow()
+
     private val _allDiscoveredDevices = MutableStateFlow<List<CastDevice>>(emptyList())
 
     val castPlayerForSession: Player? get() = castPlayer
@@ -165,6 +171,8 @@ class CastManager @Inject constructor(
             _castDurationMs.value = jellyfinRemotePlayCastStrategy.durationMs.value
             _castIsPlaying.value = jellyfinRemotePlayCastStrategy.isPlaying.value
             _castVolume.value = jellyfinRemotePlayCastStrategy.volume.value
+            _castTitle.value = jellyfinRemotePlayCastStrategy.nowPlayingTitle.value
+            _castSubtitle.value = jellyfinRemotePlayCastStrategy.nowPlayingSubtitle.value
             return
         }
         val player = castPlayer ?: return
