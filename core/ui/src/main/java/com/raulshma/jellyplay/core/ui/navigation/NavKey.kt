@@ -117,10 +117,6 @@ sealed class Route : NavKey {
         val audioStreamIndex: Int? = null,
     ) : Route()
 
-    @Serializable data object LiveTvGuide : Route()
-
-    @Serializable data object Dvr : Route()
-
     @Serializable data object SyncPlay : Route()
 
     @Serializable data class Ambient(
