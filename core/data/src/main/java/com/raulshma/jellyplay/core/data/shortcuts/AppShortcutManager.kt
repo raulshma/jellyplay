@@ -6,6 +6,7 @@ import androidx.core.content.pm.ShortcutInfoCompat
 import androidx.core.content.pm.ShortcutManagerCompat
 import androidx.core.graphics.drawable.IconCompat
 import coil3.imageLoader
+import coil3.request.CachePolicy
 import coil3.request.ImageRequest
 import coil3.toBitmap
 import com.raulshma.jellyplay.core.data.playback.AudioPlaybackManager
@@ -95,6 +96,13 @@ class AppShortcutManager @Inject constructor(
         val request = ImageRequest.Builder(context)
             .data(artworkUrl)
             .size(192)
+            // Disable the memory cache so we decode a private Bitmap instance.
+            // toBitmap() otherwise returns the shared cache Bitmap (also held
+            // by any Compose AsyncImage showing albumArtUrl). Handing that
+            // shared Bitmap to ShortcutManagerCompat risks the BitmapPool
+            // recycling it out from under the system while it serializes the
+            // icon. Matches WidgetImageLoader/JellyPlayNotificationProvider.
+            .memoryCachePolicy(CachePolicy.DISABLED)
             .build()
         val result = context.imageLoader.execute(request)
         val bitmap = result.image?.toBitmap() ?: return createDefaultIcon()

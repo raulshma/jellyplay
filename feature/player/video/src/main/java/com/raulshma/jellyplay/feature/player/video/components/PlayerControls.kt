@@ -405,6 +405,10 @@ internal fun PlayerControls(
                             onClick = onSyncPlayClick,
                         )
                     }
+                    if (castManager != null) {
+                        Spacer(Modifier.width(8.dp))
+                        CastButton(castManager = castManager)
+                    }
                 }
             }
         }
@@ -598,9 +602,6 @@ internal fun PlayerControls(
                                 onClick = onLockClick,
                             )
                             MuteButton(isMuted = isMuted, onClick = onMuteClick)
-                            if (castManager != null) {
-                                CastButton(castManager = castManager)
-                            }
                         }
 
                         Row(verticalAlignment = Alignment.CenterVertically) {
@@ -619,7 +620,7 @@ internal fun PlayerControls(
                     } else {
                         // LANDSCAPE / TV: asymmetric layout — a scrolling primary
                         // row on the left and a fixed cluster (Lock, Mute, PiP,
-                        // Rotate, Cast, More) on the right.
+                        // Rotate, More) on the right.
                         Row(
                             modifier = Modifier
                                 .weight(1f)
@@ -674,10 +675,6 @@ internal fun PlayerControls(
                                     contentDescription = "Rotate Screen",
                                     onClick = onToggleOrientation,
                                 )
-                            }
-
-                            if (castManager != null) {
-                                CastButton(castManager = castManager)
                             }
 
                             PlayerIconButton(

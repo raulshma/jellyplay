@@ -4,6 +4,7 @@ import android.content.Context
 import android.net.ConnectivityManager
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.runBlocking
+import com.raulshma.jellyplay.core.datastore.UserPreferencesStore
 import com.raulshma.jellyplay.core.network.JellyfinApiClient
 import com.raulshma.jellyplay.core.network.JellyfinApiClientImpl
 import com.raulshma.jellyplay.core.network.config.OkHttpConfigProvider
@@ -50,9 +51,11 @@ import okhttp3.Protocol
 import okhttp3.logging.HttpLoggingInterceptor
 import javax.inject.Named
 import org.jellyfin.sdk.Jellyfin
+import org.jellyfin.sdk.android.androidDevice
 import org.jellyfin.sdk.api.okhttp.OkHttpFactory
 import org.jellyfin.sdk.createJellyfin
 import org.jellyfin.sdk.model.ClientInfo
+import org.jellyfin.sdk.model.DeviceInfo
 import java.io.File
 import java.util.concurrent.TimeUnit
 import javax.inject.Singleton
@@ -172,14 +175,29 @@ abstract class NetworkModule {
         fun provideJellyfin(
             @ApplicationContext context: Context,
             okHttpClient: OkHttpClient,
-        ): Jellyfin = createJellyfin {
-            this.context = context
-            clientInfo = ClientInfo(
-                name = "JellyPlay",
-                version = context.packageManager
-                    .getPackageInfo(context.packageName, 0).versionName ?: "1.0"
-            )
-            apiClientFactory = OkHttpFactory(okHttpClient)
+            userPreferencesStore: UserPreferencesStore,
+        ): Jellyfin {
+            // Use the app's persistent DataStore UUID as the SDK device id so the
+            // REST/session API, the WebSocket connection (which passes the same
+            // id in MainViewModel), and the server all agree on one identity.
+            // Without this the SDK defaults to Settings.Secure.ANDROID_ID, which
+            // never equals ensureDeviceId() and made the app's own session show up
+            // in the Play On / Cast device list.
+            val androidDefault = androidDevice(context)
+            val deviceId = runBlocking { userPreferencesStore.ensureDeviceId() }
+            return createJellyfin {
+                this.context = context
+                clientInfo = ClientInfo(
+                    name = "JellyPlay",
+                    version = context.packageManager
+                        .getPackageInfo(context.packageName, 0).versionName ?: "1.0"
+                )
+                deviceInfo = DeviceInfo(
+                    id = deviceId,
+                    name = androidDefault.name,
+                )
+                apiClientFactory = OkHttpFactory(okHttpClient)
+            }
         }
 
         @Provides
