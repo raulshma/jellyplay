@@ -1,10 +1,8 @@
 package com.raulshma.jellyplay.feature.onboarding.components
 
 import androidx.compose.animation.animateColorAsState
-import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.animateFloatAsState
-import androidx.compose.animation.core.spring
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -44,10 +42,7 @@ fun OnboardingPagerIndicator(
                     isNeighbor -> 12.dp
                     else -> 8.dp
                 },
-                animationSpec = spring(
-                    dampingRatio = Spring.DampingRatioMediumBouncy,
-                    stiffness = Spring.StiffnessMedium,
-                ),
+                animationSpec = MaterialTheme.motionScheme.defaultSpatialSpec(),
                 label = "indicatorWidth_$index",
             )
             val alpha by animateFloatAsState(
@@ -56,10 +51,7 @@ fun OnboardingPagerIndicator(
                     isNeighbor -> 0.6f
                     else -> 0.3f
                 },
-                animationSpec = spring(
-                    dampingRatio = Spring.DampingRatioNoBouncy,
-                    stiffness = Spring.StiffnessHigh,
-                ),
+                animationSpec = MaterialTheme.motionScheme.fastEffectsSpec(),
                 label = "indicatorAlpha_$index",
             )
             val color by animateColorAsState(

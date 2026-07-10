@@ -1,7 +1,6 @@
 package com.raulshma.jellyplay.feature.details
 
 import androidx.compose.animation.core.animateFloatAsState
-import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -82,7 +81,7 @@ internal fun FadingItem(
     }
     val alpha by animateFloatAsState(
         targetValue = if (visible) 1f else 0f,
-        animationSpec = tween(300),
+        animationSpec = MaterialTheme.motionScheme.defaultEffectsSpec(),
         label = "itemAlpha"
     )
     // Render-thread blur animation dropped (was the most expensive piece of the

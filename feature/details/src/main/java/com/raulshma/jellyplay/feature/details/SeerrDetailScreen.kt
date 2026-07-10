@@ -1,15 +1,10 @@
 package com.raulshma.jellyplay.feature.details
 
 import androidx.compose.animation.*
-import com.raulshma.jellyplay.core.designsystem.theme.AlphaEasing
-import com.raulshma.jellyplay.core.designsystem.theme.FancyTransitionEasing
-import com.raulshma.jellyplay.core.designsystem.theme.PointToPointEasing
 import com.raulshma.jellyplay.core.designsystem.theme.RatingColors
 import com.raulshma.jellyplay.core.designsystem.theme.ShapeCache
 import com.raulshma.jellyplay.core.designsystem.theme.isLightColor
-import com.raulshma.jellyplay.core.ui.animation.AnimationTokens
 import androidx.compose.animation.core.animateFloatAsState
-import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -1005,12 +1000,12 @@ private fun SeerrDetailBody(
             // Recommendations
             AnimatedVisibility(
                 visible = recommendations.isNotEmpty(),
-                enter = fadeIn(tween(400, easing = AlphaEasing)) +
+                enter = fadeIn(MaterialTheme.motionScheme.defaultEffectsSpec()) +
                         slideInVertically(
                             initialOffsetY = { it / 16 },
-                            animationSpec = tween(400, easing = FancyTransitionEasing),
+                            animationSpec = MaterialTheme.motionScheme.defaultSpatialSpec(),
                         ),
-                exit = fadeOut(tween(150, easing = AlphaEasing)),
+                exit = fadeOut(MaterialTheme.motionScheme.fastEffectsSpec()),
             ) {
                 SeerrHorizontalSection(
                     title = "Recommendations",
@@ -1022,12 +1017,12 @@ private fun SeerrDetailBody(
             // Similar
             AnimatedVisibility(
                 visible = similar.isNotEmpty(),
-                enter = fadeIn(tween(400, delayMillis = 60, easing = AlphaEasing)) +
+                enter = fadeIn(MaterialTheme.motionScheme.defaultEffectsSpec()) +
                         slideInVertically(
                             initialOffsetY = { it / 16 },
-                            animationSpec = tween(400, delayMillis = 60, easing = FancyTransitionEasing),
+                            animationSpec = MaterialTheme.motionScheme.defaultSpatialSpec(),
                         ),
-                exit = fadeOut(tween(150, easing = AlphaEasing)),
+                exit = fadeOut(MaterialTheme.motionScheme.fastEffectsSpec()),
             ) {
                 SeerrHorizontalSection(
                     title = "Similar",
@@ -1322,10 +1317,10 @@ private fun SeasonsSection(
             AnimatedVisibility(
                 visible = true,
                 enter = expandVertically(
-                    animationSpec = tween(300, easing = FancyTransitionEasing),
+                    animationSpec = MaterialTheme.motionScheme.defaultSpatialSpec(),
                     initialHeight = { 0 }
-                ) + fadeIn(tween(300)),
-                exit = shrinkVertically(tween(200)) + fadeOut(tween(150)),
+                ) + fadeIn(MaterialTheme.motionScheme.defaultEffectsSpec()),
+                exit = shrinkVertically(MaterialTheme.motionScheme.fastSpatialSpec()) + fadeOut(MaterialTheme.motionScheme.fastEffectsSpec()),
             ) {
                 val episodes = episodesBySeason[selectedSeason]
                 if (isLoadingEpisodes && episodes == null) {

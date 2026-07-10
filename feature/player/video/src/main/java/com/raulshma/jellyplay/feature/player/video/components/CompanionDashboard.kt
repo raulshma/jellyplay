@@ -3,9 +3,7 @@ package com.raulshma.jellyplay.feature.player.video.components
 import androidx.compose.animation.AnimatedVisibility
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.animation.animateColorAsState
-import androidx.compose.animation.core.LinearOutSlowInEasing
 import androidx.compose.animation.core.animateFloatAsState
-import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -96,12 +94,12 @@ fun CompanionDashboard(
 
     val animatedBgStart by animateColorAsState(
         targetValue = dominantColor,
-        animationSpec = tween(1000, easing = LinearOutSlowInEasing),
+        animationSpec = MaterialTheme.motionScheme.slowEffectsSpec(),
         label = "bgStart"
     )
     val animatedBgEnd by animateColorAsState(
         targetValue = darkMutedColor,
-        animationSpec = tween(1200, easing = LinearOutSlowInEasing),
+        animationSpec = MaterialTheme.motionScheme.slowEffectsSpec(),
         label = "bgEnd"
     )
 

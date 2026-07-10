@@ -3,7 +3,6 @@ package com.raulshma.jellyplay.feature.player.audio
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.animateContentSize
 import androidx.compose.animation.core.animateFloatAsState
-import androidx.compose.animation.core.tween
 import androidx.compose.animation.expandVertically
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
@@ -59,9 +58,8 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.composables.icons.tabler.Tabler
 import com.composables.icons.tabler.outline.*
-import com.raulshma.jellyplay.core.designsystem.theme.AlphaEasing
-import com.raulshma.jellyplay.core.designsystem.theme.PointToPointEasing
 import com.raulshma.jellyplay.core.designsystem.theme.ShapeCache
+import com.raulshma.jellyplay.core.designsystem.theme.defaultContentSizeSpec
 import com.raulshma.jellyplay.core.ui.components.JellyPlayLoadingIndicator
 import com.raulshma.jellyplay.core.ui.image.MediaImage
 import com.raulshma.jellyplay.core.ui.tv.rememberTvFocusState
@@ -178,18 +176,12 @@ internal fun LyricsOverlay(
                         val isNearActive = distance <= 3
                         val animatedAlpha by animateFloatAsState(
                             targetValue = targetAlpha,
-                            animationSpec = tween(
-                                durationMillis = 300,
-                                easing = AlphaEasing,
-                            ),
+                            animationSpec = MaterialTheme.motionScheme.defaultEffectsSpec(),
                             label = "lyricAlpha$index",
                         )
                         val animatedScale by animateFloatAsState(
                             targetValue = targetScale,
-                            animationSpec = tween(
-                                durationMillis = 300,
-                                easing = PointToPointEasing,
-                            ),
+                            animationSpec = MaterialTheme.motionScheme.defaultSpatialSpec(),
                             label = "lyricScale$index",
                         )
                         val finalAlpha = if (isNearActive) animatedAlpha else targetAlpha
@@ -205,7 +197,7 @@ internal fun LyricsOverlay(
                             },
                             color = Color.White.copy(alpha = finalAlpha),
                             modifier = Modifier
-                                .animateContentSize(animationSpec = tween(300))
+                                .animateContentSize(animationSpec = defaultContentSizeSpec())
                                 .graphicsLayer {
                                     scaleX = finalScale
                                     scaleY = finalScale
@@ -249,8 +241,8 @@ internal fun LyricsOverlay(
                     if (hasSyncedLyrics) {
                         AnimatedVisibility(
                             visible = showOffsetSlider,
-                            enter = fadeIn(tween(200)) + expandVertically(),
-                            exit = fadeOut(tween(150)) + shrinkVertically(),
+                            enter = fadeIn(MaterialTheme.motionScheme.fastEffectsSpec()) + expandVertically(),
+                            exit = fadeOut(MaterialTheme.motionScheme.fastEffectsSpec()) + shrinkVertically(),
                         ) {
                             Surface(
                                 shape = ShapeCache.smooth8,
@@ -499,8 +491,8 @@ internal fun AlbumArtwork(
 
         AnimatedVisibility(
             visible = lyricsVisible,
-            enter = fadeIn(tween(400)),
-            exit = fadeOut(tween(300)),
+            enter = fadeIn(MaterialTheme.motionScheme.slowEffectsSpec()),
+            exit = fadeOut(MaterialTheme.motionScheme.defaultEffectsSpec()),
         ) {
             if (karaokeMode && lyrics.any { it.words.isNotEmpty() }) {
                 com.raulshma.jellyplay.feature.player.audio.lyrics.KaraokeLyricsView(

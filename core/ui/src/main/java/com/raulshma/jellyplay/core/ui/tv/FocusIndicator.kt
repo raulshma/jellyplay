@@ -56,12 +56,14 @@ fun rememberTvFocusState(
     var isFocused by remember { mutableStateOf(false) }
 
     val motionScheme = MaterialTheme.motionScheme
+    val reducedMotion = com.raulshma.jellyplay.core.ui.components.LocalReducedMotion.current
 
     // Breathing fade alpha animation (TV only). On non-TV devices the breathing
     // fraction is always 0 so the effect is invisible; skip constructing the
     // infinite transition entirely to avoid a continuous animation coroutine
-    // driving recomposition on every focusable item.
-    val alphaProvider = if (isTv) {
+    // driving recomposition on every focusable item. Also skip under reduce
+    // motion / performance mode.
+    val alphaProvider = if (isTv && !reducedMotion) {
         val infiniteTransition = rememberInfiniteTransition(label = "tvFocusBreathing")
         val breathingAlpha = infiniteTransition.animateFloat(
             initialValue = 1f,
@@ -125,10 +127,12 @@ fun rememberRowSharedFocusState(
     val isTv = LocalTvMode.current
     val focusTokens = LocalJellyPlayUi.current.focus
     var isFocused by remember { mutableStateOf(false) }
+    val reducedMotion = com.raulshma.jellyplay.core.ui.components.LocalReducedMotion.current
 
     // Breathing fade alpha animation (TV only). See rememberTvFocusState for
-    // rationale on gating behind isTv.
-    val alphaProvider = if (isTv) {
+    // rationale on gating behind isTv. Also skipped under reduce motion /
+    // performance mode.
+    val alphaProvider = if (isTv && !reducedMotion) {
         val infiniteTransition = rememberInfiniteTransition(label = "tvFocusBreathingShared")
         val breathingAlpha = infiniteTransition.animateFloat(
             initialValue = 1f,

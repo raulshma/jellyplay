@@ -59,7 +59,7 @@ import com.composables.icons.tabler.outline.DeviceTv
 import com.composables.icons.tabler.outline.Message
 import com.composables.icons.tabler.outline.PlayerPause
 import androidx.compose.foundation.shape.CircleShape
-import com.raulshma.jellyplay.core.ui.components.LocalPerformanceMode
+import com.raulshma.jellyplay.core.ui.components.LocalReducedMotion
 import com.raulshma.jellyplay.core.ui.components.focusIndicator
 import com.raulshma.jellyplay.core.designsystem.theme.ShapeCache
 import com.raulshma.jellyplay.core.model.SessionInfo
@@ -360,14 +360,14 @@ private fun ActiveDeviceCard(
 
 @Composable
 private fun NowPlayingBars(color: androidx.compose.ui.graphics.Color = MaterialTheme.colorScheme.primary) {
-    val performanceMode = LocalPerformanceMode.current
+    val reducedMotion = LocalReducedMotion.current
     // Each NowPlayingBars row runs three infinite animations; the active-devices
-    // list can show several rows. In performance mode freeze the equalizer bars
-    // to a static mid height instead of driving a per-row redraw coroutine.
+    // list can show several rows. In performance/reduced-motion mode freeze the
+    // equalizer bars to a static mid height instead of driving a per-row redraw coroutine.
     val bar1: Float
     val bar2: Float
     val bar3: Float
-    if (!performanceMode) {
+    if (!reducedMotion) {
         val infiniteTransition = rememberInfiniteTransition(label = "nowPlaying")
         bar1 = infiniteTransition.animateFloat(
             initialValue = 0.3f,

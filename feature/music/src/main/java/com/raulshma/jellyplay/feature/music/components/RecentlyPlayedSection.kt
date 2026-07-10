@@ -37,7 +37,6 @@ import com.raulshma.jellyplay.core.ui.image.MediaImage
 import com.raulshma.jellyplay.core.ui.tv.TvFocusableItemRow
 import com.raulshma.jellyplay.core.designsystem.theme.ShapeCache
 import androidx.compose.animation.core.animateFloatAsState
-import androidx.compose.animation.core.tween
 import com.raulshma.jellyplay.core.ui.tv.rememberTvFocusState
 import com.raulshma.jellyplay.core.ui.tv.tvFocusIndicator
 import androidx.compose.ui.focus.FocusDirection
@@ -139,7 +138,7 @@ private fun RecentTrackCard(
     val isPressed by interactionSource.collectIsPressedAsState()
     val scale by animateFloatAsState(
         targetValue = if (isPressed) 0.95f else 1f,
-        animationSpec = tween(100),
+        animationSpec = MaterialTheme.motionScheme.fastSpatialSpec(),
         label = "track_card_scale"
     )
 

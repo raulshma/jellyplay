@@ -9,7 +9,6 @@ import androidx.compose.animation.ExitTransition
 import androidx.compose.animation.ExperimentalSharedTransitionApi
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.animateFloatAsState
-import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.scaleIn
@@ -745,19 +744,24 @@ private fun DetailContent(
                     alpha = 1f - (scrollFraction * 0.8f)
                 }
         ) {
+            // Capture in composable scope; AnimatedContent's transitionSpec is not composable.
+            val backdropFadeIn = MaterialTheme.motionScheme.defaultEffectsSpec<Float>()
+            val backdropScaleIn = MaterialTheme.motionScheme.defaultSpatialSpec<Float>()
+            val backdropFadeOut = MaterialTheme.motionScheme.fastEffectsSpec<Float>()
+            val backdropScaleOut = MaterialTheme.motionScheme.fastSpatialSpec<Float>()
             AnimatedContent(
                 targetState = targetBackdropId,
                 transitionSpec = {
                     fadeIn(
-                        animationSpec = tween(400),
+                        animationSpec = backdropFadeIn,
                     ) + scaleIn(
                         initialScale = 1.035f,
-                        animationSpec = tween(400),
+                        animationSpec = backdropScaleIn,
                     ) togetherWith fadeOut(
-                        animationSpec = tween(300),
+                        animationSpec = backdropFadeOut,
                     ) + scaleOut(
                         targetScale = 0.99f,
-                        animationSpec = tween(300),
+                        animationSpec = backdropScaleOut,
                     )
                 },
                 label = "detailBackdrop",

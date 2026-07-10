@@ -2,9 +2,7 @@ package com.raulshma.jellyplay.feature.library
 
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.animateContentSize
-import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.animateFloatAsState
-import androidx.compose.animation.core.spring
 import androidx.compose.animation.expandVertically
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
@@ -220,12 +218,9 @@ fun LibraryScreen(
                     AnimatedVisibility(
                         visible = true,
                         enter = fadeIn(
-                            spring(stiffness = Spring.StiffnessMediumLow)
+                            MaterialTheme.motionScheme.defaultEffectsSpec()
                         ) + slideInVertically(
-                            spring(
-                                stiffness = Spring.StiffnessMediumLow,
-                                dampingRatio = Spring.DampingRatioLowBouncy,
-                            ),
+                            MaterialTheme.motionScheme.defaultSpatialSpec(),
                             initialOffsetY = { -40 },
                         ),
                     ) {
@@ -254,10 +249,7 @@ fun LibraryScreen(
                                 val isFilterPressed by filterInteractionSource.collectIsPressedAsState()
                                 val filterScale by animateFloatAsState(
                                     targetValue = if (isFilterPressed) 0.95f else 1f,
-                                    animationSpec = spring(
-                                        dampingRatio = Spring.DampingRatioMediumBouncy,
-                                        stiffness = Spring.StiffnessMedium,
-                                    ),
+                                    animationSpec = MaterialTheme.motionScheme.defaultSpatialSpec(),
                                     label = "filterPressedScale"
                                 )
                                 val filterShape = ShapeCache.smooth12
@@ -305,12 +297,9 @@ fun LibraryScreen(
                     AnimatedVisibility(
                         visible = folders.size > 1,
                         enter = fadeIn(
-                            spring(stiffness = Spring.StiffnessMediumLow)
+                            MaterialTheme.motionScheme.defaultEffectsSpec()
                         ) + slideInVertically(
-                            spring(
-                                stiffness = Spring.StiffnessMediumLow,
-                                dampingRatio = Spring.DampingRatioLowBouncy,
-                            ),
+                            MaterialTheme.motionScheme.defaultSpatialSpec(),
                             initialOffsetY = { 40 },
                         ),
                     ) {
@@ -339,10 +328,10 @@ fun LibraryScreen(
                     AnimatedVisibility(
                         visible = hasActiveFilters,
                         enter = fadeIn(
-                            spring(stiffness = Spring.StiffnessHigh)
+                            MaterialTheme.motionScheme.fastEffectsSpec()
                         ) + expandVertically(),
                         exit = fadeOut(
-                            spring(stiffness = Spring.StiffnessHigh)
+                            MaterialTheme.motionScheme.fastEffectsSpec()
                         ) + shrinkVertically(),
                     ) {
                         FlowRow(
@@ -388,18 +377,12 @@ fun LibraryScreen(
                             val isClearAllPressed by clearAllInteractionSource.collectIsPressedAsState()
                             val clearAllScale by animateFloatAsState(
                                 targetValue = if (isClearAllPressed) 0.95f else 1f,
-                                animationSpec = spring(
-                                    dampingRatio = Spring.DampingRatioMediumBouncy,
-                                    stiffness = Spring.StiffnessMedium,
-                                ),
+                                animationSpec = MaterialTheme.motionScheme.defaultSpatialSpec(),
                                 label = "clearAllPressedScale"
                             )
                             val clearAllShapeMorph by animateFloatAsState(
                                 targetValue = if (isClearAllPressed) 1f else 0f,
-                                animationSpec = spring(
-                                    dampingRatio = Spring.DampingRatioMediumBouncy,
-                                    stiffness = Spring.StiffnessMedium,
-                                ),
+                                animationSpec = MaterialTheme.motionScheme.defaultSpatialSpec(),
                                 label = "clearAllShapeMorph"
                             )
                             val clearAllShape = remember(clearAllShapeMorph) {
@@ -604,18 +587,15 @@ fun LibraryScreen(
                                     androidx.compose.ui.unit.IntOffset(x = 0, y = yOffset.toInt())
                                 },
                             enter = fadeIn(
-                                spring(stiffness = Spring.StiffnessMedium)
+                                MaterialTheme.motionScheme.defaultEffectsSpec()
                             ) + slideInVertically(
-                                spring(
-                                    stiffness = Spring.StiffnessMedium,
-                                    dampingRatio = Spring.DampingRatioLowBouncy,
-                                ),
+                                MaterialTheme.motionScheme.defaultSpatialSpec(),
                                 initialOffsetY = { it },
                             ),
                             exit = fadeOut(
-                                spring(stiffness = Spring.StiffnessHigh)
+                                MaterialTheme.motionScheme.fastEffectsSpec()
                             ) + androidx.compose.animation.slideOutVertically(
-                                spring(stiffness = Spring.StiffnessHigh),
+                                MaterialTheme.motionScheme.fastSpatialSpec(),
                                 targetOffsetY = { it },
                             ),
                         ) {
@@ -810,20 +790,14 @@ private fun GlassPill(
     val isPressed by interactionSource.collectIsPressedAsState()
     val baseScale by animateFloatAsState(
         targetValue = if (isPressed) 0.95f else 1f,
-        animationSpec = spring(
-            dampingRatio = Spring.DampingRatioMediumBouncy,
-            stiffness = Spring.StiffnessMedium,
-        ),
+        animationSpec = MaterialTheme.motionScheme.defaultSpatialSpec(),
         label = "pillPressedScale"
     )
     val scale = baseScale * focusState.scale
 
     val shapeMorphProgress by animateFloatAsState(
         targetValue = if (isPressed || selected) 1f else 0f,
-        animationSpec = spring(
-            dampingRatio = Spring.DampingRatioMediumBouncy,
-            stiffness = Spring.StiffnessMedium,
-        ),
+        animationSpec = MaterialTheme.motionScheme.defaultSpatialSpec(),
         label = "pillShapeMorph"
     )
     val shape = remember(shapeMorphProgress) {

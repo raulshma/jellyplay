@@ -42,7 +42,7 @@ import com.composables.icons.tabler.outline.Server
 import com.raulshma.jellyplay.core.designsystem.theme.AlphaEasing
 import com.raulshma.jellyplay.core.designsystem.theme.ShapeCache
 import com.raulshma.jellyplay.core.model.SystemInfo
-import com.raulshma.jellyplay.core.ui.components.LocalPerformanceMode
+import com.raulshma.jellyplay.core.ui.components.LocalReducedMotion
 import com.raulshma.jellyplay.core.ui.tv.rememberTvFocusState
 import com.raulshma.jellyplay.core.ui.tv.tvFocusIndicator
 
@@ -61,12 +61,12 @@ fun ServerHeroHeader(
     val restartFocusState = rememberTvFocusState(focusedScale = 1.05f)
     val shutdownFocusState = rememberTvFocusState(focusedScale = 1.04f)
 
-    val performanceMode = LocalPerformanceMode.current
+    val reducedMotion = LocalReducedMotion.current
     // Server status pulse is a continuous two-channel infinite animation. In
-    // performance mode freeze it at the resting state values.
+    // performance/reduced-motion mode freeze it at the resting state values.
     val pulseAlpha: Float
     val pulseScale: Float
-    if (!performanceMode) {
+    if (!reducedMotion) {
         val infiniteTransition = rememberInfiniteTransition(label = "statusPulse")
         pulseAlpha = infiniteTransition.animateFloat(
             initialValue = 0.4f,

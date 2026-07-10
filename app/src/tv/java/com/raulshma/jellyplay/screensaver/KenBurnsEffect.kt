@@ -66,7 +66,7 @@ fun KenBurnsImage(
             .build()
     }
 
-    if (enabled) {
+    if (enabled && !com.raulshma.jellyplay.core.ui.components.LocalReducedMotion.current) {
         val infiniteTransition = rememberInfiniteTransition(label = "kenBurns")
         val progress by infiniteTransition.animateFloat(
             initialValue = 0f,

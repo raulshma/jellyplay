@@ -1,7 +1,6 @@
 package com.raulshma.jellyplay.feature.player.audio.lyrics
 
 import androidx.compose.animation.core.animateFloatAsState
-import androidx.compose.animation.core.tween
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.PaddingValues
@@ -70,7 +69,7 @@ fun KaraokeLyricsView(
                 val isCurrent = index == currentIndex
                 val lineAlpha by animateFloatAsState(
                     targetValue = if (isCurrent) activeAlpha else upcomingAlpha,
-                    animationSpec = tween(durationMillis = 250),
+                    animationSpec = MaterialTheme.motionScheme.fastEffectsSpec(),
                     label = "karaokeLineAlpha_$index",
                 )
                 if (isCurrent && line.words.isNotEmpty()) {

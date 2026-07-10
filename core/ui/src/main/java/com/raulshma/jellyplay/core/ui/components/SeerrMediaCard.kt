@@ -154,9 +154,13 @@ fun SeerrMediaCard(
 
     val shimmerOffset = remember { Animatable(-500f) }
     val glowAlpha = remember { Animatable(0.3f) }
+    val reducedMotion = com.raulshma.jellyplay.core.ui.components.LocalReducedMotion.current
 
     LaunchedEffect(isLoading) {
         if (isLoading) {
+            // Skip the ambient shimmer/glow loops under reduce motion / performance mode;
+            // the card just rests at its initial values while loading.
+            if (reducedMotion) return@LaunchedEffect
             launch {
                 while (isActive) {
                     shimmerOffset.animateTo(
