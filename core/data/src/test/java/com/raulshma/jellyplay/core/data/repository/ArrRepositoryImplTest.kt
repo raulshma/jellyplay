@@ -373,6 +373,200 @@ class ArrRepositoryImplTest {
         }
     }
 
+    // ── redownloadMedia (delete & re-download flow) ────────────────────────
+
+    private val radarrSrv = ArrServerConfig("r1", "https://r1.local", "k", "R1", ArrServiceKind.RADARR)
+    private val sonarrSrv = ArrServerConfig("s1", "https://s1.local", "k", "S1", ArrServiceKind.SONARR)
+
+    private fun setupRadarrOnly() {
+        every { arrPreferencesStore.preferences } returns MutableStateFlow(
+            ArrPreferences(useSeerrDiscovery = false, manualServers = listOf(radarrSrv)),
+        )
+        repository = ArrRepositoryImpl(radarrApiClient, sonarrApiClient, seerrRepository, arrPreferencesStore)
+    }
+
+    private fun setupSonarrOnly() {
+        every { arrPreferencesStore.preferences } returns MutableStateFlow(
+            ArrPreferences(useSeerrDiscovery = false, manualServers = listOf(sonarrSrv)),
+        )
+        repository = ArrRepositoryImpl(radarrApiClient, sonarrApiClient, seerrRepository, arrPreferencesStore)
+    }
+
+    @Test
+    fun `redownloadMedia movie deletes file then verifies monitors and searches`() = runTest {
+        setupRadarrOnly()
+        val movieInfo = com.raulshma.jellyplay.core.network.arr.RadarrMovieInfo(
+            id = 42, movieFileId = 9001, hasFile = true, monitored = false,
+        )
+        // First getMovieForTmdb returns the movie with a file; subsequent
+        // calls (the verify re-query) return hasFile=false. Use a counter so
+        // MockK returns the right value per call order.
+        var callCount = 0
+        coEvery { radarrApiClient.getMovieForTmdb(any(), any(), any()) } answers {
+            callCount++
+            Result.success(if (callCount == 1) movieInfo else movieInfo.copy(hasFile = false, movieFileId = 0))
+        }
+        coEvery { radarrApiClient.deleteMovieFile("https://r1.local", "k", 9001) } returns Result.success(Unit)
+        coEvery { radarrApiClient.monitorMovies("https://r1.local", "k", listOf(42), true) } returns Result.success(Unit)
+        coEvery { radarrApiClient.postCommand(any(), any(), any(), any(), any()) } returns
+            Result.success(com.raulshma.jellyplay.core.model.arr.ArrCommand(1, "SearchMovie", "queued"))
+
+        val result = repository.redownloadMedia(555, ArrServiceKind.RADARR).getOrThrow()
+        val steps = result.steps.associateBy { it.step }
+        assertEquals(com.raulshma.jellyplay.core.model.arr.ArrRedownloadStepStatus.SUCCESS, steps[com.raulshma.jellyplay.core.model.arr.ArrRedownloadStep.DELETE_FILE]?.status)
+        assertEquals(com.raulshma.jellyplay.core.model.arr.ArrRedownloadStepStatus.SUCCESS, steps[com.raulshma.jellyplay.core.model.arr.ArrRedownloadStep.VERIFY_DELETED]?.status)
+        assertEquals(com.raulshma.jellyplay.core.model.arr.ArrRedownloadStepStatus.SUCCESS, steps[com.raulshma.jellyplay.core.model.arr.ArrRedownloadStep.MONITOR]?.status)
+        assertEquals(com.raulshma.jellyplay.core.model.arr.ArrRedownloadStepStatus.SUCCESS, steps[com.raulshma.jellyplay.core.model.arr.ArrRedownloadStep.SEARCH]?.status)
+        assertTrue(result.isComplete)
+        coVerify { radarrApiClient.deleteMovieFile("https://r1.local", "k", 9001) }
+    }
+
+    @Test
+    fun `redownloadMedia movie skips monitor when already monitored`() = runTest {
+        setupRadarrOnly()
+        val movieInfo = com.raulshma.jellyplay.core.network.arr.RadarrMovieInfo(
+            id = 42, movieFileId = 9001, hasFile = true, monitored = true,
+        )
+        coEvery { radarrApiClient.getMovieForTmdb("https://r1.local", "k", 555) } returns Result.success(movieInfo)
+        coEvery { radarrApiClient.deleteMovieFile(any(), any(), any()) } returns Result.success(Unit)
+        coEvery { radarrApiClient.getMovieForTmdb(any(), any(), any()) } returns Result.success(movieInfo.copy(hasFile = false, movieFileId = 0))
+        coEvery { radarrApiClient.postCommand(any(), any(), any(), any(), any()) } returns
+            Result.success(com.raulshma.jellyplay.core.model.arr.ArrCommand(1, "SearchMovie", "queued"))
+
+        val result = repository.redownloadMedia(555, ArrServiceKind.RADARR).getOrThrow()
+        val monitor = result.steps.first { it.step == com.raulshma.jellyplay.core.model.arr.ArrRedownloadStep.MONITOR }
+        assertEquals(com.raulshma.jellyplay.core.model.arr.ArrRedownloadStepStatus.SKIPPED, monitor.status)
+        coVerify(exactly = 0) { radarrApiClient.monitorMovies(any(), any(), any(), any()) }
+    }
+
+    @Test
+    fun `redownloadMedia movie aborts when delete fails`() = runTest {
+        setupRadarrOnly()
+        val movieInfo = com.raulshma.jellyplay.core.network.arr.RadarrMovieInfo(
+            id = 42, movieFileId = 9001, hasFile = true, monitored = false,
+        )
+        coEvery { radarrApiClient.getMovieForTmdb(any(), any(), any()) } returns Result.success(movieInfo)
+        coEvery { radarrApiClient.deleteMovieFile(any(), any(), any()) } returns
+            Result.failure(ApiException.fromHttp(409, "Root folder missing"))
+
+        val result = repository.redownloadMedia(555, ArrServiceKind.RADARR).getOrThrow()
+        val deleteStep = result.steps.first { it.step == com.raulshma.jellyplay.core.model.arr.ArrRedownloadStep.DELETE_FILE }
+        assertEquals(com.raulshma.jellyplay.core.model.arr.ArrRedownloadStepStatus.FAILED, deleteStep.status)
+        assertFalse(result.isComplete)
+        // No subsequent steps should run.
+        assertEquals(1, result.steps.size)
+    }
+
+    @Test
+    fun `redownloadMedia movie skips delete when no file present`() = runTest {
+        setupRadarrOnly()
+        val movieInfo = com.raulshma.jellyplay.core.network.arr.RadarrMovieInfo(
+            id = 42, movieFileId = 0, hasFile = false, monitored = false,
+        )
+        coEvery { radarrApiClient.getMovieForTmdb(any(), any(), any()) } returns Result.success(movieInfo)
+        coEvery { radarrApiClient.monitorMovies(any(), any(), any(), any()) } returns Result.success(Unit)
+        coEvery { radarrApiClient.postCommand(any(), any(), any(), any(), any()) } returns
+            Result.success(com.raulshma.jellyplay.core.model.arr.ArrCommand(1, "SearchMovie", "queued"))
+
+        val result = repository.redownloadMedia(555, ArrServiceKind.RADARR).getOrThrow()
+        val deleteStep = result.steps.first { it.step == com.raulshma.jellyplay.core.model.arr.ArrRedownloadStep.DELETE_FILE }
+        assertEquals(com.raulshma.jellyplay.core.model.arr.ArrRedownloadStepStatus.SKIPPED, deleteStep.status)
+        // Flow continues (file was already gone — not an error).
+        assertTrue(result.isComplete)
+        coVerify(exactly = 0) { radarrApiClient.deleteMovieFile(any(), any(), any()) }
+    }
+
+    @Test
+    fun `redownloadMedia episode resolves series then episode then deletes file`() = runTest {
+        setupSonarrOnly()
+        val episodeInfo = com.raulshma.jellyplay.core.network.arr.SonarrEpisodeInfo(
+            id = 7, episodeFileId = 500, hasFile = true, monitored = false, seasonNumber = 2,
+        )
+        coEvery { sonarrApiClient.findSeriesByTvdb("https://s1.local", "k", 123) } returns Result.success(10)
+        var callCount = 0
+        coEvery { sonarrApiClient.getEpisodeInfo(any(), any(), any(), any(), any()) } answers {
+            callCount++
+            Result.success(if (callCount == 1) episodeInfo else episodeInfo.copy(hasFile = false, episodeFileId = 0))
+        }
+        coEvery { sonarrApiClient.deleteEpisodeFile("https://s1.local", "k", 500) } returns Result.success(Unit)
+        coEvery { sonarrApiClient.monitorEpisodes("https://s1.local", "k", listOf(7), true) } returns Result.success(Unit)
+        coEvery { sonarrApiClient.postCommand(any(), any(), any(), any(), any()) } returns
+            Result.success(com.raulshma.jellyplay.core.model.arr.ArrCommand(1, "EpisodeSearch", "queued"))
+
+        val result = repository.redownloadMedia(0, ArrServiceKind.SONARR, tvdbId = 123, seasonNumber = 2, episodeNumber = 5).getOrThrow()
+        val steps = result.steps.associateBy { it.step }
+        assertEquals(com.raulshma.jellyplay.core.model.arr.ArrRedownloadStepStatus.SUCCESS, steps[com.raulshma.jellyplay.core.model.arr.ArrRedownloadStep.DELETE_FILE]?.status)
+        assertEquals(com.raulshma.jellyplay.core.model.arr.ArrRedownloadStepStatus.SUCCESS, steps[com.raulshma.jellyplay.core.model.arr.ArrRedownloadStep.MONITOR]?.status)
+        assertEquals(com.raulshma.jellyplay.core.model.arr.ArrRedownloadStepStatus.SUCCESS, steps[com.raulshma.jellyplay.core.model.arr.ArrRedownloadStep.SEARCH]?.status)
+        assertTrue(result.isComplete)
+        coVerify {
+            sonarrApiClient.deleteEpisodeFile("https://s1.local", "k", 500)
+            sonarrApiClient.postCommand("https://s1.local", "k", ArrCommandName.SEARCH_EPISODES, seriesId = null, episodeIds = listOf(7))
+        }
+    }
+
+    @Test
+    fun `redownloadMedia episode not found shows diagnostic with season summaries`() = runTest {
+        setupSonarrOnly()
+        coEvery { sonarrApiClient.findSeriesByTvdb("https://s1.local", "k", 123) } returns Result.success(10)
+        coEvery { sonarrApiClient.getEpisodeInfo(any(), any(), any(), any(), any()) } returns Result.success(null)
+        coEvery {
+            sonarrApiClient.getSeasonSummaries("https://s1.local", "k", 10)
+        } returns Result.success(
+            listOf(
+                com.raulshma.jellyplay.core.network.arr.SonarrSeasonSummary(0, listOf(1, 2, 3)),
+                com.raulshma.jellyplay.core.network.arr.SonarrSeasonSummary(1, (1..12).toList()),
+            )
+        )
+
+        val result = repository.redownloadMedia(0, ArrServiceKind.SONARR, tvdbId = 123, seasonNumber = 5, episodeNumber = 12).getOrThrow()
+        val deleteStep = result.steps.first { it.step == com.raulshma.jellyplay.core.model.arr.ArrRedownloadStep.DELETE_FILE }
+        assertEquals(com.raulshma.jellyplay.core.model.arr.ArrRedownloadStepStatus.FAILED, deleteStep.status)
+        val msg = deleteStep.message!!
+        assertTrue("diagnostic should list Sonarr seasons: $msg", msg.contains("S0 (eps 1–3)"))
+        assertTrue("diagnostic should list S1 range: $msg", msg.contains("S1 (eps 1–12)"))
+        assertTrue("diagnostic should name the requested episode: $msg", msg.contains("E12"))
+        assertFalse(result.isComplete)
+    }
+
+    @Test
+    fun `redownloadMedia verify-deleted surfaces WARNING when re-query returns null`() = runTest {
+        setupSonarrOnly()
+        val episodeInfo = com.raulshma.jellyplay.core.network.arr.SonarrEpisodeInfo(
+            id = 7, episodeFileId = 500, hasFile = true, monitored = true, seasonNumber = 2,
+        )
+        coEvery { sonarrApiClient.findSeriesByTvdb("https://s1.local", "k", 123) } returns Result.success(10)
+        var callCount = 0
+        // 1st getEpisodeInfo → episode present; 2nd (verify re-query) → null.
+        coEvery { sonarrApiClient.getEpisodeInfo(any(), any(), any(), any(), any()) } answers {
+            callCount++
+            Result.success(if (callCount == 1) episodeInfo else null)
+        }
+        coEvery { sonarrApiClient.deleteEpisodeFile("https://s1.local", "k", 500) } returns Result.success(Unit)
+        coEvery { sonarrApiClient.postCommand(any(), any(), any(), any(), any()) } returns
+            Result.success(com.raulshma.jellyplay.core.model.arr.ArrCommand(1, "EpisodeSearch", "queued"))
+
+        val result = repository.redownloadMedia(0, ArrServiceKind.SONARR, tvdbId = 123, seasonNumber = 2, episodeNumber = 5).getOrThrow()
+        val steps = result.steps.associateBy { it.step }
+        // Verify should be WARNING (inconclusive), not SUCCESS — the prior bug.
+        assertEquals(com.raulshma.jellyplay.core.model.arr.ArrRedownloadStepStatus.WARNING, steps[com.raulshma.jellyplay.core.model.arr.ArrRedownloadStep.VERIFY_DELETED]?.status)
+        // WARNING is not a hard gate; flow should continue to completion.
+        assertEquals(com.raulshma.jellyplay.core.model.arr.ArrRedownloadStepStatus.SUCCESS, steps[com.raulshma.jellyplay.core.model.arr.ArrRedownloadStep.SEARCH]?.status)
+        assertTrue(result.isComplete)
+    }
+
+    @Test
+    fun `redownloadMedia fails fast when no relevant server configured`() = runTest {
+        // No servers configured at all.
+        every { arrPreferencesStore.preferences } returns MutableStateFlow(ArrPreferences())
+        repository = ArrRepositoryImpl(radarrApiClient, sonarrApiClient, seerrRepository, arrPreferencesStore)
+
+        val result = repository.redownloadMedia(555, ArrServiceKind.RADARR).getOrThrow()
+        val deleteStep = result.steps.first { it.step == com.raulshma.jellyplay.core.model.arr.ArrRedownloadStep.DELETE_FILE }
+        assertEquals(com.raulshma.jellyplay.core.model.arr.ArrRedownloadStepStatus.FAILED, deleteStep.status)
+        assertFalse(result.isComplete)
+    }
+
     private fun radarrSettings(id: Int, hostname: String, apiKey: String, baseUrl: String? = null) =
         SeerrRadarrSettings(
             id = id, name = "Radarr $id", hostname = hostname, port = 7878, apiKey = apiKey,

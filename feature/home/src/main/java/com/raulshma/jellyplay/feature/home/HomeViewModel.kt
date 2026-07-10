@@ -216,10 +216,22 @@ class HomeViewModel @Inject constructor(
             }
         }
 
+        // Only collect the offline library while actually in an offline mode.
+        // The underlying Flow re-emits on every download progress write, so
+        // collecting it unconditionally caused the whole home tree to
+        // re-invalidated during downloads even in online mode (where the
+        // offline branch never renders). flatMapLatest on offlineMode means
+        // the upstream collection is cancelled entirely while online.
+        @OptIn(kotlinx.coroutines.ExperimentalCoroutinesApi::class)
         launch {
-            offlineRepository.getOfflineLibrary().collect { items ->
-                _uiState.update { it.copy(offlineLibrary = items) }
-            }
+            offlineModeManager.offlineMode
+                .flatMapLatest { mode ->
+                    if (mode != OfflineMode.ONLINE) offlineRepository.getOfflineLibrary()
+                    else kotlinx.coroutines.flow.flowOf(emptyList())
+                }
+                .collect { items ->
+                    _uiState.update { it.copy(offlineLibrary = items) }
+                }
         }
 
         launch {

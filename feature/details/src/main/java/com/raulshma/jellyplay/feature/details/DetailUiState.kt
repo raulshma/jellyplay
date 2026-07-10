@@ -41,6 +41,9 @@ data class DetailUiState(
     val albumTracks: List<MediaItem> = emptyList(),
     // Collection content
     val collectionItems: List<MediaItem> = emptyList(),
+    /** Similar/related items — fetched separately from the core detail so the
+     *  screen can render incrementally (title/poster/cast first, similar after). */
+    val relatedItems: List<MediaItem> = emptyList(),
     // Smart play (continue-watching / next-up computed target)
     val smartPlayTarget: SmartPlayTarget? = null,
     // Stream selection (audio/subtitle indices persisted across sessions)
@@ -69,11 +72,11 @@ data class DetailUiState(
     val downloadedEpisodeIds: Set<String> = emptySet(),
     // Delete & re-download (DIRECT_ARR_INTEGRATION). Shown only when a relevant
     // *arr server is resolved; the dialog confirms before the destructive
-    // delete + monitor + search flow.
+    // delete + monitor + search flow. [redownloadProgress] carries the per-step
+    // result list so the dialog renders live progress.
     val canRedownload: Boolean = false,
     val showRedownloadDialog: Boolean = false,
-    val isRedownloading: Boolean = false,
-    val redownloadResult: RedownloadOutcome? = null,
+    val redownloadProgress: RedownloadProgress? = null,
     // For episodes: the parent series' provider IDs (e.g. "tvdb" → series tvdb id).
     // Sonarr's findSeriesByTvdb lookup requires the *series* tvdb id, not the
     // episode-level tvdb id stored in [detail.providerIds].
@@ -87,15 +90,20 @@ data class DetailUiState(
     )
 
     /**
-     * Outcome of a delete & re-download flow. Drives the result dialog:
-     * success → navigate back (item deleted); partial → the file is gone but a
-     * *arr step failed (still navigate back); delete failed → stay and report.
+     * Progress + result of a delete & re-download flow. [isRunning] is true
+     * while the flow is in flight; [steps] holds one entry per
+     * [com.raulshma.jellyplay.core.model.arr.ArrRedownloadStep], null until the
+     * flow completes. [deleteSucceeded] drives whether "Done" navigates back
+     * (file gone) vs. the dialog stays open (delete failed).
      */
     @Immutable
-    sealed class RedownloadOutcome {
-        data object InProgress : RedownloadOutcome()
-        data class Success(val message: String) : RedownloadOutcome()
-        data class PartialFailure(val message: String) : RedownloadOutcome()
-        data class DeleteFailed(val message: String) : RedownloadOutcome()
+    data class RedownloadProgress(
+        val isRunning: Boolean,
+        val steps: List<com.raulshma.jellyplay.core.model.arr.ArrRedownloadStepResult>? = null,
+    ) {
+        val deleteSucceeded: Boolean
+            get() = steps?.firstOrNull {
+                it.step == com.raulshma.jellyplay.core.model.arr.ArrRedownloadStep.DELETE_FILE
+            }?.status != com.raulshma.jellyplay.core.model.arr.ArrRedownloadStepStatus.FAILED
     }
 }

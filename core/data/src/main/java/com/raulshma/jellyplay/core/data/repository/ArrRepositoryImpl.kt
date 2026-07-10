@@ -12,14 +12,16 @@ import com.raulshma.jellyplay.core.model.arr.ArrQueueDeleteOptions
 import com.raulshma.jellyplay.core.model.arr.ArrQueueItem
 import com.raulshma.jellyplay.core.model.arr.ArrRedownloadResult
 import com.raulshma.jellyplay.core.model.arr.ArrRedownloadStep
+import com.raulshma.jellyplay.core.model.arr.ArrRedownloadStepResult
+import com.raulshma.jellyplay.core.model.arr.ArrRedownloadStepStatus
+import com.raulshma.jellyplay.core.network.arr.RadarrApiClient
+import com.raulshma.jellyplay.core.network.arr.SonarrApiClient
 import com.raulshma.jellyplay.core.model.arr.ArrServerConfig
 import com.raulshma.jellyplay.core.model.arr.ArrServiceKind
 import com.raulshma.jellyplay.core.model.arr.ArrServiceSummary
 import com.raulshma.jellyplay.core.model.seerr.SeerrRadarrSettings
 import com.raulshma.jellyplay.core.model.seerr.SeerrSonarrSettings
 import com.raulshma.jellyplay.core.network.api.ApiException
-import com.raulshma.jellyplay.core.network.arr.RadarrApiClient
-import com.raulshma.jellyplay.core.network.arr.SonarrApiClient
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -390,7 +392,7 @@ class ArrRepositoryImpl @Inject constructor(
             }.let { Result.success(it) }
     }
 
-    override suspend fun monitorAndSearch(
+    override suspend fun redownloadMedia(
         tmdbId: Int,
         kind: ArrServiceKind,
         tvdbId: Int?,
@@ -398,124 +400,296 @@ class ArrRepositoryImpl @Inject constructor(
         episodeNumber: Int?,
     ): Result<ArrRedownloadResult> = withContext(cacheScope.coroutineContext) {
         val summary = resolveServers().getOrDefault(ArrServiceSummary())
-        if (summary.isEmpty) return@withContext Result.success(ArrRedownloadResult())
         val servers = if (kind == ArrServiceKind.RADARR) summary.radarrServers else summary.sonarrServers
-        if (servers.isEmpty()) return@withContext Result.success(ArrRedownloadResult())
+        if (servers.isEmpty()) {
+            // No relevant server configured — can't do anything. Report as a
+            // DELETE_FILE failure so the UI shows an actionable message.
+            return@withContext Result.success(
+                ArrRedownloadResult(
+                    steps = listOf(
+                        ArrRedownloadStepResult(
+                            ArrRedownloadStep.DELETE_FILE,
+                            ArrRedownloadStepStatus.FAILED,
+                            "No ${if (kind == ArrServiceKind.RADARR) "Radarr" else "Sonarr"} server configured.",
+                        ),
+                    ),
+                    isComplete = false,
+                ),
+            )
+        }
 
-        // Fan out across servers; accumulate the best outcome. A server
-        // succeeding on both steps counts as overall success; partial results
-        // (monitor ok but search failed, or vice-versa) are merged so the UI
-        // can show a meaningful message.
-        val outcomes = servers.map { srv ->
+        // Fan out across servers. The first server whose DELETE_FILE step
+        // succeeds (or is skipped because there's no file) wins; its full step
+        // list becomes the result. A DELETE_FILE failure on one server falls
+        // through to the next; only when ALL fail do we report the failure.
+        val perServer = servers.map { srv ->
             async {
                 if (kind == ArrServiceKind.RADARR) {
-                    monitorAndSearchMovie(srv, tmdbId)
+                    redownloadMovie(srv, tmdbId)
                 } else {
-                    monitorAndSearchEpisode(srv, tvdbId, seasonNumber, episodeNumber)
+                    redownloadEpisode(srv, tvdbId, seasonNumber, episodeNumber)
                 }
             }
         }.awaitAll()
 
-        val merged = outcomes.reduce { acc, r ->
-            ArrRedownloadResult(
-                monitored = acc.monitored || r.monitored,
-                searchStarted = acc.searchStarted || r.searchStarted,
-                commands = acc.commands + r.commands,
-                // Prefer the first non-null failure so the UI surfaces it; if a
-                // later server succeeded on that step, clear it.
-                failureStep = when {
-                    acc.failureStep == null && r.failureStep == null -> null
-                    // If acc has a failure but r succeeded on that step, clear.
-                    acc.failureStep == r.failureStep -> if (stepSucceeded(r, acc.failureStep)) null else acc.failureStep
-                    r.failureStep != null && !stepSucceeded(acc, r.failureStep) -> r.failureStep
-                    else -> acc.failureStep ?: r.failureStep
-                },
-                errorMessage = acc.errorMessage ?: r.errorMessage,
-            )
-        }
-        Result.success(merged)
-    }
-
-    /** True when [r] indicates the given [step] succeeded on at least one server. */
-    private fun stepSucceeded(r: ArrRedownloadResult, step: ArrRedownloadStep?): Boolean = when (step) {
-        ArrRedownloadStep.MONITOR -> r.monitored
-        ArrRedownloadStep.SEARCH -> r.searchStarted
-        null -> true
+        // Pick the first result that got past the DELETE_FILE gate (i.e. its
+        // DELETE step is not FAILED). If none did, return the first failure.
+        val winner = perServer.firstOrNull { result ->
+            result.steps.firstOrNull { it.step == ArrRedownloadStep.DELETE_FILE }
+                ?.status != ArrRedownloadStepStatus.FAILED
+        } ?: perServer.first()
+        Result.success(winner)
     }
 
     /**
-     * Movie path: resolve tmdbId → internal movie id, re-monitor, then queue a
-     * SearchMovie. Best-effort across the three steps; a monitor failure still
-     * attempts the search (the movie may already be monitored).
+     * Movie re-download flow on one Radarr server. Returns the full 4-step
+     * result list. DELETE_FILE is the hard gate; subsequent steps run
+     * best-effort regardless of each other.
      */
-    private suspend fun monitorAndSearchMovie(
+    private suspend fun redownloadMovie(
         srv: ArrServerConfig,
         tmdbId: Int,
     ): ArrRedownloadResult {
-        val movieId = radarrApiClient.findMovieIdByTmdb(srv.baseUrl, srv.apiKey, tmdbId).getOrNull()
-            ?: return ArrRedownloadResult(
-                failureStep = ArrRedownloadStep.MONITOR,
-                errorMessage = "Movie not tracked in Radarr.",
+        val steps = mutableListOf<ArrRedownloadStepResult>()
+        val movieResult = radarrApiClient.getMovieForTmdb(srv.baseUrl, srv.apiKey, tmdbId)
+        val movie = movieResult.getOrNull()
+        if (movieResult.isFailure) {
+            steps += ArrRedownloadStepResult(
+                ArrRedownloadStep.DELETE_FILE,
+                ArrRedownloadStepStatus.FAILED,
+                "Radarr lookup failed: ${movieResult.exceptionOrNull()?.message}.",
             )
-        val monitored = radarrApiClient.monitorMovies(
-            srv.baseUrl, srv.apiKey, listOf(movieId), monitored = true,
-        ).isSuccess
-        val search = radarrApiClient.postCommand(
-            srv.baseUrl, srv.apiKey, ArrCommandName.SEARCH_MOVIE, movieIds = listOf(movieId),
-        ).getOrNull()
-        return ArrRedownloadResult(
-            monitored = monitored,
-            searchStarted = search != null,
-            commands = listOfNotNull(search),
-            failureStep = if (!monitored && search == null) ArrRedownloadStep.MONITOR else null,
-            errorMessage = if (!monitored && search == null) "Monitor and search failed." else null,
+            return ArrRedownloadResult(steps, isComplete = false)
+        }
+        if (movie == null) {
+            steps += ArrRedownloadStepResult(
+                ArrRedownloadStep.DELETE_FILE,
+                ArrRedownloadStepStatus.FAILED,
+                "Movie (tmdb $tmdbId) not tracked in Radarr.",
+            )
+            return ArrRedownloadResult(steps, isComplete = false)
+        }
+
+        // Step 1: delete the file. No file → skip (already gone, not an error).
+        if (movie.movieFileId == 0) {
+            steps += ArrRedownloadStepResult(
+                ArrRedownloadStep.DELETE_FILE,
+                ArrRedownloadStepStatus.SKIPPED,
+                "No file to delete.",
+            )
+        } else {
+            val deleteOk = radarrApiClient.deleteMovieFile(srv.baseUrl, srv.apiKey, movie.movieFileId).isSuccess
+            steps += ArrRedownloadStepResult(
+                ArrRedownloadStep.DELETE_FILE,
+                if (deleteOk) ArrRedownloadStepStatus.SUCCESS else ArrRedownloadStepStatus.FAILED,
+                if (deleteOk) null else "Radarr rejected the file delete.",
+            )
+            if (!deleteOk) return ArrRedownloadResult(steps, isComplete = false)
+        }
+
+        // Step 2: verify deleted. Re-query; warn if hasFile still true.
+        val rechecked = radarrApiClient.getMovieForTmdb(srv.baseUrl, srv.apiKey, tmdbId).getOrNull()
+        val verified = rechecked?.hasFile != true
+        steps += ArrRedownloadStepResult(
+            ArrRedownloadStep.VERIFY_DELETED,
+            if (verified) ArrRedownloadStepStatus.SUCCESS else ArrRedownloadStepStatus.FAILED,
+            if (verified) null else "Radarr still reports a file present.",
         )
+
+        // Step 3: monitor only if not already monitored (idempotent otherwise).
+        if (movie.monitored) {
+            steps += ArrRedownloadStepResult(
+                ArrRedownloadStep.MONITOR,
+                ArrRedownloadStepStatus.SKIPPED,
+                "Already monitored.",
+            )
+        } else {
+            val monOk = radarrApiClient.monitorMovies(
+                srv.baseUrl, srv.apiKey, listOf(movie.id), monitored = true,
+            ).isSuccess
+            steps += ArrRedownloadStepResult(
+                ArrRedownloadStep.MONITOR,
+                if (monOk) ArrRedownloadStepStatus.SUCCESS else ArrRedownloadStepStatus.FAILED,
+                if (monOk) null else "Failed to re-monitor.",
+            )
+        }
+
+        // Step 4: search.
+        val search = radarrApiClient.postCommand(
+            srv.baseUrl, srv.apiKey, ArrCommandName.SEARCH_MOVIE, movieIds = listOf(movie.id),
+        ).isSuccess
+        steps += ArrRedownloadStepResult(
+            ArrRedownloadStep.SEARCH,
+            if (search) ArrRedownloadStepStatus.SUCCESS else ArrRedownloadStepStatus.FAILED,
+            if (search) "Radarr is searching for a new download." else "Search command failed.",
+        )
+        return ArrRedownloadResult(steps, isComplete = true)
     }
 
     /**
-     * Episode path: resolve tvdbId → series id → episode id (via S/E),
-     * re-monitor the episode, then queue an EpisodeSearch. Requires tvdbId +
-     * season/episode numbers; missing any is a monitor-step failure.
+     * Episode re-download flow on one Sonarr server. Returns the full 4-step
+     * result list. Requires tvdbId + season/episode numbers.
      */
-    private suspend fun monitorAndSearchEpisode(
+    private suspend fun redownloadEpisode(
         srv: ArrServerConfig,
         tvdbId: Int?,
         seasonNumber: Int?,
         episodeNumber: Int?,
     ): ArrRedownloadResult {
+        val steps = mutableListOf<ArrRedownloadStepResult>()
         if (tvdbId == null || seasonNumber == null || episodeNumber == null) {
-            return ArrRedownloadResult(
-                failureStep = ArrRedownloadStep.MONITOR,
-                errorMessage = "Missing tvdb id or season/episode number for Sonarr lookup.",
+            steps += ArrRedownloadStepResult(
+                ArrRedownloadStep.DELETE_FILE,
+                ArrRedownloadStepStatus.FAILED,
+                "Missing tvdb id or season/episode number.",
             )
+            return ArrRedownloadResult(steps, isComplete = false)
         }
-        val seriesId = sonarrApiClient.findSeriesByTvdb(srv.baseUrl, srv.apiKey, tvdbId).getOrNull()
-            ?: return ArrRedownloadResult(
-                failureStep = ArrRedownloadStep.MONITOR,
-                errorMessage = "Series not tracked in Sonarr.",
+
+        val seriesResult = sonarrApiClient.findSeriesByTvdb(srv.baseUrl, srv.apiKey, tvdbId)
+        // Distinguish a genuine "not tracked" (null) from a network/parse error
+        // (failure) so the message is actionable instead of misleading.
+        val seriesId = seriesResult.getOrNull()
+        if (seriesResult.isFailure) {
+            steps += ArrRedownloadStepResult(
+                ArrRedownloadStep.DELETE_FILE,
+                ArrRedownloadStepStatus.FAILED,
+                "Sonarr lookup failed: ${seriesResult.exceptionOrNull()?.message}.",
             )
-        val episodeIds = sonarrApiClient.getEpisodeIds(
+            return ArrRedownloadResult(steps, isComplete = false)
+        }
+        if (seriesId == null) {
+            steps += ArrRedownloadStepResult(
+                ArrRedownloadStep.DELETE_FILE,
+                ArrRedownloadStepStatus.FAILED,
+                "Series (tvdb $tvdbId) not tracked in Sonarr.",
+            )
+            return ArrRedownloadResult(steps, isComplete = false)
+        }
+
+        val episodeResult = sonarrApiClient.getEpisodeInfo(
             srv.baseUrl, srv.apiKey, seriesId, seasonNumber, episodeNumber,
-        ).getOrNull().orEmpty()
-        if (episodeIds.isEmpty()) {
-            return ArrRedownloadResult(
-                failureStep = ArrRedownloadStep.MONITOR,
-                errorMessage = "Episode S${seasonNumber}E${episodeNumber} not found in Sonarr.",
+        )
+        val episode = episodeResult.getOrNull()
+        if (episodeResult.isFailure) {
+            steps += ArrRedownloadStepResult(
+                ArrRedownloadStep.DELETE_FILE,
+                ArrRedownloadStepStatus.FAILED,
+                "Sonarr episode lookup failed: ${episodeResult.exceptionOrNull()?.message}.",
+            )
+            return ArrRedownloadResult(steps, isComplete = false)
+        }
+        if (episode == null) {
+            // Episode genuinely absent from Sonarr (not a numbering mismatch we
+            // could resolve). Build a diagnostic message showing what Sonarr
+            // *does* have so the user can see the discrepancy.
+            val diag = sonarrApiClient.getSeasonSummaries(srv.baseUrl, srv.apiKey, seriesId)
+                .getOrNull()
+                ?.takeIf { it.isNotEmpty() }
+                ?.joinToString(", ") { summ ->
+                    "S${summ.seasonNumber} (eps ${summ.episodeNumbers.first()}" +
+                        if (summ.episodeNumbers.size > 1) {
+                            "–${summ.episodeNumbers.last()}"
+                        } else {
+                            ""
+                        } + ")"
+                }
+            val hint = if (diag != null) {
+                "Sonarr has: $diag. "
+            } else {
+                "Sonarr has no episodes for this series. "
+            }
+            steps += ArrRedownloadStepResult(
+                ArrRedownloadStep.DELETE_FILE,
+                ArrRedownloadStepStatus.FAILED,
+                "${hint}No episode numbered E$episodeNumber found (requested as S${seasonNumber}E${episodeNumber}) in series $seriesId.",
+            )
+            return ArrRedownloadResult(steps, isComplete = false)
+        }
+
+        // Step 1: delete the file. No file → skip.
+        if (episode.episodeFileId == 0) {
+            steps += ArrRedownloadStepResult(
+                ArrRedownloadStep.DELETE_FILE,
+                ArrRedownloadStepStatus.SKIPPED,
+                "No file to delete.",
+            )
+        } else {
+            val deleteOk = sonarrApiClient.deleteEpisodeFile(
+                srv.baseUrl, srv.apiKey, episode.episodeFileId,
+            ).isSuccess
+            steps += ArrRedownloadStepResult(
+                ArrRedownloadStep.DELETE_FILE,
+                if (deleteOk) ArrRedownloadStepStatus.SUCCESS else ArrRedownloadStepStatus.FAILED,
+                if (deleteOk) null else "Sonarr rejected the file delete.",
+            )
+            if (!deleteOk) return ArrRedownloadResult(steps, isComplete = false)
+        }
+
+        // Step 2: verify deleted. Re-query using the episode's *actual* Sonarr
+        // season (may differ from the requested season when the cross-season
+        // fallback resolved it). A null re-query is inconclusive — don't claim
+        // success, surface a WARNING instead (previously a silent false-positive).
+        val recheckResult = sonarrApiClient.getEpisodeInfo(
+            srv.baseUrl, srv.apiKey, seriesId, episode.seasonNumber, episodeNumber,
+        )
+        val rechecked = recheckResult.getOrNull()
+        val verifyResult = when {
+            recheckResult.isFailure -> ArrRedownloadStepResult(
+                ArrRedownloadStep.VERIFY_DELETED,
+                ArrRedownloadStepStatus.WARNING,
+                "Couldn't re-query Sonarr to confirm deletion (${recheckResult.exceptionOrNull()?.message}); the delete command did return success.",
+            )
+            rechecked == null -> ArrRedownloadStepResult(
+                ArrRedownloadStep.VERIFY_DELETED,
+                ArrRedownloadStepStatus.WARNING,
+                "Sonarr no longer reports the episode after delete (it may have been removed); cannot confirm file status.",
+            )
+            rechecked.hasFile -> ArrRedownloadStepResult(
+                ArrRedownloadStep.VERIFY_DELETED,
+                ArrRedownloadStepStatus.FAILED,
+                "Sonarr still reports a file present.",
+            )
+            else -> ArrRedownloadStepResult(
+                ArrRedownloadStep.VERIFY_DELETED,
+                ArrRedownloadStepStatus.SUCCESS,
+                null,
             )
         }
-        val monitored = sonarrApiClient.monitorEpisodes(
-            srv.baseUrl, srv.apiKey, episodeIds, monitored = true,
-        ).isSuccess
+        steps += verifyResult
+        // A FAILED verify is a hard gate (file still present → search no-ops).
+        if (verifyResult.status == ArrRedownloadStepStatus.FAILED) {
+            return ArrRedownloadResult(steps, isComplete = false)
+        }
+
+        // Step 3: monitor only if not already monitored.
+        if (episode.monitored) {
+            steps += ArrRedownloadStepResult(
+                ArrRedownloadStep.MONITOR,
+                ArrRedownloadStepStatus.SKIPPED,
+                "Already monitored.",
+            )
+        } else {
+            val monOk = sonarrApiClient.monitorEpisodes(
+                srv.baseUrl, srv.apiKey, listOf(episode.id), monitored = true,
+            ).isSuccess
+            steps += ArrRedownloadStepResult(
+                ArrRedownloadStep.MONITOR,
+                if (monOk) ArrRedownloadStepStatus.SUCCESS else ArrRedownloadStepStatus.FAILED,
+                if (monOk) null else "Failed to re-monitor.",
+            )
+        }
+
+        // Step 4: search.
         val search = sonarrApiClient.postCommand(
-            srv.baseUrl, srv.apiKey, ArrCommandName.SEARCH_EPISODES, episodeIds = episodeIds,
-        ).getOrNull()
-        return ArrRedownloadResult(
-            monitored = monitored,
-            searchStarted = search != null,
-            commands = listOfNotNull(search),
-            failureStep = if (!monitored && search == null) ArrRedownloadStep.MONITOR else null,
-            errorMessage = if (!monitored && search == null) "Monitor and search failed." else null,
+            srv.baseUrl, srv.apiKey, ArrCommandName.SEARCH_EPISODES, episodeIds = listOf(episode.id),
+        ).isSuccess
+        steps += ArrRedownloadStepResult(
+            ArrRedownloadStep.SEARCH,
+            if (search) ArrRedownloadStepStatus.SUCCESS else ArrRedownloadStepStatus.FAILED,
+            if (search) "Sonarr is searching for a new download." else "Search command failed.",
         )
+        return ArrRedownloadResult(steps, isComplete = true)
     }
 
     // ── Routing helpers ────────────────────────────────────────────────────

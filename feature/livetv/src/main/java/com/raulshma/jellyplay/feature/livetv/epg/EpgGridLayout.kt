@@ -55,8 +55,6 @@ data class ProgramLayout(
     val program: LiveTvProgram,
     val startOffsetDp: Float,
     val widthDp: Float,
-    /** Whether this program is currently live (overlaps `now`). */
-    val isCurrent: Boolean,
 )
 
 /**
@@ -112,11 +110,16 @@ fun buildEpgGridData(
  * fall partially outside the window are clamped. Gaps (empty stretches with
  * no program) are not currently emitted; the row simply renders with empty
  * space between cells.
+ *
+ * Purely geometric — does NOT depend on [Instant.now]. The "is this program
+ * currently live" check is intentionally excluded so the layout is stable
+ * across the 30s now-tick; [EpgScreen] derives live status separately via a
+ * single [androidx.compose.runtime.derivedStateOf], recomposing only the cell
+ * whose live state actually flips rather than re-laying-out every row.
  */
 fun layoutChannelRow(
     row: EpgChannelRow,
     gridData: EpgGridData,
-    now: Instant,
 ): ChannelRowLayout {
     val layouts = row.programs.mapNotNull { program ->
         val start = program.startInstant() ?: return@mapNotNull null
@@ -130,7 +133,6 @@ fun layoutChannelRow(
             program = program,
             startOffsetDp = startMinutes * EpgGridLayout.DP_PER_MINUTE,
             widthDp = durationMinutes * EpgGridLayout.DP_PER_MINUTE,
-            isCurrent = now >= start && now < end,
         )
     }
     return ChannelRowLayout(channel = row.channel, programLayouts = layouts)

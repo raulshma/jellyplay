@@ -327,6 +327,27 @@ class RadarrApiClientImpl @Inject constructor(
             .map { list -> list.firstOrNull()?.id }
     }
 
+    override suspend fun getMovieForTmdb(baseUrl: String, apiKey: String, tmdbId: Int): Result<RadarrMovieInfo?> {
+        val url = buildUrl(baseUrl, "/movie").newBuilder()
+            .addQueryParameter("tmdbId", tmdbId.toString())
+            .build()
+        val request = Request.Builder().url(url).withApiKey(apiKey).get().build()
+        return parseAndMap<List<RadarrMovieResource>>(executeRequest(request))
+            .map { list ->
+                list.firstOrNull()?.let {
+                    RadarrMovieInfo(
+                        id = it.id,
+                        movieFileId = it.movieFileId,
+                        hasFile = it.hasFile,
+                        monitored = it.monitored,
+                    )
+                }
+            }
+    }
+
+    override suspend fun deleteMovieFile(baseUrl: String, apiKey: String, movieFileId: Int): Result<Unit> =
+        deleteRequest(baseUrl, apiKey, "/movieFile/$movieFileId")
+
     override suspend fun monitorMovies(
         baseUrl: String,
         apiKey: String,
@@ -413,6 +434,7 @@ class RadarrApiClientImpl @Inject constructor(
         val tmdbId: Int? = null,
         val monitored: Boolean = false,
         val hasFile: Boolean = false,
+        val movieFileId: Int = 0,
         val inCinemas: String? = null,
         val digitalRelease: String? = null,
         val physicalRelease: String? = null,
