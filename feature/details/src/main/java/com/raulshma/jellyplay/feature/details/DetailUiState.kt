@@ -70,17 +70,10 @@ data class DetailUiState(
     val downloadSheetEpisodes: Map<String, List<MediaItem>> = emptyMap(),
     val downloadSheetLoadingSeasons: Set<String> = emptySet(),
     val downloadedEpisodeIds: Set<String> = emptySet(),
-    // Delete & re-download (DIRECT_ARR_INTEGRATION). Shown only when a relevant
-    // *arr server is resolved; the dialog confirms before the destructive
-    // delete + monitor + search flow. [redownloadProgress] carries the per-step
-    // result list so the dialog renders live progress.
-    val canRedownload: Boolean = false,
-    val showRedownloadDialog: Boolean = false,
-    val redownloadProgress: RedownloadProgress? = null,
-    // For episodes: the parent series' provider IDs (e.g. "tvdb" → series tvdb id).
-    // Sonarr's findSeriesByTvdb lookup requires the *series* tvdb id, not the
-    // episode-level tvdb id stored in [detail.providerIds].
-    val seriesProviderIds: Map<String, String> = emptyMap(),
+    // "Manage Series" (DIRECT_ARR_INTEGRATION). Shown for a series with a tvdb
+    // id when the experimental flag is on; server resolution is deferred to the
+    // ManageSeriesScreen itself (cheap gate here — no network on the detail screen).
+    val canManageSeries: Boolean = false,
 ) {
     @Immutable
     data class SmartPlayTarget(
@@ -88,22 +81,4 @@ data class DetailUiState(
         val label: String,
         val startPositionTicks: Long,
     )
-
-    /**
-     * Progress + result of a delete & re-download flow. [isRunning] is true
-     * while the flow is in flight; [steps] holds one entry per
-     * [com.raulshma.jellyplay.core.model.arr.ArrRedownloadStep], null until the
-     * flow completes. [deleteSucceeded] drives whether "Done" navigates back
-     * (file gone) vs. the dialog stays open (delete failed).
-     */
-    @Immutable
-    data class RedownloadProgress(
-        val isRunning: Boolean,
-        val steps: List<com.raulshma.jellyplay.core.model.arr.ArrRedownloadStepResult>? = null,
-    ) {
-        val deleteSucceeded: Boolean
-            get() = steps?.firstOrNull {
-                it.step == com.raulshma.jellyplay.core.model.arr.ArrRedownloadStep.DELETE_FILE
-            }?.status != com.raulshma.jellyplay.core.model.arr.ArrRedownloadStepStatus.FAILED
-    }
 }

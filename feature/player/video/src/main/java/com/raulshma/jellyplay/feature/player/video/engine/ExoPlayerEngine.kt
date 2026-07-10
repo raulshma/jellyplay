@@ -12,6 +12,7 @@ import androidx.media3.common.C
 import androidx.media3.common.Format
 import androidx.media3.common.MediaItem
 import androidx.media3.common.MediaMetadata
+import androidx.media3.common.MimeTypes
 import androidx.media3.common.PlaybackException
 import androidx.media3.common.Player
 import androidx.media3.common.TrackGroup
@@ -414,7 +415,30 @@ class ExoPlayerEngine(
 
         val mediaItem = MediaItem.Builder()
             .setUri(request.uri)
-            .apply { request.mimeType?.let { setMimeType(it) } }
+            .apply {
+                val effectiveMime = request.mimeType ?: if (request.isLive) {
+                    // Live TV stream URLs are extension-less (/Videos/{id}/stream
+                    // ?...&LiveStreamId=...). Without a hint ExoPlayer falls
+                    // back to content sniffing, which fails for MPEG-TS-over-HTTP
+                    // and selects the wrong extractor for HLS. Pick the hint from
+                    // the URL so the right MediaSource is used.
+                    if (request.uri.contains(".m3u8", ignoreCase = true)) {
+                        MimeTypes.APPLICATION_M3U8
+                    } else {
+                        MimeTypes.VIDEO_MP2T
+                    }
+                } else null
+                effectiveMime?.let { setMimeType(it) }
+            }
+            .apply {
+                if (request.isLive) {
+                    // Enable live-mode playback so ExoPlayer tracks the live
+                    // window (target/min/max offset defaults) instead of treating
+                    // the stream as finite VOD whose "duration" would trip the
+                    // ended-close logic.
+                    setLiveConfiguration(MediaItem.LiveConfiguration.Builder().build())
+                }
+            }
             .setSubtitleConfigurations(subtitleConfigs)
             .setMediaMetadata(metadataBuilder.build())
             .build()
@@ -424,7 +448,8 @@ class ExoPlayerEngine(
         currentSubtitleConfigs.clear()
         currentSubtitleConfigs.addAll(subtitleConfigs)
         exo.prepare()
-        if (request.startPositionMs > 0) {
+        // Live streams start at the live edge; never seek to a resume position.
+        if (!request.isLive && request.startPositionMs > 0) {
             exo.seekTo(request.startPositionMs)
         }
         exo.play()

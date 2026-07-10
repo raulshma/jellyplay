@@ -11,6 +11,8 @@ import com.raulshma.jellyplay.core.model.arr.ArrDownloadSummary
 import com.raulshma.jellyplay.core.model.arr.ArrQueueDeleteOptions
 import com.raulshma.jellyplay.core.model.arr.ArrQueueItem
 import com.raulshma.jellyplay.core.model.arr.ArrRedownloadResult
+import com.raulshma.jellyplay.core.model.arr.ArrSeriesEpisode
+import com.raulshma.jellyplay.core.model.arr.ArrSeriesResolution
 import com.raulshma.jellyplay.core.model.arr.ArrRedownloadStep
 import com.raulshma.jellyplay.core.model.arr.ArrRedownloadStepResult
 import com.raulshma.jellyplay.core.model.arr.ArrRedownloadStepStatus
@@ -440,6 +442,138 @@ class ArrRepositoryImpl @Inject constructor(
         } ?: perServer.first()
         Result.success(winner)
     }
+
+    // ── Sonarr series management ("Manage Series" screen) ────────────────
+
+    override suspend fun resolveSonarrSeries(tvdbId: Int): Result<ArrSeriesResolution> =
+        withContext(cacheScope.coroutineContext) {
+            resolveSonarrSeriesForSeries(tvdbId)?.let {
+                Result.success(
+                    ArrSeriesResolution(
+                        serverId = it.serverId,
+                        seriesId = it.seriesId,
+                        title = it.title,
+                        monitored = it.monitored,
+                        path = it.path,
+                    ),
+                )
+            } ?: Result.failure(noServerException())
+        }
+
+    override suspend fun getSonarrEpisodes(tvdbId: Int): Result<List<ArrSeriesEpisode>> =
+        withContext(cacheScope.coroutineContext) {
+            val target = resolveSonarrSeriesForSeries(tvdbId)
+                ?: return@withContext Result.failure(noServerException())
+            sonarrApiClient.getEpisodesForSeries(target.baseUrl, target.apiKey, target.seriesId)
+        }
+
+    override suspend fun monitorSonarrEpisodes(
+        tvdbId: Int,
+        episodeIds: List<Int>,
+        monitored: Boolean,
+    ): Result<Unit> = withContext(cacheScope.coroutineContext) {
+        val target = resolveSonarrSeriesForSeries(tvdbId)
+            ?: return@withContext noServer()
+        if (episodeIds.isEmpty()) return@withContext Result.success(Unit)
+        sonarrApiClient.monitorEpisodes(target.baseUrl, target.apiKey, episodeIds, monitored)
+    }
+
+    override suspend fun deleteSonarrEpisodeFile(tvdbId: Int, episodeFileId: Int): Result<Unit> =
+        withContext(cacheScope.coroutineContext) {
+            val target = resolveSonarrSeriesForSeries(tvdbId)
+                ?: return@withContext noServer()
+            sonarrApiClient.deleteEpisodeFile(target.baseUrl, target.apiKey, episodeFileId)
+        }
+
+    override suspend fun searchSonarrEpisodes(tvdbId: Int, episodeIds: List<Int>): Result<Unit> =
+        withContext(cacheScope.coroutineContext) {
+            val target = resolveSonarrSeriesForSeries(tvdbId)
+                ?: return@withContext noServer()
+            if (episodeIds.isEmpty()) return@withContext Result.success(Unit)
+            sonarrApiClient.postCommand(
+                target.baseUrl, target.apiKey,
+                ArrCommandName.SEARCH_EPISODES, episodeIds = episodeIds,
+            ).map { }
+        }
+
+    override suspend fun searchMonitoredSonarrSeason(tvdbId: Int, seasonNumber: Int): Result<Unit> =
+        withContext(cacheScope.coroutineContext) {
+            val target = resolveSonarrSeriesForSeries(tvdbId)
+                ?: return@withContext noServer()
+            sonarrApiClient.postCommand(
+                target.baseUrl, target.apiKey,
+                ArrCommandName.SEASON_SEARCH,
+                seriesId = target.seriesId,
+                seasonNumber = seasonNumber,
+            ).map { }
+        }
+
+    override suspend fun refreshSonarrSeries(tvdbId: Int): Result<Unit> =
+        withContext(cacheScope.coroutineContext) {
+            val target = resolveSonarrSeriesForSeries(tvdbId)
+                ?: return@withContext noServer()
+            sonarrApiClient.postCommand(
+                target.baseUrl, target.apiKey,
+                ArrCommandName.REFRESH_SERIES, seriesId = target.seriesId,
+            ).map { }
+        }
+
+    override suspend fun rescanSonarrSeries(tvdbId: Int): Result<Unit> =
+        withContext(cacheScope.coroutineContext) {
+            val target = resolveSonarrSeriesForSeries(tvdbId)
+                ?: return@withContext noServer()
+            sonarrApiClient.postCommand(
+                target.baseUrl, target.apiKey,
+                ArrCommandName.RESCAN_SERIES, seriesId = target.seriesId,
+            ).map { }
+        }
+
+    override suspend fun searchSonarrSeries(tvdbId: Int): Result<Unit> =
+        withContext(cacheScope.coroutineContext) {
+            val target = resolveSonarrSeriesForSeries(tvdbId)
+                ?: return@withContext noServer()
+            sonarrApiClient.postCommand(
+                target.baseUrl, target.apiKey,
+                ArrCommandName.SEARCH_SERIES, seriesId = target.seriesId,
+            ).map { }
+        }
+
+    /**
+     * Resolves the owning Sonarr server + internal series id for [tvdbId] by
+     * probing each configured Sonarr server. Returns the first server that
+     * tracks the series (its [ResolvedSonarrSeries]), or null when no server
+     * tracks it / none are configured / server resolution fails. Reuses the
+     * cached [resolveServers] (TTL-bounded).
+     */
+    private suspend fun resolveSonarrSeriesForSeries(tvdbId: Int): ResolvedSonarrSeries? {
+        val summary = resolveServers().getOrDefault(ArrServiceSummary())
+        for (srv in summary.sonarrServers) {
+            val info = sonarrApiClient.getSeriesInfo(srv.baseUrl, srv.apiKey, tvdbId).getOrNull()
+            if (info != null) {
+                return ResolvedSonarrSeries(
+                    serverId = srv.id,
+                    baseUrl = srv.baseUrl,
+                    apiKey = srv.apiKey,
+                    seriesId = info.id,
+                    title = info.title,
+                    monitored = info.monitored,
+                    path = info.path,
+                )
+            }
+        }
+        return null
+    }
+
+    /** Private carrier for a resolved Sonarr series + its owning server credentials. */
+    private data class ResolvedSonarrSeries(
+        val serverId: String,
+        val baseUrl: String,
+        val apiKey: String,
+        val seriesId: Int,
+        val title: String,
+        val monitored: Boolean,
+        val path: String? = null,
+    )
 
     /**
      * Movie re-download flow on one Radarr server. Returns the full 4-step
