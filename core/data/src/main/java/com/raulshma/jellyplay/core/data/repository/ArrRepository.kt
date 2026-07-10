@@ -153,27 +153,26 @@ interface ArrRepository {
     suspend fun searchForTmdb(tmdbId: Int, kind: ArrServiceKind): Result<List<ArrCommand>>
 
     /**
-     * Re-marks an item monitored and triggers a fresh search across the
-     * relevant servers — the *arr half of the delete & re-download flow.
-     * *arr unmonitors an item when its file is deleted, so without this step a
-     * re-download would never trigger.
+     * The delete & re-download flow: deletes the file through the *arr file-
+     * delete API (same as the web UI "Manage Files" → delete), verifies the
+     * deletion, re-monitors if needed, then queues a search — so *arr re-grabs
+     * a fresh copy. This is the correct flow; deleting only from Jellyfin
+     * leaves *arr's `hasFile` stale and the search no-ops.
      *
-     * - **Movies** ([kind] = RADARR): per Radarr server → resolve tmdbId →
-     *   internal movie id → `PUT /movie/monitor` → `SearchMovie`.
-     * - **Episodes** ([kind] = SONARR): per Sonarr server → resolve [tvdbId]
-     *   → series id → episode id (via [seasonNumber]/[episodeNumber]) →
-     *   `PUT /episode/monitor` → `EpisodeSearch`.
+     * Runs a 4-step sequence ([com.raulshma.jellyplay.core.model.arr.ArrRedownloadStep]):
+     * 1. **DELETE_FILE** — resolve the file id (`episodeFileId`/`movieFileId`)
+     *    then `DELETE /episodeFile|movieFile/{id}`. Skipped (not failed) when
+     *    there's no file. A hard failure here aborts the flow.
+     * 2. **VERIFY_DELETED** — re-query, assert `hasFile == false`.
+     * 3. **MONITOR** — re-monitor only when not already monitored (idempotent).
+     * 4. **SEARCH** — `EpisodeSearch` / `SearchMovie`.
      *
-     * Returns an [ArrRedownloadResult] accumulating the best outcome across
-     * servers (any server succeeding counts as success). Best-effort: a monitor
-     * failure on one server does not abort the search on others. When the item
-     * isn't tracked by *arr (id lookup returns null) the result records a
-     * [com.raulshma.jellyplay.core.model.arr.ArrRedownloadStep.MONITOR] failure.
-     *
-     * [tvdbId], [seasonNumber], [episodeNumber] are required for SONARR and
-     * ignored for RADARR.
+     * Returns [ArrRedownloadResult] with one [com.raulshma.jellyplay.core.model.arr.ArrRedownloadStepResult]
+     * per step, in order. Fans out across resolved servers; the first server to
+     * succeed on a step wins (per-server failures swallowed). [tmdbId] is
+     * required for RADARR; [tvdbId]+[seasonNumber]+[episodeNumber] for SONARR.
      */
-    suspend fun monitorAndSearch(
+    suspend fun redownloadMedia(
         tmdbId: Int,
         kind: ArrServiceKind,
         tvdbId: Int? = null,

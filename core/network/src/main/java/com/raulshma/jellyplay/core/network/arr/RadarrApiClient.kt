@@ -140,10 +140,26 @@ interface RadarrApiClient {
     suspend fun findMovieIdByTmdb(baseUrl: String, apiKey: String, tmdbId: Int): Result<Int?>
 
     /**
+     * `GET /api/v3/movie?tmdbId=...` → maps the full [RadarrMovieInfo] needed
+     * for the delete & re-download flow (internal id, movieFileId, hasFile,
+     * monitored). Returns null when Radarr has no movie matching [tmdbId].
+     */
+    suspend fun getMovieForTmdb(baseUrl: String, apiKey: String, tmdbId: Int): Result<RadarrMovieInfo?>
+
+    /**
+     * `DELETE /api/v3/movieFile/{id}` — deletes a movie's file (the same flow
+     * the Radarr web UI uses under movie detail → delete file). Clears
+     * `hasFile` server-side so a subsequent `SearchMovie` will re-grab.
+     * Returns 200 (not 204); a 409 indicates the movie's root folder is missing
+     * or empty (surfaced as an actionable error).
+     */
+    suspend fun deleteMovieFile(baseUrl: String, apiKey: String, movieFileId: Int): Result<Unit>
+
+    /**
      * `PUT /api/v3/movie/monitor` — toggles the monitored flag on one or more
-     * movies. Used by the delete & re-download flow to re-mark a movie
-     * monitored after a delete, since Radarr may unmonitor movies whose file is
-     * deleted (so it won't re-grab them otherwise). Idempotent.
+     * movies. Idempotent. Used by the delete & re-download flow to guarantee
+     * the movie is monitored before searching (Radarr never auto-unmonitors on
+     * file delete, so this is a safety net, not always required).
      */
     suspend fun monitorMovies(
         baseUrl: String,
@@ -157,4 +173,20 @@ interface RadarrApiClient {
      */
     suspend fun testConnection(baseUrl: String, apiKey: String): Result<Unit>
 }
+
+/**
+ * Radarr movie info needed for the delete & re-download flow, mapped from
+ * `GET /api/v3/movie?tmdbId=`. Kept in `core.network` as a client-facing
+ * contract, mirroring how the *arr clients own their DTO shapes.
+ */
+data class RadarrMovieInfo(
+    /** Radarr internal movie id (used for `SearchMovie` + monitor). */
+    val id: Int,
+    /** The movie file's id; 0 when no file exists. Used for `DELETE /movieFile/{id}`. */
+    val movieFileId: Int,
+    /** True when the movie has a file linked. Re-queried post-delete to verify. */
+    val hasFile: Boolean,
+    /** Current monitored flag. Re-monitor is skipped when already true. */
+    val monitored: Boolean,
+)
 
