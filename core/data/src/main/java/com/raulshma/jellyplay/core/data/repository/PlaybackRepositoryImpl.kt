@@ -146,6 +146,7 @@ class PlaybackRepositoryImpl @Inject constructor(
             playMethod = method,
             playSessionId = result.playSessionId,
             maxStreamingBitrate = maxStreamingBitrateBits,
+            isLive = isLiveStream,
         )
     }
 

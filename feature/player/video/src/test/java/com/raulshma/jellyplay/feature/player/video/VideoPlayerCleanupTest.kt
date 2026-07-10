@@ -93,6 +93,7 @@ class VideoPlayerCleanupTest {
             getResolvedPlayMethod = { com.raulshma.jellyplay.core.model.PlayMethod.DIRECT_PLAY },
             getMediaEngine = { null },
             getIncognitoModeEnabled = { false },
+            getIsLive = { false },
             onAutoSkip = {},
             onPlaybackEndedNoNext = {},
             onWatchedThresholdReached = {},

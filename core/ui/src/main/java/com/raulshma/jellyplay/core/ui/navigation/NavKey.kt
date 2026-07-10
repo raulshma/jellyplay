@@ -32,6 +32,8 @@ sealed class Route : NavKey {
     @Serializable data class MetadataEditor(val itemId: String) : Route()
     @Serializable data class SeerrDetail(val tmdbId: Int, val mediaType: String) : Route()
     @Serializable data class PersonDetail(val personId: String) : Route()
+    /** Sonarr-style series management screen (collapsible seasons, per-episode actions). */
+    @Serializable data class ManageSeries(val seriesId: String) : Route()
 
     @Serializable data class VideoPlayer(
         val itemId: String,
@@ -226,6 +228,7 @@ val Route.isDetail: Boolean
         is Route.MetadataEditor,
         is Route.SeerrDetail,
         is Route.PersonDetail,
+        is Route.ManageSeries,
         is Route.MediaInfo,
         is Route.CollectionDetail,
         is Route.OfflineSeries,
@@ -249,6 +252,7 @@ val DETAIL_ROUTE_CLASS_NAMES: Set<String> = setOf(
     "MetadataEditor",
     "SeerrDetail",
     "PersonDetail",
+    "ManageSeries",
     "MediaInfo",
     "CollectionDetail",
     "OfflineSeries",

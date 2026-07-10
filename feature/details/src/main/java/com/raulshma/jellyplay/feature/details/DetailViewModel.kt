@@ -18,7 +18,6 @@ import com.raulshma.jellyplay.core.model.MediaItem
 import com.raulshma.jellyplay.core.model.MediaType
 import com.raulshma.jellyplay.core.model.NetworkStatus
 import com.raulshma.jellyplay.core.model.UserPreferences
-import com.raulshma.jellyplay.core.model.arr.ArrServiceKind
 import com.raulshma.jellyplay.core.model.isExperimentalEnabled
 import com.raulshma.jellyplay.core.model.seerr.SeerrRadarrServiceDetail
 import com.raulshma.jellyplay.core.model.seerr.SeerrRequestResult
@@ -80,58 +79,27 @@ class DetailViewModel @Inject constructor(
     private val _uiState = MutableStateFlow(DetailUiState())
 
     /**
-     * Whether the "Delete & Re-download" action should be shown. True iff:
+     * Whether the "Manage Series" action should be shown. True iff:
      * - The DIRECT_ARR_INTEGRATION experimental flag is enabled, AND
-     * - The current item is a MOVIE or EPISODE (series-level re-download is
-     *   intentionally out of scope — too destructive), AND
-     * - The item has the provider id the *arr lookup needs (tmdb for movies,
-     *   tvdb for episodes), AND
-     * - A relevant *arr server is resolved (Radarr for movies, Sonarr for
-     *   episodes).
+     * - The current item is a SERIES (episode navigation goes via the parent
+     *   series detail, so the menu naturally appears there), AND
+     * - The series has a tvdb id (Sonarr resolves series by tvdb), AND
+     * - At least one Sonarr server is resolved.
      *
-     * Server resolution is deferred: the flag/type/provider-id checks run in
-     * the combine (cheap, pure), and the (potentially blocking) server resolve
-     * only fires once those pass — avoiding a network-resolution call on every
-     * unrelated `_uiState`/preferences emission.
+     * Server resolution is deferred past the cheap checks; the actual series
+     * lookup happens inside ManageSeriesScreen.
      */
-    val canRedownload: StateFlow<Boolean> = combine(
+    val canManageSeries: StateFlow<Boolean> = combine(
         _uiState.map { it.detail?.item },
-        _uiState.map { it.seriesProviderIds },
+        _uiState.map { it.detail?.providerIds },
         preferencesStore.preferences.map { it.isExperimentalEnabled(ExperimentalFeature.DIRECT_ARR_INTEGRATION) },
-    ) { item, _, flagEnabled ->
+    ) { item, providerIds, flagEnabled ->
         if (!flagEnabled || item == null) return@combine false
-        val isEligibleType = item.mediaType == MediaType.MOVIE || item.mediaType == MediaType.EPISODE
-        if (!isEligibleType) return@combine false
-        // Cheap provider-id check first — short-circuits before any server work.
-        if (!hasRequiredProviderId(item)) return@combine false
-        // Only resolve servers once the cheap checks pass. Best-effort: a
-        // resolve failure simply hides the action rather than throwing.
-        val kind = if (item.mediaType == MediaType.MOVIE) ArrServiceKind.RADARR else ArrServiceKind.SONARR
+        if (item.mediaType != MediaType.SERIES) return@combine false
+        if (providerIds?.get("tvdb")?.toIntOrNull() == null) return@combine false
         val summary = arrRepository.resolveServers().getOrDefault(com.raulshma.jellyplay.core.model.arr.ArrServiceSummary())
-        val hasServer = if (kind == ArrServiceKind.RADARR) summary.radarrServers.isNotEmpty() else summary.sonarrServers.isNotEmpty()
-        hasServer
+        summary.sonarrServers.isNotEmpty()
     }.stateIn(scope, SharingStarted.WhileSubscribed(5_000), false)
-
-    /**
-     * Movies need a tmdb id (Radarr resolves tmdbId → internal id); episodes
-     * need the *series* tvdb id (Sonarr resolves series tvdb → series → episode).
-     * For episodes, [DetailUiState.seriesProviderIds] holds the parent series'
-     * provider ids, which is what Sonarr's findSeriesByTvdb expects. The
-     * episode-level [MediaDetail.providerIds] holds the episode's own tvdb id,
-     * which is different and won't match the Sonarr series lookup.
-     * Provider ids are lowercased by the Jellyfin mapper.
-     */
-    private fun hasRequiredProviderId(item: MediaItem): Boolean {
-        return if (item.mediaType == MediaType.MOVIE) {
-            val providerIds = _uiState.value.detail?.providerIds.orEmpty()
-            providerIds["tmdb"]?.toIntOrNull() != null
-        } else {
-            // For episodes, use the parent series' tvdb id (from seriesProviderIds),
-            // not the episode's own tvdb id.
-            val seriesIds = _uiState.value.seriesProviderIds
-            seriesIds["tvdb"]?.toIntOrNull() != null
-        }
-    }
 
     private val seerrRequestState = com.raulshma.jellyplay.core.data.seerr.SeerrRequestStateHolder(scope, seerrRequestDelegate)
 
@@ -296,7 +264,6 @@ class DetailViewModel @Inject constructor(
                     isDownloadingSeries = false,
                     downloadError = null,
                     seriesDownloadResult = null,
-                    seriesProviderIds = emptyMap(),
                 )
             }
             episodesMap.clear()
@@ -323,22 +290,9 @@ class DetailViewModel @Inject constructor(
                         loadSeasons(itemId)
                     } else if (itemType == MediaType.EPISODE && detail.item.seriesId != null) {
                         // For episodes: load the parent series' seasons so the
-                        // episode row + smart-play target resolve. The series'
-                        // provider IDs (for the redownload feature) are read from
-                        // the seasons call's parent if available; we avoid a
-                        // redundant full getMediaDetail(seriesId) round-trip by
-                        // fetching the series detail concurrently and non-blocking
-                        // — it only feeds the opt-in *arr redownload path, so it
-                        // must never gate the Play button.
-                        val seriesId = detail.item.seriesId!!
-                        loadSeasons(seriesId)
-                        launch {
-                            mediaRepository.getMediaDetail(seriesId).onSuccess { seriesDetail ->
-                                _uiState.update { state ->
-                                    state.copy(seriesProviderIds = seriesDetail.providerIds)
-                                }
-                            }
-                        }
+                        // episode row + smart-play target resolve. This must
+                        // never gate the Play button, hence the non-blocking call.
+                        loadSeasons(detail.item.seriesId!!)
                     } else if (itemType == MediaType.ALBUM) {
                         loadAlbumTracks(itemId)
                     } else if (itemType == MediaType.COLLECTION) {
@@ -660,95 +614,6 @@ class DetailViewModel @Inject constructor(
         val item = _uiState.value.detail?.item ?: return
         launch {
             preferencesStore.hideCwItem(item.id)
-        }
-    }
-
-    // ── Delete & re-download ──────────────────────────────────────────────
-
-    /** Opens the confirmation dialog (no destructive action yet). */
-    fun requestRedownload() {
-        _uiState.update {
-            it.copy(showRedownloadDialog = true, redownloadProgress = null)
-        }
-    }
-
-    /** Cancels the dialog / dismisses the result. */
-    fun dismissRedownloadDialog() {
-        _uiState.update {
-            it.copy(showRedownloadDialog = false, redownloadProgress = null)
-        }
-    }
-
-    /**
-     * Runs the 4-step *arr delete & re-download flow: delete file → verify →
-     * re-monitor (if needed) → search. The whole flow is driven through the
-     * *arr file-delete API (NOT Jellyfin) so *arr's `hasFile` flips to false
-     * and the search actually re-grabs. Per-step results are surfaced live via
-     * [DetailUiState.redownloadProgress]; the dialog renders each step's status.
-     */
-    fun confirmRedownload() {
-        val detail = _uiState.value.detail ?: return
-        val item = detail.item
-        val providerIds = detail.providerIds
-        val kind = if (item.mediaType == MediaType.MOVIE) ArrServiceKind.RADARR else ArrServiceKind.SONARR
-
-        // Resolve ids up-front; bail with a message if the required id is
-        // missing (the action shouldn't have been visible, but guard anyway).
-        val tmdbId = providerIds["tmdb"]?.toIntOrNull()
-        val tvdbId = if (item.mediaType == MediaType.EPISODE) {
-            _uiState.value.seriesProviderIds["tvdb"]?.toIntOrNull()
-        } else {
-            providerIds["tvdb"]?.toIntOrNull()
-        }
-        if (kind == ArrServiceKind.RADARR && tmdbId == null) {
-            _uiState.update {
-                it.copy(redownloadProgress = DetailUiState.RedownloadProgress(
-                    isRunning = false,
-                    steps = listOf(
-                        com.raulshma.jellyplay.core.model.arr.ArrRedownloadStepResult(
-                            com.raulshma.jellyplay.core.model.arr.ArrRedownloadStep.DELETE_FILE,
-                            com.raulshma.jellyplay.core.model.arr.ArrRedownloadStepStatus.FAILED,
-                            context.getString(R.string.detail_redownload_missing_id_movie),
-                        ),
-                    ),
-                ))
-            }
-            return
-        }
-        if (kind == ArrServiceKind.SONARR && (tvdbId == null || item.seasonNumber == null || item.episodeNumber == null)) {
-            _uiState.update {
-                it.copy(redownloadProgress = DetailUiState.RedownloadProgress(
-                    isRunning = false,
-                    steps = listOf(
-                        com.raulshma.jellyplay.core.model.arr.ArrRedownloadStepResult(
-                            com.raulshma.jellyplay.core.model.arr.ArrRedownloadStep.DELETE_FILE,
-                            com.raulshma.jellyplay.core.model.arr.ArrRedownloadStepStatus.FAILED,
-                            context.getString(R.string.detail_redownload_missing_id_episode),
-                        ),
-                    ),
-                ))
-            }
-            return
-        }
-
-        _uiState.update {
-            it.copy(redownloadProgress = DetailUiState.RedownloadProgress(isRunning = true))
-        }
-        launch {
-            val result = arrRepository.redownloadMedia(
-                tmdbId = tmdbId ?: 0,
-                kind = kind,
-                tvdbId = tvdbId,
-                seasonNumber = item.seasonNumber,
-                episodeNumber = item.episodeNumber,
-            ).getOrNull()
-
-            _uiState.update {
-                it.copy(redownloadProgress = DetailUiState.RedownloadProgress(
-                    isRunning = false,
-                    steps = result?.steps,
-                ))
-            }
         }
     }
 
