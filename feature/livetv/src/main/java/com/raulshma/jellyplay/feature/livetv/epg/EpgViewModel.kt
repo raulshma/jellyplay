@@ -48,21 +48,37 @@ class EpgViewModel @Inject constructor(
 
     /** Half-open window [start, end) covered by the current guide fetch. */
     private val _windowStart = composeState(Instant.now().minus(2, ChronoUnit.HOURS))
-    val windowStart: Instant get() = _windowStart.value
     private val _windowEnd = composeState(Instant.now().plus(4, ChronoUnit.HOURS))
-    val windowEnd: Instant get() = _windowEnd.value
 
     private val _recordDialog = composeState<RecordDialogState?>(null)
     val recordDialog: RecordDialogState? get() = _recordDialog.value
 
-    /** Convenience: pre-built grid snapshot for the current data. */
-    val gridData: EpgGridData
-        get() = buildEpgGridData(
-            channels = channels,
-            programs = programs,
-            windowStart = windowStart,
-            windowEnd = windowEnd,
+    /**
+     * Cached grid snapshot. Rebuilt only when the source channels/programs or
+     * the fetch window change — NOT on every recomposition. Previously this was
+     * a computed getter that re-ran `buildEpgGridData` (groupBy + per-channel
+     * filter + sort) on every frame read, which was the primary cause of guide
+     * jank. See [rebuildGrid].
+     */
+    private val _gridData = composeState(
+        buildEpgGridData(
+            channels = emptyList(),
+            programs = emptyList(),
+            windowStart = _windowStart.value,
+            windowEnd = _windowEnd.value,
+        ),
+    )
+    val gridData: EpgGridData get() = _gridData.value
+
+    /** Recompute the cached grid snapshot from the current source data. */
+    private fun rebuildGrid() {
+        _gridData.value = buildEpgGridData(
+            channels = _channels.value,
+            programs = _programs.value,
+            windowStart = _windowStart.value,
+            windowEnd = _windowEnd.value,
         )
+    }
 
     init {
         loadGuide()
@@ -83,6 +99,7 @@ class EpgViewModel @Inject constructor(
                     _programs.value = guide.programs
                     _windowStart.value = now.minus(2, ChronoUnit.HOURS)
                     _windowEnd.value = now.plus(4, ChronoUnit.HOURS)
+                    rebuildGrid()
                 }
                 .onFailure { _error.value = it.message }
             _isLoading.value = false
@@ -99,7 +116,7 @@ class EpgViewModel @Inject constructor(
         val pending = (_recordDialog.value as? RecordDialogState.Confirm)?.program ?: return
         _recordDialog.value = RecordDialogState.Requesting
         launch {
-            mediaRepository.createTimer(pending.id, pending.channelId, pending.startDate, pending.endDate)
+            mediaRepository.createTimer(pending.id)
                 .onSuccess {
                     _recordDialog.value = RecordDialogState.Success(pending.name)
                     loadGuide()
@@ -125,6 +142,7 @@ class EpgViewModel @Inject constructor(
                         _programs.value = guide.programs
                         _windowStart.value = now.minus(2, ChronoUnit.HOURS)
                         _windowEnd.value = now.plus(4, ChronoUnit.HOURS)
+                        rebuildGrid()
                     }
             }
         }

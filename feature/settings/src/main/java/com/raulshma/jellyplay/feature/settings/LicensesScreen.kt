@@ -1,19 +1,21 @@
 package com.raulshma.jellyplay.feature.settings
 
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.HorizontalDivider
-import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -21,28 +23,25 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
+import com.mikepenz.aboutlibraries.entity.Library
+import com.raulshma.jellyplay.core.designsystem.theme.ShapeCache
 import com.raulshma.jellyplay.core.ui.adaptive.LocalAdaptiveInfo
 import com.raulshma.jellyplay.core.ui.adaptive.bottomPadding
 import com.raulshma.jellyplay.core.ui.adaptive.contentPadding
 import com.raulshma.jellyplay.core.ui.components.JellyPlayScreenScaffold
 import com.raulshma.jellyplay.core.ui.components.LoadingScreen
+import com.raulshma.jellyplay.core.ui.components.focusIndicator
 import com.raulshma.jellyplay.core.ui.tv.LocalTvMode
+import com.raulshma.jellyplay.core.ui.tv.TvGrabInitialFocus
 import com.raulshma.jellyplay.core.ui.tv.tvFocusRestorer
-import com.raulshma.jellyplay.core.designsystem.theme.ShapeCache
-import androidx.compose.foundation.clickable
-import androidx.compose.ui.draw.clip
-import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
-import com.raulshma.jellyplay.core.ui.tv.TvGrabInitialFocus
-import com.raulshma.jellyplay.core.ui.tv.tryRequestFocus
-import com.raulshma.jellyplay.core.ui.components.focusIndicator
 
 @Composable
 fun LicensesScreen(
@@ -51,16 +50,17 @@ fun LicensesScreen(
 ) {
     val adaptiveInfo = LocalAdaptiveInfo.current
     val isTv = LocalTvMode.current
-    val context = LocalContext.current
 
     val backgroundColor = com.raulshma.jellyplay.core.ui.components.rememberScreenBackgroundColor()
 
     val focusRequester = remember { FocusRequester() }
     TvGrabInitialFocus(
         focusRequester = focusRequester,
-        itemCount = if (!viewModel.isLoading) viewModel.licenses.size else 0,
+        itemCount = if (!viewModel.isLoading) viewModel.libraries.size else 0,
         tag = "licenses_init",
     )
+
+    var selectedLibrary by remember { mutableStateOf<Library?>(null) }
 
     JellyPlayScreenScaffold(
         title = stringResource(R.string.settings_open_source_licenses_title),
@@ -97,58 +97,64 @@ fun LicensesScreen(
                     verticalArrangement = Arrangement.spacedBy(2.dp),
                 ) {
                     items(
-                        count = viewModel.licenses.size,
-                        key = { viewModel.licenses[it].name },
+                        count = viewModel.libraries.size,
+                        key = { viewModel.libraries[it].uniqueId },
+                        contentType = { "license" },
                     ) { index ->
-                        val license = viewModel.licenses[index]
+                        val library = viewModel.libraries[index]
                         LicenseRow(
-                            name = license.name,
-                            licenseType = license.license,
-                            version = license.version,
+                            library = library,
+                            onClick = { selectedLibrary = library },
                         )
                     }
                 }
             }
         }
     }
+
+    selectedLibrary?.let { library ->
+        LicenseDetailDialog(
+            library = library,
+            onDismiss = { selectedLibrary = null },
+        )
+    }
 }
 
 @Composable
 private fun LicenseRow(
-    name: String,
-    licenseType: String,
-    version: String,
+    library: Library,
+    onClick: () -> Unit,
 ) {
     val isTv = LocalTvMode.current
+    val licenseId = library.licenses.firstOrNull()?.spdxId.orEmpty()
     val rowModifier = if (isTv) {
         Modifier
             .fillMaxWidth()
             .clip(ShapeCache.smooth8)
             .focusIndicator()
-            .clickable(onClick = {})
+            .clickable(onClick = onClick)
             .padding(horizontal = 16.dp, vertical = 8.dp)
     } else {
         Modifier
             .fillMaxWidth()
+            .clickable(onClick = onClick)
             .padding(horizontal = 16.dp, vertical = 8.dp)
     }
-    Column(
-        modifier = rowModifier,
-    ) {
+    Column(modifier = rowModifier) {
         Text(
-            text = name,
+            text = library.name,
             style = MaterialTheme.typography.bodyMedium,
             fontWeight = FontWeight.Medium,
             color = MaterialTheme.colorScheme.onSurface,
             maxLines = 1,
             overflow = TextOverflow.Ellipsis,
         )
-        if (version.isNotBlank() || licenseType.isNotBlank()) {
+        if (!library.artifactVersion.isNullOrBlank() || licenseId.isNotBlank()) {
             Text(
                 text = buildString {
-                    if (version.isNotBlank()) append(version)
-                    if (version.isNotBlank() && licenseType.isNotBlank()) append(" · ")
-                    if (licenseType.isNotBlank()) append(licenseType)
+                    if (!library.artifactVersion.isNullOrBlank()) append(library.artifactVersion)
+                    if (!library.artifactVersion.isNullOrBlank() && licenseId.isNotBlank()) append(" · ")
+                    if (licenseId.isNotBlank()) append(licenseId)
                 },
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
@@ -158,5 +164,60 @@ private fun LicenseRow(
     HorizontalDivider(
         modifier = Modifier.padding(horizontal = 16.dp),
         color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.08f),
+    )
+}
+
+@Composable
+private fun LicenseDetailDialog(
+    library: Library,
+    onDismiss: () -> Unit,
+) {
+    val license = library.licenses.firstOrNull()
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = {
+            Column {
+                Text(
+                    text = library.name,
+                    style = MaterialTheme.typography.titleLarge,
+                    fontWeight = FontWeight.Bold,
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis,
+                )
+                val subtitle = license?.name ?: license?.spdxId
+                if (!subtitle.isNullOrBlank()) {
+                    Text(
+                        text = subtitle,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+            }
+        },
+        text = {
+            val content = license?.licenseContent
+            if (!content.isNullOrBlank()) {
+                Text(
+                    text = content,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurface,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .heightIn(max = 400.dp)
+                        .verticalScroll(rememberScrollState()),
+                )
+            } else {
+                Text(
+                    text = stringResource(R.string.settings_license_text_unavailable),
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+        },
+        confirmButton = {
+            TextButton(onClick = onDismiss) {
+                Text(stringResource(R.string.settings_ok))
+            }
+        },
     )
 }

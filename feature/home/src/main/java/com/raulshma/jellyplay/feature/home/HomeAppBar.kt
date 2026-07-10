@@ -60,6 +60,7 @@ import com.raulshma.jellyplay.core.ui.components.ModeSwitch
 import com.raulshma.jellyplay.core.ui.components.rememberWallClockTimeString
 import com.composables.icons.tabler.Tabler
 import com.composables.icons.tabler.outline.ArrowLeft
+import com.composables.icons.tabler.outline.Cast
 import com.composables.icons.tabler.outline.DotsVertical
 import com.composables.icons.tabler.outline.Download
 import com.composables.icons.tabler.outline.Search
@@ -381,6 +382,7 @@ fun HomeFabMenu(
     onSyncPlayClick: () -> Unit,
     onDownloadsClick: () -> Unit,
     onToggleOffline: () -> Unit,
+    onPlayOnClick: () -> Unit,
     onSettingsClick: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
@@ -504,6 +506,21 @@ fun HomeFabMenu(
             } else {
                 MaterialTheme.colorScheme.secondaryContainer
             },
+        )
+        FloatingActionButtonMenuItem(
+            onClick = {
+                onToggle(false)
+                onPlayOnClick()
+            },
+            text = { Text("Play On") },
+            icon = {
+                Icon(
+                    Tabler.Outline.Cast,
+                    contentDescription = null,
+                    modifier = Modifier.size(20.dp),
+                )
+            },
+            containerColor = MaterialTheme.colorScheme.secondaryContainer,
         )
         FloatingActionButtonMenuItem(
             onClick = {

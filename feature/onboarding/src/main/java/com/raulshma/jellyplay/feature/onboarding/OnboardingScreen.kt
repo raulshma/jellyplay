@@ -2,8 +2,6 @@ package com.raulshma.jellyplay.feature.onboarding
 
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.animation.core.Spring
-import androidx.compose.animation.core.spring
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.slideInVertically
@@ -262,10 +260,7 @@ fun OnboardingScreen(
             AnimatedVisibility(
                 visible = bottomBarVisible,
                 enter = slideInVertically(
-                    animationSpec = spring(
-                        dampingRatio = Spring.DampingRatioMediumBouncy,
-                        stiffness = Spring.StiffnessMediumLow,
-                    ),
+                    animationSpec = MaterialTheme.motionScheme.defaultSpatialSpec(),
                     initialOffsetY = { it },
                 ) + fadeIn(),
             ) {
@@ -306,6 +301,8 @@ private fun OnboardingBottomBar(
     val nextFocusRequester = remember { FocusRequester() }
     val skipFocusState = rememberTvFocusState(focusedScale = 1.04f)
     val nextFocusState = rememberTvFocusState(focusedScale = 1.04f)
+    // Capture once in composable scope; AnimatedContent's transitionSpec is not composable.
+    val fadeSpec = MaterialTheme.motionScheme.defaultEffectsSpec<Float>()
 
     LaunchedEffect(Unit) {
         if (isTv) nextFocusRequester.tryRequestFocus("onboarding_next")
@@ -323,8 +320,8 @@ private fun OnboardingBottomBar(
             AnimatedContent(
                 targetState = isLastPage,
                 transitionSpec = {
-                    fadeIn(spring(stiffness = Spring.StiffnessMedium)) togetherWith
-                            fadeOut(spring(stiffness = Spring.StiffnessMedium))
+                    fadeIn(fadeSpec) togetherWith
+                            fadeOut(fadeSpec)
                 },
                 label = "skipButtonTransition",
             ) { last ->
@@ -357,8 +354,8 @@ private fun OnboardingBottomBar(
             AnimatedContent(
                 targetState = isLastPage,
                 transitionSpec = {
-                    fadeIn(spring(stiffness = Spring.StiffnessMedium)) togetherWith
-                            fadeOut(spring(stiffness = Spring.StiffnessMedium))
+                    fadeIn(fadeSpec) togetherWith
+                            fadeOut(fadeSpec)
                 },
                 label = "nextButtonTransition",
             ) { last ->

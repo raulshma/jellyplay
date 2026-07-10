@@ -9,8 +9,11 @@ import com.raulshma.jellyplay.core.model.DvrSeriesTimer
 import com.raulshma.jellyplay.core.model.DvrTimer
 import com.raulshma.jellyplay.core.model.DvrTimerStatus
 import com.raulshma.jellyplay.core.model.ImageBlurHashes
+import com.raulshma.jellyplay.core.model.GuideInfo
 import com.raulshma.jellyplay.core.model.LiveTvChannel
 import com.raulshma.jellyplay.core.model.LiveTvProgram
+import com.raulshma.jellyplay.core.model.LiveTvRecording
+import com.raulshma.jellyplay.core.model.RecordingFolder
 import com.raulshma.jellyplay.core.model.LogFile
 import com.raulshma.jellyplay.core.model.MediaItem
 import com.raulshma.jellyplay.core.model.MediaType
@@ -34,6 +37,9 @@ import org.jellyfin.sdk.model.api.MediaStreamType
 import org.jellyfin.sdk.model.api.RecordingStatus
 import org.jellyfin.sdk.model.api.TrickplayInfoDto
 import org.jellyfin.sdk.model.serializer.toUUID
+import org.jellyfin.sdk.model.DateTime
+import java.time.ZoneId
+import java.time.format.DateTimeFormatter
 
 internal fun BaseItemDto.toMediaItem() = MediaItem(
     id = id.toString(),
@@ -137,6 +143,8 @@ internal fun MediaSourceInfo.toMediaSource(
     supportsDirectStream = supportsDirectStream,
     supportsDirectPlay = supportsDirectPlay,
     transcodeUrl = transcodingUrl,
+    liveStreamId = liveStreamId,
+    requiresOpening = requiresOpening,
     path = path,
     mediaStreams = mediaStreams?.map { it.toMediaStream() } ?: emptyList(),
     trickplayInfo = trickplayInfo,
@@ -184,8 +192,9 @@ internal fun BaseItemDto.toLiveTvProgram() = LiveTvProgram(
     name = name ?: "",
     overview = overview,
     channelId = channelId?.toString() ?: "",
-    startDate = startDate?.toString(),
-    endDate = endDate?.toString(),
+    channelName = channelName,
+    startDate = startDate?.toIsoInstantString(),
+    endDate = endDate?.toIsoInstantString(),
     durationTicks = runTimeTicks,
     episodeTitle = episodeTitle,
     officialRating = officialRating,
@@ -196,7 +205,51 @@ internal fun BaseItemDto.toLiveTvProgram() = LiveTvProgram(
     isLive = isLive ?: false,
     isPremiere = isPremiere ?: false,
     isSeries = isSeries ?: false,
+    isRepeat = isRepeat ?: false,
+    hasAired = endDate?.isBefore(org.jellyfin.sdk.model.DateTime.now()) ?: false,
+    indexNumber = indexNumber,
+    parentIndexNumber = parentIndexNumber,
+    imageTag = imageTags?.get(ImageType.PRIMARY)?.toString(),
+    timerId = timerId?.toString(),
+    seriesTimerId = seriesTimerId?.toString(),
 )
+
+internal fun BaseItemDto.toLiveTvRecording() = LiveTvRecording(
+    id = id.toString(),
+    name = name ?: "",
+    overview = overview,
+    channelId = channelId?.toString(),
+    channelName = channelName,
+    startDate = startDate?.toIsoInstantString(),
+    endDate = endDate?.toIsoInstantString(),
+    runTimeTicks = runTimeTicks,
+    imageTag = imageTags?.get(ImageType.PRIMARY)?.toString(),
+    seriesTimerId = seriesTimerId?.toString(),
+    status = DvrTimerStatus.COMPLETED,
+)
+
+internal fun BaseItemDto.toRecordingFolder() = RecordingFolder(
+    id = id.toString(),
+    name = name ?: "",
+    collectionType = collectionType?.serialName,
+)
+
+/**
+ * Convert a Jellyfin SDK [DateTime] into a zone-carrying ISO-8601 string.
+ *
+ * The SDK serializes date-times as [ZonedDateTime] but deserializes them into
+ * a [DateTime] (a `java.time.LocalDateTime` typealias on JVM) by shifting to
+ * the system zone and dropping the offset — see
+ * `DateTimeSerializer.deserialize`. A plain `.toString()` therefore emits a
+ * bare `LocalDateTime` with no offset, which downstream consumers (e.g. the
+ * EPG grid) would misread as UTC, shifting every program by the local offset
+ * and dropping most outside the visible window.
+ *
+ * Re-attach the system zone here so callers get an unambiguous ISO instant
+ * (`...Z` / `+HH:MM`) regardless of device timezone.
+ */
+internal fun DateTime.toIsoInstantString(): String =
+    atZone(ZoneId.systemDefault()).format(DateTimeFormatter.ISO_OFFSET_DATE_TIME)
 
 internal fun org.jellyfin.sdk.model.api.TimerInfoDto.toDvrTimer() = DvrTimer(
     id = id?.toString() ?: java.util.UUID.randomUUID().toString(),
@@ -204,8 +257,8 @@ internal fun org.jellyfin.sdk.model.api.TimerInfoDto.toDvrTimer() = DvrTimer(
     programName = name ?: "",
     channelId = channelId?.toString() ?: "",
     channelName = channelName ?: "",
-    startDate = startDate?.toString(),
-    endDate = endDate?.toString(),
+    startDate = startDate?.toIsoInstantString(),
+    endDate = endDate?.toIsoInstantString(),
     status = when (status) {
         RecordingStatus.NEW -> DvrTimerStatus.NEW
         RecordingStatus.IN_PROGRESS -> DvrTimerStatus.RECORDING

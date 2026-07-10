@@ -1,6 +1,7 @@
 package com.raulshma.jellyplay.core.data.playback
 
 import com.raulshma.jellyplay.core.model.AudioNormalizationMode
+import com.raulshma.jellyplay.core.model.ChannelMixMode
 import com.raulshma.jellyplay.core.model.EffectStrength
 import com.raulshma.jellyplay.core.model.EqualizerPreset
 import com.raulshma.jellyplay.core.model.EqualizerSettings
@@ -25,6 +26,8 @@ interface AudioEffectsManager {
     val waveformData: StateFlow<ByteArray>
     val replayGainMode: StateFlow<AudioNormalizationMode>
     val replayGainPreAmpDb: StateFlow<Float>
+    val channelMixMode: StateFlow<ChannelMixMode>
+    val channelMixEnabled: StateFlow<Boolean>
 
     fun toggleNightMode()
     fun toggleDialogueBoost()
@@ -36,6 +39,7 @@ interface AudioEffectsManager {
     fun setNightModeParams(volume: Float, gain: Int)
     fun setReplayGainMode(mode: AudioNormalizationMode)
     fun setReplayGainPreAmpDb(db: Float)
+    fun setChannelMix(mode: ChannelMixMode, enabled: Boolean)
     fun setEqualizerPreset(preset: EqualizerPreset)
     fun toggleBassBoost()
     fun setBassBoostStrength(strength: EffectStrength)

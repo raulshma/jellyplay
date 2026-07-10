@@ -3,18 +3,22 @@ package com.raulshma.jellyplay.feature.details
 import android.content.Context
 import androidx.compose.runtime.Immutable
 import com.raulshma.jellyplay.core.data.offline.OfflineModeManager
+import com.raulshma.jellyplay.core.data.repository.ArrRepository
 import com.raulshma.jellyplay.core.data.repository.DownloadRepository
 import com.raulshma.jellyplay.core.data.repository.MediaRepository
 import com.raulshma.jellyplay.core.data.repository.PlaybackRepository
 import com.raulshma.jellyplay.core.data.repository.SeerrRepository
 import com.raulshma.jellyplay.core.data.seerr.SeerrRequestDelegate
+import com.raulshma.jellyplay.core.data.util.ImageUrlProvider
 import com.raulshma.jellyplay.core.datastore.UserPreferencesStore
 import com.raulshma.jellyplay.core.model.DownloadQuality
+import com.raulshma.jellyplay.core.model.ExperimentalFeature
 import com.raulshma.jellyplay.core.model.MediaDetail
 import com.raulshma.jellyplay.core.model.MediaItem
 import com.raulshma.jellyplay.core.model.MediaType
 import com.raulshma.jellyplay.core.model.NetworkStatus
 import com.raulshma.jellyplay.core.model.UserPreferences
+import com.raulshma.jellyplay.core.model.isExperimentalEnabled
 import com.raulshma.jellyplay.core.model.seerr.SeerrRadarrServiceDetail
 import com.raulshma.jellyplay.core.model.seerr.SeerrRequestResult
 import com.raulshma.jellyplay.core.model.seerr.SeerrSearchItem
@@ -52,6 +56,7 @@ class DetailViewModel @Inject constructor(
     @ApplicationContext private val context: Context,
     private val mediaRepository: MediaRepository,
     private val playbackRepository: PlaybackRepository,
+    private val imageUrlProvider: ImageUrlProvider,
     private val downloadRepository: DownloadRepository,
     private val preferencesStore: UserPreferencesStore,
     private val offlineModeManager: OfflineModeManager,
@@ -61,6 +66,7 @@ class DetailViewModel @Inject constructor(
     private val audioPlaybackManager: com.raulshma.jellyplay.core.data.playback.AudioPlaybackManager,
     private val themeMusicPlayer: com.raulshma.jellyplay.core.data.playback.ThemeMusicPlayer,
     private val tmdbApiClient: TmdbApiClient,
+    private val arrRepository: ArrRepository,
 ) : JellyPlayViewModel() {
 
     val preferences: StateFlow<UserPreferences> = preferencesStore.preferences
@@ -71,6 +77,29 @@ class DetailViewModel @Inject constructor(
     // folds in [SeerrRequestStateHolder] state via combine() so observers see a
     // single atomic snapshot.
     private val _uiState = MutableStateFlow(DetailUiState())
+
+    /**
+     * Whether the "Manage Series" action should be shown. True iff:
+     * - The DIRECT_ARR_INTEGRATION experimental flag is enabled, AND
+     * - The current item is a SERIES (episode navigation goes via the parent
+     *   series detail, so the menu naturally appears there), AND
+     * - The series has a tvdb id (Sonarr resolves series by tvdb), AND
+     * - At least one Sonarr server is resolved.
+     *
+     * Server resolution is deferred past the cheap checks; the actual series
+     * lookup happens inside ManageSeriesScreen.
+     */
+    val canManageSeries: StateFlow<Boolean> = combine(
+        _uiState.map { it.detail?.item },
+        _uiState.map { it.detail?.providerIds },
+        preferencesStore.preferences.map { it.isExperimentalEnabled(ExperimentalFeature.DIRECT_ARR_INTEGRATION) },
+    ) { item, providerIds, flagEnabled ->
+        if (!flagEnabled || item == null) return@combine false
+        if (item.mediaType != MediaType.SERIES) return@combine false
+        if (providerIds?.get("tvdb")?.toIntOrNull() == null) return@combine false
+        val summary = arrRepository.resolveServers().getOrDefault(com.raulshma.jellyplay.core.model.arr.ArrServiceSummary())
+        summary.sonarrServers.isNotEmpty()
+    }.stateIn(scope, SharingStarted.WhileSubscribed(5_000), false)
 
     private val seerrRequestState = com.raulshma.jellyplay.core.data.seerr.SeerrRequestStateHolder(scope, seerrRequestDelegate)
 
@@ -125,11 +154,9 @@ class DetailViewModel @Inject constructor(
     val relatedVideos: StateFlow<List<SeerrRelatedVideo>> = _uiState
         .map { it.relatedVideos }
         .stateIn(scope, SharingStarted.WhileSubscribed(5_000), emptyList())
-    val isSeerrConnected: StateFlow<Boolean> = uiState
-        .map { it.isSeerrConnected }
+    val isSeerrConnected: StateFlow<Boolean> = seerrRepository.isConnected()
         .stateIn(scope, SharingStarted.WhileSubscribed(5_000), false)
-    val isSeerrRecommendationsEnabled: StateFlow<Boolean> = uiState
-        .map { it.isSeerrRecommendationsEnabled }
+    val isSeerrRecommendationsEnabled: StateFlow<Boolean> = seerrRepository.isRecommendationsEnabled()
         .stateIn(scope, SharingStarted.WhileSubscribed(5_000), false)
     val seerrRequestResult: StateFlow<SeerrRequestResult?> get() = seerrRequestState.requestResult
     val radarrServers: StateFlow<List<SeerrRadarrServiceDetail>> get() = seerrRequestState.radarrServers
@@ -144,6 +171,7 @@ class DetailViewModel @Inject constructor(
     val episodes: Map<String, List<MediaItem>> get() = _uiState.value.episodes
     val albumTracks: List<MediaItem> get() = _uiState.value.albumTracks
     val collectionItems: List<MediaItem> get() = _uiState.value.collectionItems
+    val relatedItems: List<MediaItem> get() = _uiState.value.relatedItems
     val fetchedSeasonIds: Set<String> get() = _uiState.value.fetchedSeasonIds
     val isDownloading: Boolean get() = _uiState.value.isDownloading
     val downloadError: String? get() = _uiState.value.downloadError
@@ -225,6 +253,7 @@ class DetailViewModel @Inject constructor(
                     episodes = emptyMap(),
                     fetchedSeasonIds = emptySet(),
                     collectionItems = emptyList(),
+                    relatedItems = emptyList(),
                     smartPlayTarget = null,
                     selectedSubtitleIndex = null,
                     selectedAudioIndex = null,
@@ -260,6 +289,9 @@ class DetailViewModel @Inject constructor(
                     if (itemType == MediaType.SERIES) {
                         loadSeasons(itemId)
                     } else if (itemType == MediaType.EPISODE && detail.item.seriesId != null) {
+                        // For episodes: load the parent series' seasons so the
+                        // episode row + smart-play target resolve. This must
+                        // never gate the Play button, hence the non-blocking call.
                         loadSeasons(detail.item.seriesId!!)
                     } else if (itemType == MediaType.ALBUM) {
                         loadAlbumTracks(itemId)
@@ -270,6 +302,20 @@ class DetailViewModel @Inject constructor(
                     }
                     val themeSourceId = detail.item.seriesId ?: itemId
                     themeMusicPlayer.playThemeFor(themeSourceId)
+
+                    // Fetch similar/related items concurrently and
+                    // non-blocking so the core detail (title, poster, cast,
+                    // streams) renders immediately. The result lands in
+                    // [DetailUiState.relatedItems] and the "More like this"
+                    // section appears when it arrives.
+                    launch {
+                        mediaRepository.getSimilarItems(itemId, limit = 12)
+                            .onSuccess { items ->
+                                _uiState.update {
+                                    it.copy(relatedItems = items.filter { related -> related.id != itemId })
+                                }
+                            }
+                    }
                 }
                 .onFailure { err ->
                     _uiState.update { it.copy(error = err.message ?: context.getString(R.string.detail_error_load_failed)) }
@@ -285,7 +331,16 @@ class DetailViewModel @Inject constructor(
                 .onSuccess { seasonList ->
                     _uiState.update { it.copy(seasons = seasonList) }
                     if (seasonList.isNotEmpty()) {
-                        loadEpisodes(seriesId, seasonList.first().id)
+                        // Fetch ALL seasons' episodes in parallel up-front.
+                        // Previously this fetched only the first season and
+                        // recursed serially through empty seasons (one network
+                        // round-trip at a time) before the Play button label
+                        // could resolve. Parallel fetch collapses N serial
+                        // round-trips into one concurrent batch; smart-play
+                        // is computed once all land.
+                        seasonList.forEach { season ->
+                            loadEpisodes(seriesId, season.id)
+                        }
                     }
                 }
         }
@@ -296,36 +351,27 @@ class DetailViewModel @Inject constructor(
         loadEpisodes(seriesId, seasonId)
     }
 
+    /**
+     * Fetch episodes for a single season. Each call is independent (no
+     * recursion), so [loadSeasons] can fan them out in parallel. Smart-play
+     * is re-evaluated after each season resolves; the smart-play logic itself
+     * is idempotent and will keep waiting for more seasons if none have a
+     * resumeable/unplayed episode yet.
+     */
     private fun loadEpisodes(seriesId: String, seasonId: String) {
         launch {
             mediaRepository.getEpisodes(seriesId, seasonId)
                 .onSuccess { episodeList ->
                     episodesMap[seasonId] = episodeList
                     // Fold the fetchedSeasonIds update into the same emission as
-                    // the episodes update so each recursion level produces one
-                    // uiState copy (was two: one for episodes, one for
-                    // fetchedSeasonIds). StateFlow conflation means downstream
-                    // sees the final state either way; this halves the
-                    // intermediate allocation/emit churn.
+                    // the episodes update so each call produces one uiState copy.
                     _uiState.update {
                         it.copy(
                             episodes = episodesMap.toMap(),
                             fetchedSeasonIds = it.fetchedSeasonIds + seasonId,
                         )
                     }
-
-                    if (episodeList.isEmpty()) {
-                        val seasons = _uiState.value.seasons
-                        val seasonIndex = seasons.indexOfFirst { it.id == seasonId }
-                        if (seasonIndex >= 0 && seasonIndex < seasons.size - 1) {
-                            val nextSeasonId = seasons[seasonIndex + 1].id
-                            loadEpisodes(seriesId, nextSeasonId)
-                        } else {
-                            maybeComputeSmartPlayTarget()
-                        }
-                    } else {
-                        maybeComputeSmartPlayTarget()
-                    }
+                    maybeComputeSmartPlayTarget()
                 }
                 .onFailure {
                     if (!_uiState.value.episodes.containsKey(seasonId)) {
@@ -337,22 +383,9 @@ class DetailViewModel @Inject constructor(
                             )
                         }
                     } else {
-                        // Still record the fetched season id even on a no-op failure.
                         _uiState.update { it.copy(fetchedSeasonIds = it.fetchedSeasonIds + seasonId) }
                     }
-
-                    val seasons = _uiState.value.seasons
-                    val seasonIndex = seasons.indexOfFirst { it.id == seasonId }
-                    if (seasonIndex >= 0 && seasonIndex < seasons.size - 1) {
-                        val nextSeasonId = seasons[seasonIndex + 1].id
-                        if (!_uiState.value.fetchedSeasonIds.contains(nextSeasonId)) {
-                            loadEpisodes(seriesId, nextSeasonId)
-                        } else {
-                            maybeComputeSmartPlayTarget()
-                        }
-                    } else {
-                        maybeComputeSmartPlayTarget()
-                    }
+                    maybeComputeSmartPlayTarget()
                 }
         }
     }
@@ -394,11 +427,18 @@ class DetailViewModel @Inject constructor(
 
     private fun computeSeriesSmartPlayTarget() {
         launch(Dispatchers.Default) {
-            val allEpisodes = _uiState.value.episodes.values.flatten()
+            val state = _uiState.value
+            val allEpisodes = state.episodes.values.flatten()
+            // If there are still seasons in-flight (parallel batch from
+            // loadSeasons hasn't fully resolved), defer: do not set a target
+            // yet, and do NOT re-trigger fetches (all seasons are already
+            // launched in parallel). The next season landing will call
+            // maybeComputeSmartPlayTarget() again.
             if (allEpisodes.isEmpty()) {
-                if (hasMoreSeasonsToLoad()) {
-                    loadNextUnfetchedSeason()
+                if (state.seasons.any { s -> !state.fetchedSeasonIds.contains(s.id) }) {
+                    return@launch // more seasons pending — wait
                 }
+                _uiState.update { it.copy(smartPlayTarget = null) }
                 return@launch
             }
             val sorted = allEpisodes.sortedByPlaybackOrder()
@@ -440,9 +480,10 @@ class DetailViewModel @Inject constructor(
                 return@launch
             }
 
-            if (hasMoreSeasonsToLoad()) {
-                loadNextUnfetchedSeason()
-                return@launch
+            // All episodes played — check whether more seasons are still
+            // in-flight before falling back to a replay target.
+            if (state.seasons.any { s -> !state.fetchedSeasonIds.contains(s.id) }) {
+                return@launch // wait for remaining seasons
             }
 
             val first = sorted.first()
@@ -457,22 +498,6 @@ class DetailViewModel @Inject constructor(
                     )
                 )
             }
-        }
-    }
-
-    private fun hasMoreSeasonsToLoad(): Boolean {
-        val state = _uiState.value
-        return state.seasons.any { season -> !state.fetchedSeasonIds.contains(season.id) }
-    }
-
-    private fun loadNextUnfetchedSeason() {
-        val seriesId = currentSeriesId ?: return
-        val state = _uiState.value
-        val nextSeason = state.seasons.firstOrNull { season -> !state.fetchedSeasonIds.contains(season.id) }
-        if (nextSeason != null) {
-            loadEpisodes(seriesId, nextSeason.id)
-        } else {
-            _uiState.update { it.copy(smartPlayTarget = null) }
         }
     }
 
@@ -709,7 +734,7 @@ class DetailViewModel @Inject constructor(
     }
 
     fun getImageUrl(itemId: String): String =
-        playbackRepository.getImageUrl(itemId, maxWidth = 400)
+        imageUrlProvider.getImageUrl(itemId)
 
     fun downloadSeries(episodeIds: Map<String, List<String>>? = null) {
         val detail = _uiState.value.detail ?: run {
@@ -783,7 +808,7 @@ class DetailViewModel @Inject constructor(
     }
 
     fun getBackdropUrl(itemId: String): String =
-        playbackRepository.getBackdropUrl(itemId, maxWidth = 1280)
+        imageUrlProvider.getBackdropUrl(itemId)
 
     private fun enqueueDownloadWorker(downloadId: String) {
         downloadRepository.enqueueDownload(downloadId)

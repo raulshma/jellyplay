@@ -6,6 +6,8 @@ import androidx.media3.common.AudioAttributes
 import androidx.media3.common.C
 import androidx.media3.common.MediaItem
 import androidx.media3.common.MediaMetadata
+import androidx.media3.common.PlaybackException
+import androidx.media3.common.Player
 import androidx.media3.exoplayer.DefaultLoadControl
 import androidx.media3.exoplayer.DefaultRenderersFactory
 import androidx.media3.exoplayer.ExoPlayer
@@ -37,6 +39,7 @@ class AudioCrossfader(
     private val audioBufferProvider: () -> Pair<Int, Int>,
     private val onCrossfadeTransition: suspend (secondary: ExoPlayer, nextIndex: Int, nextItem: AudioQueueItem) -> Unit,
     private val detachPrimaryListener: (ExoPlayer) -> Unit,
+    private val onCrossfadeError: (PlaybackException) -> Unit,
 ) {
     private var crossfadePlayer: ExoPlayer? = null
     private var crossfadeJob: Job? = null
@@ -84,13 +87,25 @@ class AudioCrossfader(
             .build()
 
         val renderersFactory = object : DefaultRenderersFactory(context) {
+            init {
+                setExtensionRendererMode(DefaultRenderersFactory.EXTENSION_RENDERER_MODE_ON)
+                setEnableDecoderFallback(true)
+            }
+
             override fun buildAudioSink(
                 context: android.content.Context,
                 enableFloatOutput: Boolean,
                 enableAudioTrackPlaybackParams: Boolean,
             ): androidx.media3.exoplayer.audio.AudioSink {
                 return DefaultAudioSink.Builder(context)
-                    .setAudioProcessors(arrayOf(effectsProcessor.crossfadeReplayGainProcessor))
+                    .setAudioProcessors(
+                        arrayOf(
+                            effectsProcessor.crossfadeChannelMixProcessor,
+                            effectsProcessor.crossfadeDynamicsProcessor,
+                            effectsProcessor.crossfadeReplayGainProcessor,
+                            effectsProcessor.crossfadeHighPassProcessor,
+                        ),
+                    )
                     .setEnableFloatOutput(enableFloatOutput)
                     .setEnableAudioTrackPlaybackParams(enableAudioTrackPlaybackParams)
                     .build()
@@ -114,7 +129,16 @@ class AudioCrossfader(
             .setAudioAttributes(audioAttributes, true)
             .setHandleAudioBecomingNoisy(true)
             .setWakeMode(C.WAKE_MODE_LOCAL)
-            .build()
+            .build().also { player ->
+                // Route crossfade-player decode errors to the same handler as
+                // the primary player so a failed transition is visible instead
+                // of silently abandoning the crossfade.
+                player.addListener(object : Player.Listener {
+                    override fun onPlayerError(error: PlaybackException) {
+                        onCrossfadeError(error)
+                    }
+                })
+            }
     }
 
     private fun prepareAndCrossfade(targetIndex: Int, crossfadeMs: Long) {

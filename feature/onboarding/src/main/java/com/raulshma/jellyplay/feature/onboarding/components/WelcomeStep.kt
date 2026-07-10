@@ -6,6 +6,7 @@ import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.snap
 import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
@@ -51,33 +52,38 @@ fun WelcomeStep(
     modifier: Modifier = Modifier,
 ) {
     var visible by remember { mutableStateOf(false) }
+    val reducedMotion = com.raulshma.jellyplay.core.ui.components.LocalReducedMotion.current
     val floatingOffset = remember { Animatable(-6f) }
     val glowScale = remember { Animatable(0.85f) }
 
     LaunchedEffect(Unit) {
         visible = true
-        floatingOffset.animateTo(
-            targetValue = 6f,
-            animationSpec = infiniteRepeatable(
-                animation = tween(durationMillis = 2500, easing = LinearEasing),
-                repeatMode = RepeatMode.Reverse,
-            ),
-        )
+        if (!reducedMotion) {
+            floatingOffset.animateTo(
+                targetValue = 6f,
+                animationSpec = infiniteRepeatable(
+                    animation = tween(durationMillis = 2500, easing = LinearEasing),
+                    repeatMode = RepeatMode.Reverse,
+                ),
+            )
+        }
     }
 
     LaunchedEffect(Unit) {
-        glowScale.animateTo(
-            targetValue = 1.15f,
-            animationSpec = infiniteRepeatable(
-                animation = tween(durationMillis = 3000, easing = LinearEasing),
-                repeatMode = RepeatMode.Reverse,
-            ),
-        )
+        if (!reducedMotion) {
+            glowScale.animateTo(
+                targetValue = 1.15f,
+                animationSpec = infiniteRepeatable(
+                    animation = tween(durationMillis = 3000, easing = LinearEasing),
+                    repeatMode = RepeatMode.Reverse,
+                ),
+            )
+        }
     }
 
     val iconScale by animateFloatAsState(
         targetValue = if (visible) 1f else 0.3f,
-        animationSpec = spring(
+        animationSpec = if (reducedMotion) snap() else spring(
             dampingRatio = Spring.DampingRatioLowBouncy,
             stiffness = Spring.StiffnessMedium,
         ),
@@ -86,12 +92,12 @@ fun WelcomeStep(
 
     val titleAlpha by animateFloatAsState(
         targetValue = if (visible) 1f else 0f,
-        animationSpec = tween(500),
+        animationSpec = if (reducedMotion) snap() else tween(500),
         label = "welcomeTitleAlpha",
     )
     val titleOffset by animateFloatAsState(
         targetValue = if (visible) 0f else 20f,
-        animationSpec = spring(
+        animationSpec = if (reducedMotion) snap() else spring(
             dampingRatio = Spring.DampingRatioMediumBouncy,
             stiffness = Spring.StiffnessMediumLow,
         ),
@@ -100,18 +106,18 @@ fun WelcomeStep(
 
     val subtitleAlpha by animateFloatAsState(
         targetValue = if (visible) 1f else 0f,
-        animationSpec = tween(600, 100),
+        animationSpec = if (reducedMotion) snap() else tween(600, 100),
         label = "welcomeSubtitleAlpha",
     )
 
     val featuresAlpha by animateFloatAsState(
         targetValue = if (visible) 1f else 0f,
-        animationSpec = tween(600, 200),
+        animationSpec = if (reducedMotion) snap() else tween(600, 200),
         label = "welcomeFeaturesAlpha",
     )
     val featuresOffset by animateFloatAsState(
         targetValue = if (visible) 0f else 24f,
-        animationSpec = spring(
+        animationSpec = if (reducedMotion) snap() else spring(
             dampingRatio = Spring.DampingRatioMediumBouncy,
             stiffness = Spring.StiffnessMediumLow,
         ),
@@ -234,6 +240,7 @@ private fun StaggeredFeatureHighlight(
     index: Int,
 ) {
     var visible by remember { mutableStateOf(false) }
+    val reducedMotion = com.raulshma.jellyplay.core.ui.components.LocalReducedMotion.current
 
     LaunchedEffect(Unit) {
         kotlinx.coroutines.delay(index * AnimationTokens.StaggerDelayPerItem.toLong())
@@ -242,7 +249,7 @@ private fun StaggeredFeatureHighlight(
 
     val alpha by animateFloatAsState(
         targetValue = if (visible) 1f else 0f,
-        animationSpec = tween(300),
+        animationSpec = if (reducedMotion) snap() else tween(300),
         label = "featureAlpha_$index",
     )
 

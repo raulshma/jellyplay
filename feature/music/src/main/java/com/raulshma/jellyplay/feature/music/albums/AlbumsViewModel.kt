@@ -3,7 +3,7 @@ package com.raulshma.jellyplay.feature.music.albums
 import androidx.paging.PagingData
 import androidx.paging.cachedIn
 import com.raulshma.jellyplay.core.data.repository.MediaRepository
-import com.raulshma.jellyplay.core.data.repository.PlaybackRepository
+import com.raulshma.jellyplay.core.data.util.ImageUrlProvider
 import com.raulshma.jellyplay.core.model.MediaItem
 import com.raulshma.jellyplay.core.model.MediaType
 import com.raulshma.jellyplay.core.ui.viewmodel.JellyPlayViewModel
@@ -11,6 +11,8 @@ import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.flatMapLatest
 import javax.inject.Inject
 
@@ -26,13 +28,12 @@ enum class AlbumSortOption(val label: String, val sortBy: String) {
 @HiltViewModel
 class AlbumsViewModel @Inject constructor(
     private val mediaRepository: MediaRepository,
-    private val playbackRepository: PlaybackRepository,
+    private val imageUrlProvider: ImageUrlProvider,
 ) : JellyPlayViewModel() {
 
-    private val _selectedSort = composeState(AlbumSortOption.NAME)
-    val selectedSort: AlbumSortOption get() = _selectedSort.value
+    private val sortFlow = MutableStateFlow(AlbumSortOption.NAME)
 
-    private val sortFlow = MutableStateFlow(_selectedSort.value)
+    val selectedSort: StateFlow<AlbumSortOption> = sortFlow.asStateFlow()
 
     val albums: Flow<PagingData<MediaItem>> = sortFlow.flatMapLatest { sort ->
         mediaRepository.getMediaItemsPaged(
@@ -42,10 +43,9 @@ class AlbumsViewModel @Inject constructor(
     }.cachedIn(scope)
 
     fun setSort(sort: AlbumSortOption) {
-        _selectedSort.value = sort
         sortFlow.value = sort
     }
 
     fun getImageUrl(itemId: String): String =
-        playbackRepository.getImageUrl(itemId, maxWidth = 300)
+        imageUrlProvider.getImageUrl(itemId, maxWidth = ImageUrlProvider.MUSIC_MAX_WIDTH)
 }

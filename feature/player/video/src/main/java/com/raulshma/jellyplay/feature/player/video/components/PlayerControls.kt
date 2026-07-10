@@ -51,6 +51,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -194,7 +195,8 @@ internal fun PlayerControls(
     onChannelMixClick: () -> Unit = {},
     onChannelMixModeChange: (ChannelMixMode) -> Unit = {},
     sleepTimerActive: Boolean = false,
-    sleepTimerDisplayText: String = "",
+    sleepTimerEndOfEpisode: Boolean = false,
+    sleepTimerRemainingFlow: StateFlow<Long> = MutableStateFlow(0L),
     supportsVideoFilters: Boolean = false,
     videoFiltersActive: Boolean = false,
     onSleepTimerClick: () -> Unit = {},
@@ -225,6 +227,7 @@ internal fun PlayerControls(
     val currentPosition by currentPositionFlow.collectAsStateWithLifecycle()
     val bufferedPosition by bufferedPositionFlow.collectAsStateWithLifecycle()
     val videoStats by videoStatsFlow.collectAsStateWithLifecycle()
+    val sleepTimerRemainingMs by sleepTimerRemainingFlow.collectAsStateWithLifecycle()
     // Project only the static codec/HDR/audio-channel slice that
     // PlaybackMetadataRow reads. The full EngineVideoStats stream also carries
     // high-churn fields (droppedFrames, bufferedPositionMs, videoBitrate,
@@ -401,6 +404,10 @@ internal fun PlayerControls(
                             isSyncing = isSyncPlaySyncing,
                             onClick = onSyncPlayClick,
                         )
+                    }
+                    if (castManager != null) {
+                        Spacer(Modifier.width(8.dp))
+                        CastButton(castManager = castManager)
                     }
                 }
             }
@@ -595,9 +602,6 @@ internal fun PlayerControls(
                                 onClick = onLockClick,
                             )
                             MuteButton(isMuted = isMuted, onClick = onMuteClick)
-                            if (castManager != null) {
-                                CastButton(castManager = castManager)
-                            }
                         }
 
                         Row(verticalAlignment = Alignment.CenterVertically) {
@@ -616,7 +620,7 @@ internal fun PlayerControls(
                     } else {
                         // LANDSCAPE / TV: asymmetric layout — a scrolling primary
                         // row on the left and a fixed cluster (Lock, Mute, PiP,
-                        // Rotate, Cast, More) on the right.
+                        // Rotate, More) on the right.
                         Row(
                             modifier = Modifier
                                 .weight(1f)
@@ -671,10 +675,6 @@ internal fun PlayerControls(
                                     contentDescription = "Rotate Screen",
                                     onClick = onToggleOrientation,
                                 )
-                            }
-
-                            if (castManager != null) {
-                                CastButton(castManager = castManager)
                             }
 
                             PlayerIconButton(
@@ -779,7 +779,7 @@ internal fun PlayerControls(
                 onChannelMixModeChange(it)
             },
             sleepTimerActive = sleepTimerActive,
-            sleepTimerDisplayText = sleepTimerDisplayText,
+            sleepTimerDisplayText = if (sleepTimerEndOfEpisode) "End of episode" else formatDuration(sleepTimerRemainingMs),
             onSleepTimerClick = {
                 showOverflow = false
                 onSleepTimerClick()

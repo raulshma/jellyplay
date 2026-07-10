@@ -1,17 +1,20 @@
 package com.raulshma.jellyplay.feature.player.audio
 
 import androidx.compose.animation.core.animateFloatAsState
-import androidx.compose.animation.core.spring
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
 import androidx.compose.material3.Icon
@@ -19,6 +22,7 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LongState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
@@ -32,6 +36,7 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.composables.icons.tabler.Tabler
 import com.composables.icons.tabler.filled.*
@@ -46,14 +51,15 @@ import com.raulshma.jellyplay.core.ui.tv.tvFocusIndicator
 /** Waveform seek bar + timestamp row — Pixel Player style. */
 @Composable
 internal fun PixelProgressSection(
-    currentPosition: Long,
+    currentPosition: LongState,
     duration: Long,
     isPlaying: Boolean,
     accentColor: Color,
     onSeek: (Float) -> Unit,
 ) {
+    val positionMs = currentPosition.value
     WaveformSeekBar(
-        progress = if (duration > 0) currentPosition.toFloat() / duration else 0f,
+        progress = if (duration > 0) positionMs.toFloat() / duration else 0f,
         isPlaying = isPlaying,
         activeColor = accentColor,
         inactiveColor = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.25f),
@@ -69,7 +75,7 @@ internal fun PixelProgressSection(
         horizontalArrangement = Arrangement.SpaceBetween,
     ) {
         Text(
-            com.raulshma.jellyplay.core.ui.components.formatDurationMs(currentPosition),
+            com.raulshma.jellyplay.core.ui.components.formatDurationMs(positionMs),
             style = MaterialTheme.typography.labelSmall,
             color = accentColor.copy(alpha = 0.8f),
         )
@@ -259,6 +265,78 @@ internal fun PixelSecondaryControls(
     }
 }
 
+/**
+ * "Up next" strip shown beneath the secondary controls row. Surfaces the next
+ * queued track and lets the user skip over it (remove it from the upcoming
+ * queue). Flat, borderless design — no card/surface container, just inline
+ * artwork, text, and a skip affordance.
+ */
+@Composable
+internal fun NextTrackBar(
+    title: String,
+    artist: String,
+    artworkUrl: String?,
+    onSkipTrack: () -> Unit,
+    modifier: Modifier = Modifier,
+    accentColor: Color,
+) {
+    Row(
+        modifier = modifier
+            .fillMaxWidth()
+            .clickable(role = androidx.compose.ui.semantics.Role.Button, onClick = onSkipTrack)
+            .padding(horizontal = 8.dp, vertical = 6.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Box(
+            modifier = Modifier
+                .size(36.dp)
+                .clip(ShapeCache.smooth8)
+                .background(MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.1f)),
+            contentAlignment = Alignment.Center,
+        ) {
+            if (!artworkUrl.isNullOrBlank()) {
+                com.raulshma.jellyplay.core.ui.image.MediaImage(
+                    url = artworkUrl,
+                    contentDescription = title,
+                    modifier = Modifier.fillMaxSize(),
+                    contentScale = androidx.compose.ui.layout.ContentScale.Crop,
+                )
+            } else {
+                Icon(
+                    Tabler.Outline.Music,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.size(18.dp),
+                )
+            }
+        }
+        Spacer(Modifier.width(12.dp))
+        Column(modifier = Modifier.weight(1f)) {
+            Text(
+                text = "Up next",
+                style = MaterialTheme.typography.labelSmall,
+                color = accentColor.copy(alpha = 0.8f),
+                maxLines = 1,
+            )
+            Text(
+                text = "$title · $artist",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
+        }
+        Spacer(Modifier.width(8.dp))
+        // Skip-over affordance: removes this upcoming track from the queue.
+        Icon(
+            Tabler.Outline.X,
+            contentDescription = stringResource(R.string.audio_controls_next),
+            tint = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.size(20.dp),
+        )
+    }
+}
+
 /** Pixel Player play/pause: rounded-square, light accent background */
 @Composable
 internal fun PixelPlayPauseButton(
@@ -273,7 +351,7 @@ internal fun PixelPlayPauseButton(
     val isPressed by interactionSource.collectIsPressedAsState()
     val scale by animateFloatAsState(
         targetValue = if (isPressed) 0.88f else 1f,
-        animationSpec = spring(stiffness = 500f),
+        animationSpec = MaterialTheme.motionScheme.fastSpatialSpec(),
         label = "pixelPlayScale",
     )
 

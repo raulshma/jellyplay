@@ -14,6 +14,7 @@ import androidx.media3.session.MediaSession
 import androidx.media3.session.MediaStyleNotificationHelper
 import androidx.palette.graphics.Palette
 import coil3.ImageLoader
+import coil3.request.CachePolicy
 import coil3.request.ImageRequest
 import coil3.toBitmap
 import com.google.common.collect.ImmutableList
@@ -53,11 +54,10 @@ class JellyPlayNotificationProvider(
     fun release() {
         scope.cancel()
         synchronized(bitmapLock) {
-            // Mirror NowPlayingWidgetUpdater.stop(): explicitly recycle the
-            // cached artwork bitmap rather than waiting for GC to reclaim the
-            // native allocation. Safe because release() is invoked at service
-            // teardown, after the notification (which held this bitmap via
-            // setLargeIcon) has already been torn down.
+            // Recycle the artwork Bitmap. Safe because loadArtworkAsync
+            // decodes with memoryCachePolicy(DISABLED), so this is a private
+            // instance never handed to a Compose AsyncImage (which would crash
+            // on its next onDraw). Mirrors NowPlayingWidgetUpdater.stop().
             cachedBitmap?.let { if (!it.isRecycled) it.recycle() }
             cachedBitmap = null
             cachedArtworkUri = null
@@ -181,6 +181,15 @@ class JellyPlayNotificationProvider(
                 val request = ImageRequest.Builder(appContext)
                     .data(artworkUri)
                     .size(ARTWORK_SIZE)
+                    // Disable the memory cache so Coil decodes a fresh,
+                    // privately-owned Bitmap. The default path returns the
+                    // *shared* cache Bitmap also handed to any Compose
+                    // AsyncImage showing the same artwork URL (MiniPlayer,
+                    // AudioPlayerArtwork). Recycling that shared Bitmap in
+                    // release() then crashed the Compose painter with
+                    // "Canvas: trying to use a recycled bitmap". Mirrors the
+                    // fix proven in WidgetImageLoader.loadPoster.
+                    .memoryCachePolicy(CachePolicy.DISABLED)
                     .build()
                 val result = imageLoader.execute(request)
                 val bitmap = result.image?.toBitmap()

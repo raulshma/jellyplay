@@ -125,6 +125,7 @@ fun UserStatisticsScreen(
                     items(
                         items = state.users,
                         key = { it.userId },
+                        contentType = { "userStat" },
                     ) { user ->
                         StaggeredSection(visible = true, index = state.users.indexOf(user) + 2) {
                             UserStatisticsCard(

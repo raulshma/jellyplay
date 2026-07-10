@@ -72,6 +72,11 @@ class OfflineSeriesViewModel @Inject constructor(
         episodes.map { map -> map.values.flatten().sumOf { it.totalSizeBytes } }
             .stateIn(scope, SharingStarted.WhileSubscribed(5_000), 0L)
 
+    /** Number of episodes actually downloaded for this series (across all seasons). */
+    val downloadedEpisodeCount: StateFlow<Int> =
+        episodes.map { map -> map.values.sumOf { it.size } }
+            .stateIn(scope, SharingStarted.WhileSubscribed(5_000), 0)
+
     /** Drives the screen's data. Called once from a LaunchedEffect(seriesId). */
     fun load(seriesId: String) {
         if (_seriesId.value == seriesId) return

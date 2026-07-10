@@ -12,18 +12,20 @@ import androidx.media3.common.C
 import androidx.media3.common.Format
 import androidx.media3.common.MediaItem
 import androidx.media3.common.MediaMetadata
+import androidx.media3.common.MimeTypes
 import androidx.media3.common.PlaybackException
 import androidx.media3.common.Player
 import androidx.media3.common.TrackGroup
 import androidx.media3.common.TrackSelectionOverride
 import androidx.media3.datasource.DataSource
 import androidx.media3.datasource.DefaultDataSource
-import androidx.media3.datasource.DefaultHttpDataSource
 import androidx.media3.datasource.ResolvingDataSource
+import androidx.media3.datasource.okhttp.OkHttpDataSource
 import androidx.media3.exoplayer.DefaultLoadControl
 import androidx.media3.exoplayer.DefaultRenderersFactory
 import androidx.media3.exoplayer.DecoderCounters
 import androidx.media3.exoplayer.ExoPlayer
+import androidx.media3.exoplayer.audio.DefaultAudioSink
 import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
 import androidx.media3.exoplayer.trackselection.DefaultTrackSelector
 import androidx.media3.exoplayer.upstream.DefaultBandwidthMeter
@@ -35,14 +37,20 @@ import androidx.media3.extractor.DefaultExtractorsFactory
 import androidx.media3.extractor.text.DefaultSubtitleParserFactory
 import com.raulshma.jellyplay.core.data.playback.AudioNormalizationHelper
 import com.raulshma.jellyplay.core.data.playback.BassBoostHelper
+import com.raulshma.jellyplay.core.data.playback.ChannelMixAudioProcessor
 import com.raulshma.jellyplay.core.data.playback.ChannelMixHelper
 import com.raulshma.jellyplay.core.data.playback.DialogueBoostHelper
+import com.raulshma.jellyplay.core.data.playback.DynamicsCompressorAudioProcessor
 import com.raulshma.jellyplay.core.data.playback.EqualizerHelper
+import com.raulshma.jellyplay.core.data.playback.HighPassFilterAudioProcessor
+import com.raulshma.jellyplay.core.data.playback.LoudnessEnhancerHelper
 import com.raulshma.jellyplay.core.data.playback.MediaStreamVolume
 import com.raulshma.jellyplay.core.data.playback.NightModeHelper
+import com.raulshma.jellyplay.core.data.playback.ReplayGainAudioProcessor
 import com.raulshma.jellyplay.core.data.playback.ReverbHelper
 import com.raulshma.jellyplay.core.data.playback.VirtualizerHelper
-import com.raulshma.jellyplay.core.data.playback.LoudnessEnhancerHelper
+import com.raulshma.jellyplay.core.model.AudioNormalizationMode
+import com.raulshma.jellyplay.core.model.ChannelMixMode
 import com.raulshma.jellyplay.core.model.DecoderMode
 import com.raulshma.jellyplay.core.model.ExoAudioOffloadMode
 import com.raulshma.jellyplay.core.model.ExoFrameRateStrategy
@@ -65,6 +73,7 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
+import okhttp3.OkHttpClient
 
 // The position-polling bounded paused-wait (M2) now lives in [EnginePositionTicker].
 
@@ -77,6 +86,7 @@ private const val DEFAULT_SUBTITLE_SIZE_SP = 18f
 
 class ExoPlayerEngine(
     private val context: Context,
+    private val streamingOkHttpClient: OkHttpClient,
     bandwidthMeter: DefaultBandwidthMeter? = null,
 ) : MediaEngine {
 
@@ -124,6 +134,9 @@ class ExoPlayerEngine(
     private var player: ExoPlayer? = null
     private var trackSelector: DefaultTrackSelector? = null
     private var playerView: PlayerView? = null
+    private var frameSizeListener: android.view.View.OnLayoutChangeListener? = null
+    private var lastFrameW = -1
+    private var lastFrameH = -1
     private var currentMediaItem: MediaItem? = null
     private val bandwidthMeter = bandwidthMeter ?: DefaultBandwidthMeter.Builder(context).build()
     private val currentSubtitleConfigs = mutableListOf<MediaItem.SubtitleConfiguration>()
@@ -132,8 +145,16 @@ class ExoPlayerEngine(
     
     private var currentConfig = EngineConfig()
 
+    /**
+     * Per-track ReplayGain (dB) from the current [PlaybackRequest], used
+     * for TRACK/ALBUM loudness normalization via [replayGainProcessor].
+     * `null` until [load] is called.
+     */
+    private var currentNormalizationGain: Float? = null
+
     private val equalizerHelper = EqualizerHelper()
-    private val dialogueBoost = DialogueBoostHelper(equalizerHelper)
+    private val highPassFilter = HighPassFilterAudioProcessor()
+    private val dialogueBoost = DialogueBoostHelper(equalizerHelper, highPassFilter)
     private val nightMode = NightModeHelper()
     private val audioNormalizationHelper = AudioNormalizationHelper()
     private val channelMixHelper = ChannelMixHelper()
@@ -141,6 +162,14 @@ class ExoPlayerEngine(
     private val virtualizerHelper = VirtualizerHelper()
     private val reverbHelper = ReverbHelper()
     private val loudnessEnhancerHelper = LoudnessEnhancerHelper()
+
+    // In-sink AudioProcessors for the video ExoPlayer path — these run
+    // real DSP (channel matrixing, dynamic compression, ReplayGain,
+    // sub-bass high-pass) that the android.media.audiofx helpers above
+    // cannot do. Installed via the custom renderers factory in load().
+    private val channelMixProcessor = ChannelMixAudioProcessor()
+    private val dynamicsProcessor = DynamicsCompressorAudioProcessor()
+    private val replayGainProcessor = ReplayGainAudioProcessor()
 
     private var lastVideoStats: EngineVideoStats? = null
 
@@ -227,6 +256,8 @@ class ExoPlayerEngine(
         release()
         engineScope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
 
+        currentNormalizationGain = request.normalizationGain
+
         val exoCfg = (currentConfig.engineSpecific as? ExoPlayerEngineConfig) ?: ExoPlayerEngineConfig()
 
         val selector = DefaultTrackSelector(context)
@@ -270,9 +301,37 @@ class ExoPlayerEngine(
             DecoderMode.HW_ONLY -> DefaultRenderersFactory.EXTENSION_RENDERER_MODE_OFF
             DecoderMode.SW_ONLY -> DefaultRenderersFactory.EXTENSION_RENDERER_MODE_PREFER
         }
-        val renderersFactory = DefaultRenderersFactory(context)
-            .setExtensionRendererMode(rendererMode)
-            .setEnableDecoderFallback(exoCfg.enableDecoderFallback)
+        // Custom renderers factory injects the in-sink AudioProcessor chain
+        // (channel mix → dynamics → ReplayGain → high-pass) into the video
+        // ExoPlayer path, mirroring the audio/music player's sink. This is the
+        // single point where real DSP channel mixing and per-track loudness
+        // normalization get applied to video playback; without it those effects
+        // are silently ignored here even though the config exposes them.
+        val renderersFactory = object : DefaultRenderersFactory(context) {
+            init {
+                setExtensionRendererMode(rendererMode)
+                setEnableDecoderFallback(exoCfg.enableDecoderFallback)
+            }
+
+            override fun buildAudioSink(
+                context: android.content.Context,
+                enableFloatOutput: Boolean,
+                enableAudioTrackPlaybackParams: Boolean,
+            ): DefaultAudioSink {
+                return DefaultAudioSink.Builder(context)
+                    .setAudioProcessors(
+                        arrayOf(
+                            channelMixProcessor,
+                            dynamicsProcessor,
+                            replayGainProcessor,
+                            highPassFilter,
+                        ),
+                    )
+                    .setEnableFloatOutput(enableFloatOutput)
+                    .setEnableAudioTrackPlaybackParams(enableAudioTrackPlaybackParams)
+                    .build()
+            }
+        }
 
         val loadControl = DefaultLoadControl.Builder()
             .setBufferDurationsMs(request.minBufferMs, request.maxBufferMs, 1_000, 3_000)
@@ -323,6 +382,7 @@ class ExoPlayerEngine(
             .setLoadControl(loadControl)
             .setAudioAttributes(audioAttrs, currentConfig.pauseOnAudioFocusLoss)
             .setWakeMode(if (isNetworkStream) C.WAKE_MODE_NETWORK else C.WAKE_MODE_LOCAL)
+            .setHandleAudioBecomingNoisy(true)
             .setBandwidthMeter(bandwidthMeter)
             .setVideoScalingMode(exoCfg.videoScalingMode.value)
             .setVideoChangeFrameRateStrategy(exoCfg.frameRateStrategy.value)
@@ -355,7 +415,30 @@ class ExoPlayerEngine(
 
         val mediaItem = MediaItem.Builder()
             .setUri(request.uri)
-            .apply { request.mimeType?.let { setMimeType(it) } }
+            .apply {
+                val effectiveMime = request.mimeType ?: if (request.isLive) {
+                    // Live TV stream URLs are extension-less (/Videos/{id}/stream
+                    // ?...&LiveStreamId=...). Without a hint ExoPlayer falls
+                    // back to content sniffing, which fails for MPEG-TS-over-HTTP
+                    // and selects the wrong extractor for HLS. Pick the hint from
+                    // the URL so the right MediaSource is used.
+                    if (request.uri.contains(".m3u8", ignoreCase = true)) {
+                        MimeTypes.APPLICATION_M3U8
+                    } else {
+                        MimeTypes.VIDEO_MP2T
+                    }
+                } else null
+                effectiveMime?.let { setMimeType(it) }
+            }
+            .apply {
+                if (request.isLive) {
+                    // Enable live-mode playback so ExoPlayer tracks the live
+                    // window (target/min/max offset defaults) instead of treating
+                    // the stream as finite VOD whose "duration" would trip the
+                    // ended-close logic.
+                    setLiveConfiguration(MediaItem.LiveConfiguration.Builder().build())
+                }
+            }
             .setSubtitleConfigurations(subtitleConfigs)
             .setMediaMetadata(metadataBuilder.build())
             .build()
@@ -365,7 +448,8 @@ class ExoPlayerEngine(
         currentSubtitleConfigs.clear()
         currentSubtitleConfigs.addAll(subtitleConfigs)
         exo.prepare()
-        if (request.startPositionMs > 0) {
+        // Live streams start at the live edge; never seek to a resume position.
+        if (!request.isLive && request.startPositionMs > 0) {
             exo.seekTo(request.startPositionMs)
         }
         exo.play()
@@ -374,17 +458,22 @@ class ExoPlayerEngine(
     }
 
     private fun createAuthenticatedDataSourceFactory(
-        serverUrl: String?, 
-        token: String?, 
+        serverUrl: String?,
+        token: String?,
         headers: Map<String, String>
     ): DataSource.Factory {
-        val httpDataSourceFactory = DefaultHttpDataSource.Factory()
+        // Route media streams through the shared app OkHttp stack rather than a
+        // standalone HttpURLConnection. The injected client carries the shared
+        // connection pool, the user-sized disk Cache, the BandwidthInterceptor
+        // that feeds adaptive bitrate selection, and HTTP/2 multiplexing — so
+        // the highest-bandwidth traffic reuses the same wiring as every other
+        // request. OkHttp follows cross-protocol redirects by default, and the
+        // "streaming" qualifier already sets a >=30s read timeout. The
+        // ResolvingDataSource auth wrapper below composes on top unchanged.
+        val httpDataSourceFactory = OkHttpDataSource.Factory(streamingOkHttpClient)
             .setUserAgent("JellyPlay")
-            .setConnectTimeoutMs(15_000)
-            .setReadTimeoutMs(30_000)
-            .setAllowCrossProtocolRedirects(true)
             .setDefaultRequestProperties(headers)
-            
+
         val baseFactory = DefaultDataSource.Factory(context, httpDataSourceFactory)
 
         val authority = serverUrl?.let { Uri.parse(it).authority }
@@ -406,6 +495,8 @@ class ExoPlayerEngine(
         engineScope.cancel()
         player?.removeListener(listener)
         player?.removeAnalyticsListener(decoderCountersListener)
+        frameSizeListener?.let { playerView?.removeOnLayoutChangeListener(it) }
+        frameSizeListener = null
         playerView?.player = null
         playerView = null
         player?.release()
@@ -568,16 +659,18 @@ class ExoPlayerEngine(
         // Layout passes fire frequently during playback (controls show/hide,
         // seekbar interaction, immersive transitions, video-size callbacks);
         // only reparent on genuine geometry changes to suppress no-op work.
-        var lastFrameW = -1
-        var lastFrameH = -1
-        pv.addOnLayoutChangeListener { _, left, top, right, bottom, _, _, _, _ ->
+        lastFrameW = -1
+        lastFrameH = -1
+        val layoutListener = android.view.View.OnLayoutChangeListener { _, left, top, right, bottom, _, _, _, _ ->
             val w = right - left
             val h = bottom - top
-            if (w == lastFrameW && h == lastFrameH) return@addOnLayoutChangeListener
+            if (w == lastFrameW && h == lastFrameH) return@OnLayoutChangeListener
             lastFrameW = w
             lastFrameH = h
             pv.post { reparentSubtitleViewIntoVideoFrame(pv) }
         }
+        frameSizeListener = layoutListener
+        pv.addOnLayoutChangeListener(layoutListener)
         playerView = pv
         applySubtitleStyleToView(pv, currentConfig.subtitleStyle)
         return pv
@@ -826,10 +919,12 @@ class ExoPlayerEngine(
         
         dialogueBoost.setStrength(config.dialogueBoostStrength)
         dialogueBoost.setEnabled(config.dialogueBoostEnabled)
-        
+        // dialogueBoost also toggles highPassFilter (its rumble cut) —
+        // driven inside DialogueBoostHelper.setEnabled.
+
         nightMode.setStrength(config.nightModeStrength)
         nightMode.setEnabled(config.nightModeEnabled)
-        
+
         // equalizerHelper owns the single priority-0 Equalizer for this
         // session and DialogueBoostHelper overlays its vocal-band gains
         // on top via setBandOffsets (see EqualizerHelper kdoc). The
@@ -839,11 +934,44 @@ class ExoPlayerEngine(
         equalizerHelper.setSettings(config.equalizerSettings)
         equalizerHelper.setEnabled(config.equalizerEnabled || config.dialogueBoostEnabled)
 
-        audioNormalizationHelper.setMode(config.audioNormalizationMode)
-        audioNormalizationHelper.setEnabled(config.audioNormalizationEnabled)
+        // Normalization is now handled by the in-sink AudioProcessor chain
+        // rather than the legacy audiofx LoudnessEnhancer, so the three
+        // modes are consistent with the audio/music + MPV paths:
+        //  - DYNAMIC  → DSP compressor (dynamicsProcessor)
+        //  - TRACK/ALBUM → per-track ReplayGain (replayGainProcessor) when
+        //    the item has a normalizationGain, else no-op
+        //  - NONE     → both off
+        when (config.audioNormalizationMode) {
+            AudioNormalizationMode.DYNAMIC -> {
+                if (config.audioNormalizationEnabled) {
+                    dynamicsProcessor.setEnabled(true)
+                    replayGainProcessor.setGainDb(0f)
+                } else {
+                    dynamicsProcessor.setEnabled(false)
+                    replayGainProcessor.setGainDb(0f)
+                }
+            }
+            AudioNormalizationMode.TRACK, AudioNormalizationMode.ALBUM -> {
+                dynamicsProcessor.setEnabled(false)
+                val gain = currentNormalizationGain ?: 0f
+                replayGainProcessor.setGainDb(if (config.audioNormalizationEnabled) gain else 0f)
+            }
+            AudioNormalizationMode.NONE -> {
+                dynamicsProcessor.setEnabled(false)
+                replayGainProcessor.setGainDb(0f)
+            }
+        }
+        // Legacy LoudnessEnhancer is intentionally left disabled to avoid
+        // double-processing DYNAMIC mode alongside the DSP compressor.
+        audioNormalizationHelper.setMode(AudioNormalizationMode.NONE)
+        audioNormalizationHelper.setEnabled(false)
 
-        channelMixHelper.setMode(config.channelMixMode)
-        channelMixHelper.setEnabled(config.channelMixEnabled)
+        // Real channel matrix mixing via the in-sink processor; the legacy
+        // audiofx-based channelMixHelper no longer drives a mode here.
+        channelMixProcessor.setMode(config.channelMixMode)
+        channelMixProcessor.setEnabled(config.channelMixEnabled)
+        channelMixHelper.setMode(ChannelMixMode.AUTO)
+        channelMixHelper.setEnabled(false)
 
         bassBoostHelper.setStrength(config.bassBoostStrength)
         bassBoostHelper.setEnabled(config.bassBoostEnabled)

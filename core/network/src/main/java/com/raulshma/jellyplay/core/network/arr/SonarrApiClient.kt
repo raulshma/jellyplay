@@ -7,6 +7,7 @@ import com.raulshma.jellyplay.core.model.arr.ArrCommandName
 import com.raulshma.jellyplay.core.model.arr.ArrHistoryItem
 import com.raulshma.jellyplay.core.model.arr.ArrQueueDeleteOptions
 import com.raulshma.jellyplay.core.model.arr.ArrQueueItem
+import com.raulshma.jellyplay.core.model.arr.ArrSeriesEpisode
 import com.raulshma.jellyplay.core.model.arr.ArrWantedItem
 
 /**
@@ -121,8 +122,9 @@ interface SonarrApiClient {
 
     /**
      * `POST /api/v3/command` — queues an asynchronous command. Pass [seriesId]
-     * for series-scoped commands (RefreshSeries / SeriesSearch) or
-     * [episodeIds] for EpisodeSearch. Returns the queued [ArrCommand].
+     * for series-scoped commands (RefreshSeries / SeriesSearch), [episodeIds]
+     * for EpisodeSearch, or [seasonNumber] for SeasonSearch (requires [seriesId]).
+     * Returns the queued [ArrCommand].
      */
     suspend fun postCommand(
         baseUrl: String,
@@ -130,10 +132,151 @@ interface SonarrApiClient {
         commandName: ArrCommandName,
         seriesId: Int? = null,
         episodeIds: List<Int>? = null,
+        seasonNumber: Int? = null,
     ): Result<ArrCommand>
+
+    /**
+     * `GET /api/v3/series?tvdbId=...` — resolves the Sonarr internal series id
+     * for a tvdb id. Returns null when Sonarr has no series matching [tvdbId]
+     * (the series isn't tracked). Used by the delete & re-download flow to
+     * translate a Jellyfin episode's tvdb id → the Sonarr series id that
+     * episode + command endpoints key off.
+     */
+    suspend fun findSeriesByTvdb(baseUrl: String, apiKey: String, tvdbId: Int): Result<Int?>
+
+    /**
+     * Resolves the single episode matching S/E, returning the fields the
+     * delete & re-download flow needs.
+     *
+     * Lookup strategy (handles numbering mismatches between Jellyfin and Sonarr
+     * — split seasons, anime absolute numbering, specials placement):
+     * 1. `GET /episode?seriesId=&seasonNumber=` then client-side filter by
+     *    [episodeNumber]. Fast path; the common case.
+     * 2. If (1) misses, `GET /episode?seriesId=` (all episodes) and match on
+     *    [episodeNumber] **across all seasons**. Handles cases where Jellyfin's
+     *    `ParentIndexNumber` (season) disagrees with Sonarr's `SeasonNumber`.
+     *    The matched episode's actual season is in [SonarrEpisodeInfo.seasonNumber].
+     *
+     * Note: Sonarr's `/episode` controller has **no `episodeNumber` query
+     * param**; passing one is silently ignored and returns the whole season.
+     *
+     * Returns null when no episode matches [episodeNumber] in any season.
+     * [SonarrEpisodeInfo.episodeFileId] is 0 when the episode has no file.
+     * Use [getSeasonSummaries] on the null path to build a diagnostic message.
+     */
+    suspend fun getEpisodeInfo(
+        baseUrl: String,
+        apiKey: String,
+        seriesId: Int,
+        seasonNumber: Int,
+        episodeNumber: Int,
+    ): Result<SonarrEpisodeInfo?>
+
+    /**
+     * `GET /api/v3/episode?seriesId=...` — a compact per-season index of the
+     * series' episodes. Used **only** on the `getEpisodeInfo` null path to build
+     * a diagnostic message ("Sonarr has S0 (eps 1–3), S1 (eps 1–24); no match
+     * for S5E12"). Not needed when [getEpisodeInfo] resolves successfully.
+     */
+    suspend fun getSeasonSummaries(
+        baseUrl: String,
+        apiKey: String,
+        seriesId: Int,
+    ): Result<List<SonarrSeasonSummary>>
+
+    /**
+     * `DELETE /api/v3/episodeFile/{id}` — deletes an episode's file (the same
+     * flow the Sonarr web UI uses under "Manage Episodes" → delete). Clears
+     * `hasFile` server-side so a subsequent `EpisodeSearch` will re-grab.
+     * Returns 200 (not 204); a 409 indicates the series' root folder is missing
+     * or empty (surfaced as an actionable error). Safe to 404 if the file was
+     * already removed.
+     */
+    suspend fun deleteEpisodeFile(baseUrl: String, apiKey: String, episodeFileId: Int): Result<Unit>
+
+    /**
+     * `PUT /api/v3/episode/monitor` — toggles the monitored flag on one or more
+     * episodes. Idempotent. Used by the delete & re-download flow to guarantee
+     * the episode is monitored before searching (Sonarr does NOT auto-unmonitor
+     * on file delete by default, so this is a safety net, not always required).
+     */
+    suspend fun monitorEpisodes(
+        baseUrl: String,
+        apiKey: String,
+        episodeIds: List<Int>,
+        monitored: Boolean,
+    ): Result<Unit>
+
+    /**
+     * `GET /api/v3/series?tvdbId=...` — resolves whether Sonarr tracks this
+     * series and, if so, returns its internal id + monitored flag. Mirrors
+     * [findSeriesByTvdb] but keeps the series metadata instead of returning just
+     * the id. Used by the "Manage Series" screen to locate the owning series.
+     *
+     * Returns null when no series matches [tvdbId] (not tracked). As with
+     * [findSeriesByTvdb], the `?tvdbId=` query param is treated as untrusted —
+     * the result is filtered client-side because some Sonarr versions ignore it.
+     */
+    suspend fun getSeriesInfo(baseUrl: String, apiKey: String, tvdbId: Int): Result<SonarrSeriesInfo?>
+
+    /**
+     * `GET /api/v3/episode?seriesId=...` — the rich projection used by the
+     * "Manage Series" screen: every episode in the series with its season /
+     * episode numbers, title, air date, overview, monitored flag, and (when a
+     * file exists) file id + size + quality. Mapped to [ArrSeriesEpisode].
+     *
+     * Distinct from [getEpisodeInfo] (single-episode lookup for the redownload
+     * flow) and [getSeasonSummaries] (compact diagnostic index): this returns
+     * every episode and the full field set the management UI needs.
+     */
+    suspend fun getEpisodesForSeries(baseUrl: String, apiKey: String, seriesId: Int): Result<List<ArrSeriesEpisode>>
 
     /**
      * `GET /api/v3/system/status` — connection probe. Succeeds iff 2xx.
      */
     suspend fun testConnection(baseUrl: String, apiKey: String): Result<Unit>
 }
+
+/**
+ * Resolved series identity + monitored flag, mapped from `GET /api/v3/series`.
+ * Kept in `core.network` (like [SonarrEpisodeInfo]) as a client-facing contract.
+ */
+data class SonarrSeriesInfo(
+    val id: Int,
+    val title: String,
+    val monitored: Boolean,
+    /** On-disk root folder for the series (Sonarr `path`). Null when absent. */
+    val path: String? = null,
+)
+
+/**
+ * Sonarr episode info needed for the delete & re-download flow, mapped from
+ * `GET /api/v3/episode` rows. Kept in `core.network` (not `core.model`) as a
+ * client-facing contract, mirroring how the *arr clients own their DTO shapes.
+ */
+data class SonarrEpisodeInfo(
+    /** Sonarr internal episode id (used for `EpisodeSearch` + monitor). */
+    val id: Int,
+    /** The episode file's id; 0 when no file exists. Used for `DELETE /episodeFile/{id}`. */
+    val episodeFileId: Int,
+    /** True when the episode has a file linked. Re-queried post-delete to verify. */
+    val hasFile: Boolean,
+    /** Current monitored flag. Re-monitor is skipped when already true. */
+    val monitored: Boolean,
+    /**
+     * Sonarr's season number for this episode. Differs from the requested
+     * season when a cross-season fallback resolved the episode — include it in
+     * the result so callers (and diagnostic messages) use Sonarr's truth.
+     */
+    val seasonNumber: Int,
+)
+
+/**
+ * Compact per-season index, for diagnostic messages when an episode isn't
+ * found. [episodeNumbers] is the list of episode numbers Sonarr has in that
+ * season.
+ */
+data class SonarrSeasonSummary(
+    val seasonNumber: Int,
+    val episodeNumbers: List<Int>,
+)

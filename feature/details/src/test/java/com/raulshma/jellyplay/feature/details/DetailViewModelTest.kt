@@ -10,6 +10,7 @@ import com.raulshma.jellyplay.core.data.repository.MediaRepository
 import com.raulshma.jellyplay.core.data.repository.PlaybackRepository
 import com.raulshma.jellyplay.core.data.repository.SeerrRepository
 import com.raulshma.jellyplay.core.data.seerr.SeerrRequestDelegate
+import com.raulshma.jellyplay.core.data.util.ImageUrlProvider
 import com.raulshma.jellyplay.core.datastore.UserPreferencesStore
 import com.raulshma.jellyplay.core.model.ExternalUrl
 import com.raulshma.jellyplay.core.model.MediaDetail
@@ -43,6 +44,7 @@ class DetailViewModelTest {
     private lateinit var context: Context
     private lateinit var mediaRepository: MediaRepository
     private lateinit var playbackRepository: PlaybackRepository
+    private lateinit var imageUrlProvider: ImageUrlProvider
     private lateinit var downloadRepository: DownloadRepository
     private lateinit var preferencesStore: UserPreferencesStore
     private lateinit var offlineModeManager: OfflineModeManager
@@ -60,6 +62,7 @@ class DetailViewModelTest {
         context = mockk(relaxed = true)
         mediaRepository = mockk(relaxed = true)
         playbackRepository = mockk(relaxed = true)
+        imageUrlProvider = mockk(relaxed = true)
         downloadRepository = mockk(relaxed = true)
         preferencesStore = mockk(relaxed = true)
         offlineModeManager = mockk(relaxed = true)
@@ -109,6 +112,7 @@ class DetailViewModelTest {
             context = context,
             mediaRepository = mediaRepository,
             playbackRepository = playbackRepository,
+            imageUrlProvider = imageUrlProvider,
             downloadRepository = downloadRepository,
             preferencesStore = preferencesStore,
             offlineModeManager = offlineModeManager,

@@ -30,6 +30,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.Immutable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -93,34 +94,69 @@ import com.composables.icons.tabler.outline.*
 
 private val LocalAnimateSettingsEntrance = staticCompositionLocalOf { false }
 
+/**
+ * Bundles the sub-screen navigation callbacks passed into [SettingsScreen].
+ *
+ * Grouping them into a single `@Immutable` value lets the navigation call site
+ * `remember` one instance, so the [SettingsScreen] subtree is treated as
+ * skip-worthy by the Compose compiler instead of recomposing on every parent
+ * state change (each unstable lambda parameter would otherwise be a distinct
+ * stability key). Mirrors the [com.raulshma.jellyplay.feature.home.HomeCallbacks]
+ * pattern.
+ *
+ * Callers should construct via `remember(...) { SettingsCallbacks(...) }` so the
+ * same instance is reused across recompositions.
+ */
+@Immutable
+data class SettingsCallbacks(
+    val onServerManagement: (String?) -> Unit = {},
+    val onUserManagement: (String?) -> Unit = {},
+    val onSeerrSettings: (String?) -> Unit = {},
+    val onArrSettings: (String?) -> Unit = {},
+    val onAdminDashboard: () -> Unit = {},
+    val onSetupWizard: () -> Unit = {},
+    val onNewsletterClick: () -> Unit = {},
+    val onFavoritesClick: () -> Unit = {},
+    val onAboutClick: () -> Unit = {},
+    val onWatchProgressHeatmapClick: () -> Unit = {},
+    val onAppearanceSettings: (String?) -> Unit = {},
+    val onPinnedHomeSections: (String?) -> Unit = {},
+    val onHomeLayoutPresets: (String?) -> Unit = {},
+    val onPlaybackSettings: (String?) -> Unit = {},
+    val onAudioSettings: (String?) -> Unit = {},
+    val onLanguageSettings: (String?) -> Unit = {},
+    val onNotificationSettings: (String?) -> Unit = {},
+    val onStorageSettings: (String?) -> Unit = {},
+    val onSecuritySettings: (String?) -> Unit = {},
+    val onBackupSettings: (String?) -> Unit = {},
+    val onExperimentalSettings: (String?) -> Unit = {},
+)
+
 @OptIn(ExperimentalMaterial3Api::class, androidx.compose.material3.ExperimentalMaterial3ExpressiveApi::class)
 @Composable
 fun SettingsScreen(
     onBack: () -> Unit,
     onLogout: (Boolean) -> Unit,
-    onServerManagement: (String?) -> Unit = {},
-    onUserManagement: (String?) -> Unit = {},
-    onSeerrSettings: (String?) -> Unit = {},
-    onArrSettings: (String?) -> Unit = {},
-    onAdminDashboard: () -> Unit = {},
-    onSetupWizard: () -> Unit = {},
-    onNewsletterClick: () -> Unit = {},
-    onFavoritesClick: () -> Unit = {},
-    onAboutClick: () -> Unit = {},
-    onWatchProgressHeatmapClick: () -> Unit = {},
-    onAppearanceSettings: (String?) -> Unit = {},
-    onPinnedHomeSections: (String?) -> Unit = {},
-    onHomeLayoutPresets: (String?) -> Unit = {},
-    onPlaybackSettings: (String?) -> Unit = {},
-    onAudioSettings: (String?) -> Unit = {},
-    onLanguageSettings: (String?) -> Unit = {},
-    onNotificationSettings: (String?) -> Unit = {},
-    onStorageSettings: (String?) -> Unit = {},
-    onSecuritySettings: (String?) -> Unit = {},
-    onBackupSettings: (String?) -> Unit = {},
-    onExperimentalSettings: (String?) -> Unit = {},
+    callbacks: SettingsCallbacks,
     viewModel: SettingsViewModel = hiltViewModel(),
 ) {
+    val onServerManagement = callbacks.onServerManagement
+    val onUserManagement = callbacks.onUserManagement
+    val onSeerrSettings = callbacks.onSeerrSettings
+    val onArrSettings = callbacks.onArrSettings
+    val onNewsletterClick = callbacks.onNewsletterClick
+    val onAboutClick = callbacks.onAboutClick
+    val onAppearanceSettings = callbacks.onAppearanceSettings
+    val onPinnedHomeSections = callbacks.onPinnedHomeSections
+    val onHomeLayoutPresets = callbacks.onHomeLayoutPresets
+    val onPlaybackSettings = callbacks.onPlaybackSettings
+    val onAudioSettings = callbacks.onAudioSettings
+    val onLanguageSettings = callbacks.onLanguageSettings
+    val onNotificationSettings = callbacks.onNotificationSettings
+    val onStorageSettings = callbacks.onStorageSettings
+    val onSecuritySettings = callbacks.onSecuritySettings
+    val onBackupSettings = callbacks.onBackupSettings
+    val onExperimentalSettings = callbacks.onExperimentalSettings
     val preferences = viewModel.preferences
     val userName = viewModel.currentUserName
     val adaptiveInfo = LocalAdaptiveInfo.current

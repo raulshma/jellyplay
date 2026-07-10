@@ -99,6 +99,7 @@ fun OfflineSeriesScreen(
     val seasons by viewModel.seasons.collectAsStateWithLifecycle(initialValue = emptyList())
     val episodes by viewModel.episodes.collectAsStateWithLifecycle(initialValue = emptyMap())
     val totalSizeBytes by viewModel.totalSizeBytes.collectAsStateWithLifecycle(initialValue = 0L)
+    val downloadedEpisodeCount by viewModel.downloadedEpisodeCount.collectAsStateWithLifecycle(initialValue = 0)
     val isTv = LocalTvMode.current
     val adaptiveInfo = LocalAdaptiveInfo.current
     val contentPad = adaptiveInfo.contentPadding(isTv)
@@ -198,13 +199,13 @@ fun OfflineSeriesScreen(
                             )
                             Spacer(Modifier.height(12.dp))
                             InfoRow(series = series)
-                            if (totalSizeBytes > 0 || series.childCount > 0) {
+                            if (totalSizeBytes > 0 || downloadedEpisodeCount > 0) {
                                 Spacer(Modifier.height(8.dp))
                                 Row(verticalAlignment = Alignment.CenterVertically) {
                                     Icon(Tabler.Outline.DeviceFloppy, contentDescription = null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(14.dp))
                                     Spacer(Modifier.width(4.dp))
                                     val parts = buildList {
-                                        if (series.childCount > 0) add("${series.childCount} episodes")
+                                        if (downloadedEpisodeCount > 0) add("$downloadedEpisodeCount episodes")
                                         if (totalSizeBytes > 0) add(totalSizeBytes.formatBytes())
                                     }
                                     Text(parts.joinToString(" · "), style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.primary)

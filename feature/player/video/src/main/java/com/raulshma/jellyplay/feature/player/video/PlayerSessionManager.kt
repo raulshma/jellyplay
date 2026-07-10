@@ -50,6 +50,14 @@ data class PlayerSessionState(
     val isReady: Boolean = false,
     val offlineTrickplayDir: java.io.File? = null,
     val streamUrl: String? = null,
+    /**
+     * `true` for Live TV / IPTV channels (server-issued `liveStreamId` or
+     * `requiresOpening`). Surfaced from [com.raulshma.jellyplay.core.model.ResolvedPlayback.isLive]
+     * so the player layer can treat live streams distinctly from finite VOD
+     * — the close-on-ended logic is suppressed and the engine gets live
+     * hints. Always `false` for offline playback.
+     */
+    val isLive: Boolean = false,
 )
 
 class PlayerSessionManager(
@@ -255,7 +263,7 @@ class PlayerSessionManager(
             playerType = playerType,
         )
         val url = resolved?.streamUrl
-            ?: playbackRepository.getStreamUrl(itemId, sourceId, startPositionTicks)
+            ?: playbackRepository.getStreamUrl(itemId, sourceId, startPositionTicks, source?.liveStreamId)
         val playMethod = resolved?.playMethod ?: PlayMethod.DIRECT_PLAY
 
         _sessionState.update {
@@ -270,6 +278,9 @@ class PlayerSessionManager(
                 isDirectPlayForced = prefs.playbackMode == PlaybackMode.FORCE_DIRECT_PLAY,
                 playSessionId = resolved?.playSessionId,
                 streamUrl = url,
+                isLive = resolved?.isLive == true ||
+                    source?.liveStreamId != null ||
+                    source?.requiresOpening == true,
             )
         }
 
@@ -292,7 +303,14 @@ class PlayerSessionManager(
         playMethod: PlayMethod = PlayMethod.DIRECT_PLAY,
         mimeType: String? = null,
     ) {
-        _engine.value?.release()
+        // Release the outgoing engine and null the reference before creating the
+        // replacement, so a failure in create()/setup can never leave the field
+        // pointing at an already-released engine.
+        try {
+            _engine.value?.release()
+        } finally {
+            _engine.value = null
+        }
         val eng = playerEngineFactory.create(playerType)
         _engine.value = eng
         lastPlayerType = playerType
@@ -336,7 +354,9 @@ class PlayerSessionManager(
             authToken = token,
             minBufferMs = prefs.videoPreloadBufferSize.minBufferMs,
             maxBufferMs = prefs.videoPreloadBufferSize.maxBufferMs,
+            normalizationGain = detail.item.normalizationGain,
             mimeType = mimeType,
+            isLive = _sessionState.value.isLive,
         )
 
         lastPlaybackRequest = request
@@ -431,8 +451,11 @@ class PlayerSessionManager(
         val last = lastPlaybackRequest ?: return
         val prefs = preferencesStore.preferences.first()
 
-        _engine.value?.release()
-        _engine.value = null
+        try {
+            _engine.value?.release()
+        } finally {
+            _engine.value = null
+        }
 
         val eng = playerEngineFactory.create(playerType)
         _engine.value = eng

@@ -15,6 +15,7 @@ import com.raulshma.jellyplay.core.data.repository.PlaybackRepository
 import com.raulshma.jellyplay.core.data.repository.ItemPlaybackPreferenceRepository
 import com.raulshma.jellyplay.core.data.syncplay.SyncPlayManager
 import com.raulshma.jellyplay.core.data.syncplay.SyncPlayPlaybackCore
+import com.raulshma.jellyplay.core.data.util.ImageUrlProvider
 import com.raulshma.jellyplay.core.datastore.UserPreferencesStore
 import com.raulshma.jellyplay.core.model.EffectStrength
 import com.raulshma.jellyplay.core.model.PlaybackMode
@@ -60,6 +61,7 @@ class VideoPlayerViewModelTest {
         val context = mockk<Context>(relaxed = true)
         val mediaRepository = mockk<MediaRepository>(relaxed = true)
         val playbackRepository = mockk<PlaybackRepository>(relaxed = true)
+        val imageUrlProvider = mockk<ImageUrlProvider>(relaxed = true)
         downloadRepository = mockk(relaxed = true)
         offlineRepository = mockk(relaxed = true)
         val itemPlaybackPreferenceRepository = mockk<ItemPlaybackPreferenceRepository>(relaxed = true)
@@ -83,6 +85,7 @@ class VideoPlayerViewModelTest {
             context = context,
             mediaRepository = mediaRepository,
             playbackRepository = playbackRepository,
+            imageUrlProvider = imageUrlProvider,
             downloadRepository = downloadRepository,
             offlineRepository = offlineRepository,
             itemPlaybackPreferenceRepository = itemPlaybackPreferenceRepository,

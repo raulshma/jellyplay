@@ -1,38 +1,21 @@
 package com.raulshma.jellyplay.feature.settings
 
 import android.content.Context
+import com.mikepenz.aboutlibraries.Libs
+import com.mikepenz.aboutlibraries.entity.Library
 import com.raulshma.jellyplay.core.ui.viewmodel.JellyPlayViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
-import kotlinx.serialization.Serializable
-import kotlinx.serialization.json.Json
 import javax.inject.Inject
-
-@Serializable
-data class LicenseEntry(
-    val name: String,
-    val license: String = "",
-    val version: String = "",
-    val description: String = "",
-    val url: String = "",
-)
-
-@Serializable
-data class LicensesFile(
-    val licenses: Map<String, String> = emptyMap(),
-    val dependencies: List<LicenseEntry> = emptyList(),
-)
 
 @HiltViewModel
 class LicensesViewModel @Inject constructor(
     @ApplicationContext private val context: Context,
 ) : JellyPlayViewModel() {
 
-    private val json = Json { ignoreUnknownKeys = true }
-
-    var licenses by composeState<List<LicenseEntry>>(emptyList())
+    var libraries by composeState<List<Library>>(emptyList())
         private set
 
     var isLoading by composeState(true)
@@ -51,12 +34,12 @@ class LicensesViewModel @Inject constructor(
             error = null
             try {
                 val jsonText = withContext(Dispatchers.IO) {
-                    context.assets.open("licenses.json").bufferedReader().use { it.readText() }
+                    context.assets.open("aboutlibraries.json").bufferedReader().use { it.readText() }
                 }
-                val parsed = json.decodeFromString<LicensesFile>(jsonText)
-                licenses = parsed.dependencies.sortedBy { it.name.lowercase() }
+                val parsed = Libs.Builder().withJson(jsonText).build()
+                libraries = parsed.libraries.sortedWith(compareBy(String.CASE_INSENSITIVE_ORDER) { it.name })
             } catch (_: Exception) {
-                licenses = emptyList()
+                libraries = emptyList()
                 error = "Could not load license information"
             }
             isLoading = false

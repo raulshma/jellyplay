@@ -31,22 +31,29 @@ import com.composables.icons.tabler.Tabler
 import com.composables.icons.tabler.outline.Cast
 import com.raulshma.jellyplay.core.designsystem.theme.CastColors
 import com.raulshma.jellyplay.core.designsystem.theme.ShapeCache
+import com.raulshma.jellyplay.core.ui.components.LocalReducedMotion
 
 @Composable
 fun CastIndicatorOverlay(
     isConnecting: Boolean,
     modifier: Modifier = Modifier,
 ) {
-    val infiniteTransition = rememberInfiniteTransition(label = "castPulse")
-    val pulseAlpha by infiniteTransition.animateFloat(
-        initialValue = 0.5f,
-        targetValue = 1f,
-        animationSpec = infiniteRepeatable(
-            animation = tween(1500, easing = LinearEasing),
-            repeatMode = RepeatMode.Reverse,
-        ),
-        label = "castAlpha",
-    )
+    val reducedMotion = LocalReducedMotion.current
+    // Cast connection pulse. Freeze at full alpha in performance/reduced-motion mode
+    // to drop the redraw coroutine while the overlay is on screen.
+    val pulseAlpha = if (!reducedMotion) {
+        rememberInfiniteTransition(label = "castPulse").animateFloat(
+            initialValue = 0.5f,
+            targetValue = 1f,
+            animationSpec = infiniteRepeatable(
+                animation = tween(1500, easing = LinearEasing),
+                repeatMode = RepeatMode.Reverse,
+            ),
+            label = "castAlpha",
+        ).value
+    } else {
+        1f
+    }
 
     Row(
         modifier = modifier

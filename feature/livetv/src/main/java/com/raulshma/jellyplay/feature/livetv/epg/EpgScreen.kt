@@ -33,6 +33,7 @@ import androidx.compose.material3.TextButton
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import com.raulshma.jellyplay.core.ui.components.JellyPlayLoadingIndicator
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
@@ -95,6 +96,7 @@ fun EpgScreen(
         title = "Program Guide",
         onBack = onBack,
         backgroundColor = backgroundColor,
+        topBarStyle = com.raulshma.jellyplay.core.ui.components.TopBarStyle.None,
         actions = {
             HeaderStatusIndicator(
                 status = headerStatus,
@@ -254,11 +256,17 @@ private fun EpgGrid(
                 key = { _, row -> "channel_${row.channel.id}" },
                 contentType = { _, _ -> "channel_row" },
             ) { index, row ->
-                val rowLayout = remember(row, gridData, now) {
-                    layoutChannelRow(row, gridData, now)
+                // Layout is purely geometric: depends only on the (stable)
+                // row + grid window, NOT on `now`. Re-laid out only when the
+                // data or fetch window changes, so the 30s now-tick never
+                // invalidates it.
+                val rowLayout = remember(row, gridData) {
+                    layoutChannelRow(row, gridData)
                 }
                 ChannelProgramsRow(
                     rowLayout = rowLayout,
+                    windowStart = gridData.windowStart,
+                    now = now,
                     channelColumnWidth = channelColumnWidth,
                     totalWidthDp = gridData.totalWidthDp,
                     horizontalScrollState = horizontalScrollState,
@@ -344,6 +352,8 @@ private fun TimeHeaderRow(
 @Composable
 private fun ChannelProgramsRow(
     rowLayout: ChannelRowLayout,
+    windowStart: java.time.Instant,
+    now: java.time.Instant,
     channelColumnWidth: androidx.compose.ui.unit.Dp,
     totalWidthDp: Float,
     horizontalScrollState: androidx.compose.foundation.ScrollState,
@@ -351,6 +361,20 @@ private fun ChannelProgramsRow(
     onRecordClick: ((LiveTvProgram) -> Unit)?,
     modifier: Modifier = Modifier,
 ) {
+    // Derive the single currently-live program id for this row from `now`.
+    // The whole row recomposes on a 30s tick, but [ProgramCell] only re-reads
+    // this State via a derived check, so only the one cell whose live status
+    // actually flips is invalidated — not the entire program strip layout.
+    val liveProgramId by remember(rowLayout, windowStart) {
+        derivedStateOf {
+            val live = rowLayout.programLayouts.firstOrNull { layout ->
+                val s = layout.program.startInstant()
+                val e = layout.program.endInstant() ?: s
+                s != null && now >= s && now < (e ?: s)
+            }
+            live?.program?.id
+        }
+    }
     Row(modifier = modifier.fillMaxWidth().height(EpgGridLayout.CHANNEL_ROW_HEIGHT)) {
         // Sticky channel-name cell
         ChannelNameCell(
@@ -358,7 +382,7 @@ private fun ChannelProgramsRow(
             number = rowLayout.channel.number,
             width = channelColumnWidth,
         )
-        // Programs strip — horizontal scroll shared with header row
+        // Programs strip — horizontal scroll shared with header row.
         Box(
             modifier = Modifier
                 .fillMaxWidth()
@@ -366,10 +390,19 @@ private fun ChannelProgramsRow(
         ) {
             Box(modifier = Modifier.width(totalWidthDp.dp)) {
                 rowLayout.programLayouts.forEach { layout ->
+                    // Memoize per-cell click lambdas so they don't reallocate
+                    // on every recomposition of the strip.
+                    val clickLambda = remember(layout.program.id, onProgramClick) {
+                        { onProgramClick(layout.program) }
+                    }
+                    val recordLambda = remember(layout.program.id, onRecordClick) {
+                        onRecordClick?.let { cb -> { cb(layout.program) } }
+                    }
                     ProgramCell(
                         layout = layout,
-                        onClick = { onProgramClick(layout.program) },
-                        onRecordClick = onRecordClick?.let { { it(layout.program) } },
+                        isCurrent = liveProgramId == layout.program.id,
+                        onClick = clickLambda,
+                        onRecordClick = recordLambda,
                         modifier = Modifier.offset(x = layout.startOffsetDp.dp),
                     )
                 }
@@ -417,12 +450,12 @@ private fun ChannelNameCell(
 @Composable
 private fun ProgramCell(
     layout: ProgramLayout,
+    isCurrent: Boolean,
     onClick: () -> Unit,
     onRecordClick: (() -> Unit)?,
     modifier: Modifier = Modifier,
 ) {
     val focusState = rememberTvFocusState()
-    val isCurrent = layout.isCurrent
     val containerColor = if (isCurrent) {
         MaterialTheme.colorScheme.primary.copy(alpha = 0.18f)
     } else {

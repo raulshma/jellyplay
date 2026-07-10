@@ -21,7 +21,6 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.animation.animateColorAsState
-import androidx.compose.animation.core.tween
 import androidx.compose.foundation.clickable
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
@@ -275,6 +274,7 @@ fun UserStatisticsDetailScreen(
                         items(
                             items = state.detail.topItems.drop(5),
                             key = { it.itemId },
+                            contentType = { "topItem" },
                         ) { item ->
                             TopItemRow(item)
                         }
@@ -744,22 +744,22 @@ private fun SegmentedControl(
 ) {
     val chartBgColor by animateColorAsState(
         targetValue = if (selected) MaterialTheme.colorScheme.primary else Color.Transparent,
-        animationSpec = tween(200),
+        animationSpec = MaterialTheme.motionScheme.fastEffectsSpec(),
         label = "chartBgColor"
     )
     val chartTextColor by animateColorAsState(
         targetValue = if (selected) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurfaceVariant,
-        animationSpec = tween(200),
+        animationSpec = MaterialTheme.motionScheme.fastEffectsSpec(),
         label = "chartTextColor"
     )
     val listBgColor by animateColorAsState(
         targetValue = if (!selected) MaterialTheme.colorScheme.primary else Color.Transparent,
-        animationSpec = tween(200),
+        animationSpec = MaterialTheme.motionScheme.fastEffectsSpec(),
         label = "listBgColor"
     )
     val listTextColor by animateColorAsState(
         targetValue = if (!selected) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurfaceVariant,
-        animationSpec = tween(200),
+        animationSpec = MaterialTheme.motionScheme.fastEffectsSpec(),
         label = "listTextColor"
     )
 

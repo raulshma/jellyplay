@@ -1,7 +1,12 @@
 package com.raulshma.jellyplay.feature.player.audio
 
+import androidx.compose.runtime.LongState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.setValue
+import androidx.media3.common.MediaItem
+import androidx.media3.common.Player
+import com.raulshma.jellyplay.core.data.cast.CastManager
+import com.raulshma.jellyplay.core.data.cast.CastMediaOptions
 import com.raulshma.jellyplay.core.data.playback.AudioPlaybackManager
 import com.raulshma.jellyplay.core.data.playback.AudioQueueItem
 import com.raulshma.jellyplay.core.data.playback.SleepTimerManager
@@ -34,7 +39,22 @@ class AudioPlayerViewModel @Inject constructor(
     private val downloadRepository: com.raulshma.jellyplay.core.data.repository.DownloadRepository,
     private val playbackRepository: com.raulshma.jellyplay.core.data.repository.PlaybackRepository,
     private val sleepTimerManager: SleepTimerManager,
+    private val castManager: CastManager,
 ) : JellyPlayViewModel() {
+
+    /** Exposed so the audio top bar can render a shared [com.raulshma.jellyplay.feature.player.audio.components.CastButton]. */
+    val castManagerField: CastManager = castManager
+
+    init {
+        // CastManager is a ref-counted app-wide singleton shared with the video
+        // player and the Home "Play On" entry. Acquire for this VM's lifetime.
+        castManager.acquireConsumer()
+    }
+
+    override fun onCleared() {
+        super.onCleared()
+        castManager.releaseConsumer()
+    }
 
     val preferences = preferencesStore.preferences
         .stateIn(scope, SharingStarted.WhileSubscribed(5_000), UserPreferences())
@@ -43,11 +63,30 @@ class AudioPlayerViewModel @Inject constructor(
     val uiState: StateFlow<AudioPlayerUiState> = _uiState.asStateFlow()
 
     /**
+     * Sleep-timer countdown, sourced directly from SleepTimerManager. Kept OUT
+     * of [uiState] (mirroring [currentPosition]) so a 5 s tick — or the 100 ms
+     * fade-out burst — does not copy the whole [AudioPlayerUiState] and
+     * re-invalidate the screen root. Collected only by the leaf composables
+     * that render the countdown (top-bar label, AudioSleepTimerSheet).
+     */
+    val sleepTimerRemainingMs: StateFlow<Long> = sleepTimerManager.remainingMs
+
+    /**
      * High-frequency playback position, kept OUTSIDE [uiState] so the 250ms tick only
      * recomposes consumers that read position, rather than copying the whole UiState.
      */
-    var currentPosition by composeLongState(0L)
+    private val currentPositionHolder = composeLongState(0L)
+    var currentPosition by currentPositionHolder
         private set
+
+    /**
+     * Snapshot-state handle to playback position, meant to be read only inside
+     * the leaf composables that render it (seek bar, time labels, karaoke word
+     * highlight). Passing this instead of the plain [Long] value keeps the
+     * recomposition triggered by the 4 Hz position tick scoped to those leaves
+     * rather than invalidating the whole screen body.
+     */
+    val currentPositionState: LongState get() = currentPositionHolder.asState()
 
     /** Mirrors [AudioEffectsState.dialogueBoostStrength] for callers that read it directly. */
     val dialogueBoostStrength: EffectStrength
@@ -258,11 +297,6 @@ class AudioPlayerViewModel @Inject constructor(
             }.collect {}
         }
         launch {
-            sleepTimerManager.remainingMs.collect { remaining ->
-                _uiState.update { it.copy(sleepTimer = it.sleepTimer.copy(remainingMs = remaining)) }
-            }
-        }
-        launch {
             combine(
                 sleepTimerManager.isActive,
                 sleepTimerManager.isEndOfEpisodeMode,
@@ -375,6 +409,35 @@ class AudioPlayerViewModel @Inject constructor(
 
     fun togglePlayPause() {
         audioPlaybackManager.togglePlayPause()
+    }
+
+    // ------------------------------------------------------------------
+    // Cast / "Play On" — fling the current track to another Jellyfin session.
+    // Mirrors VideoPlayerViewModel.castToDevice(); for audio there are no
+    // subtitle/quality variants to carry, so the cast options are empty.
+    // ------------------------------------------------------------------
+
+    fun castToDevice() {
+        val itemId = audioPlaybackManager.currentPlayingItemId.value ?: return
+        val positionMs = currentPosition
+        val mediaItem = MediaItem.Builder()
+            .setMediaId(itemId)
+            .build()
+        castManager.loadMedia(
+            mediaItem = mediaItem,
+            startPositionMs = positionMs,
+            listener = object : Player.Listener {},
+            options = CastMediaOptions(),
+        )
+        audioPlaybackManager.pause()
+    }
+
+    fun castPlay() = castManager.play()
+    fun castPause() = castManager.pause()
+    fun castSeekTo(positionMs: Long) = castManager.seekTo(positionMs)
+    fun setCastVolume(volume: Float) = castManager.setVolume(volume)
+    fun onCastDisconnected() {
+        // No local teardown needed — the singleton owns the session lifecycle.
     }
 
     fun changePlaybackSpeed(value: Float) {
@@ -610,7 +673,7 @@ class AudioPlayerViewModel @Inject constructor(
     fun cancelSleepTimer() {
         sleepTimerManager.cancel()
         _uiState.update {
-            it.copy(sleepTimer = it.sleepTimer.copy(active = false, endOfEpisode = false, remainingMs = 0))
+            it.copy(sleepTimer = it.sleepTimer.copy(active = false, endOfEpisode = false))
         }
     }
 
@@ -640,6 +703,11 @@ class AudioPlayerViewModel @Inject constructor(
 
     fun toggleKaraokeMode() {
         setKaraokeModeEnabled(!karaokeMode)
+    }
+
+    /** Persists the lyrics overlay visibility so it survives across sessions. */
+    fun setLyricsVisible(enabled: Boolean) {
+        launch { preferencesStore.setAudioLyricsVisible(enabled) }
     }
 
     private fun keySentinel(id: String) = "§null§$id"

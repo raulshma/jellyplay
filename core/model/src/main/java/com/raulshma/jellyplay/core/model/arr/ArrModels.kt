@@ -381,6 +381,7 @@ enum class ArrCommandName(val serialName: String) {
     RESCAN_MOVIE("RescanMovie"),
     SEARCH_SERIES("SeriesSearch"),
     SEARCH_EPISODES("EpisodeSearch"),
+    SEASON_SEARCH("SeasonSearch"),
     REFRESH_SERIES("RefreshSeries"),
     RESCAN_SERIES("RescanSeries"),
     RSS_SYNC("RssSync"),
@@ -388,6 +389,70 @@ enum class ArrCommandName(val serialName: String) {
     MISSING_EPISODES("MissingEpisodesSearch"),
     CUTTING_OFF_SEARCH("CuttingOffSeriesSearch"),
 }
+
+/**
+ * The phases of a delete & re-download flow, in execution order. Each phase
+ * produces an [ArrRedownloadStepResult] surfaced to the UI so the user sees
+ * live progress. [DELETE_FILE] is the hard gate — a failure there aborts the
+ * whole flow (the file wasn't removed, so search would no-op). Subsequent
+ * steps are best-effort: a non-DELETE failure continues.
+ */
+@Immutable
+enum class ArrRedownloadStep {
+    /** Delete the file via the *arr file-delete API (`DELETE /episodeFile|movieFile`). */
+    DELETE_FILE,
+    /** Re-query the resource and confirm `hasFile == false`. */
+    VERIFY_DELETED,
+    /** Re-mark the item monitored if it isn't already. */
+    MONITOR,
+    /** Queue a search command (`EpisodeSearch` / `SearchMovie`). */
+    SEARCH,
+}
+
+/**
+ * Status of a single [ArrRedownloadStep]. Drives the per-step icon in the UI
+ * (spinner → check → dash → alert).
+ */
+@Immutable
+enum class ArrRedownloadStepStatus {
+    /** Step not yet started (or in-flight, depending on UI context). */
+    PENDING,
+    /** Step completed successfully. */
+    SUCCESS,
+    /** Step deliberately skipped (e.g. monitor when already monitored, or no file to delete). */
+    SKIPPED,
+    /** Step finished but with an inconclusive result (e.g. verify-deleted couldn't re-query the episode). */
+    WARNING,
+    /** Step failed. [ArrRedownloadStepResult.message] carries the reason. */
+    FAILED,
+}
+
+/**
+ * Result of a single [ArrRedownloadStep]. [message] carries a success note,
+ * skip reason, or failure explanation for the UI.
+ */
+@Immutable
+data class ArrRedownloadStepResult(
+    val step: ArrRedownloadStep,
+    val status: ArrRedownloadStepStatus,
+    val message: String? = null,
+)
+
+/**
+ * Outcome of a delete & re-download flow: the ordered list of per-step
+ * results plus whether the flow ran to completion (no hard-gate failure).
+ *
+ * Best-effort across servers: when multiple servers resolve, the first server
+ * to succeed on a step determines that step's result; failures on other
+ * servers are swallowed (mirroring [com.raulshma.jellyplay.core.data.repository.ArrRepository.searchForTmdb]'s
+ * fan-out contract). [steps] always has exactly one entry per [ArrRedownloadStep],
+ * in execution order, so the UI can render a fixed 4-row progress list.
+ */
+@Immutable
+data class ArrRedownloadResult(
+    val steps: List<ArrRedownloadStepResult> = emptyList(),
+    val isComplete: Boolean = false,
+)
 
 /**
  * Lightweight display-oriented summary written into RequestsUiState so the
@@ -401,3 +466,48 @@ data class ArrDownloadSummary(
     val sizeLeft: Long?,
     val timeLeft: String?,
 )
+
+/**
+ * A resolved Sonarr series for the "Manage Series" screen: the owning server
+ * plus the Sonarr-internal series id needed by all episode/season/series
+ * operations. Produced by
+ * [com.raulshma.jellyplay.core.data.repository.ArrRepository.resolveSonarrSeries]
+ * by probing each configured Sonarr server for a tvdb match.
+ */
+@Immutable
+data class ArrSeriesResolution(
+    /** The [ArrServerConfig.id] of the Sonarr instance that tracks this series. */
+    val serverId: String,
+    /** Sonarr's internal series id (the `id` on the `/series` resource). */
+    val seriesId: Int,
+    val title: String,
+    val monitored: Boolean,
+    /** On-disk root folder for the series (Sonarr `path`). Null when absent. */
+    val path: String? = null,
+)
+
+/**
+ * A single episode for the "Manage Series" screen — the rich projection of
+ * Sonarr's `/episode?seriesId=` rows, carrying enough to render a Sonarr-style
+ * episode row (status badge, monitor toggle, file size/quality) and to act on
+ * it (search by [id], delete by [episodeFileId], monitor by [id]).
+ */
+@Immutable
+data class ArrSeriesEpisode(
+    val id: Int,
+    val seasonNumber: Int,
+    val episodeNumber: Int,
+    val absoluteEpisodeNumber: Int? = null,
+    val title: String,
+    val airDateUtc: String? = null,
+    val overview: String? = null,
+    val hasFile: Boolean = false,
+    val monitored: Boolean = false,
+    /** 0 when there is no file; drives the delete-file action. */
+    val episodeFileId: Int = 0,
+    val fileSizeBytes: Long? = null,
+    val quality: String? = null,
+) {
+    /** True when a downloadable file is present (hasFile + a file id to delete). */
+    val hasDownload: Boolean get() = hasFile && episodeFileId != 0
+}

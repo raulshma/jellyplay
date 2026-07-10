@@ -18,7 +18,6 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -27,8 +26,10 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import coil3.compose.AsyncImage
 import coil3.request.ImageRequest
+import coil3.request.crossfade
 import com.composables.icons.tabler.Tabler
 import com.composables.icons.tabler.outline.PlayerPause
 import com.composables.icons.tabler.outline.PlayerPlay
@@ -52,10 +53,10 @@ fun FloatingPlayerOverlay(
     state: FloatingPlayerState,
     onClose: () -> Unit,
 ) {
-    val title by state.title.collectAsState()
-    val subtitle by state.subtitle.collectAsState()
-    val isPlaying by state.isPlaying.collectAsState()
-    val artworkUrl by state.artworkUrl.collectAsState()
+    val title by state.title.collectAsStateWithLifecycle()
+    val subtitle by state.subtitle.collectAsStateWithLifecycle()
+    val isPlaying by state.isPlaying.collectAsStateWithLifecycle()
+    val artworkUrl by state.artworkUrl.collectAsStateWithLifecycle()
 
     Surface(
         modifier = Modifier
@@ -84,6 +85,7 @@ fun FloatingPlayerOverlay(
                         ImageRequest.Builder(context)
                             .data(artworkUrl)
                             .size(168, 168)
+                            .crossfade(true)
                             .build()
                     }
                     AsyncImage(

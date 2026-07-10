@@ -379,79 +379,72 @@ class LibraryApiClientImpl @Inject constructor(
     }
 
     override suspend fun getMediaDetail(itemId: String): Result<MediaDetail> = engine.apiResultWithRetry {
-        coroutineScope {
-            val client = engine.requireApi()
-            val uuid = itemId.toUUID()
-            val item = client.userLibraryApi.getItem(itemId = uuid).content
-            val people = (item.people?.map { person ->
-                PersonInfo(
-                    id = person.id.toString(),
-                    name = person.name ?: "",
-                    role = person.role,
-                    type = person.type?.serialName ?: "",
-                    primaryImageTag = person.primaryImageTag,
-                )
-            } ?: emptyList()).distinctBy { it.id }
-            val relatedItemsDeferred = async {
-                try {
-                    client.libraryApi.getSimilarItems(
-                        itemId = uuid,
-                        limit = 12,
-                    ).content.items.map { it.toMediaItem() }
-                        .distinctBy { it.id }
-                        .filter { it.id != itemId }
-                } catch (_: Exception) {
-                    emptyList()
-                }
-            }
-            val relatedItems = relatedItemsDeferred.await()
-            val chapters = item.chapters?.map { chapter ->
-                ChapterInfo(
-                    name = chapter.name ?: "",
-                    startPositionTicks = chapter.startPositionTicks ?: 0L,
-                    imageDateModified = chapter.imageDateModified?.toString(),
-                )
-            } ?: emptyList()
-            val mediaSources = item.mediaSources?.map { source ->
-                source.toMediaSource(
-                    trickplayInfo = item.trickplay
-                        ?.get(source.id.toString())
-                        ?.values
-                        ?.maxByOrNull { it.width ?: 0 }
-                        ?.toTrickplayInfo(),
-                )
-            } ?: emptyList()
-            val externalUrls = item.externalUrls?.map { url ->
-                com.raulshma.jellyplay.core.model.ExternalUrl(
-                    name = url.name ?: "",
-                    url = url.url ?: "",
-                )
-            } ?: emptyList()
-            val providerIds = item.providerIds?.mapNotNull { (k, v) -> v?.let { k.lowercase() to it } }?.toMap() ?: emptyMap()
-            MediaDetail(
-                item = item.toMediaItem(),
-                sortName = item.forcedSortName,
-                customRating = item.customRating,
-                criticRating = item.criticRating?.toFloat(),
-                taglines = item.taglines ?: emptyList(),
-                productionLocations = item.productionLocations ?: emptyList(),
-                lockData = item.lockData ?: false,
-                lockedFields = item.lockedFields?.map { it.toString() } ?: emptyList(),
-                status = item.status?.toString(),
-                airDays = item.airDays?.map { it.toString() } ?: emptyList(),
-                airTime = item.airTime,
-                displayOrder = item.displayOrder,
-                preferredMetadataLanguage = item.preferredMetadataLanguage,
-                preferredMetadataCountryCode = item.preferredMetadataCountryCode,
-                dateCreated = item.dateCreated?.toString(),
-                people = people,
-                relatedItems = relatedItems,
-                chapters = chapters,
-                mediaSources = mediaSources,
-                externalUrls = externalUrls,
-                providerIds = providerIds,
+        // NOTE: similar/related items are fetched separately via [getSimilarItems]
+        // rather than nested in this call. Previously a nested async+await
+        // blocked the entire detail (title, poster, streams, cast) from
+        // returning until similar items resolved — the dominant source of
+        // perceived cold-open lag on the detail screen. Now the core detail
+        // returns as soon as the item fetch completes; the VM fetches similar
+        // concurrently and merges it into state so the screen renders
+        // incrementally.
+        val client = engine.requireApi()
+        val uuid = itemId.toUUID()
+        val item = client.userLibraryApi.getItem(itemId = uuid).content
+        val people = (item.people?.map { person ->
+            PersonInfo(
+                id = person.id.toString(),
+                name = person.name ?: "",
+                role = person.role,
+                type = person.type?.serialName ?: "",
+                primaryImageTag = person.primaryImageTag,
             )
-        }
+        } ?: emptyList()).distinctBy { it.id }
+        val chapters = item.chapters?.map { chapter ->
+            ChapterInfo(
+                name = chapter.name ?: "",
+                startPositionTicks = chapter.startPositionTicks ?: 0L,
+                imageDateModified = chapter.imageDateModified?.toString(),
+            )
+        } ?: emptyList()
+        val mediaSources = item.mediaSources?.map { source ->
+            source.toMediaSource(
+                trickplayInfo = item.trickplay
+                    ?.get(source.id.toString())
+                    ?.values
+                    ?.maxByOrNull { it.width ?: 0 }
+                    ?.toTrickplayInfo(),
+            )
+        } ?: emptyList()
+        val externalUrls = item.externalUrls?.map { url ->
+            com.raulshma.jellyplay.core.model.ExternalUrl(
+                name = url.name ?: "",
+                url = url.url ?: "",
+            )
+        } ?: emptyList()
+        val providerIds = item.providerIds?.mapNotNull { (k, v) -> v?.let { k.lowercase() to it } }?.toMap() ?: emptyMap()
+        MediaDetail(
+            item = item.toMediaItem(),
+            sortName = item.forcedSortName,
+            customRating = item.customRating,
+            criticRating = item.criticRating?.toFloat(),
+            taglines = item.taglines ?: emptyList(),
+            productionLocations = item.productionLocations ?: emptyList(),
+            lockData = item.lockData ?: false,
+            lockedFields = item.lockedFields?.map { it.toString() } ?: emptyList(),
+            status = item.status?.toString(),
+            airDays = item.airDays?.map { it.toString() } ?: emptyList(),
+            airTime = item.airTime,
+            displayOrder = item.displayOrder,
+            preferredMetadataLanguage = item.preferredMetadataLanguage,
+            preferredMetadataCountryCode = item.preferredMetadataCountryCode,
+            dateCreated = item.dateCreated?.toString(),
+            people = people,
+            relatedItems = emptyList(),
+            chapters = chapters,
+            mediaSources = mediaSources,
+            externalUrls = externalUrls,
+            providerIds = providerIds,
+        )
     }
 
     override suspend fun getIntros(itemId: String): Result<List<MediaItem>> = engine.apiResultWithRetry {

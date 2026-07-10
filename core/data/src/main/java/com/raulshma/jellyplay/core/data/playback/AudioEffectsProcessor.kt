@@ -5,6 +5,7 @@ import androidx.media3.common.C
 import androidx.media3.common.PlaybackParameters
 import androidx.media3.exoplayer.ExoPlayer
 import com.raulshma.jellyplay.core.model.AudioNormalizationMode
+import com.raulshma.jellyplay.core.model.ChannelMixMode
 import com.raulshma.jellyplay.core.model.EffectStrength
 import com.raulshma.jellyplay.core.model.EqualizerPreset
 import com.raulshma.jellyplay.core.model.EqualizerSettings
@@ -25,7 +26,8 @@ class AudioEffectsProcessor @Inject constructor() {
 
     private var loudnessEnhancer: LoudnessEnhancer? = null
     private val equalizerHelper = EqualizerHelper()
-    private val dialogueBoost = DialogueBoostHelper(equalizerHelper)
+    private val highPassFilter = HighPassFilterAudioProcessor()
+    private val dialogueBoost = DialogueBoostHelper(equalizerHelper, highPassFilter)
     private val bassBoostHelper = BassBoostHelper()
     private val virtualizerHelper = VirtualizerHelper()
     private val reverbHelper = ReverbHelper()
@@ -34,6 +36,19 @@ class AudioEffectsProcessor @Inject constructor() {
 
     val replayGainProcessor = ReplayGainAudioProcessor()
     val crossfadeReplayGainProcessor = ReplayGainAudioProcessor()
+    /** Real PCM matrix channel mixer (downmix/upmix/mono). */
+    val channelMixProcessor = ChannelMixAudioProcessor()
+    /** Feed-forward dynamics compressor for DYNAMIC normalization mode. */
+    val dynamicsProcessor = DynamicsCompressorAudioProcessor()
+    /**
+     * Sub-bass high-pass for dialogue-boost de-noise; shared with
+     * [dialogueBoost]. Also drives the crossfade player's chain.
+     */
+    val highPassProcessor: HighPassFilterAudioProcessor get() = highPassFilter
+    /** Mirror processors for the crossfade player (separate sinks). */
+    val crossfadeChannelMixProcessor = ChannelMixAudioProcessor()
+    val crossfadeDynamicsProcessor = DynamicsCompressorAudioProcessor()
+    val crossfadeHighPassProcessor = HighPassFilterAudioProcessor()
 
     private var _dialogueBoostStrength = EffectStrength.MODERATE
     private var _nightModeStrength = EffectStrength.MODERATE
@@ -85,6 +100,12 @@ class AudioEffectsProcessor @Inject constructor() {
 
     private val _replayGainPreAmpDb = MutableStateFlow(0f)
     val replayGainPreAmpDb: StateFlow<Float> = _replayGainPreAmpDb.asStateFlow()
+
+    private val _channelMixMode = MutableStateFlow(ChannelMixMode.AUTO)
+    val channelMixMode: StateFlow<ChannelMixMode> = _channelMixMode.asStateFlow()
+
+    private val _channelMixEnabled = MutableStateFlow(false)
+    val channelMixEnabled: StateFlow<Boolean> = _channelMixEnabled.asStateFlow()
 
     val nightModeVolumeForStrength: Float
         get() = when (_nightModeStrength) {
@@ -188,6 +209,9 @@ class AudioEffectsProcessor @Inject constructor() {
         dialogueBoost.attach(audioSessionId)
         dialogueBoost.setStrength(_dialogueBoostStrength)
         dialogueBoost.setEnabled(_dialogueBoostEnabled.value)
+        // Mirror the dialogue-boost rumble cut onto the crossfade sink so
+        // the incoming track is filtered during the crossfade window too.
+        crossfadeHighPassProcessor.setEnabled(_dialogueBoostEnabled.value)
     }
 
     fun applyEqualizer() {
@@ -205,20 +229,37 @@ class AudioEffectsProcessor @Inject constructor() {
 
     fun applyReplayGain(trackGain: Float?, isShuffled: Boolean = false) {
         val mode = _replayGainMode.value
-        if (mode != AudioNormalizationMode.TRACK && mode != AudioNormalizationMode.ALBUM) {
-            replayGainProcessor.setGainDb(0f)
-            crossfadeReplayGainProcessor.setGainDb(0f)
-            return
+        when (mode) {
+            AudioNormalizationMode.TRACK,
+            AudioNormalizationMode.ALBUM -> {
+                // DYNAMIC compressor is mutually exclusive with per-track
+                // loudness normalization; disable it while ReplayGain runs.
+                dynamicsProcessor.setEnabled(false)
+                crossfadeDynamicsProcessor.setEnabled(false)
+                if (mode == AudioNormalizationMode.ALBUM && isShuffled) {
+                    replayGainProcessor.setGainDb(0f)
+                    crossfadeReplayGainProcessor.setGainDb(0f)
+                    return
+                }
+                val preAmp = _replayGainPreAmpDb.value
+                val gain = (trackGain ?: 0f) + preAmp
+                replayGainProcessor.setGainDb(gain)
+                crossfadeReplayGainProcessor.setGainDb(gain)
+            }
+            AudioNormalizationMode.DYNAMIC -> {
+                // No per-track gain; drive the DSP compressor instead.
+                replayGainProcessor.setGainDb(0f)
+                crossfadeReplayGainProcessor.setGainDb(0f)
+                dynamicsProcessor.setEnabled(true)
+                crossfadeDynamicsProcessor.setEnabled(true)
+            }
+            AudioNormalizationMode.NONE -> {
+                replayGainProcessor.setGainDb(0f)
+                crossfadeReplayGainProcessor.setGainDb(0f)
+                dynamicsProcessor.setEnabled(false)
+                crossfadeDynamicsProcessor.setEnabled(false)
+            }
         }
-        if (mode == AudioNormalizationMode.ALBUM && isShuffled) {
-            replayGainProcessor.setGainDb(0f)
-            crossfadeReplayGainProcessor.setGainDb(0f)
-            return
-        }
-        val preAmp = _replayGainPreAmpDb.value
-        val gain = (trackGain ?: 0f) + preAmp
-        replayGainProcessor.setGainDb(gain)
-        crossfadeReplayGainProcessor.setGainDb(gain)
     }
 
     fun setReplayGainMode(mode: AudioNormalizationMode, normalizationGain: Float?, isShuffled: Boolean) {
@@ -229,6 +270,22 @@ class AudioEffectsProcessor @Inject constructor() {
     fun setReplayGainPreAmpDb(db: Float, normalizationGain: Float?, isShuffled: Boolean) {
         _replayGainPreAmpDb.value = db
         applyReplayGain(normalizationGain, isShuffled)
+    }
+
+    /**
+     * Push the channel-mix mode + enabled flag to the DSP
+     * [channelMixProcessor]. Drives real downmix/upmix/mono via ITU
+     * BS.775 coefficients; on the audio/music path this replaces the
+     * previously unwired [ChannelMixMode] preference.
+     */
+    fun setChannelMix(mode: ChannelMixMode, enabled: Boolean) {
+        _channelMixMode.value = mode
+        _channelMixEnabled.value = enabled
+        // Primary + crossfade sinks each need their own processor state.
+        channelMixProcessor.setMode(mode)
+        channelMixProcessor.setEnabled(enabled)
+        crossfadeChannelMixProcessor.setMode(mode)
+        crossfadeChannelMixProcessor.setEnabled(enabled)
     }
 
     fun attachLoudnessEnhancer(audioSessionId: Int, gain: Int) {
@@ -285,6 +342,7 @@ class AudioEffectsProcessor @Inject constructor() {
         if (_dialogueBoostEnabled.value) {
             dialogueBoost.attach(audioSessionId)
             dialogueBoost.setEnabled(true)
+            crossfadeHighPassProcessor.setEnabled(true)
         }
         if (_bassBoostEnabled.value) {
             bassBoostHelper.attach(audioSessionId)
@@ -425,6 +483,7 @@ class AudioEffectsProcessor @Inject constructor() {
 
     fun releaseAll() {
         dialogueBoost.detach()
+        crossfadeHighPassProcessor.setEnabled(false)
         equalizerHelper.detach()
         bassBoostHelper.detach()
         virtualizerHelper.detach()

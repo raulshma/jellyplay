@@ -37,11 +37,21 @@ fun rememberArtworkColors(imageUrl: String?): ArtworkColors? {
                     .data(imageUrl)
                     .size(Size(64, 64))
                     .allowHardware(false)
+                    // Isolate this Palette decode in its own cache slot so it
+                    // can't evict the larger display bitmap a live AsyncImage is
+                    // drawing (eviction lets the BitmapPool recycle it,
+                    // crashing onDraw with "Canvas: trying to use a recycled
+                    // bitmap"). See WidgetImageLoader for the same fix class.
+                    .memoryCacheKey("$imageUrl#palette-artwork")
                     .build()
                 val result = loader.execute(request)
                 if (result is SuccessResult) {
                     val bitmap = (result.image as? coil3.BitmapImage)?.bitmap
                         ?: return@withContext
+                    // At 64px, ArtworkColorExtractor.scaleForPalette returns the
+                    // same instance (<=128px), so it won't recycle the shared
+                    // cache bitmap. The cache-key isolation above is what keeps
+                    // this request from evicting a display painter's bitmap.
                     val colors = ArtworkColorExtractor.extractColors(bitmap)
                     colorCache.put(imageUrl, colors)
                     artworkColors = colors
