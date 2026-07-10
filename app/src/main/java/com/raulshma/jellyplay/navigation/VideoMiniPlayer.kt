@@ -3,10 +3,6 @@ package com.raulshma.jellyplay.navigation
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.animateFloatAsState
-import androidx.compose.animation.core.spring
-import androidx.compose.animation.core.tween
-import com.raulshma.jellyplay.core.designsystem.theme.AlphaEasing
-import com.raulshma.jellyplay.core.designsystem.theme.FancyTransitionEasing
 import com.raulshma.jellyplay.core.designsystem.theme.ShapeCache
 import com.raulshma.jellyplay.core.designsystem.theme.LocalIsSynthwave
 import com.raulshma.jellyplay.core.designsystem.theme.LocalIsSoothingTheme
@@ -70,12 +66,12 @@ fun VideoMiniPlayer(
         visible = isVisible && engine != null,
         enter = slideInVertically(
             initialOffsetY = { it },
-            animationSpec = spring(stiffness = 400f),
-        ) + fadeIn(tween(300, easing = AlphaEasing)),
+            animationSpec = MaterialTheme.motionScheme.defaultSpatialSpec(),
+        ) + fadeIn(MaterialTheme.motionScheme.defaultEffectsSpec()),
         exit = slideOutVertically(
             targetOffsetY = { it },
-            animationSpec = tween(200, easing = FancyTransitionEasing),
-        ) + fadeOut(tween(150, easing = AlphaEasing)),
+            animationSpec = MaterialTheme.motionScheme.fastSpatialSpec(),
+        ) + fadeOut(MaterialTheme.motionScheme.fastEffectsSpec()),
         modifier = modifier,
     ) {
         val navBarColorState = LocalNavigationBarColor.current
@@ -96,7 +92,7 @@ fun VideoMiniPlayer(
 
         val animatedColor by animateColorAsState(
             targetValue = targetTint,
-            animationSpec = tween(400),
+            animationSpec = MaterialTheme.motionScheme.defaultEffectsSpec(),
             label = "videoMiniPlayerColor",
         )
 

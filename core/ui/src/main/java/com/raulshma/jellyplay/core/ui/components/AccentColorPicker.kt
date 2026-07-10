@@ -1,9 +1,7 @@
 package com.raulshma.jellyplay.core.ui.components
 
 import androidx.compose.animation.animateColorAsState
-import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.animateFloatAsState
-import androidx.compose.animation.core.spring
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -136,7 +134,7 @@ fun SwatchCircle(
 
     val scale by animateFloatAsState(
         targetValue = if (isPressed) 0.9f else if (isSelected) 1.1f else 1.0f,
-        animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy, stiffness = Spring.StiffnessLow),
+        animationSpec = MaterialTheme.motionScheme.defaultSpatialSpec(),
         label = "swatchScale"
     )
 
@@ -192,7 +190,7 @@ fun DynamicSwatchCircle(
 
     val scale by animateFloatAsState(
         targetValue = if (isPressed) 0.9f else if (isSelected) 1.1f else 1.0f,
-        animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy, stiffness = Spring.StiffnessLow),
+        animationSpec = MaterialTheme.motionScheme.defaultSpatialSpec(),
         label = "dynamicSwatchScale"
     )
 
@@ -417,7 +415,7 @@ fun SynthwaveAccentPicker(
 
                 val scale by animateFloatAsState(
                     targetValue = if (isPressed) 0.9f else if (isSelected) 1.1f else 1.0f,
-                    animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy, stiffness = Spring.StiffnessLow),
+                    animationSpec = MaterialTheme.motionScheme.defaultSpatialSpec(),
                     label = "synthwaveSwatchScale"
                 )
 
@@ -528,10 +526,7 @@ fun SoothingAccentPicker(
 
                 val scale by animateFloatAsState(
                     targetValue = if (isPressed) 0.9f else if (isSelected) 1.1f else 1.0f,
-                    animationSpec = androidx.compose.animation.core.spring(
-                        dampingRatio = androidx.compose.animation.core.Spring.DampingRatioMediumBouncy,
-                        stiffness = androidx.compose.animation.core.Spring.StiffnessLow
-                    ),
+                    animationSpec = MaterialTheme.motionScheme.defaultSpatialSpec(),
                     label = "soothingSwatchScale"
                 )
 

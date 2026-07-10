@@ -1,7 +1,6 @@
 package com.raulshma.jellyplay.feature.admin.statistics.components
 
 import androidx.compose.animation.core.Animatable
-import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -69,12 +68,13 @@ fun ActivityBarChart(
     val textMeasurer = rememberTextMeasurer()
     val labelStyle = MaterialTheme.typography.labelSmall
     val cornerRadius = 4.dp
+    val entranceSpec = MaterialTheme.motionScheme.defaultSpatialSpec<Float>()
 
     LaunchedEffect(data) {
         if (animateEntrance) {
             animatable.animateTo(
                 targetValue = 1f,
-                animationSpec = tween(durationMillis = 800, delayMillis = 200),
+                animationSpec = entranceSpec,
             )
         }
     }
@@ -351,11 +351,12 @@ fun PieChart(
     val trackColor = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.05f)
     val total = data.sumOf { it.value }.coerceAtLeast(1L)
     val animatedProgress = remember { Animatable(0f) }
+    val entranceSpec = MaterialTheme.motionScheme.defaultSpatialSpec<Float>()
 
     LaunchedEffect(data) {
         animatedProgress.animateTo(
             targetValue = 1f,
-            animationSpec = tween(durationMillis = 800, delayMillis = 200),
+            animationSpec = entranceSpec,
         )
     }
 
@@ -454,11 +455,12 @@ fun TrendLineChart(
 
     val maxValue = data.maxOfOrNull { it.value }?.coerceAtLeast(1L) ?: 1L
     val animatedProgress = remember { Animatable(0f) }
+    val entranceSpec = MaterialTheme.motionScheme.defaultSpatialSpec<Float>()
 
     LaunchedEffect(data) {
         animatedProgress.animateTo(
             targetValue = 1f,
-            animationSpec = tween(durationMillis = 800, delayMillis = 200),
+            animationSpec = entranceSpec,
         )
     }
 

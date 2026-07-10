@@ -3,11 +3,7 @@ package com.raulshma.jellyplay.feature.player.audio
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.Animatable
-import androidx.compose.animation.core.Spring
-import com.raulshma.jellyplay.core.designsystem.theme.AlphaEasing
 import com.raulshma.jellyplay.core.designsystem.theme.ShapeCache
-import androidx.compose.animation.core.spring
-import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.background
@@ -141,17 +137,22 @@ fun AudioPlayerScreen(
 
     val artworkScale = remember { Animatable(0.8f) }
     val contentAlpha = remember { Animatable(0f) }
+    // Capture scheme specs in composable scope; the animateTo calls below run in coroutines.
+    val artworkScaleSpec = MaterialTheme.motionScheme.slowSpatialSpec<Float>()
+    val contentFadeSpec = MaterialTheme.motionScheme.defaultEffectsSpec<Float>()
+    val swipeSpringSpec = MaterialTheme.motionScheme.defaultSpatialSpec<Float>()
+    val boundsSpec = MaterialTheme.motionScheme.slowSpatialSpec<androidx.compose.ui.geometry.Rect>()
 
     val isTv = LocalTvMode.current
     val playFocusRequester = remember { FocusRequester() }
 
     LaunchedEffect(itemId) {
         viewModel.play(itemId)
-        artworkScale.animateTo(1f, spring(dampingRatio = Spring.DampingRatioLowBouncy, stiffness = Spring.StiffnessLow))
+        artworkScale.animateTo(1f, artworkScaleSpec)
     }
 
     LaunchedEffect(Unit) {
-        contentAlpha.animateTo(1f, tween(600, delayMillis = 200, easing = AlphaEasing))
+        contentAlpha.animateTo(1f, contentFadeSpec)
         if (isTv) {
             for (attempt in 1..20) {
                 androidx.compose.runtime.withFrameNanos { }
@@ -234,10 +235,7 @@ fun AudioPlayerScreen(
                     rememberSharedContentState(key = "audio_player_container"),
                     animatedVisibilityScope = animatedVisibilityScope,
                     boundsTransform = androidx.compose.animation.BoundsTransform { _, _ ->
-                        spring(
-                            dampingRatio = androidx.compose.animation.core.Spring.DampingRatioLowBouncy,
-                            stiffness = androidx.compose.animation.core.Spring.StiffnessMediumLow,
-                        )
+                        boundsSpec
                     }
                 )
             }
@@ -265,7 +263,7 @@ fun AudioPlayerScreen(
                                 DragDirection.VERTICAL -> {
                                     if (swipeDismissOffset.value < -80f || totalDragY < -150f) {
                                         coroutineScope.launch {
-                                            swipeDismissOffset.animateTo(0f, spring(stiffness = Spring.StiffnessMedium))
+                                            swipeDismissOffset.animateTo(0f, swipeSpringSpec)
                                         }
                                         showQueue = true
                                     } else if (swipeDismissOffset.value > 150f || totalDragY > 200f) {
@@ -276,7 +274,7 @@ fun AudioPlayerScreen(
                                         }
                                     } else {
                                         coroutineScope.launch {
-                                            swipeDismissOffset.animateTo(0f, spring(stiffness = Spring.StiffnessMedium))
+                                            swipeDismissOffset.animateTo(0f, swipeSpringSpec)
                                         }
                                     }
                                 }
@@ -285,16 +283,16 @@ fun AudioPlayerScreen(
                                     if (horizontalSwipeOffset.value < -threshold) { // Swipe Left -> Next
                                         coroutineScope.launch {
                                             viewModel.skipToNext()
-                                            horizontalSwipeOffset.animateTo(0f, spring(stiffness = Spring.StiffnessMedium))
+                                            horizontalSwipeOffset.animateTo(0f, swipeSpringSpec)
                                         }
                                     } else if (horizontalSwipeOffset.value > threshold) { // Swipe Right -> Prev
                                         coroutineScope.launch {
                                             viewModel.skipToPrevious()
-                                            horizontalSwipeOffset.animateTo(0f, spring(stiffness = Spring.StiffnessMedium))
+                                            horizontalSwipeOffset.animateTo(0f, swipeSpringSpec)
                                         }
                                     } else {
                                         coroutineScope.launch {
-                                            horizontalSwipeOffset.animateTo(0f, spring(stiffness = Spring.StiffnessMedium))
+                                            horizontalSwipeOffset.animateTo(0f, swipeSpringSpec)
                                         }
                                     }
                                 }
@@ -304,8 +302,8 @@ fun AudioPlayerScreen(
                         },
                         onDragCancel = {
                             coroutineScope.launch {
-                                swipeDismissOffset.animateTo(0f, spring(stiffness = Spring.StiffnessMedium))
-                                horizontalSwipeOffset.animateTo(0f, spring(stiffness = Spring.StiffnessMedium))
+                                swipeDismissOffset.animateTo(0f, swipeSpringSpec)
+                                horizontalSwipeOffset.animateTo(0f, swipeSpringSpec)
                             }
                             dragDirection = null
                         }
@@ -675,8 +673,8 @@ fun AudioPlayerScreen(
 
             AnimatedVisibility(
                 visible = showErrorOverlay && uiState.playbackError != null,
-                enter = fadeIn(tween(300)),
-                exit = fadeOut(tween(200)),
+                enter = fadeIn(MaterialTheme.motionScheme.defaultEffectsSpec()),
+                exit = fadeOut(MaterialTheme.motionScheme.fastEffectsSpec()),
                 modifier = Modifier.align(Alignment.BottomCenter),
             ) {
                 val retryFocusState = rememberTvFocusState(focusedScale = 1.05f)

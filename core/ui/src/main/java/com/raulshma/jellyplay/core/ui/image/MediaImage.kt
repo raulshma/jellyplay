@@ -53,6 +53,7 @@ fun MediaImage(
     performanceModeAware: Boolean = true,
 ) {
     val performanceMode = com.raulshma.jellyplay.core.ui.components.LocalPerformanceMode.current
+    val reducedMotion = com.raulshma.jellyplay.core.ui.components.LocalReducedMotion.current
     // Performance mode lowers decode size to save memory, but callers that
     // explicitly request [Size.ORIGINAL] (e.g. the full-screen photo viewer)
     // need the unmodified resolution — capping them to 256² produces blurry
@@ -72,7 +73,10 @@ fun MediaImage(
         else -> size
     }
     val effectiveBlurHash = if (performanceMode) null else blurHash
-    val effectiveCrossfade = if (performanceMode) false else crossfade
+    // Crossfade is a motion effect, so disable it under either performance mode
+    // or reduce motion (blurHash is a memory/quality optimization and stays
+    // gated on performance mode alone).
+    val effectiveCrossfade = if (reducedMotion) false else crossfade
     val context = LocalContext.current
     val imageRequest = remember(url, effectiveSize, effectiveCrossfade) {
         ImageRequest.Builder(context)

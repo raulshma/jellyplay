@@ -2,8 +2,6 @@ package com.raulshma.jellyplay.core.ui.components
 
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.animateFloatAsState
-import androidx.compose.animation.core.spring
-import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -174,10 +172,7 @@ fun ModeSwitch(
 
     val progress by animateFloatAsState(
         targetValue = if (isMusic) 0f else 1f,
-        animationSpec = spring(
-            dampingRatio = 0.76f,
-            stiffness = 280f,
-        ),
+        animationSpec = MaterialTheme.motionScheme.defaultSpatialSpec(),
         label = "mode_switch_progress"
     )
 

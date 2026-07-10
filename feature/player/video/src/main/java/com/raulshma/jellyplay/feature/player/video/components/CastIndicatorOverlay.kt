@@ -31,17 +31,17 @@ import com.composables.icons.tabler.Tabler
 import com.composables.icons.tabler.outline.Cast
 import com.raulshma.jellyplay.core.designsystem.theme.CastColors
 import com.raulshma.jellyplay.core.designsystem.theme.ShapeCache
-import com.raulshma.jellyplay.core.ui.components.LocalPerformanceMode
+import com.raulshma.jellyplay.core.ui.components.LocalReducedMotion
 
 @Composable
 fun CastIndicatorOverlay(
     isConnecting: Boolean,
     modifier: Modifier = Modifier,
 ) {
-    val performanceMode = LocalPerformanceMode.current
-    // Cast connection pulse. Freeze at full alpha in performance mode to drop
-    // the redraw coroutine while the overlay is on screen.
-    val pulseAlpha = if (!performanceMode) {
+    val reducedMotion = LocalReducedMotion.current
+    // Cast connection pulse. Freeze at full alpha in performance/reduced-motion mode
+    // to drop the redraw coroutine while the overlay is on screen.
+    val pulseAlpha = if (!reducedMotion) {
         rememberInfiniteTransition(label = "castPulse").animateFloat(
             initialValue = 0.5f,
             targetValue = 1f,

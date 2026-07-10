@@ -35,6 +35,7 @@ import androidx.compose.ui.unit.dp
 import com.composables.icons.tabler.Tabler
 import com.composables.icons.tabler.outline.Clock
 import com.raulshma.jellyplay.core.designsystem.theme.ShapeCache
+import com.raulshma.jellyplay.core.designsystem.theme.defaultContentSizeSpec
 import com.raulshma.jellyplay.core.model.AuditLogEntry
 import com.raulshma.jellyplay.core.model.CleanupActionType
 import com.raulshma.jellyplay.core.ui.components.ScreenEmptyState
@@ -88,7 +89,7 @@ private fun AuditEntryCard(entry: AuditLogEntry) {
         Column(
             modifier = Modifier
                 .padding(16.dp)
-                .animateContentSize(),
+                .animateContentSize(animationSpec = defaultContentSizeSpec()),
         ) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Column(modifier = Modifier.weight(1f)) {

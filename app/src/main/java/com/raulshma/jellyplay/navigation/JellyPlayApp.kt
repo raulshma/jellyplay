@@ -547,7 +547,7 @@ private fun MainContent(
     // the feature is disabled — in which case mediaPreviewState is always null.
     val previewBlur by androidx.compose.animation.core.animateFloatAsState(
         targetValue = if (peekEnabled && !isTv && !preferences.performanceMode && mediaPreviewState != null) 14f else 0f,
-        animationSpec = androidx.compose.animation.core.tween(durationMillis = 220),
+        animationSpec = MaterialTheme.motionScheme.fastEffectsSpec(),
         label = "previewBackdropBlur",
     )
     val previewBlurModifier =
@@ -602,10 +602,7 @@ private fun MainContent(
 
     val animatedBottomNavOffset by androidx.compose.animation.core.animateFloatAsState(
         targetValue = if (isBottomNavVisible) 0f else -bottomNavHeightPx * 2,
-        animationSpec = androidx.compose.animation.core.tween(
-            durationMillis = 300,
-            easing = androidx.compose.animation.core.FastOutSlowInEasing
-        ),
+        animationSpec = MaterialTheme.motionScheme.defaultSpatialSpec(),
         label = "bottomNavOffset"
     )
 
