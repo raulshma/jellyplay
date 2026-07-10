@@ -18,6 +18,7 @@ import androidx.compose.material3.Tab
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -122,9 +123,10 @@ private fun ArtistsPage(
         gridMin = gridMin,
         spacing = spacing,
     ) { artist, itemModifier ->
+        val imageUrl = remember(artist.id) { viewModel.getImageUrl(artist.id) }
         ArtistCard(
             name = artist.name,
-            imageUrl = viewModel.getImageUrl(artist.id),
+            imageUrl = imageUrl,
             onClick = { onItemClick(artist.id) },
             modifier = itemModifier,
             blurHash = artist.blurHashes.primary,
@@ -148,11 +150,12 @@ private fun AlbumsPage(
         gridMin = gridMin,
         spacing = spacing,
     ) { album, itemModifier ->
+        val imageUrl = remember(album.id) { viewModel.getImageUrl(album.id) }
         AlbumCard(
             name = album.name,
             artist = album.albumArtist,
             year = album.year,
-            imageUrl = viewModel.getImageUrl(album.id),
+            imageUrl = imageUrl,
             onClick = { onItemClick(album.id) },
             modifier = itemModifier,
             blurHash = album.blurHashes.primary,
@@ -192,6 +195,7 @@ private fun TracksPage(
                             contentType = { "mediaItem" },
                         ) { index ->
                             val track = tracks[index] ?: return@items
+                            val imageUrl = remember(track.id) { viewModel.getImageUrl(track.id) }
                             TrackRow(
                                 name = track.name,
                                 artist = track.albumArtist,
@@ -199,7 +203,7 @@ private fun TracksPage(
                                 duration = track.runTimeTicks?.let { ticks ->
                                     com.raulshma.jellyplay.core.ui.components.formatDurationMs(ticks / 10_000)
                                 },
-                                imageUrl = viewModel.getImageUrl(track.id),
+                                imageUrl = imageUrl,
                                 onClick = { onItemClick(track.id) },
                                 blurHash = track.blurHashes.primary,
                             )
@@ -270,11 +274,12 @@ private fun PlaylistsPage(
             modifier = Modifier.fillMaxSize(),
             contentType = { "playlist" },
         ) { _, playlist, itemModifier ->
+            val imageUrl = remember(playlist.id) { viewModel.getImageUrl(playlist.id) }
             AlbumCard(
                 name = playlist.name,
                 artist = if (playlist.itemCount > 0) "${playlist.itemCount} items" else null,
                 year = null,
-                imageUrl = viewModel.getImageUrl(playlist.id),
+                imageUrl = imageUrl,
                 onClick = { onItemClick(playlist.id) },
                 modifier = itemModifier,
             )

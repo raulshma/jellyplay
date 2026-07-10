@@ -6,9 +6,6 @@ import com.raulshma.jellyplay.core.ui.tv.ifElse
 import com.raulshma.jellyplay.core.ui.tv.tryRequestFocus
 import com.raulshma.jellyplay.core.ui.tv.rememberTvFocusState
 import com.raulshma.jellyplay.core.ui.tv.tvFocusIndicator
-import androidx.compose.animation.core.tween
-import com.raulshma.jellyplay.core.designsystem.theme.AlphaEasing
-import com.raulshma.jellyplay.core.designsystem.theme.PointToPointEasing
 import com.raulshma.jellyplay.core.designsystem.theme.playerOnScrim
 import com.raulshma.jellyplay.core.designsystem.theme.ShapeCache
 import com.raulshma.jellyplay.core.ui.animation.AnimationTokens
@@ -99,8 +96,8 @@ private fun SkipButtonOverlay(
 
     AnimatedVisibility(
         visible = isVisible,
-        enter = fadeIn(tween(150, easing = AlphaEasing)) + scaleIn(initialScale = 0.85f, animationSpec = tween(150, easing = PointToPointEasing)) + slideInHorizontally(animationSpec = tween(400, easing = PointToPointEasing), initialOffsetX = { it / 3 }),
-        exit = fadeOut(tween(200, easing = AlphaEasing)) + scaleOut(targetScale = 0.85f, animationSpec = tween(200, easing = PointToPointEasing)) + slideOutHorizontally(animationSpec = tween(400, easing = PointToPointEasing), targetOffsetX = { it / 3 }),
+        enter = fadeIn(MaterialTheme.motionScheme.fastEffectsSpec()) + scaleIn(initialScale = 0.85f, animationSpec = MaterialTheme.motionScheme.fastSpatialSpec()) + slideInHorizontally(animationSpec = MaterialTheme.motionScheme.slowSpatialSpec(), initialOffsetX = { it / 3 }),
+        exit = fadeOut(MaterialTheme.motionScheme.fastEffectsSpec()) + scaleOut(targetScale = 0.85f, animationSpec = MaterialTheme.motionScheme.fastSpatialSpec()) + slideOutHorizontally(animationSpec = MaterialTheme.motionScheme.slowSpatialSpec(), targetOffsetX = { it / 3 }),
         modifier = modifier,
     ) {
         Row(

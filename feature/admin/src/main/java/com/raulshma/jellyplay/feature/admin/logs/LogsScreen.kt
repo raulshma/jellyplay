@@ -304,7 +304,7 @@ private fun LogFilesTab(
                         }
                         val highlightAlpha by animateFloatAsState(
                             targetValue = if (isHighlighted) 0.15f else 0.0f,
-                            animationSpec = androidx.compose.animation.core.tween(durationMillis = 1000),
+                            animationSpec = MaterialTheme.motionScheme.slowEffectsSpec(),
                             label = "lineHighlightAlpha"
                         )
                         

@@ -2,7 +2,6 @@ package com.raulshma.jellyplay.feature.downloads
 
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.animateColorAsState
-import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.togetherWith
@@ -76,6 +75,9 @@ internal fun OfflineSeasonsSection(
         seasons.indexOfFirst { it.id == id }.coerceAtLeast(0)
     } ?: 0
     var selectedSeasonIndex by remember { mutableIntStateOf(initialSeasonIndex) }
+    // Capture in composable scope; AnimatedContent's transitionSpec is not composable.
+    val seasonFadeIn = MaterialTheme.motionScheme.defaultEffectsSpec<Float>()
+    val seasonFadeOut = MaterialTheme.motionScheme.fastEffectsSpec<Float>()
 
     // Pending per-episode delete confirmation. The per-episode trash badge is a
     // small touch target overlapping the play affordance on a 16:9 thumbnail, so
@@ -122,7 +124,7 @@ internal fun OfflineSeasonsSection(
         AnimatedContent(
             targetState = selectedSeasonIndex to (seasons.getOrNull(selectedSeasonIndex)?.let { episodes[it.id]?.size } ?: 0),
             transitionSpec = {
-                fadeIn(animationSpec = tween(400)) togetherWith fadeOut(animationSpec = tween(300))
+                fadeIn(animationSpec = seasonFadeIn) togetherWith fadeOut(animationSpec = seasonFadeOut)
             },
             label = "offlineSeasonEpisodes",
         ) { (seasonIdx, _) ->

@@ -3,11 +3,7 @@ package com.raulshma.jellyplay.feature.player.audio
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.Animatable
-import androidx.compose.animation.core.Spring
-import com.raulshma.jellyplay.core.designsystem.theme.AlphaEasing
 import com.raulshma.jellyplay.core.designsystem.theme.ShapeCache
-import androidx.compose.animation.core.spring
-import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.background
@@ -46,6 +42,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
@@ -128,7 +125,9 @@ fun AudioPlayerScreen(
             val result = snackbarHostState.showSnackbar(
                 message = message,
                 actionLabel = undoActionLabel,
-                duration = SnackbarDuration.Long,
+                // Undo affordances are recoverable actions, not errors; keep
+                // them brief (≤4s) so they don't linger over the controls.
+                duration = SnackbarDuration.Short,
             )
             if (result == SnackbarResult.ActionPerformed) {
                 viewModel.undoLastQueueOperation()
@@ -138,17 +137,22 @@ fun AudioPlayerScreen(
 
     val artworkScale = remember { Animatable(0.8f) }
     val contentAlpha = remember { Animatable(0f) }
+    // Capture scheme specs in composable scope; the animateTo calls below run in coroutines.
+    val artworkScaleSpec = MaterialTheme.motionScheme.slowSpatialSpec<Float>()
+    val contentFadeSpec = MaterialTheme.motionScheme.defaultEffectsSpec<Float>()
+    val swipeSpringSpec = MaterialTheme.motionScheme.defaultSpatialSpec<Float>()
+    val boundsSpec = MaterialTheme.motionScheme.slowSpatialSpec<androidx.compose.ui.geometry.Rect>()
 
     val isTv = LocalTvMode.current
     val playFocusRequester = remember { FocusRequester() }
 
     LaunchedEffect(itemId) {
         viewModel.play(itemId)
-        artworkScale.animateTo(1f, spring(dampingRatio = Spring.DampingRatioLowBouncy, stiffness = Spring.StiffnessLow))
+        artworkScale.animateTo(1f, artworkScaleSpec)
     }
 
     LaunchedEffect(Unit) {
-        contentAlpha.animateTo(1f, tween(600, delayMillis = 200, easing = AlphaEasing))
+        contentAlpha.animateTo(1f, contentFadeSpec)
         if (isTv) {
             for (attempt in 1..20) {
                 androidx.compose.runtime.withFrameNanos { }
@@ -166,14 +170,20 @@ fun AudioPlayerScreen(
             showEffectsSheet = false
             showSleepTimer = false
             showDeleteConfirm = false
-        } else if (showLyrics) {
-            showLyrics = false
         } else {
+            // Lyrics visibility is a persisted preference, not a transient
+            // overlay — back navigates away without hiding them, so the choice
+            // survives the next time the player is opened.
             onBack()
         }
     }
 
     val preferences by viewModel.preferences.collectAsStateWithLifecycle()
+    // Seed the lyrics overlay from the persisted preference, then keep them in
+    // sync: toggling in the UI writes back so the choice survives across opens.
+    LaunchedEffect(preferences.audioLyricsVisible) {
+        showLyrics = preferences.audioLyricsVisible
+    }
     val currentDownloadItem by viewModel.currentDownloadItem.collectAsStateWithLifecycle()
     val abLoopStart by viewModel.abLoopStartMs.collectAsStateWithLifecycle(initialValue = null)
     val abLoopEnd by viewModel.abLoopEndMs.collectAsStateWithLifecycle(initialValue = null)
@@ -225,10 +235,7 @@ fun AudioPlayerScreen(
                     rememberSharedContentState(key = "audio_player_container"),
                     animatedVisibilityScope = animatedVisibilityScope,
                     boundsTransform = androidx.compose.animation.BoundsTransform { _, _ ->
-                        spring(
-                            dampingRatio = androidx.compose.animation.core.Spring.DampingRatioLowBouncy,
-                            stiffness = androidx.compose.animation.core.Spring.StiffnessMediumLow,
-                        )
+                        boundsSpec
                     }
                 )
             }
@@ -256,7 +263,7 @@ fun AudioPlayerScreen(
                                 DragDirection.VERTICAL -> {
                                     if (swipeDismissOffset.value < -80f || totalDragY < -150f) {
                                         coroutineScope.launch {
-                                            swipeDismissOffset.animateTo(0f, spring(stiffness = Spring.StiffnessMedium))
+                                            swipeDismissOffset.animateTo(0f, swipeSpringSpec)
                                         }
                                         showQueue = true
                                     } else if (swipeDismissOffset.value > 150f || totalDragY > 200f) {
@@ -267,7 +274,7 @@ fun AudioPlayerScreen(
                                         }
                                     } else {
                                         coroutineScope.launch {
-                                            swipeDismissOffset.animateTo(0f, spring(stiffness = Spring.StiffnessMedium))
+                                            swipeDismissOffset.animateTo(0f, swipeSpringSpec)
                                         }
                                     }
                                 }
@@ -276,16 +283,16 @@ fun AudioPlayerScreen(
                                     if (horizontalSwipeOffset.value < -threshold) { // Swipe Left -> Next
                                         coroutineScope.launch {
                                             viewModel.skipToNext()
-                                            horizontalSwipeOffset.animateTo(0f, spring(stiffness = Spring.StiffnessMedium))
+                                            horizontalSwipeOffset.animateTo(0f, swipeSpringSpec)
                                         }
                                     } else if (horizontalSwipeOffset.value > threshold) { // Swipe Right -> Prev
                                         coroutineScope.launch {
                                             viewModel.skipToPrevious()
-                                            horizontalSwipeOffset.animateTo(0f, spring(stiffness = Spring.StiffnessMedium))
+                                            horizontalSwipeOffset.animateTo(0f, swipeSpringSpec)
                                         }
                                     } else {
                                         coroutineScope.launch {
-                                            horizontalSwipeOffset.animateTo(0f, spring(stiffness = Spring.StiffnessMedium))
+                                            horizontalSwipeOffset.animateTo(0f, swipeSpringSpec)
                                         }
                                     }
                                 }
@@ -295,8 +302,8 @@ fun AudioPlayerScreen(
                         },
                         onDragCancel = {
                             coroutineScope.launch {
-                                swipeDismissOffset.animateTo(0f, spring(stiffness = Spring.StiffnessMedium))
-                                horizontalSwipeOffset.animateTo(0f, spring(stiffness = Spring.StiffnessMedium))
+                                swipeDismissOffset.animateTo(0f, swipeSpringSpec)
+                                horizontalSwipeOffset.animateTo(0f, swipeSpringSpec)
                             }
                             dragDirection = null
                         }
@@ -348,7 +355,10 @@ fun AudioPlayerScreen(
                     onBack = onBack,
                     hasLyrics = true,
                     lyricsVisible = showLyrics,
-                    onLyricsClick = { showLyrics = !showLyrics },
+                    onLyricsClick = {
+                        showLyrics = !showLyrics
+                        viewModel.setLyricsVisible(showLyrics)
+                    },
                     onQueueClick = { showQueue = true },
                     onMenuToggle = { showMenu = it },
                     showMenu = showMenu,
@@ -366,11 +376,13 @@ fun AudioPlayerScreen(
                     onNightModeStrengthChange = { viewModel.setNightModeStrength(it) },
                     onAmbientClick = { showMenu = false; onAmbientClick(uiState.albumArtUrl.ifBlank { null }, uiState.title, uiState.artist) },
                     sleepTimerActive = sleepTimer.active,
-                    sleepTimerDisplayText = if (sleepTimer.endOfEpisode) stringResource(R.string.audio_sleep_timer_end_of_episode) else com.raulshma.jellyplay.core.ui.components.formatDurationMs(sleepTimer.remainingMs),
+                    sleepTimerEndOfEpisode = sleepTimer.endOfEpisode,
+                    sleepTimerRemainingFlow = viewModel.sleepTimerRemainingMs,
                     onSleepTimerClick = { showMenu = false; showSleepTimer = true },
                     karaokeMode = lyricsState.karaokeMode,
                     onKaraokeToggle = { viewModel.setKaraokeModeEnabled(it) },
                     hasKaraokeLyrics = lyricsState.hasKaraokeLyrics,
+                    castManager = viewModel.castManagerField,
                 )
 
                 if (useSideBySide) {
@@ -399,7 +411,7 @@ fun AudioPlayerScreen(
                                 lyricsSource = lyricsState.lyricsSource,
                                 onSearchClick = { showLyricsSearch = true },
                                 karaokeMode = lyricsState.karaokeMode,
-                                currentPositionMs = viewModel.currentPosition,
+                                currentPositionMs = viewModel.currentPositionState,
                                 lyricsOffsetMs = lyricsState.lyricsOffsetMs,
                                 onLyricsOffsetChange = { viewModel.setLyricsOffset(it) },
                             )
@@ -420,7 +432,7 @@ fun AudioPlayerScreen(
                             )
                             Spacer(Modifier.height(28.dp))
                             PixelProgressSection(
-                                currentPosition = viewModel.currentPosition,
+                                currentPosition = viewModel.currentPositionState,
                                 duration = uiState.duration,
                                 isPlaying = uiState.isPlaying,
                                 accentColor = accentColor,
@@ -461,6 +473,13 @@ fun AudioPlayerScreen(
                                 pillSurfaceDark = pillSurfaceDark,
                                 accentColor = accentColor,
                             )
+                            Spacer(Modifier.height(16.dp))
+                            NextTrackSection(
+                                queue = queueState.queue,
+                                currentIndex = queueState.currentIndex,
+                                onSkipTrack = { viewModel.removeFromQueue(it) },
+                                accentColor = accentColor,
+                            )
                         }
                     }
                 } else {
@@ -480,7 +499,7 @@ fun AudioPlayerScreen(
                         lyricsSource = lyricsState.lyricsSource,
                         onSearchClick = { showLyricsSearch = true },
                         karaokeMode = lyricsState.karaokeMode,
-                        currentPositionMs = viewModel.currentPosition,
+                        currentPositionMs = viewModel.currentPositionState,
                         lyricsOffsetMs = lyricsState.lyricsOffsetMs,
                         onLyricsOffsetChange = { viewModel.setLyricsOffset(it) },
                     )
@@ -502,7 +521,7 @@ fun AudioPlayerScreen(
                         )
                         Spacer(Modifier.height(24.dp))
                         PixelProgressSection(
-                            currentPosition = viewModel.currentPosition,
+                            currentPosition = viewModel.currentPositionState,
                             duration = uiState.duration,
                             isPlaying = uiState.isPlaying,
                             accentColor = accentColor,
@@ -541,6 +560,13 @@ fun AudioPlayerScreen(
                             },
                             onAbLoopClick = { viewModel.cycleAbLoop() },
                             pillSurfaceDark = pillSurfaceDark,
+                            accentColor = accentColor,
+                        )
+                        Spacer(Modifier.height(16.dp))
+                        NextTrackSection(
+                            queue = queueState.queue,
+                            currentIndex = queueState.currentIndex,
+                            onSkipTrack = { viewModel.removeFromQueue(it) },
                             accentColor = accentColor,
                         )
                         Spacer(Modifier.height(16.dp))
@@ -608,13 +634,47 @@ fun AudioPlayerScreen(
                 hostState = snackbarHostState,
                 modifier = Modifier
                     .align(Alignment.BottomCenter)
-                    .padding(bottom = 120.dp),
-            )
+                    .padding(bottom = 16.dp, start = 16.dp, end = 16.dp),
+            ) { snackbarData ->
+                // Material 3 Expressive snackbar: pill surface, elevated tonal,
+                // rounded to the expressive shape, with a bold action label.
+                Surface(
+                    shape = ShapeCache.smoothPill,
+                    color = MaterialTheme.colorScheme.inverseSurface.copy(alpha = 0.95f),
+                    contentColor = MaterialTheme.colorScheme.inverseOnSurface,
+                    shadowElevation = 6.dp,
+                    modifier = Modifier.fillMaxWidth(),
+                ) {
+                    Row(
+                        modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Text(
+                            text = snackbarData.visuals.message,
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.inverseOnSurface,
+                            modifier = Modifier.weight(1f),
+                            maxLines = 2,
+                            overflow = TextOverflow.Ellipsis,
+                        )
+                        if (snackbarData.visuals.actionLabel != null) {
+                            Spacer(Modifier.width(8.dp))
+                            TextButton(onClick = { snackbarData.performAction() }) {
+                                Text(
+                                    snackbarData.visuals.actionLabel!!,
+                                    color = MaterialTheme.colorScheme.inversePrimary,
+                                    fontWeight = androidx.compose.ui.text.font.FontWeight.Bold,
+                                )
+                            }
+                        }
+                    }
+                }
+            }
 
             AnimatedVisibility(
                 visible = showErrorOverlay && uiState.playbackError != null,
-                enter = fadeIn(tween(300)),
-                exit = fadeOut(tween(200)),
+                enter = fadeIn(MaterialTheme.motionScheme.defaultEffectsSpec()),
+                exit = fadeOut(MaterialTheme.motionScheme.fastEffectsSpec()),
                 modifier = Modifier.align(Alignment.BottomCenter),
             ) {
                 val retryFocusState = rememberTvFocusState(focusedScale = 1.05f)
@@ -705,10 +765,11 @@ fun AudioPlayerScreen(
     }
 
     if (showSleepTimer) {
+        val sleepTimerRemainingMs by viewModel.sleepTimerRemainingMs.collectAsStateWithLifecycle()
         AudioSleepTimerSheet(
             isActive = sleepTimer.active,
             isEndOfEpisodeMode = sleepTimer.endOfEpisode,
-            remainingMs = sleepTimer.remainingMs,
+            remainingMs = sleepTimerRemainingMs,
             lastUsedDurationMs = sleepTimer.lastUsedDurationMs,
             onSelectDuration = { viewModel.startSleepTimer(it) },
             onSelectEndOfEpisode = { viewModel.startSleepTimerEndOfEpisode() },
@@ -763,4 +824,31 @@ fun AudioPlayerScreen(
 }
 
 private enum class DragDirection { VERTICAL, HORIZONTAL }
+
+/**
+ * Surfaces the next queued track beneath the controls and lets the user skip
+ * over (remove) it. Hidden when the queue is empty or only one track remains
+ * (nothing to skip). Only shows a *real* next track — when the current track is
+ * last and the queue doesn't wrap, there is no upcoming item to skip.
+ */
+@Composable
+private fun NextTrackSection(
+    queue: List<com.raulshma.jellyplay.core.data.playback.AudioQueueItem>,
+    currentIndex: Int,
+    onSkipTrack: (Int) -> Unit,
+    accentColor: Color,
+) {
+    if (queue.size <= 1) return
+    // A genuine upcoming track exists only when current isn't the last item.
+    if (currentIndex < 0 || currentIndex >= queue.lastIndex) return
+    val nextIndex = currentIndex + 1
+    val nextTrack = queue.getOrNull(nextIndex) ?: return
+    NextTrackBar(
+        title = nextTrack.name,
+        artist = nextTrack.artist,
+        artworkUrl = nextTrack.imageUrl,
+        onSkipTrack = { onSkipTrack(nextIndex) },
+        accentColor = accentColor,
+    )
+}
 

@@ -435,7 +435,7 @@ fun LanguageSettingsScreen(
                 LazyColumn(
                     modifier = Modifier.heightIn(max = LocalConfiguration.current.screenHeightDp.dp * 0.35f),
                 ) {
-                    itemsIndexed(SubtitleColor.entries, contentType = { _, _ -> "color" }) { index, color ->
+                    itemsIndexed(SubtitleColor.entries, key = { _, color -> color.name }, contentType = { _, _ -> "color" }) { index, color ->
                         val selected = color == preferences.subtitleStyle.backgroundColor
                         val shape = expressiveListShape(
                             index, SubtitleColor.entries.size,

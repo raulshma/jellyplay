@@ -1275,7 +1275,8 @@ fun VideoPlayerScreen(
                 onChannelMixClick = onChannelMixClick,
                 onChannelMixModeChange = onChannelMixModeChange,
                 sleepTimerActive = uiState.sleepTimerActive,
-                sleepTimerDisplayText = if (uiState.sleepTimerEndOfEpisode) "End of episode" else formatDuration(uiState.sleepTimerRemainingMs),
+                sleepTimerEndOfEpisode = uiState.sleepTimerEndOfEpisode,
+                sleepTimerRemainingFlow = viewModel.sleepTimerRemainingMs,
                 onSleepTimerClick = onSleepTimerClick,
                 supportsVideoFilters = uiState.engineCapabilities.supportsVideoFilters,
                 videoFiltersActive = uiState.videoEffects != com.raulshma.jellyplay.core.model.VideoEffectsConfig(),
@@ -1424,6 +1425,7 @@ fun VideoPlayerScreen(
         dismissSheet = dismissSheet,
         uiState = uiState,
         currentPositionFlow = viewModel.currentPositionMs,
+        sleepTimerRemainingFlow = viewModel.sleepTimerRemainingMs,
         doSeekTo = doSeekTo,
         viewModel = viewModel,
         itemId = itemId,
@@ -1545,6 +1547,7 @@ private fun PlayerSheetRouter(
     dismissSheet: () -> Unit,
     uiState: VideoPlayerUiState,
     currentPositionFlow: StateFlow<Long>,
+    sleepTimerRemainingFlow: StateFlow<Long>,
     doSeekTo: (Long) -> Unit,
     viewModel: VideoPlayerViewModel,
     itemId: String,
@@ -1775,11 +1778,11 @@ private fun PlayerSheetRouter(
             )
         }
         is PlayerSheet.SleepTimer -> {
-            SleepTimerSheet(
+            SleepTimerSheetBinder(
                 isActive = uiState.sleepTimerActive,
                 isEndOfEpisodeMode = uiState.sleepTimerEndOfEpisode,
-                remainingMs = uiState.sleepTimerRemainingMs,
                 lastUsedDurationMs = uiState.sleepTimerLastUsedDurationMs,
+                sleepTimerRemainingFlow = sleepTimerRemainingFlow,
                 onSelectDuration = { viewModel.startSleepTimer(it) },
                 onSelectEndOfEpisode = { viewModel.startSleepTimerEndOfEpisode() },
                 onCancel = { viewModel.cancelSleepTimer() },
@@ -1814,6 +1817,35 @@ private fun ChapterPickerBinder(
         chapters = chapters,
         currentPositionMs = currentPositionMs,
         onSelect = onSelect,
+        onDismiss = onDismiss,
+    )
+}
+
+/**
+ * Narrow binder that subscribes to [sleepTimerRemainingFlow] only while the
+ * sleep-timer sheet is open, so the sheet router and screen root are not
+ * invalidated on every 5 s tick (or the 100 ms fade-out burst).
+ */
+@Composable
+private fun SleepTimerSheetBinder(
+    isActive: Boolean,
+    isEndOfEpisodeMode: Boolean,
+    lastUsedDurationMs: Long,
+    sleepTimerRemainingFlow: StateFlow<Long>,
+    onSelectDuration: (Long) -> Unit,
+    onSelectEndOfEpisode: () -> Unit,
+    onCancel: () -> Unit,
+    onDismiss: () -> Unit,
+) {
+    val remainingMs by sleepTimerRemainingFlow.collectAsStateWithLifecycle()
+    SleepTimerSheet(
+        isActive = isActive,
+        isEndOfEpisodeMode = isEndOfEpisodeMode,
+        remainingMs = remainingMs,
+        lastUsedDurationMs = lastUsedDurationMs,
+        onSelectDuration = onSelectDuration,
+        onSelectEndOfEpisode = onSelectEndOfEpisode,
+        onCancel = onCancel,
         onDismiss = onDismiss,
     )
 }

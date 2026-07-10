@@ -9,6 +9,7 @@ import okhttp3.mockwebserver.MockWebServer
 import org.jellyfin.sdk.Jellyfin
 import org.junit.After
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
@@ -69,6 +70,17 @@ class PlaybackApiClientImplTest {
         assertTrue(url.contains("static=true"))
         assertTrue(url.contains("mediaSourceId=source-1"))
         assertTrue(url.contains("startTimeTicks=5000"))
+        assertTrue(url.contains("api_key=token-123"))
+    }
+
+    @Test
+    fun `getStreamUrl appends LiveStreamId and drops static for live sources`() {
+        val url = playbackClient.getStreamUrl("channel-1", "source-1", 0L, liveStreamId = "live-abc")
+        assertTrue(url.contains("/Videos/channel-1/stream"))
+        // static=true would break a non-seekable live tuner stream
+        assertFalse(url.contains("static=true"))
+        assertTrue(url.contains("LiveStreamId=live-abc"))
+        assertTrue(url.contains("mediaSourceId=source-1"))
         assertTrue(url.contains("api_key=token-123"))
     }
 

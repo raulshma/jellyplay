@@ -63,10 +63,10 @@ class ShortcutsViewModel @Inject constructor(
             category = ShortcutCategory.LIBRARY,
         ),
         ShortcutItem(
-            title = "TV Guide",
-            description = "Live TV schedule and programs.",
-            icon = Tabler.Outline.Calendar,
-            route = Route.LiveTvGuide,
+            title = "Live TV",
+            description = "Live TV programs, guide, channels, and recordings.",
+            icon = Tabler.Outline.DeviceTv,
+            route = Route.LiveTv,
             category = ShortcutCategory.LIBRARY,
         ),
         ShortcutItem(
@@ -102,6 +102,13 @@ class ShortcutsViewModel @Inject constructor(
             description = "Combined Radarr/Sonarr download queue and management.",
             icon = Tabler.Outline.Database,
             route = Route.ArrQueue,
+            category = ShortcutCategory.SERVICES,
+        ),
+        ShortcutItem(
+            title = "Upcoming",
+            description = "Combined Sonarr/Radarr release calendar.",
+            icon = Tabler.Outline.CalendarEvent,
+            route = Route.UpcomingCalendar,
             category = ShortcutCategory.SERVICES,
         ),
         ShortcutItem(

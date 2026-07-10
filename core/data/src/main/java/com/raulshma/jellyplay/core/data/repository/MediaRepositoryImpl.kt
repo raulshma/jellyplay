@@ -19,6 +19,10 @@ import com.raulshma.jellyplay.core.model.HomeSectionType
 import com.raulshma.jellyplay.core.model.LibraryFolder
 import com.raulshma.jellyplay.core.model.LiveTvChannel
 import com.raulshma.jellyplay.core.model.LiveTvProgram
+import com.raulshma.jellyplay.core.model.LiveTvRecording
+import com.raulshma.jellyplay.core.model.RecordingFolder
+import com.raulshma.jellyplay.core.model.GuideInfo
+import com.raulshma.jellyplay.core.model.ProgramFilters
 import com.raulshma.jellyplay.core.model.LrcLibTrack
 import com.raulshma.jellyplay.core.data.network.NetworkMonitor
 import com.raulshma.jellyplay.core.model.LyricsLine
@@ -666,29 +670,53 @@ class MediaRepositoryImpl @Inject constructor(
         return apiClient.markUnplayed(itemId)
     }
 
-    override suspend fun getLiveTvChannels(startIndex: Int, limit: Int): Result<List<LiveTvChannel>> =
-        apiClient.getLiveTvChannels(startIndex, limit)
+    override suspend fun getLiveTvChannels(
+        startIndex: Int,
+        limit: Int,
+        addCurrentProgram: Boolean,
+        enableFavoriteSorting: Boolean,
+        isFavorite: Boolean?,
+    ): Result<List<LiveTvChannel>> =
+        apiClient.getLiveTvChannels(startIndex, limit, addCurrentProgram, enableFavoriteSorting, isFavorite)
+
+    override suspend fun getRecommendedPrograms(
+        filters: ProgramFilters,
+        limit: Int,
+    ): Result<List<LiveTvProgram>> =
+        apiClient.getRecommendedPrograms(filters, limit)
 
     override suspend fun getLiveTvPrograms(channelId: String, startDateUtc: String?, endDateUtc: String?): Result<List<LiveTvProgram>> =
         apiClient.getLiveTvPrograms(channelId, startDateUtc, endDateUtc)
 
+    override suspend fun getPrograms(channelIds: List<String>, startDateUtc: String, endDateUtc: String): Result<List<LiveTvProgram>> =
+        apiClient.getPrograms(channelIds, startDateUtc, endDateUtc)
+
     override suspend fun getLiveTvGuide(startDateUtc: String, endDateUtc: String, startIndex: Int, limit: Int): Result<EpgGuide> =
         apiClient.getLiveTvGuide(startDateUtc, endDateUtc, startIndex, limit)
 
-    override suspend fun getTimers(): Result<List<DvrTimer>> =
-        apiClient.getTimers()
+    override suspend fun getGuideInfo(): Result<GuideInfo> = apiClient.getGuideInfo()
 
-    override suspend fun getSeriesTimers(): Result<List<DvrSeriesTimer>> =
-        apiClient.getSeriesTimers()
+    override suspend fun getRecordings(limit: Int?, isInProgress: Boolean?): Result<List<LiveTvRecording>> =
+        apiClient.getRecordings(limit, isInProgress)
 
-    override suspend fun createTimer(programId: String, channelId: String, startDate: String?, endDate: String?): Result<Unit> =
-        apiClient.createTimer(programId, channelId, startDate, endDate)
+    override suspend fun getRecordingFolders(): Result<List<RecordingFolder>> = apiClient.getRecordingFolders()
 
-    override suspend fun cancelTimer(timerId: String): Result<Unit> =
-        apiClient.cancelTimer(timerId)
+    override suspend fun getTimers(isActive: Boolean?, isScheduled: Boolean?): Result<List<DvrTimer>> =
+        apiClient.getTimers(isActive, isScheduled)
 
-    override suspend fun cancelSeriesTimer(seriesTimerId: String): Result<Unit> =
-        apiClient.cancelSeriesTimer(seriesTimerId)
+    override suspend fun getSeriesTimers(sortBy: String?): Result<List<DvrSeriesTimer>> =
+        apiClient.getSeriesTimers(sortBy)
+
+    override suspend fun getDefaultTimer(programId: String): Result<DvrSeriesTimer> =
+        apiClient.getDefaultTimer(programId)
+
+    override suspend fun createTimer(programId: String): Result<Unit> = apiClient.createTimer(programId)
+
+    override suspend fun createSeriesTimer(programId: String): Result<Unit> = apiClient.createSeriesTimer(programId)
+
+    override suspend fun cancelTimer(timerId: String): Result<Unit> = apiClient.cancelTimer(timerId)
+
+    override suspend fun cancelSeriesTimer(seriesTimerId: String): Result<Unit> = apiClient.cancelSeriesTimer(seriesTimerId)
 
     private suspend fun cacheLyrics(
         itemId: String,

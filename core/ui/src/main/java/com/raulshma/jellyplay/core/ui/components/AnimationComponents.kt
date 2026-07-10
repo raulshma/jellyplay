@@ -2,22 +2,19 @@ package com.raulshma.jellyplay.core.ui.components
 
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.AnimatedVisibilityScope
-import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.scaleIn
 import androidx.compose.animation.scaleOut
 import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutVertically
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
-import com.raulshma.jellyplay.core.designsystem.theme.AlphaEasing
-import com.raulshma.jellyplay.core.designsystem.theme.FancyTransitionEasing
-import com.raulshma.jellyplay.core.designsystem.theme.PointToPointEasing
 
 @Composable
 fun StaggeredSection(
@@ -28,14 +25,14 @@ fun StaggeredSection(
     AnimatedVisibility(
         visible = visible,
         enter = fadeIn(
-            animationSpec = tween(340, delayMillis = index * 70, easing = AlphaEasing),
+            animationSpec = MaterialTheme.motionScheme.defaultEffectsSpec(),
         ) + slideInVertically(
             initialOffsetY = { it / 14 },
-            animationSpec = tween(400, delayMillis = index * 70, easing = FancyTransitionEasing),
+            animationSpec = MaterialTheme.motionScheme.defaultSpatialSpec(),
         ),
-        exit = fadeOut(tween(160, easing = AlphaEasing)) + slideOutVertically(
+        exit = fadeOut(MaterialTheme.motionScheme.fastEffectsSpec()) + slideOutVertically(
             targetOffsetY = { -it / 24 },
-            animationSpec = tween(180, easing = FancyTransitionEasing),
+            animationSpec = MaterialTheme.motionScheme.fastSpatialSpec(),
         ),
     ) {
         content()
@@ -50,14 +47,14 @@ fun AnimatedEntrance(
 ) {
     AnimatedVisibility(
         visible = visible,
-        enter = fadeIn(tween(350, delayMillis = delayMillis, easing = AlphaEasing)) +
+        enter = fadeIn(MaterialTheme.motionScheme.defaultEffectsSpec()) +
                 slideInVertically(
                     initialOffsetY = { it / 10 },
-                    animationSpec = tween(400, delayMillis = delayMillis, easing = FancyTransitionEasing),
+                    animationSpec = MaterialTheme.motionScheme.defaultSpatialSpec(),
                 ),
-        exit = fadeOut(tween(200, easing = AlphaEasing)) + slideOutVertically(
+        exit = fadeOut(MaterialTheme.motionScheme.fastEffectsSpec()) + slideOutVertically(
             targetOffsetY = { it / 10 },
-            animationSpec = tween(200, easing = FancyTransitionEasing)
+            animationSpec = MaterialTheme.motionScheme.fastSpatialSpec()
         ),
         content = content,
     )
@@ -71,15 +68,15 @@ fun AnimatedScaleEntrance(
 ) {
     AnimatedVisibility(
         visible = visible,
-        enter = fadeIn(tween(300, delayMillis = delayMillis, easing = AlphaEasing)) +
+        enter = fadeIn(MaterialTheme.motionScheme.defaultEffectsSpec()) +
                 scaleIn(
                     initialScale = 0.92f,
-                    animationSpec = tween(400, delayMillis = delayMillis, easing = PointToPointEasing),
+                    animationSpec = MaterialTheme.motionScheme.defaultSpatialSpec(),
                 ),
-        exit = fadeOut(tween(150, easing = AlphaEasing)) +
+        exit = fadeOut(MaterialTheme.motionScheme.fastEffectsSpec()) +
                 scaleOut(
                     targetScale = 0.92f,
-                    animationSpec = tween(150, easing = PointToPointEasing),
+                    animationSpec = MaterialTheme.motionScheme.fastSpatialSpec(),
                 ),
         content = content,
     )
@@ -107,12 +104,12 @@ fun AnimatedMediaItem(
     AnimatedVisibility(
         visible = visible,
         enter = fadeIn(
-            animationSpec = tween(320, delayMillis = index * delayPerItem, easing = AlphaEasing),
+            animationSpec = MaterialTheme.motionScheme.defaultEffectsSpec(),
         ) + slideInVertically(
             initialOffsetY = { it / 10 },
-            animationSpec = tween(400, delayMillis = index * delayPerItem, easing = FancyTransitionEasing),
+            animationSpec = MaterialTheme.motionScheme.defaultSpatialSpec(),
         ),
-        exit = fadeOut(tween(140, easing = AlphaEasing)),
+        exit = fadeOut(MaterialTheme.motionScheme.fastEffectsSpec()),
     ) {
         content()
     }

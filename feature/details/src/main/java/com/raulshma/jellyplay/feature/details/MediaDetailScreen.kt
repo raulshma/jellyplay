@@ -9,7 +9,6 @@ import androidx.compose.animation.ExitTransition
 import androidx.compose.animation.ExperimentalSharedTransitionApi
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.animateFloatAsState
-import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.scaleIn
@@ -135,6 +134,7 @@ fun MediaDetailScreen(
     onItemClick: (itemId: String) -> Unit,
     onPersonClick: (personId: String) -> Unit,
     onNavigateToSeries: (seriesId: String) -> Unit,
+    onManageSeries: (seriesId: String) -> Unit = {},
     onNavigate: (com.raulshma.jellyplay.core.ui.navigation.Route) -> Unit = {},
     onEditClick: (itemId: String) -> Unit = {},
     onBack: () -> Unit,
@@ -163,6 +163,7 @@ fun MediaDetailScreen(
     val selectedAudioIndex = uiState.selectedAudioIndex
     val albumTracks = uiState.albumTracks
     val collectionItems = uiState.collectionItems
+    val relatedItems = uiState.relatedItems
     val isDownloading = uiState.isDownloading
     val isDownloadingSeries = uiState.isDownloadingSeries
     val downloadSheetEpisodes = uiState.downloadSheetEpisodes
@@ -172,6 +173,7 @@ fun MediaDetailScreen(
     val downloadError = uiState.downloadError
     val userMessage = uiState.userMessage
     val cellularDownloadWarningMb = uiState.cellularDownloadWarningMb
+    val canManageSeries by viewModel.canManageSeries.collectAsStateWithLifecycle()
     val seerrTvSeasons = uiState.seerrTvSeasons
     LaunchedEffect(detail?.item?.id) {
         detail?.let {
@@ -356,6 +358,7 @@ fun MediaDetailScreen(
             onEditClick = remember(onEditClick, itemId) { { onEditClick(itemId) } },
             albumTracks = albumTracks,
             collectionItems = collectionItems,
+            relatedItems = relatedItems,
             onPlayAlbumTrack = remember(viewModel) { { index: Int -> viewModel.playAlbum(index) } },
             relatedVideos = relatedVideos,
             onVideoClick = remember(uriHandler) {
@@ -374,6 +377,8 @@ fun MediaDetailScreen(
             preferences = preferences,
             onHideFromNextUp = remember(viewModel) { { viewModel.hideFromNextUp() } },
             onHideFromContinueWatching = remember(viewModel) { { viewModel.hideFromContinueWatching() } },
+            canManageSeries = canManageSeries,
+            onManageSeries = remember(onManageSeries, itemId) { { onManageSeries(itemId) } },
         )
 
         // Seerr request dialog
@@ -524,12 +529,15 @@ private fun DetailContent(
     onEditClick: () -> Unit = {},
     albumTracks: List<MediaItem> = emptyList(),
     collectionItems: List<MediaItem> = emptyList(),
+    relatedItems: List<MediaItem> = emptyList(),
     onPlayAlbumTrack: (Int) -> Unit = {},
     relatedVideos: List<SeerrRelatedVideo> = emptyList(),
     onVideoClick: (SeerrRelatedVideo) -> Unit = {},
     preferences: UserPreferences,
     onHideFromNextUp: () -> Unit = {},
     onHideFromContinueWatching: () -> Unit = {},
+    canManageSeries: Boolean = false,
+    onManageSeries: () -> Unit = {},
 ) {
     val item = detail?.item
     val listState = rememberLazyListState()
@@ -576,6 +584,7 @@ private fun DetailContent(
         activeDownload = activeDownload,
         isDownloading = isDownloading,
         isDownloadingSeries = isDownloadingSeries,
+        canManageSeries = canManageSeries,
         onClose = { /* menus close themselves */ },
         onEditClick = onEditClick,
         onShare = shareMedia,
@@ -583,6 +592,7 @@ private fun DetailContent(
         onDownloadSeries = onDownloadSeriesClick,
         onHideFromNextUp = onHideFromNextUp,
         onHideFromContinueWatching = onHideFromContinueWatching,
+        onManageSeries = onManageSeries,
         onTechnicalInfo = { onNavigate(com.raulshma.jellyplay.core.ui.navigation.Route.MediaInfo(itemId)) },
     )
 
@@ -722,19 +732,24 @@ private fun DetailContent(
                     alpha = 1f - (scrollFraction * 0.8f)
                 }
         ) {
+            // Capture in composable scope; AnimatedContent's transitionSpec is not composable.
+            val backdropFadeIn = MaterialTheme.motionScheme.defaultEffectsSpec<Float>()
+            val backdropScaleIn = MaterialTheme.motionScheme.defaultSpatialSpec<Float>()
+            val backdropFadeOut = MaterialTheme.motionScheme.fastEffectsSpec<Float>()
+            val backdropScaleOut = MaterialTheme.motionScheme.fastSpatialSpec<Float>()
             AnimatedContent(
                 targetState = targetBackdropId,
                 transitionSpec = {
                     fadeIn(
-                        animationSpec = tween(400),
+                        animationSpec = backdropFadeIn,
                     ) + scaleIn(
                         initialScale = 1.035f,
-                        animationSpec = tween(400),
+                        animationSpec = backdropScaleIn,
                     ) togetherWith fadeOut(
-                        animationSpec = tween(300),
+                        animationSpec = backdropFadeOut,
                     ) + scaleOut(
                         targetScale = 0.99f,
-                        animationSpec = tween(300),
+                        animationSpec = backdropScaleOut,
                     )
                 },
                 label = "detailBackdrop",
@@ -753,7 +768,10 @@ private fun DetailContent(
                     modifier = backdropModifier,
                     contentScale = ContentScale.Crop,
                     // Full-bleed hero backdrop: decode large enough for 4K TV width
-                    // (3840 px). The default 512×512 produces visible blur on TV.
+                    // (3840 px). The default 384² produces visible blur on TV.
+                    // performanceModeAware stays true: MediaImage now tiers the
+                    // clamp so a ≥1080 request decodes at 768² in performance mode
+                    // (crisp full-screen on phones) instead of 256².
                     size = CoilSize(1920, 1080),
                 )
             }
@@ -927,6 +945,7 @@ private fun DetailContent(
                                     isAlbum = isAlbum,
                                     albumTracks = albumTracks,
                                     collectionItems = collectionItems,
+                                    relatedItems = relatedItems,
                                     onPlayClick = onPlayClick,
                                     onAudioClick = onAudioClick,
                                     onToggleFavorite = onToggleFavorite,
@@ -1037,6 +1056,7 @@ private fun DetailContent(
                                     isAlbum = isAlbum,
                                     albumTracks = albumTracks,
                                     collectionItems = collectionItems,
+                                    relatedItems = relatedItems,
                                     onPlayClick = onPlayClick,
                                     onAudioClick = onAudioClick,
                                     onToggleFavorite = onToggleFavorite,

@@ -16,6 +16,7 @@ import com.raulshma.jellyplay.core.data.repository.ItemPlaybackPreferenceReposit
 import com.raulshma.jellyplay.core.datastore.UserPreferencesStore
 import com.raulshma.jellyplay.core.data.syncplay.SyncPlayManager
 import com.raulshma.jellyplay.core.data.syncplay.SyncPlayPlaybackCore
+import com.raulshma.jellyplay.core.data.util.ImageUrlProvider
 import com.raulshma.jellyplay.core.ui.feedback.UserMessageBus
 import com.raulshma.jellyplay.core.ui.viewmodel.StateFlowHandle
 import io.mockk.every
@@ -92,6 +93,7 @@ class VideoPlayerCleanupTest {
             getResolvedPlayMethod = { com.raulshma.jellyplay.core.model.PlayMethod.DIRECT_PLAY },
             getMediaEngine = { null },
             getIncognitoModeEnabled = { false },
+            getIsLive = { false },
             onAutoSkip = {},
             onPlaybackEndedNoNext = {},
             onWatchedThresholdReached = {},
@@ -132,6 +134,7 @@ class VideoPlayerCleanupTest {
         val context = mockk<Context>(relaxed = true)
         val mediaRepository = mockk<MediaRepository>(relaxed = true)
         val playbackRepository = mockk<PlaybackRepository>(relaxed = true)
+        val imageUrlProvider = mockk<ImageUrlProvider>(relaxed = true)
         val downloadRepository = mockk<DownloadRepository>(relaxed = true)
         val offlineRepository = mockk<OfflineRepository>(relaxed = true)
         val itemPlaybackPreferenceRepository = mockk<ItemPlaybackPreferenceRepository>(relaxed = true)
@@ -156,6 +159,7 @@ class VideoPlayerCleanupTest {
             context = context,
             mediaRepository = mediaRepository,
             playbackRepository = playbackRepository,
+            imageUrlProvider = imageUrlProvider,
             downloadRepository = downloadRepository,
             offlineRepository = offlineRepository,
             itemPlaybackPreferenceRepository = itemPlaybackPreferenceRepository,

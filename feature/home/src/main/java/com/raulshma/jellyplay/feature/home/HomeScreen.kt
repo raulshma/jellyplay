@@ -139,6 +139,7 @@ data class HomeCallbacks(
     val onSettingsClick: () -> Unit = {},
     val onSyncPlayClick: () -> Unit = {},
     val onDownloadsClick: () -> Unit = {},
+    val onPlayOnClick: () -> Unit = {},
     val onOfflineLibraryClick: () -> Unit = {},
     /** Open a specific downloaded item: series go to the offline series
      *  browser, everything else to the offline detail screen. */
@@ -158,6 +159,7 @@ data class HomeCallbacks(
     val onWatchProgressHeatmapClick: () -> Unit = {},
     val onRequestsClick: () -> Unit = {},
     val onActivityQueueClick: () -> Unit = {},
+    val onUpcomingClick: () -> Unit = {},
 )
 
 @Composable
@@ -693,6 +695,7 @@ private fun MainHomeContent(
                         onSyncPlayClick = callbacks.onSyncPlayClick,
                         onDownloadsClick = callbacks.onDownloadsClick,
                         onToggleOffline = { viewModel.onEvent(HomeUiEvent.ToggleOfflineMode) },
+                        onPlayOnClick = callbacks.onPlayOnClick,
                         onSettingsClick = callbacks.onSettingsClick,
                         modifier = Modifier
                             .align(Alignment.BottomEnd)

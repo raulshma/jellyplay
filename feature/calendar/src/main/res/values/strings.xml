@@ -1,0 +1,30 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="calendar_title">Upcoming</string>
+
+    <!-- Month nav -->
+    <string name="calendar_today">Today</string>
+    <string name="calendar_prev_month_cd">Previous month</string>
+    <string name="calendar_next_month_cd">Next month</string>
+    <string name="calendar_refresh_cd">Refresh</string>
+
+    <!-- Filter -->
+    <string name="calendar_filter_all">All</string>
+    <string name="calendar_filter_movies">Movies</string>
+    <string name="calendar_filter_series">Series</string>
+
+    <!-- Day header -->
+    <string name="calendar_releases_count">%1$d releases</string>
+
+    <!-- Empty / error -->
+    <string name="calendar_empty_title">Nothing upcoming</string>
+    <string name="calendar_empty_desc">No releases scheduled in this month.</string>
+    <string name="calendar_go_today">Go to today</string>
+    <string name="calendar_error_unknown">Couldn\'t load the calendar.</string>
+    <string name="calendar_no_detail">No detail available for this item.</string>
+
+    <!-- Feature disabled -->
+    <string name="calendar_feature_disabled_title">Direct *arr Integration is off</string>
+    <string name="calendar_feature_disabled_desc">Enable it in Settings → Integrations to see upcoming releases from Sonarr and Radarr.</string>
+    <string name="calendar_open_settings">Open *arr Settings</string>
+</resources>

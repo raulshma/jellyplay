@@ -1,5 +1,6 @@
 package com.raulshma.jellyplay.feature.settings.navigation
 
+import androidx.compose.runtime.remember
 import androidx.navigation3.runtime.EntryProviderScope
 import androidx.navigation3.runtime.NavKey
 import com.raulshma.jellyplay.core.ui.navigation.Navigator
@@ -19,6 +20,7 @@ import com.raulshma.jellyplay.feature.settings.PlaybackSettingsScreen
 import com.raulshma.jellyplay.feature.settings.SeerrSettingsScreen
 import com.raulshma.jellyplay.feature.settings.SecuritySettingsScreen
 import com.raulshma.jellyplay.feature.settings.ServerManagementScreen
+import com.raulshma.jellyplay.feature.settings.SettingsCallbacks
 import com.raulshma.jellyplay.feature.settings.SettingsScreen
 import com.raulshma.jellyplay.feature.settings.StorageSettingsScreen
 import com.raulshma.jellyplay.feature.settings.UserManagementScreen
@@ -29,30 +31,39 @@ fun EntryProviderScope<NavKey>.settingsSection(
     onSetupWizard: () -> Unit = {},
 ) {
     entry<Route.Settings> {
+        // Build the callbacks once per (navigator, onLogout, onSetupWizard) lifetime so
+        // the SettingsScreen subtree sees a single stable SettingsCallbacks instance
+        // (treated as @Immutable by the Compose compiler) instead of fresh lambda
+        // allocations on every recomposition.
+        val callbacks = remember(navigator, onLogout, onSetupWizard) {
+            SettingsCallbacks(
+                onServerManagement = { id -> navigator.navigate(Route.ServerManagement(id)) },
+                onUserManagement = { id -> navigator.navigate(Route.UserManagement(id)) },
+                onSeerrSettings = { id -> navigator.navigate(Route.SeerrSettings(id)) },
+                onArrSettings = { id -> navigator.navigate(Route.ArrSettings(id)) },
+                onAdminDashboard = { navigator.navigate(Route.AdminDashboard) },
+                onSetupWizard = onSetupWizard,
+                onNewsletterClick = { navigator.navigate(Route.Newsletter) },
+                onFavoritesClick = { navigator.navigate(Route.Favorites) },
+                onAboutClick = { navigator.navigate(Route.About) },
+                onWatchProgressHeatmapClick = { navigator.navigate(Route.WatchProgressHeatmap) },
+                onAppearanceSettings = { id -> navigator.navigate(Route.AppearanceSettings(id)) },
+                onPinnedHomeSections = { id -> navigator.navigate(Route.PinnedHomeSections(id)) },
+                onHomeLayoutPresets = { id -> navigator.navigate(Route.HomeLayoutPresets(id)) },
+                onPlaybackSettings = { id -> navigator.navigate(Route.PlaybackSettings(id)) },
+                onAudioSettings = { id -> navigator.navigate(Route.AudioSettings(id)) },
+                onLanguageSettings = { id -> navigator.navigate(Route.LanguageSettings(id)) },
+                onNotificationSettings = { id -> navigator.navigate(Route.NotificationSettings(id)) },
+                onStorageSettings = { id -> navigator.navigate(Route.StorageSettings(id)) },
+                onSecuritySettings = { id -> navigator.navigate(Route.SecuritySettings(id)) },
+                onBackupSettings = { id -> navigator.navigate(Route.BackupSettings(id)) },
+                onExperimentalSettings = { id -> navigator.navigate(Route.ExperimentalSettings(id)) },
+            )
+        }
         SettingsScreen(
             onBack = { navigator.goBack() },
             onLogout = onLogout,
-            onServerManagement = { id -> navigator.navigate(Route.ServerManagement(id)) },
-            onUserManagement = { id -> navigator.navigate(Route.UserManagement(id)) },
-            onSeerrSettings = { id -> navigator.navigate(Route.SeerrSettings(id)) },
-            onArrSettings = { id -> navigator.navigate(Route.ArrSettings(id)) },
-            onAdminDashboard = { navigator.navigate(Route.AdminDashboard) },
-            onSetupWizard = onSetupWizard,
-            onNewsletterClick = { navigator.navigate(Route.Newsletter) },
-            onFavoritesClick = { navigator.navigate(Route.Favorites) },
-            onAboutClick = { navigator.navigate(Route.About) },
-            onWatchProgressHeatmapClick = { navigator.navigate(Route.WatchProgressHeatmap) },
-            onAppearanceSettings = { id -> navigator.navigate(Route.AppearanceSettings(id)) },
-            onPinnedHomeSections = { id -> navigator.navigate(Route.PinnedHomeSections(id)) },
-            onHomeLayoutPresets = { id -> navigator.navigate(Route.HomeLayoutPresets(id)) },
-            onPlaybackSettings = { id -> navigator.navigate(Route.PlaybackSettings(id)) },
-            onAudioSettings = { id -> navigator.navigate(Route.AudioSettings(id)) },
-            onLanguageSettings = { id -> navigator.navigate(Route.LanguageSettings(id)) },
-            onNotificationSettings = { id -> navigator.navigate(Route.NotificationSettings(id)) },
-            onStorageSettings = { id -> navigator.navigate(Route.StorageSettings(id)) },
-            onSecuritySettings = { id -> navigator.navigate(Route.SecuritySettings(id)) },
-            onBackupSettings = { id -> navigator.navigate(Route.BackupSettings(id)) },
-            onExperimentalSettings = { id -> navigator.navigate(Route.ExperimentalSettings(id)) },
+            callbacks = callbacks,
         )
     }
 

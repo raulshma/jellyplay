@@ -2,7 +2,6 @@ package com.raulshma.jellyplay.feature.player.video.components
 
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.core.Animatable
-import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.gestures.detectVerticalDragGestures
@@ -45,8 +44,6 @@ import kotlinx.coroutines.launch
 import kotlin.math.roundToInt
 
 private val SheetTopShape = RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp)
-private const val SHEET_ANIM_MS = 280
-private const val SNAP_MS = 180
 private const val MAX_SCRIM_ALPHA = 0.5f
 private const val DISMISS_FRACTION = 0.18f
 /**
@@ -113,9 +110,11 @@ private fun InWindowPlayerSheet(
         val fullHeightPx = with(density) { maxHeight.toPx() }
         val sheetOffset = remember { Animatable(fullHeightPx) }
         var liveDrag by remember { mutableFloatStateOf(0f) }
+        val sheetSlideSpec = MaterialTheme.motionScheme.defaultSpatialSpec<Float>()
+        val sheetSnapSpec = MaterialTheme.motionScheme.fastSpatialSpec<Float>()
 
         LaunchedEffect(Unit) {
-            sheetOffset.animateTo(0f, tween(SHEET_ANIM_MS))
+            sheetOffset.animateTo(0f, sheetSlideSpec)
         }
 
         val dismiss: () -> Unit = remember(onDismissRequest) {
@@ -123,7 +122,7 @@ private fun InWindowPlayerSheet(
                 scope.launch {
                     keyboardController?.hide()
                     focusManager.clearFocus(force = true)
-                    sheetOffset.animateTo(fullHeightPx, tween(SHEET_ANIM_MS))
+                    sheetOffset.animateTo(fullHeightPx, sheetSlideSpec)
                     onDismissRequest()
                 }
             }
@@ -169,7 +168,7 @@ private fun InWindowPlayerSheet(
                                     if (current > fullHeightPx * DISMISS_FRACTION) {
                                         dismiss()
                                     } else {
-                                        sheetOffset.animateTo(0f, tween(SNAP_MS))
+                                        sheetOffset.animateTo(0f, sheetSnapSpec)
                                     }
                                 }
                             },

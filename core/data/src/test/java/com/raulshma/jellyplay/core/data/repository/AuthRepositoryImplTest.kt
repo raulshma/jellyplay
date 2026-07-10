@@ -92,6 +92,7 @@ class AuthRepositoryImplTest {
             userDao = userDao,
             preferencesStore = preferencesStore,
             tokenCipher = tokenCipher,
+            json = kotlinx.serialization.json.Json { ignoreUnknownKeys = true },
         )
     }
 

@@ -1,10 +1,7 @@
 package com.raulshma.jellyplay.feature.onboarding.components
 
 import androidx.compose.animation.animateColorAsState
-import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.animateFloatAsState
-import androidx.compose.animation.core.spring
-import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
@@ -199,10 +196,7 @@ fun OnboardingOptionCard(
     )
     val selectionScale by animateFloatAsState(
         targetValue = if (selected) 1f else 0f,
-        animationSpec = spring(
-            dampingRatio = Spring.DampingRatioMediumBouncy,
-            stiffness = Spring.StiffnessMedium,
-        ),
+        animationSpec = MaterialTheme.motionScheme.defaultSpatialSpec(),
         label = "optionCardSelectionScale",
     )
     val containerColor by animateColorAsState(
@@ -220,7 +214,7 @@ fun OnboardingOptionCard(
     val borderColor by animateColorAsState(
         targetValue = if (selected) MaterialTheme.colorScheme.primary
         else Color.Transparent,
-        animationSpec = tween(250),
+        animationSpec = MaterialTheme.motionScheme.fastEffectsSpec(),
         label = "optionCardBorder",
     )
 

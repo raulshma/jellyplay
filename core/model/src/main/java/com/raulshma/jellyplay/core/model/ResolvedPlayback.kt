@@ -19,4 +19,11 @@ data class ResolvedPlayback(
     val playMethod: PlayMethod,
     val playSessionId: String?,
     val maxStreamingBitrate: Long?,
+    /**
+     * `true` for Live TV / IPTV sources (server-issued `liveStreamId` or
+     * `requiresOpening`). Propagated to the engine and the close-gating logic
+     * so live streams are not treated as finite VOD — see
+     * [com.raulshma.jellyplay.feature.player.video.VideoPlayerViewModel].
+     */
+    val isLive: Boolean = false,
 )

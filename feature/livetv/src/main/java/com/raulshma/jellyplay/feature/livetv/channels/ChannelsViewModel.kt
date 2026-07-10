@@ -2,8 +2,8 @@ package com.raulshma.jellyplay.feature.livetv.channels
 
 import androidx.compose.runtime.Immutable
 import com.raulshma.jellyplay.core.data.repository.MediaRepository
-import com.raulshma.jellyplay.core.data.repository.PlaybackRepository
 import com.raulshma.jellyplay.core.data.playback.VideoMiniPlayerState
+import com.raulshma.jellyplay.core.data.util.ImageUrlProvider
 import com.raulshma.jellyplay.core.datastore.UserPreferencesStore
 import com.raulshma.jellyplay.core.model.LiveTvChannel
 import com.raulshma.jellyplay.core.ui.viewmodel.JellyPlayViewModel
@@ -26,7 +26,7 @@ data class ChannelsUiState(
 @HiltViewModel
 class ChannelsViewModel @Inject constructor(
     private val mediaRepository: MediaRepository,
-    private val playbackRepository: PlaybackRepository,
+    private val imageUrlProvider: ImageUrlProvider,
     private val preferencesStore: UserPreferencesStore,
     videoMiniPlayerState: VideoMiniPlayerState,
 ) : JellyPlayViewModel() {
@@ -90,7 +90,7 @@ class ChannelsViewModel @Inject constructor(
 
     fun getImageUrl(itemId: String, imageTag: String?): String {
         return if (imageTag != null) {
-            playbackRepository.getImageUrl(itemId, maxWidth = 400)
+            imageUrlProvider.getImageUrl(itemId)
         } else ""
     }
 }

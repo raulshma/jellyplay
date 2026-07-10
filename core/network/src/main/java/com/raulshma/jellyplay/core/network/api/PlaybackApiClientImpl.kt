@@ -95,13 +95,19 @@ class PlaybackApiClientImpl @Inject constructor(
         )
     }
 
-    override fun getStreamUrl(itemId: String, mediaSourceId: String, startTimeTicks: Long): String {
+    override fun getStreamUrl(
+        itemId: String,
+        mediaSourceId: String,
+        startTimeTicks: Long,
+        liveStreamId: String?,
+    ): String {
         return getStreamUrl(
             itemId = itemId,
             mediaSourceId = mediaSourceId,
             startTimeTicks = startTimeTicks,
             maxBitrate = null,
             useAudioEndpoint = false,
+            liveStreamId = liveStreamId,
         )
     }
 
@@ -111,9 +117,11 @@ class PlaybackApiClientImpl @Inject constructor(
         startTimeTicks: Long,
         maxBitrate: Int?,
         useAudioEndpoint: Boolean,
+        liveStreamId: String?,
     ): String {
         val server = engine.currentServer.value ?: return ""
         val user = engine.currentUser.value ?: return ""
+        val isLive = !liveStreamId.isNullOrBlank()
         val path = if (useAudioEndpoint) {
             "/Audio/$itemId/universal"
         } else {
@@ -129,8 +137,14 @@ class PlaybackApiClientImpl @Inject constructor(
                 append("&deviceId=${user.serverId}")
                 append("&userId=${user.id}")
             }
+            // Echo the live-stream id so the server opens/attaches the tuner
+            // session. Required for Live TV channels; omitted for VOD.
+            if (isLive) append("&LiveStreamId=$liveStreamId")
         }
-        val paramPrefix = if (useAudioEndpoint) "?" else "?static=true&"
+        // Static direct-play only applies to VOD files. Live sources are
+        // opened as a (growing) direct stream — `static=true` makes the server
+        // try a byte-range seek on a non-seekable stream and fail.
+        val paramPrefix = if (useAudioEndpoint || isLive) "?" else "?static=true&"
         return "${server.address}$path$paramPrefix$baseParams&api_key=${user.accessToken}"
     }
 

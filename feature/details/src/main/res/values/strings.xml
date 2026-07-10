@@ -128,4 +128,44 @@
     <string name="detail_error_download_failed">Download failed</string>
     <string name="detail_error_not_a_series">This is not a series</string>
     <string name="detail_error_queue_failed">Failed to queue downloads</string>
+
+    <!-- ── Manage Series (Sonarr-style episode management) ───────────────── -->
+    <string name="detail_option_manage_series">Manage Series</string>
+    <string name="detail_manage_title">Manage Series</string>
+    <!-- Series-level actions -->
+    <string name="detail_manage_refresh_metadata">Refresh Metadata</string>
+    <string name="detail_manage_refresh_scan">Refresh &amp; Scan</string>
+    <string name="detail_manage_search_series">Search</string>
+    <!-- %1$s = formatted size (e.g. "12.3 GB") -->
+    <string name="detail_manage_disk_used_format">Disk: %1$s</string>
+    <!-- Series monitored indicator -->
+    <string name="detail_manage_monitored">Monitored</string>
+    <string name="detail_manage_unmonitored">Unmonitored</string>
+    <!-- Season header -->
+    <string name="detail_manage_season_format">Season %1$d</string>
+    <string name="detail_manage_season_specials">Specials</string>
+    <!-- %1$d = downloaded count, %2$d = total count -->
+    <string name="detail_manage_season_count_format">%1$d/%2$d</string>
+    <!-- Episode status badges -->
+    <string name="detail_manage_status_downloaded">Downloaded</string>
+    <string name="detail_manage_status_missing">Missing</string>
+    <string name="detail_manage_status_unmonitored">Unmonitored</string>
+    <string name="detail_manage_status_unaired">Unaired</string>
+    <!-- Episode actions -->
+    <string name="detail_manage_search">Automatic Search</string>
+    <string name="detail_manage_monitor">Monitor</string>
+    <string name="detail_manage_unmonitor">Unmonitor</string>
+    <string name="detail_manage_delete_file">Delete File</string>
+    <!-- Delete-file confirmation dialog. %1$s = episode title, %2$s = SxxExx -->
+    <string name="detail_manage_delete_title">Delete Episode File</string>
+    <string name="detail_manage_delete_message">Delete the file for \"%1$s\" (%2$s)? Sonarr will remove it and you can search for a replacement.</string>
+    <string name="detail_manage_delete_confirm">Delete</string>
+    <!-- Empty / error states -->
+    <string name="detail_manage_no_episodes">No episodes found in Sonarr for this series.</string>
+    <string name="detail_manage_not_tracked">No Sonarr server tracks this series.</string>
+    <!-- Content descriptions (TalkBack / TV) -->
+    <string name="detail_manage_cd_search_season">Search monitored in season</string>
+    <string name="detail_manage_cd_toggle_monitor_season">Toggle monitor for all episodes in season</string>
+    <string name="detail_manage_cd_toggle_monitor_episode">Toggle monitor for episode</string>
+    <string name="detail_manage_cd_episode_menu">Episode options</string>
 </resources>

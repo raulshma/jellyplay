@@ -7,6 +7,7 @@ import androidx.sqlite.db.framework.FrameworkSQLiteOpenHelperFactory
 import androidx.test.core.app.ApplicationProvider
 import com.raulshma.jellyplay.core.database.JellyPlayDatabase
 import com.raulshma.jellyplay.core.database.crypto.TokenCipher
+import com.raulshma.jellyplay.core.database.migration.allMigrations
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.test.runTest
 import org.junit.After
@@ -399,6 +400,31 @@ class MigrationTest {
         helper.close()
     }
 
+    @Test
+    fun allMigrations_coversContiguousRange() {
+        val tokenCipher = TokenCipher.forTestingWithPersistentKey()
+        val migrations = allMigrations(tokenCipher)
+        // One migration per step from v1 up to the current schema version (34),
+        // each handing off to the next with no gaps or duplicate starts.
+        val expected = JellyPlayDatabase::class.java
+            .getAnnotation(androidx.room.Database::class.java)?.version
+            ?: 34
+        val startVersions = migrations.map { it.startVersion }
+        assertEquals(
+            "every version 1..<current must start exactly one migration",
+            (1 until expected).toList(),
+            startVersions,
+        )
+        migrations.zipWithNext { a, b ->
+            assertEquals(
+                "migration chain must be contiguous",
+                a.endVersion,
+                b.startVersion,
+            )
+        }
+        assertEquals(expected, migrations.last().endVersion)
+    }
+
     private fun openWithMigrations(): JellyPlayDatabase {
         val tokenCipher = TokenCipher.forTestingWithPersistentKey()
         val db = Room.databaseBuilder(
@@ -406,7 +432,7 @@ class MigrationTest {
             JellyPlayDatabase::class.java,
             dbFile.absolutePath,
         )
-            .addMigrations(*ALL_MIGRATIONS.toTypedArray(), Migration24To25(tokenCipher))
+            .addMigrations(*allMigrations(tokenCipher).toTypedArray())
             .allowMainThreadQueries()
             .build()
         database = db

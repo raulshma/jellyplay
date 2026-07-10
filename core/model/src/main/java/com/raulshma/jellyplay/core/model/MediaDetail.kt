@@ -69,6 +69,12 @@ data class MediaSource(
     val supportsDirectPlay: Boolean = false,
     val transcodeUrl: String? = null,
     val directStreamUrl: String? = null,
+    /** Server-issued live-stream id for Live TV channels; must be appended to
+     *  the stream URL as `LiveStreamId` so the tuner session is opened. */
+    val liveStreamId: String? = null,
+    /** True when the server requires the live stream to be explicitly opened
+     *  before playback (Live TV). Drives the `LiveStreamId` query param. */
+    val requiresOpening: Boolean = false,
     val path: String? = null,
     val mediaStreams: List<MediaStream> = emptyList(),
     val trickplayInfo: TrickplayInfo? = null,

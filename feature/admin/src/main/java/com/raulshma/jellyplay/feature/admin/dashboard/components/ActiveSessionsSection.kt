@@ -38,6 +38,7 @@ import com.composables.icons.tabler.outline.DeviceMobile
 import com.composables.icons.tabler.outline.DeviceTv
 import com.raulshma.jellyplay.core.designsystem.theme.ShapeCache
 import com.raulshma.jellyplay.core.model.SessionInfo
+import com.raulshma.jellyplay.core.ui.components.LocalReducedMotion
 import com.raulshma.jellyplay.core.ui.tv.rememberTvFocusState
 import com.raulshma.jellyplay.core.ui.tv.tvFocusIndicator
 
@@ -202,34 +203,44 @@ private fun SessionItem(
 
 @Composable
 private fun NowPlayingIndicator() {
-    val infiniteTransition = rememberInfiniteTransition(label = "nowPlaying")
-    val bar1 by infiniteTransition.animateFloat(
-        initialValue = 0.3f,
-        targetValue = 1f,
-        animationSpec = infiniteRepeatable(
-            animation = tween(400, easing = FastOutSlowInEasing),
-            repeatMode = RepeatMode.Reverse,
-        ),
-        label = "bar1",
-    )
-    val bar2 by infiniteTransition.animateFloat(
-        initialValue = 0.6f,
-        targetValue = 0.4f,
-        animationSpec = infiniteRepeatable(
-            animation = tween(350, easing = FastOutSlowInEasing),
-            repeatMode = RepeatMode.Reverse,
-        ),
-        label = "bar2",
-    )
-    val bar3 by infiniteTransition.animateFloat(
-        initialValue = 0.5f,
-        targetValue = 0.9f,
-        animationSpec = infiniteRepeatable(
-            animation = tween(450, easing = FastOutSlowInEasing),
-            repeatMode = RepeatMode.Reverse,
-        ),
-        label = "bar3",
-    )
+    val reducedMotion = LocalReducedMotion.current
+    val bar1: Float
+    val bar2: Float
+    val bar3: Float
+    if (!reducedMotion) {
+        val infiniteTransition = rememberInfiniteTransition(label = "nowPlaying")
+        bar1 = infiniteTransition.animateFloat(
+            initialValue = 0.3f,
+            targetValue = 1f,
+            animationSpec = infiniteRepeatable(
+                animation = tween(400, easing = FastOutSlowInEasing),
+                repeatMode = RepeatMode.Reverse,
+            ),
+            label = "bar1",
+        ).value
+        bar2 = infiniteTransition.animateFloat(
+            initialValue = 0.6f,
+            targetValue = 0.4f,
+            animationSpec = infiniteRepeatable(
+                animation = tween(350, easing = FastOutSlowInEasing),
+                repeatMode = RepeatMode.Reverse,
+            ),
+            label = "bar2",
+        ).value
+        bar3 = infiniteTransition.animateFloat(
+            initialValue = 0.5f,
+            targetValue = 0.9f,
+            animationSpec = infiniteRepeatable(
+                animation = tween(450, easing = FastOutSlowInEasing),
+                repeatMode = RepeatMode.Reverse,
+            ),
+            label = "bar3",
+        ).value
+    } else {
+        bar1 = 0.6f
+        bar2 = 0.5f
+        bar3 = 0.7f
+    }
 
     Row(
         horizontalArrangement = Arrangement.spacedBy(1.dp),

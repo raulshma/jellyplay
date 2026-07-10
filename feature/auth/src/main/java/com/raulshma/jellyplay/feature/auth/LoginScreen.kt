@@ -1,7 +1,6 @@
 package com.raulshma.jellyplay.feature.auth
 
 import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.slideInVertically
 import androidx.compose.foundation.layout.Column
@@ -46,8 +45,6 @@ import com.raulshma.jellyplay.core.ui.tv.rememberTvFocusState
 import com.raulshma.jellyplay.core.ui.tv.tryRequestFocus
 import com.raulshma.jellyplay.core.ui.tv.tvFocusIndicator
 import androidx.hilt.navigation.compose.hiltViewModel
-import com.raulshma.jellyplay.core.designsystem.theme.AlphaEasing
-import com.raulshma.jellyplay.core.designsystem.theme.FancyTransitionEasing
 import com.raulshma.jellyplay.core.designsystem.theme.ShapeCache
 import com.raulshma.jellyplay.core.ui.components.JellyPlayScreenScaffold
 import com.composables.icons.tabler.Tabler
@@ -96,9 +93,9 @@ fun LoginScreen(
         ) {
             AnimatedVisibility(
                 visible = contentVisible,
-                enter = fadeIn(tween(400, easing = AlphaEasing)) + slideInVertically(
+                enter = fadeIn(MaterialTheme.motionScheme.defaultEffectsSpec()) + slideInVertically(
                     initialOffsetY = { it / 20 },
-                    animationSpec = tween(400, easing = FancyTransitionEasing),
+                    animationSpec = MaterialTheme.motionScheme.defaultSpatialSpec(),
                 ),
             ) {
                 Column(horizontalAlignment = Alignment.CenterHorizontally) {
@@ -121,9 +118,9 @@ fun LoginScreen(
 
             AnimatedVisibility(
                 visible = contentVisible,
-                enter = fadeIn(tween(400, delayMillis = 100, easing = AlphaEasing)) + slideInVertically(
+                enter = fadeIn(MaterialTheme.motionScheme.defaultEffectsSpec()) + slideInVertically(
                     initialOffsetY = { it / 20 },
-                    animationSpec = tween(400, delayMillis = 100, easing = FancyTransitionEasing),
+                    animationSpec = MaterialTheme.motionScheme.defaultSpatialSpec(),
                 ),
             ) {
                 OutlinedTextField(
@@ -143,9 +140,9 @@ fun LoginScreen(
 
             AnimatedVisibility(
                 visible = contentVisible,
-                enter = fadeIn(tween(400, delayMillis = 150, easing = AlphaEasing)) + slideInVertically(
+                enter = fadeIn(MaterialTheme.motionScheme.defaultEffectsSpec()) + slideInVertically(
                     initialOffsetY = { it / 20 },
-                    animationSpec = tween(400, delayMillis = 150, easing = FancyTransitionEasing),
+                    animationSpec = MaterialTheme.motionScheme.defaultSpatialSpec(),
                 ),
             ) {
                 OutlinedTextField(
@@ -175,7 +172,7 @@ fun LoginScreen(
                 Spacer(modifier = Modifier.height(8.dp))
                 AnimatedVisibility(
                     visible = error != null,
-                    enter = fadeIn(tween(200, easing = AlphaEasing)),
+                    enter = fadeIn(MaterialTheme.motionScheme.fastEffectsSpec()),
                 ) {
                     Text(
                         error!!,
@@ -189,9 +186,9 @@ fun LoginScreen(
 
             AnimatedVisibility(
                 visible = contentVisible,
-                enter = fadeIn(tween(400, delayMillis = 250, easing = AlphaEasing)) + slideInVertically(
+                enter = fadeIn(MaterialTheme.motionScheme.defaultEffectsSpec()) + slideInVertically(
                     initialOffsetY = { it / 20 },
-                    animationSpec = tween(400, delayMillis = 250, easing = FancyTransitionEasing),
+                    animationSpec = MaterialTheme.motionScheme.defaultSpatialSpec(),
                 ),
             ) {
                 val signInFocusState = rememberTvFocusState(focusedScale = 1.04f)
@@ -231,9 +228,9 @@ fun LoginScreen(
 
             AnimatedVisibility(
                 visible = contentVisible,
-                enter = fadeIn(tween(400, delayMillis = 300, easing = AlphaEasing)) + slideInVertically(
+                enter = fadeIn(MaterialTheme.motionScheme.defaultEffectsSpec()) + slideInVertically(
                     initialOffsetY = { it / 20 },
-                    animationSpec = tween(400, delayMillis = 300, easing = FancyTransitionEasing),
+                    animationSpec = MaterialTheme.motionScheme.defaultSpatialSpec(),
                 ),
             ) {
                 val quickConnectFocusState = rememberTvFocusState(focusedScale = 1.04f)

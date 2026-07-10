@@ -70,6 +70,22 @@ class BalanceAudioProcessorTest {
     }
 
     @Test
+    fun `5_1 surround channels keep unity at centered balance`() {
+        // Regression guard: previously buildChannelGains permanently
+        // attenuated surround/LFE channels (0.8/0.7) whenever the
+        // processor was configured for 5.1, even at centered balance.
+        // Surround attenuation now belongs to ChannelMixAudioProcessor;
+        // balance must leave every channel at unity when balance == 0.
+        val surround = androidx.media3.common.audio.AudioProcessor.AudioFormat(
+            48_000, 6, androidx.media3.common.C.ENCODING_PCM_FLOAT,
+        )
+        processor.configure(surround)
+        processor.setBalance(0f)
+        // Centered balance → processor inactive → passthrough.
+        assertFalse(processor.isActive())
+    }
+
+    @Test
     fun `initial balance is zero`() {
         assertEquals(0f, processor.getBalance(), 0.001f)
     }

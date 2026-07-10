@@ -274,8 +274,9 @@ class MpvPlayerEngine(
                 ChannelMixMode.AUTO -> mpv.setOptionString("audio-channels", "auto")
             }
 
+            val afFilters = mutableListOf<String>()
+            // Normalization filters (DYNAMIC compression / TRACK-ALBUM loudnorm).
             if (currentConfig.audioEffects.audioNormalizationEnabled) {
-                val afFilters = mutableListOf<String>()
                 when (currentConfig.audioEffects.audioNormalizationMode) {
                     AudioNormalizationMode.DYNAMIC -> {
                         afFilters.add("acompressor=ratio=3:threshold=0.05:attack=10:release=200")
@@ -285,9 +286,16 @@ class MpvPlayerEngine(
                     }
                     AudioNormalizationMode.NONE -> {}
                 }
-                if (afFilters.isNotEmpty()) {
-                    mpv.setOptionString("af", afFilters.joinToString(","))
-                }
+            }
+            // Dialogue-boost voice-band de-noise: cut sub-bass rumble below
+            // the ~85 Hz voice fundamental. Mirrors the HighPassFilterAudioProcessor
+            // stage on the ExoPlayer path. The EQ vocal-band lift is applied
+            // separately via the EqualizerHelper overlay (no af filter needed).
+            if (currentConfig.audioEffects.dialogueBoostEnabled) {
+                afFilters.add("highpass=f=80")
+            }
+            if (afFilters.isNotEmpty()) {
+                mpv.setOptionString("af", afFilters.joinToString(","))
             }
         }
 
@@ -496,11 +504,14 @@ class MpvPlayerEngine(
 
             val oldAudioFx = oldConfig.audioEffects
             val newAudioFx = config.audioEffects
+            // Rebuild the af chain when normalization OR dialogue-boost changes,
+            // since dialogue boost contributes a highpass stage to the chain.
             if (oldAudioFx.audioNormalizationEnabled != newAudioFx.audioNormalizationEnabled ||
-                oldAudioFx.audioNormalizationMode != newAudioFx.audioNormalizationMode
+                oldAudioFx.audioNormalizationMode != newAudioFx.audioNormalizationMode ||
+                oldAudioFx.dialogueBoostEnabled != newAudioFx.dialogueBoostEnabled
             ) {
+                val afFilters = mutableListOf<String>()
                 if (newAudioFx.audioNormalizationEnabled) {
-                    val afFilters = mutableListOf<String>()
                     when (newAudioFx.audioNormalizationMode) {
                         AudioNormalizationMode.DYNAMIC -> {
                             afFilters.add("acompressor=ratio=3:threshold=0.05:attack=10:release=200")
@@ -510,12 +521,14 @@ class MpvPlayerEngine(
                         }
                         AudioNormalizationMode.NONE -> {}
                     }
-                    val filterString = afFilters.joinToString(",")
-                    if (filterString.isNotEmpty()) {
-                        mpv.setPropertyString("af", filterString)
-                    } else {
-                        mpv.command("af", "clr", "")
-                    }
+                }
+                // Dialogue-boost rumble cut (mirrors ExoPlayer HighPassFilterAudioProcessor).
+                if (newAudioFx.dialogueBoostEnabled) {
+                    afFilters.add("highpass=f=80")
+                }
+                val filterString = afFilters.joinToString(",")
+                if (filterString.isNotEmpty()) {
+                    mpv.setPropertyString("af", filterString)
                 } else {
                     mpv.command("af", "clr", "")
                 }
@@ -547,7 +560,9 @@ class MpvPlayerEngine(
                     nightMode.setEnabled(newAudioFx.nightModeEnabled)
                 }
             }
-        } catch (_: Exception) {}
+        } catch (e: Exception) {
+            Log.w(TAG, "Failed to reconfigure MPV audio effects", e)
+        }
     }
 
     private fun applyVideoFilters(effects: VideoEffectsConfig) {
@@ -585,7 +600,9 @@ class MpvPlayerEngine(
             } else {
                 mpvView?.mpv?.command("vf", "clr", "")
             }
-        } catch (_: Exception) {}
+        } catch (e: Exception) {
+            Log.w(TAG, "Failed to apply MPV video filters", e)
+        }
     }
 
     override fun selectTrack(type: TrackType, index: Int) {
@@ -796,7 +813,7 @@ class MpvPlayerEngine(
                 trySend(posMs)
                 updateBufferPosition(posMs)
                 if (_videoStatsEnabled.value) {
-                    updateVideoStatsOnly()
+                    updateVideoStatsOnly(posMs)
                 }
             },
         ).launch()
@@ -813,10 +830,12 @@ class MpvPlayerEngine(
                 } catch (_: Exception) { 0.0 }
                 _bufferedPositionMs.value = (posMs + (cacheDuration * 1000.0)).toLong().coerceAtMost(duration.toLong())
             }
-        } catch (_: Exception) {}
+        } catch (e: Exception) {
+            Log.w(TAG, "Failed to read MPV buffer position", e)
+        }
     }
 
-    private fun updateVideoStatsOnly() {
+    private fun updateVideoStatsOnly(posMs: Long) {
         val m = mpvView?.mpv ?: return
         try {
             val videoBitrateBps = try {
@@ -830,7 +849,7 @@ class MpvPlayerEngine(
                 }
             } catch (_: Exception) { null }
             val combinedBitrate = (videoBitrateBps ?: 0) + (audioBitrateBps ?: 0)
-            val bufferHealthMs = (_bufferedPositionMs.value - currentPositionMs).coerceAtLeast(0L)
+            val bufferHealthMs = (_bufferedPositionMs.value - posMs).coerceAtLeast(0L)
             val bufferSizeBytes = if (combinedBitrate > 0) combinedBitrate * bufferHealthMs / 8000 else 0L
             val newStats = EngineVideoStats(
                 videoCodec = try { m.getPropertyString("video-format") } catch (_: Exception) { null },
@@ -872,7 +891,9 @@ class MpvPlayerEngine(
             if (newStats != currentStats) {
                 _videoStats.value = newStats
             }
-        } catch (_: Exception) {}
+        } catch (e: Exception) {
+            Log.w(TAG, "Failed to read MPV video stats", e)
+        }
     }
 
     private fun buildTracks(): List<MediaTrack> {

@@ -24,7 +24,12 @@ interface PlaybackRepository {
 
     fun getBackdropUrl(itemId: String, maxWidth: Int = 1280): String
 
-    fun getStreamUrl(itemId: String, mediaSourceId: String, startTimeTicks: Long = 0): String
+    fun getStreamUrl(
+        itemId: String,
+        mediaSourceId: String,
+        startTimeTicks: Long = 0,
+        liveStreamId: String? = null,
+    ): String
 
     /**
      * Queries the server `PlaybackInfo` endpoint. See
@@ -65,6 +70,7 @@ interface PlaybackRepository {
         startTimeTicks: Long = 0,
         maxBitrate: Int? = null,
         useAudioEndpoint: Boolean = false,
+        liveStreamId: String? = null,
     ): String
 
     fun getSubtitleDeliveryUrl(deliveryUrl: String): String

@@ -10,6 +10,7 @@ import com.raulshma.jellyplay.core.model.arr.ArrMediaType
 import com.raulshma.jellyplay.core.model.arr.ArrQueueDeleteOptions
 import com.raulshma.jellyplay.core.model.arr.ArrQueueItem
 import com.raulshma.jellyplay.core.model.arr.ArrQueueMessage
+import com.raulshma.jellyplay.core.model.arr.ArrSeriesEpisode
 import com.raulshma.jellyplay.core.model.arr.ArrWantedItem
 import com.raulshma.jellyplay.core.network.api.ApiException
 import com.raulshma.jellyplay.core.network.seerr.SeerrApiClientImpl
@@ -20,6 +21,7 @@ import kotlinx.serialization.Serializable
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonArray
+import kotlinx.serialization.json.decodeFromJsonElement
 import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.MediaType.Companion.toMediaType
@@ -302,14 +304,161 @@ class SonarrApiClientImpl @Inject constructor(
         commandName: ArrCommandName,
         seriesId: Int?,
         episodeIds: List<Int>?,
+        seasonNumber: Int?,
     ): Result<ArrCommand> {
         val body = SonarrCommandRequest(
             name = commandName.serialName,
             seriesId = seriesId,
             episodeIds = episodeIds,
+            seasonNumber = seasonNumber,
         )
         val result = postJson(baseUrl, apiKey, "/command", body)
         return parseAndMap<SonarrCommandResource>(result).map { it.toModel() }
+    }
+
+    override suspend fun findSeriesByTvdb(baseUrl: String, apiKey: String, tvdbId: Int): Result<Int?> {
+        val url = buildUrl(baseUrl, "/series").newBuilder()
+            .addQueryParameter("tvdbId", tvdbId.toString())
+            .build()
+        val request = Request.Builder().url(url).withApiKey(apiKey).get().build()
+        // /series?tvdbId= SHOULD return only the matching series, but some
+        // Sonarr versions/configs ignore the param and return ALL series. Do
+        // NOT trust `firstOrNull()` here — it would pick the wrong series and
+        // every downstream lookup (episode, delete, search) would target it.
+        // Filter client-side by the tvdbId field on each row.
+        return executeRequest(request).mapCatching { body ->
+            val arr = json.decodeFromString<JsonArray>(body)
+            arr.asSequence()
+                .map { json.decodeFromJsonElement(SonarrSeriesResource.serializer(), it) }
+                .firstOrNull { it.tvdbId == tvdbId }
+                ?.id
+        }
+    }
+
+    override suspend fun getEpisodeInfo(
+        baseUrl: String,
+        apiKey: String,
+        seriesId: Int,
+        seasonNumber: Int,
+        episodeNumber: Int,
+    ): Result<SonarrEpisodeInfo?> {
+        // Fast path: query the single season + filter client-side.
+        val seasonUrl = buildUrl(baseUrl, "/episode").newBuilder()
+            .addQueryParameter("seriesId", seriesId.toString())
+            .addQueryParameter("seasonNumber", seasonNumber.toString())
+            .build()
+        val seasonReq = Request.Builder().url(seasonUrl).withApiKey(apiKey).get().build()
+        val fastPath = executeRequest(seasonReq).mapCatching { body ->
+            parseEpisodeList(body)
+                .firstOrNull { it.seasonNumber == seasonNumber && it.episodeNumber == episodeNumber }
+        }
+        // Fast-path network/parse error → propagate (don't mask with fallback).
+        if (fastPath.isFailure) {
+            return Result.failure(fastPath.exceptionOrNull() ?: IllegalStateException("Episode lookup failed"))
+        }
+        // Fast-path hit → done.
+        fastPath.getOrNull()?.let { hit ->
+            return Result.success(hit.toInfo())
+        }
+
+        // Miss (episode not in this season under Jellyfin's numbering). Fall
+        // back to ALL episodes and match on episodeNumber across seasons —
+        // handles split seasons, anime absolute numbering, specials placement.
+        return getAllEpisodes(baseUrl, apiKey, seriesId).map { all ->
+            all.firstOrNull { it.episodeNumber == episodeNumber }?.toInfo()
+        }
+    }
+
+    override suspend fun getSeasonSummaries(
+        baseUrl: String,
+        apiKey: String,
+        seriesId: Int,
+    ): Result<List<SonarrSeasonSummary>> =
+        getAllEpisodes(baseUrl, apiKey, seriesId).map { all ->
+            all.groupBy { it.seasonNumber }
+                .toSortedMap()
+                .map { (season, eps) ->
+                    SonarrSeasonSummary(season, eps.map { it.episodeNumber }.sorted())
+                }
+        }
+
+    /**
+     * Fetches every episode for [seriesId] (no season filter) and decodes to
+     * the raw lookup resource. Shared by [getEpisodeInfo]'s fallback path and
+     * [getSeasonSummaries].
+     */
+    private suspend fun getAllEpisodes(
+        baseUrl: String,
+        apiKey: String,
+        seriesId: Int,
+    ): Result<List<SonarrEpisodeLookupResource>> {
+        val url = buildUrl(baseUrl, "/episode").newBuilder()
+            .addQueryParameter("seriesId", seriesId.toString())
+            .build()
+        val request = Request.Builder().url(url).withApiKey(apiKey).get().build()
+        return executeRequest(request).map { body -> parseEpisodeList(body) }
+    }
+
+    private fun parseEpisodeList(body: String): List<SonarrEpisodeLookupResource> {
+        val arr = json.decodeFromString<JsonArray>(body)
+        return arr.map { json.decodeFromJsonElement(SonarrEpisodeLookupResource.serializer(), it) }
+    }
+
+    override suspend fun deleteEpisodeFile(baseUrl: String, apiKey: String, episodeFileId: Int): Result<Unit> =
+        deleteRequest(baseUrl, apiKey, "/episodeFile/$episodeFileId")
+
+    override suspend fun monitorEpisodes(
+        baseUrl: String,
+        apiKey: String,
+        episodeIds: List<Int>,
+        monitored: Boolean,
+    ): Result<Unit> {
+        if (episodeIds.isEmpty()) return Result.success(Unit)
+        val body = json.encodeToString(
+            SonarrEpisodeMonitorRequest(episodeIds = episodeIds, monitored = monitored),
+        )
+        val request = Request.Builder()
+            .url(buildUrl(baseUrl, "/episode/monitor"))
+            .withApiKey(apiKey)
+            .put(body.toRequestBody("application/json".toMediaType()))
+            .build()
+        return executeRequest(request).map { }
+    }
+
+    override suspend fun getSeriesInfo(baseUrl: String, apiKey: String, tvdbId: Int): Result<SonarrSeriesInfo?> {
+        val url = buildUrl(baseUrl, "/series").newBuilder()
+            .addQueryParameter("tvdbId", tvdbId.toString())
+            .build()
+        val request = Request.Builder().url(url).withApiKey(apiKey).get().build()
+        // Same defensive client-side filter as findSeriesByTvdb: some Sonarr
+        // versions ignore the ?tvdbId= param and return ALL series.
+        return executeRequest(request).mapCatching { body ->
+            val arr = json.decodeFromString<JsonArray>(body)
+            arr.asSequence()
+                .map { json.decodeFromJsonElement(SonarrSeriesResource.serializer(), it) }
+                .firstOrNull { it.tvdbId == tvdbId }
+                ?.let { SonarrSeriesInfo(id = it.id, title = it.title, monitored = it.monitored, path = it.path) }
+        }
+    }
+
+    override suspend fun getEpisodesForSeries(
+        baseUrl: String,
+        apiKey: String,
+        seriesId: Int,
+    ): Result<List<ArrSeriesEpisode>> {
+        // Reuse getAllEpisodes' /episode?seriesId= path but decode the rich
+        // projection (title, airDate, overview, file size/quality) the
+        // management UI needs. getAllEpisodes itself decodes the leaner
+        // SonarrEpisodeLookupResource, so we issue the request directly here.
+        val url = buildUrl(baseUrl, "/episode").newBuilder()
+            .addQueryParameter("seriesId", seriesId.toString())
+            .build()
+        val request = Request.Builder().url(url).withApiKey(apiKey).get().build()
+        return executeRequest(request).mapCatching { body ->
+            val arr = json.decodeFromString<JsonArray>(body)
+            arr.map { json.decodeFromJsonElement(SonarrManagedEpisodeResource.serializer(), it) }
+                .map { it.toModel() }
+        }
     }
 
     override suspend fun testConnection(baseUrl: String, apiKey: String): Result<Unit> {
@@ -378,6 +527,7 @@ class SonarrApiClientImpl @Inject constructor(
         val title: String = "",
         val tvdbId: Int? = null,
         val monitored: Boolean = false,
+        val path: String? = null,
         val images: List<SonarrMediaCover> = emptyList(),
     )
 
@@ -418,6 +568,79 @@ class SonarrApiClientImpl @Inject constructor(
     @Serializable
     private data class SonarrIdsBulkRequest(val ids: List<Int>)
 
+    /** Body for `PUT /api/v3/episode/monitor`. */
+    @Serializable
+    private data class SonarrEpisodeMonitorRequest(
+        val episodeIds: List<Int>,
+        val monitored: Boolean,
+    )
+
+    /**
+     * Projection of `/episode` rows used by [getEpisodeInfo]. Carries the
+     * fields the delete & re-download flow needs (id, episodeFileId, hasFile,
+     * monitored) plus the season/episode numbers for client-side filtering.
+     */
+    @Serializable
+    private data class SonarrEpisodeLookupResource(
+        val id: Int = 0,
+        val seasonNumber: Int = 0,
+        val episodeNumber: Int = 0,
+        val episodeFileId: Int = 0,
+        val hasFile: Boolean = false,
+        val monitored: Boolean = false,
+    ) {
+        fun toInfo() = SonarrEpisodeInfo(
+            id = id,
+            episodeFileId = episodeFileId,
+            hasFile = hasFile,
+            monitored = monitored,
+            seasonNumber = seasonNumber,
+        )
+    }
+
+    /**
+     * Rich episode projection for the "Manage Series" screen. Carries every
+     * field [ArrSeriesEpisode] needs: season/episode/absolute numbers, title,
+     * air date, overview, monitored flag, and (when a file exists) the nested
+     * file resource for id + size + quality. Mapped to [ArrSeriesEpisode].
+     */
+    @Serializable
+    private data class SonarrManagedEpisodeResource(
+        val id: Int = 0,
+        val seasonNumber: Int = 0,
+        val episodeNumber: Int = 0,
+        val absoluteEpisodeNumber: Int? = null,
+        val title: String = "",
+        val airDateUtc: String? = null,
+        val overview: String? = null,
+        val hasFile: Boolean = false,
+        val monitored: Boolean = false,
+        val episodeFileId: Int = 0,
+        val episodeFile: SonarrEpisodeFileResource? = null,
+    ) {
+        fun toModel() = ArrSeriesEpisode(
+            id = id,
+            seasonNumber = seasonNumber,
+            episodeNumber = episodeNumber,
+            absoluteEpisodeNumber = absoluteEpisodeNumber,
+            title = title.ifBlank { "Episode $episodeNumber" },
+            airDateUtc = airDateUtc,
+            overview = overview,
+            hasFile = hasFile,
+            monitored = monitored,
+            episodeFileId = episodeFileId,
+            fileSizeBytes = episodeFile?.size?.toLong(),
+            quality = episodeFile?.quality?.name,
+        )
+    }
+
+    @Serializable
+    private data class SonarrEpisodeFileResource(
+        val id: Int = 0,
+        val size: Double? = null,
+        val quality: SonarrQuality? = null,
+    )
+
     @Serializable
     private data class SonarrBlocklistResponse(
         val records: List<SonarrBlocklistRecord> = emptyList(),
@@ -453,6 +676,7 @@ class SonarrApiClientImpl @Inject constructor(
         val name: String,
         val seriesId: Int? = null,
         val episodeIds: List<Int>? = null,
+        val seasonNumber: Int? = null,
     )
 
     @Serializable

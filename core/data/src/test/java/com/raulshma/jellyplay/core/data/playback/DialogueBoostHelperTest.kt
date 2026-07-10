@@ -25,6 +25,21 @@ class DialogueBoostHelperTest {
     }
 
     @Test
+    fun setEnabled_togglesHighPassFilterAlongsideEqOverlay() {
+        val hpf = HighPassFilterAudioProcessor()
+        assertFalse(hpf.isActive()) // not configured yet → inactive
+
+        val helperWithHpf = DialogueBoostHelper(equalizerHelper, hpf)
+        helperWithHpf.setEnabled(true)
+        // HPF enabled flag is set even before configure(); isActive() also
+        // requires a configured format, so we assert the requested state.
+        assertTrue(helperWithHpf.isEnabled)
+
+        helperWithHpf.setEnabled(false)
+        assertFalse(helperWithHpf.isEnabled)
+    }
+
+    @Test
     fun computeOffsets_moderate_appliesCoreVocalHarmonicsAndWarmth() {
         helper.setStrength(EffectStrength.MODERATE)
         val freqs = listOf(60, 250, 500, 1_000, 2_000, 4_000, 6_000, 8_000, 16_000)

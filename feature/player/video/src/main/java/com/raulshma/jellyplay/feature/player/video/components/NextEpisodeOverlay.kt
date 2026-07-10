@@ -6,9 +6,6 @@ import com.raulshma.jellyplay.core.ui.tv.ifElse
 import com.raulshma.jellyplay.core.ui.tv.tryRequestFocus
 import com.raulshma.jellyplay.core.ui.tv.rememberTvFocusState
 import com.raulshma.jellyplay.core.ui.tv.tvFocusIndicator
-import androidx.compose.animation.core.tween
-import com.raulshma.jellyplay.core.designsystem.theme.AlphaEasing
-import com.raulshma.jellyplay.core.designsystem.theme.FancyTransitionEasing
 import com.raulshma.jellyplay.core.designsystem.theme.playerOnScrim
 import com.raulshma.jellyplay.core.designsystem.theme.playerScrimColor
 import com.raulshma.jellyplay.core.designsystem.theme.ShapeCache
@@ -114,8 +111,8 @@ fun NextEpisodeOverlay(
 
     AnimatedVisibility(
         visible = show,
-        enter = fadeIn(tween(150, easing = AlphaEasing)) + slideInVertically(animationSpec = tween(400, easing = FancyTransitionEasing), initialOffsetY = { it }),
-        exit = fadeOut(tween(200, easing = AlphaEasing)) + slideOutVertically(animationSpec = tween(400, easing = FancyTransitionEasing), targetOffsetY = { it }),
+        enter = fadeIn(MaterialTheme.motionScheme.fastEffectsSpec()) + slideInVertically(animationSpec = MaterialTheme.motionScheme.slowSpatialSpec(), initialOffsetY = { it }),
+        exit = fadeOut(MaterialTheme.motionScheme.fastEffectsSpec()) + slideOutVertically(animationSpec = MaterialTheme.motionScheme.slowSpatialSpec(), targetOffsetY = { it }),
         modifier = modifier,
     ) {
         Surface(

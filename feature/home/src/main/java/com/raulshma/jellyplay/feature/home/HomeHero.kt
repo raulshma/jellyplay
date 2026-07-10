@@ -61,6 +61,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import coil3.size.Size as CoilSize
 import com.raulshma.jellyplay.core.designsystem.theme.AlphaEasing
 import com.raulshma.jellyplay.core.designsystem.theme.FancyTransitionEasing
 import com.raulshma.jellyplay.core.designsystem.theme.ShapeCache
@@ -68,6 +69,7 @@ import com.raulshma.jellyplay.core.model.MediaItem
 import com.raulshma.jellyplay.core.model.formatFixed
 import com.raulshma.jellyplay.core.ui.adaptive.LocalAdaptiveInfo
 import com.raulshma.jellyplay.core.ui.adaptive.WindowSizeClass
+import com.raulshma.jellyplay.core.ui.components.LocalReducedMotion
 import com.raulshma.jellyplay.core.ui.image.MediaImage
 import com.raulshma.jellyplay.core.ui.tv.LocalTvMode
 import com.raulshma.jellyplay.core.ui.tv.ifElse
@@ -122,6 +124,15 @@ fun AnimatedHeroHeader(
     val heroIsVisible by remember {
         derivedStateOf { listState.layoutInfo.visibleItemsInfo.any { it.index == 0 } || listState.layoutInfo.totalItemsCount == 0 }
     }
+    // Whether the hero is "prominent" (near the top, not scrolled under
+    // content). The attention-grabbing play-pulse animations are gated on
+    // this so they only run when the hero is the focal element; once the
+    // user scrolls content over the hero, the high-frequency (1.8s) layer
+    // redraws stop, cutting continuous draw-phase work while keeping the
+    // benign slow breath.
+    val heroIsProminent by remember {
+        derivedStateOf { listState.firstVisibleItemIndex == 0 && listState.firstVisibleItemScrollOffset < listState.layoutInfo.viewportSize.height / 2 }
+    }
 
     val slowEffects = MaterialTheme.motionScheme.slowEffectsSpec<Float>()
     val defaultEffects = MaterialTheme.motionScheme.defaultEffectsSpec<Float>()
@@ -158,6 +169,7 @@ fun AnimatedHeroHeader(
             onFocusChange = onFocusChange,
             requestInitialFocus = requestInitialFocus,
             isVisible = heroIsVisible,
+            isProminent = heroIsProminent,
             focusRequester = focusRequester,
         )
     }
@@ -175,11 +187,17 @@ fun HeroHeader(
     onDetailsClick: (() -> Unit)? = null,
     onFocusChange: (Boolean) -> Unit = {},
     isVisible: Boolean = true,
+    isProminent: Boolean = true,
     requestInitialFocus: Boolean = true,
     focusRequester: FocusRequester? = null,
 ) {
     val isTv = LocalTvMode.current
     val adaptiveInfo = LocalAdaptiveInfo.current
+    // Performance mode collapses the four simultaneous hero infinite
+    // animations (breath, play pulse scale/alpha, rating pulse) to their
+    // static else-branch values — the hero otherwise drives a continuous
+    // redraw loop on top of the 1920×1080 backdrop decode.
+    val reducedMotion = com.raulshma.jellyplay.core.ui.components.LocalReducedMotion.current
 
     val interactionSource = remember { MutableInteractionSource() }
     val isPressed by interactionSource.collectIsPressedAsState()
@@ -228,8 +246,9 @@ fun HeroHeader(
     val playPulseAlpha: Float
     val ratingPulse: Float
 
-    if (isVisible) {
+    if (isVisible && !reducedMotion) {
         val heroTransition = rememberInfiniteTransition(label = "hero_animations")
+        // Slow breath runs whenever the hero is visible — 12s cycle is cheap.
         val rawBreathScale by heroTransition.animateFloat(
             initialValue = 1.0f,
             targetValue = 1.04f,
@@ -241,38 +260,48 @@ fun HeroHeader(
         )
         breathScale = rawBreathScale
 
-        val rawPlayPulseScale by heroTransition.animateFloat(
-            initialValue = 1.0f,
-            targetValue = 1.35f,
-            animationSpec = infiniteRepeatable(
-                animation = tween(HERO_PLAY_PULSE_DURATION_MS, easing = AlphaEasing),
-                repeatMode = RepeatMode.Restart
-            ),
-            label = "playPulseScale"
-        )
-        playPulseScale = rawPlayPulseScale
+        // The high-frequency (1.8s) play-pulse loops drive ~60Hz draw-phase
+        // layer redraws. Only run them when the hero is the focal element
+        // (near the top, not scrolled under content); collapse to static
+        // otherwise to cut continuous redraws during scroll.
+        if (isProminent) {
+            val rawPlayPulseScale by heroTransition.animateFloat(
+                initialValue = 1.0f,
+                targetValue = 1.35f,
+                animationSpec = infiniteRepeatable(
+                    animation = tween(HERO_PLAY_PULSE_DURATION_MS, easing = AlphaEasing),
+                    repeatMode = RepeatMode.Restart
+                ),
+                label = "playPulseScale"
+            )
+            playPulseScale = rawPlayPulseScale
 
-        val rawPlayPulseAlpha by heroTransition.animateFloat(
-            initialValue = 0.45f,
-            targetValue = 0.0f,
-            animationSpec = infiniteRepeatable(
-                animation = tween(HERO_PLAY_PULSE_DURATION_MS, easing = AlphaEasing),
-                repeatMode = RepeatMode.Restart
-            ),
-            label = "playPulseAlpha"
-        )
-        playPulseAlpha = rawPlayPulseAlpha
+            val rawPlayPulseAlpha by heroTransition.animateFloat(
+                initialValue = 0.45f,
+                targetValue = 0.0f,
+                animationSpec = infiniteRepeatable(
+                    animation = tween(HERO_PLAY_PULSE_DURATION_MS, easing = AlphaEasing),
+                    repeatMode = RepeatMode.Restart
+                ),
+                label = "playPulseAlpha"
+            )
+            playPulseAlpha = rawPlayPulseAlpha
 
-        val rawRatingPulse by heroTransition.animateFloat(
-            initialValue = 0.9f,
-            targetValue = 1.1f,
-            animationSpec = infiniteRepeatable(
-                animation = tween(HERO_RATING_PULSE_DURATION_MS, easing = FancyTransitionEasing),
-                repeatMode = RepeatMode.Reverse
-            ),
-            label = "ratingPulse"
-        )
-        ratingPulse = rawRatingPulse
+            val rawRatingPulse by heroTransition.animateFloat(
+                initialValue = 0.9f,
+                targetValue = 1.1f,
+                animationSpec = infiniteRepeatable(
+                    animation = tween(HERO_RATING_PULSE_DURATION_MS, easing = FancyTransitionEasing),
+                    repeatMode = RepeatMode.Reverse
+                ),
+                label = "ratingPulse"
+            )
+            ratingPulse = rawRatingPulse
+        } else {
+            playPulseScale = 1.0f
+            playPulseAlpha = 0.45f
+            ratingPulse = 0.9f
+        }
     } else {
         breathScale = 1.0f
         playPulseScale = 1.0f
@@ -324,6 +353,14 @@ fun HeroHeader(
                     scaleY = breathScale
                 },
             contentScale = ContentScale.Crop,
+            // Full-bleed hero: decode large enough to stay sharp on a 4K TV.
+            // The default 384² is a poster thumbnail size — upscaled full-screen
+            // it looks soft. Backdrop URL is now 1920px wide (see
+            // ImageUrlProvider.DEFAULT_BACKDROP_WIDTH), so decode matches source.
+            // performanceModeAware stays true: MediaImage now tiers the clamp so
+            // a ≥1080 request decodes at 768² in performance mode (still crisp
+            // full-screen on phones) instead of the poster 256² tier.
+            size = CoilSize(1920, 1080),
         )
 
         Box(

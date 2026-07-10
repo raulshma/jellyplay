@@ -1,8 +1,6 @@
 package com.raulshma.jellyplay.feature.music.components
 
 import androidx.compose.animation.core.animateFloatAsState
-import androidx.compose.animation.core.spring
-import androidx.compose.animation.core.Spring
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -30,20 +28,14 @@ fun GenreChip(
     // Expressive spring-based scale animation
     val scale by animateFloatAsState(
         targetValue = if (isPressed) 0.95f else 1f,
-        animationSpec = spring(
-            dampingRatio = Spring.DampingRatioMediumBouncy,
-            stiffness = Spring.StiffnessMedium
-        ),
+        animationSpec = MaterialTheme.motionScheme.defaultSpatialSpec(),
         label = "chipScale",
     )
-    
+
     // Shape morphing animation
     val morphScale by animateFloatAsState(
         targetValue = if (isPressed) 0.98f else 1f,
-        animationSpec = spring(
-            dampingRatio = Spring.DampingRatioLowBouncy,
-            stiffness = Spring.StiffnessHigh
-        ),
+        animationSpec = MaterialTheme.motionScheme.fastSpatialSpec(),
         label = "chipMorph"
     )
 

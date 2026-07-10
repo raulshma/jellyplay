@@ -3,7 +3,7 @@ package com.raulshma.jellyplay.feature.library
 import androidx.paging.PagingData
 import androidx.paging.cachedIn
 import com.raulshma.jellyplay.core.data.repository.MediaRepository
-import com.raulshma.jellyplay.core.data.repository.PlaybackRepository
+import com.raulshma.jellyplay.core.data.util.ImageUrlProvider
 import com.raulshma.jellyplay.core.model.MediaItem
 import com.raulshma.jellyplay.core.model.MediaType
 import com.raulshma.jellyplay.core.ui.viewmodel.JellyPlayViewModel
@@ -23,7 +23,7 @@ enum class PhotoSortOption(val displayName: String, val apiValue: String) {
 @HiltViewModel
 class PhotoAlbumViewModel @Inject constructor(
     private val mediaRepository: MediaRepository,
-    private val playbackRepository: PlaybackRepository,
+    private val imageUrlProvider: ImageUrlProvider,
 ) : JellyPlayViewModel() {
 
     private val _parentId = stateFlow<String?>(null)
@@ -58,5 +58,5 @@ class PhotoAlbumViewModel @Inject constructor(
     }
 
     fun getImageUrl(itemId: String, maxWidth: Int = 400): String =
-        playbackRepository.getImageUrl(itemId, maxWidth = maxWidth)
+        imageUrlProvider.getImageUrl(itemId, maxWidth = maxWidth)
 }

@@ -41,6 +41,9 @@ data class DetailUiState(
     val albumTracks: List<MediaItem> = emptyList(),
     // Collection content
     val collectionItems: List<MediaItem> = emptyList(),
+    /** Similar/related items — fetched separately from the core detail so the
+     *  screen can render incrementally (title/poster/cast first, similar after). */
+    val relatedItems: List<MediaItem> = emptyList(),
     // Smart play (continue-watching / next-up computed target)
     val smartPlayTarget: SmartPlayTarget? = null,
     // Stream selection (audio/subtitle indices persisted across sessions)
@@ -67,6 +70,10 @@ data class DetailUiState(
     val downloadSheetEpisodes: Map<String, List<MediaItem>> = emptyMap(),
     val downloadSheetLoadingSeasons: Set<String> = emptySet(),
     val downloadedEpisodeIds: Set<String> = emptySet(),
+    // "Manage Series" (DIRECT_ARR_INTEGRATION). Shown for a series with a tvdb
+    // id when the experimental flag is on; server resolution is deferred to the
+    // ManageSeriesScreen itself (cheap gate here — no network on the detail screen).
+    val canManageSeries: Boolean = false,
 ) {
     @Immutable
     data class SmartPlayTarget(

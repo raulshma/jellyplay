@@ -6,6 +6,7 @@ import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.snap
 import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Canvas
@@ -55,38 +56,46 @@ fun CompletionStep(
     val pulseScale = remember { Animatable(1f) }
     var contentVisible by remember { mutableStateOf(false) }
     var buttonVisible by remember { mutableStateOf(false) }
+    val reducedMotion = com.raulshma.jellyplay.core.ui.components.LocalReducedMotion.current
 
     LaunchedEffect(Unit) {
-        checkProgress.animateTo(
-            targetValue = 1f,
-            animationSpec = spring(
-                dampingRatio = Spring.DampingRatioLowBouncy,
-                stiffness = Spring.StiffnessMedium,
-            ),
-        )
+        if (reducedMotion) {
+            // Snap the check-mark to fully drawn instead of animating the draw path.
+            checkProgress.snapTo(1f)
+        } else {
+            checkProgress.animateTo(
+                targetValue = 1f,
+                animationSpec = spring(
+                    dampingRatio = Spring.DampingRatioLowBouncy,
+                    stiffness = Spring.StiffnessMedium,
+                ),
+            )
+        }
         contentVisible = true
         kotlinx.coroutines.delay(300)
         buttonVisible = true
     }
 
     LaunchedEffect(Unit) {
-        pulseScale.animateTo(
-            targetValue = 1.08f,
-            animationSpec = infiniteRepeatable(
-                animation = tween(durationMillis = 1500, easing = LinearEasing),
-                repeatMode = RepeatMode.Reverse,
-            ),
-        )
+        if (!reducedMotion) {
+            pulseScale.animateTo(
+                targetValue = 1.08f,
+                animationSpec = infiniteRepeatable(
+                    animation = tween(durationMillis = 1500, easing = LinearEasing),
+                    repeatMode = RepeatMode.Reverse,
+                ),
+            )
+        }
     }
 
     val titleAlpha by animateFloatAsState(
         targetValue = if (contentVisible) 1f else 0f,
-        animationSpec = tween(400),
+        animationSpec = if (reducedMotion) snap() else tween(400),
         label = "completionTitleAlpha",
     )
     val titleOffset by animateFloatAsState(
         targetValue = if (contentVisible) 0f else 16f,
-        animationSpec = spring(
+        animationSpec = if (reducedMotion) snap() else spring(
             dampingRatio = Spring.DampingRatioMediumBouncy,
             stiffness = Spring.StiffnessMediumLow,
         ),
@@ -95,18 +104,18 @@ fun CompletionStep(
 
     val subtitleAlpha by animateFloatAsState(
         targetValue = if (contentVisible) 1f else 0f,
-        animationSpec = tween(500, 100),
+        animationSpec = if (reducedMotion) snap() else tween(500, 100),
         label = "completionSubtitleAlpha",
     )
 
     val buttonAlpha by animateFloatAsState(
         targetValue = if (buttonVisible) 1f else 0f,
-        animationSpec = tween(300),
+        animationSpec = if (reducedMotion) snap() else tween(300),
         label = "completionButtonAlpha",
     )
     val buttonScale by animateFloatAsState(
         targetValue = if (buttonVisible) 1f else 0.85f,
-        animationSpec = spring(
+        animationSpec = if (reducedMotion) snap() else spring(
             dampingRatio = Spring.DampingRatioLowBouncy,
             stiffness = Spring.StiffnessMedium,
         ),

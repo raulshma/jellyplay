@@ -104,13 +104,14 @@ internal fun SettingListItem(
     val bringIntoViewRequester = remember { BringIntoViewRequester() }
     val highlightColor = remember { androidx.compose.animation.Animatable(Color.Transparent) }
     val primaryColor = MaterialTheme.colorScheme.primary
+    val highlightFadeSpec = MaterialTheme.motionScheme.defaultEffectsSpec<Color>()
 
     LaunchedEffect(highlighted) {
         if (highlighted) {
             highlightColor.snapTo(primaryColor.copy(alpha = 0.25f))
             highlightColor.animateTo(
                 targetValue = Color.Transparent,
-                animationSpec = androidx.compose.animation.core.tween(durationMillis = 1500)
+                animationSpec = highlightFadeSpec
             )
         }
     }
@@ -244,13 +245,14 @@ internal fun SettingToggleItem(
     val bringIntoViewRequester = remember { BringIntoViewRequester() }
     val highlightColor = remember { androidx.compose.animation.Animatable(Color.Transparent) }
     val primaryColor = MaterialTheme.colorScheme.primary
+    val highlightFadeSpec = MaterialTheme.motionScheme.defaultEffectsSpec<Color>()
 
     LaunchedEffect(highlighted) {
         if (highlighted) {
             highlightColor.snapTo(primaryColor.copy(alpha = 0.25f))
             highlightColor.animateTo(
                 targetValue = Color.Transparent,
-                animationSpec = androidx.compose.animation.core.tween(durationMillis = 1500)
+                animationSpec = highlightFadeSpec
             )
         }
     }

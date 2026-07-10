@@ -327,6 +327,45 @@ class RadarrApiClientImpl @Inject constructor(
             .map { list -> list.firstOrNull()?.id }
     }
 
+    override suspend fun getMovieForTmdb(baseUrl: String, apiKey: String, tmdbId: Int): Result<RadarrMovieInfo?> {
+        val url = buildUrl(baseUrl, "/movie").newBuilder()
+            .addQueryParameter("tmdbId", tmdbId.toString())
+            .build()
+        val request = Request.Builder().url(url).withApiKey(apiKey).get().build()
+        return parseAndMap<List<RadarrMovieResource>>(executeRequest(request))
+            .map { list ->
+                list.firstOrNull()?.let {
+                    RadarrMovieInfo(
+                        id = it.id,
+                        movieFileId = it.movieFileId,
+                        hasFile = it.hasFile,
+                        monitored = it.monitored,
+                    )
+                }
+            }
+    }
+
+    override suspend fun deleteMovieFile(baseUrl: String, apiKey: String, movieFileId: Int): Result<Unit> =
+        deleteRequest(baseUrl, apiKey, "/movieFile/$movieFileId")
+
+    override suspend fun monitorMovies(
+        baseUrl: String,
+        apiKey: String,
+        movieIds: List<Int>,
+        monitored: Boolean,
+    ): Result<Unit> {
+        if (movieIds.isEmpty()) return Result.success(Unit)
+        val body = json.encodeToString(
+            RadarrMovieMonitorRequest(movieIds = movieIds, monitored = monitored),
+        )
+        val request = Request.Builder()
+            .url(buildUrl(baseUrl, "/movie/monitor"))
+            .withApiKey(apiKey)
+            .put(body.toRequestBody("application/json".toMediaType()))
+            .build()
+        return executeRequest(request).map { }
+    }
+
     override suspend fun testConnection(baseUrl: String, apiKey: String): Result<Unit> {
         val request = Request.Builder()
             .url(buildUrl(baseUrl, "/system/status"))
@@ -395,6 +434,7 @@ class RadarrApiClientImpl @Inject constructor(
         val tmdbId: Int? = null,
         val monitored: Boolean = false,
         val hasFile: Boolean = false,
+        val movieFileId: Int = 0,
         val inCinemas: String? = null,
         val digitalRelease: String? = null,
         val physicalRelease: String? = null,
@@ -454,6 +494,13 @@ class RadarrApiClientImpl @Inject constructor(
         val name: String,
         val movieIds: List<Int>? = null,
         val movieId: Int? = null,
+    )
+
+    /** Body for `PUT /api/v3/movie/monitor`. */
+    @Serializable
+    private data class RadarrMovieMonitorRequest(
+        val movieIds: List<Int>,
+        val monitored: Boolean,
     )
 
     @Serializable
