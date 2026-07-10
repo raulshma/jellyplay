@@ -33,7 +33,6 @@ import com.composables.icons.tabler.outline.*
 import com.raulshma.jellyplay.core.model.MediaItem
 import com.raulshma.jellyplay.core.ui.image.MediaImage
 import androidx.compose.animation.core.animateFloatAsState
-import androidx.compose.animation.core.tween
 import com.raulshma.jellyplay.core.ui.tv.rememberTvFocusState
 import com.raulshma.jellyplay.core.ui.tv.tvFocusIndicator
 import com.raulshma.jellyplay.core.designsystem.theme.ShapeCache
@@ -51,7 +50,7 @@ fun HeartShapeArtistCard(
     val isPressed by interactionSource.collectIsPressedAsState()
     val scale by animateFloatAsState(
         targetValue = if (isPressed) 0.95f else 1f,
-        animationSpec = tween(100),
+        animationSpec = MaterialTheme.motionScheme.fastSpatialSpec(),
         label = "artist_card_scale"
     )
 

@@ -1,7 +1,7 @@
 package com.raulshma.jellyplay.feature.newsletter
 
 import com.raulshma.jellyplay.core.data.repository.MediaRepository
-import com.raulshma.jellyplay.core.data.repository.PlaybackRepository
+import com.raulshma.jellyplay.core.data.util.ImageUrlProvider
 import com.raulshma.jellyplay.core.datastore.UserPreferencesStore
 import com.raulshma.jellyplay.core.model.NewsletterSectionType
 import com.raulshma.jellyplay.core.ui.viewmodel.JellyPlayViewModel
@@ -13,7 +13,7 @@ import javax.inject.Inject
 @HiltViewModel
 class NewsletterViewModel @Inject constructor(
     private val mediaRepository: MediaRepository,
-    private val playbackRepository: PlaybackRepository,
+    private val imageUrlProvider: ImageUrlProvider,
     private val preferencesStore: UserPreferencesStore,
 ) : JellyPlayViewModel() {
 
@@ -33,10 +33,10 @@ class NewsletterViewModel @Inject constructor(
     }
 
     fun getImageUrl(itemId: String): String =
-        playbackRepository.getImageUrl(itemId)
+        imageUrlProvider.getImageUrl(itemId)
 
     fun getBackdropUrl(itemId: String): String =
-        playbackRepository.getBackdropUrl(itemId)
+        imageUrlProvider.getBackdropUrl(itemId)
 
     private fun loadData(isPullToRefresh: Boolean = false) {
         launch {

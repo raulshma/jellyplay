@@ -48,7 +48,13 @@ class JellyPlayApplication : Application(), SingletonImageLoader.Factory, Config
     // so behavior is unchanged; only the construction cost moves off the
     // cold-start critical path.
     @Inject lateinit var audioPlaybackManagerProvider: javax.inject.Provider<com.raulshma.jellyplay.core.data.playback.AudioPlaybackManager>
-    @Inject lateinit var nowPlayingWidgetUpdater: com.raulshma.jellyplay.widget.NowPlayingWidgetUpdater
+    // javax.inject.Provider defers Hilt construction of NowPlayingWidgetUpdater,
+    // whose constructor pulls in AudioPlaybackManager — the same 14-dep graph
+    // the Provider above defers. A direct field inject re-pulls that whole
+    // graph before onCreate returns; moving construction into the IO launch
+    // block below keeps it off the cold-start critical path. start() only
+    // launches observers on its own scope, so behavior is unchanged.
+    @Inject lateinit var nowPlayingWidgetUpdaterProvider: javax.inject.Provider<com.raulshma.jellyplay.widget.NowPlayingWidgetUpdater>
     @Inject lateinit var notificationScheduler: NotificationScheduler
     @Inject lateinit var autoDownloadScheduler: com.raulshma.jellyplay.core.data.worker.AutoDownloadScheduler
     @Inject lateinit var userDataSyncScheduler: com.raulshma.jellyplay.core.data.worker.UserDataSyncScheduler
@@ -65,7 +71,7 @@ class JellyPlayApplication : Application(), SingletonImageLoader.Factory, Config
         applicationScope.launch(Dispatchers.IO) {
             initSentry()
             audioPlaybackManagerProvider.get().start()
-            nowPlayingWidgetUpdater.start()
+            nowPlayingWidgetUpdaterProvider.get().start()
         }
         // Background schedulers — independent enqueue calls, all KEEP-safe.
         // Run concurrently with the critical path so cold start isn't gated on
@@ -95,12 +101,9 @@ class JellyPlayApplication : Application(), SingletonImageLoader.Factory, Config
                 if (url != null && url.contains("?")) {
                     val query = url.substringAfter("?")
                     // Match token-bearing query params case-insensitively.
-                    val tokenParamNames = setOf(
-                        "api_key", "apikey", "token", "x-emby-token", "accesstoken",
-                    )
                     val carriesToken = query.split("&").any { kv ->
                         val key = kv.substringBefore("=").lowercase()
-                        key in tokenParamNames
+                        key in TOKEN_PARAM_NAMES
                     }
                     if (carriesToken) {
                         data["url"] = url.substringBefore("?")
@@ -114,11 +117,7 @@ class JellyPlayApplication : Application(), SingletonImageLoader.Factory, Config
                 val message = breadcrumb.message
                 if (message != null) {
                     val lower = message.lowercase()
-                    val tokenPatterns = listOf(
-                        "api_key=", "apikey=", "x-emby-token:", "x-emby-token=",
-                        "accesstoken=",
-                    )
-                    if (tokenPatterns.any { lower.contains(it) }) {
+                    if (TOKEN_PATTERNS.any { lower.contains(it) }) {
                         return@setBeforeBreadcrumb null
                     }
                 }
@@ -189,4 +188,17 @@ class JellyPlayApplication : Application(), SingletonImageLoader.Factory, Config
     }
 
     override fun newImageLoader(context: Context): ImageLoader = imageLoader
+
+    companion object {
+        // Query-param names (lowercased) whose presence marks a URL as carrying
+        // a credential. Matched case-insensitively against the param key only.
+        private val TOKEN_PARAM_NAMES = setOf(
+            "api_key", "apikey", "token", "x-emby-token", "accesstoken",
+        )
+        // Lowercased substrings whose presence in a breadcrumb message marks it
+        // as a logged request line that may carry a raw token.
+        private val TOKEN_PATTERNS = listOf(
+            "api_key=", "apikey=", "x-emby-token:", "x-emby-token=", "accesstoken=",
+        )
+    }
 }

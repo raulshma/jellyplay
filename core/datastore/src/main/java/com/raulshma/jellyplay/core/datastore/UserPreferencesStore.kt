@@ -288,6 +288,7 @@ class UserPreferencesStore @Inject constructor(
         val DUCK_ON_TRANSIENT_FOCUS_LOSS = booleanPreferencesKey("duck_on_transient_focus_loss")
         val VOLUME_BOOST_ENABLED = booleanPreferencesKey("volume_boost_enabled")
         val VOLUME_BOOST_GAIN = intPreferencesKey("volume_boost_gain")
+        val AUDIO_LYRICS_VISIBLE = booleanPreferencesKey("audio_lyrics_visible")
         val SHOW_SHARE_MEDIA_OPTION = booleanPreferencesKey("show_share_media_option")
         val SHOW_EXTERNAL_RATINGS = booleanPreferencesKey("show_external_ratings")
         val DATA_SAVER_ENABLED = booleanPreferencesKey("data_saver_enabled")
@@ -1064,6 +1065,7 @@ class UserPreferencesStore @Inject constructor(
             duckOnTransientFocusLoss = readBool(prefs, Keys.DUCK_ON_TRANSIENT_FOCUS_LOSS, "duck_on_transient_focus_loss", false),
             volumeBoostEnabled = readBool(prefs, Keys.VOLUME_BOOST_ENABLED, "volume_boost_enabled", false),
             volumeBoostGain = readInt(prefs, Keys.VOLUME_BOOST_GAIN, "volume_boost_gain", 0),
+            audioLyricsVisible = readBool(prefs, Keys.AUDIO_LYRICS_VISIBLE, "audio_lyrics_visible", false),
             showShareMediaOption = readBool(prefs, Keys.SHOW_SHARE_MEDIA_OPTION, "show_share_media_option", true),
             showExternalRatings = readBool(prefs, Keys.SHOW_EXTERNAL_RATINGS, "show_external_ratings", true),
             dataSaverEnabled = readBool(prefs, Keys.DATA_SAVER_ENABLED, "data_saver_enabled", false),
@@ -1745,6 +1747,10 @@ class UserPreferencesStore @Inject constructor(
 
     suspend fun setVolumeBoostGain(gain: Int) {
         context.dataStore.edit { it[Keys.VOLUME_BOOST_GAIN] = gain }
+    }
+
+    suspend fun setAudioLyricsVisible(enabled: Boolean) {
+        context.dataStore.edit { it[Keys.AUDIO_LYRICS_VISIBLE] = enabled }
     }
 
     suspend fun setShowShareMediaOption(enabled: Boolean) {

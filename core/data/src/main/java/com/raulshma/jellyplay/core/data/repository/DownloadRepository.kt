@@ -62,6 +62,15 @@ interface DownloadRepository {
 
     suspend fun getDownloadedEpisodeIdsForSeries(seriesId: String): Set<String>
 
+    /**
+     * All downloaded episode ids grouped by their parent series, fetched in a
+     * single 2-column query. Intended for callers (e.g. the periodic
+     * auto-download worker) that need the ids for *every* series at once —
+     * preferable to calling [getDownloadedEpisodeIdsForSeries] per series,
+     * which issues N full-row queries (N+1) while consuming only `mediaItemId`.
+     */
+    suspend fun getDownloadedEpisodeIdsBySeries(): Map<String, Set<String>>
+
     suspend fun getDownloadedSeriesIds(): List<String>
 
     suspend fun downloadTrickplayData(

@@ -32,6 +32,8 @@ sealed class Route : NavKey {
     @Serializable data class MetadataEditor(val itemId: String) : Route()
     @Serializable data class SeerrDetail(val tmdbId: Int, val mediaType: String) : Route()
     @Serializable data class PersonDetail(val personId: String) : Route()
+    /** Sonarr-style series management screen (collapsible seasons, per-episode actions). */
+    @Serializable data class ManageSeries(val seriesId: String) : Route()
 
     @Serializable data class VideoPlayer(
         val itemId: String,
@@ -42,6 +44,13 @@ sealed class Route : NavKey {
     ) : Route()
 
     @Serializable data class AudioPlayer(val itemId: String) : Route()
+
+    /**
+     * Full-screen remote-control overlay for an active "Play On" (Jellyfin
+     * remote session) cast. Reached by tapping the persistent [PlayOnMiniBar].
+     * Modal — transient control surface, not a drill-in detail destination.
+     */
+    @Serializable data object PlayOnCompanion : Route()
 
     @Serializable data object Downloads : Route()
 
@@ -110,10 +119,6 @@ sealed class Route : NavKey {
         val audioStreamIndex: Int? = null,
     ) : Route()
 
-    @Serializable data object LiveTvGuide : Route()
-
-    @Serializable data object Dvr : Route()
-
     @Serializable data object SyncPlay : Route()
 
     @Serializable data class Ambient(
@@ -160,6 +165,13 @@ sealed class Route : NavKey {
 
     @Serializable data object ArrQueue : Route()
 
+    /**
+     * Combined Sonarr + Radarr upcoming-releases calendar. Modal entry gated
+     * by [com.raulshma.jellyplay.core.model.ExperimentalFeature.DIRECT_ARR_INTEGRATION],
+     * mirroring [ArrQueue] / [Requests].
+     */
+    @Serializable data object UpcomingCalendar : Route()
+
     @Serializable data object Shortcuts : Route()
 }
 
@@ -193,6 +205,7 @@ val Route.isModal: Boolean
         Route.Settings,
         Route.Downloads,
         Route.SyncPlay,
+        Route.PlayOnCompanion,
         Route.SeerrSettings,
         Route.ArrSettings,
         Route.AdminDashboard,
@@ -201,6 +214,7 @@ val Route.isModal: Boolean
         Route.Logs,
         Route.Requests -> true
         Route.ArrQueue -> true
+        Route.UpcomingCalendar -> true
         else -> false
     }
 
@@ -214,6 +228,7 @@ val Route.isDetail: Boolean
         is Route.MetadataEditor,
         is Route.SeerrDetail,
         is Route.PersonDetail,
+        is Route.ManageSeries,
         is Route.MediaInfo,
         is Route.CollectionDetail,
         is Route.OfflineSeries,
@@ -237,6 +252,7 @@ val DETAIL_ROUTE_CLASS_NAMES: Set<String> = setOf(
     "MetadataEditor",
     "SeerrDetail",
     "PersonDetail",
+    "ManageSeries",
     "MediaInfo",
     "CollectionDetail",
     "OfflineSeries",

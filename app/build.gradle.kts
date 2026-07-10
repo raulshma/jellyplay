@@ -5,6 +5,7 @@ plugins {
     alias(libs.plugins.ksp)
     alias(libs.plugins.hilt)
     alias(libs.plugins.androidx.baselineprofile)
+    alias(libs.plugins.aboutLibraries)
 }
 
 android {
@@ -76,6 +77,7 @@ android {
         }
     }
     compileOptions {
+        isCoreLibraryDesugaringEnabled = true
         sourceCompatibility = JavaVersion.VERSION_17
         targetCompatibility = JavaVersion.VERSION_17
     }
@@ -94,6 +96,24 @@ android {
             )
         }
     }
+}
+
+// AboutLibraries — collect the full runtime dependency graph (this is the only
+// module that aggregates every :core:* and :feature:* project) and export the
+// SPDX license metadata into assets. Parsed at runtime by :feature:settings.
+// phoneRelease is the canonical list; the TV flavor adds no new dependencies.
+aboutLibraries {
+    collect { includePlatform = false }
+    export {
+        outputFile = file("src/main/assets/aboutlibraries.json")
+        excludeFields.addAll("funding", "developers")
+        prettyPrint = false
+    }
+}
+
+// Keep the generated asset in sync with the dependency graph on every build.
+tasks.matching { it.name == "preBuild" }.configureEach {
+    dependsOn("exportLibraryDefinitions")
 }
 
 if (project.hasProperty("enableComposeMetrics")) {
@@ -135,6 +155,7 @@ dependencies {
     implementation(project(":feature:requests"))
     implementation(project(":feature:shortcuts"))
     implementation(project(":feature:arrqueue"))
+    implementation(project(":feature:calendar"))
 
     implementation(libs.androidx.core.ktx)
     implementation(libs.androidx.core.splashscreen)
@@ -167,6 +188,10 @@ dependencies {
     implementation(libs.hilt.navigation.compose)
 
     implementation(libs.play.services.cast.framework)
+
+    // Required by the media3-ffmpeg-decoder native extension (pulled in via
+    // :feature:player:video). Must also be enabled at the app dex entry point.
+    coreLibraryDesugaring(libs.android.desugar.jdk)
 
     implementation(libs.media3.session)
 

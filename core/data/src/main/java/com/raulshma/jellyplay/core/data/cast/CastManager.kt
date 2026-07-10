@@ -22,6 +22,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -89,6 +90,12 @@ class CastManager @Inject constructor(
 
     private val _castVolume = MutableStateFlow(1f)
     val castVolume: StateFlow<Float> = _castVolume.asStateFlow()
+
+    private val _castTitle = MutableStateFlow("")
+    val castTitle: StateFlow<String> = _castTitle.asStateFlow()
+
+    private val _castSubtitle = MutableStateFlow("")
+    val castSubtitle: StateFlow<String> = _castSubtitle.asStateFlow()
 
     private val _allDiscoveredDevices = MutableStateFlow<List<CastDevice>>(emptyList())
 
@@ -165,6 +172,8 @@ class CastManager @Inject constructor(
             _castDurationMs.value = jellyfinRemotePlayCastStrategy.durationMs.value
             _castIsPlaying.value = jellyfinRemotePlayCastStrategy.isPlaying.value
             _castVolume.value = jellyfinRemotePlayCastStrategy.volume.value
+            _castTitle.value = jellyfinRemotePlayCastStrategy.nowPlayingTitle.value
+            _castSubtitle.value = jellyfinRemotePlayCastStrategy.nowPlayingSubtitle.value
             return
         }
         val player = castPlayer ?: return
@@ -265,11 +274,13 @@ class CastManager @Inject constructor(
         preferredRendererJob = coroutineScope.launch {
             _allDiscoveredDevices.combine(userPreferencesStore.preferences) { devices, prefs ->
                 devices to prefs.preferredRenderer
-            }            .collect { (devices, preferredName) ->
-                if (preferredName.isNullOrBlank() || isConnected) return@collect
-                val match = devices.firstOrNull { it.name == preferredName }
-                if (match != null) connect(context, match)
             }
+                .distinctUntilChanged()
+                .collect { (devices, preferredName) ->
+                    if (preferredName.isNullOrBlank() || isConnected) return@collect
+                    val match = devices.firstOrNull { it.name == preferredName }
+                    if (match != null) connect(context, match)
+                }
         }
     }
 

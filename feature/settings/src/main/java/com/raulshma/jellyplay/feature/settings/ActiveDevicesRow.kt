@@ -59,6 +59,7 @@ import com.composables.icons.tabler.outline.DeviceTv
 import com.composables.icons.tabler.outline.Message
 import com.composables.icons.tabler.outline.PlayerPause
 import androidx.compose.foundation.shape.CircleShape
+import com.raulshma.jellyplay.core.ui.components.LocalReducedMotion
 import com.raulshma.jellyplay.core.ui.components.focusIndicator
 import com.raulshma.jellyplay.core.designsystem.theme.ShapeCache
 import com.raulshma.jellyplay.core.model.SessionInfo
@@ -359,34 +360,47 @@ private fun ActiveDeviceCard(
 
 @Composable
 private fun NowPlayingBars(color: androidx.compose.ui.graphics.Color = MaterialTheme.colorScheme.primary) {
-    val infiniteTransition = rememberInfiniteTransition(label = "nowPlaying")
-    val bar1 by infiniteTransition.animateFloat(
-        initialValue = 0.3f,
-        targetValue = 1f,
-        animationSpec = infiniteRepeatable(
-            animation = tween(400, easing = FastOutSlowInEasing),
-            repeatMode = RepeatMode.Reverse,
-        ),
-        label = "bar1",
-    )
-    val bar2 by infiniteTransition.animateFloat(
-        initialValue = 0.6f,
-        targetValue = 0.4f,
-        animationSpec = infiniteRepeatable(
-            animation = tween(350, easing = FastOutSlowInEasing),
-            repeatMode = RepeatMode.Reverse,
-        ),
-        label = "bar2",
-    )
-    val bar3 by infiniteTransition.animateFloat(
-        initialValue = 0.5f,
-        targetValue = 0.9f,
-        animationSpec = infiniteRepeatable(
-            animation = tween(450, easing = FastOutSlowInEasing),
-            repeatMode = RepeatMode.Reverse,
-        ),
-        label = "bar3",
-    )
+    val reducedMotion = LocalReducedMotion.current
+    // Each NowPlayingBars row runs three infinite animations; the active-devices
+    // list can show several rows. In performance/reduced-motion mode freeze the
+    // equalizer bars to a static mid height instead of driving a per-row redraw coroutine.
+    val bar1: Float
+    val bar2: Float
+    val bar3: Float
+    if (!reducedMotion) {
+        val infiniteTransition = rememberInfiniteTransition(label = "nowPlaying")
+        bar1 = infiniteTransition.animateFloat(
+            initialValue = 0.3f,
+            targetValue = 1f,
+            animationSpec = infiniteRepeatable(
+                animation = tween(400, easing = FastOutSlowInEasing),
+                repeatMode = RepeatMode.Reverse,
+            ),
+            label = "bar1",
+        ).value
+        bar2 = infiniteTransition.animateFloat(
+            initialValue = 0.6f,
+            targetValue = 0.4f,
+            animationSpec = infiniteRepeatable(
+                animation = tween(350, easing = FastOutSlowInEasing),
+                repeatMode = RepeatMode.Reverse,
+            ),
+            label = "bar2",
+        ).value
+        bar3 = infiniteTransition.animateFloat(
+            initialValue = 0.5f,
+            targetValue = 0.9f,
+            animationSpec = infiniteRepeatable(
+                animation = tween(450, easing = FastOutSlowInEasing),
+                repeatMode = RepeatMode.Reverse,
+            ),
+            label = "bar3",
+        ).value
+    } else {
+        bar1 = 0.6f
+        bar2 = 0.5f
+        bar3 = 0.7f
+    }
 
     Row(
         horizontalArrangement = Arrangement.spacedBy(1.dp),

@@ -8,6 +8,7 @@ import androidx.media3.common.C
 import androidx.media3.common.MediaItem
 import androidx.media3.common.MediaMetadata
 import androidx.media3.common.Player
+import androidx.media3.common.PlaybackException
 import androidx.media3.exoplayer.DefaultLoadControl
 import androidx.media3.exoplayer.DefaultRenderersFactory
 import androidx.media3.exoplayer.ExoPlayer
@@ -19,7 +20,9 @@ import com.raulshma.jellyplay.core.data.repository.DownloadRepository
 import com.raulshma.jellyplay.core.data.repository.MediaRepository
 import com.raulshma.jellyplay.core.data.repository.OfflineRepository
 import com.raulshma.jellyplay.core.data.repository.PlaybackRepository
+import com.raulshma.jellyplay.core.data.util.ImageUrlProvider
 import com.raulshma.jellyplay.core.model.AudioNormalizationMode
+import com.raulshma.jellyplay.core.model.ChannelMixMode
 import com.raulshma.jellyplay.core.model.EffectStrength
 import com.raulshma.jellyplay.core.model.EqualizerPreset
 import com.raulshma.jellyplay.core.model.LrcLibTrack
@@ -67,6 +70,7 @@ class AudioPlaybackManager @Inject constructor(
     @ApplicationContext private val context: Context,
     private val mediaRepository: MediaRepository,
     private val playbackRepository: PlaybackRepository,
+    private val imageUrlProvider: ImageUrlProvider,
     private val downloadRepository: DownloadRepository,
     private val offlineRepository: OfflineRepository,
     private val sessionManager: PlaybackSessionManager,
@@ -79,6 +83,7 @@ class AudioPlaybackManager @Inject constructor(
     private val lyricsManager: AudioLyricsManager,
     private val effectsProcessor: AudioEffectsProcessor,
     private val sleepTimerManager: SleepTimerManager,
+    private val jellyfinRemotePlayCastStrategy: com.raulshma.jellyplay.core.data.cast.remote.JellyfinRemotePlayCastStrategy,
 ) : AudioEffectsManager, AudioQueueManager {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
 
@@ -201,6 +206,7 @@ class AudioPlaybackManager @Inject constructor(
             onCrossfadeTransition(secondary, nextIndex, nextItem)
         },
         detachPrimaryListener = { primary -> primary.removeListener(playerListener) },
+        onCrossfadeError = { error -> playerListener.onPlayerError(error) },
     )
 
     @Volatile
@@ -277,12 +283,22 @@ class AudioPlaybackManager @Inject constructor(
     override val waveformData: StateFlow<ByteArray> get() = effectsProcessor.waveformData
     override val replayGainMode: StateFlow<AudioNormalizationMode> get() = effectsProcessor.replayGainMode
     override val replayGainPreAmpDb: StateFlow<Float> get() = effectsProcessor.replayGainPreAmpDb
+    override val channelMixMode: StateFlow<ChannelMixMode> get() = effectsProcessor.channelMixMode
+    override val channelMixEnabled: StateFlow<Boolean> get() = effectsProcessor.channelMixEnabled
 
     var skipPreviousThresholdMs = 3_000L
 
     private val playerListener = object : Player.Listener {
         override fun onIsPlayingChanged(isPlaying: Boolean) {
             _isPlaying.value = isPlaying
+        }
+
+        override fun onPlayerError(error: PlaybackException) {
+            // Surface decode/init failures (e.g. MediaCodecAudioRenderer on an
+            // undecodable codec) into the same playbackError flow the UI shows
+            // for metadata-load failures. Without this, a renderer error leaves
+            // the player silently in STATE_IDLE.
+            _playbackError.value = error.message ?: "Playback error"
         }
 
         override fun onAudioSessionIdChanged(audioSessionId: Int) {
@@ -430,13 +446,37 @@ class AudioPlaybackManager @Inject constructor(
             .build()
 
         val renderersFactory = object : DefaultRenderersFactory(context) {
+            init {
+                // Mirror the video engine: allow the FFmpeg extension renderer
+                // (software decode for DTS/TrueHD/etc. that the hardware audio
+                // decoder can't handle) and fall back across MediaCodec decoders.
+                setExtensionRendererMode(DefaultRenderersFactory.EXTENSION_RENDERER_MODE_ON)
+                setEnableDecoderFallback(true)
+            }
+
             override fun buildAudioSink(
                 context: android.content.Context,
                 enableFloatOutput: Boolean,
                 enableAudioTrackPlaybackParams: Boolean,
             ): androidx.media3.exoplayer.audio.AudioSink {
                 return DefaultAudioSink.Builder(context)
-                    .setAudioProcessors(arrayOf(effectsProcessor.replayGainProcessor, effectsProcessor.balanceProcessor))
+                    .setAudioProcessors(
+                        arrayOf(
+                            // Channel mix first: it may change the channel count,
+                            // so every downstream processor must see the remixed
+                            // layout.
+                            effectsProcessor.channelMixProcessor,
+                            // Dynamics compression (DYNAMIC normalization) and
+                            // ReplayGain (TRACK/ALBUM) are mutually exclusive at
+                            // runtime but both live in the chain.
+                            effectsProcessor.dynamicsProcessor,
+                            effectsProcessor.replayGainProcessor,
+                            // High-pass rumble cut for dialogue boost; a no-op
+                            // when boost is off.
+                            effectsProcessor.highPassProcessor,
+                            effectsProcessor.balanceProcessor,
+                        ),
+                    )
                     .setEnableFloatOutput(enableFloatOutput)
                     .setEnableAudioTrackPlaybackParams(enableAudioTrackPlaybackParams)
                     .build()
@@ -512,6 +552,20 @@ class AudioPlaybackManager @Inject constructor(
 
     fun play(itemId: String) {
         assertMainThread("play")
+
+        // "Play On" routing (mirrors jellyfin-web's playbackManager.play(): when a
+        // remote Jellyfin session is the active player, every play delegates to it
+        // and the local engine never loads). Pause local audio so only the remote
+        // session plays.
+        if (jellyfinRemotePlayCastStrategy.isConnected.value) {
+            jellyfinRemotePlayCastStrategy.loadMedia(
+                itemId = itemId,
+                startPositionMs = 0L,
+            )
+            exoPlayer?.pause()
+            return
+        }
+
         if (currentItemId == itemId) {
             if (_isLoadingItemFlag) return
             val state = exoPlayer?.playbackState
@@ -1169,8 +1223,12 @@ class AudioPlaybackManager @Inject constructor(
         effectsProcessor.setReplayGainPreAmpDb(db, normalizationGain, _shuffleMode.value)
     }
 
+    override fun setChannelMix(mode: ChannelMixMode, enabled: Boolean) {
+        effectsProcessor.setChannelMix(mode, enabled)
+    }
+
     fun getImageUrl(itemId: String): String =
-        playbackRepository.getImageUrl(itemId, maxWidth = 400)
+        imageUrlProvider.getImageUrl(itemId)
 
     override fun setEqualizerPreset(preset: EqualizerPreset) {
         effectsProcessor.setEqualizerPreset(preset)

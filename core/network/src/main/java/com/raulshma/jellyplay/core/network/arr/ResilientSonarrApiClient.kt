@@ -7,6 +7,7 @@ import com.raulshma.jellyplay.core.model.arr.ArrCommandName
 import com.raulshma.jellyplay.core.model.arr.ArrHistoryItem
 import com.raulshma.jellyplay.core.model.arr.ArrQueueDeleteOptions
 import com.raulshma.jellyplay.core.model.arr.ArrQueueItem
+import com.raulshma.jellyplay.core.model.arr.ArrSeriesEpisode
 import com.raulshma.jellyplay.core.model.arr.ArrWantedItem
 import com.raulshma.jellyplay.core.network.RetryPolicy
 import javax.inject.Inject
@@ -75,9 +76,38 @@ class ResilientSonarrApiClient @Inject constructor(
 
     override suspend fun postCommand(
         baseUrl: String, apiKey: String, commandName: ArrCommandName,
-        seriesId: Int?, episodeIds: List<Int>?,
+        seriesId: Int?, episodeIds: List<Int>?, seasonNumber: Int?,
     ): Result<ArrCommand> =
-        req { delegate.postCommand(baseUrl, apiKey, commandName, seriesId, episodeIds) }
+        req { delegate.postCommand(baseUrl, apiKey, commandName, seriesId, episodeIds, seasonNumber) }
+
+    override suspend fun findSeriesByTvdb(baseUrl: String, apiKey: String, tvdbId: Int): Result<Int?> =
+        req { delegate.findSeriesByTvdb(baseUrl, apiKey, tvdbId) }
+
+    override suspend fun getEpisodeInfo(
+        baseUrl: String, apiKey: String, seriesId: Int, seasonNumber: Int, episodeNumber: Int,
+    ): Result<SonarrEpisodeInfo?> =
+        req { delegate.getEpisodeInfo(baseUrl, apiKey, seriesId, seasonNumber, episodeNumber) }
+
+    override suspend fun getSeasonSummaries(
+        baseUrl: String, apiKey: String, seriesId: Int,
+    ): Result<List<SonarrSeasonSummary>> =
+        req { delegate.getSeasonSummaries(baseUrl, apiKey, seriesId) }
+
+    override suspend fun deleteEpisodeFile(baseUrl: String, apiKey: String, episodeFileId: Int): Result<Unit> =
+        req { delegate.deleteEpisodeFile(baseUrl, apiKey, episodeFileId) }
+
+    override suspend fun monitorEpisodes(
+        baseUrl: String, apiKey: String, episodeIds: List<Int>, monitored: Boolean,
+    ): Result<Unit> =
+        req { delegate.monitorEpisodes(baseUrl, apiKey, episodeIds, monitored) }
+
+    override suspend fun getSeriesInfo(baseUrl: String, apiKey: String, tvdbId: Int): Result<SonarrSeriesInfo?> =
+        req { delegate.getSeriesInfo(baseUrl, apiKey, tvdbId) }
+
+    override suspend fun getEpisodesForSeries(
+        baseUrl: String, apiKey: String, seriesId: Int,
+    ): Result<List<ArrSeriesEpisode>> =
+        req { delegate.getEpisodesForSeries(baseUrl, apiKey, seriesId) }
 
     override suspend fun testConnection(baseUrl: String, apiKey: String): Result<Unit> =
         req { delegate.testConnection(baseUrl, apiKey) }

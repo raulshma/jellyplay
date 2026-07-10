@@ -3,7 +3,6 @@ package com.raulshma.jellyplay.feature.library
 import android.content.Intent
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.slideInVertically
@@ -283,8 +282,8 @@ fun PhotoViewerScreen(
 
                 AnimatedVisibility(
                     visible = showControls || isTv,
-                    enter = fadeIn(tween(300)),
-                    exit = fadeOut(tween(300)),
+                    enter = fadeIn(MaterialTheme.motionScheme.defaultEffectsSpec()),
+                    exit = fadeOut(MaterialTheme.motionScheme.defaultEffectsSpec()),
                 ) {
                     Box(
                         modifier = Modifier
@@ -449,8 +448,10 @@ fun PhotoViewerScreen(
 
                 AnimatedVisibility(
                     visible = showInfo,
-                    enter = fadeIn(tween(300)) + slideInVertically(tween(300)) { it / 3 },
-                    exit = fadeOut(tween(200)) + slideOutVertically(tween(200)) { it / 3 },
+                    enter = fadeIn(MaterialTheme.motionScheme.defaultEffectsSpec()) +
+                        slideInVertically(MaterialTheme.motionScheme.defaultSpatialSpec()) { it / 3 },
+                    exit = fadeOut(MaterialTheme.motionScheme.fastEffectsSpec()) +
+                        slideOutVertically(MaterialTheme.motionScheme.fastSpatialSpec()) { it / 3 },
                 ) {
                     PhotoInfoOverlay(
                         photo = photo,
@@ -462,8 +463,10 @@ fun PhotoViewerScreen(
 
                 AnimatedVisibility(
                     visible = showAdjustments,
-                    enter = fadeIn(tween(300)) + slideInVertically(tween(300)) { it / 3 },
-                    exit = fadeOut(tween(200)) + slideOutVertically(tween(200)) { it / 3 },
+                    enter = fadeIn(MaterialTheme.motionScheme.defaultEffectsSpec()) +
+                        slideInVertically(MaterialTheme.motionScheme.defaultSpatialSpec()) { it / 3 },
+                    exit = fadeOut(MaterialTheme.motionScheme.fastEffectsSpec()) +
+                        slideOutVertically(MaterialTheme.motionScheme.fastSpatialSpec()) { it / 3 },
                 ) {
                     androidx.compose.material3.Surface(
                         modifier = Modifier

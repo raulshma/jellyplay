@@ -42,6 +42,7 @@ import com.composables.icons.tabler.outline.Server
 import com.raulshma.jellyplay.core.designsystem.theme.AlphaEasing
 import com.raulshma.jellyplay.core.designsystem.theme.ShapeCache
 import com.raulshma.jellyplay.core.model.SystemInfo
+import com.raulshma.jellyplay.core.ui.components.LocalReducedMotion
 import com.raulshma.jellyplay.core.ui.tv.rememberTvFocusState
 import com.raulshma.jellyplay.core.ui.tv.tvFocusIndicator
 
@@ -60,25 +61,35 @@ fun ServerHeroHeader(
     val restartFocusState = rememberTvFocusState(focusedScale = 1.05f)
     val shutdownFocusState = rememberTvFocusState(focusedScale = 1.04f)
 
-    val infiniteTransition = rememberInfiniteTransition(label = "statusPulse")
-    val pulseAlpha by infiniteTransition.animateFloat(
-        initialValue = 0.4f,
-        targetValue = 1f,
-        animationSpec = infiniteRepeatable(
-            animation = tween(900, easing = { AlphaEasing.transform(it) }),
-            repeatMode = RepeatMode.Reverse,
-        ),
-        label = "pulseAlpha",
-    )
-    val pulseScale by infiniteTransition.animateFloat(
-        initialValue = 0.85f,
-        targetValue = 1.15f,
-        animationSpec = infiniteRepeatable(
-            animation = tween(900, easing = { AlphaEasing.transform(it) }),
-            repeatMode = RepeatMode.Reverse,
-        ),
-        label = "pulseScale",
-    )
+    val reducedMotion = LocalReducedMotion.current
+    // Server status pulse is a continuous two-channel infinite animation. In
+    // performance/reduced-motion mode freeze it at the resting state values.
+    val pulseAlpha: Float
+    val pulseScale: Float
+    if (!reducedMotion) {
+        val infiniteTransition = rememberInfiniteTransition(label = "statusPulse")
+        pulseAlpha = infiniteTransition.animateFloat(
+            initialValue = 0.4f,
+            targetValue = 1f,
+            animationSpec = infiniteRepeatable(
+                animation = tween(900, easing = { AlphaEasing.transform(it) }),
+                repeatMode = RepeatMode.Reverse,
+            ),
+            label = "pulseAlpha",
+        ).value
+        pulseScale = infiniteTransition.animateFloat(
+            initialValue = 0.85f,
+            targetValue = 1.15f,
+            animationSpec = infiniteRepeatable(
+                animation = tween(900, easing = { AlphaEasing.transform(it) }),
+                repeatMode = RepeatMode.Reverse,
+            ),
+            label = "pulseScale",
+        ).value
+    } else {
+        pulseAlpha = 1f
+        pulseScale = 1f
+    }
 
     Box(
         modifier = modifier

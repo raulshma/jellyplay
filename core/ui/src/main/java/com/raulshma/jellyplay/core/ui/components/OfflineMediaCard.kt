@@ -1,7 +1,6 @@
 package com.raulshma.jellyplay.core.ui.components
 
 import androidx.compose.animation.core.animateFloatAsState
-import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Row
@@ -107,7 +106,7 @@ fun OfflineMediaCard(
                     } else 0f
                     val animated by animateFloatAsState(
                         targetValue = progress,
-                        animationSpec = tween(durationMillis = 400),
+                        animationSpec = MaterialTheme.motionScheme.defaultSpatialSpec(),
                         label = "offlineCardProgress",
                     )
                     OfflineProgressChip(

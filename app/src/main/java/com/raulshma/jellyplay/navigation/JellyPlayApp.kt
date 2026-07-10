@@ -184,6 +184,7 @@ import com.raulshma.jellyplay.feature.onboarding.navigation.onboardingSection
 import com.raulshma.jellyplay.feature.newsletter.navigation.newsletterSection
 import com.raulshma.jellyplay.feature.requests.navigation.requestsSection
 import com.raulshma.jellyplay.feature.arrqueue.navigation.arrQueueSection
+import com.raulshma.jellyplay.feature.calendar.navigation.calendarSection
 import com.raulshma.jellyplay.feature.shortcuts.navigation.shortcutsSection
 import kotlinx.coroutines.launch
 import com.composables.icons.tabler.Tabler
@@ -546,7 +547,7 @@ private fun MainContent(
     // the feature is disabled — in which case mediaPreviewState is always null.
     val previewBlur by androidx.compose.animation.core.animateFloatAsState(
         targetValue = if (peekEnabled && !isTv && !preferences.performanceMode && mediaPreviewState != null) 14f else 0f,
-        animationSpec = androidx.compose.animation.core.tween(durationMillis = 220),
+        animationSpec = MaterialTheme.motionScheme.fastEffectsSpec(),
         label = "previewBackdropBlur",
     )
     val previewBlurModifier =
@@ -601,10 +602,7 @@ private fun MainContent(
 
     val animatedBottomNavOffset by androidx.compose.animation.core.animateFloatAsState(
         targetValue = if (isBottomNavVisible) 0f else -bottomNavHeightPx * 2,
-        animationSpec = androidx.compose.animation.core.tween(
-            durationMillis = 300,
-            easing = androidx.compose.animation.core.FastOutSlowInEasing
-        ),
+        animationSpec = MaterialTheme.motionScheme.defaultSpatialSpec(),
         label = "bottomNavOffset"
     )
 
@@ -1017,6 +1015,22 @@ private fun PhoneContent(
     val systemNavBarBottom = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()
     var isBottomNavVisible by isBottomNavVisibleState
 
+    // Play On (cast-to-Jellyfin-session) lives at the app shell so the mini
+    // transport persists across tabs. Owned by an activity-scoped VM.
+    val playOnViewModel: com.raulshma.jellyplay.PlayOnViewModel = androidx.hilt.navigation.compose.hiltViewModel()
+    val playOnState by playOnViewModel.uiState.collectAsStateWithLifecycle()
+    var showPlayOnSheet by remember { mutableStateOf(false) }
+    val playOnContext = LocalContext.current
+    val onPlayOnClick: () -> Unit = { showPlayOnSheet = true }
+    // Current top-of-stack route — used to hide the persistent Play On mini bar
+    // while its full-screen companion is open (avoid a bar floating over its own
+    // expanded view).
+    val currentRoute = navigationState.backStacks[navigationState.topLevelRoute.value]?.lastOrNull()
+    val isPlayOnCompanionOpen = currentRoute is Route.PlayOnCompanion
+    androidx.compose.runtime.LaunchedEffect(showPlayOnSheet) {
+        if (showPlayOnSheet) playOnViewModel.startDiscovery(playOnContext)
+    }
+
     ModalNavigationDrawer(
         drawerState = drawerState,
         drawerContent = {
@@ -1050,6 +1064,14 @@ private fun PhoneContent(
                         label = "Activity Queue",
                         onClick = {
                             navigator.navigate(Route.ArrQueue)
+                            drawerScope.launch { drawerState.close() }
+                        },
+                    )
+                    DrawerItem(
+                        icon = Tabler.Outline.Calendar,
+                        label = "Upcoming",
+                        onClick = {
+                            navigator.navigate(Route.UpcomingCalendar)
                             drawerScope.launch { drawerState.close() }
                         },
                     )
@@ -1143,6 +1165,8 @@ private fun PhoneContent(
                         entryDecorator = entryDecorator,
                         onNowPlayingClick = onNowPlayingClick,
                         onAmbientClick = onAmbientClick,
+                        onPlayOnClick = onPlayOnClick,
+                        playOnStrategy = playOnViewModel.strategy,
                     )
                 }
                 if (showMiniPlayer && isExpanded) {
@@ -1236,6 +1260,44 @@ private fun PhoneContent(
                                     IntOffset.Zero
                                 }
                             },
+                    )
+                }
+                // Play On persistent transport bar — visible while a Jellyfin
+                // remote session is active and the full-screen companion is not
+                // already open. Sits above the floating nav bar.
+                if (playOnState.isConnected && !isPlayOnCompanionOpen) {
+                    com.raulshma.jellyplay.components.PlayOnMiniBar(
+                        isVisible = playOnState.isConnected,
+                        targetDeviceName = playOnState.targetDeviceName,
+                        title = playOnState.title,
+                        subtitle = playOnState.artist,
+                        isPlaying = playOnState.isPlaying,
+                        positionMs = playOnState.positionMs,
+                        durationMs = playOnState.durationMs,
+                        volume = playOnState.volume,
+                        onPlayPause = {
+                            if (playOnState.isPlaying) playOnViewModel.castPause() else playOnViewModel.castPlay()
+                        },
+                        onSeek = { playOnViewModel.castSeekTo(it) },
+                        onVolume = { playOnViewModel.setCastVolume(it) },
+                        onDisconnect = { playOnViewModel.disconnect(playOnContext) },
+                        onExpand = { navigator.navigate(Route.PlayOnCompanion) },
+                        modifier = Modifier
+                            .align(Alignment.BottomCenter)
+                            .padding(bottom = systemNavBarBottom + (if (!isExpanded) 72.dp else 8.dp)),
+                    )
+                }
+                if (showPlayOnSheet) {
+                    com.raulshma.jellyplay.components.PlayOnDeviceSheet(
+                        devices = playOnState.devices,
+                        onSelect = { device ->
+                            playOnViewModel.connectAndFling(playOnContext, device)
+                            showPlayOnSheet = false
+                        },
+                        onDismiss = {
+                            playOnViewModel.stopDiscovery()
+                            showPlayOnSheet = false
+                        },
                     )
                 }
                 if (!isExpanded) {
@@ -1378,6 +1440,8 @@ private fun MainNavDisplay(
     modifier: Modifier = Modifier,
     onNowPlayingClick: () -> Unit = {},
     onAmbientClick: () -> Unit = {},
+    onPlayOnClick: () -> Unit = {},
+    playOnStrategy: com.raulshma.jellyplay.core.data.cast.remote.JellyfinRemotePlayCastStrategy? = null,
 ) {
     val currentBackStack = navigationState.backStacks[navigationState.topLevelRoute.value] ?: return
 
@@ -1411,44 +1475,72 @@ private fun MainNavDisplay(
     val defaultSpatial = motionScheme.defaultSpatialSpec<Float>()
     val defaultSpatialOffset = motionScheme.defaultSpatialSpec<androidx.compose.ui.unit.IntOffset>()
 
-    val sharedEntryProvider = entryProvider {
-        homeSection(
-            navigator = navigator,
-            homeMode = homeMode,
-            onModeChange = onModeChange,
-            musicContent = {
-                MusicHomeScreen(
-                    onItemClick = { itemId -> navigator.navigate(Route.MediaDetail(itemId)) },
-                    onAlbumClick = { albumId -> navigator.navigate(Route.AlbumDetail(albumId)) },
-                    onArtistsClick = { navigator.navigate(Route.Artists) },
-                    onAlbumsClick = { navigator.navigate(Route.Albums) },
-                    onTracksClick = { navigator.navigate(Route.Tracks) },
-                    onGenresClick = { navigator.navigate(Route.Genres) },
-                    onPlaylistsClick = { navigator.navigate(Route.Playlists) },
-                    onNowPlayingClick = onNowPlayingClick,
-                    onAmbientClick = onAmbientClick,
+    // Remember the entry provider graph so the ~25 section builders aren't
+    // re-invoked (allocating fresh lambdas + entry objects) on every
+    // MainNavDisplay recomposition. Re-key on the values it captures.
+    val sharedEntryProvider = remember(
+        navigator,
+        homeMode,
+        onModeChange,
+        onNowPlayingClick,
+        onAmbientClick,
+        enterPip,
+        enterVideoMiniMode,
+        onLogout,
+        onPlayOnClick,
+        playOnStrategy,
+    ) {
+        entryProvider {
+            homeSection(
+                navigator = navigator,
+                homeMode = homeMode,
+                onModeChange = onModeChange,
+                onPlayOnClick = onPlayOnClick,
+                playOnStrategy = playOnStrategy,
+                musicContent = {
+                    MusicHomeScreen(
+                        onItemClick = { itemId -> navigator.navigate(Route.MediaDetail(itemId)) },
+                        onAlbumClick = { albumId -> navigator.navigate(Route.AlbumDetail(albumId)) },
+                        onArtistsClick = { navigator.navigate(Route.Artists) },
+                        onAlbumsClick = { navigator.navigate(Route.Albums) },
+                        onTracksClick = { navigator.navigate(Route.Tracks) },
+                        onGenresClick = { navigator.navigate(Route.Genres) },
+                        onPlaylistsClick = { navigator.navigate(Route.Playlists) },
+                        onNowPlayingClick = onNowPlayingClick,
+                        onAmbientClick = onAmbientClick,
+                    )
+                },
+            )
+            librarySection(navigator)
+            searchSection(navigator)
+            liveTvSection(navigator)
+            detailsSection(navigator)
+            editorSection(navigator)
+            videoPlayerSection(navigator, onEnterPip = enterPip, onEnterMiniMode = enterVideoMiniMode)
+            audioPlayerSection(navigator)
+            downloadsSection(navigator)
+            authSection(navigator) { navigator.goBack() }
+            settingsSection(navigator, onLogout) { navigator.navigate(Route.Onboarding) }
+            adminSection(navigator)
+            musicSection(navigator)
+            syncPlaySection(navigator)
+            onboardingSection { navigator.goBack() }
+            newsletterSection(navigator)
+            insightsSection(navigator)
+            requestsSection(navigator)
+            arrQueueSection(navigator)
+            calendarSection(navigator)
+            shortcutsSection(navigator)
+            // Play On companion — full-screen remote-control surface reached by
+            // tapping the persistent PlayOnMiniBar. Reuses the activity-scoped
+            // PlayOnViewModel (same instance the mini bar holds), so state stays
+            // in sync without threading the VM through params.
+            entry<Route.PlayOnCompanion> {
+                com.raulshma.jellyplay.components.PlayOnCompanionScreen(
+                    onBack = { navigator.goBack() },
                 )
-            },
-        )
-        librarySection(navigator)
-        searchSection(navigator)
-        liveTvSection(navigator)
-        detailsSection(navigator)
-        editorSection(navigator)
-        videoPlayerSection(navigator, onEnterPip = enterPip, onEnterMiniMode = enterVideoMiniMode)
-        audioPlayerSection(navigator)
-        downloadsSection(navigator)
-        authSection(navigator) { navigator.goBack() }
-        settingsSection(navigator, onLogout) { navigator.navigate(Route.Onboarding) }
-        adminSection(navigator)
-        musicSection(navigator)
-        syncPlaySection(navigator)
-        onboardingSection { navigator.goBack() }
-        newsletterSection(navigator)
-        insightsSection(navigator)
-        requestsSection(navigator)
-        arrQueueSection(navigator)
-        shortcutsSection(navigator)
+            }
+        }
     }
 
     NavDisplay(

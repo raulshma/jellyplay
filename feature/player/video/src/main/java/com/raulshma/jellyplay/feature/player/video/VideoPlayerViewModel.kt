@@ -28,6 +28,7 @@ import com.raulshma.jellyplay.core.data.repository.MediaRepository
 import com.raulshma.jellyplay.core.data.repository.OfflineRepository
 import com.raulshma.jellyplay.core.data.repository.PlaybackRepository
 import com.raulshma.jellyplay.core.data.syncplay.SyncPlayManager
+import com.raulshma.jellyplay.core.data.util.ImageUrlProvider
 import com.raulshma.jellyplay.core.model.SyncPlayRepeatMode
 import com.raulshma.jellyplay.core.model.SyncPlayShuffleMode
 import com.raulshma.jellyplay.core.datastore.UserPreferencesStore
@@ -178,12 +179,14 @@ class VideoPlayerViewModel @Inject constructor(
     @ApplicationContext private val context: Context,
     private val mediaRepository: MediaRepository,
     private val playbackRepository: PlaybackRepository,
+    private val imageUrlProvider: ImageUrlProvider,
     private val downloadRepository: DownloadRepository,
     private val offlineRepository: OfflineRepository,
     private val itemPlaybackPreferenceRepository: ItemPlaybackPreferenceRepository,
     private val preferencesStore: UserPreferencesStore,
     private val sessionManager: PlaybackSessionManager,
     private val castManager: CastManager,
+    private val jellyfinRemotePlayCastStrategy: com.raulshma.jellyplay.core.data.cast.remote.JellyfinRemotePlayCastStrategy,
     private val syncPlayManager: SyncPlayManager,
     private val okHttpClient: OkHttpClient,
     private val adaptiveBitrateManager: AdaptiveBitrateManager,
@@ -218,6 +221,13 @@ class VideoPlayerViewModel @Inject constructor(
 
     private val _videoStats = MutableStateFlow(EngineVideoStats())
     val videoStats: StateFlow<EngineVideoStats> = _videoStats.asStateFlow()
+
+    // Sleep-timer countdown, sourced directly from SleepTimerManager. Kept OUT
+    // of [uiState] (mirroring the high-frequency streams above) so a 5 s tick —
+    // or the 100 ms fade-out burst — does not copy the ~95-field [uiState] and
+    // re-invalidate the screen root. Collected only by the leaf composables
+    // that render the countdown (overflow-menu label, SleepTimerSheet).
+    val sleepTimerRemainingMs: StateFlow<Long> = sleepTimerManager.remainingMs
     // ---------------------------------------------------------------------------
 
     /**
@@ -469,8 +479,13 @@ class VideoPlayerViewModel @Inject constructor(
         getResolvedPlayMethod = { playerSessionManager.sessionState.value.playMethod },
         getMediaEngine = { playerSessionManager.engine },
         getIncognitoModeEnabled = { cachedPreferences.incognitoModeEnabled },
+        getIsLive = { _uiState.value.isLive },
         onAutoSkip = { segment -> skipSegment(segment) },
         onPlaybackEndedNoNext = {
+            // Live streams report a tiny/growing duration; the duration-based
+            // end detector would otherwise trip within seconds and dismiss
+            // the player. Suppress for live (see handlePlaybackEnded).
+            if (_uiState.value.isLive) return@PlaybackProgressReporter
             if (cinemaIntroContext != null) {
                 advanceCinemaIntro()
             } else {
@@ -681,11 +696,6 @@ class VideoPlayerViewModel @Inject constructor(
             }
         }
         launch {
-            sleepTimerManager.remainingMs.collect { remaining ->
-                _uiState.update { it.copy(sleepTimerRemainingMs = remaining) }
-            }
-        }
-        launch {
             // Pass-out protection: pause playback after N hours of no user interaction.
             var engineJob: kotlinx.coroutines.Job? = null
             playerSessionManager.engineFlow.collect { engine ->
@@ -765,6 +775,7 @@ class VideoPlayerViewModel @Inject constructor(
                             isDirectPlayForced = session.isDirectPlayForced,
                             hasAudioOverride = stored?.audioStreamIndex != null,
                             hasSubtitleOverride = stored?.subtitleStreamIndex != null,
+                            isLive = session.isLive,
                         )
                     }
                 // Re-resolve per-item/series language preference when the
@@ -880,6 +891,13 @@ class VideoPlayerViewModel @Inject constructor(
                                 var hasReachedReady = false
                                 var watchdogJob: kotlinx.coroutines.Job? = null
                                 engine.playbackState.collect { state ->
+                                    // Live streams legitimately buffer longer and
+                                    // rebuffer mid-playback; the 20s watchdog
+                                    // would otherwise surface a false "failed to
+                                    // start" error dialog for slow live tuners.
+                                    // Genuine decode errors still surface via
+                                    // errorFlow (onPlayerError) above.
+                                    if (_uiState.value.isLive) return@collect
                                     when (state) {
                                         com.raulshma.jellyplay.feature.player.video.engine.EnginePlaybackState.BUFFERING -> {
                                             if (!hasReachedReady && watchdogJob == null) {
@@ -1032,6 +1050,24 @@ class VideoPlayerViewModel @Inject constructor(
         lastSeekPositionMs = null
         lastSeekTimestamp = 0L
         trackSelectionHelper.setPendingStreams(subtitleStreamIndex, audioStreamIndex)
+
+        // "Play On" routing: if a Jellyfin remote session is connected (via the
+        // Home FAB "Play On" entry), send the video to that session instead of
+        // playing locally — mirrors official Jellyfin clients where picking a
+        // device routes subsequent plays to it. The Home "Play On" VM uses the
+        // same strategy instance directly, so this connection is independent of
+        // the video player's own CastManager cast state.
+        if (jellyfinRemotePlayCastStrategy.isConnected.value) {
+            jellyfinRemotePlayCastStrategy.loadMedia(
+                itemId = itemId,
+                startPositionMs = startPositionTicks / 10_000,
+                mediaSourceId = mediaSourceId,
+                audioStreamIndex = audioStreamIndex,
+                subtitleStreamIndex = subtitleStreamIndex,
+            )
+            return
+        }
+
         val currentItemId = playerSessionManager.sessionState.value.currentItemId
         if (currentItemId == itemId) {
             val engine = playerSessionManager.engine
@@ -1866,6 +1902,13 @@ class VideoPlayerViewModel @Inject constructor(
     }
 
     private fun handlePlaybackEnded() {
+        // Live streams are infinite: an ENDED emission (ExoPlayer stall/EOF,
+        // MPV END_FILE, VLC EndReached) must never close the player — it is
+        // almost always a transient rebuffer/drop, not true end-of-content.
+        // Suppressing here lets the engine keep its live window and the user
+        // stays in playback. Without this gate a live channel closes within
+        // seconds of starting.
+        if (_uiState.value.isLive) return
         val next = _uiState.value.nextEpisode
         if (autoplayController.shouldAutoPlayNext(next)) {
             playNextEpisode()
@@ -2088,7 +2131,7 @@ class VideoPlayerViewModel @Inject constructor(
     }
 
     fun getImageUrl(itemId: String, maxWidth: Int = 400): String =
-        playbackRepository.getImageUrl(itemId, "Primary", maxWidth)
+        imageUrlProvider.getImageUrl(itemId, maxWidth = maxWidth)
 
     // region Subtitle Manager — delegates to [subtitleManager] (extracted collaborator)
 
@@ -2500,7 +2543,6 @@ class VideoPlayerViewModel @Inject constructor(
                 reverbPreset = currentState.reverbPreset,
                 sleepTimerActive = currentState.sleepTimerActive,
                 sleepTimerEndOfEpisode = currentState.sleepTimerEndOfEpisode,
-                sleepTimerRemainingMs = currentState.sleepTimerRemainingMs,
                 sleepTimerLastUsedDurationMs = currentState.sleepTimerLastUsedDurationMs,
             )
         }
@@ -2524,7 +2566,6 @@ class VideoPlayerViewModel @Inject constructor(
         _uiState.update { it.copy(
             sleepTimerActive = true,
             sleepTimerEndOfEpisode = false,
-            sleepTimerRemainingMs = durationMs,
             sleepTimerLastUsedDurationMs = durationMs,
         ) }
     }
@@ -2541,7 +2582,6 @@ class VideoPlayerViewModel @Inject constructor(
         _uiState.update { it.copy(
             sleepTimerActive = true,
             sleepTimerEndOfEpisode = true,
-            sleepTimerRemainingMs = 0,
         ) }
     }
 
@@ -2555,7 +2595,6 @@ class VideoPlayerViewModel @Inject constructor(
         _uiState.update { it.copy(
             sleepTimerActive = false,
             sleepTimerEndOfEpisode = false,
-            sleepTimerRemainingMs = 0,
         ) }
     }
 

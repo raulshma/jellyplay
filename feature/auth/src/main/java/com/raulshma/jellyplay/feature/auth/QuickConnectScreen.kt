@@ -48,8 +48,6 @@ import com.raulshma.jellyplay.core.ui.tv.LocalTvMode
 import com.raulshma.jellyplay.core.ui.tv.rememberTvFocusState
 import com.raulshma.jellyplay.core.ui.tv.tryRequestFocus
 import com.raulshma.jellyplay.core.ui.tv.tvFocusIndicator
-import com.raulshma.jellyplay.core.designsystem.theme.AlphaEasing
-import com.raulshma.jellyplay.core.designsystem.theme.FancyTransitionEasing
 import com.raulshma.jellyplay.core.designsystem.theme.ShapeCache
 import com.raulshma.jellyplay.core.ui.components.JellyPlayScreenScaffold
 import com.raulshma.jellyplay.core.ui.components.JellyPlayLoadingIndicator
@@ -105,9 +103,9 @@ fun QuickConnectScreen(
         ) {
             AnimatedVisibility(
                 visible = contentVisible,
-                enter = fadeIn(tween(400, easing = AlphaEasing)) + slideInVertically(
+                enter = fadeIn(MaterialTheme.motionScheme.defaultEffectsSpec()) + slideInVertically(
                     initialOffsetY = { it / 20 },
-                    animationSpec = tween(400, easing = FancyTransitionEasing),
+                    animationSpec = MaterialTheme.motionScheme.defaultSpatialSpec(),
                 ),
             ) {
                 when (val state = quickConnectState) {
@@ -178,16 +176,21 @@ private fun WaitingForApprovalContent(
         if (isTv) cancelFocusRequester.tryRequestFocus("qc_cancel")
     }
 
-    val infiniteTransition = rememberInfiniteTransition(label = "qc_pulse")
-    val pulseAlpha by infiniteTransition.animateFloat(
-        initialValue = 0.6f,
-        targetValue = 1f,
-        animationSpec = infiniteRepeatable(
-            animation = tween(1500, easing = FastOutSlowInEasing),
-            repeatMode = RepeatMode.Reverse,
-        ),
-        label = "pulse_alpha",
-    )
+    val reducedMotion = com.raulshma.jellyplay.core.ui.components.LocalReducedMotion.current
+    val pulseAlpha = if (!reducedMotion) {
+        val infiniteTransition = rememberInfiniteTransition(label = "qc_pulse")
+        infiniteTransition.animateFloat(
+            initialValue = 0.6f,
+            targetValue = 1f,
+            animationSpec = infiniteRepeatable(
+                animation = tween(1500, easing = FastOutSlowInEasing),
+                repeatMode = RepeatMode.Reverse,
+            ),
+            label = "pulse_alpha",
+        ).value
+    } else {
+        1f
+    }
 
     Column(
         horizontalAlignment = Alignment.CenterHorizontally,

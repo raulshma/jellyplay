@@ -3,7 +3,6 @@ package com.raulshma.jellyplay.feature.details
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.animateFloatAsState
-import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.togetherWith
@@ -121,6 +120,7 @@ internal fun SeasonsSection(
         TvFocusableItemRow(
             items = seasons,
             key = { it.id },
+            contentType = { _, _ -> "season" },
             contentPadding = PaddingValues(horizontal = 24.dp),
             horizontalArrangement = Arrangement.spacedBy(8.dp),
         ) { index, season, focusModifier ->
@@ -164,14 +164,17 @@ internal fun SeasonsSection(
         val seasonEpisodes = selectedSeason?.let { episodes[it.id] }
         val isFetched = selectedSeason?.id?.let { fetchedSeasonIds.contains(it) } ?: false
         val isLoading = seasonEpisodes == null && selectedSeason != null && !isFetched
+        // Capture in composable scope; AnimatedContent's transitionSpec is not composable.
+        val seasonFadeIn = MaterialTheme.motionScheme.defaultEffectsSpec<Float>()
+        val seasonFadeOut = MaterialTheme.motionScheme.fastEffectsSpec<Float>()
 
         AnimatedContent(
             targetState = selectedSeasonIndex to (seasonEpisodes?.size ?: 0),
             transitionSpec = {
                 fadeIn(
-                    animationSpec = tween(400),
+                    animationSpec = seasonFadeIn,
                 ) togetherWith fadeOut(
-                    animationSpec = tween(300),
+                    animationSpec = seasonFadeOut,
                 )
             },
             label = "seasonEpisodes",
@@ -197,6 +200,7 @@ internal fun SeasonsSection(
                     TvFocusableItemRow(
                         items = currentEpisodes,
                         key = { "episode_${it.id}" },
+                        contentType = { _, _ -> "episode" },
                         contentPadding = PaddingValues(horizontal = 24.dp),
                         horizontalArrangement = Arrangement.spacedBy(16.dp),
                     ) { _, episode, focusModifier ->

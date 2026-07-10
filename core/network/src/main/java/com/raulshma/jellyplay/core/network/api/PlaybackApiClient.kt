@@ -29,7 +29,12 @@ interface PlaybackApiClient {
         positionTicks: Long,
     ): Result<Unit>
 
-    fun getStreamUrl(itemId: String, mediaSourceId: String, startTimeTicks: Long = 0): String
+    fun getStreamUrl(
+        itemId: String,
+        mediaSourceId: String,
+        startTimeTicks: Long = 0,
+        liveStreamId: String? = null,
+    ): String
 
     /**
      * Queries the Jellyfin `PlaybackInfo` endpoint to obtain the server's
@@ -74,6 +79,7 @@ interface PlaybackApiClient {
         startTimeTicks: Long = 0,
         maxBitrate: Int? = null,
         useAudioEndpoint: Boolean = false,
+        liveStreamId: String? = null,
     ): String
     fun getSubtitleDeliveryUrl(deliveryUrl: String): String
 

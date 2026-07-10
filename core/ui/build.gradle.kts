@@ -31,6 +31,17 @@ android {
     }
 }
 
+// Compose compiler stability reports + metrics. Opt-in via the same Gradle
+// property used by :app so normal builds stay fast:
+//   ./gradlew assemblePhoneRelease -PenableComposeMetrics
+// Output lands in build/compose-reports and build/compose-metrics.
+if (project.hasProperty("enableComposeMetrics")) {
+    composeCompiler {
+        metricsDestination = layout.buildDirectory.dir("compose-metrics")
+        reportsDestination = layout.buildDirectory.dir("compose-reports")
+    }
+}
+
 dependencies {
     implementation(project(":core:model"))
     implementation(project(":core:designsystem"))

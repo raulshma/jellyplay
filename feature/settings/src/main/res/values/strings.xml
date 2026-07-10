@@ -512,6 +512,7 @@
 
     <!-- LicensesScreen.kt -->
     <string name="settings_open_source_licenses_title">Open Source Licenses</string>
+    <string name="settings_license_text_unavailable">Full license text is not available for this library.</string>
 
     <!-- ExperimentalSettingsScreen.kt -->
     <string name="settings_experimental_title">Experimental</string>

@@ -82,6 +82,17 @@ class ResilientRadarrApiClient @Inject constructor(
     override suspend fun findMovieIdByTmdb(baseUrl: String, apiKey: String, tmdbId: Int): Result<Int?> =
         req { delegate.findMovieIdByTmdb(baseUrl, apiKey, tmdbId) }
 
+    override suspend fun getMovieForTmdb(baseUrl: String, apiKey: String, tmdbId: Int): Result<RadarrMovieInfo?> =
+        req { delegate.getMovieForTmdb(baseUrl, apiKey, tmdbId) }
+
+    override suspend fun deleteMovieFile(baseUrl: String, apiKey: String, movieFileId: Int): Result<Unit> =
+        req { delegate.deleteMovieFile(baseUrl, apiKey, movieFileId) }
+
+    override suspend fun monitorMovies(
+        baseUrl: String, apiKey: String, movieIds: List<Int>, monitored: Boolean,
+    ): Result<Unit> =
+        req { delegate.monitorMovies(baseUrl, apiKey, movieIds, monitored) }
+
     override suspend fun testConnection(baseUrl: String, apiKey: String): Result<Unit> =
         req { delegate.testConnection(baseUrl, apiKey) }
 

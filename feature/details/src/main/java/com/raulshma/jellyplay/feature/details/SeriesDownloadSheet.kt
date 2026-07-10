@@ -2,9 +2,7 @@ package com.raulshma.jellyplay.feature.details
 
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.animateContentSize
-import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.animateFloatAsState
-import androidx.compose.animation.core.spring
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -207,11 +205,15 @@ fun SeriesDownloadSheet(
                 val seasonEpisodes = episodes[season.id].orEmpty()
                 val isLoadingThis = season.id in loadingSeasons
 
-                val downloadedInSeason = seasonEpisodes.count { it.id in downloadedEpisodeIds }
-                val selectableInSeason = seasonEpisodes
-                    .map { it.id }
-                    .filter { it !in downloadedEpisodeIds }
-                    .toSet()
+                val downloadedInSeason = remember(seasonEpisodes, downloadedEpisodeIds) {
+                    seasonEpisodes.count { it.id in downloadedEpisodeIds }
+                }
+                val selectableInSeason = remember(seasonEpisodes, downloadedEpisodeIds) {
+                    seasonEpisodes
+                        .map { it.id }
+                        .filter { it !in downloadedEpisodeIds }
+                        .toSet()
+                }
                 val selectedInSeason = selectedEpisodeIds[season.id].orEmpty()
 
                 val triState = when {
@@ -225,10 +227,7 @@ fun SeriesDownloadSheet(
                 val seasonBgColor by animateColorAsState(
                     targetValue = if (isExpanded) MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.3f)
                     else MaterialTheme.colorScheme.surfaceContainer,
-                    animationSpec = spring(
-                        dampingRatio = Spring.DampingRatioMediumBouncy,
-                        stiffness = Spring.StiffnessMedium,
-                    ),
+                    animationSpec = MaterialTheme.motionScheme.defaultEffectsSpec(),
                     label = "seasonBg",
                 )
 
@@ -345,10 +344,7 @@ fun SeriesDownloadSheet(
                                             isEpisodeSelected -> MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.5f)
                                             else -> Color.Transparent
                                         },
-                                        animationSpec = spring(
-                                            dampingRatio = Spring.DampingRatioMediumBouncy,
-                                            stiffness = Spring.StiffnessMedium,
-                                        ),
+                                        animationSpec = MaterialTheme.motionScheme.defaultEffectsSpec(),
                                         label = "epBg",
                                     )
 

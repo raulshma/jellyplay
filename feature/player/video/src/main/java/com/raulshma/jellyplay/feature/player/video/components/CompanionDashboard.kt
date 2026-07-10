@@ -3,9 +3,7 @@ package com.raulshma.jellyplay.feature.player.video.components
 import androidx.compose.animation.AnimatedVisibility
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.animation.animateColorAsState
-import androidx.compose.animation.core.LinearOutSlowInEasing
 import androidx.compose.animation.core.animateFloatAsState
-import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -96,12 +94,12 @@ fun CompanionDashboard(
 
     val animatedBgStart by animateColorAsState(
         targetValue = dominantColor,
-        animationSpec = tween(1000, easing = LinearOutSlowInEasing),
+        animationSpec = MaterialTheme.motionScheme.slowEffectsSpec(),
         label = "bgStart"
     )
     val animatedBgEnd by animateColorAsState(
         targetValue = darkMutedColor,
-        animationSpec = tween(1200, easing = LinearOutSlowInEasing),
+        animationSpec = MaterialTheme.motionScheme.slowEffectsSpec(),
         label = "bgEnd"
     )
 
@@ -681,7 +679,7 @@ fun SubtitlesTabContent(
                 ) {
                     // Keyed by index — stable per line so slot identity survives any
                     // re-emission of the same lyrics list (e.g. a parent recomposition).
-                    itemsIndexed(lyricsLines, key = { idx, _ -> "lyric_$idx" }) { index, line ->
+                    itemsIndexed(lyricsLines, key = { idx, _ -> "lyric_$idx" }, contentType = { _, _ -> "lyric" }) { index, line ->
                         val isActive = index == activeLineIndex
                         val textColor by animateColorAsState(
                             targetValue = if (isActive) MaterialTheme.colorScheme.primary else Color.White.copy(alpha = 0.7f),

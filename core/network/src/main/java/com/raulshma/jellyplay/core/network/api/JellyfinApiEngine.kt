@@ -59,13 +59,14 @@ class JellyfinApiEngine @Inject constructor(
     suspend fun <T> apiResult(block: suspend () -> T): Result<T> =
         runCatching { withContext(Dispatchers.IO) { block() } }
             .recoverCatching {
+                // CancellationException must propagate so structured concurrency
+                // (parent coroutine cancellation) is not masked as a Result.failure.
+                // runCatching captures it (Kotlin stdlib behaviour); rethrow here before
+                // wrapping into ApiException, mirroring SeerrApiClientImpl.
+                if (it is kotlinx.coroutines.CancellationException) throw it
                 // Wrap into a typed ApiException carrying a pre-classified retryable flag.
                 // The friendly message is still produced by JellyfinErrorMapper so existing
                 // consumers reading `.message` see the same user-facing text.
-                // Note: CancellationException thrown by `block` is captured by the outer
-                // runCatching (Kotlin stdlib behaviour) and reaches here as a failure; we
-                // preserve it on the result so RetryPolicy.isRetryable() returns false and
-                // the caller can observe the cancellation rather than silently retrying.
                 throw ApiException.fromJellyfin(it)
             }
 

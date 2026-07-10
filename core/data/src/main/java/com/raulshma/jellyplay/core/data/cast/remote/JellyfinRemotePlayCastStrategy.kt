@@ -4,6 +4,7 @@ import android.content.Context
 import android.util.Log
 import com.raulshma.jellyplay.core.data.cast.CastDevice
 import com.raulshma.jellyplay.core.data.cast.CastStrategy
+import com.raulshma.jellyplay.core.data.util.ImageUrlProvider
 import com.raulshma.jellyplay.core.datastore.UserPreferencesStore
 import com.raulshma.jellyplay.core.model.SessionInfo
 import com.raulshma.jellyplay.core.network.api.AdminApiClient
@@ -14,10 +15,14 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.firstOrNull
+import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
+import kotlinx.serialization.json.Json
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -26,6 +31,8 @@ class JellyfinRemotePlayCastStrategy @Inject constructor(
     @ApplicationContext private val appContext: Context,
     private val adminApiClient: AdminApiClient,
     private val preferencesStore: UserPreferencesStore,
+    private val webSocketClient: com.raulshma.jellyplay.core.data.syncplay.JellyfinWebSocketClient,
+    private val imageUrlProvider: ImageUrlProvider,
 ) : CastStrategy {
 
     companion object {
@@ -33,7 +40,22 @@ class JellyfinRemotePlayCastStrategy @Inject constructor(
         private const val STRATEGY_NAME = "jellyfin"
     }
 
+    /**
+     * Settings.Secure.ANDROID_ID — the device id the Jellyfin SDK defaulted to before
+     * [com.raulshma.jellyplay.core.network.di.NetworkModule.provideJellyfin] pinned the SDK
+     * id to the DataStore UUID. Read to match a possibly still-live server session.
+     */
+    @android.annotation.SuppressLint("HardwareIds")
+    private fun legacyAndroidId(): String =
+        android.provider.Settings.Secure.getString(
+            appContext.contentResolver,
+            android.provider.Settings.Secure.ANDROID_ID,
+        ) ?: ""
+
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
+
+    /** Lenient decoder for the WebSocket `Sessions` push payloads. */
+    private val sessionsJson = Json { ignoreUnknownKeys = true; isLenient = true }
 
     private val _isAvailable = MutableStateFlow(false)
     override val isAvailable: StateFlow<Boolean> = _isAvailable.asStateFlow()
@@ -60,11 +82,43 @@ class JellyfinRemotePlayCastStrategy @Inject constructor(
     private val _volume = MutableStateFlow(1f)
     val volume: StateFlow<Float> = _volume.asStateFlow()
 
+    // Now-playing metadata from the connected remote session (filled by
+    // [refreshPlaybackState]). Empty until the remote session reports something.
+    private val _nowPlayingTitle = MutableStateFlow("")
+    val nowPlayingTitle: StateFlow<String> = _nowPlayingTitle.asStateFlow()
+
+    private val _nowPlayingSubtitle = MutableStateFlow("")
+    val nowPlayingSubtitle: StateFlow<String> = _nowPlayingSubtitle.asStateFlow()
+
+    // Item id of the remote session's now-playing item. Drives the artwork URL
+    // exposed below — the remote's poster is distinct from the local now-playing
+    // art, so we must resolve it from the session, not the local player.
+    private val _nowPlayingItemId = MutableStateFlow("")
+    val nowPlayingItemId: StateFlow<String> = _nowPlayingItemId.asStateFlow()
+
+    // Poster URL derived from [nowPlayingItemId]. Blank when the remote reports
+    // no now-playing item; consumers fall back to local now-playing art.
+    val nowPlayingArtworkUrl: StateFlow<String> = _nowPlayingItemId
+        .map { id -> if (id.isNotBlank()) imageUrlProvider.getImageUrl(id) else "" }
+        .stateIn(scope, SharingStarted.Eagerly, "")
+
+    /** Display name of the session we are currently connected to (for UI). */
+    private val _targetName = MutableStateFlow<String?>(null)
+    val targetName: StateFlow<String?> = _targetName.asStateFlow()
+
     @Volatile
     private var connectedSessionId: String? = null
 
     private var discoveryJob: Job? = null
     private var statusPollingJob: Job? = null
+
+    /**
+     * Subscribes to the shared [webSocketClient]'s `Sessions` push (server emits
+     * session state changes) and mirrors them onto our transport flows. This is
+     * jellyfin-web's SessionPlayer transport — real-time, no REST polling. Also
+     * auto-disconnects when the connected session disappears from the list.
+     */
+    private var sessionsObserverJob: Job? = null
 
     @Volatile
     private var discoveryActive = false
@@ -88,13 +142,22 @@ class JellyfinRemotePlayCastStrategy @Inject constructor(
         discoveryJob = scope.launch {
             while (discoveryActive) {
                 try {
-                    val ownDeviceId = preferencesStore.ensureDeviceId()
-                    val sessionsResult = adminApiClient.getSessions()
-                    if (sessionsResult.isSuccess) {
-                        val sessions = sessionsResult.getOrThrow()
-                        val controllableSessions = sessions.filter {
-                            it.supportsRemoteControl && it.deviceId.isNotBlank() && !it.deviceId.equals(ownDeviceId, ignoreCase = true)
-                        }
+                        val ownDeviceId = preferencesStore.ensureDeviceId()
+                        val sessionsResult = adminApiClient.getSessions()
+                        if (sessionsResult.isSuccess) {
+                            val sessions = sessionsResult.getOrThrow()
+                            // The legacy device id is Settings.Secure.ANDROID_ID, which the
+                            // Jellyfin SDK used as its default device id before we pinned it to
+                            // the DataStore UUID. Sessions registered under it may still be live
+                            // server-side and must be recognized as self too, or the app would
+                            // list its own (stale) session as a cast target.
+                            val legacyDeviceId = legacyAndroidId()
+                            val controllableSessions = sessions.filter {
+                                it.supportsRemoteControl &&
+                                    it.deviceId.isNotBlank() &&
+                                    !it.deviceId.equals(ownDeviceId, ignoreCase = true) &&
+                                    !it.deviceId.equals(legacyDeviceId, ignoreCase = true)
+                            }
                         _discoveredDevices.value = controllableSessions.map { session ->
                             val displayName = buildString {
                                 val devName = session.deviceName.ifBlank { session.client }
@@ -132,8 +195,14 @@ class JellyfinRemotePlayCastStrategy @Inject constructor(
         val session = device.tag as? SessionInfo ?: return
         _isConnecting.value = true
         connectedSessionId = session.id
+        _targetName.value = device.name
         _isConnected.value = true
         _isConnecting.value = false
+
+        // Real-time sync: subscribe to the server's `Sessions` WebSocket push so
+        // transport state (position / play-pause / now-playing) reflects the
+        // remote client without REST polling. Mirrors jellyfin-web SessionPlayer.
+        startSessionsObserver()
 
         Log.i(TAG, "Connected to Jellyfin remote session: ${session.userName} (${session.client})")
     }
@@ -141,13 +210,50 @@ class JellyfinRemotePlayCastStrategy @Inject constructor(
     override fun disconnect(context: Context) {
         statusPollingJob?.cancel()
         statusPollingJob = null
+        sessionsObserverJob?.cancel()
+        sessionsObserverJob = null
         connectedSessionId = null
+        _targetName.value = null
         _isConnected.value = false
         _isConnecting.value = false
         _positionMs.value = 0L
         _durationMs.value = 0L
         _isPlaying.value = false
+        _nowPlayingTitle.value = ""
+        _nowPlayingSubtitle.value = ""
+        _nowPlayingItemId.value = ""
         Log.i(TAG, "Disconnected from Jellyfin remote session")
+    }
+
+    /**
+     * Subscribes to [webSocketClient] `Sessions` events and applies the matching
+     * session's state to the transport flows. Auto-disconnects if the connected
+     * session vanishes (mirrors jellyfin-web SessionPlayer's auto-default-to-
+     * local behaviour).
+     */
+    private fun startSessionsObserver() {
+        sessionsObserverJob?.cancel()
+        sessionsObserverJob = scope.launch {
+            webSocketClient.events.collect { event ->
+                if (event.type != "Sessions") return@collect
+                val sessionId = connectedSessionId ?: return@collect
+                try {
+                    val sessions = sessionsJson.decodeFromString<
+                        List<com.raulshma.jellyplay.core.model.SessionInfo>>(
+                        event.data.toString(),
+                    )
+                    val current = sessions.firstOrNull { it.id == sessionId }
+                    if (current != null) {
+                        applySessionState(current)
+                    } else {
+                        // Session gone (other client closed / device offline).
+                        disconnect(appContext)
+                    }
+                } catch (e: Exception) {
+                    Log.w(TAG, "Failed to parse Sessions push", e)
+                }
+            }
+        }
     }
 
     suspend fun refreshPlaybackState() {
@@ -158,13 +264,7 @@ class JellyfinRemotePlayCastStrategy @Inject constructor(
                 val sessions = sessionsResult.getOrThrow()
                 val currentSession = sessions.find { it.id == sessionId }
                 if (currentSession != null) {
-                    val playState = currentSession.playState
-                    val nowPlaying = currentSession.nowPlayingItem
-                    
-                    _positionMs.value = (playState?.positionTicks ?: 0L) / 10000L
-                    _durationMs.value = (nowPlaying?.runTimeTicks ?: 0L) / 10000L
-                    _isPlaying.value = if (nowPlaying != null) !(playState?.isPaused ?: true) else false
-                    _volume.value = (playState?.volumeLevel ?: 100) / 100f
+                    applySessionState(currentSession)
                 } else {
                     disconnect(appContext)
                 }
@@ -172,6 +272,23 @@ class JellyfinRemotePlayCastStrategy @Inject constructor(
         } catch (e: Exception) {
             Log.e(TAG, "Error refreshing playback state", e)
         }
+    }
+
+    /**
+     * Applies a [SessionInfo]'s play state + now-playing metadata to the
+     * transport flows. Shared by the WebSocket push ([startSessionsObserver])
+     * and the REST fallback ([refreshPlaybackState]).
+     */
+    private fun applySessionState(session: SessionInfo) {
+        val playState = session.playState
+        val nowPlaying = session.nowPlayingItem
+        _positionMs.value = (playState?.positionTicks ?: 0L) / 10000L
+        _durationMs.value = (nowPlaying?.runTimeTicks ?: 0L) / 10000L
+        _isPlaying.value = if (nowPlaying != null) !(playState?.isPaused ?: true) else false
+        _volume.value = (playState?.volumeLevel ?: 100) / 100f
+        _nowPlayingTitle.value = nowPlaying?.name.orEmpty()
+        _nowPlayingSubtitle.value = nowPlaying?.seriesName.orEmpty()
+        _nowPlayingItemId.value = nowPlaying?.id.orEmpty()
     }
 
     fun play() {
@@ -210,6 +327,44 @@ class JellyfinRemotePlayCastStrategy @Inject constructor(
             )
             _volume.value = volume
         }
+    }
+
+    /**
+     * Jump to the next item in the connected session's play queue. Mapped by
+     * serial name inside [AdminApiClient.sendPlaystateCommand] (same enum path
+     * the local remote-control dispatchers use for PlaystateCommand.NextTrack).
+     */
+    fun nextTrack() {
+        val sessionId = connectedSessionId ?: return
+        scope.launch {
+            adminApiClient.sendPlaystateCommand(sessionId, "NextTrack")
+        }
+    }
+
+    /**
+     * Jump to the previous item in the connected session's play queue. See
+     * [nextTrack] — same playstate-command plumbing.
+     */
+    fun previousTrack() {
+        val sessionId = connectedSessionId ?: return
+        scope.launch {
+            adminApiClient.sendPlaystateCommand(sessionId, "PreviousTrack")
+        }
+    }
+
+    /**
+     * Send a `Stop` playstate command then disconnect locally. Jellyfin's Stop
+     * ends playback on the controlling client; mirroring the local dispatchers
+     * (see [com.raulshma.jellyplay.core.data.remote.AudioRemoteControlDispatcher]
+     * / VideoRemoteControlDispatcher) we treat Stop as terminal and clear our
+     * remote-session bookkeeping so local playback delegation resumes.
+     */
+    fun stop(context: Context) {
+        val sessionId = connectedSessionId ?: return
+        scope.launch {
+            adminApiClient.sendPlaystateCommand(sessionId, "Stop")
+        }
+        disconnect(context)
     }
 
     fun loadMedia(

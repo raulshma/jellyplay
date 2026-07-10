@@ -1,11 +1,9 @@
 package com.raulshma.jellyplay.navigation
 
 import androidx.activity.compose.BackHandler
-import androidx.compose.animation.core.Spring
 import androidx.compose.runtime.Stable
 import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.animateFloatAsState
-import androidx.compose.animation.core.spring
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.focusGroup
@@ -73,7 +71,6 @@ import com.raulshma.jellyplay.core.ui.components.focusIndicator
 
 private val CollapsedDrawerWidth = 72.dp
 private val ExpandedDrawerWidth = 240.dp
-private val DrawerAnimationStiffness = Spring.StiffnessMedium
 private val DrawerIconSize = 24.dp
 private val DrawerItemSpacing = 4.dp
 private const val ExitConfirmationTimeoutMs = 2000L
@@ -233,7 +230,7 @@ fun TvNavigationDrawer(
     val isClosed = drawerState.currentValue == DrawerValue.Closed
     val animatedDrawerWidth by animateDpAsState(
         targetValue = if (isClosed) CollapsedDrawerWidth else ExpandedDrawerWidth,
-        animationSpec = spring(stiffness = DrawerAnimationStiffness),
+        animationSpec = MaterialTheme.motionScheme.defaultSpatialSpec(),
         label = "drawerWidth",
     )
 
@@ -380,13 +377,13 @@ private fun TvDrawerRow(
             selected -> 1.1f
             else -> 1.0f
         },
-        animationSpec = spring(stiffness = DrawerAnimationStiffness),
+        animationSpec = MaterialTheme.motionScheme.defaultSpatialSpec(),
         label = "iconScale",
     )
 
     val rowScale by animateFloatAsState(
         targetValue = if (isFocused) 1.05f else 1.0f,
-        animationSpec = spring(stiffness = DrawerAnimationStiffness),
+        animationSpec = MaterialTheme.motionScheme.defaultSpatialSpec(),
         label = "rowScale",
     )
 

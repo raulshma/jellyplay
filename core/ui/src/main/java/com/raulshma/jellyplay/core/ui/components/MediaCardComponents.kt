@@ -1,8 +1,6 @@
 package com.raulshma.jellyplay.core.ui.components
 
-import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.animateFloatAsState
-import androidx.compose.animation.core.spring
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -86,12 +84,17 @@ fun rememberDominantColor(
     itemId: String? = null
 ): Color {
     val context = LocalContext.current
+    val performanceMode = LocalPerformanceMode.current
     val cacheKey = itemId ?: imageUrl
     var color by remember(cacheKey) { mutableStateOf(cacheKey?.let { dominantColorCache.get(it) } ?: fallback) }
     val loader = coil3.SingletonImageLoader.get(context)
 
-    LaunchedEffect(imageUrl) {
-        if (imageUrl.isNullOrBlank()) return@LaunchedEffect
+    // Skip Palette extraction entirely in performance mode: every unseen poster
+    // otherwise launches a Coil request + Palette.generate() on Dispatchers.Default,
+    // competing with the visible image decodes for CPU during scroll. Cached
+    // values (from a prior non-perf-mode session) are still returned.
+    LaunchedEffect(imageUrl, performanceMode) {
+        if (performanceMode || imageUrl.isNullOrBlank()) return@LaunchedEffect
         if (cacheKey != null) {
             dominantColorCache.get(cacheKey)?.let {
                 color = it
@@ -104,7 +107,14 @@ fun rememberDominantColor(
                     .data(imageUrl)
                     .size(CoilSize(64, 64))
                     .allowHardware(false)
-                    .memoryCacheKey(imageUrl)
+                    // Isolate the Palette decode in its own cache slot. Sharing
+                    // the display URL's key made this 64px result evict the
+                    // larger bitmap a live AsyncImage painter was still drawing;
+                    // the BitmapPool then recycled it, crashing onDraw with
+                    // "Canvas: trying to use a recycled bitmap". Same fix class
+                    // as WidgetImageLoader (memoryCachePolicy DISABLED) but we
+                    // keep Palette results cached for scroll speed.
+                    .memoryCacheKey("${imageUrl}#palette-dominant")
                     .build()
                 val result = loader.execute(request)
                 if (result is SuccessResult) {
@@ -276,15 +286,16 @@ fun PosterCard(
     val uiEnvironment = LocalJellyPlayUi.current
     val cardPrefs = LocalCardDisplayPreferences.current
     val isTv = uiEnvironment.isTv
+    // Performance mode: per-card graphicsLayer shadows are an offscreen pass,
+    // and cards render by the hundred across Home/Library rows — the single
+    // most expensive GPU work in card grids on low-end devices. Drop it.
+    val performanceMode = LocalPerformanceMode.current
     val focusInteraction = rememberJellyFocusableInteraction()
     val interactionSource = remember { MutableInteractionSource() }
     val isPressed by interactionSource.collectIsPressedAsState()
     val baseScale by animateFloatAsState(
         targetValue = if (isPressed) 0.95f else 1f,
-        animationSpec = spring(
-            dampingRatio = Spring.DampingRatioMediumBouncy,
-            stiffness = Spring.StiffnessMedium,
-        ),
+        animationSpec = MaterialTheme.motionScheme.defaultSpatialSpec(),
         label = "cardScale",
     )
     val scale = baseScale * focusInteraction.scale
@@ -356,7 +367,7 @@ fun PosterCard(
                 .graphicsLayer {
                     scaleX = scale
                     scaleY = scale
-                    shadowElevation = elevation.toPx()
+                    shadowElevation = if (performanceMode) 0f else elevation.toPx()
                     clip = clipToShape
                     shape = cardShape
                 }

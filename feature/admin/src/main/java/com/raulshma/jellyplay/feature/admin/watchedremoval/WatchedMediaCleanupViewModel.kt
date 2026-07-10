@@ -40,8 +40,8 @@ data class WatchedMediaState(
     val scanResults: List<MediaItemStub>
         get() = when (sortOption) {
             MediaSortOption.DEFAULT -> rawScanResults
-            MediaSortOption.NAME_ASC -> rawScanResults.sortedBy { it.name.lowercase() }
-            MediaSortOption.NAME_DESC -> rawScanResults.sortedByDescending { it.name.lowercase() }
+            MediaSortOption.NAME_ASC -> rawScanResults.sortedWith(compareBy(String.CASE_INSENSITIVE_ORDER) { it.name })
+            MediaSortOption.NAME_DESC -> rawScanResults.sortedWith(compareByDescending(String.CASE_INSENSITIVE_ORDER) { it.name })
             MediaSortOption.SIZE_DESC -> rawScanResults.sortedByDescending { it.sortSizeBytes }
             MediaSortOption.SIZE_ASC -> rawScanResults.sortedBy { it.sortSizeBytes }
             MediaSortOption.TYPE -> rawScanResults.sortedBy { it.type }

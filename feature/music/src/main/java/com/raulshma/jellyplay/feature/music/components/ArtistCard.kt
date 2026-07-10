@@ -2,8 +2,6 @@ package com.raulshma.jellyplay.feature.music.components
 
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.animateFloatAsState
-import androidx.compose.animation.core.spring
-import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.infiniteRepeatable
@@ -44,8 +42,8 @@ import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import com.raulshma.jellyplay.core.designsystem.theme.AlphaEasing
 import com.raulshma.jellyplay.core.ui.animation.AnimationTokens
+import com.raulshma.jellyplay.core.ui.components.LocalReducedMotion
 import com.raulshma.jellyplay.core.ui.image.MediaImage
 import com.raulshma.jellyplay.core.designsystem.theme.FancyTransitionEasing
 
@@ -58,6 +56,7 @@ fun ArtistCard(
     blurHash: String? = null,
 ) {
     val isTv = LocalTvMode.current
+    val reducedMotion = LocalReducedMotion.current
     val tvFocusState = rememberTvFocusState(focusedScale = 1.1f)
     val interactionSource = remember { MutableInteractionSource() }
     val isPressed by interactionSource.collectIsPressedAsState()
@@ -65,56 +64,56 @@ fun ArtistCard(
     // Expressive spring-based scale animation
     val baseScale by animateFloatAsState(
         targetValue = if (isPressed) AnimationTokens.CardPressScale else 1f,
-        animationSpec = spring(
-            dampingRatio = Spring.DampingRatioMediumBouncy,
-            stiffness = Spring.StiffnessMedium
-        ),
+        animationSpec = MaterialTheme.motionScheme.defaultSpatialSpec(),
         label = "artistCardScale",
     )
     val scale by animateFloatAsState(
         targetValue = baseScale * tvFocusState.scale,
-        animationSpec = spring(
-            dampingRatio = Spring.DampingRatioMediumBouncy,
-            stiffness = Spring.StiffnessMedium
-        ),
+        animationSpec = MaterialTheme.motionScheme.defaultSpatialSpec(),
         label = "artistCardCombinedScale",
     )
     val brightnessOverlay by animateFloatAsState(
         targetValue = if (isPressed) 0.08f else 0f,
-        animationSpec = tween(150, easing = AlphaEasing),
+        animationSpec = MaterialTheme.motionScheme.fastEffectsSpec(),
         label = "artistCardBrightness",
     )
-    
+
     // Shape morphing animation for the ring
     val ringMorphScale by animateFloatAsState(
         targetValue = if (isPressed) 1.05f else 1f,
-        animationSpec = spring(
-            dampingRatio = Spring.DampingRatioLowBouncy,
-            stiffness = Spring.StiffnessHigh
-        ),
+        animationSpec = MaterialTheme.motionScheme.fastSpatialSpec(),
         label = "ringMorph"
     )
 
-    val ringTransition = rememberInfiniteTransition(label = "artist_ring")
-    val ringRotation by ringTransition.animateFloat(
-        initialValue = 0f,
-        targetValue = if (isPressed) 360f else 0f,
-        animationSpec = infiniteRepeatable(
-            animation = tween(6000, easing = LinearEasing),
-            repeatMode = RepeatMode.Restart
-        ),
-        label = "rotation"
-    )
-
-    val ringPulse by ringTransition.animateFloat(
-        initialValue = 2.dp.value,
-        targetValue = 3.5.dp.value,
-        animationSpec = infiniteRepeatable(
-            animation = tween(2000, easing = FancyTransitionEasing),
-            repeatMode = RepeatMode.Reverse
-        ),
-        label = "pulse"
-    )
+    // The ring runs two infinite animations (rotation + pulse). On low-end
+    // devices these drive a continuous redraw coroutine per card, and artist
+    // grids show dozens at once — collapse to static values in performance mode.
+    val ringRotation: Float
+    val ringPulse: Float
+    if (!reducedMotion) {
+        val ringTransition = rememberInfiniteTransition(label = "artist_ring")
+        ringRotation = ringTransition.animateFloat(
+            initialValue = 0f,
+            targetValue = if (isPressed) 360f else 0f,
+            animationSpec = infiniteRepeatable(
+                animation = tween(6000, easing = LinearEasing),
+                repeatMode = RepeatMode.Restart
+            ),
+            label = "rotation"
+        ).value
+        ringPulse = ringTransition.animateFloat(
+            initialValue = 2.dp.value,
+            targetValue = 3.5.dp.value,
+            animationSpec = infiniteRepeatable(
+                animation = tween(2000, easing = FancyTransitionEasing),
+                repeatMode = RepeatMode.Reverse
+            ),
+            label = "pulse"
+        ).value
+    } else {
+        ringRotation = if (isPressed) 180f else 0f
+        ringPulse = 2.dp.value
+    }
 
     Column(
         modifier = modifier

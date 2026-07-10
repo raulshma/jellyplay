@@ -1,8 +1,6 @@
 package com.raulshma.jellyplay.core.ui.animation
 
 import androidx.compose.animation.ContentTransform
-import androidx.compose.animation.core.Spring
-import androidx.compose.animation.core.spring
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.slideInHorizontally
@@ -38,55 +36,32 @@ inline fun <T> lessSpringySpec() = MaterialTheme.motionScheme.defaultSpatialSpec
 @Composable
 inline fun <T> springySpec() = MaterialTheme.motionScheme.slowSpatialSpec<T>()
 
+@Composable
 fun fancySlideTransition(
     isForward: Boolean,
     screenWidthPx: Int,
 ): ContentTransform = if (isForward) {
     slideInHorizontally(
-        animationSpec = spring(
-            dampingRatio = Spring.DampingRatioLowBouncy,
-            stiffness = Spring.StiffnessMediumLow,
-        ),
+        animationSpec = MaterialTheme.motionScheme.defaultSpatialSpec(),
         initialOffsetX = { screenWidthPx }
     ) + fadeIn(
-        spring(
-            dampingRatio = Spring.DampingRatioNoBouncy,
-            stiffness = Spring.StiffnessMedium,
-        )
+        MaterialTheme.motionScheme.defaultEffectsSpec()
     ) togetherWith slideOutHorizontally(
-        animationSpec = spring(
-            dampingRatio = Spring.DampingRatioLowBouncy,
-            stiffness = Spring.StiffnessMediumLow,
-        ),
+        animationSpec = MaterialTheme.motionScheme.defaultSpatialSpec(),
         targetOffsetX = { -screenWidthPx }
     ) + fadeOut(
-        spring(
-            dampingRatio = Spring.DampingRatioNoBouncy,
-            stiffness = Spring.StiffnessMedium,
-        )
+        MaterialTheme.motionScheme.defaultEffectsSpec()
     )
 } else {
     slideInHorizontally(
-        animationSpec = spring(
-            dampingRatio = Spring.DampingRatioLowBouncy,
-            stiffness = Spring.StiffnessMediumLow,
-        ),
+        animationSpec = MaterialTheme.motionScheme.defaultSpatialSpec(),
         initialOffsetX = { -screenWidthPx }
     ) + fadeIn(
-        spring(
-            dampingRatio = Spring.DampingRatioNoBouncy,
-            stiffness = Spring.StiffnessMedium,
-        )
+        MaterialTheme.motionScheme.defaultEffectsSpec()
     ) togetherWith slideOutHorizontally(
-        animationSpec = spring(
-            dampingRatio = Spring.DampingRatioLowBouncy,
-            stiffness = Spring.StiffnessMediumLow,
-        ),
+        animationSpec = MaterialTheme.motionScheme.defaultSpatialSpec(),
         targetOffsetX = { screenWidthPx }
     ) + fadeOut(
-        spring(
-            dampingRatio = Spring.DampingRatioNoBouncy,
-            stiffness = Spring.StiffnessMedium,
-        )
+        MaterialTheme.motionScheme.defaultEffectsSpec()
     )
 }

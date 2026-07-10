@@ -32,12 +32,28 @@ data class PlaybackRequest(
     val minBufferMs: Int = 15_000,
     val maxBufferMs: Int = 50_000,
     /**
+     * Optional per-track ReplayGain value (dB) sourced from the media
+     * item's `normalizationGain` (Jellyfin). Consumed by engines that
+     * support TRACK/ALBUM loudness normalization via an in-sink
+     * `AudioProcessor` (currently [ExoPlayerEngine]). `null` means the
+     * server provided no gain; TRACK/ALBUM then behave as a no-op.
+     */
+    val normalizationGain: Float? = null,
+    /**
      * Optional MIME type hint for the primary media item. When set, ExoPlayer
      * uses it in preference to URI-extension inference to pick the extractor,
      * which is essential for downloaded files whose on-disk extension does not
      * match their actual container (e.g. an MKV stream saved as `.mp4`).
      */
     val mimeType: String? = null,
+    /**
+     * `true` for Live TV / IPTV channels. Engines use this to apply live-aware
+     * configuration (ExoPlayer: `MediaItem.setLiveConfiguration` + a MIME hint
+     * so the HLS/MPEG-TS extractor is selected for the extension-less stream
+     * URL; no `seekTo` to a resume position). See
+     * [com.raulshma.jellyplay.feature.player.video.PlayerSessionManager].
+     */
+    val isLive: Boolean = false,
 )
 
 data class SubtitleSource(

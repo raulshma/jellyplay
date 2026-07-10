@@ -1,7 +1,6 @@
 package com.raulshma.jellyplay.feature.player.audio.components
 
 import androidx.compose.animation.core.animateFloatAsState
-import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
@@ -33,6 +32,7 @@ import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.drawscope.clipRect
 import androidx.compose.ui.draw.drawWithCache
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -76,14 +76,18 @@ fun WaveformSeekBar(
         }
     }
 
-    val targetAmplitudeRatio = if (isAnimating) 1f else 0f
+    // Keep the wave's vertical shape (amplitude) at full whether playing or
+    // paused; only the horizontal motion (phase) freezes on pause. Previously
+    // the amplitude collapsed to 0 on pause, flattening the wave into a line.
     val currentAmplitudeRatio by animateFloatAsState(
-        targetValue = targetAmplitudeRatio,
-        animationSpec = tween(durationMillis = 500),
+        targetValue = 1f,
+        animationSpec = MaterialTheme.motionScheme.slowSpatialSpec(),
         label = "amplitudeRatio",
     )
 
-    val currentPhase = if (isAnimating) phaseShift else 0f
+    // Pause freezes the wave at its last phase rather than snapping back to 0,
+    // so the paused waveform keeps the shape the user was just hearing.
+    val currentPhase = phaseShift
 
     val density = LocalDensity.current
     val strokeWidthPx = remember(density) { with(density) { 4.dp.toPx() } }
@@ -143,8 +147,13 @@ fun WaveformSeekBar(
                     val wavePath = Path()
 
                     onDrawBehind {
+                        // While dragging, follow the finger immediately — the reported
+                        // playback position only catches up once the media controller
+                        // echoes the new seek, which makes the bar feel unresponsive.
+                        val displayFraction = if (isDragging) dragFraction else progress
+                        val clamped = displayFraction.coerceIn(0f, 1f)
                         val amplitude = (height * 0.15f) * currentAmplitudeRatio
-                        val progressX = width * progress.coerceIn(0f, 1f)
+                        val progressX = width * clamped
 
                         wavePath.reset()
                         for (i in 0..steps) {
@@ -164,7 +173,7 @@ fun WaveformSeekBar(
                         }
 
                         val dotY = centerY + amplitude * sin(
-                            (progress.coerceIn(0f, 1f) * WAVE_FREQUENCY * 2 * PI + currentPhase).toFloat()
+                            (clamped * WAVE_FREQUENCY * 2 * PI + currentPhase).toFloat()
                         ).toFloat()
                         drawCircle(
                             color = activeColor,
@@ -177,22 +186,30 @@ fun WaveformSeekBar(
 
         if (isDragging && durationMs > 0) {
             val tooltipTime = formatTime((dragFraction * durationMs).toLong())
+            // Measure the tooltip's real width so it can be centered exactly over
+            // the drag position — the previous fixed 50.dp guess drifted on any
+            // label whose width differed (e.g. "1:23" vs "10:45").
+            var tooltipWidthPx by remember { mutableFloatStateOf(0f) }
             BoxWithConstraints(
                 modifier = Modifier
                     .fillMaxWidth()
                     .height(40.dp),
-                contentAlignment = Alignment.TopCenter,
+                contentAlignment = Alignment.TopStart,
             ) {
-                // Derive the tooltip offset from the measured parent width instead of
-                // assuming a fixed 100dp width, which mis-placed it on every other screen.
-                val tooltipWidthDp = 50.dp
-                val tooltipX = (maxWidth * dragFraction) - (tooltipWidthDp / 2)
+                val maxWidthPx = with(LocalDensity.current) { maxWidth.toPx() }
+                val dragX = maxWidthPx * dragFraction
+                // With TopStart alignment the offset is from the left edge, so
+                // this left-edge value centers the tooltip over the drag point.
+                // Clamp so it never spills past either edge of the bar.
+                val tooltipX = (dragX - tooltipWidthPx / 2f)
+                    .coerceIn(0f, (maxWidthPx - tooltipWidthPx).coerceAtLeast(0f))
                 Text(
                     text = tooltipTime,
                     color = MaterialTheme.colorScheme.onSurface,
                     style = MaterialTheme.typography.labelSmall.copy(fontSize = 11.sp),
                     modifier = Modifier
-                        .offset(x = tooltipX)
+                        .offset(x = with(LocalDensity.current) { tooltipX.toDp() })
+                        .onGloballyPositioned { tooltipWidthPx = it.size.width.toFloat() }
                         .background(
                             MaterialTheme.colorScheme.surfaceContainerHigh,
                             ShapeCache.smooth4,

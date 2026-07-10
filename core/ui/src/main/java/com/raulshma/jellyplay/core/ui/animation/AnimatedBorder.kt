@@ -14,7 +14,7 @@ fun rememberAnimatedBorderPhase(
     phase: Float = 80f,
     repeatDuration: Int = 1000,
 ): Float {
-    if (com.raulshma.jellyplay.core.ui.components.LocalPerformanceMode.current) return 0f
+    if (com.raulshma.jellyplay.core.ui.components.LocalReducedMotion.current) return 0f
 
     val transition = rememberInfiniteTransition(label = "animatedBorderPhase")
 

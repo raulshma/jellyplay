@@ -8,9 +8,6 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.animateFloatAsState
-import androidx.compose.animation.core.tween
-import com.raulshma.jellyplay.core.designsystem.theme.AlphaEasing
-import com.raulshma.jellyplay.core.designsystem.theme.FancyTransitionEasing
 import com.raulshma.jellyplay.core.ui.animation.AnimationTokens
 import androidx.compose.animation.expandVertically
 import androidx.compose.animation.fadeIn
@@ -265,8 +262,8 @@ fun SearchScreen(
                 // ── Title + action row ──
                 AnimatedVisibility(
                     visible = true,
-                    enter = fadeIn(tween(500, easing = AlphaEasing)) + slideInVertically(
-                        tween(500, easing = FancyTransitionEasing),
+                    enter = fadeIn(MaterialTheme.motionScheme.slowEffectsSpec()) + slideInVertically(
+                        MaterialTheme.motionScheme.slowSpatialSpec(),
                         initialOffsetY = { -40 },
                     ),
                 ) {
@@ -322,8 +319,8 @@ fun SearchScreen(
                 // ── Search field (MD3 expressive DockedSearchBar) ──
                 AnimatedVisibility(
                     visible = true,
-                    enter = fadeIn(tween(500, delayMillis = 100, easing = AlphaEasing)) + slideInVertically(
-                        tween(500, delayMillis = 100, easing = FancyTransitionEasing),
+                    enter = fadeIn(MaterialTheme.motionScheme.slowEffectsSpec()) + slideInVertically(
+                        MaterialTheme.motionScheme.slowSpatialSpec(),
                         initialOffsetY = { 40 },
                     ),
                 ) {
@@ -426,8 +423,8 @@ fun SearchScreen(
                 // ── Active filters bar (dismissible glass tags) ──
                 AnimatedVisibility(
                     visible = hasActiveFilters,
-                    enter = fadeIn(tween(200, easing = AlphaEasing)) + expandVertically(),
-                    exit = fadeOut(tween(200, easing = AlphaEasing)) + shrinkVertically(),
+                    enter = fadeIn(MaterialTheme.motionScheme.fastEffectsSpec()) + expandVertically(),
+                    exit = fadeOut(MaterialTheme.motionScheme.fastEffectsSpec()) + shrinkVertically(),
                 ) {
                     FlowRow(
                         modifier = Modifier
@@ -475,7 +472,7 @@ fun SearchScreen(
                 // ── Result count ──
                 AnimatedVisibility(
                     visible = pagedResults.itemCount > 0,
-                    enter = fadeIn(tween(400, delayMillis = 200, easing = AlphaEasing)),
+                    enter = fadeIn(MaterialTheme.motionScheme.defaultEffectsSpec()),
                 ) {
                     Text(
                         text = pluralStringResource(R.plurals.search_result_count, pagedResults.itemCount, pagedResults.itemCount),
@@ -1012,9 +1009,10 @@ private fun SuggestionSection(
             horizontalArrangement = Arrangement.spacedBy(spacing),
             contentPadding = PaddingValues(end = contentPadding),
         ) { _, item, itemModifier ->
+            val imageUrl = remember(item.id) { getImageUrl(item.id) }
             PosterCard(
                 item = item,
-                imageUrl = getImageUrl(item.id),
+                imageUrl = imageUrl,
                 onClick = { onItemClick(item) },
                 sharedElementKey = "suggestion_${item.id}",
                 modifier = itemModifier.width(cardWidth),

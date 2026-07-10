@@ -14,16 +14,23 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.composables.icons.tabler.Tabler
 import com.composables.icons.tabler.outline.*
+import com.raulshma.jellyplay.core.data.cast.CastManager
+import com.raulshma.jellyplay.core.ui.components.formatDurationMs
 import com.raulshma.jellyplay.core.ui.tv.rememberTvFocusState
 import com.raulshma.jellyplay.core.ui.tv.tvFocusIndicator
 import com.raulshma.jellyplay.feature.player.audio.R
+import com.raulshma.jellyplay.feature.player.audio.components.CastButton
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
 
 @Composable
 internal fun PixelPlayerTopBar(
@@ -48,16 +55,25 @@ internal fun PixelPlayerTopBar(
     onNightModeStrengthChange: (com.raulshma.jellyplay.core.model.EffectStrength) -> Unit,
     onAmbientClick: () -> Unit,
     sleepTimerActive: Boolean = false,
-    sleepTimerDisplayText: String = "",
+    sleepTimerEndOfEpisode: Boolean = false,
+    sleepTimerRemainingFlow: StateFlow<Long> = MutableStateFlow(0L),
     onSleepTimerClick: () -> Unit = {},
     karaokeMode: Boolean = false,
     onKaraokeToggle: (Boolean) -> Unit = {},
     hasKaraokeLyrics: Boolean = false,
+    castManager: CastManager? = null,
 ) {
     val minimizeFocusState = rememberTvFocusState()
     val lyricsFocusState = rememberTvFocusState()
     val queueFocusState = rememberTvFocusState()
     val moreFocusState = rememberTvFocusState()
+
+    val sleepTimerRemainingMs by sleepTimerRemainingFlow.collectAsStateWithLifecycle()
+    val sleepTimerDisplayText = if (sleepTimerEndOfEpisode) {
+        stringResource(R.string.audio_sleep_timer_end_of_episode)
+    } else {
+        formatDurationMs(sleepTimerRemainingMs)
+    }
 
     Row(
         modifier = Modifier
@@ -85,6 +101,9 @@ internal fun PixelPlayerTopBar(
             letterSpacing = 1.sp,
         )
         Row {
+            if (castManager != null) {
+                CastButton(castManager = castManager)
+            }
             if (hasLyrics) {
                 IconButton(
                     onClick = onLyricsClick,

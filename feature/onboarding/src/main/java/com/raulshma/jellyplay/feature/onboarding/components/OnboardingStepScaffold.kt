@@ -1,8 +1,6 @@
 package com.raulshma.jellyplay.feature.onboarding.components
 
-import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.animateFloatAsState
-import androidx.compose.animation.core.spring
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Spacer
@@ -41,41 +39,32 @@ fun OnboardingStepScaffold(
 
     val iconAlpha by animateFloatAsState(
         targetValue = if (visible) 1f else 0f,
-        animationSpec = spring(stiffness = Spring.StiffnessMedium),
+        animationSpec = MaterialTheme.motionScheme.defaultEffectsSpec(),
         label = "scaffoldIconAlpha",
     )
     val titleAlpha by animateFloatAsState(
         targetValue = if (visible) 1f else 0f,
-        animationSpec = spring(stiffness = Spring.StiffnessMedium),
+        animationSpec = MaterialTheme.motionScheme.defaultEffectsSpec(),
         label = "scaffoldTitleAlpha",
     )
     val titleOffsetY by animateFloatAsState(
         targetValue = if (visible) 0f else 12f,
-        animationSpec = spring(
-            dampingRatio = Spring.DampingRatioMediumBouncy,
-            stiffness = Spring.StiffnessMedium,
-        ),
+        animationSpec = MaterialTheme.motionScheme.defaultSpatialSpec(),
         label = "scaffoldTitleOffset",
     )
     val subtitleAlpha by animateFloatAsState(
         targetValue = if (visible) 1f else 0f,
-        animationSpec = spring(
-            dampingRatio = Spring.DampingRatioNoBouncy,
-            stiffness = Spring.StiffnessMedium,
-        ),
+        animationSpec = MaterialTheme.motionScheme.defaultEffectsSpec(),
         label = "scaffoldSubtitleAlpha",
     )
     val contentAlpha by animateFloatAsState(
         targetValue = if (visible) 1f else 0f,
-        animationSpec = spring(stiffness = Spring.StiffnessMediumLow),
+        animationSpec = MaterialTheme.motionScheme.defaultEffectsSpec(),
         label = "scaffoldContentAlpha",
     )
     val contentOffsetY by animateFloatAsState(
         targetValue = if (visible) 0f else 16f,
-        animationSpec = spring(
-            dampingRatio = Spring.DampingRatioMediumBouncy,
-            stiffness = Spring.StiffnessMediumLow,
-        ),
+        animationSpec = MaterialTheme.motionScheme.defaultSpatialSpec(),
         label = "scaffoldContentOffset",
     )
 

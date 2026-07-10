@@ -1,4 +1,4 @@
-package com.raulshma.jellyplay.core.data.work
+package com.raulshma.jellyplay.core.data.worker
 
 import com.raulshma.jellyplay.core.database.dao.ScanStateDao
 import com.raulshma.jellyplay.core.database.entity.ScanStateEntity
@@ -25,7 +25,7 @@ internal object ScanWorkerHelper {
         mapToStub: (T) -> MediaItemStub,
     ): ScanResult {
         var startIndex = 0
-        val allItems = mutableListOf<T>()
+        val stubs = mutableListOf<MediaItemStub>()
         var hasMore = true
         var totalCount = 0
 
@@ -33,9 +33,9 @@ internal object ScanWorkerHelper {
             if (isStopped()) break
             val result = fetchPage(startIndex, BATCH_SIZE)
             totalCount = result.first
-            allItems.addAll(result.second)
+            result.second.mapTo(stubs, mapToStub)
             startIndex += BATCH_SIZE
-            hasMore = result.second.size >= BATCH_SIZE && allItems.size < MAX_ITEMS
+            hasMore = result.second.size >= BATCH_SIZE && stubs.size < MAX_ITEMS
 
             if (hasMore) delay(INTER_BATCH_DELAY_MS)
 
@@ -43,20 +43,18 @@ internal object ScanWorkerHelper {
                 entity.copy(
                     progress = startIndex,
                     total = totalCount,
-                    itemsFound = allItems.size,
+                    itemsFound = stubs.size,
                     status = ScanPhase.SCANNING.name,
                 )
             )
         }
 
-        val stubs = allItems.map(mapToStub)
-
         scanStateDao.update(
             entity.copy(
                 status = ScanPhase.COMPLETED.name,
                 progress = startIndex,
-                total = allItems.size,
-                itemsFound = allItems.size,
+                total = stubs.size,
+                itemsFound = stubs.size,
                 resultJson = json.encodeToString(serializer<List<MediaItemStub>>(), stubs),
             )
         )

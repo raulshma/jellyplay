@@ -4,6 +4,7 @@ import android.content.Context
 import android.net.ConnectivityManager
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.runBlocking
+import com.raulshma.jellyplay.core.datastore.UserPreferencesStore
 import com.raulshma.jellyplay.core.network.JellyfinApiClient
 import com.raulshma.jellyplay.core.network.JellyfinApiClientImpl
 import com.raulshma.jellyplay.core.network.config.OkHttpConfigProvider
@@ -32,6 +33,7 @@ import com.raulshma.jellyplay.core.network.arr.ResilientSonarrApiClient
 import com.raulshma.jellyplay.core.network.arr.SonarrApiClient
 import com.raulshma.jellyplay.core.network.arr.SonarrApiClientImpl
 import com.raulshma.jellyplay.core.network.seerr.ResilientSeerrApiClient
+import com.raulshma.jellyplay.core.network.api.ResilientTmdbApiClient
 import com.raulshma.jellyplay.core.network.api.TmdbApiClient
 import com.raulshma.jellyplay.core.network.api.TmdbApiClientImpl
 import com.raulshma.jellyplay.core.network.seerr.SeerrApiClient
@@ -49,9 +51,11 @@ import okhttp3.Protocol
 import okhttp3.logging.HttpLoggingInterceptor
 import javax.inject.Named
 import org.jellyfin.sdk.Jellyfin
+import org.jellyfin.sdk.android.androidDevice
 import org.jellyfin.sdk.api.okhttp.OkHttpFactory
 import org.jellyfin.sdk.createJellyfin
 import org.jellyfin.sdk.model.ClientInfo
+import org.jellyfin.sdk.model.DeviceInfo
 import java.io.File
 import java.util.concurrent.TimeUnit
 import javax.inject.Singleton
@@ -111,7 +115,7 @@ abstract class NetworkModule {
     @Binds
     @Singleton
     abstract fun bindTmdbApiClient(
-        impl: TmdbApiClientImpl,
+        impl: ResilientTmdbApiClient,
     ): TmdbApiClient
 
     @Binds
@@ -150,19 +154,50 @@ abstract class NetworkModule {
         ): ConnectivityManager =
             context.getSystemService(Context.CONNECTIVITY_SERVICE) as ConnectivityManager
 
+        /**
+         * Shared lenient `Json` for ad-hoc (de)serialization across the data and
+         * network layers (repository JSON columns, REST DTO decoding). Centralized
+         * here so every site shares one configured instance instead of re-declaring
+         * `Json { ignoreUnknownKeys = true }`. `Json` is thread-safe for
+         * parse/encode; a single process-wide instance is fine.
+         *
+         * Note: `JellyfinApiEngine.sharedJson` is the same configuration kept as a
+         * companion `val` for code paths that cannot use DI (e.g. object
+         * companions). Prefer this injected instance where a Hilt graph is available.
+         */
+        @Provides
+        @Singleton
+        fun provideJson(): kotlinx.serialization.json.Json =
+            kotlinx.serialization.json.Json { ignoreUnknownKeys = true }
+
         @Provides
         @Singleton
         fun provideJellyfin(
             @ApplicationContext context: Context,
             okHttpClient: OkHttpClient,
-        ): Jellyfin = createJellyfin {
-            this.context = context
-            clientInfo = ClientInfo(
-                name = "JellyPlay",
-                version = context.packageManager
-                    .getPackageInfo(context.packageName, 0).versionName ?: "1.0"
-            )
-            apiClientFactory = OkHttpFactory(okHttpClient)
+            userPreferencesStore: UserPreferencesStore,
+        ): Jellyfin {
+            // Use the app's persistent DataStore UUID as the SDK device id so the
+            // REST/session API, the WebSocket connection (which passes the same
+            // id in MainViewModel), and the server all agree on one identity.
+            // Without this the SDK defaults to Settings.Secure.ANDROID_ID, which
+            // never equals ensureDeviceId() and made the app's own session show up
+            // in the Play On / Cast device list.
+            val androidDefault = androidDevice(context)
+            val deviceId = runBlocking { userPreferencesStore.ensureDeviceId() }
+            return createJellyfin {
+                this.context = context
+                clientInfo = ClientInfo(
+                    name = "JellyPlay",
+                    version = context.packageManager
+                        .getPackageInfo(context.packageName, 0).versionName ?: "1.0"
+                )
+                deviceInfo = DeviceInfo(
+                    id = deviceId,
+                    name = androidDefault.name,
+                )
+                apiClientFactory = OkHttpFactory(okHttpClient)
+            }
         }
 
         @Provides
