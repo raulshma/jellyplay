@@ -156,19 +156,6 @@ interface MediaRepository : LiveTvRepository, SyncPlayRepository, NewsletterRepo
     suspend fun markUnplayed(itemId: String): Result<Unit>
 
     /**
-     * Permanently deletes an item (and its file) from the Jellyfin library via
-     * `DELETE /Items/{id}`. Used by the delete & re-download flow: the item's
-     * file must be gone from Jellyfin before *arr re-grabs and re-imports it.
-     * Also drops the item from the in-memory detail cache so a stale snapshot
-     * isn't served after navigation.
-     *
-     * Returns the failure (with a friendly [com.raulshma.jellyplay.core.network.api.ApiException]
-     * message) when the server rejects the delete; the caller decides whether
-     * to proceed with the *arr monitor+search half.
-     */
-    suspend fun deleteMediaItem(itemId: String): Result<Unit>
-
-    /**
      * Drop in-memory caches so the next repository call fetches fresh user-data
      * (favorites, played state, playback positions) from the server. Used by the
      * background user-data sync worker to keep this device's view of the library

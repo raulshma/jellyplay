@@ -139,6 +139,7 @@ internal fun DetailContentBody(
     relatedVideos: List<SeerrRelatedVideo> = emptyList(),
     onVideoClick: (SeerrRelatedVideo) -> Unit = {},
     preferences: UserPreferences,
+    relatedItems: List<MediaItem> = emptyList(),
 ) {
     val showContent = true
 
@@ -594,7 +595,7 @@ internal fun DetailContentBody(
         }
 
         StaggeredDetailSection(visible = showContent, delayIndex = 10) {
-            if (detail.relatedItems.isNotEmpty()) {
+            if (relatedItems.isNotEmpty()) {
                 Column {
                     FadingItem {
                         Text(
@@ -606,7 +607,7 @@ internal fun DetailContentBody(
                     }
                     Spacer(Modifier.height(16.dp))
                     TvFocusableItemRow(
-                        items = detail.relatedItems,
+                        items = relatedItems,
                         key = { "related_${it.id}" },
                         contentPadding = PaddingValues(horizontal = bodyContentPad),
                         horizontalArrangement = Arrangement.spacedBy(12.dp),

@@ -39,6 +39,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.annotation.StringRes
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -165,6 +166,7 @@ fun MediaDetailScreen(
     val selectedAudioIndex = uiState.selectedAudioIndex
     val albumTracks = uiState.albumTracks
     val collectionItems = uiState.collectionItems
+    val relatedItems = uiState.relatedItems
     val isDownloading = uiState.isDownloading
     val isDownloadingSeries = uiState.isDownloadingSeries
     val downloadSheetEpisodes = uiState.downloadSheetEpisodes
@@ -176,8 +178,7 @@ fun MediaDetailScreen(
     val cellularDownloadWarningMb = uiState.cellularDownloadWarningMb
     val canRedownload by viewModel.canRedownload.collectAsStateWithLifecycle()
     val showRedownloadDialog = uiState.showRedownloadDialog
-    val isRedownloading = uiState.isRedownloading
-    val redownloadResult = uiState.redownloadResult
+    val redownloadProgress = uiState.redownloadProgress
     val seerrTvSeasons = uiState.seerrTvSeasons
     LaunchedEffect(detail?.item?.id) {
         detail?.let {
@@ -362,6 +363,7 @@ fun MediaDetailScreen(
             onEditClick = remember(onEditClick, itemId) { { onEditClick(itemId) } },
             albumTracks = albumTracks,
             collectionItems = collectionItems,
+            relatedItems = relatedItems,
             onPlayAlbumTrack = remember(viewModel) { { index: Int -> viewModel.playAlbum(index) } },
             relatedVideos = relatedVideos,
             onVideoClick = remember(uriHandler) {
@@ -382,8 +384,7 @@ fun MediaDetailScreen(
             onHideFromContinueWatching = remember(viewModel) { { viewModel.hideFromContinueWatching() } },
             canRedownload = canRedownload,
             showRedownloadDialog = showRedownloadDialog,
-            isRedownloading = isRedownloading,
-            redownloadResult = redownloadResult,
+            redownloadProgress = redownloadProgress,
             onRequestRedownload = remember(viewModel) { { viewModel.requestRedownload() } },
             onConfirmRedownload = remember(viewModel) { { viewModel.confirmRedownload() } },
             onDismissRedownloadDialog = remember(viewModel) { { viewModel.dismissRedownloadDialog() } },
@@ -537,6 +538,7 @@ private fun DetailContent(
     onEditClick: () -> Unit = {},
     albumTracks: List<MediaItem> = emptyList(),
     collectionItems: List<MediaItem> = emptyList(),
+    relatedItems: List<MediaItem> = emptyList(),
     onPlayAlbumTrack: (Int) -> Unit = {},
     relatedVideos: List<SeerrRelatedVideo> = emptyList(),
     onVideoClick: (SeerrRelatedVideo) -> Unit = {},
@@ -545,8 +547,7 @@ private fun DetailContent(
     onHideFromContinueWatching: () -> Unit = {},
     canRedownload: Boolean = false,
     showRedownloadDialog: Boolean = false,
-    isRedownloading: Boolean = false,
-    redownloadResult: DetailUiState.RedownloadOutcome? = null,
+    redownloadProgress: DetailUiState.RedownloadProgress? = null,
     onRequestRedownload: () -> Unit = {},
     onConfirmRedownload: () -> Unit = {},
     onDismissRedownloadDialog: () -> Unit = {},
@@ -952,6 +953,7 @@ private fun DetailContent(
                                     isAlbum = isAlbum,
                                     albumTracks = albumTracks,
                                     collectionItems = collectionItems,
+                                    relatedItems = relatedItems,
                                     onPlayClick = onPlayClick,
                                     onAudioClick = onAudioClick,
                                     onToggleFavorite = onToggleFavorite,
@@ -1062,6 +1064,7 @@ private fun DetailContent(
                                     isAlbum = isAlbum,
                                     albumTracks = albumTracks,
                                     collectionItems = collectionItems,
+                                    relatedItems = relatedItems,
                                     onPlayClick = onPlayClick,
                                     onAudioClick = onAudioClick,
                                     onToggleFavorite = onToggleFavorite,
@@ -1237,82 +1240,92 @@ private fun DetailContent(
         )
     }
 
-    // Delete & re-download: confirmation → progress → result. Gated entirely
-    // by [showRedownloadDialog]; the in-progress/result states are driven by
-    // [redownloadResult] so the dialog stays open across the async flow.
+    // Delete & re-download: confirmation → per-step progress list → result.
+    // Gated entirely by [showRedownloadDialog]; the progress/steps are driven
+    // by [redownloadProgress] so the dialog stays open across the async flow.
     if (showRedownloadDialog) {
         val item0 = detail?.item
         val isMovie = item0?.mediaType == MediaType.MOVIE
-        val outcome = redownloadResult
+        val progress = redownloadProgress
+        val steps = progress?.steps
+        val isRunning = progress?.isRunning == true
         AlertDialog(
             onDismissRequest = {
-                // Don't allow dismissing mid-operation (the file is being
-                // deleted); only allow cancel before confirming.
-                if (!isRedownloading && outcome == null) onDismissRedownloadDialog()
+                // Don't allow dismissing mid-operation; only cancel before the
+                // flow starts or after it completes.
+                if (!isRunning) onDismissRedownloadDialog()
             },
             icon = { Icon(Tabler.Outline.Trash, contentDescription = null) },
             title = { Text(stringResource(R.string.detail_redownload_title)) },
             text = {
                 Column {
-                    when (outcome) {
-                        null -> {
-                            // Confirmation state.
-                            Text(
-                                if (isMovie) {
-                                    stringResource(R.string.detail_redownload_movie_message, item0?.name ?: "")
-                                } else {
-                                    stringResource(R.string.detail_redownload_episode_message)
-                                },
-                            )
-                        }
-                        DetailUiState.RedownloadOutcome.InProgress -> {
-                            Row(verticalAlignment = Alignment.CenterVertically) {
-                                CircularProgressIndicator(
-                                    modifier = Modifier.size(20.dp),
-                                    strokeWidth = 2.dp,
+                    if (steps == null) {
+                        // Confirmation state — explain the flow.
+                        Text(
+                            if (isMovie) {
+                                stringResource(R.string.detail_redownload_movie_message, item0?.name ?: "")
+                            } else {
+                                stringResource(R.string.detail_redownload_episode_message)
+                            },
+                        )
+                    } else {
+                        // Per-step progress list. Each step renders an icon by
+                        // status + its localized label + optional message.
+                        steps.forEach { stepResult ->
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                modifier = Modifier.padding(vertical = 4.dp),
+                            ) {
+                                StepStatusIcon(
+                                    status = stepResult.status,
+                                    isRunning = isRunning,
                                 )
                                 Spacer(Modifier.width(12.dp))
-                                Text(stringResource(R.string.detail_redownload_in_progress))
+                                Column {
+                                    Text(
+                                        stringResource(stepLabel(stepResult.step)),
+                                        style = MaterialTheme.typography.bodyMedium,
+                                    )
+                                    stepResult.message?.let { msg ->
+                                        val isErrorLike = stepResult.status in setOf(
+                                            com.raulshma.jellyplay.core.model.arr.ArrRedownloadStepStatus.FAILED,
+                                            com.raulshma.jellyplay.core.model.arr.ArrRedownloadStepStatus.WARNING,
+                                        )
+                                        Text(
+                                            msg,
+                                            style = MaterialTheme.typography.bodySmall,
+                                            color = if (isErrorLike) {
+                                                MaterialTheme.colorScheme.error
+                                            } else {
+                                                MaterialTheme.colorScheme.onSurfaceVariant
+                                            },
+                                        )
+                                    }
+                                }
                             }
-                        }
-                        is DetailUiState.RedownloadOutcome.Success -> {
-                            Text(outcome.message)
-                        }
-                        is DetailUiState.RedownloadOutcome.PartialFailure -> {
-                            Text(
-                                outcome.message,
-                                color = MaterialTheme.colorScheme.error,
-                            )
-                        }
-                        is DetailUiState.RedownloadOutcome.DeleteFailed -> {
-                            Text(
-                                outcome.message,
-                                color = MaterialTheme.colorScheme.error,
-                            )
                         }
                     }
                 }
             },
             confirmButton = {
-                when (outcome) {
-                    null -> TextButton(
+                when {
+                    // Pre-flight: confirm to start the flow.
+                    steps == null -> TextButton(
                         onClick = onConfirmRedownload,
-                        enabled = !isRedownloading,
+                        enabled = !isRunning,
                         colors = ButtonDefaults.textButtonColors(
                             contentColor = MaterialTheme.colorScheme.error,
                         ),
                     ) {
                         Text(stringResource(R.string.detail_redownload_confirm))
                     }
-                    DetailUiState.RedownloadOutcome.InProgress -> { /* no button while running */ }
-                    is DetailUiState.RedownloadOutcome.DeleteFailed -> TextButton(
-                        onClick = onDismissRedownloadDialog,
-                    ) {
+                    // Running: no button (must wait).
+                    isRunning -> {}
+                    // Delete failed: file still present → Cancel (stay on screen).
+                    !progress.deleteSucceeded -> TextButton(onClick = onDismissRedownloadDialog) {
                         Text(stringResource(R.string.detail_cancel))
                     }
-                    // Success + PartialFailure: the file is gone, so "Done"
-                    // closes the dialog and navigates back (the screen observes
-                    // the detail is deleted and pops via onBack).
+                    // File gone (success or partial) → Done navigates back.
                     else -> TextButton(onClick = {
                         onDismissRedownloadDialog()
                         onBack()
@@ -1321,15 +1334,14 @@ private fun DetailContent(
                     }
                 }
             },
-            dismissButton = when (outcome) {
-                null -> {
-                    {
-                        TextButton(onClick = onDismissRedownloadDialog) {
-                            Text(stringResource(R.string.detail_cancel))
-                        }
+            dismissButton = if (steps == null || !isRunning) {
+                {
+                    TextButton(onClick = onDismissRedownloadDialog) {
+                        Text(stringResource(R.string.detail_cancel))
                     }
                 }
-                else -> null
+            } else {
+                null
             },
         )
     }
@@ -1402,6 +1414,69 @@ private fun TvOptionItem(
             )
         }
     }
+}
+
+/**
+ * Icon for one delete & re-download step's status. Spinner while the step is
+ * pending (flow running, step not yet resolved), check on success, dash on
+ * skip, alert on failure.
+ */
+@Composable
+private fun StepStatusIcon(
+    status: com.raulshma.jellyplay.core.model.arr.ArrRedownloadStepStatus,
+    isRunning: Boolean,
+) {
+    when (status) {
+        com.raulshma.jellyplay.core.model.arr.ArrRedownloadStepStatus.PENDING -> {
+            if (isRunning) {
+                CircularProgressIndicator(modifier = Modifier.size(18.dp), strokeWidth = 2.dp)
+            } else {
+                Icon(
+                    Tabler.Outline.DotsCircleHorizontal,
+                    contentDescription = null,
+                    modifier = Modifier.size(18.dp),
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+        }
+        com.raulshma.jellyplay.core.model.arr.ArrRedownloadStepStatus.SUCCESS ->
+            Icon(
+                Tabler.Outline.Check,
+                contentDescription = null,
+                modifier = Modifier.size(18.dp),
+                tint = MaterialTheme.colorScheme.primary,
+            )
+        com.raulshma.jellyplay.core.model.arr.ArrRedownloadStepStatus.SKIPPED ->
+            Icon(
+                Tabler.Outline.Checks, // double-check reads as "already done"
+                contentDescription = null,
+                modifier = Modifier.size(18.dp),
+                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        com.raulshma.jellyplay.core.model.arr.ArrRedownloadStepStatus.WARNING ->
+            Icon(
+                Tabler.Outline.AlertTriangle,
+                contentDescription = null,
+                modifier = Modifier.size(18.dp),
+                tint = MaterialTheme.colorScheme.error, // amber unavailable; error tint keeps it visually distinct from check/skip
+            )
+        com.raulshma.jellyplay.core.model.arr.ArrRedownloadStepStatus.FAILED ->
+            Icon(
+                Tabler.Outline.AlertCircle,
+                contentDescription = null,
+                modifier = Modifier.size(18.dp),
+                tint = MaterialTheme.colorScheme.error,
+            )
+    }
+}
+
+/** Localized label for a delete & re-download step. */
+@StringRes
+private fun stepLabel(step: com.raulshma.jellyplay.core.model.arr.ArrRedownloadStep): Int = when (step) {
+    com.raulshma.jellyplay.core.model.arr.ArrRedownloadStep.DELETE_FILE -> R.string.detail_redownload_step_delete_file
+    com.raulshma.jellyplay.core.model.arr.ArrRedownloadStep.VERIFY_DELETED -> R.string.detail_redownload_step_verify
+    com.raulshma.jellyplay.core.model.arr.ArrRedownloadStep.MONITOR -> R.string.detail_redownload_step_monitor
+    com.raulshma.jellyplay.core.model.arr.ArrRedownloadStep.SEARCH -> R.string.detail_redownload_step_search
 }
 
 

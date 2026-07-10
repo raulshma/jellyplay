@@ -124,6 +124,15 @@ fun AnimatedHeroHeader(
     val heroIsVisible by remember {
         derivedStateOf { listState.layoutInfo.visibleItemsInfo.any { it.index == 0 } || listState.layoutInfo.totalItemsCount == 0 }
     }
+    // Whether the hero is "prominent" (near the top, not scrolled under
+    // content). The attention-grabbing play-pulse animations are gated on
+    // this so they only run when the hero is the focal element; once the
+    // user scrolls content over the hero, the high-frequency (1.8s) layer
+    // redraws stop, cutting continuous draw-phase work while keeping the
+    // benign slow breath.
+    val heroIsProminent by remember {
+        derivedStateOf { listState.firstVisibleItemIndex == 0 && listState.firstVisibleItemScrollOffset < listState.layoutInfo.viewportSize.height / 2 }
+    }
 
     val slowEffects = MaterialTheme.motionScheme.slowEffectsSpec<Float>()
     val defaultEffects = MaterialTheme.motionScheme.defaultEffectsSpec<Float>()
@@ -160,6 +169,7 @@ fun AnimatedHeroHeader(
             onFocusChange = onFocusChange,
             requestInitialFocus = requestInitialFocus,
             isVisible = heroIsVisible,
+            isProminent = heroIsProminent,
             focusRequester = focusRequester,
         )
     }
@@ -177,6 +187,7 @@ fun HeroHeader(
     onDetailsClick: (() -> Unit)? = null,
     onFocusChange: (Boolean) -> Unit = {},
     isVisible: Boolean = true,
+    isProminent: Boolean = true,
     requestInitialFocus: Boolean = true,
     focusRequester: FocusRequester? = null,
 ) {
@@ -237,6 +248,7 @@ fun HeroHeader(
 
     if (isVisible && !performanceMode) {
         val heroTransition = rememberInfiniteTransition(label = "hero_animations")
+        // Slow breath runs whenever the hero is visible — 12s cycle is cheap.
         val rawBreathScale by heroTransition.animateFloat(
             initialValue = 1.0f,
             targetValue = 1.04f,
@@ -248,38 +260,48 @@ fun HeroHeader(
         )
         breathScale = rawBreathScale
 
-        val rawPlayPulseScale by heroTransition.animateFloat(
-            initialValue = 1.0f,
-            targetValue = 1.35f,
-            animationSpec = infiniteRepeatable(
-                animation = tween(HERO_PLAY_PULSE_DURATION_MS, easing = AlphaEasing),
-                repeatMode = RepeatMode.Restart
-            ),
-            label = "playPulseScale"
-        )
-        playPulseScale = rawPlayPulseScale
+        // The high-frequency (1.8s) play-pulse loops drive ~60Hz draw-phase
+        // layer redraws. Only run them when the hero is the focal element
+        // (near the top, not scrolled under content); collapse to static
+        // otherwise to cut continuous redraws during scroll.
+        if (isProminent) {
+            val rawPlayPulseScale by heroTransition.animateFloat(
+                initialValue = 1.0f,
+                targetValue = 1.35f,
+                animationSpec = infiniteRepeatable(
+                    animation = tween(HERO_PLAY_PULSE_DURATION_MS, easing = AlphaEasing),
+                    repeatMode = RepeatMode.Restart
+                ),
+                label = "playPulseScale"
+            )
+            playPulseScale = rawPlayPulseScale
 
-        val rawPlayPulseAlpha by heroTransition.animateFloat(
-            initialValue = 0.45f,
-            targetValue = 0.0f,
-            animationSpec = infiniteRepeatable(
-                animation = tween(HERO_PLAY_PULSE_DURATION_MS, easing = AlphaEasing),
-                repeatMode = RepeatMode.Restart
-            ),
-            label = "playPulseAlpha"
-        )
-        playPulseAlpha = rawPlayPulseAlpha
+            val rawPlayPulseAlpha by heroTransition.animateFloat(
+                initialValue = 0.45f,
+                targetValue = 0.0f,
+                animationSpec = infiniteRepeatable(
+                    animation = tween(HERO_PLAY_PULSE_DURATION_MS, easing = AlphaEasing),
+                    repeatMode = RepeatMode.Restart
+                ),
+                label = "playPulseAlpha"
+            )
+            playPulseAlpha = rawPlayPulseAlpha
 
-        val rawRatingPulse by heroTransition.animateFloat(
-            initialValue = 0.9f,
-            targetValue = 1.1f,
-            animationSpec = infiniteRepeatable(
-                animation = tween(HERO_RATING_PULSE_DURATION_MS, easing = FancyTransitionEasing),
-                repeatMode = RepeatMode.Reverse
-            ),
-            label = "ratingPulse"
-        )
-        ratingPulse = rawRatingPulse
+            val rawRatingPulse by heroTransition.animateFloat(
+                initialValue = 0.9f,
+                targetValue = 1.1f,
+                animationSpec = infiniteRepeatable(
+                    animation = tween(HERO_RATING_PULSE_DURATION_MS, easing = FancyTransitionEasing),
+                    repeatMode = RepeatMode.Reverse
+                ),
+                label = "ratingPulse"
+            )
+            ratingPulse = rawRatingPulse
+        } else {
+            playPulseScale = 1.0f
+            playPulseAlpha = 0.45f
+            ratingPulse = 0.9f
+        }
     } else {
         breathScale = 1.0f
         playPulseScale = 1.0f

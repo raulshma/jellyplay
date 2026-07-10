@@ -82,10 +82,18 @@ class ResilientSonarrApiClient @Inject constructor(
     override suspend fun findSeriesByTvdb(baseUrl: String, apiKey: String, tvdbId: Int): Result<Int?> =
         req { delegate.findSeriesByTvdb(baseUrl, apiKey, tvdbId) }
 
-    override suspend fun getEpisodeIds(
+    override suspend fun getEpisodeInfo(
         baseUrl: String, apiKey: String, seriesId: Int, seasonNumber: Int, episodeNumber: Int,
-    ): Result<List<Int>> =
-        req { delegate.getEpisodeIds(baseUrl, apiKey, seriesId, seasonNumber, episodeNumber) }
+    ): Result<SonarrEpisodeInfo?> =
+        req { delegate.getEpisodeInfo(baseUrl, apiKey, seriesId, seasonNumber, episodeNumber) }
+
+    override suspend fun getSeasonSummaries(
+        baseUrl: String, apiKey: String, seriesId: Int,
+    ): Result<List<SonarrSeasonSummary>> =
+        req { delegate.getSeasonSummaries(baseUrl, apiKey, seriesId) }
+
+    override suspend fun deleteEpisodeFile(baseUrl: String, apiKey: String, episodeFileId: Int): Result<Unit> =
+        req { delegate.deleteEpisodeFile(baseUrl, apiKey, episodeFileId) }
 
     override suspend fun monitorEpisodes(
         baseUrl: String, apiKey: String, episodeIds: List<Int>, monitored: Boolean,

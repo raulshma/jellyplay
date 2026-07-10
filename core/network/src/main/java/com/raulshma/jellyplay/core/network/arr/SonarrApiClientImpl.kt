@@ -318,38 +318,91 @@ class SonarrApiClientImpl @Inject constructor(
             .addQueryParameter("tvdbId", tvdbId.toString())
             .build()
         val request = Request.Builder().url(url).withApiKey(apiKey).get().build()
-        // /series?tvdbId=X returns an array (0 or 1 element in practice). Parse
-        // raw JSON array to avoid coupling to the full SeriesResource DTO — only
-        // the id is needed here.
+        // /series?tvdbId= SHOULD return only the matching series, but some
+        // Sonarr versions/configs ignore the param and return ALL series. Do
+        // NOT trust `firstOrNull()` here — it would pick the wrong series and
+        // every downstream lookup (episode, delete, search) would target it.
+        // Filter client-side by the tvdbId field on each row.
         return executeRequest(request).mapCatching { body ->
             val arr = json.decodeFromString<JsonArray>(body)
-            arr.firstOrNull()
-                ?.let { json.decodeFromJsonElement(SonarrSeriesResource.serializer(), it) }
+            arr.asSequence()
+                .map { json.decodeFromJsonElement(SonarrSeriesResource.serializer(), it) }
+                .firstOrNull { it.tvdbId == tvdbId }
                 ?.id
         }
     }
 
-    override suspend fun getEpisodeIds(
+    override suspend fun getEpisodeInfo(
         baseUrl: String,
         apiKey: String,
         seriesId: Int,
         seasonNumber: Int,
         episodeNumber: Int,
-    ): Result<List<Int>> {
-        val url = buildUrl(baseUrl, "/episode").newBuilder()
+    ): Result<SonarrEpisodeInfo?> {
+        // Fast path: query the single season + filter client-side.
+        val seasonUrl = buildUrl(baseUrl, "/episode").newBuilder()
             .addQueryParameter("seriesId", seriesId.toString())
             .addQueryParameter("seasonNumber", seasonNumber.toString())
-            .addQueryParameter("episodeNumber", episodeNumber.toString())
             .build()
-        val request = Request.Builder().url(url).withApiKey(apiKey).get().build()
-        // /episode returns an array of EpisodeResource; only id is needed here.
-        return executeRequest(request).mapCatching { body ->
-            val arr = json.decodeFromString<JsonArray>(body)
-            arr.mapNotNull { el ->
-                json.decodeFromJsonElement(SonarrEpisodeLookupResource.serializer(), el).id
-            }
+        val seasonReq = Request.Builder().url(seasonUrl).withApiKey(apiKey).get().build()
+        val fastPath = executeRequest(seasonReq).mapCatching { body ->
+            parseEpisodeList(body)
+                .firstOrNull { it.seasonNumber == seasonNumber && it.episodeNumber == episodeNumber }
+        }
+        // Fast-path network/parse error → propagate (don't mask with fallback).
+        if (fastPath.isFailure) {
+            return Result.failure(fastPath.exceptionOrNull() ?: IllegalStateException("Episode lookup failed"))
+        }
+        // Fast-path hit → done.
+        fastPath.getOrNull()?.let { hit ->
+            return Result.success(hit.toInfo())
+        }
+
+        // Miss (episode not in this season under Jellyfin's numbering). Fall
+        // back to ALL episodes and match on episodeNumber across seasons —
+        // handles split seasons, anime absolute numbering, specials placement.
+        return getAllEpisodes(baseUrl, apiKey, seriesId).map { all ->
+            all.firstOrNull { it.episodeNumber == episodeNumber }?.toInfo()
         }
     }
+
+    override suspend fun getSeasonSummaries(
+        baseUrl: String,
+        apiKey: String,
+        seriesId: Int,
+    ): Result<List<SonarrSeasonSummary>> =
+        getAllEpisodes(baseUrl, apiKey, seriesId).map { all ->
+            all.groupBy { it.seasonNumber }
+                .toSortedMap()
+                .map { (season, eps) ->
+                    SonarrSeasonSummary(season, eps.map { it.episodeNumber }.sorted())
+                }
+        }
+
+    /**
+     * Fetches every episode for [seriesId] (no season filter) and decodes to
+     * the raw lookup resource. Shared by [getEpisodeInfo]'s fallback path and
+     * [getSeasonSummaries].
+     */
+    private suspend fun getAllEpisodes(
+        baseUrl: String,
+        apiKey: String,
+        seriesId: Int,
+    ): Result<List<SonarrEpisodeLookupResource>> {
+        val url = buildUrl(baseUrl, "/episode").newBuilder()
+            .addQueryParameter("seriesId", seriesId.toString())
+            .build()
+        val request = Request.Builder().url(url).withApiKey(apiKey).get().build()
+        return executeRequest(request).map { body -> parseEpisodeList(body) }
+    }
+
+    private fun parseEpisodeList(body: String): List<SonarrEpisodeLookupResource> {
+        val arr = json.decodeFromString<JsonArray>(body)
+        return arr.map { json.decodeFromJsonElement(SonarrEpisodeLookupResource.serializer(), it) }
+    }
+
+    override suspend fun deleteEpisodeFile(baseUrl: String, apiKey: String, episodeFileId: Int): Result<Unit> =
+        deleteRequest(baseUrl, apiKey, "/episodeFile/$episodeFileId")
 
     override suspend fun monitorEpisodes(
         baseUrl: String,
@@ -483,12 +536,27 @@ class SonarrApiClientImpl @Inject constructor(
     )
 
     /**
-     * Minimal projection of `/episode` rows used by [getEpisodeIds]. Only the
-     * id is consumed; the full EpisodeResource carries ~20 fields we don't need
-     * for id resolution.
+     * Projection of `/episode` rows used by [getEpisodeInfo]. Carries the
+     * fields the delete & re-download flow needs (id, episodeFileId, hasFile,
+     * monitored) plus the season/episode numbers for client-side filtering.
      */
     @Serializable
-    private data class SonarrEpisodeLookupResource(val id: Int = 0)
+    private data class SonarrEpisodeLookupResource(
+        val id: Int = 0,
+        val seasonNumber: Int = 0,
+        val episodeNumber: Int = 0,
+        val episodeFileId: Int = 0,
+        val hasFile: Boolean = false,
+        val monitored: Boolean = false,
+    ) {
+        fun toInfo() = SonarrEpisodeInfo(
+            id = id,
+            episodeFileId = episodeFileId,
+            hasFile = hasFile,
+            monitored = monitored,
+            seasonNumber = seasonNumber,
+        )
+    }
 
     @Serializable
     private data class SonarrBlocklistResponse(

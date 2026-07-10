@@ -390,41 +390,67 @@ enum class ArrCommandName(val serialName: String) {
 }
 
 /**
- * Which step of a delete & re-download flow failed (if any). Surfaced in
- * [ArrRedownloadResult] so the UI can tell the user precisely what happened
- * ("file deleted, but Sonarr search failed: ...") rather than a blanket error.
+ * The phases of a delete & re-download flow, in execution order. Each phase
+ * produces an [ArrRedownloadStepResult] surfaced to the UI so the user sees
+ * live progress. [DELETE_FILE] is the hard gate — a failure there aborts the
+ * whole flow (the file wasn't removed, so search would no-op). Subsequent
+ * steps are best-effort: a non-DELETE failure continues.
  */
 @Immutable
 enum class ArrRedownloadStep {
-    /** Re-marking the item monitored in *arr failed. */
+    /** Delete the file via the *arr file-delete API (`DELETE /episodeFile|movieFile`). */
+    DELETE_FILE,
+    /** Re-query the resource and confirm `hasFile == false`. */
+    VERIFY_DELETED,
+    /** Re-mark the item monitored if it isn't already. */
     MONITOR,
-    /** Queueing the search command in *arr failed. */
+    /** Queue a search command (`EpisodeSearch` / `SearchMovie`). */
     SEARCH,
 }
 
 /**
- * Outcome of a "delete & re-download" flow's *arr half (monitor + search). The
- * Jellyfin file delete is handled separately by `MediaRepository.deleteMediaItem`;
- * this result captures only the *arr management steps.
+ * Status of a single [ArrRedownloadStep]. Drives the per-step icon in the UI
+ * (spinner → check → dash → alert).
+ */
+@Immutable
+enum class ArrRedownloadStepStatus {
+    /** Step not yet started (or in-flight, depending on UI context). */
+    PENDING,
+    /** Step completed successfully. */
+    SUCCESS,
+    /** Step deliberately skipped (e.g. monitor when already monitored, or no file to delete). */
+    SKIPPED,
+    /** Step finished but with an inconclusive result (e.g. verify-deleted couldn't re-query the episode). */
+    WARNING,
+    /** Step failed. [ArrRedownloadStepResult.message] carries the reason. */
+    FAILED,
+}
+
+/**
+ * Result of a single [ArrRedownloadStep]. [message] carries a success note,
+ * skip reason, or failure explanation for the UI.
+ */
+@Immutable
+data class ArrRedownloadStepResult(
+    val step: ArrRedownloadStep,
+    val status: ArrRedownloadStepStatus,
+    val message: String? = null,
+)
+
+/**
+ * Outcome of a delete & re-download flow: the ordered list of per-step
+ * results plus whether the flow ran to completion (no hard-gate failure).
  *
- * - [monitored]: true when the monitor PUT succeeded on at least one server.
- * - [searchStarted]: true when at least one search command was queued.
- * - [commands]: the queued [ArrCommand]s (one per matching server).
- * - [failureStep] / [errorMessage]: set when a step failed across all servers,
- *   so the UI can show a partial-failure message. Null when everything
- *   succeeded.
- *
- * The flow is best-effort across servers: a monitor failure on one server does
- * not abort the search on others, mirroring [com.raulshma.jellyplay.core.data.repository.ArrRepository.searchForTmdb]'s
- * fan-out-with-swallowed-failures contract.
+ * Best-effort across servers: when multiple servers resolve, the first server
+ * to succeed on a step determines that step's result; failures on other
+ * servers are swallowed (mirroring [com.raulshma.jellyplay.core.data.repository.ArrRepository.searchForTmdb]'s
+ * fan-out contract). [steps] always has exactly one entry per [ArrRedownloadStep],
+ * in execution order, so the UI can render a fixed 4-row progress list.
  */
 @Immutable
 data class ArrRedownloadResult(
-    val monitored: Boolean = false,
-    val searchStarted: Boolean = false,
-    val commands: List<ArrCommand> = emptyList(),
-    val failureStep: ArrRedownloadStep? = null,
-    val errorMessage: String? = null,
+    val steps: List<ArrRedownloadStepResult> = emptyList(),
+    val isComplete: Boolean = false,
 )
 
 /**
