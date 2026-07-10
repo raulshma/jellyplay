@@ -46,6 +46,14 @@ data class PlaybackRequest(
      * match their actual container (e.g. an MKV stream saved as `.mp4`).
      */
     val mimeType: String? = null,
+    /**
+     * `true` for Live TV / IPTV channels. Engines use this to apply live-aware
+     * configuration (ExoPlayer: `MediaItem.setLiveConfiguration` + a MIME hint
+     * so the HLS/MPEG-TS extractor is selected for the extension-less stream
+     * URL; no `seekTo` to a resume position). See
+     * [com.raulshma.jellyplay.feature.player.video.PlayerSessionManager].
+     */
+    val isLive: Boolean = false,
 )
 
 data class SubtitleSource(

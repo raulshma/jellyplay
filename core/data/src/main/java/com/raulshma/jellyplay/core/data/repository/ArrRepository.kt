@@ -8,6 +8,8 @@ import com.raulshma.jellyplay.core.model.arr.ArrDownloadSummary
 import com.raulshma.jellyplay.core.model.arr.ArrQueueDeleteOptions
 import com.raulshma.jellyplay.core.model.arr.ArrRedownloadResult
 import com.raulshma.jellyplay.core.model.arr.ArrQueueItem
+import com.raulshma.jellyplay.core.model.arr.ArrSeriesEpisode
+import com.raulshma.jellyplay.core.model.arr.ArrSeriesResolution
 import com.raulshma.jellyplay.core.model.arr.ArrServerConfig
 import com.raulshma.jellyplay.core.model.arr.ArrServiceKind
 import com.raulshma.jellyplay.core.model.arr.ArrServiceSummary
@@ -179,6 +181,48 @@ interface ArrRepository {
         seasonNumber: Int? = null,
         episodeNumber: Int? = null,
     ): Result<ArrRedownloadResult>
+
+    // ── Sonarr series management ("Manage Series" screen) ────────────────
+    //
+    // All keyed by the series' tvdb id (the same identity Jellyfin exposes in
+    // MediaDetail.providerIds). Each method resolves the owning Sonarr server
+    // + internal series id internally via [resolveSonarrSeries], so the UI
+    // never needs to know which server tracks the series.
+
+    /**
+     * Resolves the Sonarr server + internal series id for [tvdbId]. Returns the
+     * [ArrSeriesResolution] (serverId, seriesId, title, monitored) on success;
+     * fails when no configured Sonarr instance tracks the series, or when
+     * server resolution itself fails.
+     */
+    suspend fun resolveSonarrSeries(tvdbId: Int): Result<ArrSeriesResolution>
+
+    /**
+     * Fetches every episode for the series tracked at [tvdbId], mapped to the
+     * rich [ArrSeriesEpisode] projection the management UI renders.
+     */
+    suspend fun getSonarrEpisodes(tvdbId: Int): Result<List<ArrSeriesEpisode>>
+
+    /** Toggles the monitored flag on one or more episodes (`PUT /episode/monitor`). */
+    suspend fun monitorSonarrEpisodes(tvdbId: Int, episodeIds: List<Int>, monitored: Boolean): Result<Unit>
+
+    /** Deletes an episode file (`DELETE /episodeFile/{episodeFileId}`). */
+    suspend fun deleteSonarrEpisodeFile(tvdbId: Int, episodeFileId: Int): Result<Unit>
+
+    /** Queues an `EpisodeSearch` for the given episode ids (`POST /command`). */
+    suspend fun searchSonarrEpisodes(tvdbId: Int, episodeIds: List<Int>): Result<Unit>
+
+    /** Queues a `SeasonSearch` for monitored episodes in [seasonNumber] (`POST /command`). */
+    suspend fun searchMonitoredSonarrSeason(tvdbId: Int, seasonNumber: Int): Result<Unit>
+
+    /** Queues a `RefreshSeries` — refresh metadata from the source (`POST /command`). */
+    suspend fun refreshSonarrSeries(tvdbId: Int): Result<Unit>
+
+    /** Queues a `RescanSeries` — scan the disk for files (`POST /command`). */
+    suspend fun rescanSonarrSeries(tvdbId: Int): Result<Unit>
+
+    /** Queues a `SeriesSearch` — search all monitored missing episodes (`POST /command`). */
+    suspend fun searchSonarrSeries(tvdbId: Int): Result<Unit>
 
     companion object {
         /** TTL for the resolved-servers cache. */

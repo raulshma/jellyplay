@@ -7,6 +7,7 @@ import com.raulshma.jellyplay.core.model.arr.ArrCommandName
 import com.raulshma.jellyplay.core.model.arr.ArrHistoryItem
 import com.raulshma.jellyplay.core.model.arr.ArrQueueDeleteOptions
 import com.raulshma.jellyplay.core.model.arr.ArrQueueItem
+import com.raulshma.jellyplay.core.model.arr.ArrSeriesEpisode
 import com.raulshma.jellyplay.core.model.arr.ArrWantedItem
 
 /**
@@ -121,8 +122,9 @@ interface SonarrApiClient {
 
     /**
      * `POST /api/v3/command` — queues an asynchronous command. Pass [seriesId]
-     * for series-scoped commands (RefreshSeries / SeriesSearch) or
-     * [episodeIds] for EpisodeSearch. Returns the queued [ArrCommand].
+     * for series-scoped commands (RefreshSeries / SeriesSearch), [episodeIds]
+     * for EpisodeSearch, or [seasonNumber] for SeasonSearch (requires [seriesId]).
+     * Returns the queued [ArrCommand].
      */
     suspend fun postCommand(
         baseUrl: String,
@@ -130,6 +132,7 @@ interface SonarrApiClient {
         commandName: ArrCommandName,
         seriesId: Int? = null,
         episodeIds: List<Int>? = null,
+        seasonNumber: Int? = null,
     ): Result<ArrCommand>
 
     /**
@@ -205,10 +208,46 @@ interface SonarrApiClient {
     ): Result<Unit>
 
     /**
+     * `GET /api/v3/series?tvdbId=...` — resolves whether Sonarr tracks this
+     * series and, if so, returns its internal id + monitored flag. Mirrors
+     * [findSeriesByTvdb] but keeps the series metadata instead of returning just
+     * the id. Used by the "Manage Series" screen to locate the owning series.
+     *
+     * Returns null when no series matches [tvdbId] (not tracked). As with
+     * [findSeriesByTvdb], the `?tvdbId=` query param is treated as untrusted —
+     * the result is filtered client-side because some Sonarr versions ignore it.
+     */
+    suspend fun getSeriesInfo(baseUrl: String, apiKey: String, tvdbId: Int): Result<SonarrSeriesInfo?>
+
+    /**
+     * `GET /api/v3/episode?seriesId=...` — the rich projection used by the
+     * "Manage Series" screen: every episode in the series with its season /
+     * episode numbers, title, air date, overview, monitored flag, and (when a
+     * file exists) file id + size + quality. Mapped to [ArrSeriesEpisode].
+     *
+     * Distinct from [getEpisodeInfo] (single-episode lookup for the redownload
+     * flow) and [getSeasonSummaries] (compact diagnostic index): this returns
+     * every episode and the full field set the management UI needs.
+     */
+    suspend fun getEpisodesForSeries(baseUrl: String, apiKey: String, seriesId: Int): Result<List<ArrSeriesEpisode>>
+
+    /**
      * `GET /api/v3/system/status` — connection probe. Succeeds iff 2xx.
      */
     suspend fun testConnection(baseUrl: String, apiKey: String): Result<Unit>
 }
+
+/**
+ * Resolved series identity + monitored flag, mapped from `GET /api/v3/series`.
+ * Kept in `core.network` (like [SonarrEpisodeInfo]) as a client-facing contract.
+ */
+data class SonarrSeriesInfo(
+    val id: Int,
+    val title: String,
+    val monitored: Boolean,
+    /** On-disk root folder for the series (Sonarr `path`). Null when absent. */
+    val path: String? = null,
+)
 
 /**
  * Sonarr episode info needed for the delete & re-download flow, mapped from

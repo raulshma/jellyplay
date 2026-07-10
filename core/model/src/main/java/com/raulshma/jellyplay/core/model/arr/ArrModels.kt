@@ -381,6 +381,7 @@ enum class ArrCommandName(val serialName: String) {
     RESCAN_MOVIE("RescanMovie"),
     SEARCH_SERIES("SeriesSearch"),
     SEARCH_EPISODES("EpisodeSearch"),
+    SEASON_SEARCH("SeasonSearch"),
     REFRESH_SERIES("RefreshSeries"),
     RESCAN_SERIES("RescanSeries"),
     RSS_SYNC("RssSync"),
@@ -465,3 +466,48 @@ data class ArrDownloadSummary(
     val sizeLeft: Long?,
     val timeLeft: String?,
 )
+
+/**
+ * A resolved Sonarr series for the "Manage Series" screen: the owning server
+ * plus the Sonarr-internal series id needed by all episode/season/series
+ * operations. Produced by
+ * [com.raulshma.jellyplay.core.data.repository.ArrRepository.resolveSonarrSeries]
+ * by probing each configured Sonarr server for a tvdb match.
+ */
+@Immutable
+data class ArrSeriesResolution(
+    /** The [ArrServerConfig.id] of the Sonarr instance that tracks this series. */
+    val serverId: String,
+    /** Sonarr's internal series id (the `id` on the `/series` resource). */
+    val seriesId: Int,
+    val title: String,
+    val monitored: Boolean,
+    /** On-disk root folder for the series (Sonarr `path`). Null when absent. */
+    val path: String? = null,
+)
+
+/**
+ * A single episode for the "Manage Series" screen — the rich projection of
+ * Sonarr's `/episode?seriesId=` rows, carrying enough to render a Sonarr-style
+ * episode row (status badge, monitor toggle, file size/quality) and to act on
+ * it (search by [id], delete by [episodeFileId], monitor by [id]).
+ */
+@Immutable
+data class ArrSeriesEpisode(
+    val id: Int,
+    val seasonNumber: Int,
+    val episodeNumber: Int,
+    val absoluteEpisodeNumber: Int? = null,
+    val title: String,
+    val airDateUtc: String? = null,
+    val overview: String? = null,
+    val hasFile: Boolean = false,
+    val monitored: Boolean = false,
+    /** 0 when there is no file; drives the delete-file action. */
+    val episodeFileId: Int = 0,
+    val fileSizeBytes: Long? = null,
+    val quality: String? = null,
+) {
+    /** True when a downloadable file is present (hasFile + a file id to delete). */
+    val hasDownload: Boolean get() = hasFile && episodeFileId != 0
+}

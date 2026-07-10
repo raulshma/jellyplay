@@ -26,6 +26,7 @@ internal class PlaybackProgressReporter(
     private val getResolvedPlayMethod: () -> PlayMethod,
     private val getMediaEngine: () -> MediaEngine?,
     private val getIncognitoModeEnabled: () -> Boolean,
+    private val getIsLive: () -> Boolean,
     private val onAutoSkip: (MediaSegment) -> Unit,
     private val onPlaybackEndedNoNext: () -> Unit,
     private val onWatchedThresholdReached: (String) -> Unit,
@@ -89,6 +90,11 @@ internal class PlaybackProgressReporter(
 
     private fun checkEndedNoNext(currentPositionMs: Long, durationMs: Long) {
         if (endedNoNextTriggered) return
+        // Live streams are infinite and frequently report a tiny or growing
+        // duration (the HLS segment window, an EPG runTimeTicks). The
+        // duration-based end detector trips within seconds on such sources,
+        // dismissing the player mid-broadcast — skip it for live content.
+        if (getIsLive()) return
         if (durationMs <= 0L) return
         if (currentPositionMs < durationMs - 500L) return
         val state = uiState.value
