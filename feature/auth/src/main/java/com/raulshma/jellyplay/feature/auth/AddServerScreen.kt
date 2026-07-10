@@ -3,7 +3,6 @@ package com.raulshma.jellyplay.feature.auth
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.animateContentSize
 import androidx.compose.animation.core.animateFloatAsState
-import androidx.compose.animation.core.tween
 import androidx.compose.animation.expandVertically
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
@@ -61,8 +60,6 @@ import com.raulshma.jellyplay.core.ui.tv.rememberTvFocusState
 import com.raulshma.jellyplay.core.ui.tv.tryRequestFocus
 import com.raulshma.jellyplay.core.ui.tv.tvFocusIndicator
 import androidx.hilt.navigation.compose.hiltViewModel
-import com.raulshma.jellyplay.core.designsystem.theme.AlphaEasing
-import com.raulshma.jellyplay.core.designsystem.theme.FancyTransitionEasing
 import com.raulshma.jellyplay.core.designsystem.theme.ShapeCache
 import com.raulshma.jellyplay.core.designsystem.theme.expressiveListShape
 import com.raulshma.jellyplay.core.ui.components.JellyPlayScreenScaffold
@@ -108,9 +105,9 @@ fun AddServerScreen(
                 Spacer(modifier = Modifier.height(24.dp))
                 AnimatedVisibility(
                     visible = contentVisible,
-                    enter = fadeIn(tween(400, easing = AlphaEasing)) + slideInVertically(
+                    enter = fadeIn(MaterialTheme.motionScheme.defaultEffectsSpec()) + slideInVertically(
                         initialOffsetY = { it / 20 },
-                        animationSpec = tween(400, easing = FancyTransitionEasing),
+                        animationSpec = MaterialTheme.motionScheme.defaultSpatialSpec(),
                     ),
                 ) {
                     Column(
@@ -143,9 +140,9 @@ fun AddServerScreen(
             item {
                 AnimatedVisibility(
                     visible = contentVisible,
-                    enter = fadeIn(tween(400, delayMillis = 100, easing = AlphaEasing)) + slideInVertically(
+                    enter = fadeIn(MaterialTheme.motionScheme.defaultEffectsSpec()) + slideInVertically(
                         initialOffsetY = { it / 20 },
-                        animationSpec = tween(400, delayMillis = 100, easing = FancyTransitionEasing),
+                        animationSpec = MaterialTheme.motionScheme.defaultSpatialSpec(),
                     ),
                 ) {
                     DiscoverySection(
@@ -165,7 +162,7 @@ fun AddServerScreen(
             item {
                 AnimatedVisibility(
                     visible = contentVisible,
-                    enter = fadeIn(tween(400, delayMillis = 150, easing = AlphaEasing)),
+                    enter = fadeIn(MaterialTheme.motionScheme.defaultEffectsSpec()),
                 ) {
                     Column(
                         modifier = Modifier.fillMaxWidth(),
@@ -194,9 +191,9 @@ fun AddServerScreen(
             item {
                 AnimatedVisibility(
                     visible = contentVisible,
-                    enter = fadeIn(tween(400, delayMillis = 200, easing = AlphaEasing)) + slideInVertically(
+                    enter = fadeIn(MaterialTheme.motionScheme.defaultEffectsSpec()) + slideInVertically(
                         initialOffsetY = { it / 20 },
-                        animationSpec = tween(400, delayMillis = 200, easing = FancyTransitionEasing),
+                        animationSpec = MaterialTheme.motionScheme.defaultSpatialSpec(),
                     ),
                 ) {
                     ManualEntrySection(

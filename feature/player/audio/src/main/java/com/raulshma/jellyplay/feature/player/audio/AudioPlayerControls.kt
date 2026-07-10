@@ -1,7 +1,6 @@
 package com.raulshma.jellyplay.feature.player.audio
 
 import androidx.compose.animation.core.animateFloatAsState
-import androidx.compose.animation.core.spring
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
@@ -352,7 +351,7 @@ internal fun PixelPlayPauseButton(
     val isPressed by interactionSource.collectIsPressedAsState()
     val scale by animateFloatAsState(
         targetValue = if (isPressed) 0.88f else 1f,
-        animationSpec = spring(stiffness = 500f),
+        animationSpec = MaterialTheme.motionScheme.fastSpatialSpec(),
         label = "pixelPlayScale",
     )
 

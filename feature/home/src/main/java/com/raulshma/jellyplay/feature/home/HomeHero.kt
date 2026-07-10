@@ -69,7 +69,7 @@ import com.raulshma.jellyplay.core.model.MediaItem
 import com.raulshma.jellyplay.core.model.formatFixed
 import com.raulshma.jellyplay.core.ui.adaptive.LocalAdaptiveInfo
 import com.raulshma.jellyplay.core.ui.adaptive.WindowSizeClass
-import com.raulshma.jellyplay.core.ui.components.LocalPerformanceMode
+import com.raulshma.jellyplay.core.ui.components.LocalReducedMotion
 import com.raulshma.jellyplay.core.ui.image.MediaImage
 import com.raulshma.jellyplay.core.ui.tv.LocalTvMode
 import com.raulshma.jellyplay.core.ui.tv.ifElse
@@ -197,7 +197,7 @@ fun HeroHeader(
     // animations (breath, play pulse scale/alpha, rating pulse) to their
     // static else-branch values — the hero otherwise drives a continuous
     // redraw loop on top of the 1920×1080 backdrop decode.
-    val performanceMode = LocalPerformanceMode.current
+    val reducedMotion = com.raulshma.jellyplay.core.ui.components.LocalReducedMotion.current
 
     val interactionSource = remember { MutableInteractionSource() }
     val isPressed by interactionSource.collectIsPressedAsState()
@@ -246,7 +246,7 @@ fun HeroHeader(
     val playPulseAlpha: Float
     val ratingPulse: Float
 
-    if (isVisible && !performanceMode) {
+    if (isVisible && !reducedMotion) {
         val heroTransition = rememberInfiniteTransition(label = "hero_animations")
         // Slow breath runs whenever the hero is visible — 12s cycle is cheap.
         val rawBreathScale by heroTransition.animateFloat(

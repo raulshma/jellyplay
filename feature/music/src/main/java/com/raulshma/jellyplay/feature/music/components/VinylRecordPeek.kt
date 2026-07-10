@@ -17,7 +17,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
-import com.raulshma.jellyplay.core.ui.components.LocalPerformanceMode
+import com.raulshma.jellyplay.core.ui.components.LocalReducedMotion
 
 @Composable
 fun VinylRecordPeek(
@@ -26,7 +26,7 @@ fun VinylRecordPeek(
     size: Dp = 120.dp,
     labelColor: Color = MaterialTheme.colorScheme.primary,
 ) {
-    val performanceMode = LocalPerformanceMode.current
+    val reducedMotion = LocalReducedMotion.current
     val slideFraction by animateFloatAsState(
         targetValue = if (isHoveredOrFocused) 0.35f else 0f,
         animationSpec = MaterialTheme.motionScheme.defaultSpatialSpec(),
@@ -36,7 +36,7 @@ fun VinylRecordPeek(
     // The vinyl rotation is only meaningful while hovered/focused, but the
     // infinite transition still spins a redraw coroutine. Freeze it in
     // performance mode (rotation stays 0 — the peek still slides in).
-    val rotation = if (!performanceMode) {
+    val rotation = if (!reducedMotion) {
         rememberInfiniteTransition(label = "vinylRotationTransition").animateFloat(
             initialValue = 0f,
             targetValue = if (isHoveredOrFocused) 360f else 0f,

@@ -38,7 +38,7 @@ import com.composables.icons.tabler.outline.DeviceMobile
 import com.composables.icons.tabler.outline.DeviceTv
 import com.raulshma.jellyplay.core.designsystem.theme.ShapeCache
 import com.raulshma.jellyplay.core.model.SessionInfo
-import com.raulshma.jellyplay.core.ui.components.LocalPerformanceMode
+import com.raulshma.jellyplay.core.ui.components.LocalReducedMotion
 import com.raulshma.jellyplay.core.ui.tv.rememberTvFocusState
 import com.raulshma.jellyplay.core.ui.tv.tvFocusIndicator
 
@@ -203,11 +203,11 @@ private fun SessionItem(
 
 @Composable
 private fun NowPlayingIndicator() {
-    val performanceMode = LocalPerformanceMode.current
+    val reducedMotion = LocalReducedMotion.current
     val bar1: Float
     val bar2: Float
     val bar3: Float
-    if (!performanceMode) {
+    if (!reducedMotion) {
         val infiniteTransition = rememberInfiniteTransition(label = "nowPlaying")
         bar1 = infiniteTransition.animateFloat(
             initialValue = 0.3f,

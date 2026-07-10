@@ -1,8 +1,6 @@
 package com.raulshma.jellyplay.core.ui.components
 
-import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.animateFloatAsState
-import androidx.compose.animation.core.spring
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -297,10 +295,7 @@ fun PosterCard(
     val isPressed by interactionSource.collectIsPressedAsState()
     val baseScale by animateFloatAsState(
         targetValue = if (isPressed) 0.95f else 1f,
-        animationSpec = spring(
-            dampingRatio = Spring.DampingRatioMediumBouncy,
-            stiffness = Spring.StiffnessMedium,
-        ),
+        animationSpec = MaterialTheme.motionScheme.defaultSpatialSpec(),
         label = "cardScale",
     )
     val scale = baseScale * focusInteraction.scale

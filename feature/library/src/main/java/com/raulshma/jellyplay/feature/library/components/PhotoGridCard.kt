@@ -1,8 +1,6 @@
 package com.raulshma.jellyplay.feature.library.components
 
 import androidx.compose.animation.core.animateFloatAsState
-import androidx.compose.animation.core.spring
-import androidx.compose.animation.core.Spring
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
@@ -44,18 +42,12 @@ fun PhotoGridCard(
 
     val baseScale by animateFloatAsState(
         targetValue = if (isPressed) AnimationTokens.CardPressScale else 1f,
-        animationSpec = spring(
-            dampingRatio = Spring.DampingRatioMediumBouncy,
-            stiffness = Spring.StiffnessMedium,
-        ),
+        animationSpec = MaterialTheme.motionScheme.defaultSpatialSpec(),
         label = "photoGridScale",
     )
     val scale by animateFloatAsState(
         targetValue = baseScale * tvFocusState.scale,
-        animationSpec = spring(
-            dampingRatio = Spring.DampingRatioMediumBouncy,
-            stiffness = Spring.StiffnessMedium,
-        ),
+        animationSpec = MaterialTheme.motionScheme.defaultSpatialSpec(),
         label = "photoGridCombinedScale",
     )
 

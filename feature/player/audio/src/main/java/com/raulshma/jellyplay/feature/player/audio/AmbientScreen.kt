@@ -47,7 +47,7 @@ import com.raulshma.jellyplay.core.designsystem.theme.AmbientColors
 import com.raulshma.jellyplay.core.designsystem.theme.ArtworkColors
 import com.raulshma.jellyplay.core.designsystem.theme.ShapeCache
 import com.raulshma.jellyplay.core.designsystem.theme.rememberArtworkColors
-import com.raulshma.jellyplay.core.ui.components.LocalPerformanceMode
+import com.raulshma.jellyplay.core.ui.components.LocalReducedMotion
 import com.raulshma.jellyplay.core.ui.tv.LocalTvMode
 import com.raulshma.jellyplay.core.ui.tv.rememberTvFocusState
 import com.raulshma.jellyplay.core.ui.tv.tryRequestFocus
@@ -213,7 +213,7 @@ private fun AmbientScreenContent(
 
 @Composable
 private fun AmbientBackground(colors: List<Color>) {
-    val performanceMode = LocalPerformanceMode.current
+    val reducedMotion = LocalReducedMotion.current
     val blobCount = 4
     val animatables = remember(blobCount) {
         List(blobCount) { Animatable(initialValue = 0f) }
@@ -223,7 +223,7 @@ private fun AmbientBackground(colors: List<Color>) {
     // This is the most expensive decorative surface in the app and it stays
     // visible for the whole listening session. In performance mode freeze the
     // blobs (LaunchedEffect bodies are skipped, values stay 0f).
-    if (!performanceMode) {
+    if (!reducedMotion) {
         animatables.forEachIndexed { index, animatable ->
             LaunchedEffect(index) {
                 animatable.animateTo(

@@ -281,6 +281,16 @@ class MainActivity : FragmentActivity() {
                 monochromeMode = preferences.monochromeMode,
                 appFontScale = preferences.appFontScale,
             ) {
+                // Provide the motion/performance flags to the whole UI subtree in one place.
+                // JellyPlayTheme already uses these to pick its MotionScheme; providing them as
+                // CompositionLocals lets non-scheme animations (infinite loops, bespoke effects)
+                // honor both "Performance Mode" and "Reduce Motion" via LocalReducedMotion.
+                androidx.compose.runtime.CompositionLocalProvider(
+                    com.raulshma.jellyplay.core.ui.components.LocalPerformanceMode provides preferences.performanceMode,
+                    com.raulshma.jellyplay.core.ui.components.LocalReduceMotionEnabled provides preferences.reduceMotionEnabled,
+                    com.raulshma.jellyplay.core.ui.components.LocalReducedMotion provides
+                        (preferences.performanceMode || preferences.reduceMotionEnabled),
+                ) {
                 HandModeProvider(mode = preferences.handMode) {
                     BlueLightFilterBox(
                         enabled = preferences.blueLightFilterEnabled,
@@ -359,6 +369,7 @@ class MainActivity : FragmentActivity() {
                             }
                         }
                     }
+                }
                 }
             }
         }

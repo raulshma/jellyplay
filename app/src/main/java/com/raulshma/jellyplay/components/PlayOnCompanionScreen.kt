@@ -1,7 +1,6 @@
 package com.raulshma.jellyplay.components
 
 import androidx.compose.animation.animateColorAsState
-import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -111,12 +110,12 @@ fun PlayOnCompanionScreen(
 
     val animatedBgStart by animateColorAsState(
         targetValue = dominant,
-        animationSpec = tween(1000),
+        animationSpec = MaterialTheme.motionScheme.slowEffectsSpec(),
         label = "companionBgStart",
     )
     val animatedBgEnd by animateColorAsState(
         targetValue = darkMuted,
-        animationSpec = tween(1200),
+        animationSpec = MaterialTheme.motionScheme.slowEffectsSpec(),
         label = "companionBgEnd",
     )
 

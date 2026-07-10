@@ -1,7 +1,6 @@
 package com.raulshma.jellyplay.feature.player.audio.components
 
 import androidx.compose.animation.core.animateFloatAsState
-import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
@@ -82,7 +81,7 @@ fun WaveformSeekBar(
     // the amplitude collapsed to 0 on pause, flattening the wave into a line.
     val currentAmplitudeRatio by animateFloatAsState(
         targetValue = 1f,
-        animationSpec = tween(durationMillis = 500),
+        animationSpec = MaterialTheme.motionScheme.slowSpatialSpec(),
         label = "amplitudeRatio",
     )
 

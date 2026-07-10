@@ -35,6 +35,6 @@ fun Dp.animate(
 
 @Composable
 fun pressScaleValue(isPressed: Boolean, defaultScale: Float = 0.95f): Float {
-    val performanceMode = com.raulshma.jellyplay.core.ui.components.LocalPerformanceMode.current
-    return if (performanceMode) 1f else if (isPressed) defaultScale else 1f
+    val reducedMotion = com.raulshma.jellyplay.core.ui.components.LocalReducedMotion.current
+    return if (reducedMotion) 1f else if (isPressed) defaultScale else 1f
 }

@@ -3,12 +3,12 @@ package com.raulshma.jellyplay.screensaver
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedContentTransitionScope
 import androidx.compose.animation.ContentTransform
-import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.slideInHorizontally
 import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.animation.togetherWith
+import androidx.compose.material3.MotionScheme
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -64,13 +64,21 @@ fun DreamSlideshow(
         }
     }
 
+    // Capture in composable scope; AnimatedContent's transitionSpec is not composable.
+    val motionScheme = MaterialTheme.motionScheme
+    val reducedMotion = com.raulshma.jellyplay.core.ui.components.LocalReducedMotion.current
+
     Box(modifier = modifier.fillMaxSize()) {
         if (images.isEmpty()) {
             DreamEmptyState()
         } else {
             AnimatedContent(
                 targetState = currentIndex,
-                transitionSpec = { transitionSpecFor(transitionStyle) },
+                transitionSpec = {
+                    // Under reduce motion / performance mode, collapse to a near-instant cut.
+                    val effectiveStyle = if (reducedMotion) DreamTransitionStyle.NONE else transitionStyle
+                    transitionSpecFor(effectiveStyle, motionScheme)
+                },
                 label = "dreamSlideshow",
             ) { index ->
                 val image = images[index % images.size]
@@ -171,20 +179,26 @@ private fun DreamEmptyState() {
 
 private fun AnimatedContentTransitionScope<Int>.transitionSpecFor(
     style: DreamTransitionStyle,
-): ContentTransform = when (style) {
-    DreamTransitionStyle.CROSSFADE -> fadeIn(animationSpec = tween(1500)) togetherWith
-        fadeOut(animationSpec = tween(1500))
-    DreamTransitionStyle.SLIDE -> (
-        slideInHorizontally(
-            animationSpec = tween(1200),
-            initialOffsetX = { it },
-        ) + fadeIn(animationSpec = tween(800))
-        ) togetherWith (
-        slideOutHorizontally(
-            animationSpec = tween(1200),
-            targetOffsetX = { -it },
-        ) + fadeOut(animationSpec = tween(800))
-        )
-    DreamTransitionStyle.NONE -> fadeIn(animationSpec = tween(200)) togetherWith
-        fadeOut(animationSpec = tween(200))
+    motionScheme: MotionScheme,
+): ContentTransform {
+    val slowEffects = motionScheme.slowEffectsSpec<Float>()
+    val fastEffects = motionScheme.fastEffectsSpec<Float>()
+    val slowSlide = motionScheme.slowSpatialSpec<androidx.compose.ui.unit.IntOffset>()
+    return when (style) {
+        DreamTransitionStyle.CROSSFADE -> fadeIn(animationSpec = slowEffects) togetherWith
+            fadeOut(animationSpec = slowEffects)
+        DreamTransitionStyle.SLIDE -> (
+            slideInHorizontally(
+                animationSpec = slowSlide,
+                initialOffsetX = { it },
+            ) + fadeIn(animationSpec = motionScheme.defaultEffectsSpec())
+            ) togetherWith (
+            slideOutHorizontally(
+                animationSpec = slowSlide,
+                targetOffsetX = { -it },
+            ) + fadeOut(animationSpec = motionScheme.defaultEffectsSpec())
+            )
+        DreamTransitionStyle.NONE -> fadeIn(animationSpec = fastEffects) togetherWith
+            fadeOut(animationSpec = fastEffects)
+    }
 }

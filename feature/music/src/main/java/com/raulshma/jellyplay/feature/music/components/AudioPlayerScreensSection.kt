@@ -1,8 +1,6 @@
 package com.raulshma.jellyplay.feature.music.components
 
-import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.animateFloatAsState
-import androidx.compose.animation.core.spring
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
@@ -182,10 +180,7 @@ private fun NowPlayingExpressiveCard(
     val isPressed by interactionSource.collectIsPressedAsState()
     val scale by animateFloatAsState(
         targetValue = if (isPressed) 0.93f else 1f,
-        animationSpec = spring(
-            dampingRatio = Spring.DampingRatioMediumBouncy,
-            stiffness = Spring.StiffnessMedium,
-        ),
+        animationSpec = MaterialTheme.motionScheme.defaultSpatialSpec(),
         label = "now_playing_scale"
     )
 
@@ -288,10 +283,7 @@ private fun PlayerScreenCard(
     val isPressed by interactionSource.collectIsPressedAsState()
     val scale by animateFloatAsState(
         targetValue = if (isPressed) 0.93f else 1f,
-        animationSpec = spring(
-            dampingRatio = Spring.DampingRatioMediumBouncy,
-            stiffness = Spring.StiffnessMedium,
-        ),
+        animationSpec = MaterialTheme.motionScheme.defaultSpatialSpec(),
         label = "${title.lowercase().replace(" ", "_")}_scale"
     )
 
@@ -375,10 +367,7 @@ private fun AmbientExpressiveCard(
     val isPressed by interactionSource.collectIsPressedAsState()
     val scale by animateFloatAsState(
         targetValue = if (isPressed) 0.93f else 1f,
-        animationSpec = spring(
-            dampingRatio = Spring.DampingRatioMediumBouncy,
-            stiffness = Spring.StiffnessMedium,
-        ),
+        animationSpec = MaterialTheme.motionScheme.defaultSpatialSpec(),
         label = "ambient_scale"
     )
 

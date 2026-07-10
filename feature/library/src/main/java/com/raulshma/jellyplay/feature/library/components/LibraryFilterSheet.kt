@@ -1,8 +1,6 @@
 package com.raulshma.jellyplay.feature.library.components
 
-import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.animateFloatAsState
-import androidx.compose.animation.core.spring
 import androidx.compose.foundation.background
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.clickable
@@ -125,10 +123,7 @@ fun LibraryFilterSheet(
                 val isResetPressed by resetInteractionSource.collectIsPressedAsState()
                 val resetScale by animateFloatAsState(
                     targetValue = if (isResetPressed) 0.95f else 1f,
-                    animationSpec = spring(
-                        dampingRatio = Spring.DampingRatioMediumBouncy,
-                        stiffness = Spring.StiffnessMedium,
-                    ),
+                    animationSpec = MaterialTheme.motionScheme.defaultSpatialSpec(),
                     label = "resetPressedScale"
                 )
                 val resetShape = ShapeCache.smooth12
@@ -355,10 +350,7 @@ fun LibraryFilterSheet(
             val isApplyPressed by applyInteractionSource.collectIsPressedAsState()
             val applyScale by animateFloatAsState(
                 targetValue = if (isApplyPressed) 0.95f else 1f,
-                animationSpec = spring(
-                    dampingRatio = Spring.DampingRatioMediumBouncy,
-                    stiffness = Spring.StiffnessMedium,
-                ),
+                animationSpec = MaterialTheme.motionScheme.defaultSpatialSpec(),
                 label = "applyPressedScale"
             )
             val applyShape = ShapeCache.smooth16

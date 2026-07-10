@@ -3,9 +3,6 @@ package com.raulshma.jellyplay.feature.player.video.components
 import androidx.compose.animation.Crossfade
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.Animatable
-import androidx.compose.animation.core.Spring
-import androidx.compose.animation.core.spring
-import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.background
@@ -73,6 +70,7 @@ internal fun SlideToUnlockOverlay(
     var uiVisible by remember { mutableStateOf(true) }
 
     val animatedOffset = remember { Animatable(0f) }
+    val offsetSpec = MaterialTheme.motionScheme.defaultSpatialSpec<Float>()
 
     val tvUnlockFocusRequester = remember { FocusRequester() }
 
@@ -82,10 +80,7 @@ internal fun SlideToUnlockOverlay(
         } else {
             animatedOffset.animateTo(
                 targetValue = 0f,
-                animationSpec = spring(
-                    dampingRatio = Spring.DampingRatioMediumBouncy,
-                    stiffness = Spring.StiffnessMedium,
-                ),
+                animationSpec = offsetSpec,
             )
         }
     }
@@ -176,8 +171,8 @@ internal fun SlideToUnlockOverlay(
 
             AnimatedVisibility(
                 visible = showUi,
-                enter = fadeIn(tween(200)),
-                exit = fadeOut(tween(200)),
+                enter = fadeIn(MaterialTheme.motionScheme.fastEffectsSpec()),
+                exit = fadeOut(MaterialTheme.motionScheme.fastEffectsSpec()),
             ) {
                 Column(
                     horizontalAlignment = Alignment.CenterHorizontally,
@@ -196,7 +191,7 @@ internal fun SlideToUnlockOverlay(
                     ) {
                         Crossfade(
                             targetState = isUnlocked,
-                            animationSpec = tween(200),
+                            animationSpec = MaterialTheme.motionScheme.fastEffectsSpec(),
                             label = "lockIcon",
                         ) { unlocked ->
                             Icon(

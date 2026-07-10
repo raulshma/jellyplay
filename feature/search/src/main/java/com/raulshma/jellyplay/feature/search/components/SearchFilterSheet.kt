@@ -1,8 +1,6 @@
 package com.raulshma.jellyplay.feature.search.components
 
-import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.animateFloatAsState
-import androidx.compose.animation.core.spring
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
@@ -104,10 +102,7 @@ fun SearchFilterSheet(
                 val isResetPressed by resetInteractionSource.collectIsPressedAsState()
                 val resetScale by animateFloatAsState(
                     targetValue = if (isResetPressed) 0.95f else 1f,
-                    animationSpec = spring(
-                        dampingRatio = Spring.DampingRatioMediumBouncy,
-                        stiffness = Spring.StiffnessMedium,
-                    ),
+                    animationSpec = MaterialTheme.motionScheme.defaultSpatialSpec(),
                     label = "searchResetPressedScale",
                 )
                 val resetShape = ShapeCache.smooth12
@@ -257,10 +252,7 @@ fun SearchFilterSheet(
             val isApplyPressed by applyInteractionSource.collectIsPressedAsState()
             val applyScale by animateFloatAsState(
                 targetValue = if (isApplyPressed) 0.95f else 1f,
-                animationSpec = spring(
-                    dampingRatio = Spring.DampingRatioMediumBouncy,
-                    stiffness = Spring.StiffnessMedium,
-                ),
+                animationSpec = MaterialTheme.motionScheme.defaultSpatialSpec(),
                 label = "searchApplyPressedScale",
             )
             val applyShape = ShapeCache.smooth16
