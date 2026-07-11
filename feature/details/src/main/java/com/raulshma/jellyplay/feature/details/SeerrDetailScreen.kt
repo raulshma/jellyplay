@@ -395,7 +395,10 @@ private fun SeerrDetailContent(
 
     val navBarColor = LocalNavigationBarColor.current
     SideEffect {
-        if (navBarColor.value != backgroundColor) navBarColor.value = backgroundColor
+        // Write the settled target, not each interpolated animation frame —
+        // this state drives an animateColorAsState at the app root, so feeding
+        // it every frame recomposes the whole nav subtree ~18x per transition.
+        if (navBarColor.value != targetBackgroundColor) navBarColor.value = targetBackgroundColor
     }
 
     val appBarColor by animateFloatAsState(
