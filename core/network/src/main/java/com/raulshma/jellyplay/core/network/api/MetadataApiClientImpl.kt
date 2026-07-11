@@ -92,7 +92,10 @@ class MetadataApiClientImpl @Inject constructor(
         MetadataEditorInfo(
             parentalRatingOptions = dto.parentalRatingOptions.map { it.toAppParentalRating() },
             contentTypeOptions = dto.contentTypeOptions.map { NameValuePair(name = it.name ?: "", value = it.value ?: "") },
-            externalIdInfos = dto.externalIdInfos.map { ExternalIdInfo(name = it.name, key = it.key, urlFormatString = null) },
+            // Normalize key to lowercase so it matches the lowercased providerIds map
+            // built in LibraryApiClientImpl.toMediaDetail — otherwise the editor can't
+            // match ExternalIdInfo.key against state.providerIds and shows empty fields.
+            externalIdInfos = dto.externalIdInfos.map { ExternalIdInfo(name = it.name, key = it.key.lowercase(), urlFormatString = null) },
             cultures = dto.cultures.map { CultureInfo(
                 name = it.name,
                 displayName = it.displayName,

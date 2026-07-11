@@ -1,0 +1,107 @@
+package com.raulshma.jellyplay.feature.home
+
+import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.lazy.LazyRow
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.remember
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clipToBounds
+import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.unit.dp
+import com.raulshma.jellyplay.core.model.seerr.SeerrSearchItem
+import com.raulshma.jellyplay.core.ui.components.LocalSeerrCardLoadingState
+import com.raulshma.jellyplay.core.ui.components.LocalSeerrPrefetch
+import com.raulshma.jellyplay.core.ui.components.SeerrCardLoadingState
+import com.raulshma.jellyplay.core.ui.components.SeerrMediaCard
+
+/**
+ * A single display-only (non-user-scrollable) horizontal row of [SeerrMediaCard]s.
+ *
+ * This unifies the previously duplicated rendering for the Seerr "Discover"
+ * grid rows and the *arr "Recently Grabbed / Coming Soon" row, which were
+ * near-identical: same `LazyRow` + `CompositionLocalProvider` + `SeerrMediaCard`
+ * + onClick `when(mediaType)` block. The card onClick / request lambdas are
+ * memoized once per row so they are not reallocated per-item per-recomposition.
+ *
+ * @param items the Seerr/TMDB-keyed cards to render in this row.
+ * @param itemWidth computed card width (the row is laid out so all items share it).
+ * @param rowHorizontalPadding outer horizontal padding + vertical centering pad.
+ * @param spacing gap between cards.
+ * @param backgroundColor row background color.
+ * @param clippingEnabled when true, clips items to the row bounds (experimental card clipping).
+ * @param seerrCardLoadingState per-card loading state (start/stop on prefetch).
+ * @param seerrPrefetch prefetches Seerr details before navigating to the request flow.
+ * @param onSeerrItemClick invoked after prefetch completes — opens the Seerr item.
+ * @param onSeerrRequest invoked when the card's request action is tapped.
+ */
+@Composable
+internal fun SeerrDiscoverRow(
+    items: List<SeerrSearchItem>,
+    itemWidth: Dp,
+    rowHorizontalPadding: Dp,
+    spacing: Dp,
+    backgroundColor: androidx.compose.ui.graphics.Color,
+    clippingEnabled: Boolean,
+    seerrCardLoadingState: SeerrCardLoadingState,
+    seerrPrefetch: (Int, String, () -> Unit) -> Unit,
+    onSeerrItemClick: (Int, String) -> Unit,
+    onSeerrRequest: (SeerrSearchItem) -> Unit,
+) {
+    // Memoize the per-card lambdas once per row. Previously these were allocated
+    // inside the `items {}` block, so every card got a fresh lambda (with the
+    // `when(mediaType)` block) on every recomposition.
+    val onCardClick = remember(seerrCardLoadingState, seerrPrefetch, onSeerrItemClick) {
+        { item: SeerrSearchItem ->
+            val mediaType = when {
+                item.mediaType.equals("movie", ignoreCase = true) -> "movie"
+                item.mediaType.equals("tv", ignoreCase = true) -> "tv"
+                else -> item.mediaType
+            }
+            seerrCardLoadingState.startLoading(item.id)
+            seerrPrefetch(item.id, mediaType) {
+                seerrCardLoadingState.stopLoading(item.id)
+                onSeerrItemClick(item.id, mediaType)
+            }
+        }
+    }
+    val onCardRequestClick = remember(onSeerrRequest) {
+        { item: SeerrSearchItem -> onSeerrRequest(item) }
+    }
+
+    CompositionLocalProvider(
+        LocalSeerrCardLoadingState provides seerrCardLoadingState,
+        LocalSeerrPrefetch provides seerrPrefetch,
+    ) {
+        LazyRow(
+            modifier = Modifier
+                .fillMaxWidth()
+                .then(if (clippingEnabled) Modifier.clipToBounds() else Modifier)
+                .background(backgroundColor)
+                .padding(horizontal = rowHorizontalPadding, vertical = spacing / 2),
+            horizontalArrangement = Arrangement.spacedBy(spacing),
+            userScrollEnabled = false,
+        ) {
+            items(
+                count = items.size,
+                key = { idx -> items[idx].id },
+                contentType = { "seerrCard" },
+            ) { idx ->
+                val seerrItem = items[idx]
+                SeerrMediaCard(
+                    item = seerrItem,
+                    imageUrl = seerrItem.posterUrl,
+                    isLoading = seerrCardLoadingState.isLoading(seerrItem.id),
+                    clipToShape = clippingEnabled,
+                    onClick = { onCardClick(seerrItem) },
+                    onRequestClick = { onCardRequestClick(seerrItem) },
+                    modifier = Modifier.width(itemWidth),
+                )
+            }
+        }
+    }
+}

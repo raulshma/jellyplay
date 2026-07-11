@@ -20,6 +20,7 @@ import io.mockk.mockk
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.flowOf
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
@@ -69,6 +70,7 @@ class SeerrDetailViewModelResolutionTest {
 
     @Test
     fun `resolves jellyfinItemId via tmdb when item is available`() = runTest {
+        backgroundScope.launch { viewModel.uiState.collect {} }
         coEvery { seerrRepository.getMovieDetails(123) } returns Result.success(
             availableMovie(tmdbId = 123)
         )
@@ -77,11 +79,12 @@ class SeerrDetailViewModelResolutionTest {
         viewModel.loadDetails(123, "movie")
         advanceUntilIdle()
 
-        assertEquals("jellyfin-uuid-1", viewModel.jellyfinItemId.value)
+        assertEquals("jellyfin-uuid-1", viewModel.uiState.value.jellyfinItemId)
     }
 
     @Test
     fun `does not attempt resolution when item is not available`() = runTest {
+        backgroundScope.launch { viewModel.uiState.collect {} }
         coEvery { seerrRepository.getMovieDetails(123) } returns Result.success(
             pendingMovie(tmdbId = 123)
         )
@@ -90,11 +93,12 @@ class SeerrDetailViewModelResolutionTest {
         advanceUntilIdle()
 
         coVerify(exactly = 0) { mediaRepository.findItemByProviderId(any(), any()) }
-        assertNull(viewModel.jellyfinItemId.value)
+        assertNull(viewModel.uiState.value.jellyfinItemId)
     }
 
     @Test
     fun `falls back to tvdb when tmdb lookup returns null`() = runTest {
+        backgroundScope.launch { viewModel.uiState.collect {} }
         coEvery { seerrRepository.getMovieDetails(123) } returns Result.success(
             availableMovie(tmdbId = 123, externalIds = SeerrExternalIds(tvdbId = 456, imdbId = "tt789"))
         )
@@ -104,11 +108,12 @@ class SeerrDetailViewModelResolutionTest {
         viewModel.loadDetails(123, "movie")
         advanceUntilIdle()
 
-        assertEquals("jellyfin-uuid-2", viewModel.jellyfinItemId.value)
+        assertEquals("jellyfin-uuid-2", viewModel.uiState.value.jellyfinItemId)
     }
 
     @Test
     fun `leaves jellyfinItemId null when no provider id resolves`() = runTest {
+        backgroundScope.launch { viewModel.uiState.collect {} }
         coEvery { seerrRepository.getMovieDetails(123) } returns Result.success(
             availableMovie(tmdbId = 123, externalIds = SeerrExternalIds(tvdbId = 456))
         )
@@ -117,7 +122,7 @@ class SeerrDetailViewModelResolutionTest {
         viewModel.loadDetails(123, "movie")
         advanceUntilIdle()
 
-        assertNull(viewModel.jellyfinItemId.value)
+        assertNull(viewModel.uiState.value.jellyfinItemId)
     }
 
     private fun availableMovie(

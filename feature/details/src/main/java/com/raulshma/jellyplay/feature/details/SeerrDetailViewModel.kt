@@ -1,7 +1,6 @@
 package com.raulshma.jellyplay.feature.details
 
 import android.util.Log
-import androidx.compose.runtime.State
 import com.raulshma.jellyplay.core.data.repository.MediaRepository
 import com.raulshma.jellyplay.core.data.repository.SeerrRepository
 import com.raulshma.jellyplay.core.data.seerr.SeerrRequestDelegate
@@ -13,23 +12,24 @@ import com.raulshma.jellyplay.core.model.seerr.SeerrEpisode
 import com.raulshma.jellyplay.core.model.seerr.SeerrMediaStatus
 import com.raulshma.jellyplay.core.model.seerr.SeerrMovieDetails
 import com.raulshma.jellyplay.core.model.seerr.SeerrPreferences
-import com.raulshma.jellyplay.core.model.seerr.SeerrRadarrServiceDetail
 import com.raulshma.jellyplay.core.model.seerr.SeerrRatings
 import com.raulshma.jellyplay.core.model.seerr.SeerrSearchItem
 import com.raulshma.jellyplay.core.model.seerr.SeerrSeason
+import com.raulshma.jellyplay.core.model.seerr.SeerrRequestResult
+import com.raulshma.jellyplay.core.model.seerr.SeerrRadarrServiceDetail
 import com.raulshma.jellyplay.core.model.seerr.SeerrSonarrServiceDetail
 import com.raulshma.jellyplay.core.model.seerr.SeerrTvDetails
-import com.raulshma.jellyplay.core.model.seerr.SeerrRequestResult
 import com.raulshma.jellyplay.core.ui.viewmodel.JellyPlayViewModel
 import com.raulshma.jellyplay.core.network.seerr.buildPosterUrl
 import com.raulshma.jellyplay.core.network.seerr.buildBackdropUrl
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.async
-import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.stateIn
+import kotlinx.coroutines.flow.update
 import javax.inject.Inject
 
 private const val TAG = "SeerrDetailVM"
@@ -47,104 +47,84 @@ class SeerrDetailViewModel @Inject constructor(
         .stateIn(
             scope = scope,
             started = SharingStarted.WhileSubscribed(5_000),
-            initialValue = UserPreferences()
+            initialValue = UserPreferences(),
         )
 
     val seerrPreferences: StateFlow<SeerrPreferences> = seerrPreferencesStore.preferences
         .stateIn(
             scope = scope,
             started = SharingStarted.WhileSubscribed(5_000),
-            initialValue = SeerrPreferences()
+            initialValue = SeerrPreferences(),
         )
 
-    private val _movieDetails = composeState<SeerrMovieDetails?>(null)
-    val movieDetails: State<SeerrMovieDetails?> = _movieDetails.asState()
+    // Single source of truth for Seerr-detail state. All mutations funnel
+    // through [_uiState.update]. Seerr request delegate state (service details,
+    // tv seasons, request result) is exposed as separate StateFlows below and
+    // read directly by the request dialog — it is not part of the atomic
+    // content snapshot.
+    private val _uiState = MutableStateFlow(SeerrDetailUiState())
 
-    private val _tvDetails = composeState<SeerrTvDetails?>(null)
-    val tvDetails: State<SeerrTvDetails?> = _tvDetails.asState()
+    private val seerrRequestState = com.raulshma.jellyplay.core.data.seerr.SeerrRequestStateHolder(scope, seerrRequestDelegate)
 
-    private val _ratings = composeState<SeerrRatings?>(null)
-    val ratings: State<SeerrRatings?> = _ratings.asState()
+    /** Atomic snapshot of the Seerr-detail screen content state. */
+    val uiState: StateFlow<SeerrDetailUiState> = _uiState
+        .stateIn(scope, SharingStarted.WhileSubscribed(5_000), SeerrDetailUiState())
 
-    private val _isLoading = composeState(false)
-    val isLoading: State<Boolean> = _isLoading.asState()
-
-    private val _error = composeState<String?>(null)
-    val error: State<String?> = _error.asState()
-
-    private val _seerrRecommendations = stateFlow<List<SeerrSearchItem>>(emptyList())
-    val seerrRecommendations = _seerrRecommendations.flow
-
-    private val _seerrSimilar = stateFlow<List<SeerrSearchItem>>(emptyList())
-    val seerrSimilar = _seerrSimilar.flow
+    // Seerr request delegate accessors (read by the SeerrRequestDialog).
+    val requestResult: StateFlow<SeerrRequestResult?> get() = seerrRequestState.requestResult
+    val radarrServers: StateFlow<List<SeerrRadarrServiceDetail>> get() = seerrRequestState.radarrServers
+    val sonarrServers: StateFlow<List<SeerrSonarrServiceDetail>> get() = seerrRequestState.sonarrServers
+    val isLoadingServices: StateFlow<Boolean> get() = seerrRequestState.isLoadingServices
+    val tvSeasons: StateFlow<List<SeerrSeason>> get() = seerrRequestState.tvSeasons
 
     val isSeerrConnected: StateFlow<Boolean> = seerrRepository.isConnected()
         .stateIn(scope, SharingStarted.WhileSubscribed(5_000), false)
-
-    private val seerrRequestState = com.raulshma.jellyplay.core.data.seerr.SeerrRequestStateHolder(scope, seerrRequestDelegate)
-    val requestResult get() = seerrRequestState.requestResult
-    val radarrServers get() = seerrRequestState.radarrServers
-    val sonarrServers get() = seerrRequestState.sonarrServers
-    val isLoadingServices get() = seerrRequestState.isLoadingServices
-
-    private val _selectedSeasonNumber = composeState<Int?>(null)
-    val selectedSeasonNumber: State<Int?> = _selectedSeasonNumber.asState()
-
-    private val _episodesBySeason = stateFlow<Map<Int, List<SeerrEpisode>>>(emptyMap())
-    val episodesBySeason = _episodesBySeason.flow
-
-    /**
-     * The Jellyfin library item id resolved for an "Available" Seerr item, or null
-     * when the item isn't in the library (or resolution hasn't run/failed). Used to
-     * enable the "Available" → "Open in library" action.
-     */
-    private val _jellyfinItemId = composeState<String?>(null)
-    val jellyfinItemId: State<String?> = _jellyfinItemId.asState()
-
-    private val _isLoadingEpisodes = stateFlow(false)
-    val isLoadingEpisodes = _isLoadingEpisodes.flow
 
     fun loadDetails(tmdbId: Int, mediaType: String) {
         launch {
             // Normalize once so every downstream comparison is case-insensitive
             // and consistent (callers may pass "movie", "Movie", "tv", "TV", …).
             val isMovie = mediaType.equals("movie", ignoreCase = true)
-            _isLoading.value = true
-            _error.value = null
-            _ratings.value = null
-            _movieDetails.value = null
-            _tvDetails.value = null
-            _jellyfinItemId.value = null
-            _seerrRecommendations.set(emptyList())
-            _seerrSimilar.set(emptyList())
-            _selectedSeasonNumber.value = null
-            _episodesBySeason.set(emptyMap())
-            _isLoadingEpisodes.set(false)
+            _uiState.update {
+                it.copy(
+                    isLoading = true,
+                    error = null,
+                    ratings = null,
+                    movieDetails = null,
+                    tvDetails = null,
+                    jellyfinItemId = null,
+                    recommendations = emptyList(),
+                    similar = emptyList(),
+                    selectedSeasonNumber = null,
+                    episodesBySeason = emptyMap(),
+                    isLoadingEpisodes = false,
+                )
+            }
 
             var hasRatings = false
 
             try {
                 if (isMovie) {
-                    seerrRepository.getMovieDetails(tmdbId).onSuccess {
-                        _movieDetails.value = it
-                        val ratings = it.ratings
+                    seerrRepository.getMovieDetails(tmdbId).onSuccess { details ->
+                        _uiState.update { it.copy(movieDetails = details) }
+                        val ratings = details.ratings
                         if (ratings?.rt != null || ratings?.imdb != null) {
                             hasRatings = true
                         }
-                        updateRatings(ratings, it.voteAverage)
+                        updateRatings(ratings, details.voteAverage)
                     }.onFailure {
-                        _error.value = it.message
+                        _uiState.update { state -> state.copy(error = it.message) }
                     }
                 } else {
-                    seerrRepository.getTvDetails(tmdbId).onSuccess {
-                        _tvDetails.value = it
-                        val ratings = it.ratings
+                    seerrRepository.getTvDetails(tmdbId).onSuccess { details ->
+                        _uiState.update { it.copy(tvDetails = details) }
+                        val ratings = details.ratings
                         if (ratings?.rt != null || ratings?.imdb != null) {
                             hasRatings = true
                         }
-                        updateRatings(ratings, it.voteAverage)
+                        updateRatings(ratings, details.voteAverage)
                     }.onFailure {
-                        _error.value = it.message
+                        _uiState.update { state -> state.copy(error = it.message) }
                     }
                 }
 
@@ -169,12 +149,12 @@ class SeerrDetailViewModel @Inject constructor(
                         updateRatings(it, null)
                     }
 
-                    recommendationsDeferred.await()?.let {
-                        _seerrRecommendations.set(it.results)
+                    recommendationsDeferred.await()?.let { result ->
+                        _uiState.update { it.copy(recommendations = result.results) }
                     }
 
-                    similarDeferred.await()?.let {
-                        _seerrSimilar.set(it.results)
+                    similarDeferred.await()?.let { result ->
+                        _uiState.update { it.copy(similar = result.results) }
                     }
                 }
 
@@ -186,7 +166,7 @@ class SeerrDetailViewModel @Inject constructor(
                 Log.w(TAG, "Failed to fetch Seerr details: ${e.message}")
             }
 
-            _isLoading.value = false
+            _uiState.update { it.copy(isLoading = false) }
         }
     }
 
@@ -194,12 +174,13 @@ class SeerrDetailViewModel @Inject constructor(
      * Resolves the Jellyfin item id for the loaded Seerr media by querying the
      * library against provider ids (tmdb first, then tvdb/imdb as fallbacks).
      * Only attempts resolution when the item is reported as available on the
-     * server. Updates [_jellyfinItemId] on success.
+     * server. Updates [SeerrDetailUiState.jellyfinItemId] on success.
      */
     private suspend fun resolveJellyfinItemId(tmdbId: Int, mediaType: String) {
         val isMovie = mediaType.equals("movie", ignoreCase = true)
-        val movie = _movieDetails.value
-        val tv = _tvDetails.value
+        val state = _uiState.value
+        val movie = state.movieDetails
+        val tv = state.tvDetails
         val mediaInfo = movie?.mediaInfo ?: tv?.mediaInfo
         val status = mediaInfo?.status ?: 0
         val mediaStatus = SeerrMediaStatus.fromValue(status)
@@ -219,47 +200,55 @@ class SeerrDetailViewModel @Inject constructor(
         for ((provider, id) in candidates) {
             val result = mediaRepository.findItemByProviderId(provider, id).getOrNull()
             if (!result.isNullOrBlank()) {
-                _jellyfinItemId.value = result
+                _uiState.update { it.copy(jellyfinItemId = result) }
                 return
             }
         }
     }
 
     private fun updateRatings(newRatings: SeerrRatings?, tmdbScore: Float?) {
-        val current = _ratings.value ?: SeerrRatings()
-        val merged = newRatings ?: current
-
-        _ratings.value = merged.copy(
-            rt = merged.rt ?: current.rt,
-            imdb = merged.imdb ?: current.imdb,
-            tmdb = merged.tmdb ?: current.tmdb ?: tmdbScore?.let { com.raulshma.jellyplay.core.model.seerr.SeerrTmdbRating(rating = it) }
-        )
+        _uiState.update { state ->
+            val current = state.ratings ?: SeerrRatings()
+            val merged = newRatings ?: current
+            state.copy(
+                ratings = merged.copy(
+                    rt = merged.rt ?: current.rt,
+                    imdb = merged.imdb ?: current.imdb,
+                    tmdb = merged.tmdb ?: current.tmdb ?: tmdbScore?.let {
+                        com.raulshma.jellyplay.core.model.seerr.SeerrTmdbRating(rating = it)
+                    },
+                ),
+            )
+        }
     }
 
     fun loadServiceDetails(mediaType: String) = seerrRequestState.loadServiceDetails(mediaType)
 
+    fun loadTvSeasons(tmdbId: Int) = seerrRequestState.loadTvSeasons(tmdbId)
+
     fun toggleSeason(tvId: Int, seasonNumber: Int) {
-        if (_selectedSeasonNumber.value == seasonNumber) {
-            _selectedSeasonNumber.value = null
+        if (_uiState.value.selectedSeasonNumber == seasonNumber) {
+            _uiState.update { it.copy(selectedSeasonNumber = null) }
             return
         }
-        _selectedSeasonNumber.value = seasonNumber
-        if (!_episodesBySeason.value.containsKey(seasonNumber)) {
+        _uiState.update { it.copy(selectedSeasonNumber = seasonNumber) }
+        if (!_uiState.value.episodesBySeason.containsKey(seasonNumber)) {
             loadSeasonEpisodes(tvId, seasonNumber)
         }
     }
 
     private fun loadSeasonEpisodes(tvId: Int, seasonNumber: Int) {
         launch {
-            _isLoadingEpisodes.set(true)
+            _uiState.update { it.copy(isLoadingEpisodes = true) }
             try {
                 seerrRepository.getTvSeasonDetails(tvId, seasonNumber).onSuccess { detail ->
-                    val current = _episodesBySeason.value.toMutableMap()
-                    current[seasonNumber] = detail.episodes
-                    _episodesBySeason.set(current)
+                    _uiState.update {
+                        it.copy(episodesBySeason = it.episodesBySeason + (seasonNumber to detail.episodes))
+                    }
                 }
-            } catch (_: Exception) {}
-            _isLoadingEpisodes.set(false)
+            } catch (_: Exception) {
+            }
+            _uiState.update { it.copy(isLoadingEpisodes = false) }
         }
     }
 
@@ -283,18 +272,24 @@ class SeerrDetailViewModel @Inject constructor(
                 tags = tags,
             ).onSuccess {
                 seerrRequestState.setRequestResult(SeerrRequestResult(isLoading = false, success = true))
-                val currentMovie = _movieDetails.value
-                val currentTv = _tvDetails.value
-                val movieMediaInfo = currentMovie?.mediaInfo
-                val tvMediaInfo = currentTv?.mediaInfo
-                if (movieMediaInfo?.tmdbId == item.id) {
-                    _movieDetails.value = currentMovie.copy(
-                        mediaInfo = movieMediaInfo.copy(status = com.raulshma.jellyplay.core.model.seerr.SeerrMediaStatus.PENDING.value)
-                    )
-                } else if (tvMediaInfo?.tmdbId == item.id) {
-                    _tvDetails.value = currentTv.copy(
-                        mediaInfo = tvMediaInfo.copy(status = com.raulshma.jellyplay.core.model.seerr.SeerrMediaStatus.PENDING.value)
-                    )
+                _uiState.update { state ->
+                    val currentMovie = state.movieDetails
+                    val currentTv = state.tvDetails
+                    val movieMediaInfo = currentMovie?.mediaInfo
+                    val tvMediaInfo = currentTv?.mediaInfo
+                    when {
+                        movieMediaInfo?.tmdbId == item.id -> state.copy(
+                            movieDetails = currentMovie!!.copy(
+                                mediaInfo = movieMediaInfo.copy(status = SeerrMediaStatus.PENDING.value),
+                            ),
+                        )
+                        tvMediaInfo?.tmdbId == item.id -> state.copy(
+                            tvDetails = currentTv!!.copy(
+                                mediaInfo = tvMediaInfo.copy(status = SeerrMediaStatus.PENDING.value),
+                            ),
+                        )
+                        else -> state
+                    }
                 }
             }.onFailure {
                 seerrRequestState.setRequestResult(SeerrRequestResult(isLoading = false, success = false, error = it.message))

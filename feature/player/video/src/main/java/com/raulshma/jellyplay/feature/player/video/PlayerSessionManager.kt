@@ -357,6 +357,7 @@ class PlayerSessionManager(
             normalizationGain = detail.item.normalizationGain,
             mimeType = mimeType,
             isLive = _sessionState.value.isLive,
+            serverDurationMs = (detail.item.runTimeTicks ?: 0L) / 10_000,
         )
 
         lastPlaybackRequest = request
@@ -424,6 +425,71 @@ class PlayerSessionManager(
         // transcode; direct play is uncapped). Rebuild the side-loaded
         // subtitle set for the new play method so the subtitle picker stays
         // populated when switching to/from a transcode.
+        val engineMaxBitrate = if (mode == PlaybackMode.AUTO) maxBitrate?.toInt() else null
+        val state = _sessionState.value
+        val rebuiltSubtitles = state.mediaDetail?.let { detail ->
+            buildExternalSubtitles(detail, state.currentMediaSource, playMethod)
+        } ?: emptyList()
+        reloadWithEngine(
+            playerType = playerType,
+            currentPositionMs = currentPositionMs,
+            playbackSpeed = prefs.videoDefaultSpeed,
+            maxVideoBitrate = engineMaxBitrate,
+            uriOverride = url,
+            externalSubtitlesOverride = rebuiltSubtitles,
+        )
+        return resolved
+    }
+
+    /**
+     * Reload playback for the current item at [currentPositionMs] with a new
+     * [audioStreamIndex] and/or [subtitleStreamIndex]. Used when the user
+     * selects a server-origin audio/subtitle track during transcoded playback
+     * — mpv cannot switch audio in-place on an HLS manifest, and embedded subs
+     * aren't delivered in the transcode, so the server must re-issue the
+     * stream with the chosen index baked in (standard Jellyfin PlaybackInfo
+     * re-POST, mirroring Wholphin's changeStreams).
+     *
+     * The current playback mode / quality / max-bitrate are preserved from the
+     * existing session; only the stream indices change. Subtitles are rebuilt
+     * via [buildExternalSubtitles] so the side-loaded set matches the new
+     * play method.
+     */
+    suspend fun reloadForStreamChange(
+        audioStreamIndex: Int?,
+        subtitleStreamIndex: Int?,
+        currentPositionMs: Long,
+    ): ResolvedPlayback? {
+        val itemId = _sessionState.value.currentItemId ?: return null
+        val sourceId = _sessionState.value.currentMediaSource?.id ?: ""
+        val prefs = preferencesStore.preferences.first()
+        val playerType = lastPlayerType ?: prefs.preferredPlayer
+        val maxBitrate = adaptiveBitrateManager.resolveEffectiveMaxBitrate()
+        val mode = prefs.playbackMode
+
+        val resolved = playbackRepository.resolvePlayback(
+            itemId = itemId,
+            mediaSourceId = sourceId,
+            startTimeTicks = currentPositionMs * 10_000,
+            audioStreamIndex = audioStreamIndex,
+            subtitleStreamIndex = subtitleStreamIndex,
+            maxStreamingBitrateBits = maxBitrate,
+            mode = mode,
+            playerType = playerType,
+        )
+        val url = resolved?.streamUrl
+            ?: playbackRepository.getStreamUrl(itemId, sourceId, currentPositionMs * 10_000)
+        val playMethod = resolved?.playMethod ?: PlayMethod.DIRECT_PLAY
+
+        _sessionState.update {
+            it.copy(
+                playMethodString = playMethod.displayName(),
+                playMethod = playMethod,
+                playSessionId = resolved?.playSessionId,
+                streamUrl = url,
+            )
+        }
+
         val engineMaxBitrate = if (mode == PlaybackMode.AUTO) maxBitrate?.toInt() else null
         val state = _sessionState.value
         val rebuiltSubtitles = state.mediaDetail?.let { detail ->

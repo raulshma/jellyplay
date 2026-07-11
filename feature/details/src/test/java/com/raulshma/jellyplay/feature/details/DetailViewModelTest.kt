@@ -6,6 +6,7 @@ import com.raulshma.jellyplay.core.data.playback.AdaptiveBitrateManager
 import com.raulshma.jellyplay.core.data.playback.AudioPlaybackManager
 import com.raulshma.jellyplay.core.data.playback.ThemeMusicPlayer
 import com.raulshma.jellyplay.core.data.repository.DownloadRepository
+import com.raulshma.jellyplay.core.data.repository.ArrRepository
 import com.raulshma.jellyplay.core.data.repository.MediaRepository
 import com.raulshma.jellyplay.core.data.repository.PlaybackRepository
 import com.raulshma.jellyplay.core.data.repository.SeerrRepository
@@ -54,6 +55,7 @@ class DetailViewModelTest {
     private lateinit var audioPlaybackManager: AudioPlaybackManager
     private lateinit var themeMusicPlayer: ThemeMusicPlayer
     private lateinit var tmdbApiClient: TmdbApiClient
+    private lateinit var arrRepository: ArrRepository
 
     private lateinit var viewModel: DetailViewModel
 
@@ -72,6 +74,7 @@ class DetailViewModelTest {
         audioPlaybackManager = mockk(relaxed = true)
         themeMusicPlayer = mockk(relaxed = true)
         tmdbApiClient = mockk(relaxed = true)
+        arrRepository = mockk(relaxed = true)
 
         every { preferencesStore.preferences } returns MutableStateFlow(UserPreferences())
         every { seerrRepository.isConnected() } returns flowOf(false)
@@ -122,6 +125,7 @@ class DetailViewModelTest {
             audioPlaybackManager = audioPlaybackManager,
             themeMusicPlayer = themeMusicPlayer,
             tmdbApiClient = tmdbApiClient,
+            arrRepository = arrRepository,
         )
     }
 

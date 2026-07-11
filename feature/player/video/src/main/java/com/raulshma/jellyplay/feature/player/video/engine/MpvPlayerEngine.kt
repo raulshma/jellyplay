@@ -4,6 +4,7 @@ import android.content.Context
 
 import android.media.AudioManager
 import android.os.Handler
+import android.os.HandlerThread
 import android.os.Looper
 import android.util.Log
 import android.view.View
@@ -55,6 +56,12 @@ class MpvPlayerEngine(
         private const val DEMUXER_MAX_BYTES_NORMAL = 64 * 1024 * 1024L
         private const val DEMUXER_MAX_BACK_BYTES_LOW = 16 * 1024 * 1024L
         private const val DEMUXER_MAX_BACK_BYTES_NORMAL = 32 * 1024 * 1024L
+        // mpv_end_file_reason — see mpv client.h handleEndFile().
+        private const val MPV_END_FILE_REASON_EOF = 0
+        private const val MPV_END_FILE_REASON_STOP = 1
+        private const val MPV_END_FILE_REASON_QUIT = 2
+        private const val MPV_END_FILE_REASON_ERROR = 3
+        private const val MPV_END_FILE_REASON_REDIRECT = 4
         private val MPV_SUBTITLE_LOG_PATTERN =
             Regex("(?i)(sub|subtitle|libass|webvtt|vtt|srt|ssa|ass|ffmpeg|http|stream)")
         private val REDACT_API_KEY = Regex("(?i)(api_key=)[^&\\s]+")
@@ -101,6 +108,20 @@ class MpvPlayerEngine(
     // the string property "audio-device-id" as an int, which always
     // threw and returned 0 — leaving the effect chain unbound.
     @Volatile private var generatedAudioSessionId: Int = 0
+
+    // Observer-driven cached playback state. These are populated by mpv
+    // property observers (postInitOptions) instead of via per-tick
+    // getProperty JNI calls on the main thread — the old polling approach
+    // issued 3–15 synchronous JNI reads/second on the main looper and was a
+    // primary source of UI jank during mpv playback (see findroid's pure-
+    // observer MPVPlayer for the reference pattern).
+    @Volatile private var cachedPositionMs: Long = 0L
+    @Volatile private var cachedDurationMs: Long = 0L
+    @Volatile private var cachedBufferedPositionMs: Long = 0L
+    // Server-reported total runtime, used as a fallback when the mpv demuxer
+    // cannot resolve a duration for HLS/transcoded streams (where `duration`
+    // is frequently 0/partial). Set from PlaybackRequest in load().
+    @Volatile private var serverDurationMs: Long = 0L
     
     private var currentConfig = EngineConfig()
     // mpv handles its own internal EQ via af filters; this helper exists
@@ -115,6 +136,21 @@ class MpvPlayerEngine(
     private var wasPlayingBeforeActivityPause = false
 
     private val mainHandler = Handler(Looper.getMainLooper())
+
+    /**
+     * Dedicated background thread for native mpv teardown. [release] is invoked
+     * from the Compose `onDispose` on the main thread; `BaseMPVView.destroy()`
+     * runs `mpv_terminate_destroy()` which synchronously tears down the GPU
+     * context, demuxer, network threads, and libass — blocking for hundreds of
+     * ms to seconds. Routing stop+destroy onto this thread (like Wholphin's
+     * "MpvPlayer:Playback" HandlerThread) keeps the main looper responsive on
+     * player close. Created lazily so non-mpv engines pay nothing.
+     */
+    private val releaseThread: HandlerThread by lazy {
+        HandlerThread("MpvRelease", android.os.Process.THREAD_PRIORITY_BACKGROUND)
+            .also { it.start() }
+    }
+    private val releaseHandler: Handler by lazy { Handler(releaseThread.looper) }
 
     override fun onActivityPause() {
         wasPlayingBeforeActivityPause = _isPlaying.value
@@ -134,8 +170,25 @@ class MpvPlayerEngine(
 
         private val observer = object : MPV.EventObserver {
             override fun eventProperty(property: String) {}
-            override fun eventProperty(property: String, value: Long) {}
-            override fun eventProperty(property: String, value: Double) {}
+            override fun eventProperty(property: String, value: Long) {
+                when (property) {
+                    "time-pos" -> cachedPositionMs = value * 1000L
+                    "demuxer-cache-time" -> cachedBufferedPositionMs = value * 1000L
+                }
+            }
+            override fun eventProperty(property: String, value: Double) {
+                when (property) {
+                    "duration" -> cachedDurationMs = (value * 1000L).toLong().coerceAtLeast(0L)
+                    "demuxer-cache-duration" -> {
+                        // demuxer-cache-duration is relative to the current
+                        // position; the ticker folds it into a downstream
+                        // buffered value via updateBufferPosition(). Cache the
+                        // raw seconds here (no JNI) so the getter path stays
+                        // off the main-thread read loop.
+                        cachedBufferedPositionMs = cachedPositionMs + (value * 1000L).toLong()
+                    }
+                }
+            }
             override fun eventProperty(property: String, value: Boolean) {
                 if (property == "pause") {
                     _isPlaying.value = !value
@@ -145,6 +198,17 @@ class MpvPlayerEngine(
                 }
                 if (property == "sub-visibility") {
                     Log.d(TAG, "MPV subtitle visibility changed to $value")
+                }
+                if (property == "eof-reached" && value) {
+                    // With keep-open=yes, natural EOF pauses on the last frame
+                    // and does NOT emit END_FILE — so this observer is the
+                    // authoritative end-of-content signal. The raw END_FILE
+                    // handler must not be treated as EOF (it fires for network
+                    // drops, transcode aborts, redirects, stop — which is why
+                    // playback used to stop a few seconds in on transcoded
+                    // streams).
+                    Log.d(TAG, "MPV eof-reached=true → ENDED")
+                    _playbackState.value = EnginePlaybackState.ENDED
                 }
             }
             override fun eventProperty(property: String, value: String) {
@@ -164,15 +228,36 @@ class MpvPlayerEngine(
                         Log.d(TAG, "MPV start file; adding ${pendingSubtitles.size} Jellyfin subtitle source(s)")
                         addPendingSubtitles(mpv)
                         _playbackState.value = EnginePlaybackState.BUFFERING
+                        // Surface side-loaded subs + early track entries. mpv's
+                        // track-list observer does not reliably fire for
+                        // externally added (sub-add) tracks or for the demuxer
+                        // entries of an HLS/transcoded stream that resolve
+                        // slightly after start-file, so re-poll explicitly.
+                        refreshTracks("start-file", delayMs = 200)
+                        refreshTracks("start-file-late", delayMs = 800)
                     }
                     MPV.mpvEvent.MPV_EVENT_FILE_LOADED -> {
                         Log.d(TAG, "MPV file loaded")
                         _playbackState.value = EnginePlaybackState.READY
                         refreshTracks("file-loaded")
+                        // For HLS/transcoded streams the demuxer populates audio
+                        // track-list entries asynchronously after FILE_LOADED;
+                        // a single immediate read races ahead of that and yields
+                        // an empty audio picker. Re-poll after a short delay so
+                        // late-arriving audio/subtitle tracks are enumerated.
+                        refreshTracks("file-loaded-late", delayMs = 500)
                     }
                     MPV.mpvEvent.MPV_EVENT_END_FILE -> {
-                        Log.d(TAG, "MPV end file")
-                        _playbackState.value = EnginePlaybackState.ENDED
+                        // END_FILE is NOT end-of-content with keep-open=yes:
+                        // true EOF keeps the file open and flips eof-reached
+                        // (handled above). END_FILE here means mpv closed the
+                        // demuxer mid-stream — a transcode session abort,
+                        // network drop, HTTP redirect, or stop command. The
+                        // data node carries {reason, error}; only act on it
+                        // to avoid the previous bug where every END_FILE was
+                        // treated as completion → playback stopped after a few
+                        // seconds on transcoded/flaky HLS streams.
+                        handleEndFile(data)
                     }
                 }
             }
@@ -305,6 +390,11 @@ class MpvPlayerEngine(
             mpv.observeProperty("pause", MPV.mpvFormat.MPV_FORMAT_FLAG)
             mpv.observeProperty("speed", MPV.mpvFormat.MPV_FORMAT_DOUBLE)
             mpv.observeProperty("paused-for-cache", MPV.mpvFormat.MPV_FORMAT_FLAG)
+            mpv.observeProperty("eof-reached", MPV.mpvFormat.MPV_FORMAT_FLAG)
+            mpv.observeProperty("time-pos", MPV.mpvFormat.MPV_FORMAT_INT64)
+            mpv.observeProperty("duration", MPV.mpvFormat.MPV_FORMAT_DOUBLE)
+            mpv.observeProperty("demuxer-cache-duration", MPV.mpvFormat.MPV_FORMAT_DOUBLE)
+            mpv.observeProperty("demuxer-cache-time", MPV.mpvFormat.MPV_FORMAT_INT64)
             mpv.observeProperty("sid", MPV.mpvFormat.MPV_FORMAT_STRING)
             mpv.observeProperty("aid", MPV.mpvFormat.MPV_FORMAT_STRING)
             mpv.observeProperty("track-list", MPV.mpvFormat.MPV_FORMAT_NODE)
@@ -350,10 +440,17 @@ class MpvPlayerEngine(
         }
         pendingRequest = request
         pendingSubtitles = request.externalSubtitles
+        // Reset observer-driven caches for the new item. The first time-pos /
+        // duration observations will repopulate these as the demuxer resolves.
+        serverDurationMs = request.serverDurationMs
+        cachedPositionMs = request.startPositionMs
+        cachedDurationMs = 0L
+        cachedBufferedPositionMs = 0L
         Log.d(
             TAG,
             "MPV load requested: uri=${redactSensitive(request.uri)}, start=${request.startPositionMs}ms, " +
-                "externalSubtitles=${request.externalSubtitles.size}, headers=${request.headers.keys}"
+                "externalSubtitles=${request.externalSubtitles.size}, headers=${request.headers.keys}, " +
+                "serverDurationMs=${request.serverDurationMs}"
         )
 
         mpvView?.let { view ->
@@ -380,14 +477,27 @@ class MpvPlayerEngine(
         val view = mpvView
         mpvView = null
         view?.let {
+            // Native teardown (stop + mpv_terminate_destroy) is synchronous and
+            // can block for hundreds of ms. Run it on the dedicated release
+            // thread so the main looper (which invoked release() from the
+            // Compose onDispose) stays responsive. Safe because: scope is
+            // cancelled, observers removed, mpvView already nulled — this is
+            // the final operation on the handle.
             it.removeObserver()
-            try { it.destroy() } catch (e: Exception) { Log.w(TAG, "destroy", e) }
+            releaseHandler.post {
+                try { it.mpv.command("stop") } catch (_: Exception) {}
+                try { it.destroy() } catch (e: Exception) { Log.w(TAG, "destroy", e) }
+            }
         }
         _playbackState.value = EnginePlaybackState.IDLE
         _isPlaying.value = false
         _availableTracks.value = emptyList()
         _bufferedPositionMs.value = 0L
         _videoStats.value = EngineVideoStats()
+        cachedPositionMs = 0L
+        cachedDurationMs = 0L
+        cachedBufferedPositionMs = 0L
+        serverDurationMs = 0L
         // Recreate the scope so a re-used engine stays usable without waiting
         // for the next load(). A cancelled scope silently swallows new
         // launches (no-ops), which would otherwise lose the position ticker.
@@ -779,14 +889,18 @@ class MpvPlayerEngine(
     }
 
     override val currentPositionMs: Long
-        get() = try {
-            Math.round((mpvView?.mpv?.getPropertyDouble("time-pos") ?: 0.0) * 1000)
-        } catch (_: Exception) { 0L }
+        get() = cachedPositionMs
 
     override val durationMs: Long
-        get() = try {
-            ((mpvView?.mpv?.getPropertyDouble("duration") ?: 0.0) * 1000).toLong().coerceAtLeast(0)
-        } catch (_: Exception) { 0L }
+        get() {
+            // Prefer the mpv demuxer's duration when available; fall back to
+            // the server-reported runTimeTicks, which for HLS/transcoded
+            // streams is the only accurate total-runtime source (mpv's
+            // `duration` property is frequently 0 or only partially resolved
+            // for a transcoded manifest).
+            val engine = cachedDurationMs
+            return if (engine > 0L) engine else serverDurationMs
+        }
 
     override val playbackSpeed: Float
         get() = try {
@@ -809,30 +923,30 @@ class MpvPlayerEngine(
             isPlayingFlow = _isPlaying,
             isCurrentlyPlaying = { _isPlaying.value },
             onActive = {
-                val posMs = currentPositionMs
+                // Push the observer-cached position downstream. No JNI here:
+                // time-pos / demuxer-cache-duration / duration are observed
+                // properties whose callbacks populate the cached fields. This
+                // is the hot path (fires every poll) so keeping it allocation-
+                // and JNI-free eliminates the primary source of main-thread
+                // jank during mpv playback.
+                val posMs = cachedPositionMs
                 trySend(posMs)
-                updateBufferPosition(posMs)
+                val dur = durationMs
+                if (dur > 0L) {
+                    _bufferedPositionMs.value = cachedBufferedPositionMs.coerceAtMost(dur)
+                } else {
+                    _bufferedPositionMs.value = cachedBufferedPositionMs
+                }
                 if (_videoStatsEnabled.value) {
-                    updateVideoStatsOnly(posMs)
+                    // Stats require ~12 property reads; run them off the main
+                    // thread (see updateVideoStatsOnly).
+                    engineScope.launch(Dispatchers.IO) {
+                        updateVideoStatsOnly(posMs)
+                    }
                 }
             },
         ).launch()
         awaitClose { ticker.cancel() }
-    }
-
-    private fun updateBufferPosition(posMs: Long) {
-        val m = mpvView?.mpv ?: return
-        try {
-            val duration = (m.getPropertyDouble("duration") ?: 0.0) * 1000.0
-            if (duration > 0) {
-                val cacheDuration = try {
-                    m.getPropertyDouble("demuxer-cache-duration") ?: 0.0
-                } catch (_: Exception) { 0.0 }
-                _bufferedPositionMs.value = (posMs + (cacheDuration * 1000.0)).toLong().coerceAtMost(duration.toLong())
-            }
-        } catch (e: Exception) {
-            Log.w(TAG, "Failed to read MPV buffer position", e)
-        }
     }
 
     private fun updateVideoStatsOnly(posMs: Long) {
@@ -931,6 +1045,53 @@ class MpvPlayerEngine(
             )
         }
         return result
+    }
+
+    /**
+     * Handle an [MPV.mpvEvent.MPV_EVENT_END_FILE] event. The mpv END_FILE event
+     * node carries `reason` (and `error` for failures). See the mpv docs for
+     * `mpv_event_end_file.reason` values:
+     *
+     * - `MPV_END_FILE_REASON_EOF` (0): the file ended naturally. With
+     *   `keep-open=yes` this should rarely arrive (mpv keeps the file open and
+     *   flips `eof-reached`), but we treat it as completion for safety.
+     * - `MPV_END_FILE_REASON_STOP` (1): a stop command (including our own from
+     *   [release]) — ignore.
+     * - `MPV_END_FILE_REASON_QUIT` (2): mpv is quitting — ignore; teardown
+     *   happens in [release].
+     * - `MPV_END_FILE_REASON_ERROR` (3): demuxer/decode/network error — surface
+     *   via [errorFlow] so the UI shows the playback-error dialog, but do NOT
+     *   mark the item as completed (it didn't finish).
+     * - `MPV_END_FILE_REASON_REDIRECT` (4): HLS variant / playlist redirect —
+     *   mpv follows these automatically, so treat as a transient buffer rather
+     *   than completion.
+     *
+     * The old code unconditionally set ENDED on every END_FILE, which — for
+     * transcoded HLS streams where the server closes the session, drops the
+     * connection, or returns a redirect — stopped playback after a few seconds.
+     */
+    private fun handleEndFile(data: MPVNode) {
+        val map = try { data.asMap() } catch (_: Exception) { null }
+        val reason = map?.let { it["reason"]?.asInt()?.toInt() }
+        val errorCode = map?.let { it["error"]?.asString() }
+        Log.d(TAG, "MPV end file: reason=$reason, error=${errorCode ?: "none"}")
+        when (reason) {
+            MPV_END_FILE_REASON_EOF -> {
+                // Defensive: keep-open normally prevents this path, but if the
+                // option was overridden, EOF is genuine completion.
+                _playbackState.value = EnginePlaybackState.ENDED
+            }
+            MPV_END_FILE_REASON_REDIRECT -> {
+                // mpv is following a playlist/redirect — treat as transient.
+                _playbackState.value = EnginePlaybackState.BUFFERING
+            }
+            MPV_END_FILE_REASON_ERROR -> {
+                _playbackState.value = EnginePlaybackState.ERROR
+                _errorFlow.tryEmit("Playback error (mpv): ${errorCode ?: "unknown"}")
+            }
+            // STOP / QUIT / null — ignore: not end-of-content.
+            else -> {}
+        }
     }
 
     private fun configureMpvForRequest(view: PlayerMPVView, request: PlaybackRequest) {
