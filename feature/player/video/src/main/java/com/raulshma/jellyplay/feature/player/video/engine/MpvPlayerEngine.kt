@@ -113,8 +113,7 @@ class MpvPlayerEngine(
     // property observers (postInitOptions) instead of via per-tick
     // getProperty JNI calls on the main thread — the old polling approach
     // issued 3–15 synchronous JNI reads/second on the main looper and was a
-    // primary source of UI jank during mpv playback (see findroid's pure-
-    // observer MPVPlayer for the reference pattern).
+    // primary source of UI jank during mpv playback
     @Volatile private var cachedPositionMs: Long = 0L
     @Volatile private var cachedDurationMs: Long = 0L
     @Volatile private var cachedBufferedPositionMs: Long = 0L

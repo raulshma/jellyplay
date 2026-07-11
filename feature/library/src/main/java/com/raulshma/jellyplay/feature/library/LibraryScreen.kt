@@ -119,6 +119,7 @@ import kotlinx.coroutines.launch
     ExperimentalMaterial3Api::class,
     ExperimentalMaterial3ExpressiveApi::class,
     ExperimentalLayoutApi::class,
+    androidx.compose.foundation.ExperimentalFoundationApi::class,
 )
 @Composable
 fun LibraryScreen(
@@ -139,11 +140,19 @@ fun LibraryScreen(
     val viewMode by viewModel.viewMode.collectAsStateWithLifecycle()
 
     val pagedItems = viewModel.pagedItems.collectAsLazyPagingItems()
-    val photoFolderChildUrls by viewModel.photoFolderChildUrls.collectAsStateWithLifecycle()
 
-    val snapshot = pagedItems.itemSnapshotList
-    LaunchedEffect(snapshot) {
-        viewModel.prefetchPhotoFolderChildUrls(snapshot.items)
+    // Prefetch photo-folder child urls on load-state transitions (append/refresh)
+    // instead of snapshot-list identity. Keying on the snapshot re-fired the
+    // prefetch on every page boundary, and each merge produced a new Map in
+    // _photoFolderChildUrls — which used to invalidate the whole screen (now
+    // mitigated by per-item collection in L3.1). Gating on loadState also lets
+    // us skip non-photo libraries entirely.
+    val appendState = pagedItems.loadState
+    LaunchedEffect(appendState) {
+        val snapshot = pagedItems.itemSnapshotList
+        if (snapshot.items.any { it.mediaType == MediaType.PHOTO_FOLDER }) {
+            viewModel.prefetchPhotoFolderChildUrls(snapshot.items)
+        }
     }
     val networkStatus by com.raulshma.jellyplay.core.ui.components.LocalNetworkStatus.current.collectAsStateWithLifecycle()
 
@@ -153,7 +162,9 @@ fun LibraryScreen(
         networkStatus = networkStatus,
     )
 
-    val gridState = rememberLazyGridState()
+    val gridState = rememberLazyGridState(
+        cacheWindow = com.raulshma.jellyplay.core.ui.tv.TvGridCacheWindow,
+    )
     val listState = rememberLazyListState()
     val hasActiveFilters by remember {
         derivedStateOf {
@@ -557,6 +568,13 @@ fun LibraryScreen(
                                                 { onItemClick(item.id, item.mediaType, item.parentId, item.name) }
                                             }
                                             val itemProgress = item.progressFraction()
+                                            // Per-item collection: only photo-folder cards subscribe,
+                                            // and only the affected card recomposes on a prefetch merge.
+                                            val photoFolderChildImageUrls by if (item.mediaType == MediaType.PHOTO_FOLDER) {
+                                                viewModel.photoFolderChildUrlsFor(item.id).collectAsStateWithLifecycle(emptyList())
+                                            } else {
+                                                androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf(emptyList()) }
+                                            }
                                             PosterCard(
                                                 item = item,
                                                 imageUrl = remember(item.id) { viewModel.getImageUrl(item.id) },
@@ -565,7 +583,7 @@ fun LibraryScreen(
                                                 progressPercent = itemProgress ?: 0f,
                                                 blurHash = item.blurHashes.primary,
                                                 sharedElementKey = "poster_${item.id}",
-                                                photoFolderChildImageUrls = photoFolderChildUrls[item.id].orEmpty(),
+                                                photoFolderChildImageUrls = photoFolderChildImageUrls,
                                                 modifier = itemModifier,
                                             )
                                         }
