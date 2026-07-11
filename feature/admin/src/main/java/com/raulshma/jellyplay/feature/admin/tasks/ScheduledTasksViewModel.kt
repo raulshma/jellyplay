@@ -6,10 +6,15 @@ import com.raulshma.jellyplay.core.model.TaskState
 import com.raulshma.jellyplay.core.network.JellyfinApiClient
 import com.raulshma.jellyplay.core.ui.viewmodel.JellyPlayViewModel
 import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.isActive
 import javax.inject.Inject
+
+/** Poll interval while at least one task is RUNNING — short enough for live progress. */
+private const val POLL_INTERVAL_MS = 2_000L
 
 data class ScheduledTasksState(
     val isLoading: Boolean = true,
@@ -64,19 +69,24 @@ class ScheduledTasksViewModel @Inject constructor(
 
     private fun startAutoRefresh() {
         launch {
-            hasRunningTasks.collect { running ->
-                while (running) {
-                    delay(5000)
-                    fetchTasks()
-                }
+            // Re-check the current value on each iteration instead of capturing the
+            // emitted `running` param: that snapshot would never change within a single
+            // emission, so the loop would either never engage (if the task was still
+            // IDLE at subscribe time) or run forever.
+            while (currentCoroutineContext().isActive) {
+                delay(POLL_INTERVAL_MS)
+                if (hasRunningTasks.value) fetchTasks()
             }
         }
     }
 
     fun startTask(taskId: String) {
         launch {
+            // Optimistically engage the auto-refresh loop — the server may take longer
+            // than one fetch to flip the task to RUNNING, and a single fetch landing on
+            // IDLE would otherwise leave hasRunningTasks false and polling off.
+            hasRunningTasks.value = true
             apiClient.startTask(taskId)
-            delay(500)
             fetchTasks()
         }
     }
@@ -84,7 +94,6 @@ class ScheduledTasksViewModel @Inject constructor(
     fun cancelTask(taskId: String) {
         launch {
             apiClient.cancelTask(taskId)
-            delay(500)
             fetchTasks()
         }
     }

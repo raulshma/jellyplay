@@ -248,8 +248,13 @@ fun HeroHeader(
 
     if (isVisible && !reducedMotion) {
         val heroTransition = rememberInfiniteTransition(label = "hero_animations")
-        // Slow breath runs whenever the hero is visible — 12s cycle is cheap.
-        val rawBreathScale by heroTransition.animateFloat(
+        // Slow breath runs only while the hero is the focal element. A 12s
+        // cycle drives a continuous draw-phase redraw of the 1920x1080
+        // backdrop; during scroll (hero partially visible at top) that redraw
+        // competes with the scroll work. Gating on isProminent collapses it
+        // to a static scale while scrolling — the 12s breath is imperceptible
+        // mid-scroll anyway.
+        val rawBreathScale by if (isProminent) heroTransition.animateFloat(
             initialValue = 1.0f,
             targetValue = 1.04f,
             animationSpec = infiniteRepeatable(
@@ -257,7 +262,7 @@ fun HeroHeader(
                 repeatMode = RepeatMode.Reverse
             ),
             label = "breath"
-        )
+        ) else androidx.compose.runtime.mutableStateOf(1.0f)
         breathScale = rawBreathScale
 
         // The high-frequency (1.8s) play-pulse loops drive ~60Hz draw-phase

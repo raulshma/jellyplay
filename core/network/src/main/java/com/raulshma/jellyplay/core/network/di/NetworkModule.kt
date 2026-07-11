@@ -2,7 +2,6 @@ package com.raulshma.jellyplay.core.network.di
 
 import android.content.Context
 import android.net.ConnectivityManager
-import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.runBlocking
 import com.raulshma.jellyplay.core.datastore.UserPreferencesStore
 import com.raulshma.jellyplay.core.network.JellyfinApiClient
@@ -207,15 +206,19 @@ abstract class NetworkModule {
             okHttpConfigProvider: OkHttpConfigProvider,
             bandwidthInterceptor: BandwidthInterceptor,
         ): OkHttpClient {
-            // Suspend on the first *real* emission of okHttpConfigProvider.config
-            // before building the cache. The StateFlow's initialValue reports
-            // maxCacheSizeMb = 0 (sentinel), and OkHttp's Cache is not dynamically
-            // resizable — so reading .value used to build the cache with the 50 MB
-            // fallback and never re-size it (if the user picked e.g. 500 MB they
-            // got 50 MB until process restart). .first() blocks (Hilt providers
-            // run on a background thread during init) until the real preference
-            // arrives ~tens of ms later, sizing the cache correctly from start.
-            val initialConfig = runBlocking { okHttpConfigProvider.config.first() }
+            // Read config synchronously via StateFlow.value — no runBlocking.
+            // On a cold start the Eagerly-shared StateFlow may still hold the
+            // initialValue sentinel (maxCacheSizeMb = 0), in which case the cache
+            // falls back to 50 MB below. The real preference lands in .value
+            // within tens of ms (DataStore disk read) and is picked up on the
+            // next process start; timeouts are re-applied per request by the
+            // interceptor below, so only the (rarely-changed) cache size is
+            // affected, and only on the very first launch. The previous
+            // runBlocking { .first() } blocked the DI critical path — every
+            // screen that transitively pulls OkHttpClient (repositories, SDK
+            // client, download workers) waited on a DataStore disk read before
+            // first frame.
+            val initialConfig = okHttpConfigProvider.config.value
             val cacheDir = File(context.cacheDir, "http_cache")
             cacheDir.mkdirs()
             val cacheMb = initialConfig.maxCacheSizeMb

@@ -51,6 +51,7 @@ import com.composables.icons.tabler.outline.Refresh
 import com.raulshma.jellyplay.core.designsystem.theme.ShapeCache
 import com.raulshma.jellyplay.core.designsystem.theme.StatusColors
 import com.raulshma.jellyplay.core.model.ScheduledTaskInfo
+import com.raulshma.jellyplay.core.model.TaskExecutionInfo
 import com.raulshma.jellyplay.core.model.TaskState
 import com.raulshma.jellyplay.core.ui.adaptive.LocalAdaptiveInfo
 import com.raulshma.jellyplay.core.ui.adaptive.bottomPadding
@@ -221,29 +222,7 @@ private fun TaskItem(
                         )
                     }
                     task.lastExecutionResult?.let { last ->
-                        Row(
-                            modifier = Modifier.padding(top = 4.dp),
-                            verticalAlignment = Alignment.CenterVertically,
-                        ) {
-                            Text(
-                                "Last run: ",
-                                style = MaterialTheme.typography.labelSmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            )
-                            Text(
-                                last.startTimeUtc?.replace("T", " ")?.take(19) ?: "Never",
-                                style = MaterialTheme.typography.labelSmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            )
-                            if (last.errorMessage != null) {
-                                Spacer(Modifier.width(6.dp))
-                                Text(
-                                    "(Failed)",
-                                    style = MaterialTheme.typography.labelSmall,
-                                    color = MaterialTheme.colorScheme.error,
-                                )
-                            }
-                        }
+                        LastRunRow(last)
                     }
                 }
                 Spacer(Modifier.width(8.dp))
@@ -289,11 +268,18 @@ private fun TaskItem(
 
             if (task.state == TaskState.RUNNING) {
                 val progress = task.currentProgressPercentage
+                Spacer(Modifier.height(8.dp))
                 if (progress != null) {
-                    Spacer(Modifier.height(8.dp))
+                    // Animate + clamp like RunningTasksCard so the bar eases between
+                    // polled values instead of jumping every refresh.
+                    val animatedProgress by animateFloatAsState(
+                        targetValue = (progress / 100).toFloat().coerceIn(0f, 1f),
+                        animationSpec = MaterialTheme.motionScheme.defaultSpatialSpec(),
+                        label = "taskProgress",
+                    )
                     @OptIn(ExperimentalMaterial3ExpressiveApi::class)
                     JellyPlayLinearProgressIndicator(
-                        progress = { (progress / 100).toFloat() },
+                        progress = { animatedProgress },
                         modifier = Modifier
                             .fillMaxWidth()
                             .clip(ShapeCache.smooth4)
@@ -302,6 +288,23 @@ private fun TaskItem(
                     Spacer(Modifier.height(2.dp))
                     Text(
                         "${progress.toInt()}%",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.primary,
+                    )
+                } else {
+                    // Jellyfin reports progress lazily (null for the first seconds of a
+                    // run, or for task types that never expose a percentage) — show an
+                    // indeterminate bar so RUNNING is visibly active.
+                    @OptIn(ExperimentalMaterial3ExpressiveApi::class)
+                    JellyPlayLinearProgressIndicator(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clip(ShapeCache.smooth4)
+                            .height(6.dp),
+                    )
+                    Spacer(Modifier.height(2.dp))
+                    Text(
+                        "Running…",
                         style = MaterialTheme.typography.labelSmall,
                         color = MaterialTheme.colorScheme.primary,
                     )
@@ -320,6 +323,101 @@ private fun TaskItem(
                 }
             }
         }
+    }
+}
+
+@Composable
+private fun LastRunRow(last: TaskExecutionInfo) {
+    val relative = remember(last.startTimeUtc) { formatRelativeTime(last.startTimeUtc) }
+    val duration = remember(last.startTimeUtc, last.endTimeUtc) {
+        formatTaskDuration(last.startTimeUtc, last.endTimeUtc)
+    }
+    // Map the SDK TaskCompletionStatus serialName to a short label + tone. Success
+    // renders no badge (the timestamp already implies a good run).
+    val statusLabel = when (last.status.lowercase()) {
+        "failed" -> "Failed" to MaterialTheme.colorScheme.error
+        "cancelled" -> "Cancelled" to StatusColors.warning
+        "aborted" -> "Aborted" to StatusColors.warning
+        else -> null to Color.Unspecified
+    }
+
+    Row(
+        modifier = Modifier.padding(top = 4.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Text(
+            "Last run ",
+            style = MaterialTheme.typography.labelSmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+        if (relative != null) {
+            Text(
+                relative,
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+        if (duration != null) {
+            Text(
+                " · $duration",
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+        statusLabel.first?.let { label ->
+            Spacer(Modifier.width(6.dp))
+            Text(
+                label,
+                style = MaterialTheme.typography.labelSmall,
+                fontWeight = FontWeight.SemiBold,
+                color = statusLabel.second,
+            )
+        }
+    }
+}
+
+/**
+ * Renders an ISO-8601 (offset-carrying) timestamp as a relative string:
+ * "just now" / "Xm ago" / "Xh ago" / "Xd ago", falling back to a localized date.
+ * Returns null if the string can't be parsed.
+ */
+private fun formatRelativeTime(iso: String?): String? {
+    if (iso.isNullOrBlank()) return null
+    return try {
+        val start = java.time.OffsetDateTime.parse(iso)
+        val duration = java.time.Duration.between(start, java.time.OffsetDateTime.now())
+        when {
+            duration.toMinutes() < 1 -> "just now"
+            duration.toMinutes() < 60 -> "${duration.toMinutes()}m ago"
+            duration.toHours() < 24 -> "${duration.toHours()}h ago"
+            duration.toDays() < 7 -> "${duration.toDays()}d ago"
+            else -> {
+                val formatter = java.text.SimpleDateFormat("MMM d, yyyy", java.util.Locale.getDefault())
+                formatter.format(java.util.Date.from(start.toInstant()))
+            }
+        }
+    } catch (_: Exception) {
+        null
+    }
+}
+
+/**
+ * Formats the wall-clock duration between two ISO-8601 timestamps as a compact
+ * "Xs" / "Xm Ys" / "Xh Ym" string, or null if either bound is missing/unparseable.
+ */
+private fun formatTaskDuration(startIso: String?, endIso: String?): String? {
+    if (startIso.isNullOrBlank() || endIso.isNullOrBlank()) return null
+    return try {
+        val start = java.time.OffsetDateTime.parse(startIso)
+        val end = java.time.OffsetDateTime.parse(endIso)
+        val seconds = java.time.Duration.between(start, end).seconds
+        when {
+            seconds < 60 -> "${seconds}s"
+            seconds < 3_600 -> "${seconds / 60}m ${seconds % 60}s"
+            else -> "${seconds / 3_600}h ${(seconds % 3_600) / 60}m"
+        }
+    } catch (_: Exception) {
+        null
     }
 }
 

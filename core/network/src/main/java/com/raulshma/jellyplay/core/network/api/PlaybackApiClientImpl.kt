@@ -171,6 +171,21 @@ class PlaybackApiClientImpl @Inject constructor(
         // FORCE_DIRECT_PLAY (no cap — the file is served verbatim).
         val sendBitrate = if (mode == PlaybackMode.FORCE_DIRECT_PLAY) null else maxStreamingBitrateBits
 
+        // FORCE_DIRECT_PLAY sends "Direct play all" profile so
+        // the server unconditionally marks sources as directly playable and
+        // hands back a `?static=true` URL — the client owns the decision to
+        // serve the file verbatim AUTO and
+        // FORCE_TRANSCODE use the codec-aware profile so the server picks the
+        // right play method and transcode target.
+        val deviceProfile = if (mode == PlaybackMode.FORCE_DIRECT_PLAY) {
+            deviceProfileProvider.directPlayAll
+        } else {
+            deviceProfileProvider.forPlayer(
+                playerType = playerType,
+                pgsDirectPlay = preferencesStore.preferences.value.pgsSubtitleDirectPlay,
+            )
+        }
+
         val dto = PlaybackInfoDto(
             userId = engine.currentUser.value?.id?.toUUID(),
             startTimeTicks = startTimeTicks.takeIf { it > 0 },
@@ -178,10 +193,7 @@ class PlaybackApiClientImpl @Inject constructor(
             audioStreamIndex = audioStreamIndex,
             subtitleStreamIndex = subtitleStreamIndex,
             mediaSourceId = mediaSourceId.takeIf { it.isNotBlank() },
-            deviceProfile = deviceProfileProvider.forPlayer(
-                playerType = playerType,
-                pgsDirectPlay = preferencesStore.preferences.value.pgsSubtitleDirectPlay,
-            ),
+            deviceProfile = deviceProfile,
             enableDirectPlay = enableDirectPlay,
             enableDirectStream = enableDirectStream,
             enableTranscoding = enableTranscoding,

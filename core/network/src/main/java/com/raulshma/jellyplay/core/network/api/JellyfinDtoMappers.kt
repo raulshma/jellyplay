@@ -323,8 +323,11 @@ internal fun org.jellyfin.sdk.model.api.TaskTriggerInfo.toTriggerModel() = TaskT
 internal fun org.jellyfin.sdk.model.api.TaskResult.toExecutionModel() = TaskExecutionInfo(
     name = name ?: "",
     key = key ?: "",
-    startTimeUtc = startTimeUtc.toString(),
-    endTimeUtc = endTimeUtc.toString(),
+    // The SDK strips the offset during deserialization (see toIsoInstantString),
+    // so a plain .toString() yields a bare LocalDateTime that can't be parsed as
+    // OffsetDateTime — re-attach the zone here.
+    startTimeUtc = startTimeUtc.toIsoInstantString(),
+    endTimeUtc = endTimeUtc.toIsoInstantString(),
     status = status.serialName,
     errorMessage = errorMessage,
 )
