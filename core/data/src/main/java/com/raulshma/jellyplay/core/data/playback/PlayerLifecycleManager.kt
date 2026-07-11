@@ -20,7 +20,7 @@ interface PlayerLifecycleCallbacks {
  * Centralized lifecycle manager for the active player engine.
  *
  * Bridges the gap between the single-activity Compose architecture and the
- * lifecycle-aware patterns used by Findroid's BasePlayerActivity. The Activity
+ * lifecycle-aware patterns. The Activity
  * calls lifecycle methods here, and this class delegates directly to the
  * active engine — no StateFlow indirection for pause/resume.
  */
