@@ -67,6 +67,7 @@ import com.raulshma.jellyplay.core.ui.components.SeerrRequestDialog
 import com.raulshma.jellyplay.core.ui.components.focusIndicator
 import com.raulshma.jellyplay.core.ui.components.rememberSeerrCardLoadingState
 import com.raulshma.jellyplay.core.ui.components.resolveHeaderStatus
+import com.raulshma.jellyplay.core.ui.components.HeaderStatus
 import com.raulshma.jellyplay.core.ui.tv.LocalTvMode
 import com.raulshma.jellyplay.core.ui.tv.input.onDpadKey
 import com.raulshma.jellyplay.core.ui.tv.tryRequestFocus
@@ -214,11 +215,12 @@ private fun MainHomeContent(
     val backgroundColor = bgState.backgroundColor
     val isLightTheme = bgState.isLightTheme
 
-    val scrollFraction = homeScrollState.scrollFraction
-
-    val baseIconColor = if (isLightTheme) androidx.compose.material3.MaterialTheme.colorScheme.onSurface else androidx.compose.ui.graphics.Color.White
-    val appBarIconColor = lerp(baseIconColor, androidx.compose.material3.MaterialTheme.colorScheme.onSurface, scrollFraction)
-    val appBarIconColorFaded = appBarIconColor.copy(alpha = 0.9f)
+    // NOTE: scrollFraction / appBarIconColor / appBarIconColorFaded are no
+    // longer read in this scope. Reading scrollFraction here (changes every
+    // pixel over the first 140 dp of hero scroll) invalidated the entire
+    // 450-line MainHomeContent body on every scroll frame. The color
+    // computation now lives in HomeTopDockScrim, a leaf that reads
+    // scrollFraction internally so only it (and HomeTopDock) recompose.
 
     val contentPad = remember(adaptiveInfo, isTv) { adaptiveInfo.contentPadding(isTv) }
 
@@ -469,9 +471,9 @@ private fun MainHomeContent(
                     { viewModel.onEvent(HomeUiEvent.ToggleOfflineMode) }
                 }
 
-                HomeTopDock(
-                    appBarIconColor = appBarIconColor,
-                    appBarIconColorFaded = appBarIconColorFaded,
+                HomeTopDockScrim(
+                    homeScrollState = homeScrollState,
+                    isLightTheme = isLightTheme,
                     isSearchFocused = isSearchFocused,
                     searchQuery = state.searchState.query,
                     offlineMode = state.offlineMode,
@@ -479,11 +481,20 @@ private fun MainHomeContent(
                     headerStatus = headerStatus,
                     activeDownloadCount = activeDownloadCount,
                     showClock = state.showClock,
+                    homeHeroEnabled = state.homeHeroEnabled,
+                    hasFeaturedItem = heroController.featuredItem != null,
+                    isTv = isTv,
                     onModeChange = callbacks.onModeChange,
                     onSearchExpanded = dockOnSearchExpanded,
                     onSearchQueryChange = dockOnSearchQueryChange,
                     onClearSearch = dockOnClearSearch,
                     onToggleOffline = dockOnToggleOffline,
+                    onHeroFocusDown = remember(heroFocusRequester) {
+                        { heroFocusRequester.tryRequestFocus("top_dock_down_hero") }
+                    },
+                    onOpenDrawer = remember(scope, drawerState) {
+                        { scope.launch { drawerState.open() } }
+                    },
                     searchResultsContent = {
                         if (state.searchState.query.isNotBlank() || searchHistory.isNotEmpty()) {
                             HomeSearchResultsOverlay(
@@ -500,18 +511,6 @@ private fun MainHomeContent(
                             )
                         }
                     },
-                    modifier = Modifier.then(
-                        if (isTv) {
-                            Modifier.onDpadKey(
-                                onDown = {
-                                    if (!isSearchFocused && state.homeHeroEnabled && heroController.featuredItem != null) {
-                                        heroFocusRequester.tryRequestFocus("top_dock_down_hero")
-                                        true
-                                    } else false
-                                }
-                            )
-                        } else Modifier
-                    )
                 )
 
                 if (!isTv) {
@@ -535,38 +534,6 @@ private fun MainHomeContent(
                                 androidx.compose.ui.unit.IntOffset(x = 0, y = yOffset.toInt())
                             },
                     )
-                }
-
-                if (!isTv && !isSearchFocused) {
-                    Box(
-                        modifier = Modifier
-                            .statusBarsPadding()
-                            .padding(
-                                horizontal = 16.dp,
-                                vertical = 4.dp
-                            )
-                            .align(Alignment.TopStart)
-                    ) {
-                        Box(
-                            modifier = Modifier
-                                .size(width = 40.dp, height = 64.dp)
-                                .clip(ShapeCache.smooth16)
-                                .focusIndicator(CircleShape)
-                                .clickable(
-                                    interactionSource = remember { MutableInteractionSource() },
-                                    indication = null,
-                                    onClick = { scope.launch { drawerState.open() } }
-                                ),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            Icon(
-                                imageVector = Tabler.Outline.Menu2,
-                                contentDescription = "Open Shortcuts Menu",
-                                tint = appBarIconColorFaded,
-                                modifier = Modifier.size(24.dp)
-                            )
-                        }
-                    }
                 }
         }
     }
@@ -599,6 +566,110 @@ private fun MainHomeContent(
             },
         )
     }
+}
+
+/**
+ * Leaf composable that owns the scroll-coupled app-bar icon colors.
+ *
+ * Reads `scrollFraction` (a per-pixel-changing value over the first 140 dp of
+ * hero scroll) inside its own scope, so only this composable + [HomeTopDock]
+ * + the menu button recompose during scroll — [MainHomeContent] (450+ lines)
+ * is left untouched. Previously the color computation lived in
+ * `MainHomeContent`, which meant every scroll frame re-executed the entire
+ * function body.
+ *
+ * `scrollFraction` is passed as a `() -> Float` getter rather than a `Float`
+ * so that reading it (a Compose snapshot read) happens inside this composable's
+ * scope, not the caller's.
+ */
+@Composable
+private fun HomeTopDockScrim(
+    homeScrollState: HomeScrollState,
+    isLightTheme: Boolean,
+    isSearchFocused: Boolean,
+    searchQuery: String,
+    offlineMode: com.raulshma.jellyplay.core.model.OfflineMode,
+    homeMode: HomeMode,
+    headerStatus: HeaderStatus,
+    activeDownloadCount: Int,
+    showClock: Boolean,
+    homeHeroEnabled: Boolean,
+    hasFeaturedItem: Boolean,
+    isTv: Boolean,
+    onModeChange: (HomeMode) -> Unit,
+    onSearchExpanded: (Boolean) -> Unit,
+    onSearchQueryChange: (String) -> Unit,
+    onClearSearch: () -> Unit,
+    onToggleOffline: () -> Unit,
+    onHeroFocusDown: () -> Boolean,
+    onOpenDrawer: () -> Unit,
+    searchResultsContent: @Composable () -> Unit,
+) {
+    val onSurface = androidx.compose.material3.MaterialTheme.colorScheme.onSurface
+    val baseIconColor = if (isLightTheme) onSurface else androidx.compose.ui.graphics.Color.White
+    val fraction = homeScrollState.scrollFraction
+    val appBarIconColor = lerp(baseIconColor, onSurface, fraction)
+    val appBarIconColorFaded = appBarIconColor.copy(alpha = 0.9f)
+
+    Box(modifier = Modifier.fillMaxSize()) {
+        HomeTopDock(
+        appBarIconColor = appBarIconColor,
+        appBarIconColorFaded = appBarIconColorFaded,
+        isSearchFocused = isSearchFocused,
+        searchQuery = searchQuery,
+        offlineMode = offlineMode,
+        homeMode = homeMode,
+        headerStatus = headerStatus,
+        activeDownloadCount = activeDownloadCount,
+        showClock = showClock,
+        onModeChange = onModeChange,
+        onSearchExpanded = onSearchExpanded,
+        onSearchQueryChange = onSearchQueryChange,
+        onClearSearch = onClearSearch,
+        onToggleOffline = onToggleOffline,
+        searchResultsContent = searchResultsContent,
+        modifier = Modifier.then(
+            if (isTv) {
+                Modifier.onDpadKey(
+                    onDown = {
+                        if (!isSearchFocused && homeHeroEnabled && hasFeaturedItem) {
+                            onHeroFocusDown()
+                        } else false
+                    }
+                )
+            } else Modifier
+        )
+    )
+
+    if (!isTv && !isSearchFocused) {
+        Box(
+            modifier = Modifier
+                .statusBarsPadding()
+                .padding(horizontal = 16.dp, vertical = 4.dp)
+                .align(Alignment.TopStart)
+        ) {
+            Box(
+                modifier = Modifier
+                    .size(width = 40.dp, height = 64.dp)
+                    .clip(ShapeCache.smooth16)
+                    .focusIndicator(CircleShape)
+                    .clickable(
+                        interactionSource = remember { MutableInteractionSource() },
+                        indication = null,
+                        onClick = onOpenDrawer,
+                    ),
+                contentAlignment = Alignment.Center
+            ) {
+                Icon(
+                    imageVector = Tabler.Outline.Menu2,
+                    contentDescription = "Open Shortcuts Menu",
+                    tint = appBarIconColorFaded,
+                    modifier = Modifier.size(24.dp)
+                )
+            }
+        }
+    }
+    } // end Box(fillMaxSize) wrapper providing BoxScope for align()
 }
 
 @Composable
