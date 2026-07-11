@@ -1,0 +1,460 @@
+package com.raulshma.jellyplay.feature.home
+
+import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyListState
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.Icon
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.Immutable
+import androidx.compose.runtime.derivedStateOf
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.Density
+import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.focus.FocusRequester
+import com.composables.icons.tabler.Tabler
+import com.composables.icons.tabler.outline.AlertCircle
+import com.composables.icons.tabler.outline.Movie
+import com.composables.icons.tabler.outline.PlayerPlay
+import com.raulshma.jellyplay.core.model.ContinueWatchingClickBehavior
+import com.raulshma.jellyplay.core.model.HomeSection
+import com.raulshma.jellyplay.core.model.HomeSectionType
+import com.raulshma.jellyplay.core.model.MediaItem
+import com.raulshma.jellyplay.core.model.OfflineMediaItem
+import com.raulshma.jellyplay.core.ui.adaptive.LocalAdaptiveInfo
+import com.raulshma.jellyplay.core.ui.adaptive.WindowSizeClass
+import com.raulshma.jellyplay.core.ui.adaptive.bottomPadding
+import com.raulshma.jellyplay.core.ui.adaptive.itemSpacing
+import com.raulshma.jellyplay.core.ui.components.DelayedLoadingScreen
+import com.raulshma.jellyplay.core.ui.components.ScreenEmptyState
+import com.raulshma.jellyplay.core.ui.components.SeerrCardLoadingState
+import com.raulshma.jellyplay.core.ui.tv.LocalTvMode
+import com.raulshma.jellyplay.core.ui.tv.rememberInt
+
+/**
+ * Bundles the (previously 38) flat parameters of the home content list into a
+ * single `@Immutable` value so the composable is skippable without relying on
+ * every caller `remember`-ing dozens of unstable lambdas. Lambdas that must
+ * remain stable across recompositions (image/url builders, click handlers) are
+ * grouped into [HomeContentCallbacks].
+ */
+@Immutable
+internal data class HomeContentState(
+    val isLoading: Boolean,
+    val homeHeroEnabled: Boolean,
+    val newsletterBannerVisible: Boolean,
+    val discoverEnabled: Boolean,
+    val experimentalCardClippingEnabled: Boolean,
+    val sections: List<HomeSection>,
+    val partialLoadError: Boolean,
+    val featuredItem: MediaItem?,
+    val backgroundColor: Color,
+    val contentPad: Dp,
+    val headerHeight: Dp,
+    val isLightTheme: Boolean,
+    val continueWatchingClickBehavior: ContinueWatchingClickBehavior,
+    val discoverRows: List<List<com.raulshma.jellyplay.core.model.seerr.SeerrSearchItem>>,
+    val allDiscoverItems: List<com.raulshma.jellyplay.core.model.seerr.SeerrSearchItem>,
+    val recentlyGrabbed: List<com.raulshma.jellyplay.core.model.seerr.SeerrSearchItem>,
+    val photoFolderChildUrls: Map<String, List<String>>,
+    val offlineLibrary: List<OfflineMediaItem>,
+)
+
+@Immutable
+internal data class HomeContentCallbacks(
+    val onRetrySectionLoad: () -> Unit,
+    val onDismissNewsletterBanner: () -> Unit,
+    val onNewsletterClick: () -> Unit,
+    val onOfflineLibraryClick: () -> Unit,
+    val onItemClick: (String) -> Unit,
+    val onFocusChange: (Boolean) -> Unit,
+    val mediaOnItemClick: (MediaItem) -> Unit,
+    val mediaOnPlayClick: (MediaItem) -> Unit,
+    val mediaImageUrlBuilder: (MediaItem) -> String,
+    val mediaBackdropUrlBuilder: (MediaItem) -> String,
+    val getImageUrl: (String) -> String,
+    val getBackdropUrl: (String) -> String,
+    val fallbackImageUrlBuilder: (MediaItem) -> List<String>,
+    val onSeerrItemClick: (Int, String) -> Unit,
+    val onSeerrRequest: (com.raulshma.jellyplay.core.model.seerr.SeerrSearchItem) -> Unit,
+    val seerrPrefetch: (Int, String, () -> Unit) -> Unit,
+)
+
+/**
+ * The home LazyColumn: hero, partial-load / newsletter banners, media rows,
+ * Seerr discover grid, *arr "Recently Grabbed" row, downloaded row, and the
+ * continue-watching "Resume vs Details" dialog.
+ *
+ * Behaviour is identical to the former `HomeContentList`; extracted here and
+ * refactored to (a) take a [HomeContentState] + [HomeContentCallbacks] bundle,
+ * (b) render the discover + recently-grabbed rows via the shared
+ * [SeerrDiscoverRow], and (c) route focus restoration through
+ * [RestoreHomeRowFocus].
+ */
+@Composable
+internal fun HomeContentList(
+    state: HomeContentState,
+    callbacks: HomeContentCallbacks,
+    listState: LazyListState,
+    density: Density,
+    seerrCardLoadingState: SeerrCardLoadingState,
+    heroFocusRequester: FocusRequester?,
+) {
+    val isTv = LocalTvMode.current
+    val adaptiveInfo = LocalAdaptiveInfo.current
+    val sections = state.sections
+
+    // Discover-row dimensions computed once at the composable scope (not inside
+    // the LazyColumn's LazyListScope, where LocalConfiguration isn't readable).
+    val discoverScreenWidth = androidx.compose.ui.platform.LocalConfiguration.current.screenWidthDp.dp
+    val discoverRowWidth = discoverScreenWidth - state.contentPad * 2
+    val discoverSpacing = adaptiveInfo.itemSpacing(isTv)
+    val discoverPattern = if (adaptiveInfo.windowSizeClass == WindowSizeClass.Compact) COMPACT_DISCOVER_PATTERN else EXPANDED_DISCOVER_PATTERN
+
+    var askContinueItem by remember { mutableStateOf<MediaItem?>(null) }
+
+    // Per-row focus requesters so D-pad navigation can target each content row.
+    var homeFocusRow by rememberInt(-1)
+    val savedRowIsValid = homeFocusRow in 0..sections.lastIndex
+    val rowFocusRequesters = remember(sections.size) { List(sections.size) { FocusRequester() } }
+    RestoreHomeRowFocus(
+        listState = listState,
+        savedRow = homeFocusRow,
+        sectionCount = sections.size,
+        newsletterBannerVisible = state.newsletterBannerVisible,
+        rowFocusRequesters = { rowFocusRequesters },
+    )
+
+    if (sections.isEmpty()) {
+        if (state.isLoading) {
+            // Initial online fetch with nothing to show yet — a real loading state
+            // instead of a blank screen. Delayed so fast loads don't flicker.
+            DelayedLoadingScreen(modifier = Modifier.padding(horizontal = state.contentPad))
+        } else {
+            ScreenEmptyState(
+                icon = Tabler.Outline.Movie,
+                title = "No Content Available",
+                description = "Check your Jellyfin libraries and try refreshing.",
+                actionLabel = "Refresh",
+                onAction = callbacks.onRetrySectionLoad,
+                modifier = Modifier.padding(horizontal = state.contentPad),
+            )
+        }
+    } else {
+        val visibleItemRange by remember {
+            derivedStateOf {
+                val info = listState.layoutInfo
+                if (info.visibleItemsInfo.isEmpty()) IntRange(0, 0)
+                else IntRange(info.visibleItemsInfo.first().index, info.visibleItemsInfo.last().index)
+            }
+        }
+
+        // De-duplicate the downloaded row against the online sections so a title
+        // that already appears in Continue Watching / Latest / Recently Added
+        // isn't shown twice.
+        val dedupedOfflineLibrary = remember(state.offlineLibrary, sections) {
+            if (state.offlineLibrary.isEmpty()) state.offlineLibrary
+            else {
+                val onlineIds = sections.flatMap { it.items }.mapTo(mutableSetOf()) { it.id }
+                if (onlineIds.isEmpty()) state.offlineLibrary else state.offlineLibrary.filter { it.id !in onlineIds }
+            }
+        }
+
+        LazyColumn(
+            state = listState,
+            modifier = Modifier.fillMaxSize(),
+            contentPadding = PaddingValues(bottom = adaptiveInfo.bottomPadding(isTv)),
+        ) {
+            if (state.featuredItem != null && state.homeHeroEnabled) {
+                item(key = "hero") {
+                    AnimatedHeroHeader(
+                        featuredItem = state.featuredItem,
+                        getBackdropUrl = remember(callbacks.getBackdropUrl) { { callbacks.getBackdropUrl(it) } },
+                        height = state.headerHeight,
+                        backgroundColor = state.backgroundColor,
+                        contentPadding = state.contentPad,
+                        listState = listState,
+                        onItemClick = callbacks.onItemClick,
+                        onDetailsClick = callbacks.onItemClick,
+                        requestInitialFocus = !savedRowIsValid,
+                        onFocusChange = callbacks.onFocusChange,
+                        focusRequester = heroFocusRequester,
+                    )
+                }
+            } else {
+                item(key = "hero_spacer") { Spacer(Modifier.height(100.dp)) }
+            }
+
+            // Non-blocking notice when some home sections failed to load.
+            if (state.partialLoadError) {
+                item(key = "partial_load_banner") {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = state.contentPad, vertical = 4.dp)
+                            .clip(MaterialTheme.shapes.medium)
+                            .background(MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.6f))
+                            .padding(horizontal = 12.dp, vertical = 8.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Icon(
+                            Tabler.Outline.AlertCircle,
+                            contentDescription = null,
+                            modifier = Modifier.size(16.dp),
+                            tint = MaterialTheme.colorScheme.onErrorContainer,
+                        )
+                        Spacer(Modifier.width(8.dp))
+                        Text(
+                            text = "Some sections couldn't be loaded.",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onErrorContainer,
+                            modifier = Modifier.weight(1f),
+                        )
+                        TextButton(onClick = callbacks.onRetrySectionLoad) {
+                            Text("Retry")
+                        }
+                    }
+                }
+            }
+
+            if (state.newsletterBannerVisible) {
+                item(key = "newsletter_banner") {
+                    NewsletterBanner(
+                        onClick = callbacks.onNewsletterClick,
+                        onDismiss = callbacks.onDismissNewsletterBanner,
+                    )
+                }
+            }
+
+            items(count = sections.size, key = { sections[it].id }, contentType = { "homeSection_${sections[it].type}" }) { index ->
+                val section = sections[index]
+                val isFirstAfterHero = index == 0 && state.featuredItem != null && state.homeHeroEnabled
+                val sectionIndexInList = index + (if (state.featuredItem != null && state.homeHeroEnabled) 1 else 0)
+                val isCurrentlyVisible = sectionIndexInList in visibleItemRange
+
+                var hasBeenVisible by rememberSaveable { mutableStateOf(false) }
+                if (isCurrentlyVisible && !hasBeenVisible) hasBeenVisible = true
+
+                val sectionAnimation by androidx.compose.animation.core.animateFloatAsState(
+                    targetValue = if (hasBeenVisible) 1f else 0f,
+                    animationSpec = MaterialTheme.motionScheme.defaultEffectsSpec(),
+                    label = "sectionAnimation",
+                )
+
+                val heroTransitionBrush = remember(state.backgroundColor, density) {
+                    Brush.verticalGradient(
+                        colors = listOf(Color.Transparent, state.backgroundColor),
+                        startY = 0f,
+                        endY = with(density) { 10.dp.toPx() },
+                    )
+                }
+                val sectionModifier = Modifier
+                    .fillMaxWidth()
+                    .then(
+                        if (isFirstAfterHero) {
+                            Modifier.background(heroTransitionBrush)
+                        } else Modifier.background(state.backgroundColor)
+                    )
+                    .padding(top = if (isFirstAfterHero) 0.dp else 16.dp)
+                    .graphicsLayer {
+                        alpha = sectionAnimation
+                        translationY = (1f - sectionAnimation) * 16.dp.toPx()
+                    }
+
+                val seedItem = section.seedItem
+                val sectionTitle = if (section.type == HomeSectionType.RECOMMENDATIONS && seedItem != null) {
+                    "Because you watched ${seedItem.name}"
+                } else {
+                    section.title
+                }
+
+                if (section.type == HomeSectionType.CONTINUE_WATCHING || section.type == HomeSectionType.NEXT_UP) {
+                    val rowItemClick: (MediaItem) -> Unit = remember(
+                        section.type, state.continueWatchingClickBehavior, callbacks.mediaOnItemClick, callbacks.mediaOnPlayClick,
+                    ) {
+                        { item ->
+                            if (section.type == HomeSectionType.CONTINUE_WATCHING) {
+                                when (state.continueWatchingClickBehavior) {
+                                    ContinueWatchingClickBehavior.DETAILS -> callbacks.mediaOnItemClick(item)
+                                    ContinueWatchingClickBehavior.PLAY -> callbacks.mediaOnPlayClick(item)
+                                    ContinueWatchingClickBehavior.ASK -> { askContinueItem = item }
+                                }
+                            } else {
+                                callbacks.mediaOnItemClick(item)
+                            }
+                        }
+                    }
+                    ContinueWatchingRow(
+                        title = sectionTitle,
+                        items = section.items,
+                        imageUrlBuilder = callbacks.mediaImageUrlBuilder,
+                        backdropUrlBuilder = callbacks.mediaBackdropUrlBuilder,
+                        onItemClick = rowItemClick,
+                        onPlayClick = callbacks.mediaOnPlayClick,
+                        modifier = sectionModifier,
+                        focusRequester = rowFocusRequesters[index],
+                        onRowFocused = { homeFocusRow = index },
+                        clippingEnabled = state.experimentalCardClippingEnabled,
+                    )
+                } else {
+                    HomeMediaRow(
+                        title = sectionTitle,
+                        items = section.items,
+                        imageUrlBuilder = callbacks.mediaImageUrlBuilder,
+                        fallbackImageUrlBuilder = callbacks.fallbackImageUrlBuilder,
+                        onItemClick = callbacks.mediaOnItemClick,
+                        onPlayClick = callbacks.mediaOnPlayClick,
+                        modifier = sectionModifier,
+                        photoFolderChildUrls = state.photoFolderChildUrls,
+                        focusRequester = rowFocusRequesters[index],
+                        onRowFocused = { homeFocusRow = index },
+                        clippingEnabled = state.experimentalCardClippingEnabled,
+                        showEpisodeSeriesBadge = section.type == HomeSectionType.LATEST_MEDIA,
+                    )
+                }
+            }
+
+            if (state.discoverEnabled && state.allDiscoverItems.isNotEmpty()) {
+                item(key = "seerr_discover_header") {
+                    SectionHeader(
+                        text = "Discover",
+                        backgroundColor = state.backgroundColor,
+                        contentPad = state.contentPad,
+                    )
+                }
+
+                items(
+                    count = state.discoverRows.size,
+                    key = { rowIndex -> "seerr_row_${state.discoverRows[rowIndex].firstOrNull()?.id ?: 0}" },
+                    contentType = { "seerrRow" },
+                ) { rowIndex ->
+                    val rowItems = state.discoverRows[rowIndex]
+                    val targetSize = discoverPattern[rowIndex % discoverPattern.size]
+                    val itemWidth = remember(discoverRowWidth, discoverSpacing, targetSize) {
+                        (discoverRowWidth - discoverSpacing * (targetSize - 1)) / targetSize.toFloat()
+                    }
+                    SeerrDiscoverRow(
+                        items = rowItems,
+                        itemWidth = itemWidth,
+                        rowHorizontalPadding = state.contentPad,
+                        spacing = discoverSpacing,
+                        backgroundColor = state.backgroundColor,
+                        clippingEnabled = state.experimentalCardClippingEnabled,
+                        seerrCardLoadingState = seerrCardLoadingState,
+                        seerrPrefetch = callbacks.seerrPrefetch,
+                        onSeerrItemClick = callbacks.onSeerrItemClick,
+                        onSeerrRequest = callbacks.onSeerrRequest,
+                    )
+                }
+            }
+
+            // ── Direct *arr "Recently Grabbed / Coming Soon" calendar row ──
+            // Reuses SeerrMediaCard (TMDB-keyed) so no new card UI is needed.
+            // Empty (and thus hidden) when the DIRECT_ARR_INTEGRATION flag is
+            // off, no *arr is configured, or the calendar window is empty.
+            if (state.recentlyGrabbed.isNotEmpty()) {
+                item(key = "arr_recently_grabbed_header") {
+                    SectionHeader(
+                        text = "Coming Soon",
+                        backgroundColor = state.backgroundColor,
+                        contentPad = state.contentPad,
+                    )
+                }
+                item(key = "arr_recently_grabbed_row") {
+                    val targetSize = discoverPattern[0]
+                    val itemWidth = remember(discoverRowWidth, discoverSpacing, targetSize) {
+                        (discoverRowWidth - discoverSpacing * (targetSize - 1)) / targetSize.toFloat()
+                    }
+                    SeerrDiscoverRow(
+                        items = state.recentlyGrabbed,
+                        itemWidth = itemWidth,
+                        rowHorizontalPadding = state.contentPad,
+                        spacing = discoverSpacing,
+                        backgroundColor = state.backgroundColor,
+                        clippingEnabled = state.experimentalCardClippingEnabled,
+                        seerrCardLoadingState = seerrCardLoadingState,
+                        seerrPrefetch = callbacks.seerrPrefetch,
+                        onSeerrItemClick = callbacks.onSeerrItemClick,
+                        onSeerrRequest = callbacks.onSeerrRequest,
+                    )
+                }
+            }
+
+            if (dedupedOfflineLibrary.isNotEmpty()) {
+                item(key = "downloaded_row") {
+                    // DownloadedSection renders its own "Downloaded" header, so we
+                    // intentionally don't emit a separate header item here.
+                    DownloadedSection(
+                        offlineLibrary = dedupedOfflineLibrary,
+                        onOfflineLibraryClick = callbacks.onOfflineLibraryClick,
+                        contentPad = state.contentPad,
+                        backgroundColor = state.backgroundColor,
+                    )
+                }
+            }
+        }
+    }
+
+    val askItem = askContinueItem
+    if (askItem != null) {
+        AlertDialog(
+            onDismissRequest = { askContinueItem = null },
+            icon = { Icon(Tabler.Outline.PlayerPlay, contentDescription = null) },
+            title = { Text(askItem.name) },
+            text = { Text("Resume playback or open details?") },
+            confirmButton = {
+                TextButton(onClick = {
+                    askContinueItem = null
+                    callbacks.mediaOnPlayClick(askItem)
+                }) { Text("Resume") }
+            },
+            dismissButton = {
+                TextButton(onClick = {
+                    askContinueItem = null
+                    callbacks.mediaOnItemClick(askItem)
+                }) { Text("Details") }
+            },
+        )
+    }
+}
+
+@Composable
+private fun SectionHeader(
+    text: String,
+    backgroundColor: Color,
+    contentPad: Dp,
+) {
+    Text(
+        text = text,
+        style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.SemiBold),
+        color = MaterialTheme.colorScheme.onSurface,
+        modifier = Modifier
+            .fillMaxWidth()
+            .background(backgroundColor)
+            .padding(start = contentPad, top = 24.dp, bottom = 8.dp),
+    )
+}

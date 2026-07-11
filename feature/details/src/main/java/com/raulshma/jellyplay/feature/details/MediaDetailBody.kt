@@ -97,49 +97,53 @@ internal fun FadingItem(
 
 @Composable
 internal fun DetailContentBody(
-    item: MediaItem,
-    detail: MediaDetail,
-    seasons: List<MediaItem>,
-    episodes: Map<String, List<MediaItem>>,
-    fetchedSeasonIds: Set<String>,
-    smartPlayTarget: DetailUiState.SmartPlayTarget?,
-    selectedSubtitleIndex: Int?,
-    selectedAudioIndex: Int?,
-    getImageUrl: (String) -> String,
-    isAudio: Boolean,
-    isAlbum: Boolean,
-    albumTracks: List<MediaItem>,
-    collectionItems: List<MediaItem> = emptyList(),
-    onPlayClick: (itemId: String, mediaSourceId: String?, startPosition: Long) -> Unit,
-    onAudioClick: () -> Unit,
-    onPlayAlbumTrack: (Int) -> Unit = {},
-    onNavigate: (com.raulshma.jellyplay.core.ui.navigation.Route) -> Unit = {},
-    onToggleFavorite: () -> Unit,
-    onMarkPlayed: () -> Unit,
-    onMarkUnplayed: () -> Unit,
-    onSubtitleSelect: (Int?) -> Unit,
-    onAudioSelect: (Int?) -> Unit,
-    onItemClick: (String) -> Unit,
-    onPersonClick: (String) -> Unit,
-    onNavigateToSeries: (String) -> Unit,
-    onSeasonSelected: (seasonId: String) -> Unit = {},
-    onLoadSeerrData: () -> Unit = {},
+    state: DetailContentState,
+    callbacks: DetailContentCallbacks,
     modifier: Modifier = Modifier,
     contentAlignment: Alignment = Alignment.TopCenter,
     showActionButtons: Boolean = true,
     showMediaInfo: Boolean = true,
     contentFocusRequester: FocusRequester? = null,
-    seerrRecommendations: List<SeerrSearchItem> = emptyList(),
-    seerrSimilar: List<SeerrSearchItem> = emptyList(),
-    isSeerrConnected: Boolean = false,
-    isSeerrRecommendationsEnabled: Boolean = false,
-    getSeerrPosterUrl: (String?) -> String? = { null },
-    onSeerrRequest: (SeerrSearchItem) -> Unit = {},
-    relatedVideos: List<SeerrRelatedVideo> = emptyList(),
-    onVideoClick: (SeerrRelatedVideo) -> Unit = {},
-    preferences: UserPreferences,
-    relatedItems: List<MediaItem> = emptyList(),
 ) {
+    // Derive flat locals from the bundles so the verbatim body content below
+    // keeps its original field references unchanged.
+    val detail = state.detail ?: return
+    val item = detail.item
+    val seasons = state.seasons
+    val episodes = state.episodes
+    val fetchedSeasonIds = state.fetchedSeasonIds
+    val smartPlayTarget = state.smartPlayTarget
+    val selectedSubtitleIndex = state.selectedSubtitleIndex
+    val selectedAudioIndex = state.selectedAudioIndex
+    val getImageUrl = callbacks.getImageUrl
+    val isAudio = item.mediaType == MediaType.AUDIO || item.mediaType == MediaType.MUSIC || item.mediaType == MediaType.ALBUM
+    val isAlbum = item.mediaType == MediaType.ALBUM
+    val albumTracks = state.albumTracks
+    val collectionItems = state.collectionItems
+    val onPlayClick = callbacks.onPlayClick
+    val onAudioClick = callbacks.onAudioClick
+    val onPlayAlbumTrack = callbacks.onPlayAlbumTrack
+    val onNavigate = callbacks.onNavigate
+    val onToggleFavorite = callbacks.onToggleFavorite
+    val onMarkPlayed = callbacks.onMarkPlayed
+    val onMarkUnplayed = callbacks.onMarkUnplayed
+    val onSubtitleSelect = callbacks.onSubtitleSelect
+    val onAudioSelect = callbacks.onAudioSelect
+    val onItemClick = callbacks.onItemClick
+    val onPersonClick = callbacks.onPersonClick
+    val onNavigateToSeries = callbacks.onNavigateToSeries
+    val onSeasonSelected = callbacks.onSeasonSelected
+    val onLoadSeerrData = callbacks.onLoadSeerrData
+    val seerrRecommendations = state.seerrRecommendations
+    val seerrSimilar = state.seerrSimilar
+    val isSeerrConnected = state.isSeerrConnected
+    val isSeerrRecommendationsEnabled = state.isSeerrRecommendationsEnabled
+    val getSeerrPosterUrl = callbacks.getSeerrPosterUrl
+    val onSeerrRequest = callbacks.onSeerrRequest
+    val relatedVideos = state.relatedVideos
+    val onVideoClick = callbacks.onVideoClick
+    val preferences = state.preferences
+    val relatedItems = state.relatedItems
     val showContent = true
 
     val adaptiveInfo = LocalAdaptiveInfo.current
@@ -396,22 +400,8 @@ internal fun DetailContentBody(
 
         if (showActionButtons) StaggeredDetailSection(visible = showContent, delayIndex = 1) {
             DetailActionButtons(
-                item = item,
-                detail = detail,
-                seasons = seasons,
-                episodes = episodes,
-                fetchedSeasonIds = fetchedSeasonIds,
-                smartPlayTarget = smartPlayTarget,
-                isAudio = isAudio,
-                isAlbum = isAlbum,
-                albumTracks = albumTracks,
-                onPlayClick = onPlayClick,
-                onAudioClick = onAudioClick,
-                onPlayAlbumTrack = onPlayAlbumTrack,
-                onNavigate = onNavigate,
-                onToggleFavorite = onToggleFavorite,
-                onMarkPlayed = onMarkPlayed,
-                onMarkUnplayed = onMarkUnplayed,
+                state = state,
+                callbacks = callbacks,
                 vertical = false,
                 contentFocusRequester = contentFocusRequester,
             )

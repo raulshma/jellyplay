@@ -57,6 +57,7 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.raulshma.jellyplay.core.designsystem.theme.ArtworkThemeWrapper
 import com.raulshma.jellyplay.core.designsystem.theme.LocalIsSynthwave
+import com.raulshma.jellyplay.core.designsystem.theme.rememberIsLightTheme
 import com.raulshma.jellyplay.core.designsystem.theme.LocalIsSoothingTheme
 import com.raulshma.jellyplay.core.ui.components.InlineTrailerPlayer
 import com.raulshma.jellyplay.core.designsystem.theme.LocalArtworkColors
@@ -100,13 +101,14 @@ fun SeerrDetailScreen(
     onNavigate: (com.raulshma.jellyplay.core.ui.navigation.Route) -> Unit = {},
     viewModel: SeerrDetailViewModel = hiltViewModel(),
 ) {
-    val movieDetail by viewModel.movieDetails
-    val tvDetail by viewModel.tvDetails
-    val ratings by viewModel.ratings
-    val isLoading by viewModel.isLoading
-    val error by viewModel.error
-    val seerrRecommendations by viewModel.seerrRecommendations.collectAsStateWithLifecycle()
-    val seerrSimilar by viewModel.seerrSimilar.collectAsStateWithLifecycle()
+    val uiState by viewModel.uiState.collectAsStateWithLifecycle()
+    val movieDetail = uiState.movieDetails
+    val tvDetail = uiState.tvDetails
+    val ratings = uiState.ratings
+    val isLoading = uiState.isLoading
+    val error = uiState.error
+    val seerrRecommendations = uiState.recommendations
+    val seerrSimilar = uiState.similar
     val requestResult by viewModel.requestResult.collectAsStateWithLifecycle()
     val preferences by viewModel.preferences.collectAsStateWithLifecycle()
     val seerrPrefs by viewModel.seerrPreferences.collectAsStateWithLifecycle()
@@ -114,10 +116,10 @@ fun SeerrDetailScreen(
     val radarrServers by viewModel.radarrServers.collectAsStateWithLifecycle()
     val sonarrServers by viewModel.sonarrServers.collectAsStateWithLifecycle()
     val isLoadingServices by viewModel.isLoadingServices.collectAsStateWithLifecycle()
-    val selectedSeasonNumber by viewModel.selectedSeasonNumber
-    val episodesBySeason by viewModel.episodesBySeason.collectAsStateWithLifecycle()
-    val isLoadingEpisodes by viewModel.isLoadingEpisodes.collectAsStateWithLifecycle()
-    val jellyfinItemId by viewModel.jellyfinItemId
+    val selectedSeasonNumber = uiState.selectedSeasonNumber
+    val episodesBySeason = uiState.episodesBySeason
+    val isLoadingEpisodes = uiState.isLoadingEpisodes
+    val jellyfinItemId = uiState.jellyfinItemId
 
     val uriHandler = LocalUriHandler.current
 
@@ -1585,26 +1587,6 @@ private fun EpisodeRow(episode: SeerrEpisode) {
     }
 }
 
-private fun formatDate(dateStr: String): String {
-    return try {
-        val input = java.text.SimpleDateFormat("yyyy-MM-dd", java.util.Locale.US)
-        val output = java.text.SimpleDateFormat("MMM d, yyyy", java.util.Locale.US)
-        input.parse(dateStr)?.let { output.format(it) } ?: dateStr.take(10)
-    } catch (_: Exception) {
-        dateStr.take(10)
-    }
-}
-
-private fun formatRuntime(minutes: Int): String {
-    val h = minutes / 60
-    val m = minutes % 60
-    return when {
-        h > 0 && m > 0 -> "${h}h ${m}m"
-        h > 0 -> "${h}h"
-        else -> "${m}m"
-    }
-}
-
 @Composable
 private fun VideosSection(
     videos: List<SeerrRelatedVideo>,
@@ -2108,20 +2090,5 @@ private fun MediaInfoRow(
                 lineHeight = 20.sp
             )
         }
-    }
-}
-
-private fun getFlagEmoji(countryCode: String): String? {
-    if (countryCode.length != 2) return null
-    val firstChar = Character.codePointAt(countryCode, 0) - 0x41 + 0x1F1E6
-    val secondChar = Character.codePointAt(countryCode, 1) - 0x41 + 0x1F1E6
-    return String(Character.toChars(firstChar)) + String(Character.toChars(secondChar))
-}
-
-@Composable
-private fun rememberIsLightTheme(): Boolean {
-    val bg = MaterialTheme.colorScheme.background
-    return remember(bg) {
-        (bg.red * 0.299f + bg.green * 0.587f + bg.blue * 0.114f) > 0.5f
     }
 }
