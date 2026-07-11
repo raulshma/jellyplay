@@ -579,6 +579,10 @@ class VideoPlayerViewModel @Inject constructor(
         updateUiState = { transform -> _uiState.update(transform) },
         getCurrentItemId = { playerSessionManager.sessionState.value.currentItemId },
         getCurrentSeriesId = { playerSessionManager.sessionState.value.mediaDetail?.item?.seriesId },
+        getPlayMethod = { playerSessionManager.sessionState.value.playMethod },
+        onReloadForStreamChange = { audioStreamIndex, subtitleStreamIndex ->
+            reloadForStreamChange(audioStreamIndex, subtitleStreamIndex)
+        },
         playbackPreferenceResolver = playbackPreferenceResolver,
         scope = scope,
     )
@@ -1388,6 +1392,23 @@ class VideoPlayerViewModel @Inject constructor(
 
     fun selectSubtitleTrack(option: TrackOption) {
         trackSelectionHelper.selectSubtitleTrack(option)
+    }
+
+    /**
+     * Reload playback for the current item at the current position with a new
+     * audio/subtitle stream index. Used when the user picks a server-origin
+     * audio or subtitle track during transcoded playback — mpv cannot switch
+     * audio in-place on an HLS manifest, and embedded subs aren't in the
+     * transcode, so the server must re-issue the stream with the chosen index.
+     * Mirrors the Wholphin changeStreams / Jellyfin PlaybackInfo re-POST path.
+     */
+    private fun reloadForStreamChange(audioStreamIndex: Int?, subtitleStreamIndex: Int?) {
+        val engine = playerSessionManager.engine ?: return
+        val positionMs = getReportPositionMs()
+        launch {
+            trackSelectionHelper.setPendingStreams(subtitleStreamIndex, audioStreamIndex)
+            playerSessionManager.reloadForStreamChange(audioStreamIndex, subtitleStreamIndex, positionMs)
+        }
     }
 
     fun resetAudioTrack() {

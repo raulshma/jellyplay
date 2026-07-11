@@ -3,6 +3,7 @@ package com.raulshma.jellyplay.feature.player.video
 import androidx.compose.runtime.Immutable
 import com.raulshma.jellyplay.core.datastore.UserPreferencesStore
 import com.raulshma.jellyplay.core.model.MediaStream
+import com.raulshma.jellyplay.core.model.PlayMethod
 import com.raulshma.jellyplay.core.model.StreamType
 import com.raulshma.jellyplay.core.model.TrackType
 import com.raulshma.jellyplay.core.model.isLanguageMatch
@@ -25,6 +26,8 @@ internal class TrackSelectionHelper(
     private val updateUiState: ((VideoPlayerUiState) -> VideoPlayerUiState) -> Unit,
     private val getCurrentItemId: () -> String?,
     private val getCurrentSeriesId: () -> String?,
+    private val getPlayMethod: () -> PlayMethod,
+    private val onReloadForStreamChange: (audioStreamIndex: Int?, subtitleStreamIndex: Int?) -> Unit,
     private val playbackPreferenceResolver: ItemPlaybackPreferenceResolver,
     private val scope: CoroutineScope,
 ) {
@@ -51,6 +54,23 @@ internal class TrackSelectionHelper(
     }
 
     fun selectAudioTrack(option: TrackOption, isUserOverride: Boolean = true) {
+        // Server-origin audio track (transcode/direct-stream): mpv cannot
+        // switch audio in-place on a transcoded HLS manifest. Re-resolve
+        // playback with the new audioStreamIndex and reload the engine at the
+        // current position. The picker refreshes once the new stream loads.
+        if (option.index >= SERVER_TRACK_INDEX_BASE) {
+            val streamIndex = option.index - SERVER_TRACK_INDEX_BASE
+            selectedAudioTrackIndex = option.index
+            updateUiState { state ->
+                state.copy(audioTracks = state.audioTracks.map { track ->
+                    track.copy(isSelected = track.index == option.index)
+                })
+            }
+            if (isUserOverride) {
+                onReloadForStreamChange(streamIndex, null)
+            }
+            return
+        }
         val engine = getEngine() ?: return
         engine.selectTrack(TrackType.AUDIO, option.index)
         selectedAudioTrackIndex = if (option.index < 0) null else option.index
@@ -71,6 +91,23 @@ internal class TrackSelectionHelper(
     }
 
     fun selectSubtitleTrack(option: TrackOption, isUserOverride: Boolean = true) {
+        // Server-origin subtitle (transcode): the sub isn't in the HLS manifest
+        // and mpv hasn't side-loaded it yet. Re-resolve playback with the new
+        // subtitleStreamIndex so the server delivers it (and side-loads it via
+        // buildExternalSubtitles on the reloaded engine).
+        if (option.index >= SERVER_TRACK_INDEX_BASE) {
+            val streamIndex = option.index - SERVER_TRACK_INDEX_BASE
+            selectedSubtitleTrackIndex = option.index
+            updateUiState { state ->
+                state.copy(subtitleTracks = state.subtitleTracks.map { track ->
+                    track.copy(isSelected = track.index == option.index)
+                })
+            }
+            if (isUserOverride) {
+                onReloadForStreamChange(null, streamIndex)
+            }
+            return
+        }
         val engine = getEngine() ?: return
 
         engine.selectTrack(TrackType.SUBTITLE, option.index)
@@ -127,19 +164,33 @@ internal class TrackSelectionHelper(
             TrackOption(t.index, t.label, t.language, t.isSelected)
         }
 
-        val audioTracks = if (audioOptions.isEmpty()) {
+        // For transcoded / direct-stream playback the server bakes a single
+        // audio track into the HLS manifest, so mpv's track-list surfaces only
+        // that one — the picker would otherwise hide every other audio stream.
+        // Supplement with server-side mediaStreams (deduped by label against
+        // the engine tracks) so the user can see and switch to any audio track.
+        // Selecting a server-origin track triggers a session reload (see
+        // selectAudioTrack) since mpv cannot switch audio in-place on a
+        // transcode.
+        val mergedAudioOptions = if (getPlayMethod() != PlayMethod.DIRECT_PLAY) {
+            mergeServerStreams(audioOptions, streams, StreamType.AUDIO)
+        } else {
+            audioOptions
+        }
+
+        val audioTracks = if (mergedAudioOptions.isEmpty()) {
             listOf(TrackOption(-1, "Default", null, true))
         } else {
             val sel = selectedAudioTrackIndex
-            val hasSelectionMatch = audioOptions.any { it.index == sel }
+            val hasSelectionMatch = mergedAudioOptions.any { it.index == sel }
             val resolvedSel = if (hasSelectionMatch) sel else {
-                val engineAutoSelected = audioOptions.find { it.isSelected }
+                val engineAutoSelected = mergedAudioOptions.find { it.isSelected }
                 if (engineAutoSelected != null) {
                     selectedAudioTrackIndex = engineAutoSelected.index
                     selectedAudioTrackIndex
                 } else null
             }
-            listOf(TrackOption(-1, "Default", null, resolvedSel == null)) + audioOptions.map { t ->
+            listOf(TrackOption(-1, "Default", null, resolvedSel == null)) + mergedAudioOptions.map { t ->
                 val isSel = if (resolvedSel != null) resolvedSel == t.index else t.isSelected
                 t.copy(isSelected = isSel)
             }
@@ -149,19 +200,29 @@ internal class TrackSelectionHelper(
             TrackOption(t.index, t.label, t.language, t.isSelected)
         }
 
-        val subtitleTracks = if (engineSubOptions.isEmpty()) {
+        // Same merge for subtitles: side-loaded external subs may take a moment
+        // to resolve in mpv's track-list, and embedded subs aren't in the
+        // transcode manifest at all. Surface all server subtitle streams so the
+        // picker is populated immediately; selecting one side-loads it.
+        val mergedSubOptions = if (getPlayMethod() != PlayMethod.DIRECT_PLAY) {
+            mergeServerStreams(engineSubOptions, streams, StreamType.SUBTITLE)
+        } else {
+            engineSubOptions
+        }
+
+        val subtitleTracks = if (mergedSubOptions.isEmpty()) {
             listOf(TrackOption(-1, "None", null, true))
         } else {
             val sel = selectedSubtitleTrackIndex
-            val hasSelectionMatch = engineSubOptions.any { it.index == sel }
+            val hasSelectionMatch = mergedSubOptions.any { it.index == sel }
             val resolvedSel = if (hasSelectionMatch) sel else {
-                val engineAutoSelected = engineSubOptions.find { it.isSelected }
+                val engineAutoSelected = mergedSubOptions.find { it.isSelected }
                 if (engineAutoSelected != null) {
                     selectedSubtitleTrackIndex = engineAutoSelected.index
                     selectedSubtitleTrackIndex
                 } else null
             }
-            listOf(TrackOption(-1, "Off", null, resolvedSel == null)) + engineSubOptions.map { t ->
+            listOf(TrackOption(-1, "Off", null, resolvedSel == null)) + mergedSubOptions.map { t ->
                 val isSel = if (resolvedSel != null) resolvedSel == t.index else t.isSelected
                 t.copy(isSelected = isSel)
             }
@@ -322,6 +383,54 @@ internal class TrackSelectionHelper(
         pendingSubtitleStreamIndex = null
         pendingAudioStreamIndex = null
         playbackPreferenceResolver.clear()
+    }
+
+    /**
+     * Merge server-side [MediaStream] entries into the engine-derived track
+     * options for transcoded/direct-stream playback. The HLS manifest only
+     * carries one audio track (and may omit embedded subs), so the engine
+     * track-list alone hides the rest. Each server stream not already
+     * represented (by label) in [engineOptions] is appended with a synthetic
+     * index ([SERVER_TRACK_INDEX_BASE] + stream.index) so selection can detect
+     * it as server-origin and trigger a session reload or side-load.
+     *
+     * The currently-active stream is marked selected so the picker reflects
+     * reality: for audio the active track is the one baked into the manifest
+     * (matched by label against engine tracks); for subtitles we defer to the
+     * engine's selection flag.
+     */
+    private fun mergeServerStreams(
+        engineOptions: List<TrackOption>,
+        streams: List<MediaStream>,
+        type: StreamType,
+    ): List<TrackOption> {
+        if (streams.isEmpty()) return engineOptions
+        val engineLabels = engineOptions.map { it.label.lowercase() }.toSet()
+        val merged = engineOptions.toMutableList()
+        for (stream in streams.filter { it.type == type }) {
+            val label = stream.displayTitle ?: stream.title ?: stream.language ?: continue
+            if (label.lowercase() in engineLabels) continue
+            val syntheticIndex = SERVER_TRACK_INDEX_BASE + stream.index
+            merged.add(
+                TrackOption(
+                    index = syntheticIndex,
+                    label = label,
+                    language = stream.language,
+                    isSelected = false,
+                )
+            )
+        }
+        return merged
+    }
+
+    companion object {
+        /**
+         * Synthetic index base for server-origin track options. A track option
+         * whose index is >= this value refers to [MediaStream.index] (subtract
+         * the base to recover it) and is not backed by an engine track; it
+         * requires a session reload (audio) or side-load (subtitle) on select.
+         */
+        internal const val SERVER_TRACK_INDEX_BASE = 100_000
     }
 
     private fun persistStreamSelectionFromPlayer(
