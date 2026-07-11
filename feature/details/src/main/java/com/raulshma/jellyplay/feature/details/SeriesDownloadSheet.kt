@@ -32,7 +32,6 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TriStateCheckbox
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.Stable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -44,7 +43,6 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
-import androidx.compose.ui.state.ToggleableState
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.composables.icons.tabler.Tabler
@@ -59,12 +57,6 @@ import com.raulshma.jellyplay.core.designsystem.theme.expressiveListShape
 import com.raulshma.jellyplay.core.model.MediaItem
 import com.raulshma.jellyplay.feature.details.R
 
-@Stable
-private data class SeasonSelectionState(
-    val allEpisodeIds: Set<String>,
-    val selectableEpisodeIds: Set<String>,
-)
-
 @OptIn(ExperimentalMaterial3ExpressiveApi::class)
 @Composable
 fun SeriesDownloadSheet(
@@ -77,27 +69,12 @@ fun SeriesDownloadSheet(
     onDownload: (selectedEpisodes: Map<String, List<String>>) -> Unit,
     onDismiss: () -> Unit,
 ) {
+    val selection = rememberSeriesDownloadSelection(seasons, episodes, downloadedEpisodeIds)
     var expandedSeasonId by remember { mutableStateOf<String?>(null) }
-    var selectedEpisodeIds by remember(seasons) {
-        mutableStateOf(seasons.associate { it.id to emptySet<String>() })
-    }
 
-    val allSelectableIds = remember(seasons, downloadedEpisodeIds, episodes) {
-        episodes.values
-            .flatten()
-            .map { it.id }
-            .filter { it !in downloadedEpisodeIds }
-            .toSet()
-    }
-
-    val totalSelectedCount = selectedEpisodeIds.values.sumOf { it.size }
-
-    // Flatten once into a Set instead of scanning every season set per id
-    // (was O(selectable × seasons); now O(total selected) once).
-    val allSelected = remember(allSelectableIds, selectedEpisodeIds) {
-        val selectedFlat = selectedEpisodeIds.values.flatten().toHashSet()
-        allSelectableIds.isNotEmpty() && allSelectableIds.all { it in selectedFlat }
-    }
+    val totalSelectedCount = selection.totalSelectedCount
+    val allSelected = selection.allSelected
+    val allSelectableIds = selection.allSelectableIds
 
     Column(
         modifier = Modifier
@@ -145,19 +122,7 @@ fun SeriesDownloadSheet(
             horizontalArrangement = Arrangement.spacedBy(4.dp),
         ) {
             FilledTonalButton(
-                onClick = {
-                    selectedEpisodeIds = if (allSelected) {
-                        seasons.associate { it.id to mutableSetOf() }
-                    } else {
-                        seasons.associate { seasonId ->
-                            val seasonEpisodes = episodes[seasonId.id].orEmpty()
-                            seasonId.id to seasonEpisodes
-                                .map { it.id }
-                                .filter { it !in downloadedEpisodeIds }
-                                .toMutableSet()
-                        }
-                    }
-                },
+                onClick = { selection.toggleSelectAll() },
                 shape = ShapeCache.smoothPill,
                 colors = ButtonDefaults.filledTonalButtonColors(
                     containerColor = if (allSelected) MaterialTheme.colorScheme.errorContainer
@@ -208,21 +173,8 @@ fun SeriesDownloadSheet(
                 val downloadedInSeason = remember(seasonEpisodes, downloadedEpisodeIds) {
                     seasonEpisodes.count { it.id in downloadedEpisodeIds }
                 }
-                val selectableInSeason = remember(seasonEpisodes, downloadedEpisodeIds) {
-                    seasonEpisodes
-                        .map { it.id }
-                        .filter { it !in downloadedEpisodeIds }
-                        .toSet()
-                }
-                val selectedInSeason = selectedEpisodeIds[season.id].orEmpty()
-
-                val triState = when {
-                    selectableInSeason.isEmpty() && downloadedInSeason > 0 -> ToggleableState.On
-                    selectableInSeason.isEmpty() -> ToggleableState.Off
-                    selectableInSeason.all { it in selectedInSeason } -> ToggleableState.On
-                    selectableInSeason.none { it in selectedInSeason } -> ToggleableState.Off
-                    else -> ToggleableState.Indeterminate
-                }
+                val selectedInSeason = selection.selectedForSeason(season.id)
+                val triState = selection.triStateForSeason(season.id, downloadedInSeason)
 
                 val seasonBgColor by animateColorAsState(
                     targetValue = if (isExpanded) MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.3f)
@@ -259,15 +211,7 @@ fun SeriesDownloadSheet(
                     ) {
                         TriStateCheckbox(
                             state = triState,
-                            onClick = {
-                                val currentSet = selectedEpisodeIds[season.id].orEmpty()
-                                val newSet = if (selectableInSeason.all { it in currentSet }) {
-                                    currentSet - selectableInSeason.toSet()
-                                } else {
-                                    currentSet + selectableInSeason
-                                }
-                                selectedEpisodeIds = selectedEpisodeIds + (season.id to newSet)
-                            },
+                            onClick = { selection.toggleSeason(season.id) },
                         )
                         Spacer(Modifier.width(4.dp))
                         Column(modifier = Modifier.weight(1f)) {
@@ -326,7 +270,7 @@ fun SeriesDownloadSheet(
                         } else {
                             Column(
                                 modifier = Modifier
-                                    .padding(start = 12.dp, top = 4.dp, end = 4.dp, bottom = 4.dp)
+                                    .padding(start = 12.dp, top = 4.dp, end = 4.dp, bottom = 4.dp),
                             ) {
                                 seasonEpisodes.forEachIndexed { idx, episode ->
                                     val isDownloaded = episode.id in downloadedEpisodeIds
@@ -354,13 +298,7 @@ fun SeriesDownloadSheet(
                                             .clip(shape)
                                             .background(episodeBgColor)
                                             .clickable(enabled = !isDownloaded) {
-                                                val currentSet = selectedEpisodeIds[season.id].orEmpty()
-                                                val newSet = if (episode.id in currentSet) {
-                                                    currentSet - episode.id
-                                                } else {
-                                                    currentSet + episode.id
-                                                }
-                                                selectedEpisodeIds = selectedEpisodeIds + (season.id to newSet)
+                                                selection.toggleEpisode(season.id, episode.id)
                                             }
                                             .padding(horizontal = 8.dp, vertical = 6.dp),
                                         verticalAlignment = Alignment.CenterVertically,
@@ -435,10 +373,7 @@ fun SeriesDownloadSheet(
                 Text(stringResource(R.string.detail_cancel))
             }
             Button(
-                onClick = {
-                    val result = selectedEpisodeIds.mapValues { (_, ids) -> ids.toList() }
-                    onDownload(result)
-                },
+                onClick = { onDownload(selection.toDownloadMap()) },
                 enabled = totalSelectedCount > 0 && !isDownloading,
                 shape = ShapeCache.smoothPill,
             ) {
@@ -457,7 +392,7 @@ fun SeriesDownloadSheet(
                 Spacer(Modifier.size(6.dp))
                 Text(
                     if (isDownloading) stringResource(R.string.detail_queuing)
-                    else "$totalSelectedCount"
+                    else "$totalSelectedCount",
                 )
             }
         }

@@ -12,6 +12,7 @@ import com.raulshma.jellyplay.core.data.repository.SearchHistoryRepository
 import com.raulshma.jellyplay.core.data.repository.SeerrRepository
 import com.raulshma.jellyplay.core.data.repository.DownloadRepository
 import com.raulshma.jellyplay.core.data.seerr.SeerrRequestDelegate
+import com.raulshma.jellyplay.core.data.seerr.SeerrRequestStateHolder
 import com.raulshma.jellyplay.core.data.util.ImageUrlProvider
 import com.raulshma.jellyplay.core.data.util.PhotoFolderPrefetcher
 import com.raulshma.jellyplay.core.datastore.SeerrPreferencesStore
@@ -21,7 +22,6 @@ import com.raulshma.jellyplay.core.data.worker.TvWatchNextScheduler
 import com.raulshma.jellyplay.core.model.UserInfo
 import com.raulshma.jellyplay.core.model.seerr.DiscoverSectionType
 import com.raulshma.jellyplay.core.model.seerr.SeerrSearchResponse
-import com.raulshma.jellyplay.core.model.seerr.SeerrRequestResult
 import com.raulshma.jellyplay.core.model.HomeSectionType
 import com.raulshma.jellyplay.core.model.NetworkStatus
 import com.raulshma.jellyplay.core.model.OfflineMode
@@ -84,6 +84,13 @@ class HomeViewModel @Inject constructor(
         private const val MIN_REFRESH_INTERVAL_MS = 30_000L
         /** TTL for Seerr discover sections (trending/popular change slowly). */
         private const val DISCOVER_TTL_MS = 10 * 60_000L
+        /**
+         * Cap on cached photo-folder child-URL entries. Photo folders are a
+         * fixed, small set per server, but the map is append-only (`+`) and a
+         * long-lived VM could accumulate stale entries across library changes.
+         * Evict oldest entries beyond this cap.
+         */
+        private const val PHOTO_FOLDER_CACHE_CAP = 50
     }
 
     private val _uiState = stateFlow(HomeUiState())
@@ -120,6 +127,14 @@ class HomeViewModel @Inject constructor(
 
     private val _searchHistory = MutableStateFlow<List<SearchHistoryItem>>(emptyList())
     val searchHistory: StateFlow<List<SearchHistoryItem>> = _searchHistory
+
+    /**
+     * Encapsulates all Seerr request UI state (result, servers, loading, seasons).
+     * SearchViewModel uses the same holder — this avoids Home duplicating that
+     * logic inline. The holder's five StateFlows are folded into
+     * [HomeUiState.seerrRequestState] below so the UI observes a single object.
+     */
+    private val seerrRequestStateHolder = SeerrRequestStateHolder(scope, seerrRequestDelegate)
 
     init {
         // Guard against environments where the process LifecycleOwner isn't initialised
@@ -264,6 +279,35 @@ class HomeViewModel @Inject constructor(
                 }
         }
 
+        // Fold the shared SeerrRequestStateHolder into HomeUiState so the UI
+        // observes a single object. Each slice writes its own field, matching the
+        // per-field collector style used for every other source flow in this VM.
+        launch {
+            seerrRequestStateHolder.requestResult.collect { result ->
+                _uiState.update { it.copy(seerrRequestState = it.seerrRequestState.copy(result = result)) }
+            }
+        }
+        launch {
+            seerrRequestStateHolder.radarrServers.collect { servers ->
+                _uiState.update { it.copy(seerrRequestState = it.seerrRequestState.copy(radarrServers = servers)) }
+            }
+        }
+        launch {
+            seerrRequestStateHolder.sonarrServers.collect { servers ->
+                _uiState.update { it.copy(seerrRequestState = it.seerrRequestState.copy(sonarrServers = servers)) }
+            }
+        }
+        launch {
+            seerrRequestStateHolder.isLoadingServices.collect { loading ->
+                _uiState.update { it.copy(seerrRequestState = it.seerrRequestState.copy(isLoadingServices = loading)) }
+            }
+        }
+        launch {
+            seerrRequestStateHolder.tvSeasons.collect { seasons ->
+                _uiState.update { it.copy(seerrRequestState = it.seerrRequestState.copy(tvSeasons = seasons)) }
+            }
+        }
+
         loadInitial()
     }
 
@@ -297,7 +341,12 @@ class HomeViewModel @Inject constructor(
             val current = _photoFolderChildUrls.value
             val results = photoFolderPrefetcher.prefetch(items, alreadyFetched = current.keys)
             if (results.isNotEmpty()) {
-                _photoFolderChildUrls.value = _photoFolderChildUrls.value + results
+                // Merge then evict the oldest entries beyond PHOTO_FOLDER_CACHE_CAP
+                // so the map stays bounded for the VM's lifetime.
+                val merged = _photoFolderChildUrls.value + results
+                _photoFolderChildUrls.value =
+                    if (merged.size <= PHOTO_FOLDER_CACHE_CAP) merged
+                    else merged.entries.drop(merged.size - PHOTO_FOLDER_CACHE_CAP).associate { it.key to it.value }
             }
         }
     }
@@ -315,16 +364,13 @@ class HomeViewModel @Inject constructor(
         homeScrollPosition = HomeScrollPosition()
     }
 
-    fun getHomeFocusPosition(): HomeFocusPosition = homeFocusPosition
+    // Note: HomeFocusPosition is still reset on user/refresh transitions
+    // (below) and pinned by HomeScrollFocusPositionTest, but no UI ever reads
+    // or writes a per-row/per-card focus index — focus restoration is handled
+    // entirely in the composable layer via rememberInt (homeFocusRow). The
+    // getter/save accessor methods were unused and have been removed.
 
-    fun saveHomeFocusPosition(sectionIndex: Int, itemIndex: Int) {
-        homeFocusPosition = HomeFocusPosition(
-            sectionIndex = sectionIndex.coerceAtLeast(0),
-            itemIndex = itemIndex.coerceAtLeast(0),
-        )
-    }
-
-    fun resetHomeFocusPosition() {
+    private fun resetHomeFocusPosition() {
         homeFocusPosition = HomeFocusPosition()
     }
 
@@ -378,53 +424,30 @@ class HomeViewModel @Inject constructor(
     }
 
     private fun requestSeerrMedia(event: HomeUiEvent.RequestSeerrMedia) {
-        launch {
-            _uiState.update { it.copy(seerrRequestState = it.seerrRequestState.copy(result = SeerrRequestResult(isLoading = true))) }
-            seerrRequestDelegate.requestMedia(
-                mediaType = event.item.mediaType,
-                tmdbId = event.item.id,
-                seasons = event.seasons,
-                serverId = event.serverId,
-                profileId = event.profileId,
-                rootFolder = event.rootFolder,
-                tags = event.tags,
-            ).onSuccess {
-                _uiState.update { it.copy(seerrRequestState = it.seerrRequestState.copy(result = SeerrRequestResult(success = true))) }
-            }.onFailure { throwable ->
-                _uiState.update { it.copy(seerrRequestState = it.seerrRequestState.copy(result = SeerrRequestResult(error = throwable.message ?: "Request failed"))) }
-            }
-        }
+        seerrRequestStateHolder.requestMedia(
+            item = event.item,
+            seasons = event.seasons,
+            serverId = event.serverId,
+            profileId = event.profileId,
+            rootFolder = event.rootFolder,
+            tags = event.tags,
+        )
     }
 
     private fun clearRequestResult() {
-        _uiState.update { it.copy(seerrRequestState = it.seerrRequestState.copy(result = null)) }
+        seerrRequestStateHolder.clearRequestResult()
     }
 
     private fun loadSeerrServiceDetails(mediaType: String) {
-        launch {
-            _uiState.update { it.copy(seerrRequestState = it.seerrRequestState.copy(isLoadingServices = true)) }
-            try {
-                val result = seerrRequestDelegate.fetchServiceDetails(mediaType)
-                _uiState.update { it.copy(seerrRequestState = it.seerrRequestState.copy(radarrServers = result.radarrServers, sonarrServers = result.sonarrServers)) }
-            } finally {
-                _uiState.update { it.copy(seerrRequestState = it.seerrRequestState.copy(isLoadingServices = false)) }
-            }
-        }
+        seerrRequestStateHolder.loadServiceDetails(mediaType)
     }
 
     private fun loadTvSeasons(tmdbId: Int) {
-        launch {
-            _uiState.update { it.copy(seerrRequestState = it.seerrRequestState.copy(tvSeasons = emptyList())) }
-            val seasons = seerrRequestDelegate.fetchTvSeasons(tmdbId)
-            _uiState.update { it.copy(seerrRequestState = it.seerrRequestState.copy(tvSeasons = seasons)) }
-        }
+        seerrRequestStateHolder.loadTvSeasons(tmdbId)
     }
 
     fun prefetchSeerrDetails(tmdbId: Int, mediaType: String, onDone: () -> Unit) {
-        launch {
-            seerrRequestDelegate.prefetchDetails(tmdbId, mediaType)
-            onDone()
-        }
+        seerrRequestStateHolder.prefetchDetails(tmdbId, mediaType, onDone)
     }
 
     fun deleteSearchHistoryItem(id: Long) {
@@ -446,6 +469,12 @@ class HomeViewModel @Inject constructor(
 
     private suspend fun fetchAndUpdateSections() {
         if (!refreshMutex.tryLock()) return
+        // Deferred widget / TV Watch Next side-effects. Captured inside the
+        // mutex (where we can detect a Continue-Watching change) but fired
+        // after unlock so a slow broadcast IPC or WorkManager enqueue can't
+        // hold the refresh lock and silently drop the next refresh attempt
+        // (refreshMutex.tryLock() above returns immediately if contended).
+        var pendingCwSideEffect: (() -> Unit)? = null
         try {
             offlineModeManager.checkNetworkAndAutoDetect()
 
@@ -523,25 +552,29 @@ class HomeViewModel @Inject constructor(
                     if (currentIds != lastContinueWatchingIds) {
                         lastContinueWatchingIds = currentIds
                         preferencesStore.setContinueWatching(continueWatching)
-                        // Explicit-component broadcast: implicit broadcasts to
-                        // manifest-registered receivers are blocked on
-                        // Android O+, and the widget's intent-filter only
-                        // carries APPWIDGET_UPDATE, so we target the receiver
-                        // class directly to guarantee delivery in-process.
-                        val intent = android.content.Intent(
-                            "com.raulshma.jellyplay.widget.ACTION_REFRESH_CONTINUE_WATCHING",
-                        ).apply {
-                            setClassName(
-                                context.packageName,
-                                "com.raulshma.jellyplay.widget.ContinueWatchingWidget",
-                            )
-                        }
-                        context.sendBroadcast(intent)
-                        // Refresh the Android TV "Watch Next" OS row so the
-                        // system home stays in sync with the user's progress.
-                        // Worker is a no-op on phones and respects its preference.
-                        if (androidTvWatchNextEnabled) {
-                            tvWatchNextScheduler.scheduleRefresh()
+                        // Defer the widget broadcast + TV Watch Next refresh until
+                        // after the mutex is released (see pendingCwSideEffect above).
+                        pendingCwSideEffect = {
+                            // Explicit-component broadcast: implicit broadcasts to
+                            // manifest-registered receivers are blocked on Android O+,
+                            // and the widget's intent-filter only carries
+                            // APPWIDGET_UPDATE, so we target the receiver class directly
+                            // to guarantee delivery in-process.
+                            val intent = android.content.Intent(
+                                "com.raulshma.jellyplay.widget.ACTION_REFRESH_CONTINUE_WATCHING",
+                            ).apply {
+                                setClassName(
+                                    context.packageName,
+                                    "com.raulshma.jellyplay.widget.ContinueWatchingWidget",
+                                )
+                            }
+                            context.sendBroadcast(intent)
+                            // Refresh the Android TV "Watch Next" OS row so the
+                            // system home stays in sync with the user's progress.
+                            // Worker is a no-op on phones and respects its preference.
+                            if (androidTvWatchNextEnabled) {
+                                tvWatchNextScheduler.scheduleRefresh()
+                            }
                         }
                     }
 
@@ -567,6 +600,7 @@ class HomeViewModel @Inject constructor(
             _uiState.update { it.copy(isLoading = false, isRefreshing = false) }
             refreshMutex.unlock()
         }
+        pendingCwSideEffect?.invoke()
     }
 
     /**
@@ -595,10 +629,7 @@ class HomeViewModel @Inject constructor(
         val now = System.currentTimeMillis()
         if (!discoverCacheInvalidated && now - lastDiscoverFetchEpochMs < DISCOVER_TTL_MS) return
 
-        val today = LocalDate.now(ZoneOffset.systemDefault())
-            .atStartOfDay(ZoneOffset.systemDefault())
-            .toLocalDate()
-            .toString()
+        val today = LocalDate.now(ZoneOffset.systemDefault()).toString()
 
         val deferredResults = mutableListOf<Pair<DiscoverSectionType, kotlinx.coroutines.Deferred<Result<SeerrSearchResponse>>>>()
 

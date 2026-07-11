@@ -54,6 +54,14 @@ data class PlaybackRequest(
      * [com.raulshma.jellyplay.feature.player.video.PlayerSessionManager].
      */
     val isLive: Boolean = false,
+    /**
+     * Server-reported total runtime in milliseconds, derived from the media
+     * item's `runTimeTicks`. Used by engines as a duration fallback when the
+     * demuxer cannot resolve one for HLS/transcoded streams (where mpv's
+     * `duration` property is frequently 0 or only partially resolved). `0`
+     * when no server runtime is available (e.g. live / unknown-length items).
+     */
+    val serverDurationMs: Long = 0L,
 )
 
 data class SubtitleSource(

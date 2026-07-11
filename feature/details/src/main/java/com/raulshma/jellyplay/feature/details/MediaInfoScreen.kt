@@ -46,18 +46,19 @@ import com.raulshma.jellyplay.core.ui.components.rememberScreenBackgroundColor
 import com.raulshma.jellyplay.core.ui.tv.LocalTvMode
 import com.raulshma.jellyplay.core.ui.tv.TvGrabInitialFocus
 import com.raulshma.jellyplay.core.ui.tv.tvFocusRestorer
+import com.raulshma.jellyplay.core.ui.util.formatFileSize
 
 @Composable
 fun MediaInfoScreen(
     itemId: String,
     onBack: () -> Unit,
-    viewModel: DetailViewModel = hiltViewModel(),
+    viewModel: MediaInfoViewModel = hiltViewModel(),
 ) {
     LaunchedEffect(itemId) {
-        viewModel.loadItem(itemId)
+        viewModel.load(itemId)
     }
 
-    val detail by viewModel.detail.collectAsStateWithLifecycle()
+    val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     val backgroundColor = rememberScreenBackgroundColor()
     val isTv = LocalTvMode.current
     val adaptiveInfo = LocalAdaptiveInfo.current
@@ -67,7 +68,7 @@ fun MediaInfoScreen(
     val contentFocusRequester = remember { FocusRequester() }
     TvGrabInitialFocus(
         focusRequester = contentFocusRequester,
-        itemCount = if (detail == null) 0 else 1,
+        itemCount = if (uiState is MediaInfoUiState.Success) 1 else 0,
         tag = "media_info_init",
     )
 
@@ -78,48 +79,64 @@ fun MediaInfoScreen(
     ) { innerPadding ->
         val scrollState = rememberScrollState()
 
-        if (detail == null) {
-            Box(
-                modifier = Modifier.fillMaxSize(),
-                contentAlignment = Alignment.Center,
-            ) {
-                com.raulshma.jellyplay.core.ui.components.JellyPlayLoadingIndicator(
-                    color = MaterialTheme.colorScheme.primary,
-                )
-            }
-        } else {
-            Column(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .tvFocusRestorer()
-                    .focusGroup()
-                    .focusRequester(contentFocusRequester)
-                    .verticalScroll(scrollState)
-                    .padding(
-                        start = adaptiveInfo.contentPadding(isTv),
-                        end = adaptiveInfo.contentPadding(isTv),
-                        bottom = innerPadding.calculateBottomPadding() + 80.dp,
-                    ),
-                verticalArrangement = Arrangement.spacedBy(16.dp),
-            ) {
-                val currentItem = detail!!.item
-                Text(
-                    text = currentItem.name,
-                    style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.SemiBold),
-                    color = MaterialTheme.colorScheme.onSurface,
-                    modifier = Modifier.padding(horizontal = 24.dp, vertical = 8.dp),
-                )
-
-                detail!!.mediaSources.forEachIndexed { sourceIndex, source ->
-                    MediaSourceSection(
-                        source = source,
-                        sourceIndex = sourceIndex,
-                        totalSources = detail!!.mediaSources.size,
+        when (val state = uiState) {
+            MediaInfoUiState.Loading -> {
+                Box(
+                    modifier = Modifier.fillMaxSize(),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    com.raulshma.jellyplay.core.ui.components.JellyPlayLoadingIndicator(
+                        color = MaterialTheme.colorScheme.primary,
                     )
                 }
+            }
+            is MediaInfoUiState.Error -> {
+                Box(
+                    modifier = Modifier.fillMaxSize(),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    Text(
+                        text = state.message,
+                        style = MaterialTheme.typography.bodyLarge,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+            }
+            is MediaInfoUiState.Success -> {
+                val detail = state.detail
+                Column(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .tvFocusRestorer()
+                        .focusGroup()
+                        .focusRequester(contentFocusRequester)
+                        .verticalScroll(scrollState)
+                        .padding(
+                            start = adaptiveInfo.contentPadding(isTv),
+                            end = adaptiveInfo.contentPadding(isTv),
+                            bottom = innerPadding.calculateBottomPadding() + 80.dp,
+                        ),
+                    verticalArrangement = Arrangement.spacedBy(16.dp),
+                ) {
+                    val currentItem = detail.item
+                    Text(
+                        text = currentItem.name,
+                        style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.SemiBold),
+                        color = MaterialTheme.colorScheme.onSurface,
+                        modifier = Modifier.padding(horizontal = 24.dp, vertical = 8.dp),
+                    )
 
-                if (detail!!.mediaSources.isEmpty()) {
-                    EmptyMediaInfo()
+                    detail.mediaSources.forEachIndexed { sourceIndex, source ->
+                        MediaSourceSection(
+                            source = source,
+                            sourceIndex = sourceIndex,
+                            totalSources = detail.mediaSources.size,
+                        )
+                    }
+
+                    if (detail.mediaSources.isEmpty()) {
+                        EmptyMediaInfo()
+                    }
                 }
             }
         }
@@ -343,13 +360,6 @@ private fun EmptyMediaInfo() {
             description = "Technical information is not available for this item",
         )
     }
-}
-
-private fun formatFileSize(bytes: Long): String = when {
-    bytes >= 1_000_000_000 -> "%.1f GB".format(bytes / 1_000_000_000.0)
-    bytes >= 1_000_000 -> "%.1f MB".format(bytes / 1_000_000.0)
-    bytes >= 1_000 -> "%.1f KB".format(bytes / 1_000.0)
-    else -> "$bytes B"
 }
 
 private fun formatBitrate(bps: Long): String = when {
