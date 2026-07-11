@@ -13,8 +13,6 @@ import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
-import androidx.compose.animation.scaleIn
-import androidx.compose.animation.scaleOut
 import androidx.compose.animation.slideInHorizontally
 import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutHorizontally
@@ -1472,7 +1470,6 @@ private fun MainNavDisplay(
     val motionScheme = MaterialTheme.motionScheme
     val defaultEffects = motionScheme.defaultEffectsSpec<Float>()
     val fastEffects = motionScheme.fastEffectsSpec<Float>()
-    val defaultSpatial = motionScheme.defaultSpatialSpec<Float>()
     val defaultSpatialOffset = motionScheme.defaultSpatialSpec<androidx.compose.ui.unit.IntOffset>()
 
     // Remember the entry provider graph so the ~25 section builders aren't
@@ -1599,17 +1596,11 @@ private fun MainNavDisplay(
                     ) + slideInHorizontally(
                         initialOffsetX = { it / 8 },
                         animationSpec = defaultSpatialOffset,
-                    ) + scaleIn(
-                        initialScale = 0.985f,
-                        animationSpec = defaultSpatial,
                     ) togetherWith fadeOut(
                         animationSpec = fastEffects,
                     ) + slideOutHorizontally(
                         targetOffsetX = { -it / 18 },
                         animationSpec = defaultSpatialOffset,
-                    ) + scaleOut(
-                        targetScale = 1.015f,
-                        animationSpec = defaultEffects,
                     )
                 }
             }
@@ -1641,17 +1632,11 @@ private fun MainNavDisplay(
                         ) + slideInHorizontally(
                             initialOffsetX = { -it / 12 },
                             animationSpec = defaultSpatialOffset,
-                        ) + scaleIn(
-                            initialScale = 1.015f,
-                            animationSpec = defaultSpatial,
                         ) togetherWith fadeOut(
                             animationSpec = fastEffects,
                         ) + slideOutHorizontally(
                             targetOffsetX = { it / 10 },
                             animationSpec = defaultSpatialOffset,
-                        ) + scaleOut(
-                            targetScale = 0.985f,
-                            animationSpec = defaultEffects,
                         )
                 }
             }
@@ -1671,17 +1656,11 @@ private fun MainNavDisplay(
                 ) + slideInHorizontally(
                     initialOffsetX = { -it / 12 },
                     animationSpec = defaultSpatialOffset,
-                ) + scaleIn(
-                    initialScale = 1.015f,
-                    animationSpec = defaultSpatial,
                 ) togetherWith fadeOut(
                     animationSpec = fastEffects,
                 ) + slideOutHorizontally(
                     targetOffsetX = { it / 10 },
                     animationSpec = defaultSpatialOffset,
-                ) + scaleOut(
-                    targetScale = 0.985f,
-                    animationSpec = defaultEffects,
                 )
             }
         },

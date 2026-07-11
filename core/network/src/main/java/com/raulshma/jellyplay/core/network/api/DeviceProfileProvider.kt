@@ -51,11 +51,13 @@ class DeviceProfileProvider @Inject constructor(
     }
 
     /**
-     * Profile used for client-capabilities registration when no player is
-     * known yet (defaults to the device-derived hardware profile).
+     * Subtitle delivery map shared by every profile: deliver SRT/ASS/VTT/etc.
+     * as external side-loaded files rather than burning them in. Declared
+     * before the eager [directPlayAll] initializer so it is non-null when
+     * [directPlayAll]'s initializer runs (Kotlin initializes properties in
+     * declaration order — a forward reference here would NPE on construction,
+     * crashing the app at launch via Hilt's provider).
      */
-    val default: org.jellyfin.sdk.model.api.DeviceProfile get() = hardwareProfile
-
     private val subtitleFormats = listOf(
         "srt" to SubtitleDeliveryMethod.EXTERNAL,
         "subrip" to SubtitleDeliveryMethod.EXTERNAL,
@@ -65,6 +67,38 @@ class DeviceProfileProvider @Inject constructor(
         "webvtt" to SubtitleDeliveryMethod.EXTERNAL,
         "ttml" to SubtitleDeliveryMethod.EXTERNAL,
     )
+
+    /**
+     * "Direct play all" profile for [PlaybackMode.FORCE_DIRECT_PLAY]. no codec/container
+     * restrictions, no transcoding profiles, and a 1 Gbps bitrate sentinel so
+     * the server marks every media source as `supportsDirectPlay=true`. The
+     * client then requests `/Videos/{id}/stream?static=true` verbatim.
+     *
+     * Consequence: the server hands back a static URL even for codecs the
+     * player may not actually decode; the player surfaces a runtime error and
+     * the UI offers a transcode fallback (mirrors Wholphin's `onPlayerError`
+     * retry pattern). This is the explicit trade-off of "force direct play" —
+     * the user has asked the server not to transcode, so we trust the static
+     * URL and let the player be the arbiter.
+     */
+    val directPlayAll: org.jellyfin.sdk.model.api.DeviceProfile = buildDeviceProfile {
+        name = "jellyplay-direct-all"
+
+        // No transcodingProfile → server has no transcode target and will not
+        // report SupportsTranscoding. No codecProfile / containerProfile → no
+        // restrictions shrink the direct-play set. An empty directPlayProfile
+        // list means "allow direct play of everything" in Jellyfin's DLNA
+        // resolution (the absence of a constraining profile is permissive).
+        maxStreamingBitrate = 1_000_000_000
+
+        subtitleFormats.forEach { (format, method) -> subtitleProfile(format, method) }
+    }
+
+    /**
+     * Profile used for client-capabilities registration when no player is
+     * known yet (defaults to the device-derived hardware profile).
+     */
+    val default: org.jellyfin.sdk.model.api.DeviceProfile get() = hardwareProfile
 
     private fun mpvProfile(pgsDirectPlay: Boolean): org.jellyfin.sdk.model.api.DeviceProfile = buildDeviceProfile {
         name = "jellyplay-mpv"

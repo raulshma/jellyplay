@@ -25,6 +25,7 @@ import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import coil3.size.Size as CoilSize
 import com.raulshma.jellyplay.core.designsystem.theme.ShapeCache
 import com.raulshma.jellyplay.core.ui.image.MediaImage
 import com.raulshma.jellyplay.core.ui.components.focusIndicator
@@ -62,6 +63,9 @@ fun LibraryListItem(
                     contentDescription = title,
                     modifier = Modifier.matchParentSize(),
                     blurHash = blurHash,
+                    // Size the decode to the 48×72 dp box (2× density = 96×144 px)
+                    // instead of the MediaImage default 384² (~4-6× oversampled).
+                    size = CoilSize(96, 144),
                 )
             }
         }
