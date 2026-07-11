@@ -3,11 +3,10 @@ package com.raulshma.jellyplay.feature.home
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.Stable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.lerp
 import com.raulshma.jellyplay.core.ui.components.LocalNavigationBarColor
@@ -54,10 +53,17 @@ internal fun rememberHomeBackgroundState(
         label = "backgroundColor",
     )
 
-    // Mirror the animated background into the system nav-bar colour.
+    // Mirror the background into the system nav-bar colour. Write only the
+    // settled *target* colour rather than each interpolated animation frame —
+    // this state is read by an animateColorAsState at the app root, so feeding
+    // it every interpolated frame would re-animate and recompose the whole
+    // nav subtree ~18x per transition (the cause of the "dynamic theming makes
+    // the app laggy" regression). The root animation smooths the transition on
+    // its own; the local backgroundColor animation above handles the screen's
+    // own draw.
     val navBarColor = LocalNavigationBarColor.current
-    LaunchedEffect(Unit) {
-        snapshotFlow { backgroundColor }.collect { navBarColor.value = it }
+    SideEffect {
+        if (navBarColor.value != targetBackgroundColor) navBarColor.value = targetBackgroundColor
     }
 
     return HomeBackgroundState(backgroundColor = backgroundColor, isLightTheme = isLightTheme)
