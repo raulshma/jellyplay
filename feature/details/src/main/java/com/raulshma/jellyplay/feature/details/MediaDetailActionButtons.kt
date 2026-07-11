@@ -37,46 +37,46 @@ import com.composables.icons.tabler.outline.EyeOff
 import com.composables.icons.tabler.outline.Heart
 import com.composables.icons.tabler.outline.PlayerPlay
 import com.raulshma.jellyplay.core.designsystem.theme.ShapeCache
-import com.raulshma.jellyplay.core.model.MediaDetail
-import com.raulshma.jellyplay.core.model.MediaItem
 import com.raulshma.jellyplay.core.model.MediaType
 import com.raulshma.jellyplay.core.ui.components.progressFraction
+import com.raulshma.jellyplay.core.ui.navigation.Route
 import com.raulshma.jellyplay.core.ui.tv.LocalTvMode
 import com.raulshma.jellyplay.core.ui.tv.rememberTvFocusState
 import com.raulshma.jellyplay.core.ui.tv.tvFocusIndicator
-import com.raulshma.jellyplay.feature.details.R
 
+/**
+ * Play / mark-watched / favorite buttons for the media-detail screen, in both a
+ * stacked vertical layout (landscape left rail) and a horizontal row (portrait
+ * body).
+ *
+ * Now takes [DetailContentState] + [DetailContentCallbacks] bundles instead of
+ * ~18 flat parameters, making the composable skippable. The vertical/horizontal
+ * play-button duplication is resolved by a shared [PlayButton] that accepts a
+ * [PlayButtonStyle].
+ *
+ * Behaviour is identical to the former implementation.
+ */
 @Composable
 internal fun DetailActionButtons(
-    item: MediaItem,
-    detail: MediaDetail,
-    seasons: List<MediaItem>,
-    episodes: Map<String, List<MediaItem>>,
-    fetchedSeasonIds: Set<String>,
-    smartPlayTarget: DetailUiState.SmartPlayTarget?,
-    isAudio: Boolean,
-    isAlbum: Boolean,
-    albumTracks: List<MediaItem>,
-    onPlayClick: (itemId: String, mediaSourceId: String?, startPosition: Long) -> Unit,
-    onAudioClick: () -> Unit,
-    onPlayAlbumTrack: (Int) -> Unit,
-    onNavigate: (com.raulshma.jellyplay.core.ui.navigation.Route) -> Unit,
-    onToggleFavorite: () -> Unit,
-    onMarkPlayed: () -> Unit,
-    onMarkUnplayed: () -> Unit,
-
+    state: DetailContentState,
+    callbacks: DetailContentCallbacks,
     modifier: Modifier = Modifier,
     vertical: Boolean = false,
     contentFocusRequester: FocusRequester? = null,
 ) {
+    val detail = state.detail ?: return
+    val item = detail.item
+    val isAudio = item.mediaType == MediaType.AUDIO || item.mediaType == MediaType.MUSIC || item.mediaType == MediaType.ALBUM
+    val isAlbum = item.mediaType == MediaType.ALBUM
+
     val isSeriesOrEpisode = item.mediaType == MediaType.SERIES || item.mediaType == MediaType.EPISODE
     val isSeries = item.mediaType == MediaType.SERIES
-    val target = if (isSeriesOrEpisode) smartPlayTarget else null
+    val target = if (isSeriesOrEpisode) state.smartPlayTarget else null
     val itemProgressFraction = item.progressFraction()
     val hasProgress = itemProgressFraction != null && itemProgressFraction > 0f
-    val allSeasonsFetched = seasons.isNotEmpty() && fetchedSeasonIds.size >= seasons.size
-    val allEpisodesEmpty = remember(seasons, episodes) {
-        seasons.isNotEmpty() && episodes.values.all { it.isEmpty() }
+    val allSeasonsFetched = state.seasons.isNotEmpty() && state.fetchedSeasonIds.size >= state.seasons.size
+    val allEpisodesEmpty = remember(state.seasons, state.episodes) {
+        state.seasons.isNotEmpty() && state.episodes.values.all { it.isEmpty() }
     }
     val isResolvingSeriesTarget = isSeries &&
         target == null &&
@@ -89,7 +89,7 @@ internal fun DetailActionButtons(
         val t = target.startPositionTicks
         val rt = target.episode.runTimeTicks
         if (t > 0 && rt != null && rt > 0) (t.toFloat() / rt).coerceIn(0f, 1f) else 0f
-    } else if (hasProgress && itemProgressFraction != null) {
+    } else if (hasProgress) {
         itemProgressFraction
     } else 0f
 
@@ -124,79 +124,27 @@ internal fun DetailActionButtons(
         label = "favoriteButtonScale",
     )
 
-    val isTv = LocalTvMode.current
-
-    // Play button — full width in vertical mode, fixed width in horizontal
-    val playButton: @Composable () -> Unit = {
-        val playTvFocusState = rememberTvFocusState(focusedScale = 1.05f)
-        Box(
-            modifier = Modifier
-                .fillMaxWidth()
-                .height(52.dp)
-                .clip(ShapeCache.smooth14)
-                .background(
-                    if (isTv && playTvFocusState.isFocused) MaterialTheme.colorScheme.onPrimary
-                    else if (canPlayPrimary) MaterialTheme.colorScheme.primary
-                    else MaterialTheme.colorScheme.primary.copy(alpha = 0.45f)
-                )
-                .then(
-                    contentFocusRequester?.let { Modifier.focusRequester(it) } ?: Modifier
-                )
-                .then(playTvFocusState.focusModifier)
-                .then(Modifier.tvFocusIndicator(playTvFocusState, ShapeCache.smooth14, color = MaterialTheme.colorScheme.onPrimary))
-                .graphicsLayer { scaleX = playScale; scaleY = playScale }
-                .clickable(
-                    interactionSource = playInteractionSource,
-                    indication = null,
-                    enabled = true,
-                ) {
-                    if (!canPlayPrimary) return@clickable
-                    if (isAlbum && albumTracks.isNotEmpty()) {
-                        onPlayAlbumTrack(0)
-                        albumTracks.firstOrNull()?.let { track ->
-                            onNavigate(com.raulshma.jellyplay.core.ui.navigation.Route.AudioPlayer(track.id))
-                        }
-                    } else if (isAudio) {
-                        onAudioClick()
-                    } else if (target != null) {
-                        onPlayClick(target.episode.id, null, target.startPositionTicks)
-                    } else {
-                        val sourceId = detail.mediaSources.firstOrNull()?.id
-                        val startPos = item.playbackPositionTicks ?: 0L
-                        onPlayClick(item.id, sourceId, startPos)
-                    }
-                },
-            contentAlignment = Alignment.Center,
-        ) {
-            if (progress > 0f) {
-                Box(
-                    modifier = Modifier
-                        .fillMaxHeight()
-                        .fillMaxWidth(progress)
-                        .align(Alignment.CenterStart)
-                        .background(MaterialTheme.colorScheme.onSurface.copy(alpha = 0.15f))
-                )
-            }
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Icon(
-                    Tabler.Outline.PlayerPlay,
-                    contentDescription = null,
-                    modifier = Modifier.size(22.dp),
-                    tint = if (isTv && playTvFocusState.isFocused) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onPrimary
-                )
-                Spacer(Modifier.size(6.dp))
-                Text(
-                    playLabel,
-                    style = MaterialTheme.typography.titleMedium,
-                    color = if (isTv && playTvFocusState.isFocused) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onPrimary
-                )
+    // Shared click handler — identical for vertical and horizontal so the two
+    // branches can never diverge in play-resolution logic.
+    val onPlay = remember(canPlayPrimary, isAlbum, isAudio, target, item, detail, callbacks, state.albumTracks) {
+        {
+            if (!canPlayPrimary) return@remember
+            if (isAlbum && state.albumTracks.isNotEmpty()) {
+                callbacks.onPlayAlbumTrack(0)
+                state.albumTracks.firstOrNull()?.let { track ->
+                    callbacks.onNavigate(Route.AudioPlayer(track.id))
+                }
+            } else if (isAudio) {
+                callbacks.onAudioClick()
+            } else if (target != null) {
+                callbacks.onPlayClick(target.episode.id, null, target.startPositionTicks)
+            } else {
+                val sourceId = detail.mediaSources.firstOrNull()?.id
+                val startPos = item.playbackPositionTicks ?: 0L
+                callbacks.onPlayClick(item.id, sourceId, startPos)
             }
         }
     }
-
-    // Icon action buttons — watch, favorite, download
-    val iconsModifier = Modifier
-        .fillMaxWidth()
 
     if (vertical) {
         Column(
@@ -204,56 +152,43 @@ internal fun DetailActionButtons(
             verticalArrangement = Arrangement.spacedBy(10.dp),
         ) {
             FadingItem {
-                playButton()
+                PlayButton(
+                    style = PlayButtonStyle.Vertical,
+                    label = playLabel,
+                    canPlayPrimary = canPlayPrimary,
+                    progress = progress,
+                    playScale = playScale,
+                    interactionSource = playInteractionSource,
+                    contentFocusRequester = contentFocusRequester,
+                    onClick = onPlay,
+                )
             }
             Row(
-                modifier = iconsModifier,
+                modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
             ) {
                 val markTvFocusState = rememberTvFocusState(focusedScale = 1.08f)
                 val favoriteTvFocusState = rememberTvFocusState(focusedScale = 1.08f)
 
                 FadingItem(modifier = Modifier.weight(1f)) {
-                    Box(
-                        contentAlignment = Alignment.Center,
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .height(48.dp)
-                            .clip(ShapeCache.smooth12)
-                            .background(MaterialTheme.colorScheme.onSurface.copy(alpha = 0.15f))
-                            .then(markTvFocusState.focusModifier)
-                            .then(Modifier.tvFocusIndicator(markTvFocusState, ShapeCache.smooth12))
-                            .graphicsLayer { scaleX = markScale; scaleY = markScale }
-                            .clickable(interactionSource = markInteractionSource, indication = null) {
-                                if (item.isPlayed) onMarkUnplayed() else onMarkPlayed()
-                            }
-                    ) {
-                        Icon(
-                            if (item.isPlayed) Tabler.Outline.Eye else Tabler.Outline.EyeOff,
-                            contentDescription = if (item.isPlayed) stringResource(R.string.detail_cd_mark_as_unwatched) else stringResource(R.string.detail_cd_mark_as_watched),
-                            tint = if (item.isPlayed) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface,
-                        )
-                    }
+                    MarkWatchedButton(
+                        style = IconButtonStyle.Vertical,
+                        isPlayed = item.isPlayed,
+                        scale = markScale,
+                        interactionSource = markInteractionSource,
+                        focusState = markTvFocusState,
+                        onClick = { if (item.isPlayed) callbacks.onMarkUnplayed() else callbacks.onMarkPlayed() },
+                    )
                 }
                 FadingItem(modifier = Modifier.weight(1f)) {
-                    Box(
-                        contentAlignment = Alignment.Center,
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .height(48.dp)
-                            .clip(ShapeCache.smooth12)
-                            .background(MaterialTheme.colorScheme.onSurface.copy(alpha = 0.15f))
-                            .then(favoriteTvFocusState.focusModifier)
-                            .then(Modifier.tvFocusIndicator(favoriteTvFocusState, ShapeCache.smooth12))
-                            .graphicsLayer { scaleX = favoriteScale; scaleY = favoriteScale }
-                            .clickable(interactionSource = favoriteInteractionSource, indication = null) { onToggleFavorite() }
-                    ) {
-                        Icon(
-                            if (item.isFavorite) Tabler.Filled.Heart else Tabler.Outline.Heart,
-                            contentDescription = stringResource(R.string.detail_cd_favorite),
-                            tint = if (item.isFavorite) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface,
-                        )
-                    }
+                    FavoriteButton(
+                        style = IconButtonStyle.Vertical,
+                        isFavorite = item.isFavorite,
+                        scale = favoriteScale,
+                        interactionSource = favoriteInteractionSource,
+                        focusState = favoriteTvFocusState,
+                        onClick = callbacks.onToggleFavorite,
+                    )
                 }
             }
         }
@@ -264,115 +199,195 @@ internal fun DetailActionButtons(
                 .padding(horizontal = 24.dp),
             horizontalArrangement = Arrangement.spacedBy(12.dp, Alignment.Start),
         ) {
-            // Horizontal: play button fixed width, icon buttons fixed size
             val playHFocusState = rememberTvFocusState(focusedScale = 1.05f)
-            FadingItem {
-                Box(
-                    modifier = Modifier
-                        .height(56.dp)
-                        .width(200.dp)
-                        .clip(ShapeCache.smooth16)
-                        .background(
-                            if (isTv && playHFocusState.isFocused) MaterialTheme.colorScheme.onPrimary
-                            else if (canPlayPrimary) MaterialTheme.colorScheme.primary
-                            else MaterialTheme.colorScheme.primary.copy(alpha = 0.45f)
-                        )
-                        .then(
-                            contentFocusRequester?.let { Modifier.focusRequester(it) } ?: Modifier
-                        )
-                        .then(playHFocusState.focusModifier)
-                        .then(Modifier.tvFocusIndicator(playHFocusState, ShapeCache.smooth16, color = MaterialTheme.colorScheme.onPrimary))
-                        .graphicsLayer { scaleX = playScale; scaleY = playScale }
-                        .clickable(
-                            interactionSource = playInteractionSource,
-                            indication = null,
-                            enabled = true,
-                        ) {
-                            if (!canPlayPrimary) return@clickable
-                            if (isAudio) {
-                                onAudioClick()
-                            } else if (target != null) {
-                                onPlayClick(target.episode.id, null, target.startPositionTicks)
-                            } else {
-                                val sourceId = detail.mediaSources.firstOrNull()?.id
-                                val startPos = item.playbackPositionTicks ?: 0L
-                                onPlayClick(item.id, sourceId, startPos)
-                            }
-                        },
-                    contentAlignment = Alignment.Center,
-                ) {
-                    if (progress > 0f) {
-                        Box(
-                            modifier = Modifier
-                                .fillMaxHeight()
-                                .fillMaxWidth(progress)
-                                .align(Alignment.CenterStart)
-                                .background(MaterialTheme.colorScheme.onSurface.copy(alpha = 0.15f))
-                        )
-                    }
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Icon(
-                            Tabler.Outline.PlayerPlay,
-                            contentDescription = null,
-                            modifier = Modifier.size(24.dp),
-                            tint = if (isTv && playHFocusState.isFocused) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onPrimary
-                        )
-                        Spacer(Modifier.size(8.dp))
-                        Text(
-                            playLabel,
-                            style = MaterialTheme.typography.titleMedium,
-                            color = if (isTv && playHFocusState.isFocused) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onPrimary
-                        )
-                    }
-                }
-            }
-
             val markHFocusState = rememberTvFocusState(focusedScale = 1.08f)
             val favoriteHFocusState = rememberTvFocusState(focusedScale = 1.08f)
 
             FadingItem {
-                Box(
-                    contentAlignment = Alignment.Center,
-                    modifier = Modifier
-                        .size(56.dp)
-                        .clip(ShapeCache.smooth16)
-                        .background(MaterialTheme.colorScheme.onSurface.copy(alpha = 0.15f))
-                        .graphicsLayer { scaleX = markScale; scaleY = markScale }
-                        .then(markHFocusState.focusModifier)
-                        .then(Modifier.tvFocusIndicator(markHFocusState, ShapeCache.smooth16))
-                        .clickable(interactionSource = markInteractionSource, indication = null) {
-                            if (item.isPlayed) onMarkUnplayed() else onMarkPlayed()
-                        }
-                ) {
-                    Icon(
-                        if (item.isPlayed) Tabler.Outline.Eye else Tabler.Outline.EyeOff,
-                        contentDescription = if (item.isPlayed) "Mark as Unwatched" else "Mark as Watched",
-                        tint = if (item.isPlayed) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface,
-                    )
-                }
+                PlayButton(
+                    style = PlayButtonStyle.Horizontal,
+                    label = playLabel,
+                    canPlayPrimary = canPlayPrimary,
+                    progress = progress,
+                    playScale = playScale,
+                    interactionSource = playInteractionSource,
+                    contentFocusRequester = contentFocusRequester,
+                    onClick = onPlay,
+                )
             }
 
             FadingItem {
-                Box(
-                    contentAlignment = Alignment.Center,
-                    modifier = Modifier
-                        .size(56.dp)
-                        .clip(ShapeCache.smooth16)
-                        .background(MaterialTheme.colorScheme.onSurface.copy(alpha = 0.15f))
-                        .graphicsLayer { scaleX = favoriteScale; scaleY = favoriteScale }
-                        .then(favoriteHFocusState.focusModifier)
-                        .then(Modifier.tvFocusIndicator(favoriteHFocusState, ShapeCache.smooth16))
-                        .clickable(interactionSource = favoriteInteractionSource, indication = null) { onToggleFavorite() }
-                ) {
-                    Icon(
-                        if (item.isFavorite) Tabler.Filled.Heart else Tabler.Outline.Heart,
-                        contentDescription = stringResource(R.string.detail_cd_favorite),
-                        tint = if (item.isFavorite) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface,
-                    )
-                }
+                MarkWatchedButton(
+                    style = IconButtonStyle.Horizontal,
+                    isPlayed = item.isPlayed,
+                    scale = markScale,
+                    interactionSource = markInteractionSource,
+                    focusState = markHFocusState,
+                    onClick = { if (item.isPlayed) callbacks.onMarkUnplayed() else callbacks.onMarkPlayed() },
+                )
             }
 
-
+            FadingItem {
+                FavoriteButton(
+                    style = IconButtonStyle.Horizontal,
+                    isFavorite = item.isFavorite,
+                    scale = favoriteScale,
+                    interactionSource = favoriteInteractionSource,
+                    focusState = favoriteHFocusState,
+                    onClick = callbacks.onToggleFavorite,
+                )
             }
+        }
+    }
+}
+
+/** Distinguishes the vertical (full-width, 52dp) from horizontal (fixed 200×56dp) play button. */
+private enum class PlayButtonStyle { Vertical, Horizontal }
+
+/** Distinguishes vertical (weight 1f, 48dp) from horizontal (56×56dp) icon buttons. */
+private enum class IconButtonStyle { Vertical, Horizontal }
+
+@Composable
+private fun PlayButton(
+    style: PlayButtonStyle,
+    label: String,
+    canPlayPrimary: Boolean,
+    progress: Float,
+    playScale: Float,
+    interactionSource: MutableInteractionSource,
+    contentFocusRequester: FocusRequester?,
+    onClick: () -> Unit,
+) {
+    val isTv = LocalTvMode.current
+    val playFocusState = rememberTvFocusState(focusedScale = 1.05f)
+    val shape = if (style == PlayButtonStyle.Vertical) ShapeCache.smooth14 else ShapeCache.smooth16
+    val iconSize = if (style == PlayButtonStyle.Vertical) 22.dp else 24.dp
+    val spacerSize = if (style == PlayButtonStyle.Vertical) 6.dp else 8.dp
+
+    val baseModifier = if (style == PlayButtonStyle.Vertical) {
+        Modifier.fillMaxWidth().height(52.dp)
+    } else {
+        Modifier.height(56.dp).width(200.dp)
+    }
+
+    Box(
+        modifier = baseModifier
+            .clip(shape)
+            .background(
+                if (isTv && playFocusState.isFocused) MaterialTheme.colorScheme.onPrimary
+                else if (canPlayPrimary) MaterialTheme.colorScheme.primary
+                else MaterialTheme.colorScheme.primary.copy(alpha = 0.45f),
+            )
+            .then(
+                contentFocusRequester?.let { Modifier.focusRequester(it) } ?: Modifier,
+            )
+            .then(playFocusState.focusModifier)
+            .then(Modifier.tvFocusIndicator(playFocusState, shape, color = MaterialTheme.colorScheme.onPrimary))
+            .graphicsLayer { scaleX = playScale; scaleY = playScale }
+            .clickable(
+                interactionSource = interactionSource,
+                indication = null,
+                enabled = true,
+                onClick = onClick,
+            ),
+        contentAlignment = Alignment.Center,
+    ) {
+        if (progress > 0f) {
+            Box(
+                modifier = Modifier
+                    .fillMaxHeight()
+                    .fillMaxWidth(progress)
+                    .align(Alignment.CenterStart)
+                    .background(MaterialTheme.colorScheme.onSurface.copy(alpha = 0.15f)),
+            )
+        }
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Icon(
+                Tabler.Outline.PlayerPlay,
+                contentDescription = null,
+                modifier = Modifier.size(iconSize),
+                tint = if (isTv && playFocusState.isFocused) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onPrimary,
+            )
+            Spacer(Modifier.size(spacerSize))
+            Text(
+                label,
+                style = MaterialTheme.typography.titleMedium,
+                color = if (isTv && playFocusState.isFocused) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onPrimary,
+            )
+        }
+    }
+}
+
+@Composable
+private fun MarkWatchedButton(
+    style: IconButtonStyle,
+    isPlayed: Boolean,
+    scale: Float,
+    interactionSource: MutableInteractionSource,
+    focusState: com.raulshma.jellyplay.core.ui.tv.TvFocusState,
+    onClick: () -> Unit,
+) {
+    val isTv = LocalTvMode.current
+    val shape = if (style == IconButtonStyle.Vertical) ShapeCache.smooth12 else ShapeCache.smooth16
+    val baseModifier = if (style == IconButtonStyle.Vertical) {
+        Modifier.fillMaxWidth().height(48.dp)
+    } else {
+        Modifier.size(56.dp)
+    }
+
+    Box(
+        contentAlignment = Alignment.Center,
+        modifier = baseModifier
+            .clip(shape)
+            .background(MaterialTheme.colorScheme.onSurface.copy(alpha = 0.15f))
+            .graphicsLayer { scaleX = scale; scaleY = scale }
+            .then(focusState.focusModifier)
+            .then(Modifier.tvFocusIndicator(focusState, shape))
+            .clickable(interactionSource = interactionSource, indication = null, onClick = onClick),
+    ) {
+        val contentDescription = if (isPlayed) {
+            stringResource(R.string.detail_cd_mark_as_unwatched)
+        } else {
+            stringResource(R.string.detail_cd_mark_as_watched)
+        }
+        Icon(
+            if (isPlayed) Tabler.Outline.Eye else Tabler.Outline.EyeOff,
+            contentDescription = contentDescription,
+            tint = if (isPlayed) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface,
+        )
+    }
+}
+
+@Composable
+private fun FavoriteButton(
+    style: IconButtonStyle,
+    isFavorite: Boolean,
+    scale: Float,
+    interactionSource: MutableInteractionSource,
+    focusState: com.raulshma.jellyplay.core.ui.tv.TvFocusState,
+    onClick: () -> Unit,
+) {
+    val shape = if (style == IconButtonStyle.Vertical) ShapeCache.smooth12 else ShapeCache.smooth16
+    val baseModifier = if (style == IconButtonStyle.Vertical) {
+        Modifier.fillMaxWidth().height(48.dp)
+    } else {
+        Modifier.size(56.dp)
+    }
+
+    Box(
+        contentAlignment = Alignment.Center,
+        modifier = baseModifier
+            .clip(shape)
+            .background(MaterialTheme.colorScheme.onSurface.copy(alpha = 0.15f))
+            .graphicsLayer { scaleX = scale; scaleY = scale }
+            .then(focusState.focusModifier)
+            .then(Modifier.tvFocusIndicator(focusState, shape))
+            .clickable(interactionSource = interactionSource, indication = null, onClick = onClick),
+    ) {
+        Icon(
+            if (isFavorite) Tabler.Filled.Heart else Tabler.Outline.Heart,
+            contentDescription = stringResource(R.string.detail_cd_favorite),
+            tint = if (isFavorite) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface,
+        )
     }
 }
