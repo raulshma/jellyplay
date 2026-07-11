@@ -4,6 +4,7 @@ import androidx.compose.animation.animateColorAsState
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.Stable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.snapshotFlow
@@ -62,6 +63,7 @@ internal fun rememberHomeBackgroundState(
     return HomeBackgroundState(backgroundColor = backgroundColor, isLightTheme = isLightTheme)
 }
 
+@Stable
 internal class HomeBackgroundState(
     val backgroundColor: Color,
     val isLightTheme: Boolean,

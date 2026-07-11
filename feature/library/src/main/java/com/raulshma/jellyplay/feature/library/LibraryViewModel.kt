@@ -113,6 +113,17 @@ class LibraryViewModel @Inject constructor(
     private val _photoFolderChildUrls = stateFlow<Map<String, List<String>>>(emptyMap())
     val photoFolderChildUrls = _photoFolderChildUrls.flow
 
+    /**
+     * Per-item slice of [photoFolderChildUrls]. Lets each photo-folder card
+     * collect only its own urls so a prefetch merge (which produces a new Map
+     * reference) doesn't invalidate the entire [LibraryScreen] — only the one
+     * card whose urls changed. See L3.1 in the perf spec.
+     */
+    fun photoFolderChildUrlsFor(itemId: String): kotlinx.coroutines.flow.Flow<List<String>> =
+        _photoFolderChildUrls.flow
+            .map { it[itemId].orEmpty() }
+            .distinctUntilChanged()
+
     private val _refreshTrigger = kotlinx.coroutines.flow.MutableStateFlow(0)
 
     @OptIn(ExperimentalCoroutinesApi::class)
