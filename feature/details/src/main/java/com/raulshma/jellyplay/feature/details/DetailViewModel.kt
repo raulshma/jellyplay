@@ -19,11 +19,7 @@ import com.raulshma.jellyplay.core.model.MediaType
 import com.raulshma.jellyplay.core.model.NetworkStatus
 import com.raulshma.jellyplay.core.model.UserPreferences
 import com.raulshma.jellyplay.core.model.isExperimentalEnabled
-import com.raulshma.jellyplay.core.model.seerr.SeerrRadarrServiceDetail
-import com.raulshma.jellyplay.core.model.seerr.SeerrRequestResult
 import com.raulshma.jellyplay.core.model.seerr.SeerrSearchItem
-import com.raulshma.jellyplay.core.model.seerr.SeerrSeason
-import com.raulshma.jellyplay.core.model.seerr.SeerrSonarrServiceDetail
 import com.raulshma.jellyplay.core.data.playback.AdaptiveBitrateManager
 import com.raulshma.jellyplay.core.data.playback.toAudioQueueItem
 import com.raulshma.jellyplay.core.network.seerr.buildPosterUrl
@@ -46,6 +42,7 @@ import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
+import kotlinx.coroutines.withContext
 import javax.inject.Inject
 
 private val TMDB_ID_REGEX = Regex("""/(\d+)(?:$|/|\?)""")
@@ -131,56 +128,11 @@ class DetailViewModel @Inject constructor(
         }
     }.stateIn(scope, SharingStarted.WhileSubscribed(5_000), DetailUiState())
 
-    // ---- Backward-compatible property accessors ----
-    // Each projects a single field out of [_uiState] (or [uiState] for seerr
-    // delegate state) so existing call sites keep working without churn. New
-    // call sites should prefer `viewModel.uiState.collectAsStateWithLifecycle()`
-    // for atomic snapshots.
-    val detail: StateFlow<MediaDetail?> = _uiState
-        .map { it.detail }
-        .stateIn(scope, SharingStarted.WhileSubscribed(5_000), null)
-    val isLoading: StateFlow<Boolean> = _uiState
-        .map { it.isLoading }
-        .stateIn(scope, SharingStarted.WhileSubscribed(5_000), false)
-    val error: StateFlow<String?> = _uiState
-        .map { it.error }
-        .stateIn(scope, SharingStarted.WhileSubscribed(5_000), null)
-    val seerrRecommendations: StateFlow<List<SeerrSearchItem>> = _uiState
-        .map { it.seerrRecommendations }
-        .stateIn(scope, SharingStarted.WhileSubscribed(5_000), emptyList())
-    val seerrSimilar: StateFlow<List<SeerrSearchItem>> = _uiState
-        .map { it.seerrSimilar }
-        .stateIn(scope, SharingStarted.WhileSubscribed(5_000), emptyList())
-    val relatedVideos: StateFlow<List<SeerrRelatedVideo>> = _uiState
-        .map { it.relatedVideos }
-        .stateIn(scope, SharingStarted.WhileSubscribed(5_000), emptyList())
-    val isSeerrConnected: StateFlow<Boolean> = seerrRepository.isConnected()
-        .stateIn(scope, SharingStarted.WhileSubscribed(5_000), false)
-    val isSeerrRecommendationsEnabled: StateFlow<Boolean> = seerrRepository.isRecommendationsEnabled()
-        .stateIn(scope, SharingStarted.WhileSubscribed(5_000), false)
-    val seerrRequestResult: StateFlow<SeerrRequestResult?> get() = seerrRequestState.requestResult
-    val radarrServers: StateFlow<List<SeerrRadarrServiceDetail>> get() = seerrRequestState.radarrServers
-    val sonarrServers: StateFlow<List<SeerrSonarrServiceDetail>> get() = seerrRequestState.sonarrServers
-    val isLoadingSeerrServices: StateFlow<Boolean> get() = seerrRequestState.isLoadingServices
-    val seerrTvSeasons: StateFlow<List<SeerrSeason>> get() = seerrRequestState.tvSeasons
-
-    // Direct (non-observable) readers for property-style access at call sites
-    // that previously used `var ... by composeState(...)`. Each reads the
-    // current snapshot from [_uiState].
-    val seasons: List<MediaItem> get() = _uiState.value.seasons
-    val episodes: Map<String, List<MediaItem>> get() = _uiState.value.episodes
-    val albumTracks: List<MediaItem> get() = _uiState.value.albumTracks
-    val collectionItems: List<MediaItem> get() = _uiState.value.collectionItems
-    val relatedItems: List<MediaItem> get() = _uiState.value.relatedItems
-    val fetchedSeasonIds: Set<String> get() = _uiState.value.fetchedSeasonIds
-    val isDownloading: Boolean get() = _uiState.value.isDownloading
-    val downloadError: String? get() = _uiState.value.downloadError
-    val isDownloadingSeries: Boolean get() = _uiState.value.isDownloadingSeries
-    val seriesDownloadResult: SeriesDownloadResult? get() = _uiState.value.seriesDownloadResult
-    val downloadSheetEpisodes: Map<String, List<MediaItem>> get() = _uiState.value.downloadSheetEpisodes
-    val downloadSheetLoadingSeasons: Set<String> get() = _uiState.value.downloadSheetLoadingSeasons
-    val downloadedEpisodeIds: Set<String> get() = _uiState.value.downloadedEpisodeIds
-    val smartPlayTarget: DetailUiState.SmartPlayTarget? get() = _uiState.value.smartPlayTarget
+    // Direct (non-observable) readers for the two stream-selection indices.
+    // These are read synchronously at click time inside the play callback
+    // (which captures a `remember`-ed lambda), so they must read the current
+    // snapshot from [_uiState] rather than a composition-captured value. All
+    // other state is consumed reactively via [uiState].
     val selectedSubtitleIndex: Int? get() = _uiState.value.selectedSubtitleIndex
     val selectedAudioIndex: Int? get() = _uiState.value.selectedAudioIndex
 
@@ -812,6 +764,22 @@ class DetailViewModel @Inject constructor(
 
     private fun enqueueDownloadWorker(downloadId: String) {
         downloadRepository.enqueueDownload(downloadId)
+    }
+
+    /**
+     * Available bytes on the volume backing the download destination
+     * (`DIRECTORY_MUSIC` for audio, `DIRECTORY_MOVIES` otherwise). Read off the
+     * main thread — callers should await this from a coroutine or `produceState`.
+     *
+     * Extracted from the inline `StatFs`/`Environment` probe that previously
+     * lived in the download-confirmation composable so the UI layer no longer
+     * touches the filesystem.
+     */
+    suspend fun getAvailableStorageBytes(isAudio: Boolean): Long = withContext(Dispatchers.IO) {
+        val downloadDir = context.getExternalFilesDir(if (isAudio) android.os.Environment.DIRECTORY_MUSIC else android.os.Environment.DIRECTORY_MOVIES)
+            ?: context.filesDir
+        val stat = android.os.StatFs(downloadDir.absolutePath)
+        stat.availableBlocksLong * stat.blockSizeLong
     }
 
     private fun loadSeerrData(detail: MediaDetail, generation: Long) {
