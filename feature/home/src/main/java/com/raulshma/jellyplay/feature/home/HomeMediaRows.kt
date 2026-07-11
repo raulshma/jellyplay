@@ -85,9 +85,14 @@ private fun HorizontalMediaScroller(
     key: ((index: Int) -> Any)? = null,
     itemContent: @Composable (index: Int) -> Unit,
 ) {
+    // Hoist the carousel state out of the clipping branch so toggling
+    // clippingEnabled (the experimental card-clipping flag) doesn't recreate
+    // the CarouselState and reset scroll position. It's only consumed in the
+    // carousel branch below.
+    val carouselState = rememberCarouselState { itemCount }
     if (clippingEnabled) {
         HorizontalUncontainedCarousel(
-            state = rememberCarouselState { itemCount },
+            state = carouselState,
             itemWidth = itemWidth,
             itemSpacing = spacing,
             contentPadding = PaddingValues(horizontal = contentPad),
