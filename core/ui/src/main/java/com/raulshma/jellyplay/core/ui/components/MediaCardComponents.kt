@@ -85,6 +85,7 @@ fun rememberDominantColor(
 ): Color {
     val context = LocalContext.current
     val performanceMode = LocalPerformanceMode.current
+    val isScrollIdle = LocalScrollIdle.current
     val cacheKey = itemId ?: imageUrl
     var color by remember(cacheKey) { mutableStateOf(cacheKey?.let { dominantColorCache.get(it) } ?: fallback) }
     val loader = coil3.SingletonImageLoader.get(context)
@@ -93,8 +94,15 @@ fun rememberDominantColor(
     // otherwise launches a Coil request + Palette.generate() on Dispatchers.Default,
     // competing with the visible image decodes for CPU during scroll. Cached
     // values (from a prior non-perf-mode session) are still returned.
-    LaunchedEffect(imageUrl, performanceMode) {
+    //
+    // Also defer until scroll settles (isScrollIdle): during fast scroll dozens
+    // of newly-composed cards would each fire a 64px Coil execute + Palette
+    // generate, starving the visible-card decodes. Reading LocalScrollIdle as a
+    // LaunchedEffect key re-triggers the effect when scroll stops, so colors
+    // populate ~150ms after the user stops flinging.
+    LaunchedEffect(imageUrl, performanceMode, isScrollIdle()) {
         if (performanceMode || imageUrl.isNullOrBlank()) return@LaunchedEffect
+        if (!isScrollIdle()) return@LaunchedEffect
         if (cacheKey != null) {
             dominantColorCache.get(cacheKey)?.let {
                 color = it
@@ -315,24 +323,33 @@ fun PosterCard(
     // rememberReleaseDismiss closes it when the finger lifts — all driven by
     // this card's existing interactionSource. No-ops on TV and when no
     // controller is provided (see LocalMediaPreviewController).
-    val peek = rememberMediaPeek(
-        item = item,
-        posterUrl = imageUrl,
-        backdropUrl = fallbackUrls.firstOrNull(),
-        blurHash = blurHash,
-    )
-    rememberReleaseDismiss(isPressed)
-
+    //
+    // Short-circuit when no controller AND no shared-element key: avoids the
+    // per-card peek/shared-element composition allocations in contexts that
+    // can't use either (e.g. library grid without preview enabled).
+    val mediaPreviewController = com.raulshma.jellyplay.core.ui.preview.LocalMediaPreviewController.current
     val sharedTransitionScope = LocalSharedTransitionScope.current
     val animatedVisibilityScope = LocalAnimatedVisibilityScope.current
+    val canPeek = mediaPreviewController != null
+    val canShareElement = sharedElementKey != null && sharedTransitionScope != null && animatedVisibilityScope != null
+
+    val peek = if (canPeek) {
+        rememberMediaPeek(
+            item = item,
+            posterUrl = imageUrl,
+            backdropUrl = fallbackUrls.firstOrNull(),
+            blurHash = blurHash,
+        )
+    } else null
+    if (canPeek) rememberReleaseDismiss(isPressed)
 
     @OptIn(androidx.compose.animation.ExperimentalSharedTransitionApi::class)
     val sharedImageModifier =
-        if (sharedElementKey != null && sharedTransitionScope != null && animatedVisibilityScope != null) {
-            with(sharedTransitionScope) {
+        if (canShareElement) {
+            with(sharedTransitionScope!!) {
                 Modifier.sharedElement(
-                    rememberSharedContentState(key = sharedElementKey),
-                    animatedVisibilityScope = animatedVisibilityScope,
+                    rememberSharedContentState(key = sharedElementKey!!),
+                    animatedVisibilityScope = animatedVisibilityScope!!,
                 )
             }
         } else Modifier
@@ -363,7 +380,7 @@ fun PosterCard(
             modifier = Modifier
                 .fillMaxWidth()
                 .then(focusInteraction.modifier)
-                .then(peek.boundsModifier)
+                .then(peek?.boundsModifier ?: Modifier)
                 .graphicsLayer {
                     scaleX = scale
                     scaleY = scale
@@ -376,7 +393,7 @@ fun PosterCard(
                     interactionSource = interactionSource,
                     indication = null,
                     onClick = onClick,
-                    onLongClick = peek.onLongClick,
+                    onLongClick = peek?.onLongClick,
                 ),
             shape = cardShape,
             border = border,

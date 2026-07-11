@@ -18,6 +18,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.Immutable
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
@@ -165,14 +166,6 @@ internal fun HomeContentList(
             )
         }
     } else {
-        val visibleItemRange by remember {
-            derivedStateOf {
-                val info = listState.layoutInfo
-                if (info.visibleItemsInfo.isEmpty()) IntRange(0, 0)
-                else IntRange(info.visibleItemsInfo.first().index, info.visibleItemsInfo.last().index)
-            }
-        }
-
         // De-duplicate the downloaded row against the online sections so a title
         // that already appears in Continue Watching / Latest / Recently Added
         // isn't shown twice.
@@ -184,6 +177,10 @@ internal fun HomeContentList(
             }
         }
 
+        CompositionLocalProvider(
+            com.raulshma.jellyplay.core.ui.components.LocalScrollIdle provides
+                remember(listState) { { !listState.isScrollInProgress } }
+        ) {
         LazyColumn(
             state = listState,
             modifier = Modifier.fillMaxSize(),
@@ -254,7 +251,16 @@ internal fun HomeContentList(
                 val section = sections[index]
                 val isFirstAfterHero = index == 0 && state.featuredItem != null && state.homeHeroEnabled
                 val sectionIndexInList = index + (if (state.featuredItem != null && state.homeHeroEnabled) 1 else 0)
-                val isCurrentlyVisible = sectionIndexInList in visibleItemRange
+                // Per-item visibility: a single shared IntRange derivedStateOf
+                // invalidated every composed section item on every boundary
+                // crossing (the range value changed even for items whose own
+                // visibility didn't). Reading each item's own visibility as a
+                // Boolean means only the item that entered/left recomposes.
+                val isCurrentlyVisible by remember {
+                    derivedStateOf {
+                        listState.layoutInfo.visibleItemsInfo.any { it.index == sectionIndexInList }
+                    }
+                }
 
                 var hasBeenVisible by rememberSaveable { mutableStateOf(false) }
                 if (isCurrentlyVisible && !hasBeenVisible) hasBeenVisible = true
@@ -417,6 +423,7 @@ internal fun HomeContentList(
                 }
             }
         }
+        } // end CompositionLocalProvider(LocalScrollIdle)
     }
 
     val askItem = askContinueItem

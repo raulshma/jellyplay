@@ -3,6 +3,7 @@ package com.raulshma.jellyplay.feature.home
 import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.Stable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
@@ -148,6 +149,7 @@ internal fun rememberHeroController(
     )
 }
 
+@Stable
 internal class HeroController(
     val featuredItem: MediaItem?,
     val backdropUrl: String?,
