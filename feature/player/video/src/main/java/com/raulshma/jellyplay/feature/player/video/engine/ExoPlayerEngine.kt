@@ -139,6 +139,16 @@ class ExoPlayerEngine(
     private var lastFrameH = -1
     private var currentMediaItem: MediaItem? = null
     private val bandwidthMeter = bandwidthMeter ?: DefaultBandwidthMeter.Builder(context).build()
+
+    /**
+     * Server-reported total runtime (ms), captured from [PlaybackRequest.serverDurationMs]
+     * in [load]. Used as a fallback in [durationMs] when the ExoPlayer demuxer cannot
+     * resolve a duration for HLS/transcoded manifests (where `player.duration` is
+     * frequently `C.TIME_UNSET`). Mirrors [MpvPlayerEngine.serverDurationMs].
+     */
+    @Volatile
+    private var serverDurationMs: Long = 0L
+
     private val currentSubtitleConfigs = mutableListOf<MediaItem.SubtitleConfiguration>()
 
     override val underlyingPlayer: androidx.media3.common.Player? get() = player
@@ -235,6 +245,17 @@ class ExoPlayerEngine(
         override fun onVolumeChanged(volume: Float) {
             cachedVolume = volume
         }
+
+        // NOTE: onMediaMetadataChanged is intentionally NOT overridden here.
+        // Previously a pinned title/artwork re-apply path called
+        // `player.replaceMediaItem(0, ...)` whenever Media3 reported an empty
+        // metadata — which it does repeatedly for HLS/transcoded manifests
+        // (Jellyfin transcode playlists carry no metadata). Mutating the
+        // currently-playing MediaItem from inside that callback disrupts
+        // ExoPlayer's HLS timeline/seek state and was the root cause of
+        // seeks restarting playback from 0 on transcoded media. Metadata
+        // pinning for the system MediaSession is now handled externally via
+        // a ForwardingPlayer in VideoPlayerViewModel.createVideoMediaSession.
     }
 
     /**
@@ -416,19 +437,24 @@ class ExoPlayerEngine(
         val mediaItem = MediaItem.Builder()
             .setUri(request.uri)
             .apply {
-                val effectiveMime = request.mimeType ?: if (request.isLive) {
-                    // Live TV stream URLs are extension-less (/Videos/{id}/stream
-                    // ?...&LiveStreamId=...). Without a hint ExoPlayer falls
-                    // back to content sniffing, which fails for MPEG-TS-over-HTTP
-                    // and selects the wrong extractor for HLS. Pick the hint from
-                    // the URL so the right MediaSource is used.
-                    if (request.uri.contains(".m3u8", ignoreCase = true)) {
-                        MimeTypes.APPLICATION_M3U8
-                    } else {
-                        MimeTypes.VIDEO_MP2T
-                    }
-                } else null
-                effectiveMime?.let { setMimeType(it) }
+                // MIME-type hint so DefaultMediaSourceFactory selects the right
+                // MediaSource (HlsMediaSource vs progressive extractor):
+                //  - Caller-provided hint wins (offline container sniffing).
+                //  - Live TV URLs are often extension-less; infer from the URL.
+                //  - Transcoded (non-live) streams are served as Jellyfin HLS
+                //    master playlists (master.m3u8) — without the hint ExoPlayer
+                //    relies on extension detection, which is fragile when the
+                //    query string trails the .m3u8 path. The official Jellyfin
+                //    Android client pins APPLICATION_M3U8 the same way. This is
+                //    also what makes native HLS seeking (segment + EXTINF
+                //    resolution) reliable on a transcode.
+                val inferredMime = when {
+                    request.mimeType != null -> request.mimeType
+                    request.uri.contains(".m3u8", ignoreCase = true) -> MimeTypes.APPLICATION_M3U8
+                    request.isLive -> MimeTypes.VIDEO_MP2T
+                    else -> null
+                }
+                inferredMime?.let { setMimeType(it) }
             }
             .apply {
                 if (request.isLive) {
@@ -445,6 +471,7 @@ class ExoPlayerEngine(
 
         exo.setMediaItem(mediaItem)
         currentMediaItem = mediaItem
+        serverDurationMs = request.serverDurationMs
         currentSubtitleConfigs.clear()
         currentSubtitleConfigs.addAll(subtitleConfigs)
         exo.prepare()
@@ -503,6 +530,7 @@ class ExoPlayerEngine(
         player = null
         trackSelector = null
         currentMediaItem = null
+        serverDurationMs = 0L
         currentSubtitleConfigs.clear()
         lastVideoStats = null
         videoDecoderCounters = null
@@ -764,7 +792,18 @@ class ExoPlayerEngine(
     }
 
     override val currentPositionMs: Long get() = player?.currentPosition ?: 0L
-    override val durationMs: Long get() = player?.duration?.coerceAtLeast(0L) ?: 0L
+    override val durationMs: Long
+        get() {
+            // Prefer the ExoPlayer-resolved duration when available; fall back
+            // to the server-reported runTimeTicks, which for HLS/transcoded
+            // streams is the only accurate total-runtime source (ExoPlayer's
+            // `duration` is `C.TIME_UNSET` until/ unless the manifest advertises
+            // a finite VOD duration — Jellyfin transcode manifests often do
+            // not, leaving the seek bar and end-detection without a duration).
+            // Mirrors [MpvPlayerEngine.durationMs].
+            val engine = player?.duration ?: C.TIME_UNSET
+            return if (engine != C.TIME_UNSET && engine > 0L) engine else serverDurationMs
+        }
     override val playbackSpeed: Float get() = player?.playbackParameters?.speed ?: 1f
     override val audioSessionId: Int get() = player?.audioSessionId ?: C.AUDIO_SESSION_ID_UNSET
 
