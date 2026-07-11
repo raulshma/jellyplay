@@ -70,6 +70,7 @@ import com.raulshma.jellyplay.core.ui.components.LoadingScreen
 import com.raulshma.jellyplay.core.ui.components.rememberScreenBackgroundColor
 import com.raulshma.jellyplay.core.ui.tv.LocalTvMode
 import com.raulshma.jellyplay.core.ui.tv.tvFocusRestorer
+import com.raulshma.jellyplay.core.ui.util.formatFileSize
 import com.raulshma.jellyplay.feature.details.R
 
 /**
@@ -604,13 +605,6 @@ private fun EpisodeRow(
             }
         }
     }
-}
-
-private fun formatFileSize(bytes: Long): String = when {
-    bytes >= 1_000_000_000 -> "%.1f GB".format(bytes / 1_000_000_000.0)
-    bytes >= 1_000_000 -> "%.1f MB".format(bytes / 1_000_000.0)
-    bytes >= 1_000 -> "%.1f KB".format(bytes / 1_000.0)
-    else -> "$bytes B"
 }
 
 /**
