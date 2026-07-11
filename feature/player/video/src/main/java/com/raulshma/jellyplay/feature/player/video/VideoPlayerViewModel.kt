@@ -350,6 +350,16 @@ class VideoPlayerViewModel @Inject constructor(
     private var lastSeekTimestamp: Long = 0L
 
     /**
+     * Guards the FORCE_DIRECT_PLAY → FORCE_TRANSCODE fallback so the runtime
+     * error triggered by an undecodable direct-played codec only retries once.
+     * Reset whenever a new item is loaded or the user manually changes the
+     * playback mode (so a later user-initiated FORCE_DIRECT_PLAY attempt is
+     * allowed to fail-and-fallback again).
+     */
+    @Volatile
+    private var directPlayFallbackOffered = false
+
+    /**
      * Snapshot of [uiState] with the live playback position/duration injected
      * from the dedicated high-frequency flows (V-1). Use this anywhere that
      * needs the position-aware derived properties ([activeSegment],
@@ -878,7 +888,38 @@ class VideoPlayerViewModel @Inject constructor(
                                 }
                             } }
                             launch { engine.availableTracks.collect { trackSelectionHelper.updateTracksFromEngine() } }
-                            launch { engine.errorFlow.collect { e -> _uiState.update { s -> s.copy(playerError = e, showPlaybackErrorDialog = true) } } }
+                            launch {
+                                engine.errorFlow.collect { e ->
+                                    // FORCE_DIRECT_PLAY uses "direct play all"
+                                    // profile — the server hands back a static URL even for
+                                    // codecs the player can't decode, so a runtime error here
+                                    // usually means the direct-played container/codec is
+                                    // undecodable. Offer a one-shot automatic transcode
+                                    // fallback (mirrors Wholphin's onPlayerError retry) rather
+                                    // than surfacing a dead-end error dialog.
+                                    if (_uiState.value.playbackMode == PlaybackMode.FORCE_DIRECT_PLAY &&
+                                        !directPlayFallbackOffered
+                                    ) {
+                                        directPlayFallbackOffered = true
+                                        userMessageBus.info("Direct Play failed — switching to transcode")
+                                        _uiState.update { it.copy(playbackMode = PlaybackMode.FORCE_TRANSCODE) }
+                                        launch {
+                                            preferencesStore.setPlaybackMode(PlaybackMode.FORCE_TRANSCODE)
+                                            reportCurrentPlaybackStopped()
+                                            progressReporter.cancelJobs()
+                                            val pos = playerSessionManager.engine?.currentPositionMs ?: 0L
+                                            playerSessionManager.reloadPlayback(
+                                                PlaybackMode.FORCE_TRANSCODE,
+                                                _uiState.value.streamingQuality,
+                                                pos,
+                                            )
+                                            afterEngineReloadRebuildSessionAndTracking()
+                                        }
+                                    } else {
+                                        _uiState.update { s -> s.copy(playerError = e, showPlaybackErrorDialog = true) }
+                                    }
+                                }
+                            }
                             // Buffering watchdog: if the engine never reaches
                             // READY within BUFFERING_TIMEOUT_MS during the
                             // *initial* buffer (before first READY), surface the
@@ -1053,6 +1094,7 @@ class VideoPlayerViewModel @Inject constructor(
         _uiState.update { it.copy(autoplayCancelled = false) }
         lastSeekPositionMs = null
         lastSeekTimestamp = 0L
+        directPlayFallbackOffered = false
         trackSelectionHelper.setPendingStreams(subtitleStreamIndex, audioStreamIndex)
 
         // "Play On" routing: if a Jellyfin remote session is connected (via the
@@ -1605,6 +1647,9 @@ class VideoPlayerViewModel @Inject constructor(
 
     fun setPlaybackMode(mode: PlaybackMode) {
         if (_uiState.value.playbackMode == mode) return
+        // User explicitly changed the mode — re-arm the direct-play fallback so
+        // a future FORCE_DIRECT_PLAY attempt can fail-and-retry again.
+        directPlayFallbackOffered = false
         _uiState.update { it.copy(playbackMode = mode) }
         launch {
             preferencesStore.setPlaybackMode(mode)
@@ -2493,7 +2538,31 @@ class VideoPlayerViewModel @Inject constructor(
         val engine = playerSessionManager.engine ?: return
         val player = engine.underlyingPlayer ?: return
 
-        val session = MediaSession.Builder(context, player)
+        // Pin the caller-supplied title/artwork at the MediaSession layer via a
+        // ForwardingPlayer. ExoPlayer's HLS playlist parser resolves an empty
+        // MediaMetadata for Jellyfin transcode manifests (which carry no
+        // metadata), which would blank the system now-playing / lock-screen
+        // notification. We previously re-applied the title by calling
+        // player.replaceMediaItem() from ExoPlayerEngine's onMediaMetadataChanged
+        // — but mutating the currently-playing MediaItem mid-playback disrupts
+        // ExoPlayer's HLS timeline/seek state and was the root cause of seeks
+        // restarting from 0 on transcoded media. Overriding getMediaMetadata()
+        // here is non-destructive: the underlying player's timeline and position
+        // are untouched, so HLS seeking stays intact while the notification
+        // continues to show the pinned title/artwork.
+        val artworkUri = playbackRepository.getImageUrl(itemId, maxWidth = 300)
+            .takeIf { it.isNotBlank() }
+            ?.let { runCatching { Uri.parse(it) }.getOrNull() }
+        val pinnedMetadata = MediaMetadata.Builder()
+            .setTitle(title)
+            .setSubtitle(subtitle)
+            .apply { artworkUri?.let { setArtworkUri(it) } }
+            .build()
+        val sessionPlayer = object : androidx.media3.common.ForwardingPlayer(player) {
+            override fun getMediaMetadata(): MediaMetadata = pinnedMetadata
+        }
+
+        val session = MediaSession.Builder(context, sessionPlayer)
             .setId("jellyplay_video_${itemId}")
             .build()
         videoMediaSession = session
