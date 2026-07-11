@@ -111,6 +111,9 @@ fun OfflineHomeContent(
             compareByDescending<OfflineMediaItem> { it.lastPlayedDate ?: "" }
                 .thenByDescending { it.createdAt }
         )
+        // "Recently Downloaded" = 10 newest by createdAt. Folded into this
+        // single-pass block (was a separate full-library sort) so we traverse
+        // the library once, not twice.
         val recent = offlineLibrary.sortedByDescending { it.createdAt }.take(10)
         OfflineSections(
             continueWatching = continueWatching,
