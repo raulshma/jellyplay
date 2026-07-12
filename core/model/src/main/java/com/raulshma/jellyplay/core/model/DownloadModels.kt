@@ -40,6 +40,7 @@ data class DownloadItem(
 @Serializable
 enum class DownloadStatus {
     PENDING,
+    QUEUED,
     DOWNLOADING,
     PAUSED,
     COMPLETED,

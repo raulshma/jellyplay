@@ -121,7 +121,9 @@ class MpvPlayerEngine(
     // cannot resolve a duration for HLS/transcoded streams (where `duration`
     // is frequently 0/partial). Set from PlaybackRequest in load().
     @Volatile private var serverDurationMs: Long = 0L
-    
+
+    @Volatile private var lastUnmuteVolume: Float = 1f
+
     private var currentConfig = EngineConfig()
     // mpv handles its own internal EQ via af filters; this helper exists
     // solely to host the dialogue-boost overlay (see DialogueBoostHelper
@@ -791,7 +793,23 @@ class MpvPlayerEngine(
     override fun setMuted(muted: Boolean) {
         try { mpvView?.mpv?.setPropertyBoolean("mute", muted) } catch (_: Exception) {}
         try {
-            MediaStreamVolume.setNormalized(context, if (muted) 0f else 1f)
+            if (muted) {
+                // Snapshot the system STREAM_MUSIC level before zeroing so unmute
+                // restores it. mpv mutes internally, but the system stream is the
+                // value the user actually controls (gesture path / hardware keys),
+                // and zeroing it here means we must remember what to restore.
+                lastUnmuteVolume = MediaStreamVolume.getNormalized(context)
+                    .takeIf { it > 0f } ?: lastUnmuteVolume
+                MediaStreamVolume.setNormalized(context, 0f)
+            } else {
+                // mpv's native `mute` preserves its own `volume`; restore the
+                // system stream to the snapshot captured at mute time rather
+                // than blasting full volume.
+                MediaStreamVolume.setNormalized(
+                    context,
+                    lastUnmuteVolume.coerceIn(0.05f, 1f),
+                )
+            }
         } catch (_: Exception) {}
     }
 

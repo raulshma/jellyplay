@@ -471,16 +471,22 @@ class LibVlcPlayerEngine(
         try {
             val mp = mediaPlayer ?: return
             if (muted) {
+                // Snapshot the system STREAM_MUSIC level the user actually hears
+                // (set via gesture path / hardware keys, which bypass the engine
+                // API). Snapshotting mp.volume is wrong — it stays near 100 when
+                // volume was adjusted outside the engine, so unmute would
+                // restore full volume.
+                val sysVol = MediaStreamVolume.getNormalized(context)
+                if (sysVol > 0f) lastUnmuteVolume = sysVol
                 mp.volume = 0
                 MediaStreamVolume.setNormalized(context, 0f)
             } else {
-                // Restore the full VLC range (0..200) so a >100% boost
-                // survives a mute cycle. Previously this clamped via
-                // coerceIn(0f, 1f) / coerceIn(0, 100), which permanently
-                // discarded any volume above 100% on the first unmute.
-                val restored = lastUnmuteVolume.coerceIn(0.05f, 2f)
-                mp.volume = (restored * 100).toInt().coerceIn(0, 200)
-                MediaStreamVolume.setNormalized(context, restored.coerceIn(0f, 1f))
+                // Restore the system stream to its pre-mute level and set VLC's
+                // software gain back to unity (100). Do NOT also scale mp.volume
+                // by the system level — that would double-attenuate.
+                val restored = lastUnmuteVolume.coerceIn(0.05f, 1f)
+                mp.volume = 100
+                MediaStreamVolume.setNormalized(context, restored)
             }
         } catch (_: Exception) {}
     }
