@@ -75,6 +75,15 @@ dependencies {
     implementation(libs.okhttp)
 
     implementation(libs.libmpv)
+    // libass wired into Media3's renderer pipeline — full ASS/SSA rendering
+    // (positioning, fonts, animations, karaoke, vector drawing) on the
+    // ExoPlayer backend. Bundles its own libass native .so per ABI.
+    implementation(libs.ass.media)
+    // Direct compile dep on ass-kt so ExoPlayerEngine can reach AssRender.setFontScale
+    // (was only a transitive runtime dep before; SCALE font-size override needs it).
+    implementation(libs.ass.kt)
+    // Parse font family names from .ttf/.otf headers for the subtitle font picker.
+    implementation(libs.truetype.parser)
     implementation(libs.libvlc.all)
     implementation(libs.hilt.android)
     ksp(libs.hilt.android.compiler)

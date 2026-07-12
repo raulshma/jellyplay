@@ -131,6 +131,19 @@ data class EngineCapabilities(
     val supportsVideoFilters: Boolean = false,
     val supportsLiveQualitySwitch: Boolean = false,
     val supportsBandwidthEstimate: Boolean = false,
+    val supportsAssOverride: Boolean = false,
+    /**
+     * Distinguishes "renders ASS/SSA" (`supportsAssOverride = true`, both
+     * ExoPlayer and mpv) from "applies the user's style overrides to ASS/SSA
+     * tracks" (mpv only via libass `--ass-override=force`). When `false`, ASS
+     * tracks render with their embedded styling and the user's colors, borders,
+     * and Force-override only affect SRT/VTT. See `assMedia` 0.4.0 degradation
+     * notes in `ExoPlayerEngine`.
+     */
+    val supportsAssStyleOverride: Boolean = false,
+    val supportsFontFamily: Boolean = false,
+    val supportsFreeFormColors: Boolean = false,
+    val supportsBorderStyles: Boolean = false,
 )
 
 enum class EnginePlaybackState {

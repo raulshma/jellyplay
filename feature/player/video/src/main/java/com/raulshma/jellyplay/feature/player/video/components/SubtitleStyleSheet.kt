@@ -23,6 +23,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.FilterChipDefaults
@@ -31,6 +32,7 @@ import androidx.compose.material3.Slider
 import androidx.compose.material3.SliderDefaults
 import androidx.compose.material3.Text
 import androidx.compose.material3.Switch
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -47,11 +49,14 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 
 import kotlin.math.roundToLong
 import com.raulshma.jellyplay.core.designsystem.theme.ShapeCache
+import com.raulshma.jellyplay.core.model.AssOverrideMode
+import com.raulshma.jellyplay.core.model.SubtitleBorderStyle
 import com.raulshma.jellyplay.core.model.SubtitleColor
 import com.raulshma.jellyplay.core.model.SubtitleEdgeType
 import com.raulshma.jellyplay.core.model.SubtitleStyle
@@ -64,6 +69,7 @@ fun SubtitleStyleSheet(
     onStyleChange: (SubtitleStyle) -> Unit,
     onDismiss: () -> Unit,
     capabilities: EngineCapabilities = EngineCapabilities(),
+    onPickFont: () -> Unit = {},
 ) {
     var applyCustomStyle by remember { mutableStateOf(currentStyle.applyCustomStyle) }
     var fontSize by remember { mutableIntStateOf(currentStyle.fontSize) }
@@ -74,6 +80,23 @@ fun SubtitleStyleSheet(
     var edgeColor by remember { mutableStateOf(currentStyle.edgeColor) }
     var offsetMs by remember { mutableLongStateOf(currentStyle.offsetMs) }
     var verticalPosition by remember { mutableFloatStateOf(currentStyle.verticalPosition) }
+
+    // --- ASS / rich styling additions (Task 9) ---
+    var assOverride by remember { mutableStateOf(currentStyle.assOverride) }
+    var fontFamilyName by remember { mutableStateOf(currentStyle.fontFamilyName) }
+    var borderStyle by remember { mutableStateOf(currentStyle.borderStyle) }
+    var borderWidth by remember { mutableFloatStateOf(currentStyle.borderWidth) }
+    var shadowOffset by remember { mutableFloatStateOf(currentStyle.shadowOffset) }
+    var bold by remember { mutableStateOf(currentStyle.bold) }
+    var italic by remember { mutableStateOf(currentStyle.italic) }
+    // ARGB free-form colors; null = use preset. (Swatch picker writes these.)
+    var fontColorArgb by remember { mutableStateOf(currentStyle.fontColorArgb) }
+    var backgroundColorArgb by remember { mutableStateOf(currentStyle.backgroundColorArgb) }
+    var edgeColorArgb by remember { mutableStateOf(currentStyle.edgeColorArgb) }
+    // Free-form color picker dialog state (hue/sat/val driven).
+    var showFontColorPicker by remember { mutableStateOf(false) }
+    var showBackgroundColorPicker by remember { mutableStateOf(false) }
+    var showEdgeColorPicker by remember { mutableStateOf(false) }
 
     val isTv = LocalTvMode.current
     val focusRequester = remember { FocusRequester() }
@@ -102,6 +125,23 @@ fun SubtitleStyleSheet(
                 ),
             )
             Spacer(Modifier.height(16.dp))
+
+            // Engine renders subtitles but not full ASS (libVLC). Inform the user.
+            if (!capabilities.supportsAssOverride && capabilities.supportsSubtitleStyle) {
+                Spacer(Modifier.height(8.dp))
+                Row(
+                    modifier = Modifier.fillMaxWidth().clip(ShapeCache.smooth8)
+                        .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f))
+                        .padding(12.dp),
+                ) {
+                    Text(
+                        "Full ASS/SSA styling is supported on ExoPlayer and mpv. " +
+                            "This engine renders subtitles with basic styling.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+            }
 
             // Style Override Toggle
             val toggleFocusState = rememberTvFocusState()
@@ -182,6 +222,115 @@ fun SubtitleStyleSheet(
                 )
             }
 
+            // --- Typography: font family + bold/italic (capability + override gated) ---
+            if (applyCustomStyle) {
+                if (capabilities.supportsFontFamily) {
+                    Spacer(Modifier.height(12.dp))
+                    Text(
+                        "Font",
+                        style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Medium),
+                    )
+                    Spacer(Modifier.height(4.dp))
+                    val fontRowFocus = rememberTvFocusState(focusedScale = 1.03f)
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clip(ShapeCache.smooth8)
+                            .then(fontRowFocus.focusModifier)
+                            .tvFocusIndicator(fontRowFocus, ShapeCache.smooth8)
+                            .clickable { onPickFont() }
+                            .padding(vertical = 10.dp, horizontal = 12.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                    ) {
+                        Text(
+                            fontFamilyName ?: "Bundled Default",
+                            style = MaterialTheme.typography.bodyMedium,
+                        )
+                        Text(
+                            "Pick…",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
+                }
+
+                Spacer(Modifier.height(8.dp))
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(12.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    TextStyleToggle(
+                        label = "Bold",
+                        selected = bold,
+                    ) {
+                        bold = it
+                        onStyleChange(currentStyle.copy(bold = it))
+                    }
+                    TextStyleToggle(
+                        label = "Italic",
+                        selected = italic,
+                    ) {
+                        italic = it
+                        onStyleChange(currentStyle.copy(italic = it))
+                    }
+                }
+            }
+
+            // --- ASS Override: SCALE keeps embedded styling, FORCE overrides it ---
+            if (capabilities.supportsAssOverride && applyCustomStyle) {
+                Spacer(Modifier.height(16.dp))
+                Text(
+                    "ASS Styling",
+                    style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Medium),
+                )
+                Spacer(Modifier.height(4.dp))
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    AssOverrideChip(
+                        label = "Respect",
+                        isSelected = assOverride == AssOverrideMode.SCALE,
+                    ) {
+                        assOverride = AssOverrideMode.SCALE
+                        onStyleChange(currentStyle.copy(assOverride = AssOverrideMode.SCALE))
+                    }
+                    // FORCE (full override of ASS colors/edges/font) is only honored by
+                    // engines that can apply user style overrides to ASS tracks (mpv via
+                    // libass --ass-override=force). ExoPlayer renders ASS as-authored, so
+                    // the chip would be a no-op there — hide it. Respect (SCALE) stays
+                    // because font scale is honored on both engines.
+                    if (capabilities.supportsAssStyleOverride) {
+                        AssOverrideChip(
+                            label = "Force",
+                            isSelected = assOverride == AssOverrideMode.FORCE,
+                        ) {
+                            assOverride = AssOverrideMode.FORCE
+                            onStyleChange(currentStyle.copy(assOverride = AssOverrideMode.FORCE))
+                        }
+                    }
+                }
+                Text(
+                    if (assOverride == AssOverrideMode.SCALE)
+                        "Keep embedded styling; apply only your size & position"
+                    else
+                        "Override embedded styling with your colors, font & borders",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                // Honesty note for engines that render ASS but cannot override its
+                // styling (ExoPlayer: ass-media 0.4.0 has no compile-time override API).
+                if (!capabilities.supportsAssStyleOverride) {
+                    Spacer(Modifier.height(4.dp))
+                    Text(
+                        "On this engine, ASS/SSA subtitles render with their embedded " +
+                            "styling. Custom colors, borders, and Force override apply to " +
+                            "SRT/VTT only.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+            }
+
             Spacer(Modifier.height(8.dp))
             Text(
                 "Font Color",
@@ -198,12 +347,23 @@ fun SubtitleStyleSheet(
                 SubtitleColor.entries.forEach { color ->
                     ColorChip(
                         color = Color(color.value),
-                        isSelected = fontColor == color,
+                        // Free-form ARGB takes precedence when set.
+                        isSelected = fontColorArgb == null && fontColor == color,
                         enabled = applyCustomStyle,
                         onClick = {
                             fontColor = color
-                            onStyleChange(currentStyle.copy(fontColor = color))
+                            fontColorArgb = null
+                            onStyleChange(currentStyle.copy(fontColor = color, fontColorArgb = null))
                         },
+                    )
+                }
+                // Free-form color picker swatch (capability-gated).
+                if (capabilities.supportsFreeFormColors && capabilities.supportsAssStyleOverride && applyCustomStyle) {
+                    ColorChip(
+                        color = if (fontColorArgb != null) Color(fontColorArgb!!) else Color.Transparent,
+                        isSelected = fontColorArgb != null,
+                        enabled = true,
+                        onClick = { showFontColorPicker = true },
                     )
                 }
             }
@@ -224,12 +384,23 @@ fun SubtitleStyleSheet(
                 SubtitleColor.entries.forEach { color ->
                     ColorChip(
                         color = Color(color.value),
-                        isSelected = backgroundColor == color,
+                        // Free-form ARGB takes precedence when set.
+                        isSelected = backgroundColorArgb == null && backgroundColor == color,
                         enabled = applyCustomStyle,
                         onClick = {
                             backgroundColor = color
-                            onStyleChange(currentStyle.copy(backgroundColor = color))
+                            backgroundColorArgb = null
+                            onStyleChange(currentStyle.copy(backgroundColor = color, backgroundColorArgb = null))
                         },
+                    )
+                }
+                // Free-form color picker swatch (capability-gated).
+                if (capabilities.supportsFreeFormColors && capabilities.supportsAssStyleOverride && applyCustomStyle) {
+                    ColorChip(
+                        color = if (backgroundColorArgb != null) Color(backgroundColorArgb!!) else Color.Transparent,
+                        isSelected = backgroundColorArgb != null,
+                        enabled = true,
+                        onClick = { showBackgroundColorPicker = true },
                     )
                 }
             }
@@ -347,13 +518,160 @@ fun SubtitleStyleSheet(
                     SubtitleColor.entries.forEach { color ->
                         ColorChip(
                             color = Color(color.value),
-                            isSelected = edgeColor == color,
+                            // Free-form ARGB takes precedence when set.
+                            isSelected = edgeColorArgb == null && edgeColor == color,
                             enabled = applyCustomStyle,
                             onClick = {
                                 edgeColor = color
-                                onStyleChange(currentStyle.copy(edgeColor = color))
+                                edgeColorArgb = null
+                                onStyleChange(currentStyle.copy(edgeColor = color, edgeColorArgb = null))
                             },
                         )
+                    }
+                    // Free-form color picker swatch (capability-gated).
+                    if (capabilities.supportsFreeFormColors && capabilities.supportsAssStyleOverride && applyCustomStyle) {
+                        ColorChip(
+                            color = if (edgeColorArgb != null) Color(edgeColorArgb!!) else Color.Transparent,
+                            isSelected = edgeColorArgb != null,
+                            enabled = true,
+                            onClick = { showEdgeColorPicker = true },
+                        )
+                    }
+                }
+            }
+
+            // --- Border Style: outline+shadow, opaque box, or background box ---
+            // Gated on supportsAssStyleOverride: ExoPlayer renders ASS as-authored,
+            // so the border-style control would be a no-op on ASS tracks there.
+            if (capabilities.supportsBorderStyles && capabilities.supportsAssStyleOverride && applyCustomStyle) {
+                Spacer(Modifier.height(12.dp))
+                Text(
+                    "Border Style",
+                    style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Medium),
+                )
+                Spacer(Modifier.height(4.dp))
+                FlowRow(
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
+                    SubtitleBorderStyle.entries.forEach { bs ->
+                        val label = when (bs) {
+                            SubtitleBorderStyle.OUTLINE_AND_SHADOW -> "Outline+Shadow"
+                            SubtitleBorderStyle.OPAQUE_BOX -> "Opaque Box"
+                            SubtitleBorderStyle.BACKGROUND_BOX -> "Background Box"
+                        }
+                        val isSelected = borderStyle == bs
+                        val chipFocusState = rememberTvFocusState(focusedScale = 1.05f)
+                        FilterChip(
+                            selected = isSelected,
+                            onClick = {
+                                borderStyle = bs
+                                onStyleChange(currentStyle.copy(borderStyle = bs))
+                            },
+                            label = {
+                                Text(
+                                    label,
+                                    style = MaterialTheme.typography.labelSmall,
+                                    fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
+                                )
+                            },
+                            shape = ShapeCache.smoothPill,
+                            colors = FilterChipDefaults.filterChipColors(
+                                selectedContainerColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.18f),
+                                selectedLabelColor = MaterialTheme.colorScheme.primary,
+                            ),
+                            border = FilterChipDefaults.filterChipBorder(
+                                borderColor = Color.Transparent,
+                                selectedBorderColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.4f),
+                                enabled = true,
+                                selected = isSelected,
+                            ),
+                            modifier = Modifier
+                                .then(chipFocusState.focusModifier)
+                                .then(Modifier.tvFocusIndicator(chipFocusState, ShapeCache.smoothPill)),
+                        )
+                    }
+                }
+
+                // Border width slider (0.0..6.0). Background box uses opacity, not width.
+                if (borderStyle != SubtitleBorderStyle.BACKGROUND_BOX) {
+                    Spacer(Modifier.height(8.dp))
+                    Text(
+                        "Border Width: ${"%.1f".format(borderWidth)}",
+                        style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Medium),
+                    )
+                    if (isTv) {
+                        DpadSlider(
+                            value = borderWidth,
+                            onValueChange = {
+                                borderWidth = it
+                                onStyleChange(currentStyle.copy(borderWidth = borderWidth))
+                            },
+                            valueRange = 0f..6f,
+                            steps = 59,
+                            dpadStep = 0.2f,
+                            colors = SliderDefaults.colors(
+                                thumbColor = MaterialTheme.colorScheme.primary,
+                                activeTrackColor = MaterialTheme.colorScheme.primary,
+                            ),
+                            modifier = Modifier.fillMaxWidth(),
+                        )
+                    } else {
+                        Slider(
+                            value = borderWidth,
+                            onValueChange = { borderWidth = it },
+                            onValueChangeFinished = {
+                                onStyleChange(currentStyle.copy(borderWidth = borderWidth))
+                            },
+                            valueRange = 0f..6f,
+                            steps = 59,
+                            colors = SliderDefaults.colors(
+                                thumbColor = MaterialTheme.colorScheme.primary,
+                                activeTrackColor = MaterialTheme.colorScheme.primary,
+                            ),
+                            modifier = Modifier.fillMaxWidth(),
+                        )
+                    }
+
+                    // Shadow offset slider (only relevant for outline+shadow).
+                    if (borderStyle == SubtitleBorderStyle.OUTLINE_AND_SHADOW) {
+                        Spacer(Modifier.height(8.dp))
+                        Text(
+                            "Shadow Offset: ${"%.1f".format(shadowOffset)}",
+                            style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Medium),
+                        )
+                        if (isTv) {
+                            DpadSlider(
+                                value = shadowOffset,
+                                onValueChange = {
+                                    shadowOffset = it
+                                    onStyleChange(currentStyle.copy(shadowOffset = shadowOffset))
+                                },
+                                valueRange = 0f..4f,
+                                steps = 39,
+                                dpadStep = 0.2f,
+                                colors = SliderDefaults.colors(
+                                    thumbColor = MaterialTheme.colorScheme.primary,
+                                    activeTrackColor = MaterialTheme.colorScheme.primary,
+                                ),
+                                modifier = Modifier.fillMaxWidth(),
+                            )
+                        } else {
+                            Slider(
+                                value = shadowOffset,
+                                onValueChange = { shadowOffset = it },
+                                onValueChangeFinished = {
+                                    onStyleChange(currentStyle.copy(shadowOffset = shadowOffset))
+                                },
+                                valueRange = 0f..4f,
+                                steps = 39,
+                                colors = SliderDefaults.colors(
+                                    thumbColor = MaterialTheme.colorScheme.primary,
+                                    activeTrackColor = MaterialTheme.colorScheme.primary,
+                                ),
+                                modifier = Modifier.fillMaxWidth(),
+                            )
+                        }
                     }
                 }
             }
@@ -457,6 +775,17 @@ fun SubtitleStyleSheet(
                         edgeColor = default.edgeColor
                         offsetMs = default.offsetMs
                         verticalPosition = default.verticalPosition
+                        // Reset ASS / rich styling additions (Task 9).
+                        assOverride = default.assOverride
+                        fontFamilyName = default.fontFamilyName
+                        borderStyle = default.borderStyle
+                        borderWidth = default.borderWidth
+                        shadowOffset = default.shadowOffset
+                        bold = default.bold
+                        italic = default.italic
+                        fontColorArgb = default.fontColorArgb
+                        backgroundColorArgb = default.backgroundColorArgb
+                        edgeColorArgb = default.edgeColorArgb
                         onStyleChange(default)
                     },
                     label = { Text("Reset", style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Medium) },
@@ -466,6 +795,38 @@ fun SubtitleStyleSheet(
                         .then(Modifier.tvFocusIndicator(resetFocusState, ShapeCache.smoothPill)),
                 )
             }
+        }
+
+        // Free-form color picker dialog (capability-gated entry point above).
+        if (showFontColorPicker) {
+            FreeFormColorPickerDialog(
+                initialColor = if (fontColorArgb != null) Color(fontColorArgb!!) else Color(fontColor.value),
+                onDismiss = { showFontColorPicker = false },
+                onColorSelected = { picked ->
+                    fontColorArgb = picked
+                    onStyleChange(currentStyle.copy(fontColorArgb = picked))
+                },
+            )
+        }
+        if (showBackgroundColorPicker) {
+            FreeFormColorPickerDialog(
+                initialColor = if (backgroundColorArgb != null) Color(backgroundColorArgb!!) else Color(backgroundColor.value),
+                onDismiss = { showBackgroundColorPicker = false },
+                onColorSelected = { picked ->
+                    backgroundColorArgb = picked
+                    onStyleChange(currentStyle.copy(backgroundColorArgb = picked))
+                },
+            )
+        }
+        if (showEdgeColorPicker) {
+            FreeFormColorPickerDialog(
+                initialColor = if (edgeColorArgb != null) Color(edgeColorArgb!!) else Color(edgeColor.value),
+                onDismiss = { showEdgeColorPicker = false },
+                onColorSelected = { picked ->
+                    edgeColorArgb = picked
+                    onStyleChange(currentStyle.copy(edgeColorArgb = picked))
+                },
+            )
         }
     }
 }
@@ -495,5 +856,151 @@ private fun ColorChip(
             .then(focusState.focusModifier)
             .tvFocusIndicator(focusState, CircleShape)
             .clickable(enabled = enabled, onClick = onClick),
+    )
+}
+
+/**
+ * Bold/Italic toggle for subtitle typography. Uses a FilterChip so D-pad focus
+ * mirrors the existing Edge Type / Border Style chips.
+ */
+@Composable
+private fun TextStyleToggle(
+    label: String,
+    selected: Boolean,
+    onChange: (Boolean) -> Unit,
+) {
+    val focusState = rememberTvFocusState(focusedScale = 1.05f)
+    FilterChip(
+        selected = selected,
+        onClick = { onChange(!selected) },
+        label = {
+            Text(
+                label,
+                style = MaterialTheme.typography.labelSmall,
+                fontWeight = if (selected) FontWeight.Bold else FontWeight.Medium,
+            )
+        },
+        shape = ShapeCache.smoothPill,
+        colors = FilterChipDefaults.filterChipColors(
+            selectedContainerColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.18f),
+            selectedLabelColor = MaterialTheme.colorScheme.primary,
+        ),
+        border = FilterChipDefaults.filterChipBorder(
+            borderColor = Color.Transparent,
+            selectedBorderColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.4f),
+            enabled = true,
+            selected = selected,
+        ),
+        modifier = Modifier
+            .then(focusState.focusModifier)
+            .then(Modifier.tvFocusIndicator(focusState, ShapeCache.smoothPill)),
+    )
+}
+
+/**
+ * ASS Override mode chip (Respect = SCALE, Force = FORCE). Mirrors [ColorChip] focus handling.
+ */
+@Composable
+private fun AssOverrideChip(
+    label: String,
+    isSelected: Boolean,
+    onClick: () -> Unit,
+) {
+    val focusState = rememberTvFocusState(focusedScale = 1.05f)
+    FilterChip(
+        selected = isSelected,
+        onClick = onClick,
+        label = {
+            Text(
+                label,
+                style = MaterialTheme.typography.labelSmall,
+                fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
+            )
+        },
+        shape = ShapeCache.smoothPill,
+        colors = FilterChipDefaults.filterChipColors(
+            selectedContainerColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.18f),
+            selectedLabelColor = MaterialTheme.colorScheme.primary,
+        ),
+        border = FilterChipDefaults.filterChipBorder(
+            borderColor = Color.Transparent,
+            selectedBorderColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.4f),
+            enabled = true,
+            selected = isSelected,
+        ),
+        modifier = Modifier
+            .then(focusState.focusModifier)
+            .then(Modifier.tvFocusIndicator(focusState, ShapeCache.smoothPill)),
+    )
+}
+
+/**
+ * Minimal HSV color picker dialog for free-form subtitle colors (v1).
+ * Three sliders drive hue (0..360), saturation (0..1), value (0..1); the resulting
+ * ARGB int is returned via [onColorSelected]. Closes itself on confirm or dismiss.
+ */
+@Composable
+private fun FreeFormColorPickerDialog(
+    initialColor: Color,
+    onDismiss: () -> Unit,
+    onColorSelected: (Int) -> Unit,
+) {
+    val hsv = remember {
+        floatArrayOf(0f, 1f, 1f).apply {
+            android.graphics.Color.colorToHSV(initialColor.toArgb(), this)
+        }
+    }
+    var hue by remember { mutableFloatStateOf(hsv[0]) }
+    var saturation by remember { mutableFloatStateOf(hsv[1]) }
+    var value by remember { mutableFloatStateOf(hsv[2]) }
+    val previewColor = remember(hue, saturation, value) {
+        Color(android.graphics.Color.HSVToColor(floatArrayOf(hue, saturation, value)))
+    }
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Pick a color") },
+        text = {
+            Column {
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(48.dp)
+                        .clip(ShapeCache.smooth8)
+                        .background(previewColor),
+                )
+                Spacer(Modifier.height(12.dp))
+                Text("Hue", style = MaterialTheme.typography.labelSmall)
+                Slider(
+                    value = hue,
+                    onValueChange = { hue = it },
+                    valueRange = 0f..360f,
+                    modifier = Modifier.fillMaxWidth(),
+                )
+                Text("Saturation", style = MaterialTheme.typography.labelSmall)
+                Slider(
+                    value = saturation,
+                    onValueChange = { saturation = it },
+                    valueRange = 0f..1f,
+                    modifier = Modifier.fillMaxWidth(),
+                )
+                Text("Value", style = MaterialTheme.typography.labelSmall)
+                Slider(
+                    value = value,
+                    onValueChange = { value = it },
+                    valueRange = 0f..1f,
+                    modifier = Modifier.fillMaxWidth(),
+                )
+            }
+        },
+        confirmButton = {
+            TextButton(onClick = {
+                onColorSelected(previewColor.toArgb())
+                onDismiss()
+            }) { Text("Apply") }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) { Text("Cancel") }
+        },
     )
 }

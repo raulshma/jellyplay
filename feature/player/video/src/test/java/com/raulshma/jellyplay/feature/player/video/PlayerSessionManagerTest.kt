@@ -103,7 +103,11 @@ class PlayerSessionManagerTest {
             adaptiveBitrateManager = adaptiveBitrateManager,
             // Tests use EXTERNAL, which short-circuits before any real engine is
             // built, so a real factory wired to the (relaxed-mock) context is fine.
-            playerEngineFactory = com.raulshma.jellyplay.feature.player.video.engine.PlayerEngineFactory(context, okHttpClient),
+            playerEngineFactory = com.raulshma.jellyplay.feature.player.video.engine.PlayerEngineFactory(
+                context,
+                okHttpClient,
+                mockk<com.raulshma.jellyplay.feature.player.video.subtitle.FontProvider>(relaxed = true),
+            ),
         )
     }
 

@@ -26,11 +26,11 @@ import com.raulshma.jellyplay.core.model.MpvHwdec
 import com.raulshma.jellyplay.core.model.MpvScaler
 import com.raulshma.jellyplay.core.model.MpvSkipLoopFilter
 import com.raulshma.jellyplay.core.model.MpvVideoOutput
-import com.raulshma.jellyplay.core.model.SubtitleEdgeType
 import com.raulshma.jellyplay.core.model.formatFixed
 import com.raulshma.jellyplay.core.model.SubtitleStyle
 import com.raulshma.jellyplay.core.model.TrackType
 import com.raulshma.jellyplay.core.model.VideoEffectsConfig
+import com.raulshma.jellyplay.feature.player.video.subtitle.FontProvider
 import kotlinx.coroutines.channels.awaitClose
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -48,6 +48,7 @@ import kotlinx.coroutines.cancel
 
 class MpvPlayerEngine(
     private val context: Context,
+    private val fontProvider: FontProvider,
 ) : MediaEngine {
 
     companion object {
@@ -275,8 +276,8 @@ class MpvPlayerEngine(
             mpv.setOptionString("config", "yes")
             mpv.setOptionString("config-dir", configDir.absolutePath)
 
-            val fontsDir = java.io.File(context.cacheDir, "fonts")
-            mpv.setOptionString("sub-fonts-dir", fontsDir.absolutePath + "/")
+            val fontsDir = fontProvider.provideFontsDir()
+            mpv.setOptionString("sub-fonts-dir", fontsDir.absolutePath)
             mpv.setOptionString("sub-font-provider", "none")
 
             val mpvCfg = (currentConfig.engineSpecific as? MpvEngineConfig) ?: MpvEngineConfig()
@@ -814,21 +815,15 @@ class MpvPlayerEngine(
     }
 
     override fun createSurfaceView(context: Context): View {
-        setupFonts(context)
+        val fontsDir = fontProvider.provideFontsDir()
         val configDir = java.io.File(context.filesDir, "mpv")
         if (!configDir.exists()) {
             configDir.mkdirs()
         }
-        writeFontsConf(context, configDir)
-        try {
-            writeFontsConf(context, context.filesDir)
-        } catch (e: Exception) {
-            Log.w(TAG, "Failed to write fallback fonts.conf to filesDir", e)
-        }
 
         try {
-            android.system.Os.setenv("FONTCONFIG_FILE", java.io.File(configDir, "fonts.conf").absolutePath, true)
-            android.system.Os.setenv("FONTCONFIG_PATH", configDir.absolutePath, true)
+            android.system.Os.setenv("FONTCONFIG_FILE", java.io.File(fontsDir, "fonts.conf").absolutePath, true)
+            android.system.Os.setenv("FONTCONFIG_PATH", fontsDir.absolutePath, true)
             Log.d(TAG, "Set FONTCONFIG environment variables successfully")
         } catch (t: Throwable) {
             Log.w(TAG, "Failed to set FONTCONFIG environment variables via Os.setenv", t)
@@ -1239,7 +1234,7 @@ class MpvPlayerEngine(
             mpv.safeSetOption("sub-ass-override", "no")
         }
 
-        mpv.safeSetOption("sub-font", "sans-serif")
+        mpv.safeSetOption("sub-font", style.fontFamilyName?.takeIf { it.isNotBlank() } ?: "sans-serif")
         mpv.safeSetOption("sub-font-size", "55")
         mpv.safeSetOption("sub-scale", (style.fontSize.toDouble() / 24.0).toString())
         val subPosValue = (100 - (style.verticalPosition * 100).toInt()).coerceIn(0, 100)
@@ -1269,7 +1264,7 @@ class MpvPlayerEngine(
             mpv.safeSetPropertyDouble("sub-shadow-offset", 0.0)
         }
 
-        mpv.safeSetPropertyString("sub-font", "sans-serif")
+        mpv.safeSetPropertyString("sub-font", style.fontFamilyName?.takeIf { it.isNotBlank() } ?: "sans-serif")
         mpv.safeSetPropertyDouble("sub-font-size", 55.0)
         mpv.safeSetPropertyDouble("sub-scale", style.fontSize.toDouble() / 24.0)
         val subPosValue = (100 - (style.verticalPosition * 100).toInt()).coerceIn(0, 100)
@@ -1281,87 +1276,18 @@ class MpvPlayerEngine(
     /**
      * The string-typed subtitle-style key/value pairs shared by both
      * [applySubtitleStyleOptions] (init-time, setOptionString) and
-     * [applySubtitleStyleProperties] (runtime, setPropertyString). Extracted
-     * (L6) so the two near-identical consumers can't drift on key names or
-     * derived values. Callers apply each pair through their own setter.
+     * [applySubtitleStyleProperties] (runtime, setPropertyString). Delegates to
+     * [MpvStyleMapping.customStyleEntries] (extracted L7) so the mapping is
+     * unit-testable without a live mpv handle. Callers apply each pair through
+     * their own setter.
      */
     private fun customSubtitleStyleEntries(
         style: SubtitleStyle,
-        values: MpvSubtitleStyleValues,
-    ): List<Pair<String, String>> = buildList {
-        add("sub-color" to values.textColor)
-        add("sub-back-color" to values.backgroundColor)
-        add("sub-outline-color" to values.edgeColor)
-        add("sub-shadow-color" to values.edgeColor)
-        val borderStyle = if (style.backgroundOpacity > 0f) "background-box" else "outline-and-shadow"
-        add("sub-border-style" to borderStyle)
-        add("sub-ass-override" to "scale")
-    }
+        @Suppress("UNUSED_PARAMETER") values: MpvStyleMapping.MpvStyleValues,
+    ): List<Pair<String, String>> = MpvStyleMapping.customStyleEntries(style)
 
-    private data class MpvSubtitleStyleValues(
-        val textColor: String,
-        val backgroundColor: String,
-        val edgeColor: String,
-        val fontSize: Int,
-        val marginY: Int,
-        val outlineSize: Double,
-        val shadowOffset: Double,
-    )
-
-    private fun subtitleStyleValues(style: SubtitleStyle): MpvSubtitleStyleValues {
-        val marginY = (style.verticalPosition.coerceIn(0f, 0.4f) * 720).toInt().coerceAtLeast(0)
-        val outlineSize: Double
-        val shadowOffset: Double
-        when (style.edgeType) {
-            SubtitleEdgeType.NONE -> {
-                outlineSize = 0.0
-                shadowOffset = 0.0
-            }
-            SubtitleEdgeType.OUTLINE -> {
-                outlineSize = 2.0
-                shadowOffset = 0.0
-            }
-            SubtitleEdgeType.DROP_SHADOW -> {
-                outlineSize = 0.0
-                shadowOffset = 2.0
-            }
-            SubtitleEdgeType.RAISED,
-            SubtitleEdgeType.DEPRESSED -> {
-                outlineSize = 1.0
-                shadowOffset = 1.5
-            }
-        }
-        return MpvSubtitleStyleValues(
-            textColor = colorToMpvHex(style.fontColor.value, 1f),
-            backgroundColor = colorToMpvHex(style.backgroundColor.value, style.backgroundOpacity),
-            edgeColor = colorToMpvHex(style.edgeColor.value, 1f),
-            fontSize = style.fontSize.coerceIn(10, 72),
-            marginY = marginY,
-            outlineSize = outlineSize,
-            shadowOffset = shadowOffset,
-        )
-    }
-
-    private fun colorToMpvHex(color: Int, opacity: Float): String {
-        val alpha = (opacity.coerceIn(0f, 1f) * 255).toInt().coerceIn(0, 255)
-        val rgb = color and 0x00FFFFFF
-        // Manual hex construction (allocation-free) — byte-identical to
-        // String.format("#%02X%06X", alpha, rgb). Avoids Formatter +
-        // StringBuilder churn on the subtitle-style-apply path (4× per
-        // subtitleStyleValues() invocation, fired on every style change and at
-        // load). Mirrors the formatFixed(:423) mitigation of the same pattern.
-        val chars = "0123456789ABCDEF"
-        val s = CharArray(9)
-        s[0] = '#'
-        s[1] = chars[(alpha shr 4) and 0xF]
-        s[2] = chars[alpha and 0xF]
-        var v = rgb
-        for (i in 8 downTo 3) {
-            s[i] = chars[v and 0xF]
-            v = v shr 4
-        }
-        return String(s)
-    }
+    private fun subtitleStyleValues(style: SubtitleStyle): MpvStyleMapping.MpvStyleValues =
+        MpvStyleMapping.computeValues(style)
 
     private fun buildTrackLabel(
         trackType: TrackType,
@@ -1450,116 +1376,6 @@ class MpvPlayerEngine(
             x = temp
         }
         return x
-    }
-
-    private fun setupFonts(context: Context) {
-        val destDirs = arrayOf(
-            java.io.File(context.cacheDir, "fonts"),
-            java.io.File(context.filesDir, "mpv"),
-            java.io.File(java.io.File(context.filesDir, "mpv"), "fonts")
-        )
-        val fontNames = arrayOf("subfont.ttf", "sans-serif.ttf", "Arial.ttf")
-
-        for (dir in destDirs) {
-            if (!dir.exists()) {
-                dir.mkdirs()
-            }
-            for (name in fontNames) {
-                val destFile = java.io.File(dir, name)
-                copyFontToDest(context, destFile)
-            }
-        }
-    }
-
-    private fun copyFontToDest(context: Context, destFile: java.io.File): Boolean {
-        if (destFile.exists() && destFile.length() > 0) return true
-
-        // Try copying from assets
-        try {
-            context.assets.open("subfont.ttf").use { input ->
-                destFile.outputStream().use { output ->
-                    input.copyTo(output)
-                }
-            }
-            Log.d(TAG, "Successfully copied font from assets to ${destFile.absolutePath}")
-            return true
-        } catch (e: Exception) {
-            Log.w(TAG, "Failed to copy font from assets to ${destFile.absolutePath}: ${e.message}")
-        }
-
-        // Try copying system fallback fonts
-        val systemFonts = arrayOf(
-            "/system/fonts/Roboto-Regular.ttf",
-            "/system/fonts/NotoSans-Regular.ttf",
-            "/system/fonts/DroidSans.ttf"
-        )
-        for (path in systemFonts) {
-            val systemFontFile = java.io.File(path)
-            if (systemFontFile.exists()) {
-                try {
-                    systemFontFile.inputStream().use { input ->
-                        destFile.outputStream().use { output ->
-                            input.copyTo(output)
-                        }
-                    }
-                    Log.d(TAG, "Successfully copied system font from $path to ${destFile.absolutePath}")
-                    return true
-                } catch (e: Exception) {
-                    Log.w(TAG, "Failed to copy system font from $path to ${destFile.absolutePath}: ${e.message}")
-                }
-            }
-        }
-        return false
-    }
-
-    private fun writeFontsConf(context: Context, configDir: java.io.File) {
-        val configFile = java.io.File(configDir, "fonts.conf")
-        val cacheDir = java.io.File(context.cacheDir, "fontconfig")
-        if (!cacheDir.exists()) {
-            cacheDir.mkdirs()
-        }
-
-        val config = """
-            <fontconfig>
-                <dir>/system/fonts/</dir>
-                <dir>/product/fonts/</dir>
-
-                <cachedir>${cacheDir.absolutePath}</cachedir>
-
-                <alias>
-                    <family>serif</family>
-                    <prefer><family>Noto Serif</family></prefer>
-                </alias>
-
-                <alias>
-                    <family>sans-serif</family>
-                    <prefer>
-                        <family>Roboto</family>
-                        <family>Noto Sans</family>
-                    </prefer>
-                </alias>
-
-                <alias>
-                    <family>monospace</family>
-                    <prefer><family>Droid Sans Mono</family></prefer>
-                </alias>
-
-                <match target="pattern">
-                    <edit name="family" mode="append_last">
-                        <string>sans-serif</string>
-                    </edit>
-                </match>
-            </fontconfig>
-        """.trimIndent()
-
-        if (configFile.exists() && configFile.readText() == config) return
-
-        try {
-            configFile.writeText(config)
-            Log.d(TAG, "Successfully wrote fonts.conf to ${configFile.absolutePath}")
-        } catch (e: java.io.IOException) {
-            Log.w(TAG, "Failed to write fonts.conf: $e")
-        }
     }
 
     private fun MPV.safeSetOption(name: String, value: String) {
