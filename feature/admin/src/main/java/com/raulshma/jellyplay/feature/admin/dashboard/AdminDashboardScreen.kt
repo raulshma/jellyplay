@@ -67,6 +67,7 @@ fun AdminDashboardScreen(
     onStaleMedia: () -> Unit = {},
     onWatchedMediaCleanup: () -> Unit = {},
     onPlugins: () -> Unit = {},
+    onUsers: () -> Unit = {},
     viewModel: AdminDashboardViewModel = hiltViewModel(),
 ) {
     val state by viewModel.uiState.collectAsStateWithLifecycle()
@@ -167,6 +168,7 @@ fun AdminDashboardScreen(
                     onStaleMedia = onStaleMedia,
                     onWatchedMediaCleanup = onWatchedMediaCleanup,
                     onPlugins = onPlugins,
+                    onUsers = onUsers,
                     contentFocusRequester = contentFocusRequester,
                     modifier = Modifier.fillMaxSize(),
                 )
@@ -190,6 +192,7 @@ private fun DashboardContent(
     onStaleMedia: () -> Unit = {},
     onWatchedMediaCleanup: () -> Unit = {},
     onPlugins: () -> Unit = {},
+    onUsers: () -> Unit = {},
     contentFocusRequester: FocusRequester,
     modifier: Modifier = Modifier,
 ) {
@@ -292,7 +295,8 @@ private fun DashboardContent(
                 onUserStatistics = onUserStatistics,
                 onStaleMedia = onStaleMedia,
                 onWatchedMediaCleanup = onWatchedMediaCleanup,
-                onPlugins = onPlugins
+                onPlugins = onPlugins,
+                onUsers = onUsers,
             )
         }
     }

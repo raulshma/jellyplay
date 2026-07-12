@@ -8,6 +8,7 @@ import androidx.compose.ui.test.performClick
 import com.raulshma.jellyplay.core.model.SubtitleColor
 import com.raulshma.jellyplay.core.model.SubtitleEdgeType
 import com.raulshma.jellyplay.core.model.SubtitleStyle
+import com.raulshma.jellyplay.feature.player.video.engine.EngineCapabilities
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Rule
@@ -236,7 +237,9 @@ class SubtitleStyleSheetTest {
             }
         }
         composeTestRule.onNodeWithText("Reset").performClick()
-        assertEquals(SubtitleStyle(), receivedStyle)
+        // Reset re-enables applyCustomStyle (the button is only enabled when it is on),
+        // so the emitted style is the full-default with applyCustomStyle = true.
+        assertEquals(SubtitleStyle(applyCustomStyle = true), receivedStyle)
     }
 
     @Test
@@ -251,5 +254,77 @@ class SubtitleStyleSheetTest {
             }
         }
         composeTestRule.onNodeWithText("Font Size: 36sp").assertIsDisplayed()
+    }
+
+    @Test
+    fun subtitleStyleSheet_withAssOverrideCapability_showsAssOverrideControl() {
+        composeTestRule.setContent {
+            MaterialTheme {
+                SubtitleStyleSheet(
+                    currentStyle = SubtitleStyle(applyCustomStyle = true),
+                    onStyleChange = {},
+                    onDismiss = {},
+                    capabilities = EngineCapabilities(
+                        supportsSubtitleStyle = true,
+                        supportsAssOverride = true,
+                    ),
+                )
+            }
+        }
+        composeTestRule.onNodeWithText("ASS Styling").assertIsDisplayed()
+    }
+
+    @Test
+    fun subtitleStyleSheet_withoutAssOverrideCapability_hidesAssOverrideControl() {
+        composeTestRule.setContent {
+            MaterialTheme {
+                SubtitleStyleSheet(
+                    currentStyle = SubtitleStyle(applyCustomStyle = true),
+                    onStyleChange = {},
+                    onDismiss = {},
+                    capabilities = EngineCapabilities(
+                        supportsSubtitleStyle = true,
+                        supportsAssOverride = false,
+                    ),
+                )
+            }
+        }
+        composeTestRule.onNodeWithText("ASS Styling").assertDoesNotExist()
+    }
+
+    @Test
+    fun subtitleStyleSheet_withBorderStylesCapability_showsBorderSection() {
+        composeTestRule.setContent {
+            MaterialTheme {
+                SubtitleStyleSheet(
+                    currentStyle = SubtitleStyle(applyCustomStyle = true),
+                    onStyleChange = {},
+                    onDismiss = {},
+                    capabilities = EngineCapabilities(
+                        supportsSubtitleStyle = true,
+                        supportsBorderStyles = true,
+                    ),
+                )
+            }
+        }
+        composeTestRule.onNodeWithText("Border Style").assertIsDisplayed()
+    }
+
+    @Test
+    fun subtitleStyleSheet_withoutBorderStylesCapability_hidesBorderSection() {
+        composeTestRule.setContent {
+            MaterialTheme {
+                SubtitleStyleSheet(
+                    currentStyle = SubtitleStyle(applyCustomStyle = true),
+                    onStyleChange = {},
+                    onDismiss = {},
+                    capabilities = EngineCapabilities(
+                        supportsSubtitleStyle = true,
+                        supportsBorderStyles = false,
+                    ),
+                )
+            }
+        }
+        composeTestRule.onNodeWithText("Border Style").assertDoesNotExist()
     }
 }

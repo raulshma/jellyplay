@@ -4,9 +4,12 @@ import android.content.Context
 
 import android.graphics.Color
 import android.net.Uri
+import android.os.Build
 import android.os.Handler
 import android.os.Looper
 import android.view.View
+import android.view.ViewGroup
+import android.widget.FrameLayout
 import androidx.media3.common.AudioAttributes
 import androidx.media3.common.C
 import androidx.media3.common.Format
@@ -58,8 +61,16 @@ import com.raulshma.jellyplay.core.model.ExoPlayerEngineConfig
 import com.raulshma.jellyplay.core.model.ExoVideoScalingMode
 import com.raulshma.jellyplay.core.model.SubtitleStyle
 import com.raulshma.jellyplay.core.model.TrackType
+import com.raulshma.jellyplay.feature.player.video.subtitle.AssSupport
+import com.raulshma.jellyplay.feature.player.video.subtitle.FontProvider
 import com.raulshma.jellyplay.feature.player.video.subtitle.OffsettingSubtitleParserFactory
 import com.raulshma.jellyplay.feature.player.video.subtitle.SubtitleMimeMapper
+import io.github.peerless2012.ass.media.AssHandler
+import io.github.peerless2012.ass.media.factory.AssRenderersFactory
+import io.github.peerless2012.ass.media.kt.withAssMkvSupport
+import io.github.peerless2012.ass.media.parser.AssSubtitleParserFactory
+import io.github.peerless2012.ass.media.type.AssRenderType
+import io.github.peerless2012.ass.media.widget.AssSubtitleView
 import kotlinx.coroutines.channels.awaitClose
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -83,11 +94,13 @@ import okhttp3.OkHttpClient
  * view height, which grows dramatically in portrait).
  */
 private const val DEFAULT_SUBTITLE_SIZE_SP = 18f
+private const val TAG = "ExoPlayerEngine"
 
 class ExoPlayerEngine(
     private val context: Context,
     private val streamingOkHttpClient: OkHttpClient,
     bandwidthMeter: DefaultBandwidthMeter? = null,
+    private val fontProvider: FontProvider,
 ) : MediaEngine {
 
     private var engineScope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
@@ -135,6 +148,19 @@ class ExoPlayerEngine(
     private var trackSelector: DefaultTrackSelector? = null
     private var playerView: PlayerView? = null
     private var frameSizeListener: android.view.View.OnLayoutChangeListener? = null
+
+    // --- libass (ass-media) overlay state ---
+    // Only one of these is populated per session: when AssSupport detects an
+    // ASS/SSA subtitle source, assHandler/assOverlayView are created and the
+    // native SubtitleView is hidden in favour of the libass overlay. Non-ASS
+    // sessions leave all three null/false and run the unchanged DefaultSubtitle
+    // ParserFactory path.
+    private var assHandler: AssHandler? = null
+    private var assOverlayView: AssSubtitleView? = null
+    private var assEnabledForSession: Boolean = false
+    // Reflects whether the *currently selected* text track is ASS. Drives the
+    // SubtitleView/AssSubtitleView visibility toggle in applySubtitleStyleToView.
+    private var activeTrackIsAss: Boolean = false
     private var lastFrameW = -1
     private var lastFrameH = -1
     private var currentMediaItem: MediaItem? = null
@@ -293,8 +319,13 @@ class ExoPlayerEngine(
             )
         }
         if (request.maxVideoBitrate != null) {
+            // Local val captures the non-null value: maxVideoBitrate now lives
+            // in :feature:player:core (different module), so Kotlin can no
+            // longer smart-cast the cross-module public property. We are inside
+            // the null-check branch, so !! is provably safe.
+            val maxVideoBitrate = request.maxVideoBitrate!!
             selector.setParameters(
-                selector.buildUponParameters().setMaxVideoBitrate(request.maxVideoBitrate)
+                selector.buildUponParameters().setMaxVideoBitrate(maxVideoBitrate)
             )
         }
         if (exoCfg.preferredVideoMimeTypes.isNotEmpty()) {
@@ -324,11 +355,9 @@ class ExoPlayerEngine(
         }
         // Custom renderers factory injects the in-sink AudioProcessor chain
         // (channel mix → dynamics → ReplayGain → high-pass) into the video
-        // ExoPlayer path, mirroring the audio/music player's sink. This is the
-        // single point where real DSP channel mixing and per-track loudness
-        // normalization get applied to video playback; without it those effects
-        // are silently ignored here even though the config exposes them.
-        val renderersFactory = object : DefaultRenderersFactory(context) {
+        // ExoPlayer path. Kept as the base; the ASS path wraps it below so the
+        // AudioProcessor chain is preserved on both paths.
+        val baseRenderersFactory = object : DefaultRenderersFactory(context) {
             init {
                 setExtensionRendererMode(rendererMode)
                 setEnableDecoderFallback(exoCfg.enableDecoderFallback)
@@ -360,17 +389,60 @@ class ExoPlayerEngine(
             .setBackBuffer(exoCfg.backBufferDurationMs.coerceAtLeast(0), false)
             .build()
 
+        // Decide whether this session needs the libass (ass-media) path: only
+        // when an ASS/SSA subtitle source is present. Non-ASS sessions keep the
+        // existing DefaultSubtitleParserFactory path untouched, so the existing
+        // engine tests (which never carry ASS sources) are unaffected.
+        assEnabledForSession = AssSupport.hasAssSubtitles(request)
+        // Reset the active-track ASS flag: a reused engine (load() called again
+        // without release()) must not carry over stale activeTrackIsAss=true from
+        // a prior ASS track, which would hide subtitles until the next select.
+        activeTrackIsAss = false
+
+        val offsetUsProvider: () -> Long = { currentConfig.subtitleDelayMs * 1000L }
+
+        // Construct the AssHandler FIRST (before the delegate parser factory)
+        // so AssSubtitleParserFactory can reference it. On the non-ASS path the
+        // handler stays null and the DefaultSubtitleParserFactory is used.
+        if (assEnabledForSession) {
+            val renderType = if (Build.VERSION.SDK_INT <= Build.VERSION_CODES.P)
+                AssRenderType.OVERLAY_CANVAS else AssRenderType.OVERLAY_OPEN_GL
+            assHandler = AssHandler(renderType)
+        }
+
+        // One offset mechanism covers both paths: the OffsettingSubtitleParser
+        // Factory wraps whichever delegate is active, so the subtitle-delay slider
+        // shifts cues on the ASS path too (libass reads the shifted start times).
+        // On the ASS path the delegate is the concrete AssSubtitleParserFactory,
+        // which is also handed (un-wrapped) to withAssMkvSupport below — that
+        // extension requires the concrete type for embedded-MKV ASS extraction,
+        // while the offset wrapper handles side-loaded external ASS subs.
+        val assParserFactory: AssSubtitleParserFactory? =
+            if (assEnabledForSession) AssSubtitleParserFactory(assHandler!!) else null
+        val delegateParserFactory: androidx.media3.extractor.text.SubtitleParser.Factory =
+            assParserFactory ?: DefaultSubtitleParserFactory()
+        val offsetFactory = OffsettingSubtitleParserFactory(delegateParserFactory, offsetUsProvider)
+
         val extractorsFactory = DefaultExtractorsFactory().apply {
-            setSubtitleParserFactory(
-                OffsettingSubtitleParserFactory(
-                    DefaultSubtitleParserFactory(),
-                    offsetUsProvider = { currentConfig.subtitleDelayMs * 1000L }
-                )
-            )
+            setSubtitleParserFactory(offsetFactory)
         }
 
         val dataSourceFactory = createAuthenticatedDataSourceFactory(request.serverUrl, request.authToken, request.headers)
-        val msf = DefaultMediaSourceFactory(dataSourceFactory, extractorsFactory)
+
+        // On the ASS path, wrap the extractors with Matroska+ASS support (for
+        // ASS embedded in MKV) and the renderers with the libass text renderer;
+        // otherwise the plain base factories reproduce the pre-ASS build exactly.
+        // withAssMkvSupport takes the extractors factory and the BARE
+        // AssSubtitleParserFactory (the concrete type), per its signature.
+        val (finalRenderersFactory, msf) = if (assEnabledForSession) {
+            val assExtractors = extractorsFactory.withAssMkvSupport(assParserFactory!!, assHandler!!)
+            val renderers = AssRenderersFactory(assHandler!!, baseRenderersFactory)
+            val sourceFactory = DefaultMediaSourceFactory(dataSourceFactory, assExtractors)
+                .setSubtitleParserFactory(offsetFactory)
+            renderers to sourceFactory
+        } else {
+            baseRenderersFactory to DefaultMediaSourceFactory(dataSourceFactory, extractorsFactory)
+        }
 
         // DRM: attach a DrmSessionManager only when the caller supplied one via
         // EngineConfig.drmSessionManagerProvider. This is the single extension
@@ -397,7 +469,7 @@ class ExoPlayerEngine(
             request.uri.startsWith("rtmp", ignoreCase = true)
 
         val exo = ExoPlayer.Builder(context)
-            .setRenderersFactory(renderersFactory)
+            .setRenderersFactory(finalRenderersFactory)
             .setMediaSourceFactory(msf)
             .setTrackSelector(selector)
             .setLoadControl(loadControl)
@@ -413,7 +485,27 @@ class ExoPlayerEngine(
         exo.addListener(listener)
         exo.addAnalyticsListener(decoderCountersListener)
         player = exo
-        
+
+        // Wire the AssHandler to the player and inject the bundled fallback
+        // font (and any user-installed fonts) so libass can resolve families.
+        // ass-media's font API is per-file byte[] (AssHandler.addFont), not a
+        // directory path, so we enumerate FontProvider's fonts dir and feed each
+        // .ttf. Mirrors mpv's sub-fonts-dir pointing at the same directory.
+        assHandler?.let { handler ->
+            handler.init(exo)
+            runCatching {
+                val fontsDir = fontProvider.provideFontsDir()
+                fontsDir.listFiles { file -> file.extension.equals("ttf", ignoreCase = true) }
+                    ?.forEach { ttf ->
+                        runCatching {
+                            ttf.readBytes().takeIf { it.isNotEmpty() }?.let { bytes ->
+                                handler.addFont(ttf.nameWithoutExtension, bytes)
+                            }
+                        }
+                    }
+            }
+        }
+
         // Build media item
         val metadataBuilder = MediaMetadata.Builder().setTitle(request.title)
         if (request.artworkUri != null) {
@@ -542,6 +634,17 @@ class ExoPlayerEngine(
         _availableTracks.value = emptyList()
         _bufferedPositionMs.value = 0L
         _videoStats.value = EngineVideoStats()
+
+        // Drop the libass overlay + handler so the next load() rebuilds them
+        // fresh. The AssSubtitleView is a child of the content frame, which was
+        // torn down with playerView above; nulling the references avoids leaks
+        // and lets the GC reclaim the native Ass/AssRender handles the handler
+        // owns. (ass-media has no explicit release() on AssHandler; it relies on
+        // the player release propagating to the renderer it injected.)
+        assOverlayView = null
+        assHandler = null
+        assEnabledForSession = false
+        activeTrackIsAss = false
     }
 
     override fun play() = runOnPlayerThread {
@@ -584,9 +687,24 @@ class ExoPlayerEngine(
 
     override fun setMuted(muted: Boolean) = runOnPlayerThread {
         val p = player ?: return@runOnPlayerThread
-        val target = if (muted) 0f else lastUnmuteVolume.coerceIn(0.05f, 1f)
-        p.volume = target
-        MediaStreamVolume.setNormalized(context, target)
+        if (muted) {
+            // Snapshot the system STREAM_MUSIC level the user actually hears
+            // (set via gesture path / hardware keys, which bypass the engine
+            // API). Snapshotting p.volume instead is wrong — it stays at its
+            // 1f default when volume was adjusted outside the engine, so unmute
+            // would restore full volume.
+            val sysVol = MediaStreamVolume.getNormalized(context)
+            if (sysVol > 0f) lastUnmuteVolume = sysVol
+            p.volume = 0f
+            MediaStreamVolume.setNormalized(context, 0f)
+        } else {
+            // Restore the system stream to its pre-mute level and set the
+            // engine software gain back to unity (1f). Do NOT also scale
+            // p.volume by the system level — that would double-attenuate.
+            val target = lastUnmuteVolume.coerceIn(0.05f, 1f)
+            p.volume = 1f
+            MediaStreamVolume.setNormalized(context, target)
+        }
     }
 
     override fun updateConfig(config: EngineConfig) {
@@ -653,6 +771,32 @@ class ExoPlayerEngine(
             }
         }
         selector.setParameters(params)
+
+        // Track-type toggle for ASS vs non-ASS visibility. Only relevant on the
+        // ASS-enabled session: detect whether the *selected* subtitle track is
+        // an ASS/SSA track (Format.sampleMimeType == TEXT_SSA) and flip the
+        // SubtitleView/AssSubtitleView visibility accordingly. On non-ASS
+        // sessions activeTrackIsAss stays false and the native view is used.
+        if (type == TrackType.SUBTITLE && assEnabledForSession) {
+            val newlyAss = if (index < 0) {
+                false
+            } else {
+                val groups = p.currentTracks.groups.filter { it.type == exoType }
+                val groupIndex = index.coerceIn(groups.indices)
+                if (groupIndex in groups.indices) {
+                    // The override targets every track in the group; ASS tracks
+                    // are homogeneous within a group, so the first format's mime
+                    // is representative.
+                    groups[groupIndex].getTrackFormat(0).sampleMimeType == MimeTypes.TEXT_SSA
+                } else {
+                    false
+                }
+            }
+            if (newlyAss != activeTrackIsAss) {
+                activeTrackIsAss = newlyAss
+                playerView?.let { applySubtitleStyleToView(it, currentConfig.subtitleStyle) }
+            }
+        }
     }
 
     override fun setMaxVideoBitrate(bps: Int?) = runOnPlayerThread {
@@ -670,9 +814,9 @@ class ExoPlayerEngine(
         val pv = PlayerView(context).apply {
             this.player = this@ExoPlayerEngine.player
             useController = false
-            layoutParams = android.widget.FrameLayout.LayoutParams(
-                android.view.ViewGroup.LayoutParams.MATCH_PARENT,
-                android.view.ViewGroup.LayoutParams.MATCH_PARENT,
+            layoutParams = FrameLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT,
+                ViewGroup.LayoutParams.MATCH_PARENT,
             )
         }
         pv.post { reparentSubtitleViewIntoVideoFrame(pv) }
@@ -695,11 +839,45 @@ class ExoPlayerEngine(
             if (w == lastFrameW && h == lastFrameH) return@OnLayoutChangeListener
             lastFrameW = w
             lastFrameH = h
-            pv.post { reparentSubtitleViewIntoVideoFrame(pv) }
+            pv.post {
+                reparentSubtitleViewIntoVideoFrame(pv)
+                // ASS coordinates are absolute to the video frame; the overlay
+                // is MATCH_PARENT inside the content frame so it already tracks
+                // the letterboxed geometry, but force a re-layout to be safe.
+                assOverlayView?.requestLayout()
+            }
         }
         frameSizeListener = layoutListener
         pv.addOnLayoutChangeListener(layoutListener)
         playerView = pv
+
+        // libass overlay: only created for ASS-enabled sessions. Inserted into
+        // the content frame alongside the native SubtitleView so ASS coordinates
+        // map to the letterboxed video rectangle, not the full screen.
+        if (assEnabledForSession && assHandler != null) {
+            val handler = assHandler!!
+            val assView = AssSubtitleView(context, handler).apply {
+                layoutParams = FrameLayout.LayoutParams(
+                    ViewGroup.LayoutParams.MATCH_PARENT,
+                    ViewGroup.LayoutParams.MATCH_PARENT,
+                )
+                // Hidden until an ASS track is selected (see applySubtitleStyleToView /
+                // selectTrack toggle). Non-ASS tracks keep using the native SubtitleView.
+                visibility = if (activeTrackIsAss) View.VISIBLE else View.GONE
+            }
+            assOverlayView = assView
+            pv.post {
+                val contentFrame = pv.findViewById<ViewGroup>(androidx.media3.ui.R.id.exo_content_frame)
+                contentFrame?.addView(
+                    assView,
+                    FrameLayout.LayoutParams(
+                        ViewGroup.LayoutParams.MATCH_PARENT,
+                        ViewGroup.LayoutParams.MATCH_PARENT,
+                    ),
+                )
+            }
+        }
+
         applySubtitleStyleToView(pv, currentConfig.subtitleStyle)
         return pv
     }
@@ -779,7 +957,33 @@ class ExoPlayerEngine(
                 sv.setFixedTextSize(android.util.TypedValue.COMPLEX_UNIT_SP, DEFAULT_SUBTITLE_SIZE_SP)
             }
             sv.setBottomPaddingFraction(style.verticalPosition)
+            // Track-type visibility toggle: when the active subtitle track is
+            // ASS, libass owns rendering via [assOverlayView] and the native
+            // SubtitleView must be hidden (and vice-versa). Non-ASS sessions and
+            // sessions without an ASS handler always show the native view.
+            sv.setVisibility(if (activeTrackIsAss && assOverlayView != null) View.GONE else View.VISIBLE)
         }
+
+        // libass (AssSubtitleView) styling. ass-media 0.4.0 renders ASS via
+        // libass and exposes NO colour/edge override API, so FORCE (colours,
+        // borders, edges) remains DEGRADED to as-authored on this engine — only
+        // mpv honours FORCE fully. SCALE (font size) IS now honoured: ass-kt
+        // 0.4.0's AssRender.setFontScale is reachable at compile time (direct
+        // dependency), and AssHandler.render hands back the live AssRender. The
+        // render is created lazily on the first frame (createRenderIfNeeded),
+        // so it may be null here until playback starts — guard accordingly.
+        // Non-ASS tracks use the native SubtitleView path sized above.
+        if (activeTrackIsAss && assEnabledForSession) {
+            runCatching {
+                assHandler?.render?.setFontScale(style.fontSize / 24f)
+            }.onFailure { e ->
+                android.util.Log.w(TAG, "setFontScale on AssRender failed", e)
+            }
+        }
+        // The overlay renders ASS; its visibility is driven by [activeTrackIsAss]
+        // (set in selectTrack), mirrored by the native SubtitleView toggling above
+        // so exactly one of the two is shown.
+        assOverlayView?.setVisibility(if (activeTrackIsAss) View.VISIBLE else View.GONE)
     }
 
     override fun setAspectRatio(mode: Int, ratio: Float?) {

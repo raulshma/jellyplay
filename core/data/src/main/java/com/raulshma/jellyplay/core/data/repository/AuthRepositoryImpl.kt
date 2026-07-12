@@ -277,6 +277,7 @@ class AuthRepositoryImpl @Inject constructor(
                         accessToken = token,
                         serverId = serverId,
                         isAdmin = userEntity.isAdmin,
+                        canDeleteContent = userEntity.canDeleteContent,
                         maxParentalAgeRating = userEntity.maxParentalAgeRating,
                         primaryImageTag = userEntity.primaryImageTag,
                         enabledFolderIds = userEntity.enabledFolderIds?.let {
@@ -377,6 +378,7 @@ class AuthRepositoryImpl @Inject constructor(
             primaryImageTag = user.primaryImageTag,
             maxParentalAgeRating = user.maxParentalAgeRating,
             isAdmin = user.isAdmin,
+            canDeleteContent = user.canDeleteContent,
             enabledFolderIds = json.encodeToString(user.enabledFolderIds),
             lastConnected = System.currentTimeMillis(),
         )
@@ -416,6 +418,7 @@ class AuthRepositoryImpl @Inject constructor(
         accessToken = tokenCipher.decrypt(accessToken) ?: "",
         serverId = serverId,
         isAdmin = isAdmin,
+        canDeleteContent = canDeleteContent,
         maxParentalAgeRating = maxParentalAgeRating,
         primaryImageTag = primaryImageTag,
         enabledFolderIds = enabledFolderIds?.let { raw ->

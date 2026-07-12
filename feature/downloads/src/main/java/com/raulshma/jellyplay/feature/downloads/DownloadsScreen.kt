@@ -3,6 +3,7 @@ package com.raulshma.jellyplay.feature.downloads
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.animateFloatAsState
 import com.raulshma.jellyplay.core.designsystem.theme.ShapeCache
+import com.raulshma.jellyplay.core.designsystem.theme.StatusColors
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.slideInVertically
 import androidx.compose.foundation.clickable
@@ -318,6 +319,13 @@ private fun DownloadItemRow(
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                         )
                     }
+                    DownloadStatus.QUEUED -> {
+                        Text(
+                            "Queued",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = StatusColors.info,
+                        )
+                    }
                     DownloadStatus.COMPLETED -> {
                         Text(
                             formatBytes(item.downloadedBytes),
@@ -389,6 +397,20 @@ private fun DownloadItemRow(
                     )
                 }
                 DownloadStatus.PENDING -> {
+                    DownloadActionButton(
+                        icon = Tabler.Outline.ArrowUp,
+                        contentDescription = "Move to Front",
+                        tint = MaterialTheme.colorScheme.primary,
+                        onClick = onMoveToFront,
+                    )
+                    DownloadActionButton(
+                        icon = Tabler.Outline.Trash,
+                        contentDescription = "Cancel",
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                        onClick = onCancel,
+                    )
+                }
+                DownloadStatus.QUEUED -> {
                     DownloadActionButton(
                         icon = Tabler.Outline.ArrowUp,
                         contentDescription = "Move to Front",

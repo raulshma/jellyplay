@@ -209,6 +209,7 @@ class AuthApiClientImpl @Inject constructor(
             serverAddress = serverInfo.address,
             accessToken = accessTokenValue,
             isAdmin = policy?.isAdministrator ?: false,
+            canDeleteContent = policy?.enableContentDeletion ?: false,
             maxParentalAgeRating = policy?.maxParentalRating,
             primaryImageTag = userDto.primaryImageTag,
             enabledFolderIds = if (policy?.enableAllFolders == false) {

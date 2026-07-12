@@ -141,6 +141,7 @@ class VideoPlayerCleanupTest {
         val preferencesStore = mockk<UserPreferencesStore>(relaxed = true)
         val sessionManager = mockk<PlaybackSessionManager>(relaxed = true)
         val castManager = mockk<CastManager>(relaxed = true)
+        val jellyfinRemotePlayCastStrategy = mockk<com.raulshma.jellyplay.core.data.cast.remote.JellyfinRemotePlayCastStrategy>(relaxed = true)
         val syncPlayManager = mockk<SyncPlayManager>(relaxed = true)
         val okHttpClient = mockk<OkHttpClient>(relaxed = true)
         val adaptiveBitrateManager = mockk<AdaptiveBitrateManager>(relaxed = true)
@@ -166,6 +167,7 @@ class VideoPlayerCleanupTest {
             preferencesStore = preferencesStore,
             sessionManager = sessionManager,
             castManager = castManager,
+            jellyfinRemotePlayCastStrategy = jellyfinRemotePlayCastStrategy,
             syncPlayManager = syncPlayManager,
             okHttpClient = okHttpClient,
             adaptiveBitrateManager = adaptiveBitrateManager,
@@ -174,7 +176,12 @@ class VideoPlayerCleanupTest {
             videoMiniPlayerState = videoMiniPlayerState,
             sleepTimerManager = sleepTimerManager,
             userMessageBus = UserMessageBus(),
-            playerEngineFactory = com.raulshma.jellyplay.feature.player.video.engine.PlayerEngineFactory(context),
+            playerEngineFactory = com.raulshma.jellyplay.feature.player.video.engine.PlayerEngineFactory(
+                context,
+                okHttpClient,
+                mockk<com.raulshma.jellyplay.feature.player.video.subtitle.FontProvider>(relaxed = true),
+            ),
+            fontProvider = mockk(relaxed = true),
             savedStateHandle = androidx.lifecycle.SavedStateHandle(),
         )
 

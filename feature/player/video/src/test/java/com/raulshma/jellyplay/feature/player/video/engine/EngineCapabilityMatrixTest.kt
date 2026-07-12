@@ -47,6 +47,8 @@ class EngineCapabilityMatrixTest {
             caps.supportsDialogueBoost, caps.supportsNightMode, caps.supportsAudioNormalization,
             caps.supportsChannelMixing, caps.supportsVideoFilters,
             caps.supportsLiveQualitySwitch, caps.supportsBandwidthEstimate,
+            caps.supportsAssOverride, caps.supportsAssStyleOverride, caps.supportsFontFamily,
+            caps.supportsFreeFormColors, caps.supportsBorderStyles,
         ).forEach { assertFalse("EXTERNAL must advertise no capabilities", it) }
     }
 
@@ -123,5 +125,39 @@ class EngineCapabilityMatrixTest {
         assertNotEquals(EngineCapabilityMatrix.EXO_PLAYER, EngineCapabilityMatrix.MPV)
         assertNotEquals(EngineCapabilityMatrix.EXO_PLAYER, EngineCapabilityMatrix.LIBVLC)
         assertNotEquals(EngineCapabilityMatrix.MPV, EngineCapabilityMatrix.LIBVLC)
+    }
+
+    // ── ASS / SSA subtitle capability flags ──
+
+    @Test
+    fun exoPlayer_assCapabilities() {
+        val c = EngineCapabilityMatrix.EXO_PLAYER
+        assertTrue(c.supportsAssOverride)
+        // ExoPlayer renders ASS but cannot apply user style overrides to it.
+        assertFalse(c.supportsAssStyleOverride)
+        assertTrue(c.supportsFontFamily)
+        assertTrue(c.supportsFreeFormColors)
+        assertTrue(c.supportsBorderStyles)
+    }
+
+    @Test
+    fun mpv_assCapabilities() {
+        val c = EngineCapabilityMatrix.MPV
+        assertTrue(c.supportsAssOverride)
+        // mpv alone applies user style overrides (colors/edges/Force) to ASS.
+        assertTrue(c.supportsAssStyleOverride)
+        assertTrue(c.supportsFontFamily)
+        assertTrue(c.supportsFreeFormColors)
+        assertTrue(c.supportsBorderStyles)
+    }
+
+    @Test
+    fun libvlc_noAssCapabilities() {
+        val c = EngineCapabilityMatrix.LIBVLC
+        assertFalse(c.supportsAssOverride)
+        assertFalse(c.supportsAssStyleOverride)
+        assertTrue(c.supportsFontFamily)          // freetype font path still works
+        assertFalse(c.supportsFreeFormColors)
+        assertFalse(c.supportsBorderStyles)
     }
 }

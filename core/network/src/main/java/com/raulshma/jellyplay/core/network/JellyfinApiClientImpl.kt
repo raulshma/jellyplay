@@ -18,6 +18,8 @@ import com.raulshma.jellyplay.core.network.api.PluginApiClient
 import com.raulshma.jellyplay.core.network.api.PluginApiClientImpl
 import com.raulshma.jellyplay.core.network.api.SyncPlayApiClient
 import com.raulshma.jellyplay.core.network.api.SyncPlayApiClientImpl
+import com.raulshma.jellyplay.core.network.api.UserApiClient
+import com.raulshma.jellyplay.core.network.api.UserApiClientImpl
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -32,6 +34,7 @@ class JellyfinApiClientImpl @Inject constructor(
     private val metadataClient: MetadataApiClientImpl,
     private val mediaInfoClient: MediaInfoApiClientImpl,
     private val pluginClient: PluginApiClientImpl,
+    private val userClient: UserApiClientImpl,
 ) : JellyfinApiClient,
     AuthApiClient by authClient,
     LibraryApiClient by libraryClient,
@@ -41,4 +44,5 @@ class JellyfinApiClientImpl @Inject constructor(
     AdminApiClient by adminClient,
     MetadataApiClient by metadataClient,
     MediaInfoApiClient by mediaInfoClient,
-    PluginApiClient by pluginClient
+    PluginApiClient by pluginClient,
+    UserApiClient by userClient

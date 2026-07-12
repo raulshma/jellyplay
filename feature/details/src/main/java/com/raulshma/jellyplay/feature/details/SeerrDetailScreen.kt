@@ -4,7 +4,6 @@ import androidx.compose.animation.*
 import com.raulshma.jellyplay.core.designsystem.theme.RatingColors
 import com.raulshma.jellyplay.core.designsystem.theme.ShapeCache
 import com.raulshma.jellyplay.core.designsystem.theme.isLightColor
-import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -60,10 +59,8 @@ import com.raulshma.jellyplay.core.designsystem.theme.LocalIsSynthwave
 import com.raulshma.jellyplay.core.designsystem.theme.rememberIsLightTheme
 import com.raulshma.jellyplay.core.designsystem.theme.LocalIsSoothingTheme
 import com.raulshma.jellyplay.core.ui.components.InlineTrailerPlayer
-import com.raulshma.jellyplay.core.designsystem.theme.LocalArtworkColors
 import com.raulshma.jellyplay.core.model.MediaType
 import com.raulshma.jellyplay.core.model.seerr.*
-import com.raulshma.jellyplay.core.ui.adaptive.AdaptiveBackdropHeight
 import com.raulshma.jellyplay.core.ui.adaptive.LocalAdaptiveInfo
 import com.raulshma.jellyplay.core.ui.adaptive.WindowSizeClass
 import com.raulshma.jellyplay.core.ui.adaptive.contentPadding
@@ -71,7 +68,6 @@ import com.raulshma.jellyplay.core.ui.adaptive.detailBodyMaxWidth
 import com.raulshma.jellyplay.core.ui.adaptive.rowCardWidth
 import com.raulshma.jellyplay.core.ui.components.CircleBgBackButton
 import com.raulshma.jellyplay.core.ui.components.ErrorScreen
-import com.raulshma.jellyplay.core.ui.components.LocalNavigationBarColor
 import com.raulshma.jellyplay.core.ui.components.SeerrMediaCard
 import com.raulshma.jellyplay.core.ui.components.SeerrRequestDialog
 import com.raulshma.jellyplay.core.ui.components.rememberSeerrCardLoadingState
@@ -321,7 +317,6 @@ private fun SeerrDetailContent(
     val isExpanded = adaptiveInfo.windowSizeClass != WindowSizeClass.Compact
     val isTv = LocalTvMode.current
     val density = LocalDensity.current
-    val artworkColors = LocalArtworkColors.current
 
     val isSynthwave = LocalIsSynthwave.current
     val isSoothing = LocalIsSoothingTheme.current
@@ -359,56 +354,23 @@ private fun SeerrDetailContent(
     }
     var autoplayEmbedFailed by remember { mutableStateOf(false) }
 
-    val backdropHeight = when {
-        isTv -> AdaptiveBackdropHeight.Tv
-        adaptiveInfo.isLandscape && isExpanded -> AdaptiveBackdropHeight.LandscapeExpanded
-        adaptiveInfo.windowSizeClass == WindowSizeClass.Expanded -> AdaptiveBackdropHeight.Expanded
-        else -> AdaptiveBackdropHeight.Portrait
-    }
-    val baseBackdropHeight = with(density) { (backdropHeight.toPx() / 1.2f).toDp() }
-    val collapsedHeight = with(density) { backdropHeight.toPx() }
-    val spacerHeightPx = with(density) { (baseBackdropHeight - 150.dp).toPx() }
-    val scrollOffset by remember {
-        derivedStateOf {
-            (if (listState.firstVisibleItemIndex > 0) spacerHeightPx else 0f) + listState.firstVisibleItemScrollOffset.toFloat()
-        }
-    }
-    val scrollFraction by remember { derivedStateOf { (scrollOffset / collapsedHeight).coerceIn(0f, 1f) } }
-
-    val isLightTheme = rememberIsLightTheme()
-
-    val baseOverlayColor = artworkColors?.darkMuted
-        ?: artworkColors?.dominant
-        ?: MaterialTheme.colorScheme.background
-
-    val targetBackgroundColor = when {
-        isSynthwave -> com.raulshma.jellyplay.core.designsystem.theme.ThemeVariantColors.SYNTHWAVE_DETAIL_BG
-        isSoothing -> MaterialTheme.colorScheme.background
-        isLightTheme -> MaterialTheme.colorScheme.background
-        else -> lerp(baseOverlayColor, Color.Black, 0.65f)
-    }
-    val backgroundColor by animateColorAsState(
-        targetValue = targetBackgroundColor,
-        animationSpec = MaterialTheme.motionScheme.slowEffectsSpec(),
-        label = "backgroundColor",
-    )
-
-    val navBarColor = LocalNavigationBarColor.current
-    SideEffect {
-        // Write the settled target, not each interpolated animation frame —
-        // this state drives an animateColorAsState at the app root, so feeding
-        // it every frame recomposes the whole nav subtree ~18x per transition.
-        if (navBarColor.value != targetBackgroundColor) navBarColor.value = targetBackgroundColor
-    }
-
-    val appBarColor by animateFloatAsState(
-        targetValue = if (scrollFraction > 0.7f) 1f else 0f,
-        animationSpec = MaterialTheme.motionScheme.defaultEffectsSpec(),
-        label = "appBarColor",
-    )
-
     val contentFocusRequester = remember { FocusRequester() }
     val hasContent = movieDetail != null || tvDetail != null
+
+    // Reuse the shared detail scroll-state controller instead of re-implementing
+    // the backdrop-height/scroll-offset/fraction/color/nav-bar-sync chain here.
+    // Behaviour is identical; consolidating removes ~40 lines of duplicated
+    // scroll math and keeps the two detail surfaces from drifting apart.
+    val detailScrollState = rememberDetailScrollState(listState, hasContent)
+    val backdropHeight = detailScrollState.backdropHeight
+    val baseBackdropHeight = detailScrollState.baseBackdropHeight
+    val scrollOffset = detailScrollState.scrollOffset
+    val scrollFraction = detailScrollState.scrollFraction
+    val backgroundColor = detailScrollState.backgroundColor
+    // Local alias for the media-detail "scrollCollapsed" value; SeerrDetail
+    // historically named this appBarColor.
+    val appBarColor = detailScrollState.scrollCollapsed
+
     val scrollBehavior = TopAppBarDefaults.exitUntilCollapsedScrollBehavior(rememberTopAppBarState())
 
     if (isTv) {
