@@ -28,4 +28,16 @@ object MediaStreamVolume {
         // changed" feedback tone on every remote tick.
         am.setStreamVolume(AudioManager.STREAM_MUSIC, target, 0)
     }
+
+    /**
+     * Read the current [AudioManager.STREAM_MUSIC] volume as a normalized
+     * 0f..1f ratio of the stream's max index. Returns 1f if the audio service
+     * is unavailable or the stream max is non-positive (treated as "full").
+     */
+    fun getNormalized(context: Context): Float {
+        val am = context.getSystemService(Context.AUDIO_SERVICE) as? AudioManager ?: return 1f
+        val max = am.getStreamMaxVolume(AudioManager.STREAM_MUSIC)
+        if (max <= 0) return 1f
+        return am.getStreamVolume(AudioManager.STREAM_MUSIC).toFloat() / max.toFloat()
+    }
 }

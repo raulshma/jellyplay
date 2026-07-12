@@ -589,9 +589,24 @@ class ExoPlayerEngine(
 
     override fun setMuted(muted: Boolean) = runOnPlayerThread {
         val p = player ?: return@runOnPlayerThread
-        val target = if (muted) 0f else lastUnmuteVolume.coerceIn(0.05f, 1f)
-        p.volume = target
-        MediaStreamVolume.setNormalized(context, target)
+        if (muted) {
+            // Snapshot the system STREAM_MUSIC level the user actually hears
+            // (set via gesture path / hardware keys, which bypass the engine
+            // API). Snapshotting p.volume instead is wrong — it stays at its
+            // 1f default when volume was adjusted outside the engine, so unmute
+            // would restore full volume.
+            val sysVol = MediaStreamVolume.getNormalized(context)
+            if (sysVol > 0f) lastUnmuteVolume = sysVol
+            p.volume = 0f
+            MediaStreamVolume.setNormalized(context, 0f)
+        } else {
+            // Restore the system stream to its pre-mute level and set the
+            // engine software gain back to unity (1f). Do NOT also scale
+            // p.volume by the system level — that would double-attenuate.
+            val target = lastUnmuteVolume.coerceIn(0.05f, 1f)
+            p.volume = 1f
+            MediaStreamVolume.setNormalized(context, target)
+        }
     }
 
     override fun updateConfig(config: EngineConfig) {

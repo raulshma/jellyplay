@@ -75,7 +75,9 @@ class DownloadWorker @AssistedInject constructor(
         }
 
         val existingBytes = entity.downloadedBytes
-        dao.updateProgress(downloadId, existingBytes, DownloadStatus.DOWNLOADING.name)
+        // Mark the row QUEUED while it waits for a concurrency slot so the UI
+        // can show a distinct indicator instead of a stalled DOWNLOADING row.
+        dao.updateProgress(downloadId, existingBytes, DownloadStatus.QUEUED.name)
 
         val activeUserId = preferencesStore.activeUserId.firstOrNull()
         val accessToken = activeUserId?.let { uid ->
@@ -89,6 +91,15 @@ class DownloadWorker @AssistedInject constructor(
         // Gate the actual transfer on a shared concurrency slot so at most
         // `maxConcurrentDownloads` run at once; the rest block here.
         return concurrencyLimiter.withPermit {
+            // Re-check status now that a slot is ours: the user may have paused
+            // or cancelled while the row was QUEUED.
+            val statusAfterQueue = dao.getStatus(downloadId)
+            if (statusAfterQueue == DownloadStatus.PAUSED.name ||
+                statusAfterQueue == DownloadStatus.CANCELLED.name
+            ) {
+                return@withPermit Result.success()
+            }
+            dao.updateProgress(downloadId, existingBytes, DownloadStatus.DOWNLOADING.name)
             try {
             if (existingBytes > 0L) {
                 performSingleConnectionDownload(
