@@ -229,7 +229,10 @@ class DownloadRepositoryImpl @Inject constructor(
 
     override suspend fun pauseDownload(id: String): Result<Unit> = runCatching {
         val entity = downloadDao.getDownloadById(id) ?: return@runCatching
-        if (entity.status == DownloadStatus.DOWNLOADING.name || entity.status == DownloadStatus.PENDING.name) {
+        if (entity.status == DownloadStatus.DOWNLOADING.name ||
+            entity.status == DownloadStatus.QUEUED.name ||
+            entity.status == DownloadStatus.PENDING.name
+        ) {
             downloadDao.updateProgress(id, entity.downloadedBytes, DownloadStatus.PAUSED.name)
         }
     }
