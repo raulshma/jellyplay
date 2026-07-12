@@ -51,6 +51,8 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.composables.icons.tabler.Tabler
 import com.composables.icons.tabler.outline.PlayerPlay
+import com.composables.icons.tabler.outline.SortAscending2
+import com.composables.icons.tabler.outline.SortDescending2
 import com.raulshma.jellyplay.core.designsystem.theme.LocalIsSoothingTheme
 import com.raulshma.jellyplay.core.designsystem.theme.LocalIsSynthwave
 import com.raulshma.jellyplay.core.designsystem.theme.ShapeCache
@@ -97,6 +99,8 @@ internal fun SeasonsSection(
         else -> 0
     }
     var selectedSeasonIndex by remember { mutableStateOf(initialSeasonIndex) }
+    // Episode sort order within a season. Default: newest episode first.
+    var episodesDescending by remember { mutableStateOf(true) }
 
     LaunchedEffect(selectedSeasonIndex) {
         val season = seasons.getOrNull(selectedSeasonIndex)
@@ -107,12 +111,39 @@ internal fun SeasonsSection(
 
     Column {
         FadingItem {
-            Text(
-                text = stringResource(R.string.detail_section_seasons),
-                style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.SemiBold),
-                modifier = Modifier.padding(horizontal = 24.dp),
-                color = MaterialTheme.colorScheme.onSurface
-            )
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 24.dp),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Text(
+                    text = stringResource(R.string.detail_section_seasons),
+                    style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.SemiBold),
+                    color = MaterialTheme.colorScheme.onSurface,
+                )
+                val sortFocusState = rememberTvFocusState(focusedScale = 1.1f)
+                Surface(
+                    modifier = Modifier
+                        .clip(ShapeCache.smooth16)
+                        .then(sortFocusState.focusModifier)
+                        .then(Modifier.tvFocusIndicator(sortFocusState, ShapeCache.smooth16))
+                        .clickable { episodesDescending = !episodesDescending },
+                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.08f),
+                    contentColor = MaterialTheme.colorScheme.onSurface,
+                    shape = ShapeCache.smooth16,
+                ) {
+                    Icon(
+                        imageVector = if (episodesDescending) Tabler.Outline.SortDescending2 else Tabler.Outline.SortAscending2,
+                        contentDescription = stringResource(
+                            if (episodesDescending) R.string.detail_cd_sort_oldest_first
+                            else R.string.detail_cd_sort_newest_first
+                        ),
+                        modifier = Modifier.padding(8.dp),
+                    )
+                }
+            }
         }
 
         Spacer(Modifier.height(16.dp))
@@ -180,6 +211,8 @@ internal fun SeasonsSection(
             label = "seasonEpisodes",
         ) { (seasonIdx, episodeCount) ->
             val currentEpisodes = seasons.getOrNull(seasonIdx)?.let { episodes[it.id] }
+                ?.sortedBy { it.episodeNumber ?: it.indexNumber ?: Int.MAX_VALUE }
+                ?.let { sorted -> if (episodesDescending) sorted.reversed() else sorted }
             val currentIsFetched = seasons.getOrNull(seasonIdx)?.id?.let { fetchedSeasonIds.contains(it) } ?: false
             val currentIsLoading = currentEpisodes == null && seasons.getOrNull(seasonIdx) != null && !currentIsFetched
 

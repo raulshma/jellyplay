@@ -41,6 +41,8 @@
     <string name="detail_cd_close">Close</string>
     <string name="detail_cd_collapse">Collapse</string>
     <string name="detail_cd_expand">Expand</string>
+    <string name="detail_cd_sort_oldest_first">Sort oldest first</string>
+    <string name="detail_cd_sort_newest_first">Sort newest first</string>
 
     <!-- ── Episode / season card labels ─────────────────────────────────── -->
     <string name="detail_season_format">Season %1$d</string>
