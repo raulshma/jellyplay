@@ -30,6 +30,7 @@ import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
+import com.raulshma.jellyplay.core.model.AudioCacheNetworkPolicy
 import com.raulshma.jellyplay.core.model.AudioNormalizationMode
 import com.raulshma.jellyplay.core.model.EffectStrength
 import com.raulshma.jellyplay.core.model.ReverbPreset
@@ -843,6 +844,63 @@ fun AudioSettingsScreen(
             onDismiss = { activeDialog = AudioSettingsDialog.None },
             onConfirm = {
                 viewModel.setVolumeBoostGain(it.toInt())
+                activeDialog = AudioSettingsDialog.None
+            },
+        )
+    }
+
+    if (activeDialog is AudioSettingsDialog.AudioCacheSizePicker) {
+        val sizes = listOf(128, 256, 512, 1024, 2048, 4096)
+        SettingsChipPickerSheet(
+            title = stringResource(R.string.settings_audio_cache_size),
+            options = sizes.map { "$it MB" },
+            selectedIndex = sizes.indexOf(preferences.audioCacheSizeMb),
+            onDismiss = { activeDialog = AudioSettingsDialog.None },
+            onSelect = { index ->
+                viewModel.setAudioCacheSizeMb(sizes[index])
+                activeDialog = AudioSettingsDialog.None
+            },
+        )
+    }
+
+    if (activeDialog is AudioSettingsDialog.AudioPrefetchLookaheadPicker) {
+        val lookahead = listOf(0, 1, 2, 3, 5, 8)
+        SettingsChipPickerSheet(
+            title = stringResource(R.string.settings_audio_prefetch_lookahead),
+            options = lookahead.map { if (it == 0) "Off" else "$it" },
+            selectedIndex = lookahead.indexOf(preferences.audioPrefetchLookahead),
+            onDismiss = { activeDialog = AudioSettingsDialog.None },
+            onSelect = { index ->
+                viewModel.setAudioPrefetchLookahead(lookahead[index])
+                activeDialog = AudioSettingsDialog.None
+            },
+        )
+    }
+
+    if (activeDialog is AudioSettingsDialog.AudioPrefetchBackfillPicker) {
+        val backfill = listOf(0, 1, 2, 5, 10, 20)
+        SettingsChipPickerSheet(
+            title = stringResource(R.string.settings_audio_prefetch_backfill),
+            options = backfill.map { if (it == 0) "Off" else "$it" },
+            selectedIndex = backfill.indexOf(preferences.audioPrefetchBackfill),
+            onDismiss = { activeDialog = AudioSettingsDialog.None },
+            onSelect = { index ->
+                viewModel.setAudioPrefetchBackfill(backfill[index])
+                activeDialog = AudioSettingsDialog.None
+            },
+        )
+    }
+
+    if (activeDialog is AudioSettingsDialog.AudioCacheNetworkPolicyPicker) {
+        val policies = AudioCacheNetworkPolicy.entries
+        SettingsListPickerSheet(
+            title = stringResource(R.string.settings_audio_cache_network_policy),
+            items = policies,
+            label = { it.displayName },
+            isSelected = { it == preferences.audioCacheNetworkPolicy },
+            onDismiss = { activeDialog = AudioSettingsDialog.None },
+            onSelect = {
+                viewModel.setAudioCacheNetworkPolicy(it)
                 activeDialog = AudioSettingsDialog.None
             },
         )
