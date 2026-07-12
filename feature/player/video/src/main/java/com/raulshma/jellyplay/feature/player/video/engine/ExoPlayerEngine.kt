@@ -293,8 +293,13 @@ class ExoPlayerEngine(
             )
         }
         if (request.maxVideoBitrate != null) {
+            // Local val captures the non-null value: maxVideoBitrate now lives
+            // in :feature:player:core (different module), so Kotlin can no
+            // longer smart-cast the cross-module public property. We are inside
+            // the null-check branch, so !! is provably safe.
+            val maxVideoBitrate = request.maxVideoBitrate!!
             selector.setParameters(
-                selector.buildUponParameters().setMaxVideoBitrate(request.maxVideoBitrate)
+                selector.buildUponParameters().setMaxVideoBitrate(maxVideoBitrate)
             )
         }
         if (exoCfg.preferredVideoMimeTypes.isNotEmpty()) {

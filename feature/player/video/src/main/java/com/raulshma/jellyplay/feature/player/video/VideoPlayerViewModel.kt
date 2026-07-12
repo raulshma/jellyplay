@@ -58,6 +58,8 @@ import com.raulshma.jellyplay.core.ui.viewmodel.JellyPlayViewModel
 import com.raulshma.jellyplay.feature.player.video.components.AspectRatio
 import com.raulshma.jellyplay.feature.player.video.engine.EngineVideoStats
 import com.raulshma.jellyplay.feature.player.video.engine.MpvPlayerEngine
+import com.raulshma.jellyplay.feature.player.video.engine.SegmentCalculator
+import com.raulshma.jellyplay.feature.player.video.engine.SegmentCalculatorInput
 import com.raulshma.jellyplay.feature.player.video.engine.SubtitleSource
 import com.raulshma.jellyplay.core.model.VideoEffectsConfig
 
@@ -144,32 +146,31 @@ private data class SegmentProjection(
 
     /**
      * Builds the [SegmentOverlayState] for a given live position/duration.
-     * Reconstructs a position-aware [VideoPlayerUiState] carrying only the
-     * segment-relevant fields so the existing `computeActiveSegment()` /
-     * `behaviorForType()` / `shouldShowUpNext` logic is reused verbatim (no
-     * duplication of the chapter-name-matching rules). This reconstruction
-     * runs only when the projection changes — not on every 4 Hz tick.
+     *
+     * Calls [SegmentCalculator] directly with the projected inputs — no
+     * throwaway [VideoPlayerUiState] allocation. Runs only when the
+     * projection changes — not on every 4 Hz tick.
      */
     fun computeOverlay(positionMs: Long, durationMs: Long): SegmentOverlayState {
-        val positioned = VideoPlayerUiState(
-            currentPosition = positionMs,
-            duration = durationMs,
+        val input = SegmentCalculatorInput(
             segments = segments,
             chapters = chapters,
             segmentBehaviors = segmentBehaviors,
+            durationMs = durationMs,
             autoplayCancelled = autoplayCancelled,
             isInSyncPlaySession = isInSyncPlaySession,
-            nextEpisode = nextEpisode,
+            hasNextEpisode = nextEpisode != null,
             seriesId = seriesId,
         )
-        val activeSegment = positioned.computeActiveSegment()
+        val activeSegment = SegmentCalculator.computeActiveSegment(input, positionMs)
         return SegmentOverlayState(
             activeSegment = activeSegment,
-            activeSegmentBehavior = activeSegment?.let { positioned.behaviorForType(it.type) }
-                ?: SegmentBehavior.IGNORE,
-            isInIntro = positioned.isInIntro,
-            isInCredits = positioned.isInCredits,
-            shouldShowUpNext = positioned.shouldShowUpNext,
+            activeSegmentBehavior = activeSegment?.let {
+                SegmentCalculator.behaviorForType(input, it.type)
+            } ?: SegmentBehavior.IGNORE,
+            isInIntro = SegmentCalculator.isInSegmentType(input, positionMs, MediaSegmentType.INTRO),
+            isInCredits = SegmentCalculator.isInSegmentType(input, positionMs, MediaSegmentType.OUTRO),
+            shouldShowUpNext = SegmentCalculator.shouldShowUpNext(input, positionMs),
         )
     }
 }

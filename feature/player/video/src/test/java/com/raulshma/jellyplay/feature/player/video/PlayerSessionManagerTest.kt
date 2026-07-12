@@ -28,6 +28,7 @@ import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.test.UnconfinedTestDispatcher
 import kotlinx.coroutines.test.runTest
+import okhttp3.OkHttpClient
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -62,6 +63,7 @@ class PlayerSessionManagerTest {
     @Before
     fun setUp() {
         context = mockk(relaxed = true)
+        val okHttpClient = mockk<OkHttpClient>(relaxed = true)
         mediaRepository = mockk(relaxed = true)
         playbackRepository = mockk(relaxed = true)
         downloadRepository = mockk(relaxed = true)
@@ -101,7 +103,7 @@ class PlayerSessionManagerTest {
             adaptiveBitrateManager = adaptiveBitrateManager,
             // Tests use EXTERNAL, which short-circuits before any real engine is
             // built, so a real factory wired to the (relaxed-mock) context is fine.
-            playerEngineFactory = com.raulshma.jellyplay.feature.player.video.engine.PlayerEngineFactory(context),
+            playerEngineFactory = com.raulshma.jellyplay.feature.player.video.engine.PlayerEngineFactory(context, okHttpClient),
         )
     }
 
