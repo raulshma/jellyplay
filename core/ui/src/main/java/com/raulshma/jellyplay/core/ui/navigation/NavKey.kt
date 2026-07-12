@@ -135,6 +135,8 @@ sealed class Route : NavKey {
     @Serializable data object Logs : Route()
     @Serializable data object UserStatistics : Route()
     @Serializable data class UserStatisticsDetail(val userId: String) : Route()
+    @Serializable data object Users : Route()
+    @Serializable data class UserDetail(val userId: String) : Route()
     @Serializable data object StaleMedia : Route()
     @Serializable data object WatchedMediaCleanup : Route()
 
@@ -213,6 +215,7 @@ val Route.isModal: Boolean
         Route.Devices,
         Route.Logs,
         Route.Requests -> true
+        Route.Users -> true
         Route.ArrQueue -> true
         Route.UpcomingCalendar -> true
         else -> false
@@ -241,7 +244,8 @@ val Route.isDetail: Boolean
         is Route.GenreDetail,
         is Route.StudioDetail,
         is Route.NewsletterSectionList,
-        is Route.UserStatisticsDetail -> true
+        is Route.UserStatisticsDetail,
+        is Route.UserDetail -> true
         else -> false
     }
 
@@ -266,4 +270,5 @@ val DETAIL_ROUTE_CLASS_NAMES: Set<String> = setOf(
     "StudioDetail",
     "NewsletterSectionList",
     "UserStatisticsDetail",
+    "UserDetail",
 )

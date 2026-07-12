@@ -61,6 +61,7 @@ import com.raulshma.jellyplay.feature.player.video.engine.MpvPlayerEngine
 import com.raulshma.jellyplay.feature.player.video.engine.SegmentCalculator
 import com.raulshma.jellyplay.feature.player.video.engine.SegmentCalculatorInput
 import com.raulshma.jellyplay.feature.player.video.engine.SubtitleSource
+import com.raulshma.jellyplay.feature.player.video.subtitle.FontProvider
 import com.raulshma.jellyplay.core.model.VideoEffectsConfig
 
 import com.raulshma.jellyplay.feature.player.video.trickplay.TrickplayManager
@@ -197,6 +198,7 @@ class VideoPlayerViewModel @Inject constructor(
     private val sleepTimerManager: SleepTimerManager,
     private val userMessageBus: UserMessageBus,
     private val playerEngineFactory: com.raulshma.jellyplay.feature.player.video.engine.PlayerEngineFactory,
+    private val fontProvider: FontProvider,
     private val savedStateHandle: SavedStateHandle,
 ) : JellyPlayViewModel() {
 
@@ -1542,6 +1544,29 @@ class VideoPlayerViewModel @Inject constructor(
         updateConfigWithUiState()
         launch {
             preferencesStore.setSubtitleStyle(style)
+        }
+    }
+
+    /**
+     * Installs a user-picked font (from a SAF `OpenDocument` uri) via
+     * [FontProvider.installUserFont], then updates + persists the resulting
+     * family name/path on [SubtitleStyle] using the same pattern as
+     * [setSubtitleStyle]: update in-memory state, push to the engine via
+     * [updateConfigWithUiState], and persist to [preferencesStore].
+     *
+     * No-op if the copy/parse fails (FontProvider returns null), leaving the
+     * bundled fallback font in place.
+     */
+    fun installUserFont(uri: android.net.Uri) {
+        launch {
+            val installed = fontProvider.installUserFont(uri) ?: return@launch
+            val newStyle = _uiState.value.subtitleStyle.copy(
+                fontFamilyPath = installed.file.absolutePath,
+                fontFamilyName = installed.familyName,
+            )
+            _uiState.update { it.copy(subtitleStyle = newStyle) }
+            updateConfigWithUiState()
+            preferencesStore.setSubtitleStyle(newStyle)
         }
     }
 
