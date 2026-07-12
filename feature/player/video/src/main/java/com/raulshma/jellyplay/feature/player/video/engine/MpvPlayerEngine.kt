@@ -1140,7 +1140,12 @@ class MpvPlayerEngine(
                 if (sub.language.isNullOrBlank()) {
                     mpv.command("sub-add", sub.url, flags, sub.label)
                 } else {
-                    mpv.command("sub-add", sub.url, flags, sub.label, sub.language)
+                    // Local val captures the non-null value: SubtitleSource.language
+                    // now lives in :feature:player:core (different module), so
+                    // Kotlin can no longer smart-cast the cross-module property.
+                    // The else branch proves non-blank (hence non-null).
+                    val language = sub.language!!
+                    mpv.command("sub-add", sub.url, flags, sub.label, language)
                 }
             } catch (e: Exception) {
                 Log.e(TAG, "Failed to add Jellyfin subtitle: ${redactSensitive(sub.url)}", e)
@@ -1156,7 +1161,12 @@ class MpvPlayerEngine(
             if (source.language.isNullOrBlank()) {
                 mpv.command("sub-add", source.url, "select", source.label)
             } else {
-                mpv.command("sub-add", source.url, "select", source.label, source.language)
+                // Local val captures the non-null value: SubtitleSource.language
+                // now lives in :feature:player:core (different module), so
+                // Kotlin can no longer smart-cast the cross-module property.
+                // The else branch proves non-blank (hence non-null).
+                val language = source.language!!
+                mpv.command("sub-add", source.url, "select", source.label, language)
             }
             refreshTracks("addExternalSubtitle", delayMs = 500)
         } catch (e: Exception) {

@@ -53,6 +53,8 @@ class TrackSelectionHelperTest {
             updateUiState = { transform -> state.value = transform(state.value) },
             getCurrentItemId = { "item1" },
             getCurrentSeriesId = { null },
+            getPlayMethod = { com.raulshma.jellyplay.core.model.PlayMethod.DIRECT_PLAY },
+            onReloadForStreamChange = { _, _ -> },
             playbackPreferenceResolver = noOpResolver(),
             scope = scope,
         )
@@ -74,6 +76,8 @@ class TrackSelectionHelperTest {
             updateUiState = { transform -> state.value = transform(state.value) },
             getCurrentItemId = { "item1" },
             getCurrentSeriesId = { null },
+            getPlayMethod = { com.raulshma.jellyplay.core.model.PlayMethod.DIRECT_PLAY },
+            onReloadForStreamChange = { _, _ -> },
             playbackPreferenceResolver = noOpResolver(),
             scope = scope,
         )
@@ -166,6 +170,8 @@ class TrackSelectionHelperTest {
             updateUiState = { transform -> state.value = transform(state.value) },
             getCurrentItemId = { "item1" },
             getCurrentSeriesId = { null },
+            getPlayMethod = { com.raulshma.jellyplay.core.model.PlayMethod.DIRECT_PLAY },
+            onReloadForStreamChange = { _, _ -> },
             playbackPreferenceResolver = noOpResolver(),
             scope = scope,
         )
@@ -360,6 +366,8 @@ class TrackSelectionHelperTest {
             updateUiState = { transform -> state.value = transform(state.value) },
             getCurrentItemId = { null },
             getCurrentSeriesId = { null },
+            getPlayMethod = { com.raulshma.jellyplay.core.model.PlayMethod.DIRECT_PLAY },
+            onReloadForStreamChange = { _, _ -> },
             playbackPreferenceResolver = noOpResolver(),
             scope = scope,
         )
