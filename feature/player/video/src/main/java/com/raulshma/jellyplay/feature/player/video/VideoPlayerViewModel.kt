@@ -58,7 +58,10 @@ import com.raulshma.jellyplay.core.ui.viewmodel.JellyPlayViewModel
 import com.raulshma.jellyplay.feature.player.video.components.AspectRatio
 import com.raulshma.jellyplay.feature.player.video.engine.EngineVideoStats
 import com.raulshma.jellyplay.feature.player.video.engine.MpvPlayerEngine
+import com.raulshma.jellyplay.feature.player.video.engine.SegmentCalculator
+import com.raulshma.jellyplay.feature.player.video.engine.SegmentCalculatorInput
 import com.raulshma.jellyplay.feature.player.video.engine.SubtitleSource
+import com.raulshma.jellyplay.feature.player.video.subtitle.FontProvider
 import com.raulshma.jellyplay.core.model.VideoEffectsConfig
 
 import com.raulshma.jellyplay.feature.player.video.trickplay.TrickplayManager
@@ -144,32 +147,31 @@ private data class SegmentProjection(
 
     /**
      * Builds the [SegmentOverlayState] for a given live position/duration.
-     * Reconstructs a position-aware [VideoPlayerUiState] carrying only the
-     * segment-relevant fields so the existing `computeActiveSegment()` /
-     * `behaviorForType()` / `shouldShowUpNext` logic is reused verbatim (no
-     * duplication of the chapter-name-matching rules). This reconstruction
-     * runs only when the projection changes — not on every 4 Hz tick.
+     *
+     * Calls [SegmentCalculator] directly with the projected inputs — no
+     * throwaway [VideoPlayerUiState] allocation. Runs only when the
+     * projection changes — not on every 4 Hz tick.
      */
     fun computeOverlay(positionMs: Long, durationMs: Long): SegmentOverlayState {
-        val positioned = VideoPlayerUiState(
-            currentPosition = positionMs,
-            duration = durationMs,
+        val input = SegmentCalculatorInput(
             segments = segments,
             chapters = chapters,
             segmentBehaviors = segmentBehaviors,
+            durationMs = durationMs,
             autoplayCancelled = autoplayCancelled,
             isInSyncPlaySession = isInSyncPlaySession,
-            nextEpisode = nextEpisode,
+            hasNextEpisode = nextEpisode != null,
             seriesId = seriesId,
         )
-        val activeSegment = positioned.computeActiveSegment()
+        val activeSegment = SegmentCalculator.computeActiveSegment(input, positionMs)
         return SegmentOverlayState(
             activeSegment = activeSegment,
-            activeSegmentBehavior = activeSegment?.let { positioned.behaviorForType(it.type) }
-                ?: SegmentBehavior.IGNORE,
-            isInIntro = positioned.isInIntro,
-            isInCredits = positioned.isInCredits,
-            shouldShowUpNext = positioned.shouldShowUpNext,
+            activeSegmentBehavior = activeSegment?.let {
+                SegmentCalculator.behaviorForType(input, it.type)
+            } ?: SegmentBehavior.IGNORE,
+            isInIntro = SegmentCalculator.isInSegmentType(input, positionMs, MediaSegmentType.INTRO),
+            isInCredits = SegmentCalculator.isInSegmentType(input, positionMs, MediaSegmentType.OUTRO),
+            shouldShowUpNext = SegmentCalculator.shouldShowUpNext(input, positionMs),
         )
     }
 }
@@ -196,6 +198,7 @@ class VideoPlayerViewModel @Inject constructor(
     private val sleepTimerManager: SleepTimerManager,
     private val userMessageBus: UserMessageBus,
     private val playerEngineFactory: com.raulshma.jellyplay.feature.player.video.engine.PlayerEngineFactory,
+    private val fontProvider: FontProvider,
     private val savedStateHandle: SavedStateHandle,
 ) : JellyPlayViewModel() {
 
@@ -1541,6 +1544,29 @@ class VideoPlayerViewModel @Inject constructor(
         updateConfigWithUiState()
         launch {
             preferencesStore.setSubtitleStyle(style)
+        }
+    }
+
+    /**
+     * Installs a user-picked font (from a SAF `OpenDocument` uri) via
+     * [FontProvider.installUserFont], then updates + persists the resulting
+     * family name/path on [SubtitleStyle] using the same pattern as
+     * [setSubtitleStyle]: update in-memory state, push to the engine via
+     * [updateConfigWithUiState], and persist to [preferencesStore].
+     *
+     * No-op if the copy/parse fails (FontProvider returns null), leaving the
+     * bundled fallback font in place.
+     */
+    fun installUserFont(uri: android.net.Uri) {
+        launch {
+            val installed = fontProvider.installUserFont(uri) ?: return@launch
+            val newStyle = _uiState.value.subtitleStyle.copy(
+                fontFamilyPath = installed.file.absolutePath,
+                fontFamilyName = installed.familyName,
+            )
+            _uiState.update { it.copy(subtitleStyle = newStyle) }
+            updateConfigWithUiState()
+            preferencesStore.setSubtitleStyle(newStyle)
         }
     }
 

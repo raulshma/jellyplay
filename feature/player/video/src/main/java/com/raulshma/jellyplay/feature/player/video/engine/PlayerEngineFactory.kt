@@ -3,6 +3,7 @@ package com.raulshma.jellyplay.feature.player.video.engine
 import android.content.Context
 import androidx.media3.exoplayer.upstream.DefaultBandwidthMeter
 import com.raulshma.jellyplay.core.model.PlayerType
+import com.raulshma.jellyplay.feature.player.video.subtitle.FontProvider
 import dagger.hilt.android.qualifiers.ApplicationContext
 import okhttp3.OkHttpClient
 import javax.inject.Inject
@@ -23,6 +24,7 @@ import javax.inject.Singleton
 class PlayerEngineFactory @Inject constructor(
     @ApplicationContext private val context: Context,
     @Named("streaming") private val streamingOkHttpClient: OkHttpClient,
+    private val fontProvider: FontProvider,
 ) {
 
     @Volatile
@@ -60,8 +62,8 @@ class PlayerEngineFactory @Inject constructor(
 
     fun create(playerType: PlayerType): MediaEngine {
         return when (playerType) {
-            PlayerType.EXO_PLAYER -> ExoPlayerEngine(context, streamingOkHttpClient, getSharedBandwidthMeter())
-            PlayerType.MPV -> MpvPlayerEngine(context)
+            PlayerType.EXO_PLAYER -> ExoPlayerEngine(context, streamingOkHttpClient, getSharedBandwidthMeter(), fontProvider)
+            PlayerType.MPV -> MpvPlayerEngine(context, fontProvider)
             PlayerType.LIBVLC -> LibVlcPlayerEngine(context)
             // External playback is launched in a third-party app; progress is
             // reported out-of-band. A NoOpEngine expresses that intent far more

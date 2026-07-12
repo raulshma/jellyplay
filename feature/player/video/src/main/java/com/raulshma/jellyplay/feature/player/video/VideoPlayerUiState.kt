@@ -27,6 +27,20 @@ import com.raulshma.jellyplay.core.model.MediaItem as JellyfinMediaItem
 import com.raulshma.jellyplay.feature.player.video.components.AspectRatio
 import com.raulshma.jellyplay.feature.player.video.engine.EngineCapabilities
 import com.raulshma.jellyplay.feature.player.video.engine.EngineVideoStats
+import com.raulshma.jellyplay.feature.player.video.engine.SegmentCalculator
+import com.raulshma.jellyplay.feature.player.video.engine.SegmentCalculatorInput
+import com.raulshma.jellyplay.feature.player.video.state.AudioEffectsState
+import com.raulshma.jellyplay.feature.player.video.state.AutoplayState
+import com.raulshma.jellyplay.feature.player.video.state.EpisodeBrowserState
+import com.raulshma.jellyplay.feature.player.video.state.GesturePrefsState
+import com.raulshma.jellyplay.feature.player.video.state.MediaContentState
+import com.raulshma.jellyplay.feature.player.video.state.PlayerUiPrefsState
+import com.raulshma.jellyplay.feature.player.video.state.SegmentState
+import com.raulshma.jellyplay.feature.player.video.state.SleepTimerState
+import com.raulshma.jellyplay.feature.player.video.state.SubtitleState
+import com.raulshma.jellyplay.feature.player.video.state.SyncPlayUiState
+import com.raulshma.jellyplay.feature.player.video.state.TrackState
+import com.raulshma.jellyplay.feature.player.video.state.VideoFxState
 import com.raulshma.jellyplay.core.model.VideoEffectsConfig
 import com.raulshma.jellyplay.core.model.PersonInfo
 import com.raulshma.jellyplay.core.model.LyricsLine
@@ -192,8 +206,135 @@ data class VideoPlayerUiState(
     val autoplayCancelled: Boolean = false,
 ) {
 
+    // ── Cohesive sub-state projections ────────────────────────────────────
+    // Each groups the flat constructor fields by concern.
+    // New code should read these (e.g. `state.media.isLive`); the flat fields
+    // remain on the root for incremental call-site migration and will be
+    // deprecated once all consumers move over.
+    //
+    // These are derived `val`s (computed per access) rather than stored
+    // properties, so the data class's equality/hashCode still reflect the flat
+    // fields — the source of truth during the transition.
+
+    val media: MediaContentState
+        get() = MediaContentState(
+            overview = overview, people = people, artworkUrl = artworkUrl,
+            lyricsLines = lyricsLines, isLive = isLive, streamUrl = streamUrl,
+            currentMediaSource = currentMediaSource, mediaStreams = mediaStreams,
+            playMethod = playMethod, isDirectPlayForced = isDirectPlayForced,
+            seriesId = seriesId,
+        )
+
+    val tracks: TrackState
+        get() = TrackState(
+            audioTracks = audioTracks, subtitleTracks = subtitleTracks,
+            hasAudioOverride = hasAudioOverride, hasSubtitleOverride = hasSubtitleOverride,
+            hasSeriesAudioPref = hasSeriesAudioPref,
+            hasSeriesSubtitlePref = hasSeriesSubtitlePref,
+            hasSeriesDialogueBoostPref = hasSeriesDialogueBoostPref,
+        )
+
+    val subtitles: SubtitleState
+        get() = SubtitleState(
+            subtitleStyle = subtitleStyle, remoteSubtitles = remoteSubtitles,
+            subtitleCultures = subtitleCultures, searchedSubtitles = searchedSubtitles,
+            isSearchingSubtitles = isSearchingSubtitles,
+            hasSearchedSubtitles = hasSearchedSubtitles,
+            subtitleSearchError = subtitleSearchError,
+            isUploadingSubtitle = isUploadingSubtitle,
+            isLoadingRemoteSubtitles = isLoadingRemoteSubtitles,
+            defaultSearchLanguage = defaultSearchLanguage,
+        )
+
+    val effects: AudioEffectsState
+        get() = AudioEffectsState(
+            dialogueBoostEnabled = dialogueBoostEnabled,
+            dialogueBoostStrength = dialogueBoostStrength,
+            nightModeEnabled = nightModeEnabled, nightModeStrength = nightModeStrength,
+            audioPassthrough = audioPassthrough, decoderMode = decoderMode,
+            audioNormalizationMode = audioNormalizationMode,
+            audioNormalizationEnabled = audioNormalizationEnabled,
+            channelMixMode = channelMixMode, channelMixEnabled = channelMixEnabled,
+            bassBoostEnabled = bassBoostEnabled, bassBoostStrength = bassBoostStrength,
+            virtualizerEnabled = virtualizerEnabled,
+            virtualizerStrength = virtualizerStrength,
+            reverbPreset = reverbPreset, audioDelayMs = audioDelayMs,
+        )
+
+    val videoFx: VideoFxState
+        get() = VideoFxState(
+            videoEffects = videoEffects, aspectRatio = aspectRatio,
+            detectedAspectRatio = detectedAspectRatio,
+            tvZoomModePercent = tvZoomModePercent,
+        )
+
+    val segmentState: SegmentState
+        get() = SegmentState(segments = segments, segmentBehaviors = segmentBehaviors)
+
+    val episodes: EpisodeBrowserState
+        get() = EpisodeBrowserState(
+            nextEpisode = nextEpisode, seriesSeasons = seriesSeasons,
+            seasonEpisodes = seasonEpisodes, currentSeasonId = currentSeasonId,
+            isLoadingEpisodes = isLoadingEpisodes,
+            videoEpisodeBrowserEnabled = videoEpisodeBrowserEnabled,
+        )
+
+    val autoplay: AutoplayState
+        get() = AutoplayState(
+            videoAutoplayNext = videoAutoplayNext,
+            autoPlayCountdownSec = autoPlayCountdownSec,
+            autoplayCancelled = autoplayCancelled,
+        )
+
+    val syncPlay: SyncPlayUiState
+        get() = SyncPlayUiState(
+            isInSyncPlaySession = isInSyncPlaySession,
+            syncPlayGroupName = syncPlayGroupName,
+            syncPlayParticipantCount = syncPlayParticipantCount,
+            isSyncPlaySynced = isSyncPlaySynced,
+            isSyncPlaySyncing = isSyncPlaySyncing,
+            syncPlayRepeatMode = syncPlayRepeatMode,
+            syncPlayShuffleMode = syncPlayShuffleMode,
+        )
+
+    val sleepTimer: SleepTimerState
+        get() = SleepTimerState(
+            sleepTimerActive = sleepTimerActive,
+            sleepTimerEndOfEpisode = sleepTimerEndOfEpisode,
+            sleepTimerLastUsedDurationMs = sleepTimerLastUsedDurationMs,
+        )
+
+    val gestures: GesturePrefsState
+        get() = GesturePrefsState(
+            gesturesEnabled = gesturesEnabled,
+            holdSpeedEnabled = holdSpeedEnabled,
+            holdSpeedMultiplier = holdSpeedMultiplier,
+            isHoldSpeedActive = isHoldSpeedActive,
+            defaultSpeed = defaultSpeed, swipeSeekMaxMs = swipeSeekMaxMs,
+            seekDurationMs = seekDurationMs, rememberBrightness = rememberBrightness,
+            brightnessLevel = brightnessLevel, frameRateMatching = frameRateMatching,
+        )
+
+    val uiPrefs: PlayerUiPrefsState
+        get() = PlayerUiPrefsState(
+            controlsTimeoutMs = controlsTimeoutMs,
+            defaultOrientation = defaultOrientation,
+            passOutProtectionHours = passOutProtectionHours,
+            showVideoStats = showVideoStats,
+            showPlaybackMetadata = showPlaybackMetadata,
+            showClock = showClock, showTimeRemaining = showTimeRemaining,
+            keepScreenOnDuringVideo = keepScreenOnDuringVideo,
+            usePinForPlayerLock = usePinForPlayerLock, pinHash = pinHash,
+            trickplayEnabled = trickplayEnabled,
+            trickplayOnSeekGesture = trickplayOnSeekGesture,
+            trickplayInfo = trickplayInfo,
+            streamingQuality = streamingQuality,
+            adaptiveBitrateEnabled = adaptiveBitrateEnabled,
+            playbackMode = playbackMode,
+        )
+
     fun behaviorForType(type: MediaSegmentType): SegmentBehavior =
-        segmentBehaviors[type] ?: SegmentBehavior.IGNORE
+        SegmentCalculator.behaviorForType(toSegmentInput(), type)
 
     /**
      * Pure (side-effect-free) derivation of the active segment at
@@ -208,7 +349,8 @@ data class VideoPlayerUiState(
      * recomputation cost is negligible. Kept as a `fun` (not a `val`) so it
      * is only evaluated when actually needed.
      */
-    fun computeActiveSegment(): MediaSegment? = computeActiveSegmentInternal(currentPosition)
+    fun computeActiveSegment(): MediaSegment? =
+        SegmentCalculator.computeActiveSegment(toSegmentInput(), currentPosition)
 
     /**
      * Position-explicit overload. Lets high-frequency callers (e.g. the
@@ -216,64 +358,19 @@ data class VideoPlayerUiState(
      * engine position WITHOUT copying this 95-field state (which is the
      * highest-frequency avoidable allocation on the playback path).
      */
-    fun computeActiveSegment(positionMs: Long): MediaSegment? = computeActiveSegmentInternal(positionMs)
+    fun computeActiveSegment(positionMs: Long): MediaSegment? =
+        SegmentCalculator.computeActiveSegment(toSegmentInput(), positionMs)
 
-    companion object {
-        private val INTRO_CHAPTER_NAMES = setOf("intro", "introduction", "opening", "op")
-        private val OUTRO_CHAPTER_NAMES = setOf("outro", "credits", "end credits", "ending", "ed")
-        private val PREVIEW_CHAPTER_NAMES = setOf("preview", "coming up", "cold open", "teaser")
-        private val RECAP_CHAPTER_NAMES = setOf("recap", "previously on", "previously")
-        private val COMMERCIAL_CHAPTER_NAMES = setOf("commercial", "ad break", "advertisement")
-
-        val CHAPTER_NAME_MAP: Map<MediaSegmentType, Set<String>> = mapOf(
-            MediaSegmentType.INTRO to INTRO_CHAPTER_NAMES,
-            MediaSegmentType.OUTRO to OUTRO_CHAPTER_NAMES,
-            MediaSegmentType.PREVIEW to PREVIEW_CHAPTER_NAMES,
-            MediaSegmentType.RECAP to RECAP_CHAPTER_NAMES,
-            MediaSegmentType.COMMERCIAL to COMMERCIAL_CHAPTER_NAMES,
-        )
-    }
-
-    private fun computeActiveSegmentInternal(positionMs: Long): MediaSegment? {
-        val posTicks = positionMs * 10_000
-        fun MediaSegment.containsPos() =
-            hasSegment && posTicks >= startTicks && posTicks < endTicks
-        val apiMatch = MediaSegmentType.SEGMENT_PRIORITY.firstNotNullOfOrNull { priority ->
-            segments.firstOrNull { it.type == priority && it.containsPos() }
-        } ?: segments.firstOrNull { it.containsPos() }
-        return apiMatch ?: detectChapterSegment(positionMs)
-    }
-
-    private fun detectChapterSegment(positionMs: Long): MediaSegment? {
-        if (chapters.isEmpty()) return null
-        val posTicks = positionMs * 10_000
-        val idx = chapters.indexOfLast { it.startPositionTicks <= posTicks }
-        if (idx < 0) return null
-        val chapter = chapters[idx]
-        val name = chapter.name.lowercase().trim()
-        for (type in MediaSegmentType.SEGMENT_PRIORITY) {
-            val names = CHAPTER_NAME_MAP[type] ?: continue
-            val isMatch = names.any { keyword ->
-                if (keyword.length <= 2) name == keyword || name.startsWith("$keyword ") || name.endsWith(" $keyword") || name.contains(" $keyword ")
-                else name.contains(keyword)
-            }
-            if (isMatch) {
-                val chapterEndTicks = if (idx + 1 < chapters.size) {
-                    chapters[idx + 1].startPositionTicks
-                } else {
-                    duration * 10_000
-                }
-                return MediaSegment(
-                    id = "chapter-${type.name}-$idx",
-                    itemId = "",
-                    type = type,
-                    startTicks = chapter.startPositionTicks,
-                    endTicks = chapterEndTicks,
-                )
-            }
-        }
-        return null
-    }
+    private fun toSegmentInput() = SegmentCalculatorInput(
+        segments = segments,
+        chapters = chapters,
+        segmentBehaviors = segmentBehaviors,
+        durationMs = duration,
+        autoplayCancelled = autoplayCancelled,
+        isInSyncPlaySession = isInSyncPlaySession,
+        hasNextEpisode = nextEpisode != null,
+        seriesId = seriesId,
+    )
 
     val activeSegment: MediaSegment?
         get() = computeActiveSegment()
@@ -284,12 +381,8 @@ data class VideoPlayerUiState(
     val isInCredits: Boolean
         get() = isInSegmentType(MediaSegmentType.OUTRO)
 
-    fun isInSegmentType(type: MediaSegmentType): Boolean {
-        val behavior = behaviorForType(type)
-        if (behavior == SegmentBehavior.IGNORE) return false
-        val seg = activeSegment
-        return seg != null && seg.type == type
-    }
+    fun isInSegmentType(type: MediaSegmentType): Boolean =
+        SegmentCalculator.isInSegmentType(toSegmentInput(), currentPosition, type)
 
     val introSegmentEndTicks: Long?
         get() = segmentEndTicksForType(MediaSegmentType.INTRO)
@@ -297,37 +390,17 @@ data class VideoPlayerUiState(
     val creditSegmentEndTicks: Long?
         get() = segmentEndTicksForType(MediaSegmentType.OUTRO)
 
-    fun segmentEndTicksForType(type: MediaSegmentType): Long? {
-        val seg = activeSegment ?: return null
-        if (seg.type != type) return null
-        return seg.endTicks
-    }
+    fun segmentEndTicksForType(type: MediaSegmentType): Long? =
+        SegmentCalculator.segmentEndTicksForType(toSegmentInput(), currentPosition, type)
 
-    fun segmentEndTicks(segment: MediaSegment): Long? {
-        if (!segment.hasSegment) return null
-        val apiMatch = segments.firstOrNull { it.id == segment.id }
-        if (apiMatch != null) return apiMatch.endTicks
-        return segment.endTicks
-    }
+    fun segmentEndTicks(segment: MediaSegment): Long? =
+        SegmentCalculator.segmentEndTicks(toSegmentInput(), segment)
 
     val shouldShowUpNext: Boolean
-        get() {
-            if (autoplayCancelled) return false
-            if (isInSyncPlaySession) return false
-            if (nextEpisode == null) return false
-            if (seriesId == null) return false
-            if (isOutroNearEnd) return true
-            if (duration > 0 && currentPosition >= (duration - 30_000)) return true
-            return false
-        }
+        get() = SegmentCalculator.shouldShowUpNext(toSegmentInput(), currentPosition)
 
     val isOutroNearEnd: Boolean
-        get() {
-            val outroEnd = creditSegmentEndTicks ?: return false
-            val durationTicks = duration * 10_000
-            if (durationTicks <= 0) return false
-            return (durationTicks - outroEnd).coerceAtLeast(0) < 300_000_000
-        }
+        get() = SegmentCalculator.isOutroNearEnd(toSegmentInput(), currentPosition)
 
     val hdrType: String?
         get() {

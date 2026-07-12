@@ -40,6 +40,8 @@ data class UserEntity(
     @ColumnInfo(defaultValue = "0")
     val isAdmin: Boolean = false,
     @ColumnInfo(defaultValue = "0")
+    val canDeleteContent: Boolean = false,
+    @ColumnInfo(defaultValue = "0")
     val lastConnected: Long = System.currentTimeMillis(),
 )
 

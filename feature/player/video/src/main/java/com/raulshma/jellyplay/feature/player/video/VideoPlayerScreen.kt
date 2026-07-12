@@ -243,6 +243,14 @@ fun VideoPlayerScreen(
         }
     }
 
+    val fontPickerLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.OpenDocument(),
+    ) { uri: android.net.Uri? ->
+        if (uri != null) {
+            viewModel.installUserFont(uri)
+        }
+    }
+
     var seekTrickplayBitmap by remember { mutableStateOf<android.graphics.Bitmap?>(null) }
     var gestureTrickplayBitmap by remember { mutableStateOf<android.graphics.Bitmap?>(null) }
     var tvTrickplayBitmap by remember { mutableStateOf<android.graphics.Bitmap?>(null) }
@@ -1441,6 +1449,9 @@ fun VideoPlayerScreen(
                 )
             )
         },
+        onPickFont = {
+            fontPickerLauncher.launch(arrayOf("*/*"))
+        },
     )
 
     val playerError = uiState.playerError
@@ -1553,6 +1564,7 @@ private fun PlayerSheetRouter(
     itemId: String,
     syncPlayIgnoreWait: Boolean,
     onLoadLocalSubtitle: () -> Unit,
+    onPickFont: () -> Unit,
 ) {
     val context = LocalContext.current
 
@@ -1673,6 +1685,7 @@ private fun PlayerSheetRouter(
             SubtitleStyleSheet(
                 currentStyle = uiState.subtitleStyle,
                 onStyleChange = { viewModel.setSubtitleStyle(it) },
+                onPickFont = onPickFont,
                 onDismiss = dismissSheet,
                 capabilities = uiState.engineCapabilities,
             )
