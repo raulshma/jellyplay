@@ -19,10 +19,9 @@ class LrcLibApi @Inject constructor(
     private val json = JellyfinApiEngine.sharedJson
 
     /**
-     * On-the-wire shape returned by lrclib.net. `instrumental` arrives as a
-     * JSON string ("true"/"false") rather than a boolean, so it is decoded as
-     * [String] here and normalized in [toDomain]. Lyrics fields are blank for
-     * absent lyrics and collapsed to null on the domain model.
+     * On-the-wire shape returned by lrclib.net. [instrumental] arrives as a
+     * native JSON boolean. Lyrics fields are blank for absent lyrics and
+     * collapsed to null on the domain model.
      */
     @Serializable
     private data class LrcLibTrackDto(
@@ -31,7 +30,7 @@ class LrcLibApi @Inject constructor(
         @SerialName("artistName") val artistName: String = "",
         @SerialName("albumName") val albumName: String = "",
         val duration: Double = 0.0,
-        val instrumental: String = "false",
+        val instrumental: Boolean = false,
         @SerialName("plainLyrics") val plainLyrics: String? = null,
         @SerialName("syncedLyrics") val syncedLyrics: String? = null,
     ) {
@@ -41,7 +40,7 @@ class LrcLibApi @Inject constructor(
             artistName = artistName,
             albumName = albumName,
             duration = duration,
-            instrumental = instrumental.equals("true", ignoreCase = true),
+            instrumental = instrumental,
             plainLyrics = plainLyrics?.takeIf { it.isNotBlank() },
             syncedLyrics = syncedLyrics?.takeIf { it.isNotBlank() },
         )
