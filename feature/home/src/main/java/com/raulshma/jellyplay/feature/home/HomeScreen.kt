@@ -232,8 +232,15 @@ private fun MainHomeContent(
     } }
 
     val photoFolderChildUrls by viewModel.photoFolderChildUrls.collectAsStateWithLifecycle()
-    androidx.compose.runtime.LaunchedEffect(state.sections) {
-        viewModel.prefetchPhotoFolderChildUrls(state.sections.flatMap { it.items })
+    // Memoize the flattened photo-folder item list so the LaunchedEffect only
+    // re-keys when the actual items change, not on every sections emission
+    // (partial loads emit updated sections repeatedly). The flatMap allocation
+    // now runs once per content change instead of once per StateFlow tick.
+    val photoFolderItems = remember(state.sections) {
+        state.sections.flatMap { it.items }
+    }
+    androidx.compose.runtime.LaunchedEffect(photoFolderItems) {
+        viewModel.prefetchPhotoFolderChildUrls(photoFolderItems)
     }
 
     val fallbackImageUrlBuilder = rememberFallbackUrls(viewModel)

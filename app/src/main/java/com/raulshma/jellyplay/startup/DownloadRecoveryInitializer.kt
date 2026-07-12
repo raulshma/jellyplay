@@ -54,7 +54,12 @@ class DownloadRecoveryInitializer @Inject constructor(
                     workRequest,
                 )
             }
-            val stale = downloadDao.getRecoveryRows(DownloadStatus.DOWNLOADING.name)
+            // Both DOWNLOADING and QUEUED rows belong to workers that were
+            // interrupted mid-flight (transferring or waiting on a concurrency
+            // slot). Reset them to PENDING and re-enqueue so they resume from
+            // their persisted byte offset.
+            val stale = downloadDao.getRecoveryRows(DownloadStatus.DOWNLOADING.name) +
+                downloadDao.getRecoveryRows(DownloadStatus.QUEUED.name)
             for (download in stale) {
                 downloadDao.updateProgress(download.id, download.downloadedBytes, DownloadStatus.PENDING.name)
                 val workRequest = OneTimeWorkRequestBuilder<DownloadWorker>()

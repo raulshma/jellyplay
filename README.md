@@ -28,7 +28,7 @@
 
 **JellyPlay** is a high-performance, feature-rich, and open-source **Jellyfin client app for Android** devices. Built entirely from the ground up using **Kotlin** and **Jetpack Compose** (Material 3/Expressive), JellyPlay delivers a premium, smooth, and native media streaming experience. Designed with an adaptive responsive interface, it adapts flawlessly to **Android mobile phones, tablets, foldables, and Android TV**.
 
-Whether you want to stream movies, play music with synchronized lyrics, manage your server via an integrated **Admin Dashboard**, edit library metadata on the go, request content via **Jellyseerr/Overseerr** (with full request management), download media for **offline playback**, catch up with a weekly **Newsletter digest**, join real-time **SyncPlay watch parties**, track your viewing habits with a **Watch Progress Heatmap**, or get notified when new content arrives — JellyPlay has you covered with built-in multi-engine support (**ExoPlayer, libmpv, LibVLC**), **remote control** from the server, **4 home screen widgets**, and a guided **Onboarding Wizard** for personalized setup.
+Whether you want to stream movies, play music with synchronized lyrics, manage your server via an integrated **Admin Dashboard**, edit library metadata on the go, request content via **Jellyseerr/Overseerr** (with full request management), manage your **Radarr/Sonarr queues** directly, track **upcoming releases** on a calendar, download media for **offline playback**, catch up with a weekly **Newsletter digest**, join real-time **SyncPlay watch parties**, cast to other Jellyfin sessions with **Play On**, track your viewing habits with a **Watch Progress Heatmap**, or get notified when new content arrives — JellyPlay has you covered with built-in multi-engine support (**ExoPlayer, libmpv, LibVLC**), **remote control** from the server, **4 home screen widgets**, and a guided **Onboarding Wizard** for personalized setup.
 
 [Key Features](#features) • [Why JellyPlay?](#why-jellyplay) • [Comparison](#jellyplay-vs-other-jellyfin-clients) • [Tech Stack](#tech-stack) • [Requirements](#requirements) • [Building & Flavors](#building) • [Permissions](#permissions) • [Project Structure](#project-structure) • [Docs](./docs) • [Website](https://raulshma.github.io/jellyplay/)
 
@@ -80,9 +80,11 @@ on every screen — phone, tablet, foldable, Android TV, and Amazon Fire TV.
   Multi-server, multi-user support with Quick Connect and token-based auth.
   **Offline downloads** with HTTP Range resumption for travel.
 - **Beyond streaming.** **SyncPlay** watch parties, **Jellyseerr / Overseerr**
-  requests, a full **metadata editor**, an in-app **server admin dashboard**,
-  synchronized lyrics via LRCLIB, 10-band equalizer with night mode, and a
-  weekly **newsletter digest** of your library activity.
+  requests with **Radarr/Sonarr queue management**, an **upcoming releases
+  calendar**, a full **metadata editor**, an in-app **server admin dashboard**,
+  **Play On** casting to other Jellyfin sessions, synchronized lyrics via LRCLIB,
+  10-band equalizer with night mode, and a weekly **newsletter digest** of your
+  library activity.
 
 > If you're looking for a Kodi alternative, a Plex alternative, or a
 > self-hosted media player for Android & Android TV — give JellyPlay a try.
@@ -134,13 +136,17 @@ on every screen — phone, tablet, foldable, Android TV, and Amazon Fire TV.
 
 ### Video Player
 
-- **Three built-in engines**: ExoPlayer (Media3), libmpv, and LibVLC
+- **Three built-in engines**: ExoPlayer (Media3), libmpv, and LibVLC, on an engine-agnostic core
+- **Force direct play** profile with automatic transcode fallback
+- **Server-side audio/subtitle switching** on transcode (no restart needed)
+- **FFmpeg software decoder** fallback for unsupported codecs
 - Video filter controls: Adjust brightness, contrast, saturation, and sharpness in-player (libmpv & LibVLC)
 - Enhanced Video Stats Overlay presenting real-time stream bitrate, frame rate, and dropped frames
 - External player launching (MX Player, VLC, etc.)
 - Direct play, direct stream, and transcoding support with quality/transcoding picker
 - Resume playback and progress reporting
 - Audio and subtitle track selection with language matching and reset functionality
+- Per-item playback preferences
 - Playback speed control (0.25x–4x) with current speed display and estimated end time
 - **Hold speed** — press and hold to temporarily increase playback speed
 - Gesture controls for seek, brightness, and volume
@@ -152,6 +158,7 @@ on every screen — phone, tablet, foldable, Android TV, and Amazon Fire TV.
 - Frame rate matching for display refresh rate sync
 - Adaptive bitrate streaming
 - Intro skip and next episode auto-play with segment auto-skip (intro/outro/recap)
+- **Play On** — cast to and control other Jellyfin sessions, with a full-screen companion transport screen
 - Chromecast support via Google Cast SDK
 - Media session integration for lock screen and notifications
 - Sleep timer with configurable duration
@@ -160,7 +167,7 @@ on every screen — phone, tablet, foldable, Android TV, and Amazon Fire TV.
 - Audio delay adjustment (ms)
 - Screen orientation toggle
 - Player lock screen overlay to prevent accidental touches
-- **Companion Dashboard** — view lyrics alongside video playback
+- **Companion Dashboard** — view lyrics and transport controls alongside video playback
 - Tap-to-translate subtitle feature
 
 ### Subtitle System
@@ -184,7 +191,7 @@ on every screen — phone, tablet, foldable, Android TV, and Amazon Fire TV.
 - 10-band equalizer with presets
 - Night Mode (loudness enhancement with configurable strength)
 - Dialogue Boost (vocal frequency equalization with configurable strength)
-- Audio normalization (ReplayGain) and channel mix modes
+- Audio normalization (ReplayGain), channel mix modes, dynamics compression, and dialogue de-noise
 - Virtualizer (3D audio) and Reverb effect presets
 - Gapless playback and crossfade between tracks
 - Ambient Mode with animated color blobs derived from album art
@@ -228,6 +235,20 @@ on every screen — phone, tablet, foldable, Android TV, and Amazon Fire TV.
 - Per-request TMDB metadata enrichment (title, poster, year, overview)
 - Seerr detail pages for unavailable media
 - Region configuration for streaming and discover content
+- **Radarr/Sonarr connection testing** with server discovery and force-import flows
+
+### Arr Queue Management
+
+- Browse and manage **Radarr** and **Sonarr** queues directly in the app
+- Delete and re-download flow via the *arr file-delete API
+- Per-series management screen (replaces per-episode redownload dialogs)
+- Queue status, progress, and quality tracking
+
+### Calendar
+
+- **Upcoming releases calendar** for movies and shows from your Radarr/Sonarr libraries
+- Month view with release badges and filtering by media type
+- Tap any date to see what's premiering
 
 ### Onboarding Wizard
 
@@ -329,7 +350,7 @@ on every screen — phone, tablet, foldable, Android TV, and Amazon Fire TV.
 
 - Video downloads via WorkManager with progress tracking
 - Series downloads with episode selection
-- Pause, resume, and retry support with HTTP Range resumption
+- Queued, paused, resumed, and retried downloads with HTTP Range resumption
 - Offline playback for completed downloads
 - Offline Library browser organized by series
 - Offline Series view for downloaded episode browsing
@@ -337,10 +358,10 @@ on every screen — phone, tablet, foldable, Android TV, and Amazon Fire TV.
 
 ### Settings
 
-Over 230 configurable options across 26 sections:
+Over 260 configurable options across 26 sections:
 
-- Player: engine selection, decoder mode, audio passthrough, orientation, seek duration, gesture toggles, autoplay, controls timeout, preload buffer
-- Audio: default speed, gapless playback, crossfade, night mode, dialogue boost, equalizer, audio normalization, channel mix, virtualizer, reverb
+- Player: engine selection, decoder mode, audio passthrough, orientation, seek duration, gesture toggles, autoplay, controls timeout, preload buffer, force direct play
+- Audio: default speed, gapless playback, crossfade, night mode, dialogue boost, equalizer, audio normalization, channel mix, dynamics compression, dialogue de-noise, virtualizer, reverb
 - Subtitles: language, style, trickplay, intro/outro skip (manual and auto), tap-to-translate
 - SyncPlay: progress reporting, auto-join, sync correction parameters
 - Downloads: connections preference, max cache size (with unlimited/0 option support)
@@ -356,6 +377,9 @@ Over 230 configurable options across 26 sections:
 - Accessibility: color blind modes, blue light filter, reduce motion, haptic intensity, font scaling
 - Experimental: feature flags for in-development capabilities
 - Seerr: server URL, API key, feature toggles, regions
+- Arr (Radarr/Sonarr): server URLs, API keys, connection testing, queue management
+- Calendar: enabled libraries, media-type filters
+- About: auto-generated open-source licenses (AboutLibraries)
 - Onboarding: re-run setup wizard anytime
 - Settings search: find any setting instantly by name
 
@@ -454,11 +478,11 @@ A GitHub Actions workflow (`.github/workflows/release.yml`) automates release bu
 
 ```
 app/                     Main Android application module (deep links, widgets, Cast, PiP, shortcuts)
-core/model/              Shared data models (55+ model files)
+core/model/              Shared data models (60+ model files)
 core/designsystem/       Shared theming (4 variants), colors, shapes, typography, motion
-core/network/            Jellyfin API clients (12), Seerr client, LRCLIB API, server discovery
-core/database/           Room database (16 DAOs), migration schemas
-core/datastore/          DataStore preferences (~231 settings), encrypted credentials
+core/network/            Jellyfin API clients, Radarr/Sonarr (Arr) clients, Seerr client, TMDB, LRCLIB API, server discovery
+core/database/           Room database (13 DAOs), migration schemas
+core/datastore/          DataStore preferences (~266 settings), encrypted credentials
 core/data/               Repositories, playback managers, audio effects, SyncPlay, Cast, downloads
 core/ui/                 Shared UI components, adaptive layouts, TV focus, animations, navigation
 core/notification/       New media notification system (worker, scheduler, dispatcher, channels)
@@ -469,10 +493,11 @@ feature/home/            Home screen, Kids home, newsletter banner, and discover
 feature/library/         Library browsing and media collections
 feature/search/          Search experience with history
 feature/details/         Media detail, person detail, collection detail, Seerr detail
-feature/player/video/    Video playback UI, multi-engine support, SyncPlay integration
+feature/player/core/     Engine-agnostic playback core (shared UiState, transport, managers)
+feature/player/video/    Video playback UI, multi-engine support, SyncPlay integration, Play On
 feature/player/audio/    Audio playback UI, lyrics, equalizer, ambient mode
 feature/downloads/       Download management, offline library, and offline playback
-feature/settings/        Settings, server/user management, Seerr configuration, settings search
+feature/settings/        Settings, server/user management, Seerr & Arr configuration, settings search
 feature/music/           Music browsing, smart/mood playlists, artist/album details
 feature/livetv/          Live TV channels, EPG guide, and DVR
 feature/syncplay/        SyncPlay group management and watch party UI
@@ -481,6 +506,8 @@ feature/admin/           Admin dashboard for server status, active devices, logs
 feature/newsletter/      Weekly server digest with library activity, curated picks, and stats
 feature/insights/        Watch progress heatmap with streak tracking and share-as-image
 feature/requests/        Jellyseerr/Overseerr request management with filter/sort/admin actions
+feature/arrqueue/        Radarr/Sonarr queue management, delete & re-download flow
+feature/calendar/        Upcoming releases calendar from Radarr/Sonarr libraries
 feature/shortcuts/       App shortcuts (static + dynamic, e.g. Continue Listening)
 baselineprofile/         Baseline profile generator for startup optimization
 website/                 Landing page (GitHub Pages)
@@ -521,17 +548,17 @@ Other open-source projects in the Jellyfin ecosystem:
 
 | Metric | Value |
 | --- | --- |
-| Gradle modules | 30 (app + 9 core + 19 feature + 1 baseline profile) |
-| Feature modules | 19 |
-| Configurable settings | ~231 |
-| Data models | 55+ |
-| API clients | 12 |
-| Room DAOs | 16 |
-| Supported languages | 9 (en, de, es, fr, it, pt, ja, ko, zh) |
-| External integrations | Jellyfin, Jellyseerr/Overseerr, LRCLIB, TMDB, Google Cast, Sentry |
+| Gradle modules | 33 (app + 9 core + 22 feature + 1 baseline profile) |
+| Feature modules | 22 |
+| Configurable settings | ~266 |
+| Data models | 60+ |
+| API clients | 18+ |
+| Room DAOs | 13 |
+| Supported languages | 1 (English; i18n infrastructure in place, community translations in progress) |
+| External integrations | Jellyfin, Jellyseerr/Overseerr, Radarr, Sonarr, LRCLIB, TMDB, Google Cast, Sentry |
 | Min SDK | 28 (Android 9.0) |
 | Target/Compile SDK | 37 |
-| Current version | v0.7.11 (Active Beta) |
+| Current version | v0.8.3 (Active Beta) |
 
 ---
 

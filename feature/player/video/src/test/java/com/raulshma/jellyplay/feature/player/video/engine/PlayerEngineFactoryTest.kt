@@ -2,7 +2,9 @@ package com.raulshma.jellyplay.feature.player.video.engine
 
 import android.content.Context
 import com.raulshma.jellyplay.core.model.PlayerType
+import com.raulshma.jellyplay.feature.player.video.subtitle.FontProvider
 import io.mockk.mockk
+import okhttp3.OkHttpClient
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
@@ -16,7 +18,9 @@ import org.junit.Test
 class PlayerEngineFactoryTest {
 
     private val context: Context = mockk(relaxed = true)
-    private val factory = PlayerEngineFactory(context)
+    private val streamingOkHttpClient: OkHttpClient = mockk(relaxed = true)
+    private val fontProvider: FontProvider = mockk(relaxed = true)
+    private val factory = PlayerEngineFactory(context, streamingOkHttpClient, fontProvider)
 
     @Test
     fun create_external_returnsNoOpEngine() {

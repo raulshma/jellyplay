@@ -595,6 +595,10 @@ internal fun DetailContentBody(
                         )
                     }
                     Spacer(Modifier.height(16.dp))
+                    // Compute the card width once from the already-read adaptiveInfo
+                    // instead of re-reading LocalAdaptiveInfo.current inside each
+                    // visible item lambda (one CompositionLocal read per item).
+                    val relatedCardWidth = if (adaptiveInfo.windowSizeClass != WindowSizeClass.Compact) 200.dp else 160.dp
                     TvFocusableItemRow(
                         items = relatedItems,
                         key = { "related_${it.id}" },
@@ -602,15 +606,12 @@ internal fun DetailContentBody(
                         horizontalArrangement = Arrangement.spacedBy(12.dp),
                     ) { _, related, focusModifier ->
                             val relatedClick = remember(related.id) { { onItemClick(related.id) } }
-                            val adaptiveInfo = LocalAdaptiveInfo.current
                             FadingItem {
                                 PosterCard(
                                     item = related,
                                     imageUrl = getImageUrl(related.id),
                                     onClick = relatedClick,
-                                    modifier = focusModifier.width(
-                                        if (adaptiveInfo.windowSizeClass != WindowSizeClass.Compact) 200.dp else 160.dp
-                                    ),
+                                    modifier = focusModifier.width(relatedCardWidth),
                                 )
                             }
                     }
@@ -619,9 +620,14 @@ internal fun DetailContentBody(
         }
 
         // ── Seerr Recommendations Section ──
+        // Defer the Seerr fetch until after the staggered section reveal (~300ms)
+        // so the network round-trip doesn't contend with the first-frame GPU work.
+        // The VM guard (seerrDataLoaded) makes this idempotent; this is purely a
+        // priority/yield, so a short frame-aligned delay suffices over an arbitrary
+        // 1s wall-clock back-off.
         LaunchedEffect(isSeerrConnected, isSeerrRecommendationsEnabled, seerrRecommendations.isEmpty()) {
             if (isSeerrConnected && isSeerrRecommendationsEnabled && seerrRecommendations.isEmpty()) {
-                kotlinx.coroutines.delay(1000)
+                kotlinx.coroutines.delay(350)
                 onLoadSeerrData()
             }
         }

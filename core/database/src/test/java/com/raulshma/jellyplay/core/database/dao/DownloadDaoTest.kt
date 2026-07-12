@@ -114,14 +114,15 @@ class DownloadDaoTest {
     }
 
     @Test
-    fun `getActiveDownloadCount counts pending downloading and paused`() = runTest {
+    fun `getActiveDownloadCount counts pending queued downloading and paused`() = runTest {
         downloadDao.insertDownload(createDownload(id = "dl-1", status = "PENDING"))
-        downloadDao.insertDownload(createDownload(id = "dl-2", status = "DOWNLOADING"))
-        downloadDao.insertDownload(createDownload(id = "dl-3", status = "PAUSED"))
-        downloadDao.insertDownload(createDownload(id = "dl-4", status = "COMPLETED"))
+        downloadDao.insertDownload(createDownload(id = "dl-2", status = "QUEUED"))
+        downloadDao.insertDownload(createDownload(id = "dl-3", status = "DOWNLOADING"))
+        downloadDao.insertDownload(createDownload(id = "dl-4", status = "PAUSED"))
+        downloadDao.insertDownload(createDownload(id = "dl-5", status = "COMPLETED"))
 
         val count = downloadDao.getActiveDownloadCount().first()
-        assertEquals(3, count)
+        assertEquals(4, count)
     }
 
     @Test

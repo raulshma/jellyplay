@@ -173,6 +173,43 @@ class MigrationTest {
         db.close()
     }
 
+    /**
+     * Regression for the v34→v35 migration: the `canDeleteContent` column must
+     * be added to the users table (defaulting to 0/false) so the Stale Media /
+     * Watched Media admin screens stop telling admins they lack delete
+     * permission after an app restart. Reuses the v12 starting schema; the chain
+     * itself carries it forward to v35, including this column via
+     * [MIGRATION_34_35].
+     */
+    @Test
+    fun migrateAllFromV12_addsCanDeleteContentColumn() = runTest {
+        createDatabase(12) { db ->
+            createServersTable(db)
+            createDownloadsTableV11(db)
+            createUsersTableV10(db)
+            createLyricsCacheTable(db)
+            createOfflineMediaTable(db)
+            db.execSQL(
+                "INSERT INTO users (userId, serverId, name, accessToken, isAdmin, lastConnected) VALUES (?, ?, ?, ?, ?, ?)",
+                arrayOf<Any>("user-1", "server-1", "AdminUser", "token123", 1, 1700000000000L)
+            )
+        }
+
+        val db = openWithMigrations()
+        // Pre-existing row picks up the default (false) after migration.
+        val migrated = db.userDao().getUserById("user-1")
+        assertNotNull(migrated)
+        assertEquals("AdminUser", migrated!!.name)
+        assertEquals(false, migrated.canDeleteContent)
+        // A fresh write with canDeleteContent = true must round-trip, proving
+        // the column exists and is read by the DAO/Room-generated mapping.
+        db.userDao().insertUser(migrated.copy(canDeleteContent = true))
+        val reloaded = db.userDao().getUserById("user-1")
+        assertNotNull(reloaded)
+        assertEquals(true, reloaded!!.canDeleteContent)
+        db.close()
+    }
+
     @Test
     fun migrateAllFromV12() = runTest {
         createDatabase(12) { db ->
@@ -404,11 +441,11 @@ class MigrationTest {
     fun allMigrations_coversContiguousRange() {
         val tokenCipher = TokenCipher.forTestingWithPersistentKey()
         val migrations = allMigrations(tokenCipher)
-        // One migration per step from v1 up to the current schema version (34),
+        // One migration per step from v1 up to the current schema version (35),
         // each handing off to the next with no gaps or duplicate starts.
         val expected = JellyPlayDatabase::class.java
             .getAnnotation(androidx.room.Database::class.java)?.version
-            ?: 34
+            ?: 35
         val startVersions = migrations.map { it.startVersion }
         assertEquals(
             "every version 1..<current must start exactly one migration",

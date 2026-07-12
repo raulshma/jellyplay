@@ -177,6 +177,18 @@ internal fun HomeContentList(
             }
         }
 
+        // Hoisted out of the items() lambda so the gradient brush is built once
+        // per (backgroundColor, density) change rather than re-instantiated for
+        // every section item in the list, even though only the first section
+        // actually applies it.
+        val heroTransitionBrush = remember(state.backgroundColor, density) {
+            Brush.verticalGradient(
+                colors = listOf(Color.Transparent, state.backgroundColor),
+                startY = 0f,
+                endY = with(density) { 10.dp.toPx() },
+            )
+        }
+
         CompositionLocalProvider(
             com.raulshma.jellyplay.core.ui.components.LocalScrollIdle provides
                 remember(listState) { { !listState.isScrollInProgress } }
@@ -271,13 +283,6 @@ internal fun HomeContentList(
                     label = "sectionAnimation",
                 )
 
-                val heroTransitionBrush = remember(state.backgroundColor, density) {
-                    Brush.verticalGradient(
-                        colors = listOf(Color.Transparent, state.backgroundColor),
-                        startY = 0f,
-                        endY = with(density) { 10.dp.toPx() },
-                    )
-                }
                 val sectionModifier = Modifier
                     .fillMaxWidth()
                     .then(

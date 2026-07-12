@@ -43,6 +43,8 @@ mediarouter = "1.9.0-alpha01"
 slf4j = "2.0.17"
 libmpv = "0.1.12"
 libvlc = "3.7.1"
+assMedia = "0.4.0"
+truetypeParser = "2.1.4"
 okhttp = "5.3.2"
 smoothCornerRect = "v1.0.0"
 tvMaterial = "1.1.0"
@@ -174,6 +176,16 @@ slf4j-nop = { group = "org.slf4j", name = "slf4j-nop", version.ref = "slf4j" }
 # Player Engines
 libmpv = { group = "io.github.abdallahmehiz", name = "mpv-android-lib", version.ref = "libmpv" }
 libvlc-all = { group = "org.videolan.android", name = "libvlc-all", version.ref = "libvlc" }
+# libass wired into Media3's renderer pipeline — full ASS/SSA rendering
+# (positioning, fonts, animations, karaoke, vector drawing) on the
+# ExoPlayer backend. Bundles its own libass native .so per ABI.
+ass-media = { group = "io.github.peerless2012", name = "ass-media", version.ref = "assMedia" }
+# Pure-Kotlin ASS subtitle parser/renderer core. Brings AssRender into the
+# compile classpath so ExoPlayerEngine can call setFontScale for SCALE override
+# on ASS tracks (same release train as ass-media, reusing the assMedia version).
+ass-kt = { group = "io.github.peerless2012", name = "ass-kt", version.ref = "assMedia" }
+# Parse font family names from .ttf/.otf headers for the subtitle font picker.
+truetype-parser = { group = "io.github.yubyf", name = "truetypeparser-light", version.ref = "truetypeParser" }
 
 # OkHttp
 okhttp = { group = "com.squareup.okhttp3", name = "okhttp", version.ref = "okhttp" }
