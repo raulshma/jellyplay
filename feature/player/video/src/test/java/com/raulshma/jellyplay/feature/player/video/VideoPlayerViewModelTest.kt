@@ -102,7 +102,12 @@ class VideoPlayerViewModelTest {
             videoMiniPlayerState = videoMiniPlayerState,
             sleepTimerManager = sleepTimerManager,
             userMessageBus = UserMessageBus(),
-            playerEngineFactory = com.raulshma.jellyplay.feature.player.video.engine.PlayerEngineFactory(context, okHttpClient),
+            playerEngineFactory = com.raulshma.jellyplay.feature.player.video.engine.PlayerEngineFactory(
+                context,
+                okHttpClient,
+                mockk<com.raulshma.jellyplay.feature.player.video.subtitle.FontProvider>(relaxed = true),
+            ),
+            fontProvider = mockk(relaxed = true),
             savedStateHandle = androidx.lifecycle.SavedStateHandle(),
         )
     }

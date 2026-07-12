@@ -49,6 +49,7 @@ fun QuickActionsSection(
     onStaleMedia: () -> Unit = {},
     onWatchedMediaCleanup: () -> Unit = {},
     onPlugins: () -> Unit = {},
+    onUsers: () -> Unit = {},
     modifier: Modifier = Modifier,
 ) {
     Column(modifier = modifier.fillMaxWidth().padding(horizontal = 8.dp)) {
@@ -123,6 +124,14 @@ fun QuickActionsSection(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.spacedBy(10.dp),
         ) {
+            QuickActionButton(
+                icon = Tabler.Outline.Users,
+                label = "Users",
+                iconBackgroundColor = MaterialTheme.colorScheme.secondaryContainer,
+                iconTint = MaterialTheme.colorScheme.onSecondaryContainer,
+                onClick = onUsers,
+                modifier = Modifier.weight(1f),
+            )
             QuickActionButton(
                 icon = Tabler.Outline.Tool,
                 label = "Plugins",

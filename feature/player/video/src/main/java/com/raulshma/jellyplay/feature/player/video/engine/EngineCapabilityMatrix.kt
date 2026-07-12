@@ -49,6 +49,15 @@ object EngineCapabilityMatrix {
         supportsVideoFilters = false,
         supportsLiveQualitySwitch = true,
         supportsBandwidthEstimate = true,
+        supportsAssOverride = true,
+        // ExoPlayer renders ASS via libass but ass-media 0.4.0 exposes no
+        // compile-time override API — ASS tracks render as-authored. User style
+        // overrides (colors, borders, Force) apply to SRT/VTT only. Font SCALE
+        // is honored separately via AssRender.setFontScale (see ExoPlayerEngine).
+        supportsAssStyleOverride = false,
+        supportsFontFamily = true,
+        supportsFreeFormColors = true,
+        supportsBorderStyles = true,
     )
 
     /** libmpv backend. */
@@ -68,6 +77,13 @@ object EngineCapabilityMatrix {
         supportsVideoFilters = true,
         supportsLiveQualitySwitch = false,
         supportsBandwidthEstimate = false,
+        supportsAssOverride = true,
+        // mpv's libass supports `--ass-override=force`, so the user's colors,
+        // borders, edges, and Force override DO apply to ASS/SSA tracks.
+        supportsAssStyleOverride = true,
+        supportsFontFamily = true,
+        supportsFreeFormColors = true,
+        supportsBorderStyles = true,
     )
 
     /** libVLC backend. */
@@ -100,6 +116,11 @@ object EngineCapabilityMatrix {
         supportsVideoFilters = true,
         supportsLiveQualitySwitch = false,
         supportsBandwidthEstimate = false,
+        supportsAssOverride = false,
+        supportsAssStyleOverride = false,
+        supportsFontFamily = true,
+        supportsFreeFormColors = false,
+        supportsBorderStyles = false,
     )
 
     /**
@@ -122,6 +143,11 @@ object EngineCapabilityMatrix {
         supportsVideoFilters = false,
         supportsLiveQualitySwitch = false,
         supportsBandwidthEstimate = false,
+        supportsAssOverride = false,
+        supportsAssStyleOverride = false,
+        supportsFontFamily = false,
+        supportsFreeFormColors = false,
+        supportsBorderStyles = false,
     )
 
     /** All declared matrices, keyed by [PlayerType]. Asserted total in tests. */

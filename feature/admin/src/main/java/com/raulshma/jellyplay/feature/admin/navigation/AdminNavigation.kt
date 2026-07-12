@@ -14,6 +14,8 @@ import com.raulshma.jellyplay.feature.admin.statistics.UserStatisticsScreen
 import com.raulshma.jellyplay.feature.admin.statistics.detail.UserStatisticsDetailScreen
 import com.raulshma.jellyplay.feature.admin.stalemedia.StaleMediaScreen
 import com.raulshma.jellyplay.feature.admin.tasks.ScheduledTasksScreen
+import com.raulshma.jellyplay.feature.admin.users.UsersScreen
+import com.raulshma.jellyplay.feature.admin.users.detail.UserDetailScreen
 import com.raulshma.jellyplay.feature.admin.watchedremoval.WatchedMediaCleanupScreen
 
 fun EntryProviderScope<NavKey>.adminSection(
@@ -29,6 +31,7 @@ fun EntryProviderScope<NavKey>.adminSection(
             onStaleMedia = { navigator.navigate(Route.StaleMedia) },
             onWatchedMediaCleanup = { navigator.navigate(Route.WatchedMediaCleanup) },
             onPlugins = { navigator.navigate(Route.Plugins) },
+            onUsers = { navigator.navigate(Route.Users) },
         )
     }
 
@@ -72,6 +75,20 @@ fun EntryProviderScope<NavKey>.adminSection(
 
     entry<Route.WatchedMediaCleanup> {
         WatchedMediaCleanupScreen(
+            onBack = { navigator.goBack() },
+        )
+    }
+
+    entry<Route.Users> {
+        UsersScreen(
+            onBack = { navigator.goBack() },
+            onUserDetail = { userId -> navigator.navigate(Route.UserDetail(userId)) },
+        )
+    }
+
+    entry<Route.UserDetail> { route ->
+        UserDetailScreen(
+            userId = route.userId,
             onBack = { navigator.goBack() },
         )
     }

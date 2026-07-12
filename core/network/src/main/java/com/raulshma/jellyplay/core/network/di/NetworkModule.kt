@@ -25,6 +25,8 @@ import com.raulshma.jellyplay.core.network.api.PluginApiClient
 import com.raulshma.jellyplay.core.network.api.PluginApiClientImpl
 import com.raulshma.jellyplay.core.network.api.SyncPlayApiClient
 import com.raulshma.jellyplay.core.network.api.SyncPlayApiClientImpl
+import com.raulshma.jellyplay.core.network.api.UserApiClient
+import com.raulshma.jellyplay.core.network.api.UserApiClientImpl
 import com.raulshma.jellyplay.core.network.arr.RadarrApiClient
 import com.raulshma.jellyplay.core.network.arr.RadarrApiClientImpl
 import com.raulshma.jellyplay.core.network.arr.ResilientRadarrApiClient
@@ -92,6 +94,10 @@ abstract class NetworkModule {
     @Binds
     @Singleton
     abstract fun bindAdminApiClient(impl: AdminApiClientImpl): AdminApiClient
+
+    @Binds
+    @Singleton
+    abstract fun bindUserApiClient(impl: UserApiClientImpl): UserApiClient
 
     @Binds
     @Singleton

@@ -5,6 +5,8 @@ import com.raulshma.jellyplay.core.model.ActivityLogSeverity
 import com.raulshma.jellyplay.core.model.ChapterInfo
 import com.raulshma.jellyplay.core.model.DeviceCapabilities
 import com.raulshma.jellyplay.core.model.DeviceInfo
+import com.raulshma.jellyplay.core.model.ManagedUser
+import com.raulshma.jellyplay.core.model.ManagedUserPolicy
 import com.raulshma.jellyplay.core.model.DvrSeriesTimer
 import com.raulshma.jellyplay.core.model.DvrTimer
 import com.raulshma.jellyplay.core.model.DvrTimerStatus
@@ -435,3 +437,66 @@ internal fun parseItemSortBy(sortBy: String): org.jellyfin.sdk.model.api.ItemSor
     "ProductionYear" -> org.jellyfin.sdk.model.api.ItemSortBy.PRODUCTION_YEAR
     else -> null
 }
+
+internal fun org.jellyfin.sdk.model.api.UserDto.toManagedUser() = ManagedUser(
+    id = id.toString(),
+    name = name ?: "",
+    primaryImageTag = primaryImageTag,
+    hasPassword = hasPassword,
+    hasConfiguredPassword = hasConfiguredPassword,
+    lastLoginDate = lastLoginDate?.toString(),
+    lastActivityDate = lastActivityDate?.toString(),
+    policy = policy?.toManagedPolicy() ?: ManagedUserPolicy(),
+)
+
+internal fun org.jellyfin.sdk.model.api.UserPolicy.toManagedPolicy() = ManagedUserPolicy(
+    isAdministrator = isAdministrator,
+    isHidden = isHidden,
+    isDisabled = isDisabled,
+    enableUserPreferenceAccess = enableUserPreferenceAccess,
+    enableAllFolders = enableAllFolders,
+    enabledFolders = (enabledFolders ?: emptyList()).map { it.toString() },
+    enableMediaPlayback = enableMediaPlayback,
+    enableAudioPlaybackTranscoding = enableAudioPlaybackTranscoding,
+    enableVideoPlaybackTranscoding = enableVideoPlaybackTranscoding,
+    enablePlaybackRemuxing = enablePlaybackRemuxing,
+    enableContentDeletion = enableContentDeletion,
+    enableContentDownloading = enableContentDownloading,
+    enableLiveTvAccess = enableLiveTvAccess,
+    enableLiveTvManagement = enableLiveTvManagement,
+    enableRemoteControlOfOtherUsers = enableRemoteControlOfOtherUsers,
+    enableRemoteAccess = enableRemoteAccess,
+    maxParentalRating = maxParentalRating,
+    maxActiveSessions = maxActiveSessions,
+    loginAttemptsBeforeLockout = loginAttemptsBeforeLockout,
+)
+
+/**
+ * Copies the 19 editable [ManagedUserPolicy] fields onto a full SDK
+ * [UserPolicy], preserving every bookkeeping field (auth provider ids,
+ * syncPlayAccess, accessSchedules, blocked/allowed tags, etc.). Used by
+ * [UserApiClientImpl.updateUserPolicy] so non-edited server state is never reset.
+ */
+internal fun org.jellyfin.sdk.model.api.UserPolicy.overlayWith(
+    edited: ManagedUserPolicy,
+): org.jellyfin.sdk.model.api.UserPolicy = copy(
+    isAdministrator = edited.isAdministrator,
+    isHidden = edited.isHidden,
+    isDisabled = edited.isDisabled,
+    enableUserPreferenceAccess = edited.enableUserPreferenceAccess,
+    enableAllFolders = edited.enableAllFolders,
+    enabledFolders = edited.enabledFolders.map { it.toUUID() },
+    enableMediaPlayback = edited.enableMediaPlayback,
+    enableAudioPlaybackTranscoding = edited.enableAudioPlaybackTranscoding,
+    enableVideoPlaybackTranscoding = edited.enableVideoPlaybackTranscoding,
+    enablePlaybackRemuxing = edited.enablePlaybackRemuxing,
+    enableContentDeletion = edited.enableContentDeletion,
+    enableContentDownloading = edited.enableContentDownloading,
+    enableLiveTvAccess = edited.enableLiveTvAccess,
+    enableLiveTvManagement = edited.enableLiveTvManagement,
+    enableRemoteControlOfOtherUsers = edited.enableRemoteControlOfOtherUsers,
+    enableRemoteAccess = edited.enableRemoteAccess,
+    maxParentalRating = edited.maxParentalRating,
+    maxActiveSessions = edited.maxActiveSessions,
+    loginAttemptsBeforeLockout = edited.loginAttemptsBeforeLockout,
+)
