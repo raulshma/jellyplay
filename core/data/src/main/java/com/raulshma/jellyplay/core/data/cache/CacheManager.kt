@@ -15,6 +15,9 @@ import java.io.File
 import javax.inject.Inject
 import javax.inject.Singleton
 
+/** Name of the audio byte cache subdirectory under [Context.cacheDir]. */
+internal const val AUDIO_CACHE_DIR_NAME = "audio_cache"
+
 /**
  * Manages the application's HTTP/image caches and honours the
  * [com.raulshma.jellyplay.core.model.UserPreferences.autoDeleteCache]
@@ -26,6 +29,10 @@ import javax.inject.Singleton
  * safe to evict at any time (the HTTP stack and image loaders will simply
  * re-fetch on demand). Downloaded media lives under a separate directory
  * and is never touched here.
+ *
+ * The [AUDIO_CACHE_DIR_NAME] subdirectory is **excluded** from the sweep
+ * because it holds in-flight data referenced by ExoPlayer; sweeping it
+ * mid-playback would corrupt reads.
  */
 @Singleton
 class CacheManager @Inject constructor(
@@ -33,6 +40,16 @@ class CacheManager @Inject constructor(
     private val userPreferencesStore: UserPreferencesStore,
     @ApplicationScope private val appScope: CoroutineScope,
 ) : DefaultLifecycleObserver {
+
+    /**
+     * Subdirectories of [Context.cacheDir] that must survive the auto-delete
+     * sweep. The audio byte cache holds in-flight data referenced by ExoPlayer.
+     */
+    private val protectedSubdirs = setOf(AUDIO_CACHE_DIR_NAME)
+
+    /** Test hook: overrides the cache directory resolved from [Context]. */
+    internal var cacheDirOverride: File? = null
+    private fun cacheDir(): File = cacheDirOverride ?: context.cacheDir
 
     init {
         runCatching {
@@ -60,15 +77,16 @@ class CacheManager @Inject constructor(
 
     /**
      * Returns the combined size (in bytes) of the internal + external cache
-     * directories. Computed on a background thread.
+     * directories. Computed on a background thread. Excludes [protectedSubdirs].
      */
     suspend fun cacheSizeBytes(): Long = withContext(Dispatchers.IO) {
-        getDirSize(context.cacheDir) + (context.externalCacheDir?.let { getDirSize(it) } ?: 0L)
+        getDirSizeExcludingProtected(cacheDir()) +
+            (context.externalCacheDir?.let { getDirSizeExcludingProtected(it) } ?: 0L)
     }
 
     private fun clearCacheInternal(): Long {
         var reclaimed = 0L
-        reclaimed += deleteContents(context.cacheDir)
+        reclaimed += deleteContents(cacheDir())
         context.externalCacheDir?.let { reclaimed += deleteContents(it) }
         return reclaimed
     }
@@ -77,6 +95,9 @@ class CacheManager @Inject constructor(
         if (!dir.exists() || !dir.isDirectory) return 0L
         var total = 0L
         dir.listFiles()?.forEach { child ->
+            if (child.isDirectory && child.name in protectedSubdirs) {
+                return@forEach // preserve audio_cache
+            }
             total += if (child.isDirectory) {
                 val sub = getDirSize(child)
                 child.deleteRecursively()
@@ -88,6 +109,17 @@ class CacheManager @Inject constructor(
             }
         }
         return total
+    }
+
+    private fun getDirSizeExcludingProtected(dir: File): Long {
+        if (!dir.exists() || !dir.isDirectory) return 0L
+        var size = 0L
+        dir.listFiles()?.forEach { child ->
+            if (child.isDirectory && child.name in protectedSubdirs) return@forEach
+            if (child.isDirectory) size += getDirSize(child)
+            else if (child.isFile) size += child.length()
+        }
+        return size
     }
 
     private fun getDirSize(dir: File): Long {

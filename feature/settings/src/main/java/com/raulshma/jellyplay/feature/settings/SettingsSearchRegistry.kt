@@ -1367,6 +1367,42 @@ object SettingsSearchRegistry {
             isAdvanced = true
         ),
         SettingsSearchItem(
+            id = "audio_caching_enabled",
+            title = "Smart Audio Caching",
+            subtitle = "Buffer upcoming tracks for instant playback",
+            category = "Audio Player",
+            keywords = listOf("audio", "cache", "caching", "prefetch", "buffer", "plexamp", "music"),
+            route = Route.AudioSettings(),
+            icon = Tabler.Outline.Database
+        ),
+        SettingsSearchItem(
+            id = "audio_cache_size",
+            title = "Audio Cache Size",
+            subtitle = "Maximum disk space for cached audio",
+            category = "Audio Player",
+            keywords = listOf("audio", "cache", "size", "disk", "storage"),
+            route = Route.AudioSettings(),
+            icon = Tabler.Outline.DeviceFloppy
+        ),
+        SettingsSearchItem(
+            id = "audio_prefetch_lookahead",
+            title = "Audio Prefetch Look-ahead",
+            subtitle = "Number of upcoming tracks to buffer ahead",
+            category = "Audio Player",
+            keywords = listOf("audio", "prefetch", "lookahead", "buffer", "upcoming"),
+            route = Route.AudioSettings(),
+            icon = Tabler.Outline.ListNumbers
+        ),
+        SettingsSearchItem(
+            id = "audio_cache_network_policy",
+            title = "Audio Cache Network Policy",
+            subtitle = "When to prefetch audio (Wi-Fi or any network)",
+            category = "Audio Player",
+            keywords = listOf("audio", "cache", "network", "wifi", "cellular", "metered"),
+            route = Route.AudioSettings(),
+            icon = Tabler.Outline.Wifi
+        ),
+        SettingsSearchItem(
             id = "replaygain_preamp",
             title = "ReplayGain Pre-Amp",
             subtitle = "Fine-tune target loudness",

@@ -84,6 +84,51 @@ class NetworkMonitor @Inject constructor(
             initialValue = NetworkStatus.Online,
         )
 
+    /**
+     * Whether the active network is metered (e.g. cellular, metered Wi-Fi).
+     * True when the network lacks [NetworkCapabilities.NET_CAPABILITY_NOT_METERED].
+     * Used by [com.raulshma.jellyplay.core.data.playback.AudioCachePolicyGuard]
+     * to gate proactive audio-cache prefetching.
+     */
+    val isMetered: StateFlow<Boolean> = callbackFlow {
+        val sendCurrent: () -> Unit = { trySend(currentMetered()) }
+
+        val callback = object : NetworkCallback() {
+            override fun onAvailable(network: Network) {
+                trySend(deriveMeteredFromCapabilities(network))
+            }
+
+            override fun onLost(network: Network) {
+                trySend(currentMetered())
+            }
+
+            override fun onCapabilitiesChanged(
+                network: Network,
+                capabilities: NetworkCapabilities,
+            ) {
+                trySend(deriveMeteredFromCapabilities(network))
+            }
+        }
+
+        sendCurrent()
+
+        val request = NetworkRequest.Builder()
+            .addCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET)
+            .build()
+        connectivityManager.registerNetworkCallback(request, callback)
+
+        awaitClose {
+            connectivityManager.unregisterNetworkCallback(callback)
+        }
+    }
+        .distinctUntilChanged()
+        .conflate()
+        .stateIn(
+            scope = scope,
+            started = SharingStarted.WhileSubscribed(5_000),
+            initialValue = false,
+        )
+
     // ── helpers ──────────────────────────────────────────────
 
     private fun currentStatus(): NetworkStatus {
@@ -104,5 +149,15 @@ class NetworkMonitor @Inject constructor(
             hasInternet -> NetworkStatus.Local
             else -> NetworkStatus.Offline
         }
+    }
+
+    private fun currentMetered(): Boolean {
+        val activeNetwork = connectivityManager.activeNetwork ?: return true
+        return deriveMeteredFromCapabilities(activeNetwork)
+    }
+
+    private fun deriveMeteredFromCapabilities(network: Network): Boolean {
+        val caps = connectivityManager.getNetworkCapabilities(network) ?: return true
+        return !caps.hasCapability(NetworkCapabilities.NET_CAPABILITY_NOT_METERED)
     }
 }
