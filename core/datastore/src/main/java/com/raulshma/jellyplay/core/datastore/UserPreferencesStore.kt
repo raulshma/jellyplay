@@ -12,6 +12,7 @@ import androidx.datastore.preferences.core.intPreferencesKey
 import androidx.datastore.preferences.core.longPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
+import com.raulshma.jellyplay.core.model.AudioCacheNetworkPolicy
 import com.raulshma.jellyplay.core.model.AudioNormalizationMode
 import com.raulshma.jellyplay.core.model.CheckFrequency
 import com.raulshma.jellyplay.core.model.ChannelMixMode
@@ -119,6 +120,12 @@ class UserPreferencesStore @Inject constructor(
         val VIDEO_DEFAULT_ASPECT_RATIO = stringPreferencesKey("video_default_aspect_ratio")
         val VIDEO_PRELOAD_BUFFER_SIZE = stringPreferencesKey("video_preload_buffer_size")
         val AUDIO_PRELOAD_BUFFER_SIZE = stringPreferencesKey("audio_preload_buffer_size")
+        val AUDIO_CACHING_ENABLED = booleanPreferencesKey("audio_caching_enabled")
+        val AUDIO_CACHE_SIZE_MB = intPreferencesKey("audio_cache_size_mb")
+        val AUDIO_PREFETCH_LOOKAHEAD = intPreferencesKey("audio_prefetch_lookahead")
+        val AUDIO_PREFETCH_BACKFILL = intPreferencesKey("audio_prefetch_backfill")
+        val AUDIO_CACHE_NETWORK_POLICY = stringPreferencesKey("audio_cache_network_policy")
+        val AUDIO_CACHE_CELLULAR_MONTHLY_CAP_MB = intPreferencesKey("audio_cache_cellular_monthly_cap_mb")
         val AUDIO_NORMALIZATION_MODE = stringPreferencesKey("audio_normalization_mode")
         val CHANNEL_MIX_MODE = stringPreferencesKey("channel_mix_mode")
         val DREAM_IMAGE_CATEGORIES = stringPreferencesKey("dream_image_categories")
@@ -923,6 +930,16 @@ class UserPreferencesStore @Inject constructor(
             audioPreloadBufferSize = try {
                 PreloadBufferSize.valueOf(prefs[Keys.AUDIO_PRELOAD_BUFFER_SIZE] ?: PreloadBufferSize.MEDIUM.name)
             } catch (_: Exception) { PreloadBufferSize.MEDIUM },
+            audioCachingEnabled = prefs[Keys.AUDIO_CACHING_ENABLED] ?: true,
+            audioCacheSizeMb = prefs[Keys.AUDIO_CACHE_SIZE_MB] ?: 1024,
+            audioPrefetchLookahead = prefs[Keys.AUDIO_PREFETCH_LOOKAHEAD] ?: 3,
+            audioPrefetchBackfill = prefs[Keys.AUDIO_PREFETCH_BACKFILL] ?: 5,
+            audioCacheNetworkPolicy = try {
+                AudioCacheNetworkPolicy.valueOf(
+                    prefs[Keys.AUDIO_CACHE_NETWORK_POLICY] ?: AudioCacheNetworkPolicy.DEFAULT.name
+                )
+            } catch (_: Exception) { AudioCacheNetworkPolicy.DEFAULT },
+            audioCacheCellularMonthlyCapMb = prefs[Keys.AUDIO_CACHE_CELLULAR_MONTHLY_CAP_MB] ?: 500,
             audioNormalizationMode = try {
                 when (val stored = prefs[Keys.AUDIO_NORMALIZATION_MODE] ?: AudioNormalizationMode.NONE.name) {
                     "REPLAYGAIN" -> AudioNormalizationMode.TRACK
@@ -1961,6 +1978,30 @@ class UserPreferencesStore @Inject constructor(
         context.dataStore.edit { it[Keys.AUDIO_PRELOAD_BUFFER_SIZE] = size.name }
     }
 
+    suspend fun setAudioCachingEnabled(enabled: Boolean) {
+        context.dataStore.edit { it[Keys.AUDIO_CACHING_ENABLED] = enabled }
+    }
+
+    suspend fun setAudioCacheSizeMb(sizeMb: Int) {
+        context.dataStore.edit { it[Keys.AUDIO_CACHE_SIZE_MB] = sizeMb }
+    }
+
+    suspend fun setAudioPrefetchLookahead(lookahead: Int) {
+        context.dataStore.edit { it[Keys.AUDIO_PREFETCH_LOOKAHEAD] = lookahead }
+    }
+
+    suspend fun setAudioPrefetchBackfill(backfill: Int) {
+        context.dataStore.edit { it[Keys.AUDIO_PREFETCH_BACKFILL] = backfill }
+    }
+
+    suspend fun setAudioCacheNetworkPolicy(policy: AudioCacheNetworkPolicy) {
+        context.dataStore.edit { it[Keys.AUDIO_CACHE_NETWORK_POLICY] = policy.name }
+    }
+
+    suspend fun setAudioCacheCellularMonthlyCapMb(capMb: Int) {
+        context.dataStore.edit { it[Keys.AUDIO_CACHE_CELLULAR_MONTHLY_CAP_MB] = capMb }
+    }
+
     suspend fun setAudioNormalizationMode(mode: AudioNormalizationMode) {
         context.dataStore.edit { it[Keys.AUDIO_NORMALIZATION_MODE] = mode.name }
     }
@@ -2358,6 +2399,12 @@ class UserPreferencesStore @Inject constructor(
             settings[Keys.VIDEO_SHOW_PLAYBACK_METADATA] = prefs.videoShowPlaybackMetadata
             settings[Keys.VIDEO_PRELOAD_BUFFER_SIZE] = prefs.videoPreloadBufferSize.name
             settings[Keys.AUDIO_PRELOAD_BUFFER_SIZE] = prefs.audioPreloadBufferSize.name
+            settings[Keys.AUDIO_CACHING_ENABLED] = prefs.audioCachingEnabled
+            settings[Keys.AUDIO_CACHE_SIZE_MB] = prefs.audioCacheSizeMb
+            settings[Keys.AUDIO_PREFETCH_LOOKAHEAD] = prefs.audioPrefetchLookahead
+            settings[Keys.AUDIO_PREFETCH_BACKFILL] = prefs.audioPrefetchBackfill
+            settings[Keys.AUDIO_CACHE_NETWORK_POLICY] = prefs.audioCacheNetworkPolicy.name
+            settings[Keys.AUDIO_CACHE_CELLULAR_MONTHLY_CAP_MB] = prefs.audioCacheCellularMonthlyCapMb
             settings[Keys.AUDIO_NORMALIZATION_MODE] = prefs.audioNormalizationMode.name
             settings[Keys.AUDIO_NORMALIZATION_ENABLED] = prefs.audioNormalizationEnabled
             settings[Keys.REPLAYGAIN_PRE_AMP_DB] = prefs.replayGainPreAmpDb

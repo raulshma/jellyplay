@@ -68,6 +68,10 @@ sealed class AudioSettingsDialog {
     object LrBalancePicker : AudioSettingsDialog()
     object PitchShiftPicker : AudioSettingsDialog()
     object VolumeBoostGainPicker : AudioSettingsDialog()
+    object AudioCacheSizePicker : AudioSettingsDialog()
+    object AudioPrefetchLookaheadPicker : AudioSettingsDialog()
+    object AudioPrefetchBackfillPicker : AudioSettingsDialog()
+    object AudioCacheNetworkPolicyPicker : AudioSettingsDialog()
 }
 
 @OptIn(ExperimentalMaterial3Api::class, androidx.compose.material3.ExperimentalMaterial3ExpressiveApi::class, androidx.compose.foundation.ExperimentalFoundationApi::class)
@@ -494,6 +498,76 @@ fun AudioSettingsScreen(
                         hiddenCount = 19,
                         onShowAdvanced = { viewModel.setShowAdvancedSettings(true) },
                     )
+                }
+            }
+            item {
+                SettingsGroup(
+                    icon = Tabler.Outline.Database,
+                    title = stringResource(R.string.settings_audio_caching_title),
+                    summary = { stringResource(R.string.settings_audio_caching_summary) },
+                    modifier = Modifier.padding(vertical = 8.dp),
+                    initiallyExpanded = false,
+                ) {
+                    var cacheIdx = 0
+                    val cacheTotal = 6
+                    SettingToggleItem(
+                        icon = Tabler.Outline.Database,
+                        title = stringResource(R.string.settings_audio_caching_enable),
+                        subtitle = if (preferences.audioCachingEnabled)
+                            stringResource(R.string.settings_audio_caching_on)
+                        else stringResource(R.string.settings_audio_caching_off),
+                        checked = preferences.audioCachingEnabled,
+                        highlighted = highlightSettingId == "audio_caching_enabled",
+                        index = cacheIdx++, count = cacheTotal,
+                        onCheckedChange = { viewModel.setAudioCachingEnabled(it) },
+                    )
+                    if (preferences.audioCachingEnabled) {
+                        SettingListItem(
+                            icon = Tabler.Outline.DeviceFloppy,
+                            title = stringResource(R.string.settings_audio_cache_size),
+                            subtitle = stringResource(R.string.settings_audio_cache_size_subtitle),
+                            trailingText = "${preferences.audioCacheSizeMb} MB",
+                            highlighted = highlightSettingId == "audio_cache_size",
+                            index = cacheIdx++, count = cacheTotal,
+                            onClick = { activeDialog = AudioSettingsDialog.AudioCacheSizePicker },
+                        )
+                        SettingListItem(
+                            icon = Tabler.Outline.ListNumbers,
+                            title = stringResource(R.string.settings_audio_prefetch_lookahead),
+                            subtitle = stringResource(R.string.settings_audio_prefetch_lookahead_subtitle),
+                            trailingText = "${preferences.audioPrefetchLookahead}",
+                            highlighted = highlightSettingId == "audio_prefetch_lookahead",
+                            index = cacheIdx++, count = cacheTotal,
+                            onClick = { activeDialog = AudioSettingsDialog.AudioPrefetchLookaheadPicker },
+                        )
+                        SettingListItem(
+                            icon = Tabler.Outline.History,
+                            title = stringResource(R.string.settings_audio_prefetch_backfill),
+                            subtitle = stringResource(R.string.settings_audio_prefetch_backfill_subtitle),
+                            trailingText = "${preferences.audioPrefetchBackfill}",
+                            highlighted = highlightSettingId == "audio_prefetch_backfill",
+                            index = cacheIdx++, count = cacheTotal,
+                            onClick = { activeDialog = AudioSettingsDialog.AudioPrefetchBackfillPicker },
+                        )
+                        SettingListItem(
+                            icon = Tabler.Outline.Wifi,
+                            title = stringResource(R.string.settings_audio_cache_network_policy),
+                            subtitle = preferences.audioCacheNetworkPolicy.displayName,
+                            trailingText = preferences.audioCacheNetworkPolicy.displayName,
+                            highlighted = highlightSettingId == "audio_cache_network_policy",
+                            index = cacheIdx++, count = cacheTotal,
+                            onClick = { activeDialog = AudioSettingsDialog.AudioCacheNetworkPolicyPicker },
+                        )
+                        SettingListItem(
+                            icon = Tabler.Outline.Trash,
+                            title = stringResource(R.string.settings_audio_cache_clear),
+                            subtitle = stringResource(R.string.settings_audio_cache_clear_subtitle),
+                            trailingText = "",
+                            highlighted = highlightSettingId == "audio_cache_clear",
+                            index = cacheIdx++, count = cacheTotal,
+                            onClick = { viewModel.clearAudioCache() },
+                        )
+                    }
                 }
             }
         }
