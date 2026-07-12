@@ -5,8 +5,12 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.asPaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.navigationBars
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
@@ -31,15 +35,18 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.composables.icons.tabler.Tabler
 import com.composables.icons.tabler.outline.Refresh
 import com.composables.icons.tabler.outline.UserPlus
+import com.raulshma.jellyplay.core.designsystem.theme.Dimensions
 import com.raulshma.jellyplay.core.designsystem.theme.ShapeCache
 import com.raulshma.jellyplay.core.ui.adaptive.LocalAdaptiveInfo
 import com.raulshma.jellyplay.core.ui.adaptive.bottomPadding
 import com.raulshma.jellyplay.core.ui.components.JellyPlayScreenScaffold
+import com.raulshma.jellyplay.core.ui.components.LocalFloatingNavOffset
 import com.raulshma.jellyplay.core.ui.components.ScreenEmptyState
 import com.raulshma.jellyplay.core.ui.components.ScreenLoadingState
 import com.raulshma.jellyplay.core.ui.components.rememberScreenBackgroundColor
@@ -62,6 +69,7 @@ fun UsersScreen(
     val adaptiveInfo = LocalAdaptiveInfo.current
     val isTv = LocalTvMode.current
     val backgroundColor = rememberScreenBackgroundColor()
+    val navOffsetPx = LocalFloatingNavOffset.current
 
     // TV focus-on-launch: focus the first user once the list arrives so D-pad input lands on
     // content, not the navigation drawer.
@@ -178,11 +186,29 @@ fun UsersScreen(
                     }
                 }
             }
-            FloatingActionButton(
-                onClick = { viewModel.showCreateDialog() },
-                modifier = Modifier.align(Alignment.BottomEnd).padding(16.dp),
-            ) {
-                Icon(Tabler.Outline.UserPlus, contentDescription = "Add user")
+            // FAB sits above the floating nav bar (clears it + the gesture-nav inset) and
+            // slides up with the nav bar's hide/show animation via LocalFloatingNavOffset.
+            if (!isTv) {
+                val addUserFocusState = rememberTvFocusState(focusedScale = 1.05f)
+                FloatingActionButton(
+                    onClick = { viewModel.showCreateDialog() },
+                    shape = ShapeCache.smooth16,
+                    modifier = Modifier
+                        .align(Alignment.BottomEnd)
+                        .then(addUserFocusState.focusModifier)
+                        .tvFocusIndicator(addUserFocusState, ShapeCache.smooth16)
+                        .padding(
+                            end = 16.dp,
+                            bottom = 16.dp + Dimensions.floatingNavHeight + WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding(),
+                        )
+                        .offset {
+                            val maxOffset = Dimensions.floatingNavHeight.toPx()
+                            val yOffset = (-navOffsetPx()).coerceAtMost(maxOffset)
+                            IntOffset(x = 0, y = yOffset.toInt())
+                        },
+                ) {
+                    Icon(Tabler.Outline.UserPlus, contentDescription = "Add user")
+                }
             }
         }
     }

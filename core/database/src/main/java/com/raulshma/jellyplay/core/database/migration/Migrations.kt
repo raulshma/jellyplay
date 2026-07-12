@@ -572,8 +572,20 @@ val MIGRATION_33_34 = object : Migration(33, 34) {
     }
 }
 
+// Persist the Jellyfin `enableContentDeletion` user policy flag so the
+// Stale Media / Watched Media admin screens can gate the Delete button on a
+// value that survives an app restart. Previously the flag lived only in the
+// in-memory UserInfo and was dropped by persistSession/restoreSession because
+// the users table had no column for it — so every restart reset it to false
+// and the admin screens wrongly told admins they lacked permission.
+val MIGRATION_34_35 = object : Migration(34, 35) {
+    override fun migrate(db: SupportSQLiteDatabase) {
+        db.execSQL("ALTER TABLE users ADD COLUMN canDeleteContent INTEGER NOT NULL DEFAULT 0")
+    }
+}
+
 /**
- * The complete, correctly-ordered v1→v34 migration chain, with the
+ * The complete, correctly-ordered v1→v35 migration chain, with the
  * token-encrypting [Migration24To25] (which needs a [TokenCipher]) inserted at
  * its true position between v23→v24 and v25→v26. Room matches migrations by
  * start/end version regardless of list order, but keeping the chain in strict
@@ -615,4 +627,5 @@ fun allMigrations(tokenCipher: TokenCipher): List<Migration> =
         MIGRATION_31_32,
         MIGRATION_32_33,
         MIGRATION_33_34,
+        MIGRATION_34_35,
     )
