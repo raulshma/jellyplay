@@ -86,6 +86,7 @@ class SettingsViewModel @Inject constructor(
     private val notificationScheduler: NotificationScheduler,
     private val autoDownloadScheduler: com.raulshma.jellyplay.core.data.worker.AutoDownloadScheduler,
     private val tvWatchNextScheduler: com.raulshma.jellyplay.core.data.worker.TvWatchNextScheduler,
+    private val audioStreamCache: com.raulshma.jellyplay.core.data.playback.AudioStreamCache,
 ) : JellyPlayViewModel() {
 
     private val editor = PreferencesEditor(scope, preferencesStore)
@@ -627,6 +628,34 @@ class SettingsViewModel @Inject constructor(
     fun setGaplessEnabled(enabled: Boolean) = editor.setGaplessEnabled(enabled)
 
     fun setCrossfadeDurationMs(ms: Long) = editor.setCrossfadeDurationMs(ms)
+
+    fun setAudioCachingEnabled(enabled: Boolean) {
+        launch { preferencesStore.setAudioCachingEnabled(enabled) }
+    }
+
+    fun setAudioCacheSizeMb(sizeMb: Int) {
+        launch { preferencesStore.setAudioCacheSizeMb(sizeMb) }
+    }
+
+    fun setAudioPrefetchLookahead(lookahead: Int) {
+        launch { preferencesStore.setAudioPrefetchLookahead(lookahead) }
+    }
+
+    fun setAudioPrefetchBackfill(backfill: Int) {
+        launch { preferencesStore.setAudioPrefetchBackfill(backfill) }
+    }
+
+    fun setAudioCacheNetworkPolicy(policy: com.raulshma.jellyplay.core.model.AudioCacheNetworkPolicy) {
+        launch { preferencesStore.setAudioCacheNetworkPolicy(policy) }
+    }
+
+    fun setAudioCacheCellularMonthlyCapMb(capMb: Int) {
+        launch { preferencesStore.setAudioCacheCellularMonthlyCapMb(capMb) }
+    }
+
+    fun clearAudioCache() {
+        launch { audioStreamCache.clear() }
+    }
 
     fun setAudioNormalizationMode(mode: AudioNormalizationMode) {
         launch { preferencesStore.setAudioNormalizationMode(mode) }
