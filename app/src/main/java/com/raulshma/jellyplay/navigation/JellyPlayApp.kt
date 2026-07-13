@@ -184,6 +184,7 @@ import com.raulshma.jellyplay.feature.requests.navigation.requestsSection
 import com.raulshma.jellyplay.feature.arrqueue.navigation.arrQueueSection
 import com.raulshma.jellyplay.feature.calendar.navigation.calendarSection
 import com.raulshma.jellyplay.feature.shortcuts.navigation.shortcutsSection
+import com.raulshma.jellyplay.feature.subtitle.tester.navigation.subtitleTesterSection
 import kotlinx.coroutines.launch
 import com.composables.icons.tabler.Tabler
 import com.composables.icons.tabler.outline.*
@@ -1528,6 +1529,7 @@ private fun MainNavDisplay(
             arrQueueSection(navigator)
             calendarSection(navigator)
             shortcutsSection(navigator)
+            subtitleTesterSection(navigator)
             // Play On companion — full-screen remote-control surface reached by
             // tapping the persistent PlayOnMiniBar. Reuses the activity-scoped
             // PlayOnViewModel (same instance the mini bar holds), so state stays

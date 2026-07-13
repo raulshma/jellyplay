@@ -1,0 +1,14 @@
+[Script Info]
+ScriptType: v4.00+
+PlayResX: 1280
+PlayResY: 720
+
+[V4+ Styles]
+Format: Name, Fontname, Fontsize, PrimaryColour, OutlineColour, BackColour, Bold, Italic, BorderStyle, Outline, Shadow, Alignment, MarginL, MarginR, MarginV
+Style: Default,Arial,48,&H00FFFFFF,&H00000000,&H00000000,0,0,1,2,1,2,40,40,60
+
+[Events]
+Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
+Dialogue: 0,0:00:00.10,0:00:00.80,Default,,0,0,0,,Look out!
+Dialogue: 0,0:00:01.00,0:00:01.70,Default,,0,0,0,,Go!
+Dialogue: 0,0:00:02.00,0:00:02.80,Default,,0,0,0,,Behind you!

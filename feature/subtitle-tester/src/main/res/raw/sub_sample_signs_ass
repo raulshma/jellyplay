@@ -1,0 +1,13 @@
+[Script Info]
+ScriptType: v4.00+
+PlayResX: 1280
+PlayResY: 720
+
+[V4+ Styles]
+Format: Name, Fontname, Fontsize, PrimaryColour, OutlineColour, BackColour, Bold, Italic, BorderStyle, Outline, Shadow, Alignment, MarginL, MarginR, MarginV
+Style: Default,Arial,48,&H00FFFFFF,&H00000000,&H00000000,0,0,1,2,1,8,40,40,60
+
+[Events]
+Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
+Dialogue: 0,0:00:00.20,0:00:04.00,Default,,0,0,0,,[Top-positioned sign: "CAFÉ OPEN"]
+Dialogue: 0,0:00:04.10,0:00:08.00,Default,,0,0,0,,[Translator note: the sign uses old kanji.]

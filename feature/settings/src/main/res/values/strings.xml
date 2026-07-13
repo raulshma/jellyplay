@@ -470,6 +470,8 @@
     <string name="settings_subtitles_summary">Font size: %1$dsp</string>
     <string name="settings_font_size">Font Size</string>
     <string name="settings_font_size_subtitle">Subtitle text size</string>
+    <string name="settings_open_subtitle_tester">Subtitle style tester</string>
+    <string name="settings_open_subtitle_tester_subtitle">Preview styles across engines</string>
     <string name="settings_forced_subtitles">Forced Subtitles Only</string>
     <string name="settings_forced_subtitles_on">Show subtitles only when forced tracks are present</string>
     <string name="settings_forced_subtitles_off">Show subtitles per preferred language</string>

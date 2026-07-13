@@ -137,6 +137,23 @@ on certain files, try switching to software decoding.
 | **Screencasts / unusual framerates** | libmpv | Hardware | mpv handles weird framerates well |
 | **Offline downloaded content** | ExoPlayer | Hardware | Lowest CPU usage on plane mode |
 
+## Subtitle Style Tester
+
+A standalone screen (`:feature:subtitle-tester`) lets you preview subtitle
+styling with a switchable-engine live render over a bundled color host clip,
+then **Apply** the config to your real preference. Because subtitle rendering
+differs across engines (e.g. only mpv honours full ASS style override), the
+tester lets you see how the same config renders on each engine before
+committing it.
+
+**Open it from:**
+- **Settings → Language & Subtitles → Subtitle style tester**, or
+- The **in-player Subtitle Style sheet → Open tester** button.
+
+The tester runs fully offline (bundled sample clip + sample subtitle presets)
+and never disturbs your running playback — it owns its own isolated engine
+instance.
+
 ## Next steps
 
 - 🚀 [Install JellyPlay →](./setup.md)

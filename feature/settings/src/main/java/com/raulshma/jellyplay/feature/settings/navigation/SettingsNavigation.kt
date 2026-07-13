@@ -131,6 +131,7 @@ fun EntryProviderScope<NavKey>.settingsSection(
     entry<Route.LanguageSettings> { entry ->
         LanguageSettingsScreen(
             onBack = { navigator.goBack() },
+            onOpenSubtitleTester = { navigator.navigate(Route.SubtitleTester) },
             highlightSettingId = entry.highlightSettingId,
         )
     }

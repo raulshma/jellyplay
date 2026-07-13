@@ -95,6 +95,7 @@ internal val appLanguages = listOf(
 @Composable
 fun LanguageSettingsScreen(
     onBack: () -> Unit,
+    onOpenSubtitleTester: () -> Unit = {},
     highlightSettingId: String? = null,
     viewModel: SettingsViewModel = hiltViewModel(),
 ) {
@@ -222,10 +223,18 @@ fun LanguageSettingsScreen(
                 ) {
                     var subIdx = 0
                     val subTotal = when {
-                        !showAdvanced -> 3
-                        preferences.hdrSubtitleStyleEnabled -> 11
-                        else -> 10
+                        !showAdvanced -> 4
+                        preferences.hdrSubtitleStyleEnabled -> 12
+                        else -> 11
                     }
+                    SettingListItem(
+                        icon = Tabler.Outline.Eye,
+                        title = stringResource(R.string.settings_open_subtitle_tester),
+                        subtitle = stringResource(R.string.settings_open_subtitle_tester_subtitle),
+                        highlighted = highlightSettingId == "subtitle_tester",
+                        index = subIdx++, count = subTotal,
+                        onClick = onOpenSubtitleTester,
+                    )
                     SettingListItem(
                         icon = Tabler.Outline.Typography,
                         title = stringResource(R.string.settings_font_size),

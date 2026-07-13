@@ -70,6 +70,7 @@ fun SubtitleStyleSheet(
     onDismiss: () -> Unit,
     capabilities: EngineCapabilities = EngineCapabilities(),
     onPickFont: () -> Unit = {},
+    onOpenTester: () -> Unit = {},
 ) {
     var applyCustomStyle by remember { mutableStateOf(currentStyle.applyCustomStyle) }
     var fontSize by remember { mutableIntStateOf(currentStyle.fontSize) }
@@ -118,12 +119,19 @@ fun SubtitleStyleSheet(
                 .padding(horizontal = 24.dp)
                 .padding(bottom = 32.dp),
         ) {
-            Text(
-                "Subtitle Settings",
-                style = MaterialTheme.typography.titleLarge.copy(
-                    fontWeight = FontWeight.Bold,
-                ),
-            )
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Text(
+                    "Subtitle Settings",
+                    style = MaterialTheme.typography.titleLarge.copy(
+                        fontWeight = FontWeight.Bold,
+                    ),
+                )
+                TextButton(onClick = onOpenTester) { Text("Open tester") }
+            }
             Spacer(Modifier.height(16.dp))
 
             // Engine renders subtitles but not full ASS (libVLC). Inform the user.

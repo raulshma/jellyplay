@@ -21,6 +21,7 @@ fun EntryProviderScope<NavKey>.videoPlayerSection(
             onBack = { navigator.goBack() },
             onEnterPip = onEnterPip,
             onEnterMiniMode = onEnterMiniMode,
+            onOpenSubtitleTester = { navigator.navigate(Route.SubtitleTester) },
         )
     }
     entry<Route.LiveTvChannelPlayer> { key ->
@@ -33,6 +34,7 @@ fun EntryProviderScope<NavKey>.videoPlayerSection(
             onBack = { navigator.goBack() },
             onEnterPip = onEnterPip,
             onEnterMiniMode = onEnterMiniMode,
+            onOpenSubtitleTester = { navigator.navigate(Route.SubtitleTester) },
         )
     }
 }
