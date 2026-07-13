@@ -9,7 +9,9 @@ import com.raulshma.jellyplay.feature.player.video.engine.EngineConfig
 import com.raulshma.jellyplay.feature.player.video.engine.EnginePlaybackState
 import com.raulshma.jellyplay.feature.player.video.engine.MediaEngine
 import com.raulshma.jellyplay.feature.player.video.engine.PlayerEngineFactory
+import com.raulshma.jellyplay.feature.player.video.subtitle.FontProvider
 import android.content.Context
+import io.mockk.coEvery
 import io.mockk.coVerify
 import io.mockk.every
 import io.mockk.mockk
@@ -36,6 +38,7 @@ class SubtitleTesterViewModelTest {
     private val testDispatcher = UnconfinedTestDispatcher()
     private lateinit var engineFactory: PlayerEngineFactory
     private lateinit var preferencesStore: UserPreferencesStore
+    private lateinit var fontProvider: FontProvider
     private lateinit var fakeEngine: MediaEngine
     private lateinit var prefsFlow: MutableStateFlow<UserPreferences>
     private lateinit var tempFilesDir: java.io.File
@@ -66,10 +69,12 @@ class SubtitleTesterViewModelTest {
         prefsFlow = MutableStateFlow(UserPreferences())
         preferencesStore = mockk(relaxed = true)
         every { preferencesStore.preferences } returns prefsFlow
+        fontProvider = mockk(relaxed = true)
 
         viewModel = SubtitleTesterViewModel(
             engineFactory = engineFactory,
             preferencesStore = preferencesStore,
+            fontProvider = fontProvider,
             context = appContext,
         )
         // Drain init coroutine (Unconfined runs eagerly).
@@ -95,14 +100,17 @@ class SubtitleTesterViewModelTest {
         viewModel = SubtitleTesterViewModel(
             engineFactory = engineFactory,
             preferencesStore = preferencesStore,
+            fontProvider = fontProvider,
             context = appContext,
         )
         testDispatcher.scheduler.advanceUntilIdle()
 
         val state = viewModel.uiState.value
-        assertEquals(sdrStyle, state.workingSdrStyle)
+        // The tester forces applyCustomStyle = true on the working copies (the
+        // override toggle is hidden); originals stay verbatim for dirty checks.
+        assertEquals(sdrStyle.copy(applyCustomStyle = true), state.workingSdrStyle)
         assertEquals(sdrStyle, state.originalSdrStyle)
-        assertEquals(hdrStyle, state.workingHdrStyle)
+        assertEquals(hdrStyle.copy(applyCustomStyle = true), state.workingHdrStyle)
         assertEquals(hdrStyle, state.originalHdrStyle)
         assertTrue(state.hdrSubtitleEnabled)
         assertFalse(state.isDirty)
@@ -111,22 +119,24 @@ class SubtitleTesterViewModelTest {
     @Test
     fun updateStyle_inSdrMode_updatesSdrWorkingCopy() {
         viewModel.setMode(SubtitleStyleMode.SDR)
+        val hdrBefore = viewModel.uiState.value.workingHdrStyle
         viewModel.updateStyle(viewModel.uiState.value.workingSdrStyle.copy(fontSize = 36))
 
         assertEquals(36, viewModel.uiState.value.workingSdrStyle.fontSize)
         // HDR untouched.
-        assertEquals(viewModel.uiState.value.originalHdrStyle, viewModel.uiState.value.workingHdrStyle)
+        assertEquals(hdrBefore, viewModel.uiState.value.workingHdrStyle)
         assertTrue(viewModel.uiState.value.isDirty)
     }
 
     @Test
     fun updateStyle_inHdrMode_updatesHdrWorkingCopy() {
         viewModel.setMode(SubtitleStyleMode.HDR)
+        val sdrBefore = viewModel.uiState.value.workingSdrStyle
         viewModel.updateStyle(viewModel.uiState.value.workingHdrStyle.copy(fontSize = 44))
 
         assertEquals(44, viewModel.uiState.value.workingHdrStyle.fontSize)
         // SDR untouched.
-        assertEquals(viewModel.uiState.value.originalSdrStyle, viewModel.uiState.value.workingSdrStyle)
+        assertEquals(sdrBefore, viewModel.uiState.value.workingSdrStyle)
         assertTrue(viewModel.uiState.value.isDirty)
     }
 
@@ -195,7 +205,7 @@ class SubtitleTesterViewModelTest {
     @Test
     fun onCleared_releasesEngine() {
         // onCleared() is protected; invoke via reflection to exercise the release path.
-        val clearedVm = SubtitleTesterViewModel(engineFactory, preferencesStore, appContext)
+        val clearedVm = SubtitleTesterViewModel(engineFactory, preferencesStore, fontProvider, appContext)
         testDispatcher.scheduler.advanceUntilIdle()
         val onCleared = androidx.lifecycle.ViewModel::class.java.getDeclaredMethod("onCleared")
         onCleared.isAccessible = true
@@ -275,7 +285,7 @@ class SubtitleTesterViewModelTest {
 
     @Test
     fun onCleared_clearsActiveEngine() {
-        val clearedVm = SubtitleTesterViewModel(engineFactory, preferencesStore, appContext)
+        val clearedVm = SubtitleTesterViewModel(engineFactory, preferencesStore, fontProvider, appContext)
         testDispatcher.scheduler.advanceUntilIdle()
         assertNotNull(clearedVm.activeEngine.value)
 
@@ -284,5 +294,38 @@ class SubtitleTesterViewModelTest {
         onCleared.invoke(clearedVm)
 
         assertNull(clearedVm.activeEngine.value)
+    }
+
+    @Test
+    fun installUserFont_stampsActiveModeStyleWithInstalledFont() {
+        val uri: android.net.Uri = mockk()
+        val installedFont = com.raulshma.jellyplay.feature.player.video.subtitle.InstalledFont(
+            file = java.io.File("/data/cache/subtitle-fonts/MyFont.ttf"),
+            familyName = "MyFont",
+        )
+        coEvery { fontProvider.installUserFont(uri) } returns installedFont
+
+        viewModel.setMode(SubtitleStyleMode.SDR)
+        viewModel.installUserFont(uri)
+        testDispatcher.scheduler.advanceUntilIdle()
+
+        val style = viewModel.uiState.value.workingSdrStyle
+        assertEquals(installedFont.file.absolutePath, style.fontFamilyPath)
+        assertEquals("MyFont", style.fontFamilyName)
+        // HDR copy untouched.
+        assertNull(viewModel.uiState.value.workingHdrStyle.fontFamilyPath)
+    }
+
+    @Test
+    fun installUserFont_nullInstallLeavesStyleUntouched() {
+        val uri: android.net.Uri = mockk()
+        coEvery { fontProvider.installUserFont(uri) } returns null
+
+        val before = viewModel.uiState.value.workingSdrStyle
+        viewModel.installUserFont(uri)
+        testDispatcher.scheduler.advanceUntilIdle()
+        val after = viewModel.uiState.value.workingSdrStyle
+
+        assertEquals(before, after)
     }
 }

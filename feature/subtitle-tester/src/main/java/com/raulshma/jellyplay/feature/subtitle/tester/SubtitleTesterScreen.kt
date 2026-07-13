@@ -20,6 +20,8 @@ import androidx.compose.material3.SingleChoiceSegmentedButtonRow
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -33,8 +35,8 @@ import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.raulshma.jellyplay.core.model.PlayerType
+import com.raulshma.jellyplay.feature.player.video.components.SubtitleStyleControls
 import com.raulshma.jellyplay.feature.subtitle.tester.components.PreviewTile
-import com.raulshma.jellyplay.feature.subtitle.tester.components.StyleControls
 import com.raulshma.jellyplay.feature.subtitle.tester.preview.PreviewEngineHost
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -48,6 +50,14 @@ fun SubtitleTesterScreen(
     val context = LocalContext.current
     val host = remember { PreviewEngineHost(context, onSurfaceReady = {}) }
     var showDiscardDialog by remember { mutableStateOf(false) }
+
+    // SAF font picker — mirrors the player's flow: the picked uri is copied into
+    // the shared font cache by the ViewModel; only the local file survives.
+    val fontPickerLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.OpenDocument(),
+    ) { uri: android.net.Uri? ->
+        if (uri != null) viewModel.installUserFont(uri)
+    }
 
     LaunchedEffect(activeEngine) {
         val engine = activeEngine
@@ -105,10 +115,16 @@ fun SubtitleTesterScreen(
             )
             EngineHintRow(previewEngine = state.previewEngine)
 
-            StyleControls(
-                style = state.activeWorkingStyle,
-                capabilities = state.engineCapabilities,
+            SubtitleStyleControls(
+                currentStyle = state.activeWorkingStyle,
                 onStyleChange = { viewModel.updateStyle(it) },
+                capabilities = state.engineCapabilities,
+                onPickFont = { fontPickerLauncher.launch(arrayOf("*/*")) },
+                // The tester always edits the resolved style; the player owns the
+                // override toggle. Reset lives in the top-app-bar, so no chip here.
+                showOverrideToggle = false,
+                onReset = null,
+                modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
             )
         }
     }
