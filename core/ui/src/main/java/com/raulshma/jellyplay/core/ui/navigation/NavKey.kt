@@ -175,6 +175,8 @@ sealed class Route : NavKey {
     @Serializable data object UpcomingCalendar : Route()
 
     @Serializable data object Shortcuts : Route()
+
+    @Serializable data object SubtitleTester : Route()
 }
 
 val VIDEO_TOP_LEVEL_ROUTES = linkedMapOf(

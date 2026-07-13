@@ -1,0 +1,156 @@
+package com.raulshma.jellyplay.feature.subtitle.tester
+
+import android.content.Context
+import androidx.lifecycle.ViewModel
+import androidx.lifecycle.viewModelScope
+import com.raulshma.jellyplay.core.datastore.UserPreferencesStore
+import com.raulshma.jellyplay.core.model.AssOverrideMode
+import com.raulshma.jellyplay.core.model.PlayerType
+import com.raulshma.jellyplay.core.model.SubtitleStyle
+import com.raulshma.jellyplay.feature.player.video.engine.EngineConfig
+import com.raulshma.jellyplay.feature.player.video.engine.MediaEngine
+import com.raulshma.jellyplay.feature.player.video.engine.PlayerEngineFactory
+import com.raulshma.jellyplay.feature.subtitle.tester.preview.PlaybackRequestFactory
+import dagger.hilt.android.lifecycle.HiltViewModel
+import dagger.hilt.android.qualifiers.ApplicationContext
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.update
+import kotlinx.coroutines.launch
+import javax.inject.Inject
+
+@HiltViewModel
+class SubtitleTesterViewModel @Inject constructor(
+    private val engineFactory: PlayerEngineFactory,
+    private val preferencesStore: UserPreferencesStore,
+    @ApplicationContext private val context: Context,
+) : ViewModel() {
+
+    private val _uiState = MutableStateFlow(SubtitleTesterUiState())
+    val uiState: StateFlow<SubtitleTesterUiState> = _uiState.asStateFlow()
+
+    private val _activeEngine = MutableStateFlow<MediaEngine?>(null)
+    val activeEngine: StateFlow<MediaEngine?> = _activeEngine.asStateFlow()
+
+    private var engine: MediaEngine? = null
+
+    // Seed-once guard: avoid re-seeding working copies after the first pref
+    // emission (e.g. when an apply/external edit flows back through the StateFlow).
+    private var seeded = false
+
+    init {
+        // Seed working copies from current prefs once, then load the preview engine.
+        viewModelScope.launch {
+            preferencesStore.preferences.collect { prefs ->
+                if (!seeded) {
+                    seeded = true
+                    _uiState.update {
+                        it.copy(
+                            workingSdrStyle = prefs.subtitleStyle,
+                            originalSdrStyle = prefs.subtitleStyle,
+                            workingHdrStyle = prefs.hdrSubtitleStyle,
+                            originalHdrStyle = prefs.hdrSubtitleStyle,
+                            hdrSubtitleEnabled = prefs.hdrSubtitleStyleEnabled,
+                        )
+                    }
+                    ensureEngineLoaded()
+                }
+            }
+        }
+    }
+
+    fun updateStyle(style: SubtitleStyle) {
+        _uiState.update {
+            if (it.mode == SubtitleStyleMode.HDR) {
+                it.copy(workingHdrStyle = style)
+            } else {
+                it.copy(workingSdrStyle = style)
+            }
+        }
+        pushConfigToEngine()
+    }
+
+    fun setMode(mode: SubtitleStyleMode) {
+        _uiState.update { it.copy(mode = mode) }
+        pushConfigToEngine()
+    }
+
+    fun setHdrSubtitleEnabled(enabled: Boolean) {
+        _uiState.update { it.copy(hdrSubtitleEnabled = enabled) }
+    }
+
+    fun switchEngine(type: PlayerType) {
+        _uiState.update { it.copy(isApplying = true, previewEngine = type) }
+        viewModelScope.launch {
+            releaseEngine()
+            ensureEngineLoaded()
+        }
+    }
+
+    fun switchPreset(id: String) {
+        _uiState.update { it.copy(samplePresetId = id, isApplying = true) }
+        viewModelScope.launch { reloadWithPreset() }
+    }
+
+    fun reset() {
+        _uiState.update {
+            it.copy(
+                workingSdrStyle = it.originalSdrStyle,
+                workingHdrStyle = it.originalHdrStyle,
+            )
+        }
+        pushConfigToEngine()
+    }
+
+    fun applyAndExit(onComplete: () -> Unit) {
+        viewModelScope.launch {
+            val state = _uiState.value
+            // Force applyCustomStyle = true so the saved pref takes effect.
+            preferencesStore.setSubtitleStyle(state.workingSdrStyle.copy(applyCustomStyle = true))
+            preferencesStore.setHdrSubtitleStyle(state.workingHdrStyle.copy(applyCustomStyle = true))
+            preferencesStore.setHdrSubtitleStyleEnabled(state.hdrSubtitleEnabled)
+            onComplete()
+        }
+    }
+
+    private fun ensureEngineLoaded() {
+        val state = _uiState.value
+        val newEngine = engineFactory.create(state.previewEngine)
+        engine = newEngine
+        val preset = SampleSubtitlePresets.byId(state.samplePresetId)
+        val useAssTrack = state.activeWorkingStyle.assOverride == AssOverrideMode.FORCE
+        val request = PlaybackRequestFactory.forPreview(context, preset, useAssTrack)
+        newEngine.load(request)
+        _activeEngine.value = newEngine
+        pushConfigToEngine()
+        _uiState.update { it.copy(isApplying = false) }
+    }
+
+    private fun reloadWithPreset() {
+        val state = _uiState.value
+        val preset = SampleSubtitlePresets.byId(state.samplePresetId)
+        val useAssTrack = state.activeWorkingStyle.assOverride == AssOverrideMode.FORCE
+        engine?.load(PlaybackRequestFactory.forPreview(context, preset, useAssTrack))
+        pushConfigToEngine()
+        _uiState.update { it.copy(isApplying = false) }
+    }
+
+    private fun pushConfigToEngine() {
+        val state = _uiState.value
+        val resolved = state.activeWorkingStyle.copy(applyCustomStyle = true)
+        val config = EngineConfig(subtitleStyle = resolved)
+        engine?.updateConfig(config)
+    }
+
+    private fun releaseEngine() {
+        _activeEngine.value = null
+        engine?.release()
+        engine = null
+    }
+
+    override fun onCleared() {
+        releaseEngine()
+        super.onCleared()
+    }
+}
