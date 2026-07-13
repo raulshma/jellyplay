@@ -316,6 +316,11 @@ class MpvPlayerEngine(
             mpv.setOptionString("sub-ass-force-margins", "no")
 
             mpv.setOptionString("scale", mpvCfg.scaler.key)
+            // dscale (downscaler) was previously left unset, so mpv fell back
+            // to its soft bilinear default — the dominant case on phones where
+            // 1080p+ video is downscaled to the display. Mirror the upscaler so
+            // both up- and down-scaled content stay sharp.
+            mpv.setOptionString("dscale", mpvCfg.scaler.key)
             if (mpvCfg.deband) {
                 mpv.setOptionString("deband", "yes")
             }

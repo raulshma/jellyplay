@@ -33,13 +33,16 @@ class ImageUrlProviderImpl @Inject constructor(
         userPreferencesStore.preferences.value.performanceMode
 
     override fun getImageUrl(itemId: String, maxWidth: Int?): String {
-        // Original-resolution requests (null) stay as-is; explicit widths are
-        // honored as the caller's minimum, default is perf-aware.
-        val effectiveWidth = when {
-            maxWidth != null -> maxWidth
-            performanceMode -> PERF_MAX_WIDTH
-            else -> ImageUrlProvider.DEFAULT_MAX_WIDTH
+        // Original-resolution requests (null) bypass performance mode: callers
+        // like the full-screen photo viewer deliberately ask for the source
+        // bitmap, and capping null to a perf width silently broke that contract.
+        if (maxWidth == null) {
+            return playbackRepository.getImageUrl(itemId, maxWidth = null)
         }
+        // Explicit widths are honored as the caller's minimum; the default
+        // (no-arg) path is perf-aware so poster grids don't over-fetch.
+        val effectiveWidth = if (performanceMode) PERF_MAX_WIDTH
+        else ImageUrlProvider.DEFAULT_MAX_WIDTH
         return playbackRepository.getImageUrl(itemId, maxWidth = effectiveWidth)
     }
 

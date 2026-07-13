@@ -59,8 +59,7 @@ internal fun DetailBodyLandscape(
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(horizontal = adaptiveInfo.contentPadding(isTv))
-            .offset(y = (-80).dp),
+            .padding(horizontal = adaptiveInfo.contentPadding(isTv)),
         horizontalArrangement = Arrangement.spacedBy(32.dp),
         verticalAlignment = Alignment.Top,
     ) {

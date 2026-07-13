@@ -526,7 +526,11 @@ fun PosterCard(
                         Text(
                             text = episodeChip,
                             style = MaterialTheme.typography.labelSmall,
-                            color = Color.White,
+                            // Use the theme's onPrimary so the chip text matches its
+                            // primary background with correct contrast across all
+                            // themes. The previous Color.White was unreadable on the
+                            // light primary of the dark/OLED themes.
+                            color = MaterialTheme.colorScheme.onPrimary,
                             fontWeight = FontWeight.SemiBold,
                             modifier = Modifier
                                 .align(Alignment.BottomStart)

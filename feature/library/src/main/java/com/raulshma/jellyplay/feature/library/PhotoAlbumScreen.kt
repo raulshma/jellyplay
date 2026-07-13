@@ -150,7 +150,7 @@ fun PhotoAlbumScreen(
         },
     ) { _ ->
         PullToRefreshBox(
-            isRefreshing = photos.loadState.refresh is LoadState.Loading,
+            isRefreshing = photos.loadState.refresh is LoadState.Loading && photos.itemCount > 0,
             onRefresh = { photos.refresh() },
             enabled = !isTv,
             modifier = Modifier.fillMaxSize(),
