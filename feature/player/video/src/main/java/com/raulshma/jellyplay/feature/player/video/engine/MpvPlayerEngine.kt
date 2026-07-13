@@ -1147,7 +1147,11 @@ class MpvPlayerEngine(
         if (subtitles.isEmpty()) return
 
         subtitles.forEach { sub ->
-            val flags = "auto"
+            // "select" forces the track active; "auto" leaves selection to mpv's
+            // slang/sub-auto heuristics, which drop a side-loaded track that has
+            // no language and no matching slang. A subtitle flagged isDefault is
+            // the source explicitly asking for it to be shown, so select it.
+            val flags = if (sub.isDefault) "select" else "auto"
             try {
                 Log.d(
                     TAG,
