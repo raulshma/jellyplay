@@ -100,22 +100,23 @@ fun AlbumsScreen(
         },
     ) { _ ->
         PullToRefreshBox(
-            isRefreshing = albums.loadState.refresh is LoadState.Loading,
+            isRefreshing = albums.loadState.refresh is LoadState.Loading && albums.itemCount > 0,
             onRefresh = { albums.refresh() },
             modifier = Modifier.fillMaxSize(),
         ) {
         Box(modifier = Modifier.fillMaxSize()) {
-            when (val refreshState = albums.loadState.refresh) {
-                is LoadState.Loading -> {
+            when {
+                albums.loadState.refresh is LoadState.Loading && albums.itemCount == 0 -> {
                     ScreenLoadingState()
                 }
-                is LoadState.Error -> {
+                albums.loadState.refresh is LoadState.Error -> {
                     ErrorScreen(
-                        message = refreshState.error.localizedMessage ?: "Failed to load albums",
+                        message = (albums.loadState.refresh as LoadState.Error).error.localizedMessage
+                            ?: "Failed to load albums",
                         onRetry = { albums.refresh() },
                     )
                 }
-                is LoadState.NotLoading -> {
+                else -> {
                     if (albums.itemCount == 0) {
                         ScreenEmptyState(
                             icon = Tabler.Outline.Disc,

@@ -452,19 +452,23 @@ fun LibraryScreen(
                 }
 
                 PullToRefreshBox(
-                    isRefreshing = pagedItems.loadState.refresh is LoadState.Loading || isLoading,
+                    isRefreshing = pagedItems.loadState.refresh is LoadState.Loading && pagedItems.itemCount > 0,
                     onRefresh = {
                         viewModel.refresh()
                     },
                     enabled = !isTv,
                     modifier = Modifier.fillMaxSize(),
                 ) {
-                    when (pagedItems.loadState.refresh) {
-                        is LoadState.Loading -> {
+                    // Initial load (no items yet) shows the center indicator only;
+                    // a refresh with existing items shows the pull-to-refresh
+                    // indicator above (via isRefreshing) and keeps the content
+                    // visible — the two must never render together.
+                    when {
+                        pagedItems.loadState.refresh is LoadState.Loading && pagedItems.itemCount == 0 -> {
                             DelayedLoadingScreen()
                         }
 
-                        is LoadState.Error -> {
+                        pagedItems.loadState.refresh is LoadState.Error -> {
                             val refreshError = pagedItems.loadState.refresh as LoadState.Error
                             ErrorScreen(
                                 message = refreshError.error.localizedMessage
@@ -474,7 +478,7 @@ fun LibraryScreen(
                             )
                         }
 
-                        is LoadState.NotLoading -> {
+                        else -> {
                             if (pagedItems.itemCount == 0) {
                                 Box(
                                     modifier = Modifier.fillMaxSize(),
