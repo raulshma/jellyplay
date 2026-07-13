@@ -99,22 +99,23 @@ fun ArtistsScreen(
         },
     ) { _ ->
         PullToRefreshBox(
-            isRefreshing = artists.loadState.refresh is LoadState.Loading,
+            isRefreshing = artists.loadState.refresh is LoadState.Loading && artists.itemCount > 0,
             onRefresh = { artists.refresh() },
             modifier = Modifier.fillMaxSize(),
         ) {
         Box(modifier = Modifier.fillMaxSize()) {
-            when (val refreshState = artists.loadState.refresh) {
-                is LoadState.Loading -> {
+            when {
+                artists.loadState.refresh is LoadState.Loading && artists.itemCount == 0 -> {
                     ScreenLoadingState()
                 }
-                is LoadState.Error -> {
+                artists.loadState.refresh is LoadState.Error -> {
                     ErrorScreen(
-                        message = refreshState.error.localizedMessage ?: "Failed to load artists",
+                        message = (artists.loadState.refresh as LoadState.Error).error.localizedMessage
+                            ?: "Failed to load artists",
                         onRetry = { artists.refresh() },
                     )
                 }
-                is LoadState.NotLoading -> {
+                else -> {
                     if (artists.itemCount == 0) {
                         ScreenEmptyState(
                             icon = Tabler.Outline.Music,

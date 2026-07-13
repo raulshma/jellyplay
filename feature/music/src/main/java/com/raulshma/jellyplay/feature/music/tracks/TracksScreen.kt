@@ -111,22 +111,23 @@ fun TracksScreen(
         },
     ) { _ ->
         PullToRefreshBox(
-            isRefreshing = tracks.loadState.refresh is LoadState.Loading,
+            isRefreshing = tracks.loadState.refresh is LoadState.Loading && tracks.itemCount > 0,
             onRefresh = { tracks.refresh() },
             modifier = Modifier.fillMaxSize(),
         ) {
         Box(modifier = Modifier.fillMaxSize()) {
-            when (val refreshState = tracks.loadState.refresh) {
-                is LoadState.Loading -> {
+            when {
+                tracks.loadState.refresh is LoadState.Loading && tracks.itemCount == 0 -> {
                     ScreenLoadingState()
                 }
-                is LoadState.Error -> {
+                tracks.loadState.refresh is LoadState.Error -> {
                     ErrorScreen(
-                        message = refreshState.error.localizedMessage ?: "Failed to load tracks",
+                        message = (tracks.loadState.refresh as LoadState.Error).error.localizedMessage
+                            ?: "Failed to load tracks",
                         onRetry = { tracks.refresh() },
                     )
                 }
-                is LoadState.NotLoading -> {
+                else -> {
                     if (tracks.itemCount == 0) {
                         ScreenEmptyState(
                             icon = Tabler.Outline.Music,
