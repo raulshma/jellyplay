@@ -8,14 +8,17 @@ import com.raulshma.jellyplay.core.model.AssOverrideMode
 import com.raulshma.jellyplay.core.model.PlayerType
 import com.raulshma.jellyplay.core.model.SubtitleStyle
 import com.raulshma.jellyplay.feature.player.video.engine.EngineConfig
+import com.raulshma.jellyplay.feature.player.video.engine.EnginePlaybackState
 import com.raulshma.jellyplay.feature.player.video.engine.MediaEngine
 import com.raulshma.jellyplay.feature.player.video.engine.PlayerEngineFactory
 import com.raulshma.jellyplay.feature.subtitle.tester.preview.PlaybackRequestFactory
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.filter
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import javax.inject.Inject
@@ -27,6 +30,8 @@ class SubtitleTesterViewModel @Inject constructor(
     @ApplicationContext private val context: Context,
 ) : ViewModel() {
 
+    private val playbackRequestFactory = PlaybackRequestFactory(context)
+
     private val _uiState = MutableStateFlow(SubtitleTesterUiState())
     val uiState: StateFlow<SubtitleTesterUiState> = _uiState.asStateFlow()
 
@@ -34,6 +39,14 @@ class SubtitleTesterViewModel @Inject constructor(
     val activeEngine: StateFlow<MediaEngine?> = _activeEngine.asStateFlow()
 
     private var engine: MediaEngine? = null
+
+    // Loop job: the bundled host clip is only a few seconds long. Without
+    // looping the player hits ENDED and stops rendering subtitles, leaving a
+    // frozen frame with no cues. This relaunches the clip on ENDED so the
+    // preview keeps showing live subtitle styling. All supported engines
+    // (ExoPlayer / mpv / libVLC) surface ENDED via [MediaEngine.playbackState]
+    // and implement seekTo/play, so this is engine-agnostic.
+    private var loopJob: Job? = null
 
     // Seed-once guard: avoid re-seeding working copies after the first pref
     // emission (e.g. when an apply/external edit flows back through the StateFlow).
@@ -90,7 +103,15 @@ class SubtitleTesterViewModel @Inject constructor(
 
     fun switchPreset(id: String) {
         _uiState.update { it.copy(samplePresetId = id, isApplying = true) }
-        viewModelScope.launch { reloadWithPreset() }
+        // Rebuild the engine (release + reload) rather than calling load() on
+        // the existing instance: ExoPlayerEngine.load() starts with release(),
+        // which nulls the bound PlayerView, and the UI only re-attaches a
+        // surface when _activeEngine re-emits a new instance. Reloading in
+        // place would leave a dead PlayerView showing nothing.
+        viewModelScope.launch {
+            releaseEngine()
+            ensureEngineLoaded()
+        }
     }
 
     fun reset() {
@@ -120,18 +141,19 @@ class SubtitleTesterViewModel @Inject constructor(
         engine = newEngine
         val preset = SampleSubtitlePresets.byId(state.samplePresetId)
         val useAssTrack = state.activeWorkingStyle.assOverride == AssOverrideMode.FORCE
-        val request = PlaybackRequestFactory.forPreview(context, preset, useAssTrack)
+        val request = playbackRequestFactory.forPreview(preset, useAssTrack)
         newEngine.load(request)
         _activeEngine.value = newEngine
-        pushConfigToEngine()
-        _uiState.update { it.copy(isApplying = false) }
-    }
-
-    private fun reloadWithPreset() {
-        val state = _uiState.value
-        val preset = SampleSubtitlePresets.byId(state.samplePresetId)
-        val useAssTrack = state.activeWorkingStyle.assOverride == AssOverrideMode.FORCE
-        engine?.load(PlaybackRequestFactory.forPreview(context, preset, useAssTrack))
+        // The host clip is short (a few seconds); loop it so subtitle cues keep
+        // rendering instead of freezing on ENDED. See [loopJob] comment.
+        loopJob = viewModelScope.launch {
+            newEngine.playbackState
+                .filter { it == EnginePlaybackState.ENDED }
+                .collect {
+                    newEngine.seekTo(0)
+                    newEngine.play()
+                }
+        }
         pushConfigToEngine()
         _uiState.update { it.copy(isApplying = false) }
     }
@@ -144,6 +166,8 @@ class SubtitleTesterViewModel @Inject constructor(
     }
 
     private fun releaseEngine() {
+        loopJob?.cancel()
+        loopJob = null
         _activeEngine.value = null
         engine?.release()
         engine = null
