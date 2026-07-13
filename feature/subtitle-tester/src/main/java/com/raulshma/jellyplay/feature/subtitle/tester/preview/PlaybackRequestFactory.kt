@@ -32,10 +32,9 @@ object PlaybackRequestFactory {
                     isDefault = true,
                 )
             ),
-            // Tight buffers for the short clip; the screen-level loop/repeat
-            // behavior is handled by the engine's repeat mode, not here.
-            minBufferMs = 1_000,
-            maxBufferMs = 3_000,
+            // Use PlaybackRequest defaults (15s/50s). ExoPlayer's
+            // DefaultLoadControl requires minBufferMs >= bufferForPlaybackAfterRebufferMs
+            // (default 5000ms), so setting tight buffers here crashes on load.
         )
     }
 }
