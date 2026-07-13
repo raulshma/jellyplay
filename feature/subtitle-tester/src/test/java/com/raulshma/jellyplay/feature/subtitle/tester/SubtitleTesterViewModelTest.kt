@@ -6,6 +6,7 @@ import com.raulshma.jellyplay.core.model.SubtitleColor
 import com.raulshma.jellyplay.core.model.SubtitleStyle
 import com.raulshma.jellyplay.core.model.UserPreferences
 import com.raulshma.jellyplay.feature.player.video.engine.EngineConfig
+import com.raulshma.jellyplay.feature.player.video.engine.EnginePlaybackState
 import com.raulshma.jellyplay.feature.player.video.engine.MediaEngine
 import com.raulshma.jellyplay.feature.player.video.engine.PlayerEngineFactory
 import android.content.Context
@@ -37,6 +38,7 @@ class SubtitleTesterViewModelTest {
     private lateinit var preferencesStore: UserPreferencesStore
     private lateinit var fakeEngine: MediaEngine
     private lateinit var prefsFlow: MutableStateFlow<UserPreferences>
+    private lateinit var tempFilesDir: java.io.File
     private val appContext: Context = mockk(relaxed = true)
 
     private lateinit var viewModel: SubtitleTesterViewModel
@@ -44,6 +46,18 @@ class SubtitleTesterViewModelTest {
     @Before
     fun setUp() {
         Dispatchers.setMain(testDispatcher)
+
+        // The factory materializes raw resources to filesDir; give it a real temp
+        // dir and a stable Resources mock returning an empty stream, so the VM
+        // init path (which loads the preview) doesn't NPE on the relaxed context
+        // mock. (A relaxed mock returns a fresh Resources each access, so the
+        // openRawResource stub must target a pinned instance.)
+        tempFilesDir = kotlin.io.path.createTempDirectory("subtitle_tester_test").toFile()
+        every { appContext.filesDir } returns tempFilesDir
+        val resources = mockk<android.content.res.Resources>(relaxed = true)
+        every { appContext.resources } returns resources
+        every { resources.openRawResource(any()) } returns
+            java.io.ByteArrayInputStream(ByteArray(0))
 
         fakeEngine = mockk(relaxed = true)
         engineFactory = mockk(relaxed = true)
@@ -65,6 +79,7 @@ class SubtitleTesterViewModelTest {
     @After
     fun tearDown() {
         Dispatchers.resetMain()
+        tempFilesDir.deleteRecursively()
     }
 
     @Test
@@ -226,6 +241,36 @@ class SubtitleTesterViewModelTest {
         val surfaced = viewModel.activeEngine.value
         assertNotNull(surfaced)
         assertSame(fakeEngine, surfaced)
+    }
+
+    @Test
+    fun switchPreset_releasesAndRebuildsEngine() {
+        // Engine created once on init.
+        verify(exactly = 1) { engineFactory.create(PlayerType.EXO_PLAYER) }
+
+        viewModel.switchPreset(SampleSubtitlePresets.ALL.last().id)
+        testDispatcher.scheduler.advanceUntilIdle()
+
+        // Old engine released and a fresh one created (re-attaches the surface).
+        verify { fakeEngine.release() }
+        verify(exactly = 2) { engineFactory.create(any()) }
+        assertEquals(SampleSubtitlePresets.ALL.last().id, viewModel.uiState.value.samplePresetId)
+        assertFalse(viewModel.uiState.value.isApplying)
+    }
+
+    @Test
+    fun loop_seeksAndPlaysOnEnded() {
+        // Give the engine a controllable playbackState so we can emit ENDED.
+        val stateFlow = MutableStateFlow(EnginePlaybackState.READY)
+        every { fakeEngine.playbackState } returns stateFlow
+        viewModel.switchEngine(PlayerType.EXO_PLAYER)
+        testDispatcher.scheduler.advanceUntilIdle()
+
+        stateFlow.value = EnginePlaybackState.ENDED
+        testDispatcher.scheduler.advanceUntilIdle()
+
+        verify(atLeast = 1) { fakeEngine.seekTo(0) }
+        verify(atLeast = 1) { fakeEngine.play() }
     }
 
     @Test

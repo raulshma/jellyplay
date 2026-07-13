@@ -13,6 +13,18 @@ android {
         minSdk = 28
     }
 
+    androidResources {
+        // Keep raw subtitle samples uncompressed. ExoPlayer's RawResourceDataSource
+        // needs an AssetFileDescriptor, which Android can't hand back for a
+        // compressed resource ("This file can not be opened as a file descriptor;
+        // it is probably compressed"). The tester now materializes these to files
+        // anyway (so mpv/libVLC get file:// paths), but leaving them uncompressed
+        // keeps android.resource:// usable for any future in-process consumer.
+        noCompress.add("srt")
+        noCompress.add("ass")
+        noCompress.add("ssa")
+    }
+
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_17
         targetCompatibility = JavaVersion.VERSION_17
