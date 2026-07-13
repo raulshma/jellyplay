@@ -40,6 +40,7 @@ class AudioCrossfader(
     private val onCrossfadeTransition: suspend (secondary: ExoPlayer, nextIndex: Int, nextItem: AudioQueueItem) -> Unit,
     private val detachPrimaryListener: (ExoPlayer) -> Unit,
     private val onCrossfadeError: (PlaybackException) -> Unit,
+    private val dataSourceFactoryProvider: () -> androidx.media3.datasource.DataSource.Factory,
 ) {
     private var crossfadePlayer: ExoPlayer? = null
     private var crossfadeJob: Job? = null
@@ -123,9 +124,13 @@ class AudioCrossfader(
             .setTargetBufferBytes(-1)
             .build()
 
+        val mediaSourceFactory = androidx.media3.exoplayer.source.DefaultMediaSourceFactory(context)
+            .setDataSourceFactory(dataSourceFactoryProvider())
+
         return ExoPlayer.Builder(context)
             .setRenderersFactory(renderersFactory)
             .setLoadControl(loadControl)
+            .setMediaSourceFactory(mediaSourceFactory)
             .setAudioAttributes(audioAttributes, true)
             .setHandleAudioBecomingNoisy(true)
             .setWakeMode(C.WAKE_MODE_LOCAL)
