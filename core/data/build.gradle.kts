@@ -47,6 +47,8 @@ dependencies {
     implementation(libs.media3.exoplayer)
     implementation(libs.media3.cast)
     implementation(libs.media3.datasource)
+    implementation(libs.media3.datasource.okhttp)
+    implementation(libs.media3.database)
     // FFmpeg software audio decoder for codecs MediaCodec lacks on most
     // devices (DTS, MLP/TrueHD, EAC3, etc.). Auto-loaded by
     // DefaultRenderersFactory via reflection when EXTENSION_RENDERER_MODE is ON.

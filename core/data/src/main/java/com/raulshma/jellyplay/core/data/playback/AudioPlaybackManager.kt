@@ -13,6 +13,7 @@ import androidx.media3.exoplayer.DefaultLoadControl
 import androidx.media3.exoplayer.DefaultRenderersFactory
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.exoplayer.audio.DefaultAudioSink
+import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
 import androidx.media3.session.MediaSession
 import androidx.media3.session.MediaLibraryService.MediaLibrarySession
 import androidx.compose.runtime.Immutable
@@ -84,6 +85,8 @@ class AudioPlaybackManager @Inject constructor(
     private val effectsProcessor: AudioEffectsProcessor,
     private val sleepTimerManager: SleepTimerManager,
     private val jellyfinRemotePlayCastStrategy: com.raulshma.jellyplay.core.data.cast.remote.JellyfinRemotePlayCastStrategy,
+    private val audioStreamCache: AudioStreamCache,
+    private val audioPrefetchEngine: AudioPrefetchEngine,
 ) : AudioEffectsManager, AudioQueueManager {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
 
@@ -128,6 +131,14 @@ class AudioPlaybackManager @Inject constructor(
         lyricsManager.initialize(scope)
         effectsProcessor.initialize(scope)
         effectsProcessor.playerProvider = { exoPlayer }
+        // Bind the prefetch engine to this manager's live queue/position.
+        audioPrefetchEngine.bindProviders(
+            queueProvider = { _queue.value },
+            currentIndexProvider = { _currentIndex.value },
+            positionProvider = { exoPlayer?.currentPosition ?: 0L },
+            durationProvider = { exoPlayer?.duration ?: 0L },
+        )
+        audioPrefetchEngine.start()
         scope.launch(Dispatchers.IO) {
             restorePersistedQueue()
             observeQueuePersistence()
@@ -207,6 +218,9 @@ class AudioPlaybackManager @Inject constructor(
         },
         detachPrimaryListener = { primary -> primary.removeListener(playerListener) },
         onCrossfadeError = { error -> playerListener.onPlayerError(error) },
+        dataSourceFactoryProvider = {
+            audioStreamCache.getCacheDataSourceFactory(audioStreamCache.buildUpstreamFactory())
+        },
     )
 
     @Volatile
@@ -493,9 +507,17 @@ class AudioPlaybackManager @Inject constructor(
             .setTargetBufferBytes(-1)
             .build()
 
+        // Wrap the default data source in the audio byte cache so every byte
+        // ExoPlayer reads is side-cached to disk (transparent cache-on-play).
+        val upstreamFactory = audioStreamCache.buildUpstreamFactory()
+        val cachedFactory = audioStreamCache.getCacheDataSourceFactory(upstreamFactory)
+        val mediaSourceFactory = DefaultMediaSourceFactory(context)
+            .setDataSourceFactory(cachedFactory)
+
         val player = ExoPlayer.Builder(context)
             .setRenderersFactory(renderersFactory)
             .setLoadControl(loadControl)
+            .setMediaSourceFactory(mediaSourceFactory)
             .setAudioAttributes(audioAttributes, true)
             .setHandleAudioBecomingNoisy(true)
             .setWakeMode(C.WAKE_MODE_LOCAL)
@@ -1524,6 +1546,7 @@ class AudioPlaybackManager @Inject constructor(
     }
 
     fun stopAndRelease() {
+        audioPrefetchEngine.stop()
         crossfader.cancel()
 
         val player = exoPlayer
