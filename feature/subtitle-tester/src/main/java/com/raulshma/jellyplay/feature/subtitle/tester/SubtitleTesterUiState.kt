@@ -19,9 +19,17 @@ data class SubtitleTesterUiState(
     val engineCapabilities: EngineCapabilities
         get() = EngineCapabilityMatrix.forType(previewEngine)
 
-    /** True if either working copy diverges from its snapshot. */
+    /**
+     * True if either working copy diverges from its snapshot. Compares
+     * `applyCustomStyle`-agnostically: the tester always forces it on (the
+     * toggle is hidden), so a saved pref with it off shouldn't read as dirty.
+     */
     val isDirty: Boolean
-        get() = workingSdrStyle != originalSdrStyle || workingHdrStyle != originalHdrStyle
+        get() = !styleEqualsIgnoringOverride(workingSdrStyle, originalSdrStyle) ||
+            !styleEqualsIgnoringOverride(workingHdrStyle, originalHdrStyle)
+
+    private fun styleEqualsIgnoringOverride(a: SubtitleStyle, b: SubtitleStyle): Boolean =
+        a.copy(applyCustomStyle = false) == b.copy(applyCustomStyle = false)
 
     /** The working copy for the active mode. */
     val activeWorkingStyle: SubtitleStyle

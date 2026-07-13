@@ -11,6 +11,7 @@ import com.raulshma.jellyplay.feature.player.video.engine.EngineConfig
 import com.raulshma.jellyplay.feature.player.video.engine.EnginePlaybackState
 import com.raulshma.jellyplay.feature.player.video.engine.MediaEngine
 import com.raulshma.jellyplay.feature.player.video.engine.PlayerEngineFactory
+import com.raulshma.jellyplay.feature.player.video.subtitle.FontProvider
 import com.raulshma.jellyplay.feature.subtitle.tester.preview.PlaybackRequestFactory
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
@@ -27,6 +28,7 @@ import javax.inject.Inject
 class SubtitleTesterViewModel @Inject constructor(
     private val engineFactory: PlayerEngineFactory,
     private val preferencesStore: UserPreferencesStore,
+    private val fontProvider: FontProvider,
     @ApplicationContext private val context: Context,
 ) : ViewModel() {
 
@@ -58,11 +60,16 @@ class SubtitleTesterViewModel @Inject constructor(
             preferencesStore.preferences.collect { prefs ->
                 if (!seeded) {
                     seeded = true
+                    // Force applyCustomStyle = true on the working copies: the tester
+                    // hides the override toggle, so every edit must take effect on the
+                    // preview. The originals stay verbatim for accurate dirty checks.
+                    val sdr = prefs.subtitleStyle.copy(applyCustomStyle = true)
+                    val hdr = prefs.hdrSubtitleStyle.copy(applyCustomStyle = true)
                     _uiState.update {
                         it.copy(
-                            workingSdrStyle = prefs.subtitleStyle,
+                            workingSdrStyle = sdr,
                             originalSdrStyle = prefs.subtitleStyle,
-                            workingHdrStyle = prefs.hdrSubtitleStyle,
+                            workingHdrStyle = hdr,
                             originalHdrStyle = prefs.hdrSubtitleStyle,
                             hdrSubtitleEnabled = prefs.hdrSubtitleStyleEnabled,
                         )
@@ -83,6 +90,26 @@ class SubtitleTesterViewModel @Inject constructor(
         }
         pushConfigToEngine()
     }
+
+    /**
+     * Copies a SAF-picked font into the shared font cache and stamps the
+     * resolved file path + family name onto the active mode's working style.
+     * Mirrors [com.raulshma.jellyplay.feature.player.video.VideoPlayerViewModel.installUserFont];
+     * the SAF uri is not persisted (only the copied local file survives).
+     */
+    fun installUserFont(uri: android.net.Uri) {
+        viewModelScope.launch {
+            val installed = fontProvider.installUserFont(uri) ?: return@launch
+            updateStyle(
+                activeStyleCopy().copy(
+                    fontFamilyPath = installed.file.absolutePath,
+                    fontFamilyName = installed.familyName,
+                ),
+            )
+        }
+    }
+
+    private fun activeStyleCopy(): SubtitleStyle = _uiState.value.activeWorkingStyle
 
     fun setMode(mode: SubtitleStyleMode) {
         _uiState.update { it.copy(mode = mode) }
