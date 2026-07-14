@@ -54,3 +54,11 @@ enum class ExperimentalFeature {
  */
 fun UserPreferences.isExperimentalEnabled(feature: ExperimentalFeature): Boolean =
     feature in enabledExperimentalFeatures
+
+/**
+ * Slice overload so the Experimental settings screen (which collects only
+ * [ExperimentalPreferences]) can perform the same check without the whole
+ * [UserPreferences] object.
+ */
+fun ExperimentalPreferences.isExperimentalEnabled(feature: ExperimentalFeature): Boolean =
+    feature in enabledExperimentalFeatures

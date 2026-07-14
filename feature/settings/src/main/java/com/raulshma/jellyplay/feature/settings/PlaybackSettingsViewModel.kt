@@ -9,6 +9,7 @@ import com.raulshma.jellyplay.core.model.EffectStrength
 import com.raulshma.jellyplay.core.model.ExoPlayerEngineConfig
 import com.raulshma.jellyplay.core.model.LibVlcEngineConfig
 import com.raulshma.jellyplay.core.model.MediaSegmentType
+import com.raulshma.jellyplay.core.model.PlaybackPreferences
 import com.raulshma.jellyplay.core.model.MpvEngineConfig
 import com.raulshma.jellyplay.core.model.OrientationMode
 import com.raulshma.jellyplay.core.model.PlayerType
@@ -16,7 +17,6 @@ import com.raulshma.jellyplay.core.model.PreloadBufferSize
 import com.raulshma.jellyplay.core.model.SegmentBehavior
 import com.raulshma.jellyplay.core.model.StreamingQuality
 import com.raulshma.jellyplay.core.model.SyncPlayJoinBehavior
-import com.raulshma.jellyplay.core.model.UserPreferences
 import com.raulshma.jellyplay.core.ui.viewmodel.JellyPlayViewModel
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.SharingStarted
@@ -32,8 +32,8 @@ class PlaybackSettingsViewModel @Inject constructor(
     private val tvWatchNextScheduler: TvWatchNextScheduler,
 ) : JellyPlayViewModel() {
 
-    val preferences: StateFlow<UserPreferences> = store.preferences
-        .stateIn(scope, SharingStarted.WhileSubscribed(5_000), UserPreferences())
+    /** Playback-screen slice — recomposes this screen only on playback-field writes. */
+    val preferences: StateFlow<PlaybackPreferences> = store.playbackPreferences
 
     val showAdvancedSettings: StateFlow<Boolean> = store.preferences
         .map { it.showAdvancedSettings }

@@ -3,8 +3,8 @@ package com.raulshma.jellyplay.feature.settings
 import android.content.Context
 import com.raulshma.jellyplay.core.datastore.PreferencesEditor
 import com.raulshma.jellyplay.core.datastore.UserPreferencesStore
+import com.raulshma.jellyplay.core.model.LanguagePreferences
 import com.raulshma.jellyplay.core.model.SubtitleStyle
-import com.raulshma.jellyplay.core.model.UserPreferences
 import com.raulshma.jellyplay.core.ui.viewmodel.JellyPlayViewModel
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
@@ -21,8 +21,8 @@ class LanguageSettingsViewModel @Inject constructor(
     private val editor: PreferencesEditor,
 ) : JellyPlayViewModel() {
 
-    val preferences: StateFlow<UserPreferences> = store.preferences
-        .stateIn(scope, SharingStarted.WhileSubscribed(5_000), UserPreferences())
+    /** Language/subtitle-screen slice — recomposes this screen only on its field writes. */
+    val preferences: StateFlow<LanguagePreferences> = store.languagePreferences
 
     val showAdvancedSettings: StateFlow<Boolean> = store.preferences
         .map { it.showAdvancedSettings }

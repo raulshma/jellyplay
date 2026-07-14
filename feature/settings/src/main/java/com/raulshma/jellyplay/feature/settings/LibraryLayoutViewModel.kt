@@ -11,7 +11,6 @@ import com.raulshma.jellyplay.core.model.MediaType
 import com.raulshma.jellyplay.core.model.PinnedHomeSection
 import com.raulshma.jellyplay.core.model.PinnedSectionType
 import com.raulshma.jellyplay.core.model.SearchResult
-import com.raulshma.jellyplay.core.model.UserPreferences
 import com.raulshma.jellyplay.core.ui.viewmodel.JellyPlayViewModel
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.Job
@@ -35,8 +34,13 @@ class LibraryLayoutViewModel @Inject constructor(
     private val mediaRepository: MediaRepository,
 ) : JellyPlayViewModel() {
 
-    val preferences: StateFlow<UserPreferences> = store.preferences
-        .stateIn(scope, SharingStarted.WhileSubscribed(5_000), UserPreferences())
+    /**
+     * Narrow slice of just the pinned home-sections list. Collecting this (rather
+     * than the whole [com.raulshma.jellyplay.core.model.UserPreferences]) means
+     * the pinned-sections screen recomposes only when the pinned list changes.
+     * One-shot reads of other preference fields use [store].preferences.value.
+     */
+    val pinnedHomeSectionsFlow: StateFlow<List<PinnedHomeSection>> = store.pinnedHomeSectionsFlow
 
     // ----- Pinned home sections -------------------------------------------
 
@@ -52,7 +56,7 @@ class LibraryLayoutViewModel @Inject constructor(
     private var pinnedBrowseJob: Job? = null
 
     val pinnedHomeSections: List<PinnedHomeSection>
-        get() = preferences.value.pinnedHomeSections
+        get() = store.preferences.value.pinnedHomeSections
 
     fun addPinnedHomeSection(section: PinnedHomeSection) {
         editor.edit { addPinnedHomeSection(section) }
@@ -68,7 +72,7 @@ class LibraryLayoutViewModel @Inject constructor(
 
     /** Moves a pinned section from [from] to [to], clamped to valid bounds. */
     fun movePinnedHomeSection(from: Int, to: Int) {
-        val current = preferences.value.pinnedHomeSections.toMutableList()
+        val current = store.preferences.value.pinnedHomeSections.toMutableList()
         if (from !in current.indices || to !in current.indices) return
         val moved = current.removeAt(from)
         current.add(to, moved)
@@ -135,7 +139,7 @@ class LibraryLayoutViewModel @Inject constructor(
     // ----- Home layout presets (save / load / import / export / reset) ----
 
     val homeLayoutPresets: List<HomeLayoutPreset>
-        get() = preferences.value.homeLayoutPresets
+        get() = store.preferences.value.homeLayoutPresets
 
     var presetImportError by composeState<String?>(null)
         private set
@@ -216,7 +220,7 @@ class LibraryLayoutViewModel @Inject constructor(
     }
 
     private fun currentLayoutConfig(): HomeLayoutConfig {
-        val prefs = preferences.value
+        val prefs = store.preferences.value
         return HomeLayoutConfig(
             enabledHomeSectionTypes = prefs.enabledHomeSectionTypes,
             homeSectionOrder = prefs.homeSectionOrder,

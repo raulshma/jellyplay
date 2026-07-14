@@ -4,13 +4,13 @@ import com.raulshma.jellyplay.core.data.playback.AudioStreamCache
 import com.raulshma.jellyplay.core.datastore.PreferencesEditor
 import com.raulshma.jellyplay.core.datastore.UserPreferencesStore
 import com.raulshma.jellyplay.core.model.AudioNormalizationMode
+import com.raulshma.jellyplay.core.model.AudioPreferences
 import com.raulshma.jellyplay.core.model.ChannelMixMode
 import com.raulshma.jellyplay.core.model.EffectStrength
 import com.raulshma.jellyplay.core.model.EqualizerPreset
 import com.raulshma.jellyplay.core.model.EqualizerSettings
 import com.raulshma.jellyplay.core.model.PreloadBufferSize
 import com.raulshma.jellyplay.core.model.ReverbPreset
-import com.raulshma.jellyplay.core.model.UserPreferences
 import com.raulshma.jellyplay.core.ui.viewmodel.JellyPlayViewModel
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.SharingStarted
@@ -26,8 +26,8 @@ class AudioSettingsViewModel @Inject constructor(
     private val audioStreamCache: AudioStreamCache,
 ) : JellyPlayViewModel() {
 
-    val preferences: StateFlow<UserPreferences> = store.preferences
-        .stateIn(scope, SharingStarted.WhileSubscribed(5_000), UserPreferences())
+    /** Audio-screen slice — recomposes this screen only on audio-field writes. */
+    val preferences: StateFlow<AudioPreferences> = store.audioPreferences
 
     val showAdvancedSettings: StateFlow<Boolean> = store.preferences
         .map { it.showAdvancedSettings }

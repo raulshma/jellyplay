@@ -17,7 +17,8 @@ import com.raulshma.jellyplay.core.model.LibraryViewMode
 import com.raulshma.jellyplay.core.model.NewsletterSectionType
 import com.raulshma.jellyplay.core.model.PreferenceResetCategory
 import com.raulshma.jellyplay.core.model.ThemeMode
-import com.raulshma.jellyplay.core.model.UserPreferences
+import com.raulshma.jellyplay.core.model.AppearanceScreenPreferences
+import com.raulshma.jellyplay.core.model.NavigationCustomizationPreferences
 import com.raulshma.jellyplay.core.ui.viewmodel.JellyPlayViewModel
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.SharingStarted
@@ -32,8 +33,12 @@ class AppearanceSettingsViewModel @Inject constructor(
     private val editor: PreferencesEditor,
 ) : JellyPlayViewModel() {
 
-    val preferences: StateFlow<UserPreferences> = store.preferences
-        .stateIn(scope, SharingStarted.WhileSubscribed(5_000), UserPreferences())
+    /** Appearance-screen slice — recomposes this screen only on appearance-field writes. */
+    val preferences: StateFlow<AppearanceScreenPreferences> = store.appearanceScreenPreferences
+
+    /** Navigation-customization slice, consumed by the embedded `NavigationCustomizationGroup`. */
+    val navigationCustomizationPreferences: StateFlow<NavigationCustomizationPreferences> =
+        store.navigationCustomizationPreferences
 
     val showAdvancedSettings: StateFlow<Boolean> = store.preferences
         .map { it.showAdvancedSettings }
