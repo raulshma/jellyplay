@@ -41,6 +41,7 @@ import com.raulshma.jellyplay.core.designsystem.theme.ShapeCache
 import com.raulshma.jellyplay.core.model.MediaItem
 import com.raulshma.jellyplay.core.model.MediaType
 import com.raulshma.jellyplay.core.model.seerr.SeerrSearchItem
+import com.raulshma.jellyplay.core.ui.animation.lazyItemPlacementSpec
 import com.raulshma.jellyplay.core.ui.image.MediaImage
 import androidx.compose.ui.graphics.Color
 import com.raulshma.jellyplay.core.ui.tv.LocalTvMode
@@ -140,6 +141,7 @@ fun HomeSearchResultsOverlay(
                         contentType = { "historyItem" },
                     ) { index ->
                         val historyItem = searchHistory[index]
+                        val placementSpec = lazyItemPlacementSpec()
                         val itemFocusState = rememberTvFocusState()
                         val deleteFocusState = rememberTvFocusState()
                         val isItemFocused = itemFocusState.isFocused
@@ -159,6 +161,7 @@ fun HomeSearchResultsOverlay(
 
                         Row(
                             modifier = Modifier
+                                .animateItem(placementSpec = placementSpec)
                                 .fillMaxWidth()
                                 .padding(horizontal = 16.dp, vertical = 2.dp),
                             verticalAlignment = Alignment.CenterVertically,
@@ -228,6 +231,7 @@ fun HomeSearchResultsOverlay(
                         contentType = { "libraryItem" },
                     ) { index ->
                         val item = jellyfinResults[index]
+                        val placementSpec = lazyItemPlacementSpec()
                         // Memoized per row on stable primitives so search-as-you-type
                         // recompositions don't re-run buildString + branches for every
                         // visible row.
@@ -243,13 +247,15 @@ fun HomeSearchResultsOverlay(
                                 }
                             }
                         }
-                        SearchItemRow(
-                            title = item.name,
-                            subtitle = subtitle,
-                            imageUrl = getImageUrl(item.id),
-                            onClick = { onJellyfinClick(item) },
-                            index = index,
-                        )
+                        Box(modifier = Modifier.animateItem(placementSpec = placementSpec)) {
+                            SearchItemRow(
+                                title = item.name,
+                                subtitle = subtitle,
+                                imageUrl = getImageUrl(item.id),
+                                onClick = { onJellyfinClick(item) },
+                                index = index,
+                            )
+                        }
                     }
                 }
                 if (seerrResults.isNotEmpty()) {
@@ -280,6 +286,7 @@ fun HomeSearchResultsOverlay(
                         contentType = { "seerrItem" },
                     ) { index ->
                         val item = seerrResults[index]
+                        val placementSpec = lazyItemPlacementSpec()
                         val subtitle = remember(item.id, item.year, item.mediaType, item.voteAverage) {
                             buildString {
                                 item.year?.let { append(it) }
@@ -298,13 +305,15 @@ fun HomeSearchResultsOverlay(
                                 }
                             }
                         }
-                        SearchItemRow(
-                            title = item.displayName,
-                            subtitle = subtitle,
-                            imageUrl = item.posterUrl ?: "",
-                            onClick = { onSeerrClick(item) },
-                            index = index + jellyfinResults.size,
-                        )
+                        Box(modifier = Modifier.animateItem(placementSpec = placementSpec)) {
+                            SearchItemRow(
+                                title = item.displayName,
+                                subtitle = subtitle,
+                                imageUrl = item.posterUrl ?: "",
+                                onClick = { onSeerrClick(item) },
+                                index = index + jellyfinResults.size,
+                            )
+                        }
                     }
                 }
                 if (isSearching) {

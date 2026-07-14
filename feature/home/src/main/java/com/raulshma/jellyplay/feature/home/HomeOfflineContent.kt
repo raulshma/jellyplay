@@ -42,6 +42,7 @@ import com.raulshma.jellyplay.core.model.formatBytes
 import com.raulshma.jellyplay.core.ui.adaptive.LocalAdaptiveInfo
 import com.raulshma.jellyplay.core.ui.adaptive.itemSpacing
 import com.raulshma.jellyplay.core.ui.adaptive.rowCardWidth
+import com.raulshma.jellyplay.core.ui.animation.lazyItemPlacementSpec
 import com.raulshma.jellyplay.core.ui.components.OfflineMediaCard
 import com.raulshma.jellyplay.core.ui.components.ScreenEmptyState
 import com.raulshma.jellyplay.core.ui.tv.LocalTvMode
@@ -260,10 +261,11 @@ private fun OfflineSection(
             horizontalArrangement = Arrangement.spacedBy(12.dp),
         ) {
             items(items, key = { "offline_${it.id}" }, contentType = { "offlineItem" }) { item ->
+                val placementSpec = lazyItemPlacementSpec()
                 OfflineMediaCard(
                     item = item,
                     onClick = { onItemClick(item.id, item.mediaType) },
-                    modifier = Modifier.width(cardWidth),
+                    modifier = Modifier.animateItem(placementSpec = placementSpec).width(cardWidth),
                     // On the offline home every card is downloaded by definition,
                     // so the "Downloaded" status badge would be redundant.
                     showStatusBadge = false,
@@ -327,10 +329,11 @@ fun DownloadedSection(
             contentType = { "offlineItem" },
         ) { index ->
             val offlineItem = offlineLibrary[index]
+            val placementSpec = lazyItemPlacementSpec()
             OfflineMediaCard(
                 item = offlineItem,
                 onClick = onOfflineLibraryClick,
-                modifier = Modifier.width(cardWidth),
+                modifier = Modifier.animateItem(placementSpec = placementSpec).width(cardWidth),
             )
         }
     }

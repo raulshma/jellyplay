@@ -10,13 +10,8 @@ import androidx.compose.animation.animateContentSize
 import androidx.compose.animation.core.Spring
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.animation.core.spring
+import androidx.compose.animation.ContentTransform
 import androidx.compose.animation.core.tween
-import androidx.compose.animation.fadeIn
-import androidx.compose.animation.fadeOut
-import androidx.compose.animation.slideInHorizontally
-import androidx.compose.animation.slideInVertically
-import androidx.compose.animation.slideOutHorizontally
-import androidx.compose.animation.slideOutVertically
 import androidx.compose.animation.togetherWith
 import com.raulshma.jellyplay.core.designsystem.theme.AlphaEasing
 import com.raulshma.jellyplay.core.designsystem.theme.FancyTransitionEasing
@@ -85,7 +80,6 @@ import androidx.navigation3.runtime.rememberNavBackStack
 import androidx.navigation3.runtime.rememberSaveableStateHolderNavEntryDecorator
 import androidx.navigation3.runtime.NavEntryDecorator
 import androidx.navigation3.runtime.NavEntry
-import androidx.navigation3.scene.Scene
 import androidx.navigation3.ui.NavDisplay
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.navigationBars
@@ -136,16 +130,19 @@ import com.raulshma.jellyplay.core.ui.components.LocalFloatingNavVisibility
 import com.raulshma.jellyplay.core.ui.feedback.LocalUserMessageBus
 import com.raulshma.jellyplay.core.ui.feedback.UserMessage
 import com.raulshma.jellyplay.core.ui.feedback.resolve
+import com.raulshma.jellyplay.core.ui.animation.DefaultNavTransitionPolicy
+import com.raulshma.jellyplay.core.ui.animation.NavDirection
+import com.raulshma.jellyplay.core.ui.animation.NavTransitionContext
+import com.raulshma.jellyplay.core.ui.animation.isReducedMotion
+import com.raulshma.jellyplay.core.ui.animation.toTransition
 import com.raulshma.jellyplay.core.ui.navigation.ALL_TOP_LEVEL_ROUTE_KEYS
-import com.raulshma.jellyplay.core.ui.navigation.DETAIL_ROUTE_CLASS_NAMES
-import com.raulshma.jellyplay.core.ui.navigation.isDetail
 import com.raulshma.jellyplay.core.ui.navigation.isFullScreen
-import com.raulshma.jellyplay.core.ui.navigation.isModal
 import com.raulshma.jellyplay.core.ui.navigation.MUSIC_TOP_LEVEL_ROUTES
 import com.raulshma.jellyplay.core.ui.navigation.Navigator
 import com.raulshma.jellyplay.core.ui.navigation.Route
 import com.raulshma.jellyplay.core.ui.navigation.VIDEO_TOP_LEVEL_ROUTES
 import com.raulshma.jellyplay.core.ui.navigation.rememberNavigationState
+import com.raulshma.jellyplay.core.ui.navigation.toNavRouteClass
 import com.raulshma.jellyplay.core.ui.tv.TvScaffold
 import com.raulshma.jellyplay.core.ui.tv.LocalTvMode
 import com.raulshma.jellyplay.core.ui.tv.LocalTvTypography
@@ -193,17 +190,6 @@ import com.composables.icons.tabler.outline.*
 internal val LocalDrawerOpener = androidx.compose.runtime.compositionLocalOf { {} }
 
 
-
-private fun isDetailScene(scene: Scene<NavKey>): Boolean {
-    // Prefer the typed Route.isDetail extension when the content key is a
-    // Route (the common case). Fall back to class-name string matching for
-    // any non-Route NavKey the host might encounter.
-    val key = scene.entries.lastOrNull()?.contentKey ?: return false
-    val route = key as? Route
-    if (route != null) return route.isDetail
-    val className = key.toString().substringBefore('(')
-    return className in DETAIL_ROUTE_CLASS_NAMES
-}
 
 @Composable
 fun JellyPlayApp(
@@ -1476,10 +1462,34 @@ private fun MainNavDisplay(
         )
     }
 
+    // Read @Composable values ONCE in the composable body — the transition
+    // spec lambdas below are NOT composable scopes and cannot call these.
     val motionScheme = MaterialTheme.motionScheme
-    val defaultEffects = motionScheme.defaultEffectsSpec<Float>()
-    val fastEffects = motionScheme.fastEffectsSpec<Float>()
-    val defaultSpatialOffset = motionScheme.defaultSpatialSpec<androidx.compose.ui.unit.IntOffset>()
+    val reducedMotion = isReducedMotion()
+    val navPolicy = DefaultNavTransitionPolicy
+
+    /**
+     * Resolve a [ContentTransform] for a route pair + direction. Plain (non-
+     * composable) local fn: it only uses the [motionScheme]/[reducedMotion]
+     * vals captured above, so it is safe to call from the non-composable spec
+     * lambdas. Returns a [ContentTransform] so the spec lambdas can call it
+     * directly.
+     */
+    fun resolveTransition(
+        targetRoute: Route?,
+        initialRoute: Route?,
+        direction: NavDirection,
+    ): ContentTransform {
+        val context = NavTransitionContext(
+            targetClass = targetRoute.toNavRouteClass,
+            initialClass = initialRoute.toNavRouteClass,
+            direction = direction,
+            isReducedMotion = reducedMotion,
+        )
+        val kind = navPolicy.kind(context)
+        val transition = kind.toTransition(motionScheme)
+        return transition.enter togetherWith transition.exit
+    }
 
     // Remember the entry provider graph so the ~25 section builders aren't
     // re-invoked (allocating fresh lambdas + entry objects) on every
@@ -1555,124 +1565,19 @@ private fun MainNavDisplay(
         onBack = { navigator.goBack() },
         entryDecorators = listOf(entryDecorator, paddingDecorator),
         transitionSpec = {
-            val targetLast = targetState
-            val initialLast = initialState
-            val targetRoute = targetLast.entries.lastOrNull()?.contentKey as? Route
-            val initialRoute = initialLast.entries.lastOrNull()?.contentKey as? Route
-            val isModalRoute = targetRoute?.isModal == true
-            val isModalPop = initialRoute?.isModal == true
-            val isTabSwitch = targetRoute != null && initialRoute != null &&
-                    ALL_TOP_LEVEL_ROUTE_KEYS.contains(targetRoute) &&
-                    ALL_TOP_LEVEL_ROUTE_KEYS.contains(initialRoute)
-            val isAmbient = targetRoute is Route.Ambient || initialRoute is Route.Ambient
-
-            when {
-                isAmbient -> {
-                    fadeIn(defaultEffects) togetherWith fadeOut(fastEffects)
-                }
-                isModalRoute -> {
-                    fadeIn(
-                        defaultEffects
-                    ) + slideInVertically(
-                        initialOffsetY = { it / 4 },
-                        animationSpec = defaultSpatialOffset,
-                    ) togetherWith fadeOut(
-                        fastEffects
-                    )
-                }
-                isModalPop -> {
-                    fadeIn(fastEffects) togetherWith fadeOut(
-                        fastEffects
-                    ) + slideOutVertically(
-                        targetOffsetY = { it / 4 },
-                        animationSpec = defaultSpatialOffset,
-                    )
-                }
-                isTabSwitch -> {
-                    fadeIn(fastEffects) togetherWith fadeOut(
-                        fastEffects
-                    )
-                }
-                isDetailScene(targetLast) || isDetailScene(initialLast) -> {
-                    fadeIn(
-                        animationSpec = defaultEffects,
-                    ) togetherWith fadeOut(
-                        animationSpec = fastEffects,
-                    )
-                }
-                else -> {
-                    fadeIn(
-                        animationSpec = defaultEffects,
-                    ) + slideInHorizontally(
-                        initialOffsetX = { it / 8 },
-                        animationSpec = defaultSpatialOffset,
-                    ) togetherWith fadeOut(
-                        animationSpec = fastEffects,
-                    ) + slideOutHorizontally(
-                        targetOffsetX = { -it / 18 },
-                        animationSpec = defaultSpatialOffset,
-                    )
-                }
-            }
+            val targetRoute = targetState.entries.lastOrNull()?.contentKey as? Route
+            val initialRoute = initialState.entries.lastOrNull()?.contentKey as? Route
+            resolveTransition(targetRoute, initialRoute, NavDirection.FORWARD)
         },
         popTransitionSpec = {
-            val targetLast = targetState
-            val initialLast = initialState
-            val initialRoute = initialLast.entries.lastOrNull()?.contentKey as? Route
-            val isModalPop = initialRoute?.isModal == true
-            when {
-                isModalPop -> {
-                    fadeIn(fastEffects) togetherWith fadeOut(
-                        fastEffects
-                    ) + slideOutVertically(
-                            targetOffsetY = { it / 4 },
-                            animationSpec = defaultSpatialOffset,
-                        )
-                }
-                isDetailScene(initialLast) || isDetailScene(targetLast) -> {
-                    fadeIn(
-                        animationSpec = defaultEffects,
-                    ) togetherWith fadeOut(
-                        animationSpec = defaultEffects,
-                    )
-                }
-                else -> {
-                    fadeIn(
-                            animationSpec = defaultEffects,
-                        ) + slideInHorizontally(
-                            initialOffsetX = { -it / 12 },
-                            animationSpec = defaultSpatialOffset,
-                        ) togetherWith fadeOut(
-                            animationSpec = fastEffects,
-                        ) + slideOutHorizontally(
-                            targetOffsetX = { it / 10 },
-                            animationSpec = defaultSpatialOffset,
-                        )
-                }
-            }
+            val targetRoute = targetState.entries.lastOrNull()?.contentKey as? Route
+            val initialRoute = initialState.entries.lastOrNull()?.contentKey as? Route
+            resolveTransition(targetRoute, initialRoute, NavDirection.POP)
         },
         predictivePopTransitionSpec = { _ ->
-            val targetLast = targetState
-            val initialLast = initialState
-            if (isDetailScene(initialLast) || isDetailScene(targetLast)) {
-                fadeIn(
-                    animationSpec = defaultEffects,
-                ) togetherWith fadeOut(
-                    animationSpec = defaultEffects,
-                )
-            } else {
-                fadeIn(
-                    animationSpec = defaultEffects,
-                ) + slideInHorizontally(
-                    initialOffsetX = { -it / 12 },
-                    animationSpec = defaultSpatialOffset,
-                ) togetherWith fadeOut(
-                    animationSpec = fastEffects,
-                ) + slideOutHorizontally(
-                    targetOffsetX = { it / 10 },
-                    animationSpec = defaultSpatialOffset,
-                )
-            }
+            val targetRoute = targetState.entries.lastOrNull()?.contentKey as? Route
+            val initialRoute = initialState.entries.lastOrNull()?.contentKey as? Route
+            resolveTransition(targetRoute, initialRoute, NavDirection.PREDICTIVE_POP)
         },
         entryProvider = sharedEntryProvider,
         modifier = modifier,
