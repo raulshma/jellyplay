@@ -64,7 +64,7 @@ class PlayerEngineFactory @Inject constructor(
         return when (playerType) {
             PlayerType.EXO_PLAYER -> ExoPlayerEngine(context, streamingOkHttpClient, getSharedBandwidthMeter(), fontProvider)
             PlayerType.MPV -> MpvPlayerEngine(context, fontProvider)
-            PlayerType.LIBVLC -> LibVlcPlayerEngine(context)
+            PlayerType.LIBVLC -> LibVlcPlayerEngine(context, fontProvider)
             // External playback is launched in a third-party app; progress is
             // reported out-of-band. A NoOpEngine expresses that intent far more
             // clearly than aliasing to a fully wired ExoPlayerEngine.

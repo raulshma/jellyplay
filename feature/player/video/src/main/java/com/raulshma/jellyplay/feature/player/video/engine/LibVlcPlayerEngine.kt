@@ -16,6 +16,7 @@ import com.raulshma.jellyplay.core.model.SubtitleStyle
 import com.raulshma.jellyplay.core.model.TrackType
 import com.raulshma.jellyplay.core.model.VideoEffectsConfig
 import com.raulshma.jellyplay.core.model.parseLanguageFromLabel
+import com.raulshma.jellyplay.feature.player.video.subtitle.FontProvider
 import kotlinx.coroutines.channels.awaitClose
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -38,10 +39,14 @@ import org.videolan.libvlc.util.VLCVideoLayout
 
 class LibVlcPlayerEngine(
     private val context: Context,
+    private val fontProvider: FontProvider,
 ) : MediaEngine {
 
     companion object {
         private const val TAG = "LibVlcPlayerEngine"
+        // libVLC uses 0 for the weakest slave priority and 4 for the strongest.
+        // The tester's external track must win auto-selection immediately.
+        private const val EXTERNAL_SUBTITLE_PRIORITY = 4
     }
 
     private val isLowRamDevice by lazy { EngineDeviceProfile.isLowRamDevice(context) }
@@ -101,7 +106,7 @@ class LibVlcPlayerEngine(
     override fun onActivityResume() {
         videoLayout?.let { layout ->
             try {
-                mediaPlayer?.attachViews(layout, null, false, false)
+                mediaPlayer?.attachPreviewViews(layout)
             } catch (e: Exception) {
                 Log.e(TAG, "attachViews failed on resume", e)
             }
@@ -266,6 +271,11 @@ class LibVlcPlayerEngine(
 
         val mp = MediaPlayer(vlc)
         mp.setEventListener(eventListener)
+        // VLC's VideoHelper otherwise uses the Activity orientation when it
+        // calculates the child SurfaceView bounds. A 16:9 preview inside this
+        // portrait screen is then treated as portrait and its width/height are
+        // swapped, leaving a small centred video. Use the actual view bounds.
+        mp.setUseOrientationFromBounds(true)
         mediaPlayer = mp
 
         pendingRendererItem?.let { renderer ->
@@ -295,7 +305,7 @@ class LibVlcPlayerEngine(
         // Re-attach view if it exists
         videoLayout?.let {
             try {
-                mp.attachViews(it, null, false, false)
+                mp.attachPreviewViews(it)
                 mp.play()
                 pendingPlay = false
             } catch (e: Exception) {
@@ -415,7 +425,7 @@ class LibVlcPlayerEngine(
         try {
             mp.addSlave(
                 org.videolan.libvlc.interfaces.IMedia.Slave.Type.Subtitle,
-                source.url,
+                Uri.parse(source.url),
                 true,
             )
         } catch (e: Exception) {
@@ -499,7 +509,7 @@ class LibVlcPlayerEngine(
             override fun onViewAttachedToWindow(v: View) {
                 val mp = mediaPlayer ?: return
                 try {
-                    mp.attachViews(layout, null, false, false)
+                    mp.attachPreviewViews(layout)
                     if (pendingPlay) {
                         pendingPlay = false
                         mp.play()
@@ -515,6 +525,20 @@ class LibVlcPlayerEngine(
         })
 
         return layout
+    }
+
+    /**
+     * Attaches LibVLC after the Compose-hosted surface has entered the view tree.
+     * The delayed surface update is necessary because VLC's initial layout event
+     * can arrive before the 16:9 preview receives its final height.
+     */
+    private fun MediaPlayer.attachPreviewViews(layout: VLCVideoLayout) {
+        // The third argument makes VideoHelper inflate and bind its transparent
+        // subtitle SurfaceView as well as the video SurfaceView.
+        attachViews(layout, null, true, false)
+        layout.post {
+            if (videoLayout === layout) updateVideoSurfaces()
+        }
     }
 
     override fun applySubtitleStyleToView(view: View, style: SubtitleStyle) {
@@ -653,7 +677,7 @@ class LibVlcPlayerEngine(
             try {
                 media.addSlave(org.videolan.libvlc.interfaces.IMedia.Slave(
                     org.videolan.libvlc.interfaces.IMedia.Slave.Type.Subtitle,
-                    0,
+                    EXTERNAL_SUBTITLE_PRIORITY,
                     sub.url,
                 ))
             } catch (e: Exception) {
@@ -688,8 +712,6 @@ class LibVlcPlayerEngine(
             addOption(":freetype-background-color=$backgroundColor")
             addOption(":freetype-background-opacity=${(style.backgroundOpacity * 255).toInt().coerceIn(0, 255)}")
             addOption(":freetype-outline-color=$edgeColor")
-            addOption(":freetype-bold=true")
-
             when (style.edgeType) {
                 com.raulshma.jellyplay.core.model.SubtitleEdgeType.NONE -> addOption(":freetype-outline-thickness=0")
                 com.raulshma.jellyplay.core.model.SubtitleEdgeType.OUTLINE -> addOption(":freetype-outline-thickness=2")
@@ -711,9 +733,16 @@ class LibVlcPlayerEngine(
             addOption(":freetype-outline-color=0") // Black
             addOption(":freetype-outline-thickness=2")
             addOption(":freetype-shadow-opacity=255")
-            addOption(":freetype-bold=true")
             addOption(":freetype-rel-fontsize=${style.fontSize}")
         }
+
+        // The freetype module accepts a font file path. Supplying the same
+        // bundled fallback used by the other engines makes its synthetic
+        // bold/italic variants deterministic instead of depending on the
+        // device's generic sans-serif family.
+        LibVlcSubtitleStyleMapping
+            .typefaceOptions(style, fontProvider.bundledFallbackPath())
+            .forEach(::addOption)
 
         val screenHeight = context.resources.displayMetrics.heightPixels
         val marginPixels = (style.verticalPosition * screenHeight).toInt()

@@ -199,6 +199,19 @@ val ALL_TOP_LEVEL_ROUTE_KEYS: Set<Route> =
     VIDEO_TOP_LEVEL_ROUTES.keys.union(MUSIC_TOP_LEVEL_ROUTES.keys)
 
 /**
+ * Routes that render in the bare full-screen layout (player / onboarding /
+ * ambient / photo viewer). Centralised so the layout-branch picker in
+ * `MainContent` can match by membership rather than re-listing routes, and so
+ * a back stack can be scanned for *any* full-screen route (not just the top
+ * entry) — see `MainContent` for why that matters for the player↔subtitle-tester
+ * round trip.
+ */
+val Route.isFullScreen: Boolean
+    get() = this is Route.VideoPlayer || this is Route.LiveTvChannelPlayer ||
+        this is Route.AudioPlayer || this is Route.Ambient ||
+        this is Route.Onboarding || this is Route.PhotoViewer
+
+/**
  * Routes that present as a modal/bottom-sheet-style overlay rather than a
  * push-on-the-stack navigation. Centralised here so the transition
  * `transitionSpec` and `popTransitionSpec` lambdas do not duplicate the set;
