@@ -20,6 +20,7 @@ import androidx.compose.material3.SingleChoiceSegmentedButtonRow
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
+import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.runtime.Composable
@@ -64,6 +65,14 @@ fun SubtitleTesterScreen(
         if (engine != null) host.attach(engine) else host.detach()
     }
 
+    // System/gesture back matches the toolbar back: prompt to discard when
+    // there are unsaved edits, otherwise pop. The tester can render inside the
+    // bare full-screen container (reached from the player), which — unlike the
+    // phone/TV shells — installs no back handler of its own.
+    BackHandler {
+        if (state.isDirty) showDiscardDialog = true else onBack()
+    }
+
     Scaffold(
         topBar = {
             TopAppBar(
@@ -87,45 +96,56 @@ fun SubtitleTesterScreen(
         Column(
             modifier = Modifier
                 .fillMaxSize()
-                .padding(padding)
-                .verticalScroll(rememberScrollState()),
-            verticalArrangement = Arrangement.spacedBy(8.dp),
+                .padding(padding),
         ) {
-            // Mode toggle (SDR / HDR).
-            SingleChoiceSegmentedButtonRow(modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp)) {
-                SubtitleStyleMode.entries.forEachIndexed { index, mode ->
-                    SegmentedButton(
-                        selected = state.mode == mode,
-                        onClick = { viewModel.setMode(mode) },
-                        shape = SegmentedButtonDefaults.itemShape(index, SubtitleStyleMode.entries.size),
-                    ) {
-                        Text(stringResource(if (mode == SubtitleStyleMode.SDR) R.string.subtitle_tester_mode_sdr else R.string.subtitle_tester_mode_hdr))
+            // Sticky preview region: mode toggle + pickers + preview tile stay
+            // pinned at the top so the user sees style changes instantly while
+            // scrolling the controls below. Only the style form scrolls.
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                // Mode toggle (SDR / HDR).
+                SingleChoiceSegmentedButtonRow(modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp)) {
+                    SubtitleStyleMode.entries.forEachIndexed { index, mode ->
+                        SegmentedButton(
+                            selected = state.mode == mode,
+                            onClick = { viewModel.setMode(mode) },
+                            shape = SegmentedButtonDefaults.itemShape(index, SubtitleStyleMode.entries.size),
+                        ) {
+                            Text(stringResource(if (mode == SubtitleStyleMode.SDR) R.string.subtitle_tester_mode_sdr else R.string.subtitle_tester_mode_hdr))
+                        }
                     }
                 }
+
+                EnginePicker(selected = state.previewEngine, onSelect = { viewModel.switchEngine(it) })
+                PresetPicker(selected = state.samplePresetId, onSelect = { viewModel.switchPreset(it) })
+
+                PreviewTile(
+                    host = host,
+                    isApplying = state.isApplying,
+                    applyingLabel = stringResource(R.string.subtitle_tester_reloading),
+                    modifier = Modifier.padding(horizontal = 16.dp),
+                )
+                EngineHintRow(previewEngine = state.previewEngine)
             }
 
-            EnginePicker(selected = state.previewEngine, onSelect = { viewModel.switchEngine(it) })
-            PresetPicker(selected = state.samplePresetId, onSelect = { viewModel.switchPreset(it) })
-
-            PreviewTile(
-                host = host,
-                isApplying = state.isApplying,
-                applyingLabel = stringResource(R.string.subtitle_tester_reloading),
-                modifier = Modifier.padding(horizontal = 16.dp),
-            )
-            EngineHintRow(previewEngine = state.previewEngine)
-
-            SubtitleStyleControls(
-                currentStyle = state.activeWorkingStyle,
-                onStyleChange = { viewModel.updateStyle(it) },
-                capabilities = state.engineCapabilities,
-                onPickFont = { fontPickerLauncher.launch(arrayOf("*/*")) },
-                // The tester always edits the resolved style; the player owns the
-                // override toggle. Reset lives in the top-app-bar, so no chip here.
-                showOverrideToggle = false,
-                onReset = null,
-                modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
-            )
+            // Scrollable controls beneath the pinned preview.
+            Column(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .verticalScroll(rememberScrollState()),
+                verticalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                SubtitleStyleControls(
+                    currentStyle = state.activeWorkingStyle,
+                    onStyleChange = { viewModel.updateStyle(it) },
+                    capabilities = state.engineCapabilities,
+                    onPickFont = { fontPickerLauncher.launch(arrayOf("*/*")) },
+                    // The tester always edits the resolved style; the player owns the
+                    // override toggle. Reset lives in the top-app-bar, so no chip here.
+                    showOverrideToggle = false,
+                    onReset = null,
+                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
+                )
+            }
         }
     }
 

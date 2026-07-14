@@ -139,6 +139,7 @@ import com.raulshma.jellyplay.core.ui.feedback.resolve
 import com.raulshma.jellyplay.core.ui.navigation.ALL_TOP_LEVEL_ROUTE_KEYS
 import com.raulshma.jellyplay.core.ui.navigation.DETAIL_ROUTE_CLASS_NAMES
 import com.raulshma.jellyplay.core.ui.navigation.isDetail
+import com.raulshma.jellyplay.core.ui.navigation.isFullScreen
 import com.raulshma.jellyplay.core.ui.navigation.isModal
 import com.raulshma.jellyplay.core.ui.navigation.MUSIC_TOP_LEVEL_ROUTES
 import com.raulshma.jellyplay.core.ui.navigation.Navigator
@@ -374,9 +375,16 @@ private fun MainContent(
 
     val isAudioPlayerScreen = currentRoute is Route.AudioPlayer
 
-    val isFullScreenRoute = isPlayerScreen || isAudioPlayerScreen ||
-            currentRoute is Route.Ambient || currentRoute is Route.Onboarding ||
-            currentRoute is Route.PhotoViewer
+    // A full-screen route may sit below the top of the back stack (e.g. the
+    // video player with the subtitle tester pushed on top of it). Keep the
+    // full-screen layout branch active while *any* full-screen route is on the
+    // current stack: switching the branch mid-round-trip re-registers the
+    // player's NavKey in a second NavDisplay subtree against the shared
+    // SaveableStateHolder, crashing with "Key VideoPlayer(...) was used
+    // multiple times" on the back-pop. isPlayerScreen/isAudioPlayerScreen stay
+    // top-only since they only drive chrome styling.
+    val currentBackStack = navigationState.backStacks[navigationState.topLevelRoute.value]
+    val isFullScreenRoute = currentBackStack?.any { it is Route && it.isFullScreen } ?: false
 
     // Memoize the route filter+reorder so it only re-runs when homeMode /
     // hiddenNavItems / navItemOrder actually change. MainContent recomposes
