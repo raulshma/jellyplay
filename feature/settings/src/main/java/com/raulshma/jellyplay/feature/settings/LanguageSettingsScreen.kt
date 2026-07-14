@@ -1,5 +1,6 @@
 package com.raulshma.jellyplay.feature.settings
 
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.expandVertically
 import androidx.compose.animation.shrinkVertically
@@ -97,10 +98,10 @@ fun LanguageSettingsScreen(
     onBack: () -> Unit,
     onOpenSubtitleTester: () -> Unit = {},
     highlightSettingId: String? = null,
-    viewModel: SettingsViewModel = hiltViewModel(),
+    viewModel: LanguageSettingsViewModel = hiltViewModel(),
 ) {
-    val preferences = viewModel.preferences
-    val showAdvanced = preferences.showAdvancedSettings
+    val preferences by viewModel.preferences.collectAsStateWithLifecycle()
+    val showAdvanced by viewModel.showAdvancedSettings.collectAsStateWithLifecycle()
     val adaptiveInfo = LocalAdaptiveInfo.current
     val isTv = LocalTvMode.current
     var activeDialog by remember { mutableStateOf<LanguageSettingsDialog>(LanguageSettingsDialog.None) }

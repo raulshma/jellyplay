@@ -54,6 +54,13 @@ import androidx.compose.ui.unit.dp
 import androidx.activity.compose.BackHandler
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.flow.debounce
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.flowOn
+import kotlinx.coroutines.flow.map
+import androidx.compose.runtime.produceState
+import androidx.compose.runtime.snapshotFlow
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.lazy.itemsIndexed
@@ -212,11 +219,19 @@ fun SettingsScreen(
     var showSignOutConfirm by remember { mutableStateOf(false) }
     var signOutFromServer by remember { mutableStateOf(false) }
 
-    val filteredItems = remember(searchQuery) {
-        // Ranked fuzzy match: tolerates typos, merged/split terms and synonyms so advanced
-        // settings with jargon-heavy titles/thin keyword lists stay findable. See
-        // SettingsSearchMatcher for scoring details.
-        SettingsSearchMatcher.search(searchQuery, SettingsSearchRegistry.items)
+    // Debounced + off-main-thread fuzzy search. Each keystroke only re-runs the
+    // matcher after a short quiet period, and the Damerau-Levenshtein work happens
+    // on Dispatchers.Default so typing stays smooth on low-end devices.
+    val filteredItems by produceState(
+        initialValue = emptyList<SettingsSearchItem>(),
+        searchQuery,
+    ) {
+        snapshotFlow { searchQuery }
+            .debounce(120)
+            .distinctUntilChanged()
+            .map { SettingsSearchMatcher.search(it, SettingsSearchRegistry.items) }
+            .flowOn(Dispatchers.Default)
+            .collect { value = it }
     }
 
     BackHandler(enabled = isSearchActive) {
@@ -237,6 +252,19 @@ fun SettingsScreen(
                 userMessageBus.info(msg)
                 viewModel.clearMessageEvent()
             }
+        }
+
+        // Admin session polling is tied to screen visibility so it only runs
+        // while settings is in the foreground, not for the VM's whole lifetime.
+        // Key on the user id so the effect re-runs once the async `currentUser`
+        // load resolves — on first entry currentUser is still null, so keying on
+        // Unit would never start polling for an admin who stays on the screen.
+        val currentUserId = viewModel.currentUser?.id
+        androidx.lifecycle.compose.LifecycleStartEffect(currentUserId) {
+            if (viewModel.currentUser?.isAdmin == true) {
+                viewModel.startSessionAutoRefresh()
+            }
+            onStopOrDispose { viewModel.stopSessionAutoRefresh() }
         }
 
         Box(

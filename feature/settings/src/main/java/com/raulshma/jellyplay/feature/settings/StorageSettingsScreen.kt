@@ -24,6 +24,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -61,14 +62,17 @@ private fun streamingQualityLabel(quality: StreamingQuality): String = when (qua
 fun StorageSettingsScreen(
     onBack: () -> Unit,
     highlightSettingId: String? = null,
-    viewModel: SettingsViewModel = hiltViewModel(),
+    viewModel: StorageSettingsViewModel = hiltViewModel(),
 ) {
-    val preferences = viewModel.preferences
-    val showAdvanced = preferences.showAdvancedSettings
+    val preferences by viewModel.preferences.collectAsStateWithLifecycle()
+    val showAdvanced by viewModel.showAdvancedSettings.collectAsStateWithLifecycle()
     val adaptiveInfo = LocalAdaptiveInfo.current
     val isTv = LocalTvMode.current
     val backgroundColor = com.raulshma.jellyplay.core.ui.components.rememberScreenBackgroundColor()
     var showQualityPicker by remember { mutableStateOf(false) }
+
+    // #11 — cache size computed lazily on screen entry, not at VM construction.
+    LaunchedEffect(Unit) { viewModel.refreshCacheSize() }
 
     val scrollState = rememberLazyListState()
     val scrollIndex = remember(highlightSettingId) {

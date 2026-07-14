@@ -75,7 +75,7 @@ import java.util.Date
 fun HomeLayoutPresetsScreen(
     onBack: () -> Unit,
     highlightSettingId: String? = null,
-    viewModel: SettingsViewModel = hiltViewModel(),
+    viewModel: LibraryLayoutViewModel = hiltViewModel(),
 ) {
     val presets = viewModel.homeLayoutPresets
     val isTv = LocalTvMode.current
