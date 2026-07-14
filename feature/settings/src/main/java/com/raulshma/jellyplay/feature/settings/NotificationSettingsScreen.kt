@@ -1,5 +1,6 @@
 package com.raulshma.jellyplay.feature.settings
 
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
@@ -73,10 +74,11 @@ sealed class NotificationSettingsDialog {
 fun NotificationSettingsScreen(
     onBack: () -> Unit,
     highlightSettingId: String? = null,
-    viewModel: SettingsViewModel = hiltViewModel(),
+    viewModel: NotificationSettingsViewModel = hiltViewModel(),
 ) {
-    val preferences = viewModel.preferences
-    val showAdvanced = preferences.showAdvancedSettings
+    val preferences by viewModel.preferences.collectAsStateWithLifecycle()
+    val showAdvanced by viewModel.showAdvancedSettings.collectAsStateWithLifecycle()
+    val libraryFolders by viewModel.libraryFolders.collectAsStateWithLifecycle()
     val context = LocalContext.current
     val adaptiveInfo = LocalAdaptiveInfo.current
     val isTv = LocalTvMode.current
@@ -266,8 +268,8 @@ fun NotificationSettingsScreen(
                                 index = notifIdx++, count = notifTotal,
                                 onClick = { activeDialog = NotificationSettingsDialog.MaxPerCheckPicker },
                             )
-                            val libraryCount = viewModel.libraryFolders.size
-                            val enabledLibraries = viewModel.libraryFolders.count { folder ->
+                            val libraryCount = libraryFolders.size
+                            val enabledLibraries = libraryFolders.count { folder ->
                                 notifPrefs.libraryConfigs[folder.id]?.enabled ?: true
                             }
                             SettingListItem(
@@ -442,14 +444,14 @@ fun NotificationSettingsScreen(
             title = { Text(stringResource(R.string.settings_monitored_libraries)) },
             text = {
                 Column(modifier = Modifier.verticalScroll(rememberScrollState())) {
-                    if (viewModel.libraryFolders.isEmpty()) {
+                    if (libraryFolders.isEmpty()) {
                         Text(
                             text = stringResource(R.string.settings_no_libraries_found),
                             style = MaterialTheme.typography.bodyMedium,
                             modifier = Modifier.padding(16.dp)
                         )
                     } else {
-                        viewModel.libraryFolders.forEach { folder ->
+                        libraryFolders.forEach { folder ->
                             val currentConfig = notifPrefs.libraryConfigs[folder.id] ?: LibraryNotificationConfig(enabled = true)
                             Row(
                                 modifier = Modifier

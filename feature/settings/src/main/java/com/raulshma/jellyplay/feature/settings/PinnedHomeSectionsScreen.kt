@@ -1,5 +1,6 @@
 package com.raulshma.jellyplay.feature.settings
 
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.ExperimentalFoundationApi
@@ -67,9 +68,9 @@ import com.raulshma.jellyplay.core.ui.tv.tryRequestFocus
 fun PinnedHomeSectionsScreen(
     onBack: () -> Unit,
     highlightSettingId: String? = null,
-    viewModel: SettingsViewModel = hiltViewModel(),
+    viewModel: LibraryLayoutViewModel = hiltViewModel(),
 ) {
-    val preferences = viewModel.preferences
+    val preferences by viewModel.preferences.collectAsStateWithLifecycle()
     val pinnedSections = preferences.pinnedHomeSections
     val isTv = LocalTvMode.current
     val backgroundColor = rememberScreenBackgroundColor()
@@ -377,7 +378,7 @@ private fun AddPinnedSectionRow(
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun AddPinnedSectionSheet(
-    viewModel: SettingsViewModel,
+    viewModel: LibraryLayoutViewModel,
     alreadyPinnedIds: Set<String>,
     onDismiss: () -> Unit,
     onPinned: () -> Unit,
@@ -495,10 +496,10 @@ private fun PinnedTypePicker(onSelect: (PinnedSectionType) -> Unit) {
 
 @Composable
 private fun PinnedOptionBrowser(
-    viewModel: SettingsViewModel,
+    viewModel: LibraryLayoutViewModel,
     alreadyPinnedIds: Set<String>,
     onBack: () -> Unit,
-    onSelect: (SettingsViewModel.PinnableOption) -> Unit,
+    onSelect: (PinnableOption) -> Unit,
 ) {
     val options = viewModel.pinnedBrowseOptions
     val loading = viewModel.pinnedBrowseLoading

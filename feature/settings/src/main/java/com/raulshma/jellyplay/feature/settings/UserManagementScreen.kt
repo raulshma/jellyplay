@@ -71,11 +71,11 @@ fun UserManagementScreen(
     onBack: () -> Unit,
     onAddUser: () -> Unit,
     highlightSettingId: String? = null,
-    viewModel: SettingsViewModel = hiltViewModel(),
+    viewModel: ServerSettingsViewModel = hiltViewModel(),
 ) {
-    val currentUser = viewModel.currentUser
-    val serverUsers = viewModel.currentServerUsers
-    val isLoading = viewModel.isLoadingUsers
+    val currentUser by viewModel.currentUser.collectAsStateWithLifecycle()
+    val serverUsers by viewModel.currentServerUsers.collectAsStateWithLifecycle()
+    val isLoading by viewModel.isLoadingUsers.collectAsStateWithLifecycle()
     val networkStatus by LocalNetworkStatus.current
         .collectAsStateWithLifecycle()
     val headerStatus = resolveHeaderStatus(
