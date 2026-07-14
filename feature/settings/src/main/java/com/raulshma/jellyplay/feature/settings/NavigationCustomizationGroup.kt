@@ -23,7 +23,7 @@ import com.composables.icons.tabler.outline.Home
 import com.composables.icons.tabler.outline.LayoutList
 import com.composables.icons.tabler.outline.Menu2
 import com.composables.icons.tabler.outline.Search
-import com.raulshma.jellyplay.core.model.UserPreferences
+import com.raulshma.jellyplay.core.model.NavigationCustomizationPreferences
 
 /**
  * Describes a single floating-navigation-bar item for the customization UI.
@@ -61,7 +61,7 @@ private val NAV_ITEMS: List<NavItemDescriptor> = listOf(
  */
 @Composable
 fun NavigationCustomizationGroup(
-    preferences: UserPreferences,
+    preferences: NavigationCustomizationPreferences,
     viewModel: AppearanceSettingsViewModel,
     modifier: Modifier = Modifier,
 ) {

@@ -642,8 +642,9 @@ fun AppearanceSettingsScreen(
             // Floating navigation bar customization (enable/disable items, reorder,
             // hide-on-scroll).
             item {
+                val navPrefs by viewModel.navigationCustomizationPreferences.collectAsStateWithLifecycle()
                 NavigationCustomizationGroup(
-                    preferences = preferences,
+                    preferences = navPrefs,
                     viewModel = viewModel,
                 )
             }

@@ -8,8 +8,8 @@ import com.raulshma.jellyplay.core.model.DownloadQuality
 import com.raulshma.jellyplay.core.model.DownloadScheduleWindow
 import com.raulshma.jellyplay.core.model.MeteredNetworkBehavior
 import com.raulshma.jellyplay.core.model.NetworkTimeoutPreset
+import com.raulshma.jellyplay.core.model.StoragePreferences
 import com.raulshma.jellyplay.core.model.StreamingQuality
-import com.raulshma.jellyplay.core.model.UserPreferences
 import com.raulshma.jellyplay.core.ui.viewmodel.JellyPlayViewModel
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
@@ -40,8 +40,7 @@ class StorageSettingsViewModel @Inject constructor(
     private val autoDownloadScheduler: AutoDownloadScheduler,
 ) : JellyPlayViewModel() {
 
-    val preferences: StateFlow<UserPreferences> = store.preferences
-        .stateIn(scope, SharingStarted.WhileSubscribed(5_000), UserPreferences())
+    val preferences: StateFlow<StoragePreferences> = store.storagePreferences
 
     val showAdvancedSettings: StateFlow<Boolean> = store.preferences
         .map { it.showAdvancedSettings }

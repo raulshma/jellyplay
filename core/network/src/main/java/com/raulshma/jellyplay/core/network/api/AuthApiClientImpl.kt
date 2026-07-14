@@ -140,12 +140,18 @@ class AuthApiClientImpl @Inject constructor(
     }
 
     override suspend fun setUser(userInfo: UserInfo) {
-        engine.authMutex.withLock { engine.updateUser(userInfo) }
-        val server = engine.currentServer.value ?: return
-        engine.updateApi(engine.jellyfin.createApi(
-            baseUrl = server.address,
-            accessToken = userInfo.accessToken,
-        ))
+        engine.authMutex.withLock {
+            val server = engine.currentServer.value ?: return
+            // `currentUser` drives the authenticated UI (including Home's
+            // initial fetch), so do not publish it until requests can use this
+            // user's API client. Publishing first made a user switch issue its
+            // first request with the previous user's client or no client.
+            engine.updateApi(engine.jellyfin.createApi(
+                baseUrl = server.address,
+                accessToken = userInfo.accessToken,
+            ))
+            engine.updateUser(userInfo)
+        }
     }
 
     override suspend fun disconnect() {
