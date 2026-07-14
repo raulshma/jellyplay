@@ -47,6 +47,7 @@ import com.raulshma.jellyplay.core.model.HomeSectionType
 import com.raulshma.jellyplay.core.model.MediaItem
 import com.raulshma.jellyplay.core.model.MediaType
 import com.raulshma.jellyplay.core.ui.adaptive.LocalAdaptiveInfo
+import com.raulshma.jellyplay.core.ui.animation.lazyItemPlacementSpec
 import com.raulshma.jellyplay.core.ui.adaptive.WindowSizeClass
 import com.raulshma.jellyplay.core.ui.adaptive.contentPadding
 import com.raulshma.jellyplay.core.ui.adaptive.itemSpacing
@@ -110,7 +111,16 @@ private fun HorizontalMediaScroller(
                 count = itemCount,
                 key = key,
                 contentType = { "mediaCard" },
-            ) { index -> itemContent(index) }
+            ) { index ->
+                // animateItem (LazyItemScope) animates placement. Placement spec
+                // routes through lazyItemPlacementSpec() so it snaps under
+                // reduce-motion. Wrapping itemContent in a Box is required because
+                // itemContent has no modifier param.
+                val placementSpec = lazyItemPlacementSpec()
+                Box(modifier = Modifier.animateItem(placementSpec = placementSpec)) {
+                    itemContent(index)
+                }
+            }
         }
     }
 }

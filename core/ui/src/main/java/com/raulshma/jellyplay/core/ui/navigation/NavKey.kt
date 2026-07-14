@@ -287,3 +287,26 @@ val DETAIL_ROUTE_CLASS_NAMES: Set<String> = setOf(
     "UserStatisticsDetail",
     "UserDetail",
 )
+
+/**
+ * Maps a [Route] to a coarse [NavRouteClass] for transition selection.
+ * Ambient is checked first (before fullscreen) because [Route.Ambient] is a
+ * distinct immersive overlay that should always cross-fade.
+ */
+val Route?.toNavRouteClass: com.raulshma.jellyplay.core.ui.animation.NavRouteClass
+    get() = when {
+        this == null ->
+            com.raulshma.jellyplay.core.ui.animation.NavRouteClass.DEFAULT
+        this is Route.Ambient ->
+            com.raulshma.jellyplay.core.ui.animation.NavRouteClass.AMBIENT
+        this.isFullScreen ->
+            com.raulshma.jellyplay.core.ui.animation.NavRouteClass.FULLSCREEN
+        this.isModal ->
+            com.raulshma.jellyplay.core.ui.animation.NavRouteClass.MODAL
+        this.isDetail ->
+            com.raulshma.jellyplay.core.ui.animation.NavRouteClass.DETAIL
+        com.raulshma.jellyplay.core.ui.navigation.ALL_TOP_LEVEL_ROUTE_KEYS.contains(this) ->
+            com.raulshma.jellyplay.core.ui.animation.NavRouteClass.TOP_LEVEL_TAB
+        else ->
+            com.raulshma.jellyplay.core.ui.animation.NavRouteClass.DEFAULT
+    }

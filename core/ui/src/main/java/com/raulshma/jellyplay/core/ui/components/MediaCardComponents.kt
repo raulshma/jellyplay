@@ -65,6 +65,7 @@ import com.raulshma.jellyplay.core.designsystem.theme.cardElevation
 import com.raulshma.jellyplay.core.model.MediaItem
 import com.raulshma.jellyplay.core.model.MediaType
 import com.raulshma.jellyplay.core.ui.animation.fastEffectsSpec
+import com.raulshma.jellyplay.core.ui.animation.pressScale
 import com.raulshma.jellyplay.core.ui.adaptive.LocalJellyPlayUi
 import com.raulshma.jellyplay.core.ui.image.MediaImage
 import com.raulshma.jellyplay.core.ui.image.PhotoFolderPoster
@@ -301,12 +302,11 @@ fun PosterCard(
     val focusInteraction = rememberJellyFocusableInteraction()
     val interactionSource = remember { MutableInteractionSource() }
     val isPressed by interactionSource.collectIsPressedAsState()
-    val baseScale by animateFloatAsState(
-        targetValue = if (isPressed) 0.95f else 1f,
-        animationSpec = MaterialTheme.motionScheme.defaultSpatialSpec(),
-        label = "cardScale",
-    )
-    val scale = baseScale * focusInteraction.scale
+    // Press feedback is applied via Modifier.pressScale(interactionSource) below
+    // (its own graphicsLayer, animated through motionScheme so it flattens under
+    // reduce-motion). Focus feedback is applied via the focus graphicsLayer that
+    // follows it. Two nested graphicsLayers multiply: press (0.95) × focus (1.05).
+    val focusScale = focusInteraction.scale
     val themeVariant = com.raulshma.jellyplay.core.designsystem.theme.LocalThemeVariant.current
     val elevation = themeVariant.cardElevation(
         isPressed = isPressed,
@@ -381,9 +381,10 @@ fun PosterCard(
                 .fillMaxWidth()
                 .then(focusInteraction.modifier)
                 .then(peek?.boundsModifier ?: Modifier)
+                .pressScale(interactionSource = interactionSource)
                 .graphicsLayer {
-                    scaleX = scale
-                    scaleY = scale
+                    scaleX = focusScale
+                    scaleY = focusScale
                     shadowElevation = if (performanceMode) 0f else elevation.toPx()
                     clip = clipToShape
                     shape = cardShape
