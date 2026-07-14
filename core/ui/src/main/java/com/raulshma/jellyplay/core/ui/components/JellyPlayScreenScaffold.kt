@@ -152,7 +152,7 @@ fun JellyPlayScreenScaffold(
                         },
                         navigationIcon = {
                             if (onBack != null) {
-                                CircleBgBackButton(onClick = onBack)
+                                CircleBgBackButton(onClick = onBack, iconColor = MaterialTheme.colorScheme.onSurface)
                             }
                         },
                         actions = { actions() },
@@ -166,7 +166,7 @@ fun JellyPlayScreenScaffold(
                         },
                         navigationIcon = {
                             if (onBack != null) {
-                                CircleBgBackButton(onClick = onBack)
+                                CircleBgBackButton(onClick = onBack, iconColor = MaterialTheme.colorScheme.onSurface)
                             }
                         },
                         actions = { actions() },
@@ -207,7 +207,13 @@ fun CircleBgBackButton(
 
     val resolvedIconColor = iconColor
         ?: lerp(Color.White, MaterialTheme.colorScheme.onSurface, scrollCollapsed)
-    val bgAlpha = if (scrollCollapsed < 0.5f) 0.3f else 0f
+    // The translucent scrim only helps a white icon over arbitrary artwork. When a caller passes
+    // an explicit iconColor (e.g. a solid-background screen) they own contrast, so drop the scrim.
+    val bgAlpha = when {
+        iconColor != null -> 0f
+        scrollCollapsed < 0.5f -> 0.3f
+        else -> 0f
+    }
     val bgColor = MaterialTheme.colorScheme.surface.copy(alpha = bgAlpha)
 
     IconButton(
