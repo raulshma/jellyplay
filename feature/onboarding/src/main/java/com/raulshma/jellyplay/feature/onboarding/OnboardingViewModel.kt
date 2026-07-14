@@ -17,9 +17,8 @@ class OnboardingViewModel @Inject constructor(
     val preferencesStore: UserPreferencesStore,
     val seerrPreferencesStore: SeerrPreferencesStore,
     private val seerrSecureCredentialsStore: SeerrSecureCredentialsStore,
+    private val editor: PreferencesEditor,
 ) : JellyPlayViewModel() {
-
-    private val editor = PreferencesEditor(scope, preferencesStore)
 
     val preferences = preferencesStore.preferences
         .stateIn(scope, SharingStarted.WhileSubscribed(5_000), UserPreferences())
@@ -43,9 +42,7 @@ class OnboardingViewModel @Inject constructor(
     }
 
     fun completeOnboarding() {
-        launch {
-            preferencesStore.setOnboardingCompleted(true)
-        }
+        editor.edit { setOnboardingCompleted(true) }
     }
 
     fun setThemeMode(mode: com.raulshma.jellyplay.core.model.ThemeMode) = editor.setThemeMode(mode)

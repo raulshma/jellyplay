@@ -13,6 +13,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -20,6 +21,7 @@ import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Color
 import com.raulshma.jellyplay.core.designsystem.theme.playerScrimColor
+import kotlinx.coroutines.launch
 import com.raulshma.jellyplay.core.ui.components.PinLockScreen
 import com.raulshma.jellyplay.core.ui.tv.LocalTvMode
 import com.raulshma.jellyplay.core.ui.tv.input.onDpadKey
@@ -39,11 +41,12 @@ internal fun PinLockOverlay(
     visible: Boolean,
     onDismiss: () -> Unit,
     onUnlock: () -> Unit,
-    verifyPin: (String) -> Boolean,
+    verifyPin: suspend (String) -> Boolean,
     modifier: Modifier = Modifier,
 ) {
     val isTv = LocalTvMode.current
     val focusRequester = remember { FocusRequester() }
+    val scope = rememberCoroutineScope()
 
     LaunchedEffect(visible, isTv) {
         if (visible && isTv) {
@@ -79,21 +82,29 @@ internal fun PinLockOverlay(
             contentAlignment = Alignment.Center,
         ) {
             var errorMessage by remember { mutableStateOf<String?>(null) }
+            var verifying by remember { mutableStateOf(false) }
             PinLockScreen(
                 title = "Enter PIN",
                 subtitle = "Unlock player",
                 onPinEntered = { pin ->
-                    if (verifyPin(pin)) {
-                        errorMessage = null
-                        onUnlock()
-                    } else {
-                        errorMessage = "Incorrect PIN"
+                    if (verifying) return@PinLockScreen
+                    verifying = true
+                    scope.launch {
+                        val valid = verifyPin(pin)
+                        if (valid) {
+                            errorMessage = null
+                            onUnlock()
+                        } else {
+                            errorMessage = "Incorrect PIN"
+                        }
+                        verifying = false
                     }
                 },
                 onErrorClear = { errorMessage = null },
                 errorMessage = errorMessage,
                 compactMode = true,
-                enabled = true,
+                enabled = !verifying,
+                verifying = verifying,
             )
         }
     }

@@ -26,6 +26,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.ui.Modifier
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
@@ -63,10 +64,10 @@ fun AppearanceSettingsScreen(
     onPinnedHomeSections: (String?) -> Unit = {},
     onHomeLayoutPresets: (String?) -> Unit = {},
     highlightSettingId: String? = null,
-    viewModel: SettingsViewModel = hiltViewModel(),
+    viewModel: AppearanceSettingsViewModel = hiltViewModel(),
 ) {
-    val preferences = viewModel.preferences
-    val showAdvanced = preferences.showAdvancedSettings
+    val preferences by viewModel.preferences.collectAsStateWithLifecycle()
+    val showAdvanced by viewModel.showAdvancedSettings.collectAsStateWithLifecycle()
     val adaptiveInfo = LocalAdaptiveInfo.current
     val isTv = LocalTvMode.current
     val backgroundColor = com.raulshma.jellyplay.core.ui.components.rememberScreenBackgroundColor()

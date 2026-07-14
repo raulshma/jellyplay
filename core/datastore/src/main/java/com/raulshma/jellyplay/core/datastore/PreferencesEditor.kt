@@ -1,5 +1,6 @@
 package com.raulshma.jellyplay.core.datastore
 
+import com.raulshma.jellyplay.core.datastore.di.ApplicationScope
 import com.raulshma.jellyplay.core.model.ColorStyle
 import com.raulshma.jellyplay.core.model.ContrastLevel
 import com.raulshma.jellyplay.core.model.PreferenceResetCategory
@@ -17,67 +18,86 @@ import com.raulshma.jellyplay.core.model.SubtitleStyle
 import com.raulshma.jellyplay.core.model.ThemeMode
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.launch
+import javax.inject.Inject
+import javax.inject.Singleton
 
-class PreferencesEditor(
-    private val scope: CoroutineScope,
+/**
+ * Single auditable write seam over [UserPreferencesStore]. Every preference
+ * mutation from a ViewModel flows through here so cross-cutting write concerns
+ * (logging, validation, batching) have one place to live.
+ *
+ * [edit] is the general-purpose escape hatch for any store mutation; the named
+ * methods below cover the appearance / home / playback setters shared by the
+ * onboarding and settings flows. Writes that require a post-write side effect
+ * on a scheduler (auto-download, TV watch-next, notifications) belong to the
+ * layer that owns those scheduler dependencies — they call [edit] for the
+ * store write and then trigger the scheduler themselves.
+ */
+@Singleton
+class PreferencesEditor @Inject constructor(
+    @ApplicationScope private val scope: CoroutineScope,
     private val store: UserPreferencesStore,
 ) {
-    fun setThemeMode(mode: ThemeMode) = scope.launch { store.setThemeMode(mode) }
-    fun setDynamicTheming(enabled: Boolean) = scope.launch { store.setDynamicTheming(enabled) }
-    fun setOledMode(enabled: Boolean) = scope.launch { store.setOledMode(enabled) }
-    fun setContrastLevel(level: ContrastLevel) = scope.launch { store.setContrastLevel(level) }
-    fun setAccentColorSwatch(swatch: String) = scope.launch { store.setAccentColorSwatch(swatch) }
-    fun setColorStyle(style: ColorStyle) = scope.launch { store.setColorStyle(style) }
-    fun setPerformanceMode(enabled: Boolean) = scope.launch { store.setPerformanceMode(enabled) }
-    fun setHomeHeroEnabled(enabled: Boolean) = scope.launch { store.setHomeHeroEnabled(enabled) }
-    fun setHomeMode(mode: HomeMode) = scope.launch { store.setHomeMode(mode) }
-    fun setEnabledHomeSectionTypes(types: Set<HomeSectionType>) = scope.launch { store.setEnabledHomeSectionTypes(types) }
-    fun setNavBarShowLabels(show: Boolean) = scope.launch { store.setNavBarShowLabels(show) }
-    fun setPreferredPlayer(playerType: PlayerType) = scope.launch { store.setPreferredPlayer(playerType) }
-    fun setStreamingQuality(quality: StreamingQuality) = scope.launch { store.setStreamingQuality(quality) }
-    fun setVideoSeekDurationMs(ms: Long) = scope.launch { store.setVideoSeekDurationMs(ms) }
-    fun setVideoGesturesEnabled(enabled: Boolean) = scope.launch { store.setVideoGesturesEnabled(enabled) }
-    fun setVideoDefaultOrientation(mode: OrientationMode) = scope.launch { store.setVideoDefaultOrientation(mode) }
-    fun setVideoAutoplayNext(enabled: Boolean) = scope.launch { store.setVideoAutoplayNext(enabled) }
-    fun setAudioDefaultSpeed(speed: Float) = scope.launch { store.setAudioDefaultSpeed(speed) }
-    fun setGaplessEnabled(enabled: Boolean) = scope.launch { store.setGaplessEnabled(enabled) }
-    fun setCrossfadeDurationMs(ms: Long) = scope.launch { store.setCrossfadeDurationMs(ms) }
-    fun setAudioNormalizationEnabled(enabled: Boolean) = scope.launch { store.setAudioNormalizationEnabled(enabled) }
-    fun setAudioAutoplayNext(enabled: Boolean) = scope.launch { store.setAudioAutoplayNext(enabled) }
-    fun setSubtitleStyle(style: SubtitleStyle) = scope.launch { store.setSubtitleStyle(style) }
-    fun setPreferredSubtitleLanguage(language: String?) = scope.launch { store.setPreferredSubtitleLanguage(language) }
-    fun setSubtitlesForcedOnly(enabled: Boolean) = scope.launch { store.setSubtitlesForcedOnly(enabled) }
-    fun setPinLockEnabled(enabled: Boolean) = scope.launch { store.setPinLockEnabled(enabled) }
-    fun setPinHash(hash: String?) = scope.launch { store.setPinHash(hash) }
-    fun setBiometricLockEnabled(enabled: Boolean) = scope.launch { store.setBiometricLockEnabled(enabled) }
-    fun setUsePinForPlayerLock(enabled: Boolean) = scope.launch { store.setUsePinForPlayerLock(enabled) }
-    fun setDuckOnTransientFocusLoss(enabled: Boolean) = scope.launch { store.setDuckOnTransientFocusLoss(enabled) }
-    fun setAutoLockTimerMs(ms: Long) = scope.launch { store.setAutoLockTimerMs(ms) }
+    /** Fire-and-forget launch over the application scope. */
+    private fun run(block: suspend () -> Unit) = scope.launch { block() }
+
+    /**
+     * Runs [block] against the store on the application scope. Use this for any
+     * store mutation that does not need a post-write side effect.
+     */
+    fun edit(block: suspend UserPreferencesStore.() -> Unit) = run { store.block() }
+
+    // ----- Named convenience setters (appearance / home / playback) --------
+
+    fun setThemeMode(mode: ThemeMode) = edit { setThemeMode(mode) }
+    fun setDynamicTheming(enabled: Boolean) = edit { setDynamicTheming(enabled) }
+    fun setOledMode(enabled: Boolean) = edit { setOledMode(enabled) }
+    fun setContrastLevel(level: ContrastLevel) = edit { setContrastLevel(level) }
+    fun setAccentColorSwatch(swatch: String) = edit { setAccentColorSwatch(swatch) }
+    fun setColorStyle(style: ColorStyle) = edit { setColorStyle(style) }
+    fun setPerformanceMode(enabled: Boolean) = edit { setPerformanceMode(enabled) }
+    fun setHomeHeroEnabled(enabled: Boolean) = edit { setHomeHeroEnabled(enabled) }
+    fun setHomeMode(mode: HomeMode) = edit { setHomeMode(mode) }
+    fun setEnabledHomeSectionTypes(types: Set<HomeSectionType>) = edit { setEnabledHomeSectionTypes(types) }
+    fun setNavBarShowLabels(show: Boolean) = edit { setNavBarShowLabels(show) }
+    fun setPreferredPlayer(playerType: PlayerType) = edit { setPreferredPlayer(playerType) }
+    fun setStreamingQuality(quality: StreamingQuality) = edit { setStreamingQuality(quality) }
+    fun setVideoSeekDurationMs(ms: Long) = edit { setVideoSeekDurationMs(ms) }
+    fun setVideoGesturesEnabled(enabled: Boolean) = edit { setVideoGesturesEnabled(enabled) }
+    fun setVideoDefaultOrientation(mode: OrientationMode) = edit { setVideoDefaultOrientation(mode) }
+    fun setVideoAutoplayNext(enabled: Boolean) = edit { setVideoAutoplayNext(enabled) }
+    fun setAudioDefaultSpeed(speed: Float) = edit { setAudioDefaultSpeed(speed) }
+    fun setGaplessEnabled(enabled: Boolean) = edit { setGaplessEnabled(enabled) }
+    fun setCrossfadeDurationMs(ms: Long) = edit { setCrossfadeDurationMs(ms) }
+    fun setAudioNormalizationEnabled(enabled: Boolean) = edit { setAudioNormalizationEnabled(enabled) }
+    fun setAudioAutoplayNext(enabled: Boolean) = edit { setAudioAutoplayNext(enabled) }
+    fun setSubtitleStyle(style: SubtitleStyle) = edit { setSubtitleStyle(style) }
+    fun setPreferredSubtitleLanguage(language: String?) = edit { setPreferredSubtitleLanguage(language) }
+    fun setSubtitlesForcedOnly(enabled: Boolean) = edit { setSubtitlesForcedOnly(enabled) }
+    fun setPinLockEnabled(enabled: Boolean) = edit { setPinLockEnabled(enabled) }
+    fun setPinHash(hash: String?) = edit { setPinHash(hash) }
+    fun setBiometricLockEnabled(enabled: Boolean) = edit { setBiometricLockEnabled(enabled) }
+    fun setUsePinForPlayerLock(enabled: Boolean) = edit { setUsePinForPlayerLock(enabled) }
+    fun setDuckOnTransientFocusLoss(enabled: Boolean) = edit { setDuckOnTransientFocusLoss(enabled) }
+    fun setAutoLockTimerMs(ms: Long) = edit { setAutoLockTimerMs(ms) }
     fun hashPin(pin: String): String = store.hashPin(pin)
 
-    /**
-     * Resets all preferences in a specific category to their default values.
-     * @param category The [PreferenceResetCategory] to reset.
-     */
-    fun resetCategory(category: PreferenceResetCategory) = scope.launch {
-        store.resetCategory(category)
-    }
+    /** Resets all preferences in a specific category to their default values. */
+    fun resetCategory(category: PreferenceResetCategory) = edit { resetCategory(category) }
 
     /**
-     * Clears all preferences and resets to factory defaults.
-     * This will log out the user and clear all app data.
+     * Clears the preferences DataStore only (preferences reset to defaults).
+     * Does **not** sign out the user or delete downloaded media, cache, or DB.
      */
-    fun clearAllPreferences() = scope.launch {
-        store.clearAllPreferences()
-    }
+    fun clearAllPreferences() = edit { clearAllPreferencesOnly() }
 
-    fun setHapticsEnabled(enabled: Boolean) = scope.launch { store.setHapticsEnabled(enabled) }
-    fun setDateFormatPreference(preference: DateFormatPreference) = scope.launch { store.setDateFormatPreference(preference) }
-    fun setAppFontScale(scale: AppFontScale) = scope.launch { store.setAppFontScale(scale) }
-    fun setScheduledThemeStartHour(hour: Int) = scope.launch { store.setScheduledThemeStartHour(hour) }
-    fun setScheduledThemeEndHour(hour: Int) = scope.launch { store.setScheduledThemeEndHour(hour) }
-    fun setColorBlindMode(mode: ColorBlindMode) = scope.launch { store.setColorBlindMode(mode) }
-    fun setHandMode(mode: HandMode) = scope.launch { store.setHandMode(mode) }
-    fun setDownloadScheduleEnabled(enabled: Boolean) = scope.launch { store.setDownloadScheduleEnabled(enabled) }
-    fun setDownloadScheduleWindow(window: DownloadScheduleWindow) = scope.launch { store.setDownloadScheduleWindow(window) }
+    fun setHapticsEnabled(enabled: Boolean) = edit { setHapticsEnabled(enabled) }
+    fun setDateFormatPreference(preference: DateFormatPreference) = edit { setDateFormatPreference(preference) }
+    fun setAppFontScale(scale: AppFontScale) = edit { setAppFontScale(scale) }
+    fun setScheduledThemeStartHour(hour: Int) = edit { setScheduledThemeStartHour(hour) }
+    fun setScheduledThemeEndHour(hour: Int) = edit { setScheduledThemeEndHour(hour) }
+    fun setColorBlindMode(mode: ColorBlindMode) = edit { setColorBlindMode(mode) }
+    fun setHandMode(mode: HandMode) = edit { setHandMode(mode) }
+    fun setDownloadScheduleEnabled(enabled: Boolean) = edit { setDownloadScheduleEnabled(enabled) }
+    fun setDownloadScheduleWindow(window: DownloadScheduleWindow) = edit { setDownloadScheduleWindow(window) }
 }

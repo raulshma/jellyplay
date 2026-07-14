@@ -56,6 +56,13 @@ import com.raulshma.jellyplay.core.model.SubtitleEdgeType
 import com.raulshma.jellyplay.core.model.ThemeMode
 import com.raulshma.jellyplay.core.model.NotificationPreferences
 import com.raulshma.jellyplay.core.model.UserPreferences
+import com.raulshma.jellyplay.core.model.appearance
+import com.raulshma.jellyplay.core.model.audioPlayer
+import com.raulshma.jellyplay.core.model.download
+import com.raulshma.jellyplay.core.model.security
+import com.raulshma.jellyplay.core.model.subtitle
+import com.raulshma.jellyplay.core.model.syncPlay
+import com.raulshma.jellyplay.core.model.videoPlayer
 import com.raulshma.jellyplay.core.model.VideoEffectsConfig
 import com.raulshma.jellyplay.core.model.CastingStrategy
 import com.raulshma.jellyplay.core.model.SyncPlayJoinBehavior
@@ -78,6 +85,7 @@ import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import kotlinx.serialization.decodeFromString
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
@@ -442,7 +450,13 @@ class UserPreferencesStore @Inject constructor(
 
     private fun readBool(prefs: Preferences, key: Preferences.Key<Boolean>, name: String, default: Boolean): Boolean {
         val typed = try { prefs[key] } catch (_: ClassCastException) { null }
-        return typed ?: prefs[stringPreferencesKey(name)]?.toBoolean() ?: default
+        // Once the one-shot typed-key migration has run, the legacy string-key
+        // fallback is no longer needed — every key was rewritten in place — so
+        // skip the extra string lookup on every preference emission.
+        if (typed != null || prefs[Keys.TYPED_MIGRATION_DONE] != true) {
+            return typed ?: prefs[stringPreferencesKey(name)]?.toBoolean() ?: default
+        }
+        return typed ?: default
     }
 
     /**
@@ -463,17 +477,26 @@ class UserPreferencesStore @Inject constructor(
 
     private fun readInt(prefs: Preferences, key: Preferences.Key<Int>, name: String, default: Int): Int {
         val typed = try { prefs[key] } catch (_: ClassCastException) { null }
-        return typed ?: prefs[stringPreferencesKey(name)]?.toIntOrNull() ?: default
+        if (typed != null || prefs[Keys.TYPED_MIGRATION_DONE] != true) {
+            return typed ?: prefs[stringPreferencesKey(name)]?.toIntOrNull() ?: default
+        }
+        return typed ?: default
     }
 
     private fun readFloat(prefs: Preferences, key: Preferences.Key<Float>, name: String, default: Float): Float {
         val typed = try { prefs[key] } catch (_: ClassCastException) { null }
-        return typed ?: prefs[stringPreferencesKey(name)]?.toFloatOrNull() ?: default
+        if (typed != null || prefs[Keys.TYPED_MIGRATION_DONE] != true) {
+            return typed ?: prefs[stringPreferencesKey(name)]?.toFloatOrNull() ?: default
+        }
+        return typed ?: default
     }
 
     private fun readLong(prefs: Preferences, key: Preferences.Key<Long>, name: String, default: Long): Long {
         val typed = try { prefs[key] } catch (_: ClassCastException) { null }
-        return typed ?: prefs[stringPreferencesKey(name)]?.toLongOrNull() ?: default
+        if (typed != null || prefs[Keys.TYPED_MIGRATION_DONE] != true) {
+            return typed ?: prefs[stringPreferencesKey(name)]?.toLongOrNull() ?: default
+        }
+        return typed ?: default
     }
 
     private fun readMediaStreamSelections(prefs: Preferences): Map<String, MediaStreamSelection> {
@@ -1148,6 +1171,41 @@ class UserPreferencesStore @Inject constructor(
     val autoOfflineEnabled: Flow<Boolean> =
         sharedPrefs.map { it[Keys.AUTO_OFFLINE_ENABLED] ?: true }.distinctUntilChanged()
 
+    // Per-domain preference slices. Each is derived from the single source-of-truth
+    // [preferences] StateFlow and de-duplicated on the slice's structural equality, so
+    // a sub-screen collecting only its slice recomposes only when that slice actually
+    // changes — not on every preference mutation app-wide. The group projections are
+    // defined in `PreferenceGroups.kt`; deriving from [preferences] (rather than
+    // re-reading the raw DataStore keys) keeps a single read path and avoids drift.
+    val videoPlayerPreferences: StateFlow<com.raulshma.jellyplay.core.model.VideoPlayerPreferences> =
+        preferences.map { it.videoPlayer }
+            .distinctUntilChanged()
+            .stateIn(scope, SharingStarted.WhileSubscribed(5_000), com.raulshma.jellyplay.core.model.VideoPlayerPreferences())
+    val audioPlayerPreferences: StateFlow<com.raulshma.jellyplay.core.model.AudioPlayerPreferences> =
+        preferences.map { it.audioPlayer }
+            .distinctUntilChanged()
+            .stateIn(scope, SharingStarted.WhileSubscribed(5_000), com.raulshma.jellyplay.core.model.AudioPlayerPreferences())
+    val subtitlePreferences: StateFlow<com.raulshma.jellyplay.core.model.SubtitlePreferences> =
+        preferences.map { it.subtitle }
+            .distinctUntilChanged()
+            .stateIn(scope, SharingStarted.WhileSubscribed(5_000), com.raulshma.jellyplay.core.model.SubtitlePreferences())
+    val securityPreferences: StateFlow<com.raulshma.jellyplay.core.model.SecurityPreferences> =
+        preferences.map { it.security }
+            .distinctUntilChanged()
+            .stateIn(scope, SharingStarted.WhileSubscribed(5_000), com.raulshma.jellyplay.core.model.SecurityPreferences())
+    val downloadPreferences: StateFlow<com.raulshma.jellyplay.core.model.DownloadPreferences> =
+        preferences.map { it.download }
+            .distinctUntilChanged()
+            .stateIn(scope, SharingStarted.WhileSubscribed(5_000), com.raulshma.jellyplay.core.model.DownloadPreferences())
+    val syncPlayPreferences: StateFlow<com.raulshma.jellyplay.core.model.SyncPlayPreferences> =
+        preferences.map { it.syncPlay }
+            .distinctUntilChanged()
+            .stateIn(scope, SharingStarted.WhileSubscribed(5_000), com.raulshma.jellyplay.core.model.SyncPlayPreferences())
+    val appearancePreferences: StateFlow<com.raulshma.jellyplay.core.model.AppearancePreferences> =
+        preferences.map { it.appearance }
+            .distinctUntilChanged()
+            .stateIn(scope, SharingStarted.WhileSubscribed(5_000), com.raulshma.jellyplay.core.model.AppearancePreferences())
+
     suspend fun ensureDeviceId(): String {
         var id: String? = null
         context.dataStore.edit { prefs ->
@@ -1355,6 +1413,31 @@ class UserPreferencesStore @Inject constructor(
     }
 
     /**
+     * Sets a new PIN atomically: hashes [pin] and writes both the hash and
+     * `pinLockEnabled = true` in a single DataStore transaction so a concurrent
+     * reader can never observe `pinLockEnabled = true` with the previous hash.
+     */
+    suspend fun setPin(pin: String) {
+        if (pin.isBlank()) return
+        val hash = PinHasher.hash(pin)
+        context.dataStore.edit { prefs ->
+            prefs[Keys.PIN_HASH] = hash
+            prefs[Keys.PIN_LOCK_ENABLED] = true
+        }
+    }
+
+    /**
+     * Clears the PIN atomically: disables the lock and removes the hash in a
+     * single DataStore transaction.
+     */
+    suspend fun clearPin() {
+        context.dataStore.edit { prefs ->
+            prefs[Keys.PIN_LOCK_ENABLED] = false
+            prefs.remove(Keys.PIN_HASH)
+        }
+    }
+
+    /**
      * Silently upgrades a legacy (unsalted SHA-256) PIN hash to the v2 PBKDF2
      * format after the user has successfully unlocked with [pin]. No-op when
      * the stored hash is already v2 or when no PIN is set. Safe to call after
@@ -1463,9 +1546,19 @@ class UserPreferencesStore @Inject constructor(
         context.dataStore.edit { it[Keys.USE_PIN_FOR_PLAYER_LOCK] = enabled }
     }
 
-    fun verifyPin(pin: String): Boolean {
+    /**
+     * Verifies [pin] against the stored hash, running the PBKDF2 derivation on
+     * [Dispatchers.Default] so callers never block the UI thread. Returns `false`
+     * when no PIN is set. On success with a legacy hash, the hash is silently
+     * upgraded to PBKDF2 (v2).
+     */
+    suspend fun verifyPinOffMainThread(pin: String): Boolean {
         val storedHash = preferences.value.pinHash ?: return false
-        return PinHasher.verify(pin, storedHash)
+        val valid = withContext(Dispatchers.Default) { PinHasher.verify(pin, storedHash) }
+        if (valid && pinHashNeedsMigration(storedHash)) {
+            upgradePinHashIfLegacy(pin)
+        }
+        return valid
     }
 
     suspend fun setShowAdvancedSettings(enabled: Boolean) {
@@ -2817,10 +2910,14 @@ class UserPreferencesStore @Inject constructor(
     }
 
     /**
-     * Clears all preferences and resets to factory defaults.
-     * This will log out the user and clear all app data.
+     * Clears the preferences DataStore only, resetting every stored preference
+     * to its default. This does **not** sign out the user (the active
+     * server/user selection is also cleared because it lives in the same
+     * DataStore, but `AuthRepository` session state is untouched) and does
+     * **not** delete downloaded media, the cache, or the database. Callers that
+     * need a true factory reset must additionally sign out and clear those.
      */
-    suspend fun clearAllPreferences() {
+    suspend fun clearAllPreferencesOnly() {
         context.dataStore.edit { prefs ->
             prefs.clear()
         }

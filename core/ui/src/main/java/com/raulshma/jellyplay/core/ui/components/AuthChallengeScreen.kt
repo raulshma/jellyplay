@@ -54,6 +54,7 @@ fun AuthChallengeScreen(
     onDismiss: () -> Unit = {},
     showAsDialog: Boolean = false,
     enabled: Boolean = true,
+    verifying: Boolean = false,
 ) {
     val context = LocalContext.current
     val activity = remember(context) { context.findFragmentActivity() }
@@ -170,6 +171,7 @@ fun AuthChallengeScreen(
                     errorMessage = errorMessage,
                     compactMode = showAsDialog,
                     enabled = enabled,
+                    verifying = verifying,
                 )
                 if (canUseBiometric) {
                     Spacer(Modifier.height(16.dp))

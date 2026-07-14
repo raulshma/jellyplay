@@ -1,0 +1,68 @@
+package com.raulshma.jellyplay.feature.settings
+
+import com.raulshma.jellyplay.core.data.repository.AuthRepository
+import com.raulshma.jellyplay.core.datastore.PreferencesEditor
+import com.raulshma.jellyplay.core.datastore.UserPreferencesStore
+import com.raulshma.jellyplay.core.model.SecurityPreferences
+import com.raulshma.jellyplay.core.ui.viewmodel.JellyPlayViewModel
+import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.coroutines.flow.SharingStarted
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.stateIn
+import javax.inject.Inject
+
+@HiltViewModel
+class SecuritySettingsViewModel @Inject constructor(
+    private val store: UserPreferencesStore,
+    private val editor: PreferencesEditor,
+    private val authRepository: AuthRepository,
+) : JellyPlayViewModel() {
+
+    /** Security preference slice — recomposes this screen only on security-key writes. */
+    val securityPreferences: StateFlow<SecurityPreferences> = store.securityPreferences
+
+    val showAdvancedSettings: StateFlow<Boolean> = store.preferences
+        .map { it.showAdvancedSettings }
+        .stateIn(scope, SharingStarted.WhileSubscribed(5_000), false)
+
+    fun setShowAdvancedSettings(enabled: Boolean) =
+        editor.edit { setShowAdvancedSettings(enabled) }
+
+    fun setPinLockEnabled(enabled: Boolean) = editor.setPinLockEnabled(enabled)
+
+    fun setPin(pin: String) {
+        editor.edit { setPin(pin) }
+    }
+
+    fun clearPin() {
+        editor.edit { clearPin() }
+    }
+
+    suspend fun verifyPin(pin: String): Boolean = store.verifyPinOffMainThread(pin)
+
+    fun setBiometricLockEnabled(enabled: Boolean) = editor.setBiometricLockEnabled(enabled)
+
+    fun setUsePinForPlayerLock(enabled: Boolean) = editor.setUsePinForPlayerLock(enabled)
+
+    fun setAutoLockTimerMs(ms: Long) = editor.setAutoLockTimerMs(ms)
+
+    fun setRemoteControlEnabled(enabled: Boolean) =
+        editor.edit { setRemoteControlEnabled(enabled) }
+
+    fun authorizeQuickConnect(code: String, onResult: (success: Boolean, error: String?) -> Unit) {
+        launch {
+            authRepository.authorizeQuickConnect(code)
+                .onSuccess { authorized ->
+                    if (authorized) {
+                        onResult(true, null)
+                    } else {
+                        onResult(false, "Code not found or already used")
+                    }
+                }
+                .onFailure { e ->
+                    onResult(false, e.message ?: "Authorization failed")
+                }
+        }
+    }
+}

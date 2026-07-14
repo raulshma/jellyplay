@@ -62,7 +62,7 @@ private val NAV_ITEMS: List<NavItemDescriptor> = listOf(
 @Composable
 fun NavigationCustomizationGroup(
     preferences: UserPreferences,
-    viewModel: SettingsViewModel,
+    viewModel: AppearanceSettingsViewModel,
     modifier: Modifier = Modifier,
 ) {
     SettingsGroup(
