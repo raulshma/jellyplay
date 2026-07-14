@@ -108,6 +108,7 @@ import com.raulshma.jellyplay.core.model.MediaType
 import com.raulshma.jellyplay.feature.library.components.LibraryFilterSheet
 import com.raulshma.jellyplay.feature.library.components.LibraryListItem
 import com.raulshma.jellyplay.core.ui.animation.animateContentSizeNoClip
+import com.raulshma.jellyplay.core.ui.animation.lazyItemPlacementSpec
 import com.composables.icons.tabler.Tabler
 import com.composables.icons.tabler.outline.*
 import androidx.compose.ui.res.pluralStringResource
@@ -327,11 +328,14 @@ fun LibraryScreen(
                             }
                             items(folders.size, key = { folders[it].id }, contentType = { "folder" }) { index ->
                                 val folder = folders[index]
-                                GlassPill(
-                                    label = folder.name,
-                                    selected = selectedFolder?.id == folder.id,
-                                    onClick = { viewModel.selectFolder(folder) },
-                                )
+                                val placementSpec = lazyItemPlacementSpec()
+                                Box(modifier = Modifier.animateItem(placementSpec = placementSpec)) {
+                                    GlassPill(
+                                        label = folder.name,
+                                        selected = selectedFolder?.id == folder.id,
+                                        onClick = { viewModel.selectFolder(folder) },
+                                    )
+                                }
                             }
                         }
                     }
@@ -523,6 +527,7 @@ fun LibraryScreen(
                                         ) { index ->
                                             val item = pagedItems[index]
                                             if (item != null) {
+                                                val placementSpec = lazyItemPlacementSpec()
                                                 val memoizedClick = remember(item.id, item.mediaType, item.parentId, item.name) {
                                                     { onItemClick(item.id, item.mediaType, item.parentId, item.name) }
                                                 }
@@ -550,6 +555,7 @@ fun LibraryScreen(
                                                     imageUrl = remember(item.id) { viewModel.getImageUrl(item.id) },
                                                     blurHash = item.blurHashes.primary,
                                                     onClick = memoizedClick,
+                                                    modifier = Modifier.animateItem(placementSpec = placementSpec),
                                                 )
                                             }
                                         }

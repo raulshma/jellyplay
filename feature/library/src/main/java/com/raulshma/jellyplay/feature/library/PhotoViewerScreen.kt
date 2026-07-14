@@ -78,6 +78,7 @@ import com.composables.icons.tabler.outline.PlayerPause
 import com.composables.icons.tabler.outline.PlayerPlay
 import com.composables.icons.tabler.outline.Share
 import com.composables.icons.tabler.outline.X
+import com.raulshma.jellyplay.core.ui.animation.lazyItemPlacementSpec
 import com.raulshma.jellyplay.core.ui.components.DelayedLoadingScreen
 import com.raulshma.jellyplay.core.ui.components.focusIndicator
 import com.raulshma.jellyplay.core.ui.components.LoadingScreen
@@ -845,9 +846,11 @@ private fun PhotoFilmstrip(
                 val interactionSource = remember { MutableInteractionSource() }
                 val isFocused by interactionSource.collectIsFocusedAsState()
                 val isHighlighted = isSelected || isFocused
+                val placementSpec = lazyItemPlacementSpec()
 
                 Box(
                     modifier = Modifier
+                        .animateItem(placementSpec = placementSpec)
                         .size(if (isHighlighted) 64.dp else 52.dp)
                         .clip(smoothCornerShape(6.dp))
                         .background(Color.DarkGray.copy(alpha = 0.5f))

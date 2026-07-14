@@ -47,6 +47,7 @@ import com.raulshma.jellyplay.core.model.HomeSectionType
 import com.raulshma.jellyplay.core.model.MediaItem
 import com.raulshma.jellyplay.core.model.OfflineMediaItem
 import com.raulshma.jellyplay.core.ui.adaptive.LocalAdaptiveInfo
+import com.raulshma.jellyplay.core.ui.animation.lazyItemPlacementSpec
 import com.raulshma.jellyplay.core.ui.adaptive.WindowSizeClass
 import com.raulshma.jellyplay.core.ui.adaptive.bottomPadding
 import com.raulshma.jellyplay.core.ui.adaptive.itemSpacing
@@ -283,7 +284,9 @@ internal fun HomeContentList(
                     label = "sectionAnimation",
                 )
 
+                val placementSpec = lazyItemPlacementSpec()
                 val sectionModifier = Modifier
+                    .animateItem(placementSpec = placementSpec)
                     .fillMaxWidth()
                     .then(
                         if (isFirstAfterHero) {
