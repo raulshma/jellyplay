@@ -2,9 +2,23 @@ package com.raulshma.jellyplay.core.datastore
 
 import androidx.test.core.app.ApplicationProvider
 import com.raulshma.jellyplay.core.model.AppearancePreferences
+import com.raulshma.jellyplay.core.model.AppearanceScreenPreferences
 import com.raulshma.jellyplay.core.model.AudioPlayerPreferences
+import com.raulshma.jellyplay.core.model.AudioPreferences
 import com.raulshma.jellyplay.core.model.DownloadPreferences
+import com.raulshma.jellyplay.core.model.ExperimentalPreferences
+import com.raulshma.jellyplay.core.model.LanguagePreferences
+import com.raulshma.jellyplay.core.model.NavigationCustomizationPreferences
+import com.raulshma.jellyplay.core.model.PlaybackPreferences
+import com.raulshma.jellyplay.core.model.appearanceScreen
+import com.raulshma.jellyplay.core.model.audio
+import com.raulshma.jellyplay.core.model.experimental
+import com.raulshma.jellyplay.core.model.language
+import com.raulshma.jellyplay.core.model.navigationCustomization
+import com.raulshma.jellyplay.core.model.playback
+import com.raulshma.jellyplay.core.model.storage
 import com.raulshma.jellyplay.core.model.SecurityPreferences
+import com.raulshma.jellyplay.core.model.StoragePreferences
 import com.raulshma.jellyplay.core.model.SubtitlePreferences
 import com.raulshma.jellyplay.core.model.SyncPlayPreferences
 import com.raulshma.jellyplay.core.model.VideoPlayerPreferences
@@ -70,5 +84,59 @@ class PreferenceSliceTest {
         val securityBefore = store.securityPreferences.first()
         store.setOledMode(true)
         assertEquals(securityBefore, store.securityPreferences.first())
+    }
+
+    @Test
+    fun `per-screen slices equal their projection from the full preferences`() = runTest {
+        // Each slice StateFlow must reflect the same values the projection
+        // getter produces from the whole UserPreferences. This is order-
+        // independent (unlike a defaults assertion) and catches projection drift
+        // — a field the screen reads but the slice omits won't appear here, but
+        // a projection that disagrees with the store's slice value will.
+        val prefs = store.preferences.value
+        assertEquals(prefs.playback, store.playbackPreferences.first())
+        assertEquals(prefs.audio, store.audioPreferences.first())
+        assertEquals(prefs.storage, store.storagePreferences.first())
+        assertEquals(prefs.appearanceScreen, store.appearanceScreenPreferences.first())
+        assertEquals(prefs.navigationCustomization, store.navigationCustomizationPreferences.first())
+        assertEquals(prefs.language, store.languagePreferences.first())
+        assertEquals(prefs.experimental, store.experimentalPreferences.first())
+        assertEquals(prefs.pinnedHomeSections, store.pinnedHomeSectionsFlow.first())
+    }
+
+    @Test
+    fun `a playback write is reflected in the playback slice and not the audio slice`() = runTest {
+        val playbackBefore = store.playbackPreferences.first()
+        val audioBefore = store.audioPreferences.first()
+
+        store.setCinemaModeEnabled(!playbackBefore.cinemaModeEnabled)
+
+        val playbackAfter = store.playbackPreferences.first()
+        assertNotEquals(playbackBefore, playbackAfter)
+        assertEquals(!playbackBefore.cinemaModeEnabled, playbackAfter.cinemaModeEnabled)
+        // The audio slice must be unaffected by a playback-only write.
+        assertEquals(audioBefore, store.audioPreferences.first())
+    }
+
+    @Test
+    fun `an audio write is reflected in the audio slice and not the playback slice`() = runTest {
+        val playbackBefore = store.playbackPreferences.first()
+        store.setBassBoostEnabled(true)
+        assertEquals(true, store.audioPreferences.first().bassBoostEnabled)
+        // The playback slice must be unaffected by an audio-only write.
+        assertEquals(playbackBefore, store.playbackPreferences.first())
+    }
+
+    @Test
+    fun `a pinned-sections write is reflected in the pinned flow`() = runTest {
+        val before = store.pinnedHomeSectionsFlow.first().size
+        store.addPinnedHomeSection(
+            com.raulshma.jellyplay.core.model.PinnedHomeSection(
+                type = com.raulshma.jellyplay.core.model.PinnedSectionType.FAVORITES,
+                sourceId = com.raulshma.jellyplay.core.model.PinnedHomeSection.FAVORITES_SOURCE_ID,
+                title = "Favorites",
+            )
+        )
+        assertEquals(before + 1, store.pinnedHomeSectionsFlow.first().size)
     }
 }
