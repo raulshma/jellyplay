@@ -57,9 +57,16 @@ import com.raulshma.jellyplay.core.model.ThemeMode
 import com.raulshma.jellyplay.core.model.NotificationPreferences
 import com.raulshma.jellyplay.core.model.UserPreferences
 import com.raulshma.jellyplay.core.model.appearance
+import com.raulshma.jellyplay.core.model.appearanceScreen
+import com.raulshma.jellyplay.core.model.audio
 import com.raulshma.jellyplay.core.model.audioPlayer
 import com.raulshma.jellyplay.core.model.download
+import com.raulshma.jellyplay.core.model.experimental
+import com.raulshma.jellyplay.core.model.language
+import com.raulshma.jellyplay.core.model.navigationCustomization
+import com.raulshma.jellyplay.core.model.playback
 import com.raulshma.jellyplay.core.model.security
+import com.raulshma.jellyplay.core.model.storage
 import com.raulshma.jellyplay.core.model.subtitle
 import com.raulshma.jellyplay.core.model.syncPlay
 import com.raulshma.jellyplay.core.model.videoPlayer
@@ -1205,6 +1212,47 @@ class UserPreferencesStore @Inject constructor(
         preferences.map { it.appearance }
             .distinctUntilChanged()
             .stateIn(scope, SharingStarted.WhileSubscribed(5_000), com.raulshma.jellyplay.core.model.AppearancePreferences())
+
+    // Per-screen preference slices. Each mirrors the exact fields one settings
+    // sub-screen reads (see the slice types in `PreferenceGroups.kt`), so a
+    // sub-screen collecting its slice recomposes only when one of its fields
+    // changes — not on every preference mutation app-wide. Like the per-domain
+    // slices above, these derive from the single source-of-truth [preferences]
+    // StateFlow and de-duplicate via the slice's structural equality.
+    val playbackPreferences: StateFlow<com.raulshma.jellyplay.core.model.PlaybackPreferences> =
+        preferences.map { it.playback }
+            .distinctUntilChanged()
+            .stateIn(scope, SharingStarted.WhileSubscribed(5_000), com.raulshma.jellyplay.core.model.PlaybackPreferences())
+    val audioPreferences: StateFlow<com.raulshma.jellyplay.core.model.AudioPreferences> =
+        preferences.map { it.audio }
+            .distinctUntilChanged()
+            .stateIn(scope, SharingStarted.WhileSubscribed(5_000), com.raulshma.jellyplay.core.model.AudioPreferences())
+    val storagePreferences: StateFlow<com.raulshma.jellyplay.core.model.StoragePreferences> =
+        preferences.map { it.storage }
+            .distinctUntilChanged()
+            .stateIn(scope, SharingStarted.WhileSubscribed(5_000), com.raulshma.jellyplay.core.model.StoragePreferences())
+    val appearanceScreenPreferences: StateFlow<com.raulshma.jellyplay.core.model.AppearanceScreenPreferences> =
+        preferences.map { it.appearanceScreen }
+            .distinctUntilChanged()
+            .stateIn(scope, SharingStarted.WhileSubscribed(5_000), com.raulshma.jellyplay.core.model.AppearanceScreenPreferences())
+    val navigationCustomizationPreferences: StateFlow<com.raulshma.jellyplay.core.model.NavigationCustomizationPreferences> =
+        preferences.map { it.navigationCustomization }
+            .distinctUntilChanged()
+            .stateIn(scope, SharingStarted.WhileSubscribed(5_000), com.raulshma.jellyplay.core.model.NavigationCustomizationPreferences())
+    val languagePreferences: StateFlow<com.raulshma.jellyplay.core.model.LanguagePreferences> =
+        preferences.map { it.language }
+            .distinctUntilChanged()
+            .stateIn(scope, SharingStarted.WhileSubscribed(5_000), com.raulshma.jellyplay.core.model.LanguagePreferences())
+    val experimentalPreferences: StateFlow<com.raulshma.jellyplay.core.model.ExperimentalPreferences> =
+        preferences.map { it.experimental }
+            .distinctUntilChanged()
+            .stateIn(scope, SharingStarted.WhileSubscribed(5_000), com.raulshma.jellyplay.core.model.ExperimentalPreferences())
+
+    /** Narrow flow of the pinned home-sections list for the pinned-sections screen. */
+    val pinnedHomeSectionsFlow: StateFlow<List<com.raulshma.jellyplay.core.model.PinnedHomeSection>> =
+        preferences.map { it.pinnedHomeSections }
+            .distinctUntilChanged()
+            .stateIn(scope, SharingStarted.WhileSubscribed(5_000), emptyList())
 
     suspend fun ensureDeviceId(): String {
         var id: String? = null

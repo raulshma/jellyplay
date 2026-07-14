@@ -102,7 +102,7 @@ fun NotificationSettingsScreen(
             )
         },
     ) { innerPadding ->
-        val notifPrefs = preferences.notificationPreferences
+        val notifPrefs = preferences
 
         // Center a highlighted (search-navigated) setting in the viewport instead of parking it
         // at the bottom edge, which is the default BringIntoViewSpec behaviour.
@@ -298,7 +298,7 @@ fun NotificationSettingsScreen(
     }
 
     if (activeDialog is NotificationSettingsDialog.FrequencyPicker) {
-        val notifPrefs = preferences.notificationPreferences
+        val notifPrefs = preferences
         AlertDialog(
             onDismissRequest = { activeDialog = NotificationSettingsDialog.None },
             title = { Text(stringResource(R.string.settings_check_frequency)) },
@@ -342,7 +342,7 @@ fun NotificationSettingsScreen(
     }
 
     if (activeDialog is NotificationSettingsDialog.QuietStartPicker) {
-        val notifPrefs = preferences.notificationPreferences
+        val notifPrefs = preferences
         val timePickerState = rememberTimePickerState(
             initialHour = notifPrefs.quietHoursStart / 60,
             initialMinute = notifPrefs.quietHoursStart % 60,
@@ -371,7 +371,7 @@ fun NotificationSettingsScreen(
     }
 
     if (activeDialog is NotificationSettingsDialog.QuietEndPicker) {
-        val notifPrefs = preferences.notificationPreferences
+        val notifPrefs = preferences
         val timePickerState = rememberTimePickerState(
             initialHour = notifPrefs.quietHoursEnd / 60,
             initialMinute = notifPrefs.quietHoursEnd % 60,
@@ -400,7 +400,7 @@ fun NotificationSettingsScreen(
     }
 
     if (activeDialog is NotificationSettingsDialog.MaxPerCheckPicker) {
-        val notifPrefs = preferences.notificationPreferences
+        val notifPrefs = preferences
         val options = listOf(5, 10, 15, 20, 30, 50, 100)
         AlertDialog(
             onDismissRequest = { activeDialog = NotificationSettingsDialog.None },
@@ -438,7 +438,7 @@ fun NotificationSettingsScreen(
     }
 
     if (activeDialog is NotificationSettingsDialog.LibrariesPicker) {
-        val notifPrefs = preferences.notificationPreferences
+        val notifPrefs = preferences
         AlertDialog(
             onDismissRequest = { activeDialog = NotificationSettingsDialog.None },
             title = { Text(stringResource(R.string.settings_monitored_libraries)) },

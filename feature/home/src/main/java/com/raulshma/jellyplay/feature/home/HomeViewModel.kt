@@ -39,6 +39,7 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.debounce
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.first
@@ -142,15 +143,27 @@ class HomeViewModel @Inject constructor(
         runCatching { ProcessLifecycleOwner.get().lifecycle.addObserver(this) }
 
         launch {
-            authRepository.currentUser.collect { user ->
-                _uiState.update { it.copy(currentUser = user) }
-            }
-        }
-
-        launch {
             var previousUserId: String? = null
-            preferencesStore.activeUserId.collect { userId ->
-                if (previousUserId != null && previousUserId != userId) {
+            authRepository.currentUser.collectLatest { user ->
+                _uiState.update { it.copy(currentUser = user) }
+
+                val userId = user?.id
+                if (userId == null) {
+                    if (previousUserId != null) {
+                        refreshJob?.cancel()
+                        resetHomeScrollPosition()
+                        resetHomeFocusPosition()
+                        _uiState.update {
+                            it.copy(
+                                sections = emptyList(),
+                                favorites = emptyList(),
+                                discoverSections = emptyMap(),
+                                error = null,
+                                isLoading = true,
+                            )
+                        }
+                    }
+                } else if (previousUserId != userId) {
                     refreshJob?.cancel()
                     resetHomeScrollPosition()
                     resetHomeFocusPosition()
@@ -307,8 +320,6 @@ class HomeViewModel @Inject constructor(
                 _uiState.update { it.copy(seerrRequestState = it.seerrRequestState.copy(tvSeasons = seasons)) }
             }
         }
-
-        loadInitial()
     }
 
     fun onEvent(event: HomeUiEvent) {
@@ -372,14 +383,6 @@ class HomeViewModel @Inject constructor(
 
     private fun resetHomeFocusPosition() {
         homeFocusPosition = HomeFocusPosition()
-    }
-
-    private fun loadInitial() {
-        launch {
-            _uiState.update { it.copy(isLoading = true, error = null) }
-            fetchAndUpdateSections()
-            startPeriodicRefresh()
-        }
     }
 
     private fun refresh() {
@@ -468,12 +471,16 @@ class HomeViewModel @Inject constructor(
     }
 
     private suspend fun fetchAndUpdateSections() {
-        if (!refreshMutex.tryLock()) return
+        // Do not drop a refresh that arrives while another request is running.
+        // In particular, a sign-in can complete while Home's earlier request is
+        // still failing with the just-cleared session. Waiting for the lock
+        // ensures the authenticated follow-up request runs and clears that
+        // transient error without requiring the user to tap Retry.
+        refreshMutex.lock()
         // Deferred widget / TV Watch Next side-effects. Captured inside the
         // mutex (where we can detect a Continue-Watching change) but fired
         // after unlock so a slow broadcast IPC or WorkManager enqueue can't
-        // hold the refresh lock and silently drop the next refresh attempt
-        // (refreshMutex.tryLock() above returns immediately if contended).
+        // hold the refresh lock.
         var pendingCwSideEffect: (() -> Unit)? = null
         try {
             offlineModeManager.checkNetworkAndAutoDetect()

@@ -70,8 +70,7 @@ fun PinnedHomeSectionsScreen(
     highlightSettingId: String? = null,
     viewModel: LibraryLayoutViewModel = hiltViewModel(),
 ) {
-    val preferences by viewModel.preferences.collectAsStateWithLifecycle()
-    val pinnedSections = preferences.pinnedHomeSections
+    val pinnedSections by viewModel.pinnedHomeSectionsFlow.collectAsStateWithLifecycle()
     val isTv = LocalTvMode.current
     val backgroundColor = rememberScreenBackgroundColor()
     val adaptiveInfo = LocalAdaptiveInfo.current
