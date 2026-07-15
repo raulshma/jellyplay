@@ -30,7 +30,7 @@ fun ProfileTab(
         modifier = modifier
             .fillMaxSize()
             .verticalScroll(rememberScrollState())
-            .padding(bottom = 96.dp),
+            .padding(top = 16.dp, bottom = 96.dp),
         verticalArrangement = Arrangement.spacedBy(16.dp),
     ) {
         GeneralSection(

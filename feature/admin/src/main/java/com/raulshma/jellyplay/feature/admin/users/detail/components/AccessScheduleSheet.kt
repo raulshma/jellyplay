@@ -56,14 +56,16 @@ fun AccessScheduleSection(
 ) {
     var showAdder by remember { mutableStateOf(false) }
 
-    Column(modifier = modifier.fillMaxWidth().padding(horizontal = 8.dp)) {
-        Text("Access schedules", style = MaterialTheme.typography.titleSmall)
+    UserEditSection(
+        title = "Access schedules",
+        description = "Restrict when this user can sign in.",
+        modifier = modifier,
+    ) {
         if (schedules.isEmpty()) {
             Text(
                 "No schedules set",
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.padding(top = 4.dp),
             )
         } else {
             schedules.forEachIndexed { index, s ->

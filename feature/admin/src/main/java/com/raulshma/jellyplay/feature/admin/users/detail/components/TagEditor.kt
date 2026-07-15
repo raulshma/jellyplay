@@ -40,8 +40,10 @@ fun TagEditor(
 ) {
     var draft by remember { mutableStateOf("") }
 
-    Column(modifier = modifier.fillMaxWidth().padding(horizontal = 8.dp)) {
-        Text(label, style = MaterialTheme.typography.titleSmall)
+    // Renders as section CONTENT (no own card/title/horizontal padding — the
+    // surrounding UserEditSection supplies those). The [label] is kept for
+    // accessibility/state-description only.
+    Column(modifier = modifier.fillMaxWidth()) {
         if (tags.isNotEmpty()) {
             FlowRow(
                 modifier = Modifier.padding(top = 4.dp),

@@ -30,8 +30,8 @@ import com.raulshma.jellyplay.core.model.UnratedItemOption
 
 /**
  * Parental Control tab: max-rating dropdown (score + subScore), block-unrated
- * multi-select, allowed/blocked tag editors, and access schedules (added in
- * Task 8). Schedule editing is hidden for administrators (web parity).
+ * multi-select, allowed/blocked tag editors, and access schedules. Schedule
+ * editing is hidden for administrators (web parity).
  */
 @OptIn(androidx.compose.foundation.layout.ExperimentalLayoutApi::class)
 @Composable
@@ -49,24 +49,59 @@ fun ParentalControlTab(
             .padding(bottom = 96.dp),
         verticalArrangement = Arrangement.spacedBy(16.dp),
     ) {
-        MaxParentalRatingSection(
-            policy = policy,
-            parentalRatings = parentalRatings,
-            onPolicyChange = onPolicyChange,
-        )
-        BlockUnratedSection(policy = policy, onPolicyChange = onPolicyChange)
-        TagEditor(
-            label = "Allow content with tags",
-            tags = policy.allowedTags,
-            suggestions = tags,
-            onChange = { onPolicyChange(policy.copy(allowedTags = it)) },
-        )
-        TagEditor(
-            label = "Block content with tags",
-            tags = policy.blockedTags,
-            suggestions = tags,
-            onChange = { onPolicyChange(policy.copy(blockedTags = it)) },
-        )
+        UserEditSection(
+            title = "Max parental rating",
+            description = "Hide content above the chosen rating.",
+        ) {
+            MaxParentalRatingField(
+                policy = policy,
+                parentalRatings = parentalRatings,
+                onPolicyChange = onPolicyChange,
+            )
+        }
+        UserEditSection(
+            title = "Block unrated content",
+            description = "Block specific media types that carry no rating.",
+        ) {
+            FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                UnratedItemOption.entries.forEach { item ->
+                    FilterChip(
+                        selected = item in policy.blockUnratedItems,
+                        onClick = {
+                            val next = if (item in policy.blockUnratedItems) {
+                                policy.blockUnratedItems - item
+                            } else {
+                                policy.blockUnratedItems + item
+                            }
+                            onPolicyChange(policy.copy(blockUnratedItems = next))
+                        },
+                        label = { Text(item.unratedLabel()) },
+                    )
+                }
+            }
+        }
+        UserEditSection(
+            title = "Allow content with tags",
+            description = "Only media carrying one of these tags is visible.",
+        ) {
+            TagEditor(
+                label = "Allow content with tags",
+                tags = policy.allowedTags,
+                suggestions = tags,
+                onChange = { onPolicyChange(policy.copy(allowedTags = it)) },
+            )
+        }
+        UserEditSection(
+            title = "Block content with tags",
+            description = "Media carrying any of these tags is hidden.",
+        ) {
+            TagEditor(
+                label = "Block content with tags",
+                tags = policy.blockedTags,
+                suggestions = tags,
+                onChange = { onPolicyChange(policy.copy(blockedTags = it)) },
+            )
+        }
         if (!policy.isAdministrator) {
             AccessScheduleSection(
                 schedules = policy.accessSchedules,
@@ -77,7 +112,7 @@ fun ParentalControlTab(
 }
 
 @Composable
-private fun MaxParentalRatingSection(
+private fun MaxParentalRatingField(
     policy: ManagedUserPolicy,
     parentalRatings: List<ParentalRatingOption>,
     onPolicyChange: (ManagedUserPolicy) -> Unit,
@@ -92,62 +127,34 @@ private fun MaxParentalRatingSection(
     } ?: options.first() // "No limit"
     var expanded by remember { mutableStateOf(false) }
 
-    Column(modifier = modifier.fillMaxWidth().padding(horizontal = 8.dp)) {
-        ExposedDropdownMenuBox(expanded = expanded, onExpandedChange = { expanded = it }) {
-            OutlinedTextField(
-                value = selected.name,
-                onValueChange = {},
-                readOnly = true,
-                label = { Text("Max parental rating") },
-                trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded) },
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .menuAnchor(),
-            )
-            ExposedDropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
-                options.forEach { option ->
-                    DropdownMenuItem(
-                        text = { Text(option.name) },
-                        onClick = {
-                            onPolicyChange(
-                                policy.copy(
-                                    maxParentalRating = option.score,
-                                    maxParentalSubRating = option.subScore,
-                                ),
-                            )
-                            expanded = false
-                        },
-                    )
-                }
-            }
-        }
-    }
-}
-
-@Composable
-private fun BlockUnratedSection(
-    policy: ManagedUserPolicy,
-    onPolicyChange: (ManagedUserPolicy) -> Unit,
-    modifier: Modifier = Modifier,
-) {
-    Column(modifier = modifier.fillMaxWidth().padding(horizontal = 8.dp)) {
-        Text("Block items with no rating", style = MaterialTheme.typography.titleSmall)
-        FlowRow(
-            modifier = Modifier.padding(top = 4.dp),
-            horizontalArrangement = Arrangement.spacedBy(6.dp),
-        ) {
-            UnratedItemOption.entries.forEach { item ->
-                FilterChip(
-                    selected = item in policy.blockUnratedItems,
+    ExposedDropdownMenuBox(
+        expanded = expanded,
+        onExpandedChange = { expanded = it },
+        modifier = modifier.fillMaxWidth(),
+    ) {
+        OutlinedTextField(
+            value = selected.name,
+            onValueChange = {},
+            readOnly = true,
+            label = { Text("Rating") },
+            trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded) },
+            modifier = Modifier
+                .fillMaxWidth()
+                .menuAnchor(),
+        )
+        ExposedDropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
+            options.forEach { option ->
+                DropdownMenuItem(
+                    text = { Text(option.name) },
                     onClick = {
-                        val next = if (item in policy.blockUnratedItems) {
-                            policy.blockUnratedItems - item
-                        } else {
-                            policy.blockUnratedItems + item
-                        }
-                        onPolicyChange(policy.copy(blockUnratedItems = next))
+                        onPolicyChange(
+                            policy.copy(
+                                maxParentalRating = option.score,
+                                maxParentalSubRating = option.subScore,
+                            ),
+                        )
+                        expanded = false
                     },
-                    label = { Text(item.unratedLabel()) },
                 )
             }
         }

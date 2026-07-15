@@ -1,7 +1,5 @@
 package com.raulshma.jellyplay.feature.admin.users.detail.components
 
-import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.text.KeyboardOptions
@@ -13,22 +11,22 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import com.raulshma.jellyplay.core.model.ManagedUserPolicy
 
+/**
+ * Security limits: active-session cap and login lockout. The max parental
+ * rating lives on the Parental Control tab (with a proper rating dropdown),
+ * so it is intentionally not surfaced here.
+ */
 @Composable
 fun LimitsSection(
     policy: ManagedUserPolicy,
     onPolicyChange: (ManagedUserPolicy) -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    Column(modifier = modifier.fillMaxWidth().padding(horizontal = 8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-        OutlinedTextField(
-            value = policy.maxParentalRating?.toString() ?: "",
-            onValueChange = { onPolicyChange(policy.copy(maxParentalRating = it.toIntOrNull())) },
-            label = { Text("Max parental rating") },
-            supportingText = { Text("Blank = no limit") },
-            singleLine = true,
-            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-            modifier = Modifier.fillMaxWidth(),
-        )
+    UserEditSection(
+        title = "Security limits",
+        description = "Concurrent sessions and login protection.",
+        modifier = modifier,
+    ) {
         OutlinedTextField(
             value = if (policy.maxActiveSessions == 0) "" else policy.maxActiveSessions.toString(),
             onValueChange = { onPolicyChange(policy.copy(maxActiveSessions = it.toIntOrNull() ?: 0)) },
@@ -45,7 +43,7 @@ fun LimitsSection(
             supportingText = { Text("Blank = no lockout") },
             singleLine = true,
             keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-            modifier = Modifier.fillMaxWidth(),
+            modifier = Modifier.fillMaxWidth().padding(top = 4.dp),
         )
     }
 }
