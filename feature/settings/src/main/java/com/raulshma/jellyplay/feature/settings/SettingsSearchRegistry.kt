@@ -50,10 +50,77 @@ object SettingsSearchRegistry {
             id = "seerr_settings",
             title = "Seerr Integration",
             subtitle = "Configure Seerr/Jellyseerr requests and options",
-            category = "Account",
+            category = "System",
             keywords = listOf("seerr", "jellyseerr", "request", "movies", "shows", "approve"),
             route = Route.SeerrSettings(),
-            icon = Tabler.Outline.LayersLinked
+            icon = Tabler.Outline.Puzzle
+        ),
+
+        // Activity & Insights (migrated from the Home drawer)
+        SettingsSearchItem(
+            id = "favorites",
+            title = "Browse Favorites",
+            subtitle = "View your favourited movies, shows, and music",
+            category = "Activity & Insights",
+            keywords = listOf("favorites", "favourite", "liked", "collection", "heart"),
+            route = Route.Favorites,
+            icon = Tabler.Outline.Heart
+        ),
+        SettingsSearchItem(
+            id = "watch_progress_heatmap",
+            title = "Watch History Heatmap",
+            subtitle = "Visualize your viewing activity over time",
+            category = "Activity & Insights",
+            keywords = listOf("watch", "history", "heatmap", "progress", "activity", "stats"),
+            route = Route.WatchProgressHeatmap,
+            icon = Tabler.Outline.ChartBar
+        ),
+        SettingsSearchItem(
+            id = "activity_queue",
+            title = "Activity Queue",
+            subtitle = "View download and import queue from Radarr/Sonarr",
+            category = "Activity & Insights",
+            keywords = listOf("activity", "queue", "download", "radarr", "sonarr", "arr", "import"),
+            route = Route.ArrQueue,
+            icon = Tabler.Outline.Database
+        ),
+        SettingsSearchItem(
+            id = "upcoming",
+            title = "Upcoming",
+            subtitle = "Calendar of upcoming and recently aired episodes",
+            category = "Activity & Insights",
+            keywords = listOf("upcoming", "calendar", "schedule", "new", "episodes", "soon"),
+            route = Route.UpcomingCalendar,
+            icon = Tabler.Outline.CalendarEvent
+        ),
+        SettingsSearchItem(
+            id = "requests",
+            title = "Requests",
+            subtitle = "Review Seerr/Jellyseerr movie and show requests",
+            category = "Activity & Insights",
+            keywords = listOf("requests", "seerr", "jellyseerr", "pending", "approve"),
+            route = Route.Requests,
+            icon = Tabler.Outline.Inbox
+        ),
+
+        // System (migrated from the Home drawer)
+        SettingsSearchItem(
+            id = "admin_dashboard",
+            title = "Admin Dashboard",
+            subtitle = "Server admin tools and session management",
+            category = "System",
+            keywords = listOf("admin", "dashboard", "sessions", "server", "management"),
+            route = Route.AdminDashboard,
+            icon = Tabler.Outline.Shield
+        ),
+        SettingsSearchItem(
+            id = "setup_wizard",
+            title = "Setup Wizard",
+            subtitle = "Re-run the initial setup and onboarding flow",
+            category = "System",
+            keywords = listOf("setup", "wizard", "onboarding", "configure", "initial"),
+            route = Route.Onboarding,
+            icon = Tabler.Outline.Wand
         ),
 
         // Appearance Settings

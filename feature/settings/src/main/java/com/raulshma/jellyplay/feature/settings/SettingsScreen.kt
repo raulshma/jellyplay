@@ -126,6 +126,9 @@ data class SettingsCallbacks(
     val onFavoritesClick: () -> Unit = {},
     val onAboutClick: () -> Unit = {},
     val onWatchProgressHeatmapClick: () -> Unit = {},
+    val onActivityQueueClick: () -> Unit = {},
+    val onUpcomingClick: () -> Unit = {},
+    val onRequestsClick: () -> Unit = {},
     val onAppearanceSettings: (String?) -> Unit = {},
     val onPinnedHomeSections: (String?) -> Unit = {},
     val onHomeLayoutPresets: (String?) -> Unit = {},
@@ -153,6 +156,13 @@ fun SettingsScreen(
     val onArrSettings = callbacks.onArrSettings
     val onNewsletterClick = callbacks.onNewsletterClick
     val onAboutClick = callbacks.onAboutClick
+    val onActivityQueueClick = callbacks.onActivityQueueClick
+    val onUpcomingClick = callbacks.onUpcomingClick
+    val onRequestsClick = callbacks.onRequestsClick
+    val onFavoritesClick = callbacks.onFavoritesClick
+    val onWatchProgressHeatmapClick = callbacks.onWatchProgressHeatmapClick
+    val onAdminDashboard = callbacks.onAdminDashboard
+    val onSetupWizard = callbacks.onSetupWizard
     val onAppearanceSettings = callbacks.onAppearanceSettings
     val onPinnedHomeSections = callbacks.onPinnedHomeSections
     val onHomeLayoutPresets = callbacks.onHomeLayoutPresets
@@ -581,7 +591,38 @@ fun SettingsScreen(
                                                     when (item.route) {
                                                         is Route.ServerManagement -> onServerManagement(item.id)
                                                         is Route.UserManagement -> onUserManagement(item.id)
-                                                        is Route.SeerrSettings -> onSeerrSettings(item.id)
+                                                        is Route.SeerrSettings -> {
+                                                            lastClickedSettingId = "seerr_settings"
+                                                            onSeerrSettings(item.id)
+                                                        }
+                                                        Route.Favorites -> {
+                                                            lastClickedSettingId = "favorites"
+                                                            onFavoritesClick()
+                                                        }
+                                                        Route.WatchProgressHeatmap -> {
+                                                            lastClickedSettingId = "watch_progress_heatmap"
+                                                            onWatchProgressHeatmapClick()
+                                                        }
+                                                        Route.ArrQueue -> {
+                                                            lastClickedSettingId = "activity_queue"
+                                                            onActivityQueueClick()
+                                                        }
+                                                        Route.UpcomingCalendar -> {
+                                                            lastClickedSettingId = "upcoming"
+                                                            onUpcomingClick()
+                                                        }
+                                                        Route.Requests -> {
+                                                            lastClickedSettingId = "requests"
+                                                            onRequestsClick()
+                                                        }
+                                                        Route.AdminDashboard -> {
+                                                            lastClickedSettingId = "admin_dashboard"
+                                                            onAdminDashboard()
+                                                        }
+                                                        Route.Onboarding -> {
+                                                            lastClickedSettingId = "setup_wizard"
+                                                            onSetupWizard()
+                                                        }
                                                         is Route.ArrSettings -> {
                                                             lastClickedSettingId = "integrations"
                                                             onArrSettings(item.id)
@@ -717,10 +758,32 @@ fun SettingsScreen(
                             initiallyExpanded = false,
                         ) {
                             SettingListItem(
+                                icon = Tabler.Outline.Server,
+                                title = stringResource(R.string.settings_server_management),
+                                subtitle = stringResource(R.string.settings_server_management_subtitle),
+                                index = 0, count = 4,
+                                highlighted = lastClickedSettingId == "server_management",
+                                onClick = {
+                                    lastClickedSettingId = "server_management"
+                                    onServerManagement(null)
+                                },
+                            )
+                            SettingListItem(
+                                icon = Tabler.Outline.Users,
+                                title = stringResource(R.string.settings_switch_user),
+                                subtitle = stringResource(R.string.settings_switch_user_subtitle),
+                                index = 1, count = 4,
+                                highlighted = lastClickedSettingId == "user_management",
+                                onClick = {
+                                    lastClickedSettingId = "user_management"
+                                    onUserManagement(null)
+                                },
+                            )
+                            SettingListItem(
                                 icon = Tabler.Outline.Logout,
                                 title = stringResource(R.string.settings_sign_out),
                                 subtitle = stringResource(R.string.settings_sign_out_subtitle),
-                                index = 0, count = 2,
+                                index = 2, count = 4,
                                 isDestructive = true,
                                 onClick = {
                                     signOutFromServer = false
@@ -731,7 +794,7 @@ fun SettingsScreen(
                                 icon = Tabler.Outline.Logout,
                                 title = stringResource(R.string.settings_sign_out_from_server),
                                 subtitle = stringResource(R.string.settings_sign_out_from_server_subtitle),
-                                index = 1, count = 2,
+                                index = 3, count = 4,
                                 isDestructive = true,
                                 onClick = {
                                     signOutFromServer = true
@@ -744,6 +807,123 @@ fun SettingsScreen(
 
                 item {
                     AnimatedSettingsEntrance(2) {
+                        SettingsGroup(
+                            icon = Tabler.Outline.Activity,
+                            title = stringResource(R.string.settings_activity_insights),
+                            summary = { stringResource(R.string.settings_activity_insights_subtitle) },
+                            initiallyExpanded = false,
+                        ) {
+                            val insightsCount = 5
+                            SettingListItem(
+                                icon = Tabler.Outline.Heart,
+                                title = stringResource(R.string.settings_browse_favorites),
+                                subtitle = stringResource(R.string.settings_browse_favorites_subtitle),
+                                index = 0, count = insightsCount,
+                                highlighted = lastClickedSettingId == "favorites",
+                                onClick = {
+                                    lastClickedSettingId = "favorites"
+                                    onFavoritesClick()
+                                },
+                            )
+                            SettingListItem(
+                                icon = Tabler.Outline.ChartBar,
+                                title = stringResource(R.string.settings_watch_history_heatmap),
+                                subtitle = stringResource(R.string.settings_watch_history_heatmap_subtitle),
+                                index = 1, count = insightsCount,
+                                highlighted = lastClickedSettingId == "watch_progress_heatmap",
+                                onClick = {
+                                    lastClickedSettingId = "watch_progress_heatmap"
+                                    onWatchProgressHeatmapClick()
+                                },
+                            )
+                            SettingListItem(
+                                icon = Tabler.Outline.Database,
+                                title = stringResource(R.string.settings_activity_queue),
+                                subtitle = stringResource(R.string.settings_activity_queue_subtitle),
+                                index = 2, count = insightsCount,
+                                highlighted = lastClickedSettingId == "activity_queue",
+                                onClick = {
+                                    lastClickedSettingId = "activity_queue"
+                                    onActivityQueueClick()
+                                },
+                            )
+                            SettingListItem(
+                                icon = Tabler.Outline.CalendarEvent,
+                                title = stringResource(R.string.settings_upcoming),
+                                subtitle = stringResource(R.string.settings_upcoming_subtitle),
+                                index = 3, count = insightsCount,
+                                highlighted = lastClickedSettingId == "upcoming",
+                                onClick = {
+                                    lastClickedSettingId = "upcoming"
+                                    onUpcomingClick()
+                                },
+                            )
+                            SettingListItem(
+                                icon = Tabler.Outline.Inbox,
+                                title = stringResource(R.string.settings_requests),
+                                subtitle = stringResource(R.string.settings_requests_subtitle),
+                                index = 4, count = insightsCount,
+                                highlighted = lastClickedSettingId == "requests",
+                                onClick = {
+                                    lastClickedSettingId = "requests"
+                                    onRequestsClick()
+                                },
+                            )
+                        }
+                    }
+                }
+
+                item {
+                    AnimatedSettingsEntrance(3) {
+                        SettingsGroup(
+                            icon = Tabler.Outline.Adjustments,
+                            title = stringResource(R.string.settings_system),
+                            summary = { stringResource(R.string.settings_system_subtitle) },
+                            initiallyExpanded = false,
+                        ) {
+                            val systemCount = if (viewModel.currentUser?.isAdmin == true) 4 else 3
+                            var systemIndex = 0
+                            if (viewModel.currentUser?.isAdmin == true) {
+                                SettingListItem(
+                                    icon = Tabler.Outline.Shield,
+                                    title = stringResource(R.string.settings_admin_dashboard),
+                                    subtitle = stringResource(R.string.settings_admin_dashboard_subtitle),
+                                    index = systemIndex++, count = systemCount,
+                                    highlighted = lastClickedSettingId == "admin_dashboard",
+                                    onClick = {
+                                        lastClickedSettingId = "admin_dashboard"
+                                        onAdminDashboard()
+                                    },
+                                )
+                            }
+                            SettingListItem(
+                                icon = Tabler.Outline.Puzzle,
+                                title = stringResource(R.string.settings_seerr_integration),
+                                subtitle = stringResource(R.string.settings_seerr_integration_subtitle),
+                                index = systemIndex++, count = systemCount,
+                                highlighted = lastClickedSettingId == "seerr_settings",
+                                onClick = {
+                                    lastClickedSettingId = "seerr_settings"
+                                    onSeerrSettings(null)
+                                },
+                            )
+                            SettingListItem(
+                                icon = Tabler.Outline.Wand,
+                                title = stringResource(R.string.settings_setup_wizard),
+                                subtitle = stringResource(R.string.settings_setup_wizard_subtitle),
+                                index = systemIndex++, count = systemCount,
+                                highlighted = lastClickedSettingId == "setup_wizard",
+                                onClick = {
+                                    lastClickedSettingId = "setup_wizard"
+                                    onSetupWizard()
+                                },
+                            )
+                        }
+                    }
+                }
+
+                item {
+                    AnimatedSettingsEntrance(4) {
                         SettingListItem(
                             icon = Tabler.Outline.Palette,
                             title = stringResource(R.string.settings_appearance),
@@ -759,7 +939,7 @@ fun SettingsScreen(
                 }
 
                 item {
-                    AnimatedSettingsEntrance(3) {
+                    AnimatedSettingsEntrance(5) {
                         SettingListItem(
                             icon = Tabler.Outline.PlayerPlay,
                             title = stringResource(R.string.settings_playback),
@@ -775,7 +955,7 @@ fun SettingsScreen(
                 }
 
                 item {
-                    AnimatedSettingsEntrance(4) {
+                    AnimatedSettingsEntrance(6) {
                         SettingListItem(
                             icon = Tabler.Outline.Music,
                             title = stringResource(R.string.settings_audio_player),
@@ -791,7 +971,7 @@ fun SettingsScreen(
                 }
 
                 item {
-                    AnimatedSettingsEntrance(5) {
+                    AnimatedSettingsEntrance(7) {
                         SettingListItem(
                             icon = Tabler.Outline.Language,
                             title = stringResource(R.string.settings_language_subtitles),
@@ -807,7 +987,7 @@ fun SettingsScreen(
                 }
 
                 item {
-                    AnimatedSettingsEntrance(6) {
+                    AnimatedSettingsEntrance(8) {
                         val notifPrefs = preferences.notificationPreferences
                         SettingListItem(
                             icon = Tabler.Outline.Bell,
@@ -824,7 +1004,7 @@ fun SettingsScreen(
                 }
 
                 item {
-                    AnimatedSettingsEntrance(7) {
+                    AnimatedSettingsEntrance(9) {
                         SettingListItem(
                             icon = Tabler.Outline.Database,
                             title = stringResource(R.string.settings_downloads_storage),
@@ -840,7 +1020,7 @@ fun SettingsScreen(
                 }
 
                 item {
-                    AnimatedSettingsEntrance(8) {
+                    AnimatedSettingsEntrance(10) {
                         SettingListItem(
                             icon = Tabler.Outline.Lock,
                             title = stringResource(R.string.settings_security),
@@ -861,7 +1041,7 @@ fun SettingsScreen(
                 }
 
                 item {
-                    AnimatedSettingsEntrance(9) {
+                    AnimatedSettingsEntrance(11) {
                         SettingListItem(
                             icon = Tabler.Outline.DatabaseExport,
                             title = stringResource(R.string.settings_backup_restore),
@@ -878,7 +1058,7 @@ fun SettingsScreen(
 
                 if (isTv) {
                     item {
-                        AnimatedSettingsEntrance(10) {
+                        AnimatedSettingsEntrance(12) {
                             SettingsGroup(
                                 icon = Tabler.Outline.Moon,
                                 title = stringResource(R.string.settings_screensaver),
@@ -964,7 +1144,7 @@ fun SettingsScreen(
                 }
 
                 item {
-                    AnimatedSettingsEntrance(if (isTv) 11 else 10) {
+                    AnimatedSettingsEntrance(if (isTv) 13 else 12) {
                         SettingListItem(
                             icon = Tabler.Outline.Flask,
                             title = stringResource(R.string.settings_experimental),
@@ -980,7 +1160,7 @@ fun SettingsScreen(
                 }
 
                 item {
-                    AnimatedSettingsEntrance(if (isTv) 12 else 11) {
+                    AnimatedSettingsEntrance(if (isTv) 14 else 13) {
                         SettingListItem(
                             icon = Tabler.Outline.Download,
                             title = stringResource(R.string.settings_integrations),
@@ -996,7 +1176,7 @@ fun SettingsScreen(
                 }
 
                 item {
-                    AnimatedSettingsEntrance(if (isTv) 13 else 12) {
+                    AnimatedSettingsEntrance(if (isTv) 15 else 14) {
                         SettingListItem(
                             icon = Tabler.Outline.InfoCircle,
                             title = stringResource(R.string.settings_about),
