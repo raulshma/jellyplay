@@ -5,13 +5,18 @@ import androidx.compose.animation.fadeIn
 import androidx.compose.animation.slideInVertically
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.asPaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.navigationBars
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
@@ -44,13 +49,16 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.raulshma.jellyplay.core.model.UserInfo
+import com.raulshma.jellyplay.core.designsystem.theme.Dimensions
 import com.raulshma.jellyplay.core.ui.adaptive.LocalAdaptiveInfo
 import com.raulshma.jellyplay.core.ui.adaptive.contentPadding
 import com.raulshma.jellyplay.core.ui.adaptive.itemSpacing
 import com.raulshma.jellyplay.core.ui.components.CircleBgBackButton
+import com.raulshma.jellyplay.core.ui.components.LocalFloatingNavOffset
 import com.raulshma.jellyplay.core.ui.components.ScreenEmptyState
 import com.raulshma.jellyplay.core.ui.components.focusIndicator
 import com.raulshma.jellyplay.core.ui.components.ScreenLoadingState
@@ -85,6 +93,7 @@ fun UserSelectionScreen(
 
     val isSynthwave = LocalIsSynthwave.current
     val backgroundColor = rememberScreenBackgroundColor()
+    val navOffsetPx = LocalFloatingNavOffset.current
 
     Scaffold(
         containerColor = backgroundColor,
@@ -97,75 +106,91 @@ fun UserSelectionScreen(
                 )
             )
         },
-        floatingActionButton = {
-            val fabFocusState = rememberTvFocusState(focusedScale = 1.05f)
-            ExtendedFloatingActionButton(
-                onClick = onAddUser,
-                modifier = Modifier.then(fabFocusState.focusModifier).tvFocusIndicator(fabFocusState, ShapeCache.smooth16),
-                icon = { Icon(Tabler.Outline.Plus, contentDescription = null) },
-                text = { Text("Add User") },
-            )
-        },
     ) { padding ->
         val adaptiveInfo = LocalAdaptiveInfo.current
         val isTv = LocalTvMode.current
         val contentPad = adaptiveInfo.contentPadding(isTv)
         val spacing = adaptiveInfo.itemSpacing(isTv)
 
-        when {
-            isLoading -> {
-                ScreenLoadingState(
-                    message = "Loading users...",
-                    modifier = Modifier.padding(padding),
-                )
-            }
-            users.isEmpty() -> {
-                ScreenEmptyState(
-                    icon = Tabler.Outline.User,
-                    title = "No users on this server",
-                    description = "Add a user to get started",
-                    actionLabel = "Add User",
-                    onAction = onAddUser,
-                    modifier = Modifier.padding(padding),
-                )
-            }
-            else -> {
-                val firstItemFocusRequester = remember { FocusRequester() }
-                LaunchedEffect(Unit) {
-                    if (isTv) firstItemFocusRequester.tryRequestFocus("user_first")
+        Box(modifier = Modifier.padding(padding).fillMaxSize()) {
+            when {
+                isLoading -> {
+                    ScreenLoadingState(message = "Loading users...")
                 }
-                LazyColumn(
-                    modifier = Modifier.padding(padding).tvFocusRestorer(),
-                    contentPadding = PaddingValues(contentPad),
-                    verticalArrangement = Arrangement.spacedBy(spacing),
-                ) {
-                    itemsIndexed(users, key = { _, it -> it.id }, contentType = { _, _ -> "user" }) { index, user ->
-                        val visible = remember { mutableStateOf(false) }
-                        LaunchedEffect(Unit) { visible.value = true }
-                        AnimatedVisibility(
-                            visible = visible.value,
-                            enter = fadeIn(
-                                animationSpec = MaterialTheme.motionScheme.defaultEffectsSpec()
-                            ) + slideInVertically(
-                                initialOffsetY = { it / 10 },
-                                animationSpec = MaterialTheme.motionScheme.defaultSpatialSpec(),
-                            ),
-                        ) {
-                            UserCard(
-                                user = user,
-                                firstFocusModifier = if (index == 0) Modifier.focusRequester(firstItemFocusRequester) else Modifier,
-                                onClick = {
-                                    viewModel.switchUser(user.id) { result ->
-                                        if (result.isSuccess) {
-                                            onUserSelected()
+                users.isEmpty() -> {
+                    ScreenEmptyState(
+                        icon = Tabler.Outline.User,
+                        title = "No users on this server",
+                        description = "Add a user to get started",
+                        actionLabel = "Add User",
+                        onAction = onAddUser,
+                    )
+                }
+                else -> {
+                    val firstItemFocusRequester = remember { FocusRequester() }
+                    LaunchedEffect(Unit) {
+                        if (isTv) firstItemFocusRequester.tryRequestFocus("user_first")
+                    }
+                    LazyColumn(
+                        modifier = Modifier.fillMaxSize().tvFocusRestorer(),
+                        contentPadding = PaddingValues(
+                            start = contentPad,
+                            end = contentPad,
+                            top = contentPad,
+                            bottom = contentPad + Dimensions.floatingNavHeight,
+                        ),
+                        verticalArrangement = Arrangement.spacedBy(spacing),
+                    ) {
+                        itemsIndexed(users, key = { _, it -> it.id }, contentType = { _, _ -> "user" }) { index, user ->
+                            val visible = remember { mutableStateOf(false) }
+                            LaunchedEffect(Unit) { visible.value = true }
+                            AnimatedVisibility(
+                                visible = visible.value,
+                                enter = fadeIn(
+                                    animationSpec = MaterialTheme.motionScheme.defaultEffectsSpec()
+                                ) + slideInVertically(
+                                    initialOffsetY = { it / 10 },
+                                    animationSpec = MaterialTheme.motionScheme.defaultSpatialSpec(),
+                                ),
+                            ) {
+                                UserCard(
+                                    user = user,
+                                    firstFocusModifier = if (index == 0) Modifier.focusRequester(firstItemFocusRequester) else Modifier,
+                                    onClick = {
+                                        viewModel.switchUser(user.id) { result ->
+                                            if (result.isSuccess) {
+                                                onUserSelected()
+                                            }
                                         }
-                                    }
-                                },
-                                onRemove = { viewModel.removeUser(user.id) },
-                            )
+                                    },
+                                    onRemove = { viewModel.removeUser(user.id) },
+                                )
+                            }
                         }
                     }
                 }
+            }
+
+            if (!isTv) {
+                val fabFocusState = rememberTvFocusState(focusedScale = 1.05f)
+                ExtendedFloatingActionButton(
+                    onClick = onAddUser,
+                    modifier = Modifier
+                        .align(Alignment.BottomEnd)
+                        .then(fabFocusState.focusModifier)
+                        .tvFocusIndicator(fabFocusState, ShapeCache.smooth16)
+                        .padding(
+                            end = 16.dp,
+                            bottom = 16.dp + Dimensions.floatingNavHeight,
+                        )
+                        .offset {
+                            val maxOffset = Dimensions.floatingNavHeight.toPx()
+                            val yOffset = (-navOffsetPx()).coerceAtMost(maxOffset)
+                            IntOffset(x = 0, y = yOffset.toInt())
+                        },
+                    icon = { Icon(Tabler.Outline.Plus, contentDescription = null) },
+                    text = { Text("Add User") },
+                )
             }
         }
     }

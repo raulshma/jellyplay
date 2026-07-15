@@ -41,8 +41,11 @@ import com.raulshma.jellyplay.core.designsystem.theme.ShapeCache
 import com.raulshma.jellyplay.core.model.MediaItem
 import com.raulshma.jellyplay.core.model.MediaType
 import com.raulshma.jellyplay.core.model.seerr.SeerrSearchItem
+import com.raulshma.jellyplay.core.ui.animation.lazyItemPlacementSpec
 import com.raulshma.jellyplay.core.ui.image.MediaImage
+import com.raulshma.jellyplay.core.ui.settingssearch.SettingsSearchItem
 import androidx.compose.ui.graphics.Color
+import coil3.size.Size as CoilSize
 import com.raulshma.jellyplay.core.ui.tv.LocalTvMode
 import com.raulshma.jellyplay.core.ui.tv.rememberTvFocusState
 import com.raulshma.jellyplay.core.ui.tv.tvFocusIndicator
@@ -62,9 +65,11 @@ fun HomeSearchResultsOverlay(
     onHistoryClick: (String) -> Unit = {},
     onDeleteHistoryItem: (Long) -> Unit = {},
     onClearHistory: () -> Unit = {},
+    settingsResults: List<SettingsSearchItem> = emptyList(),
+    onSettingsClick: (SettingsSearchItem) -> Unit = {},
     modifier: Modifier = Modifier,
 ) {
-    val totalItems = jellyfinResults.size + seerrResults.size
+    val totalItems = jellyfinResults.size + seerrResults.size + settingsResults.size
     val hasAnyResults = totalItems > 0
 
     Column(
@@ -140,6 +145,7 @@ fun HomeSearchResultsOverlay(
                         contentType = { "historyItem" },
                     ) { index ->
                         val historyItem = searchHistory[index]
+                        val placementSpec = lazyItemPlacementSpec()
                         val itemFocusState = rememberTvFocusState()
                         val deleteFocusState = rememberTvFocusState()
                         val isItemFocused = itemFocusState.isFocused
@@ -159,6 +165,7 @@ fun HomeSearchResultsOverlay(
 
                         Row(
                             modifier = Modifier
+                                .animateItem(placementSpec = placementSpec)
                                 .fillMaxWidth()
                                 .padding(horizontal = 16.dp, vertical = 2.dp),
                             verticalAlignment = Alignment.CenterVertically,
@@ -228,6 +235,7 @@ fun HomeSearchResultsOverlay(
                         contentType = { "libraryItem" },
                     ) { index ->
                         val item = jellyfinResults[index]
+                        val placementSpec = lazyItemPlacementSpec()
                         // Memoized per row on stable primitives so search-as-you-type
                         // recompositions don't re-run buildString + branches for every
                         // visible row.
@@ -243,13 +251,15 @@ fun HomeSearchResultsOverlay(
                                 }
                             }
                         }
-                        SearchItemRow(
-                            title = item.name,
-                            subtitle = subtitle,
-                            imageUrl = getImageUrl(item.id),
-                            onClick = { onJellyfinClick(item) },
-                            index = index,
-                        )
+                        Box(modifier = Modifier.animateItem(placementSpec = placementSpec)) {
+                            SearchItemRow(
+                                title = item.name,
+                                subtitle = subtitle,
+                                imageUrl = getImageUrl(item.id),
+                                onClick = { onJellyfinClick(item) },
+                                index = index,
+                            )
+                        }
                     }
                 }
                 if (seerrResults.isNotEmpty()) {
@@ -280,6 +290,7 @@ fun HomeSearchResultsOverlay(
                         contentType = { "seerrItem" },
                     ) { index ->
                         val item = seerrResults[index]
+                        val placementSpec = lazyItemPlacementSpec()
                         val subtitle = remember(item.id, item.year, item.mediaType, item.voteAverage) {
                             buildString {
                                 item.year?.let { append(it) }
@@ -298,13 +309,52 @@ fun HomeSearchResultsOverlay(
                                 }
                             }
                         }
-                        SearchItemRow(
-                            title = item.displayName,
-                            subtitle = subtitle,
-                            imageUrl = item.posterUrl ?: "",
-                            onClick = { onSeerrClick(item) },
-                            index = index + jellyfinResults.size,
+                        Box(modifier = Modifier.animateItem(placementSpec = placementSpec)) {
+                            SearchItemRow(
+                                title = item.displayName,
+                                subtitle = subtitle,
+                                imageUrl = item.posterUrl ?: "",
+                                onClick = { onSeerrClick(item) },
+                                index = index + jellyfinResults.size,
+                            )
+                        }
+                    }
+                }
+                if (settingsResults.isNotEmpty()) {
+                    if (jellyfinResults.isNotEmpty() || seerrResults.isNotEmpty()) {
+                        item(contentType = "settingsDivider") {
+                            HorizontalDivider(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(horizontal = 16.dp, vertical = 4.dp),
+                                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.08f),
+                            )
+                        }
+                    }
+                    item(contentType = "settingsHeader") {
+                        Text(
+                            text = "Settings",
+                            style = MaterialTheme.typography.labelMedium.copy(
+                                fontWeight = FontWeight.SemiBold,
+                                letterSpacing = 0.8.sp,
+                            ),
+                            color = MaterialTheme.colorScheme.primary,
+                            modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
                         )
+                    }
+                    items(
+                        count = settingsResults.size,
+                        key = { index -> "set-${settingsResults[index].id}" },
+                        contentType = { "settingsItem" },
+                    ) { index ->
+                        val item = settingsResults[index]
+                        val placementSpec = lazyItemPlacementSpec()
+                        Box(modifier = Modifier.animateItem(placementSpec = placementSpec)) {
+                            SettingsSearchRow(
+                                item = item,
+                                onClick = { onSettingsClick(item) },
+                            )
+                        }
                     }
                 }
                 if (isSearching) {
@@ -391,6 +441,10 @@ private fun SearchItemRow(
                         .fillMaxSize()
                         .clip(ShapeCache.smooth10),
                     contentScale = ContentScale.Crop,
+                    // 44dp thumbnail at 3× density ≈ 132px; decode at 128² instead
+                    // of the 384² default to cut memory and decode cost during
+                    // search-as-you-type.
+                    size = CoilSize(128, 128),
                 )
             } else {
                 androidx.compose.material3.Icon(
@@ -419,6 +473,101 @@ private fun SearchItemRow(
                     overflow = TextOverflow.Ellipsis,
                 )
             }
+        }
+    }
+}
+
+/**
+ * A settings search-result row for the home search overlay. Mirrors [SearchItemRow]'s
+ * visual language (44dp leading tile, TV focus, press-scale) but renders the setting's
+ * [SettingsSearchItem.icon] in the tile and its category as the subtitle, so settings
+ * rows are visually distinct from media rows without a separate design language.
+ */
+@Composable
+private fun SettingsSearchRow(
+    item: SettingsSearchItem,
+    onClick: () -> Unit,
+) {
+    val isTv = LocalTvMode.current
+    val tvFocusState = rememberTvFocusState()
+    val interactionSource = remember { MutableInteractionSource() }
+    val isPressed by interactionSource.collectIsPressedAsState()
+    val baseScale by animateFloatAsState(
+        targetValue = if (isPressed) 0.97f else 1f,
+        animationSpec = MaterialTheme.motionScheme.defaultSpatialSpec(),
+        label = "settingsRowScale",
+    )
+    val scale = if (isTv) 1f else baseScale
+    val isFocused = tvFocusState.isFocused
+    val backgroundColor = when {
+        isPressed -> MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.8f)
+        isFocused -> MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)
+        else -> Color.Transparent
+    }
+
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .then(tvFocusState.focusModifier)
+            .tvFocusIndicator(tvFocusState, ShapeCache.smooth12)
+            .graphicsLayer {
+                scaleX = scale
+                scaleY = scale
+            }
+            .clip(ShapeCache.smooth12)
+            .background(backgroundColor)
+            .clickable(
+                interactionSource = interactionSource,
+                indication = null,
+                onClick = onClick,
+            )
+            .padding(horizontal = 12.dp, vertical = 4.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Box(
+            modifier = Modifier
+                .size(44.dp)
+                .clip(ShapeCache.smooth10)
+                .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.10f)),
+            contentAlignment = Alignment.Center,
+        ) {
+            Icon(
+                imageVector = item.icon,
+                contentDescription = null,
+                modifier = Modifier.size(22.dp),
+                tint = MaterialTheme.colorScheme.primary,
+            )
+        }
+        Spacer(Modifier.width(12.dp))
+        Column(modifier = Modifier.weight(1f)) {
+            Text(
+                text = item.title,
+                style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Medium),
+                color = MaterialTheme.colorScheme.onSurface,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
+            if (item.subtitle.isNotBlank()) {
+                Text(
+                    text = item.subtitle,
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+            }
+        }
+        if (item.isAdvanced) {
+            Spacer(Modifier.width(8.dp))
+            Text(
+                text = item.category,
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier
+                    .clip(ShapeCache.smooth8)
+                    .background(MaterialTheme.colorScheme.onSurface.copy(alpha = 0.06f))
+                    .padding(horizontal = 6.dp, vertical = 2.dp),
+            )
         }
     }
 }

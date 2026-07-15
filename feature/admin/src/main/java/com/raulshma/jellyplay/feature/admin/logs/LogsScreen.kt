@@ -72,6 +72,7 @@ import com.raulshma.jellyplay.core.model.ActivityLogEntry
 import com.raulshma.jellyplay.core.model.ActivityLogSeverity
 import com.raulshma.jellyplay.core.model.LogFile
 import com.raulshma.jellyplay.core.ui.adaptive.LocalAdaptiveInfo
+import com.raulshma.jellyplay.core.ui.animation.lazyItemPlacementSpec
 import com.raulshma.jellyplay.core.ui.adaptive.bottomPadding
 import com.raulshma.jellyplay.core.ui.components.JellyPlayScreenScaffold
 import com.raulshma.jellyplay.core.ui.components.focusIndicator
@@ -315,7 +316,7 @@ private fun LogFilesTab(
                             ),
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                             modifier = Modifier
-                                .animateItem()
+                                .animateItem(placementSpec = lazyItemPlacementSpec())
                                 .fillMaxWidth()
                                 .background(
                                     color = if (highlightAlpha > 0f) {

@@ -37,6 +37,10 @@ fun MediaImage(
     contentScale: ContentScale = ContentScale.Crop,
     fallbackUrls: List<String> = emptyList(),
     blurHash: String? = null,
+    // The blurHash placeholder normally inherits the image's contentScale, but
+    // callers that fit the image (e.g. the photo viewer) want the blur to fill
+    // the whole surface as a background rather than letterboxing with the photo.
+    blurHashContentScale: ContentScale = contentScale,
     crossfade: Boolean = true,
     // Default decode size lowered from 512² to 384² — visually
     // indistinguishable for posters and ~30% less decode memory. At lower
@@ -91,7 +95,7 @@ fun MediaImage(
             BlurHashImage(
                 blurHash = effectiveBlurHash,
                 modifier = Modifier.fillMaxSize(),
-                contentScale = contentScale,
+                contentScale = blurHashContentScale,
             )
         }
 

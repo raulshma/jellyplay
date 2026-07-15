@@ -1,7 +1,9 @@
 package com.raulshma.jellyplay.feature.player.video.subtitle
 
 import android.content.Context
+import android.graphics.Typeface
 import android.net.Uri
+import com.raulshma.jellyplay.core.model.SubtitleStyle
 import com.yubyf.truetypeparser.TTFFile
 import dagger.hilt.android.qualifiers.ApplicationContext
 import java.io.File
@@ -48,6 +50,32 @@ class FontProvider @Inject constructor(
         writeFontsConf(fontsDir, File(context.cacheDir, "fontconfig"))
         return fontsDir
     }
+
+    /**
+     * Returns the selected font with the requested synthetic weight and slant.
+     *
+     * Android's native subtitle renderer only accepts a single [Typeface].  In
+     * particular, passing the regular bundled face alone silently drops the
+     * bold/italic toggles, so apply the requested style after loading the font.
+     */
+    fun typefaceFor(style: SubtitleStyle): Typeface {
+        val fontFile = style.fontFamilyPath
+            ?.let(::File)
+            ?.takeIf(File::isFile)
+            ?: bundledFallback
+        val base = runCatching { Typeface.createFromFile(fontFile) }
+            .getOrDefault(Typeface.SANS_SERIF)
+        val typefaceStyle = when {
+            style.bold && style.italic -> Typeface.BOLD_ITALIC
+            style.bold -> Typeface.BOLD
+            style.italic -> Typeface.ITALIC
+            else -> Typeface.NORMAL
+        }
+        return Typeface.create(base, typefaceStyle)
+    }
+
+    /** Absolute path to the bundled fallback, for engines that accept a font file. */
+    fun bundledFallbackPath(): String = bundledFallback.absolutePath
 
     /**
      * Copies a user-picked font (from a SAF uri) into the fonts dir and parses

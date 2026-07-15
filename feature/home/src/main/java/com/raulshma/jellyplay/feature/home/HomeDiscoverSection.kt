@@ -29,7 +29,10 @@ fun rememberDiscoverRows(
         while (i < allDiscoverItems.size) {
             val targetSize = pattern[patternIdx % pattern.size]
             val rowSize = targetSize.coerceAtMost(allDiscoverItems.size - i)
-            result.add(allDiscoverItems.subList(i, i + rowSize))
+            // Copy the sublist so each row owns an independent list rather than
+            // a live view backed by allDiscoverItems — avoids pinning the parent
+            // list in memory and guards against ConcurrentModificationException.
+            result.add(allDiscoverItems.subList(i, i + rowSize).toList())
             i += rowSize
             patternIdx++
         }

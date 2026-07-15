@@ -83,6 +83,13 @@ sealed class Route : NavKey {
     @Serializable data class ExperimentalSettings(val highlightSettingId: String? = null) : Route()
 
     /**
+     * Integrations hub — top-level list of every third-party service JellyPlay
+     * talks to (Seerr, Radarr/Sonarr). Each entry drills into its own screen
+     * ([SeerrSettings] / [ArrSettings]).
+     */
+    @Serializable data class Integrations(val highlightSettingId: String? = null) : Route()
+
+    /**
      * Direct Radarr/Sonarr integration settings — manual server override +
      * Seerr auto-discovery toggle. Gated by
      * [com.raulshma.jellyplay.core.model.ExperimentalFeature.DIRECT_ARR_INTEGRATION].
@@ -175,6 +182,8 @@ sealed class Route : NavKey {
     @Serializable data object UpcomingCalendar : Route()
 
     @Serializable data object Shortcuts : Route()
+
+    @Serializable data object SubtitleTester : Route()
 }
 
 val VIDEO_TOP_LEVEL_ROUTES = linkedMapOf(
@@ -197,6 +206,19 @@ val ALL_TOP_LEVEL_ROUTE_KEYS: Set<Route> =
     VIDEO_TOP_LEVEL_ROUTES.keys.union(MUSIC_TOP_LEVEL_ROUTES.keys)
 
 /**
+ * Routes that render in the bare full-screen layout (player / onboarding /
+ * ambient / photo viewer). Centralised so the layout-branch picker in
+ * `MainContent` can match by membership rather than re-listing routes, and so
+ * a back stack can be scanned for *any* full-screen route (not just the top
+ * entry) — see `MainContent` for why that matters for the player↔subtitle-tester
+ * round trip.
+ */
+val Route.isFullScreen: Boolean
+    get() = this is Route.VideoPlayer || this is Route.LiveTvChannelPlayer ||
+        this is Route.AudioPlayer || this is Route.Ambient ||
+        this is Route.Onboarding || this is Route.PhotoViewer
+
+/**
  * Routes that present as a modal/bottom-sheet-style overlay rather than a
  * push-on-the-stack navigation. Centralised here so the transition
  * `transitionSpec` and `popTransitionSpec` lambdas do not duplicate the set;
@@ -209,6 +231,7 @@ val Route.isModal: Boolean
         Route.SyncPlay,
         Route.PlayOnCompanion,
         Route.SeerrSettings,
+        Route.Integrations,
         Route.ArrSettings,
         Route.AdminDashboard,
         Route.ScheduledTasks,
@@ -272,3 +295,26 @@ val DETAIL_ROUTE_CLASS_NAMES: Set<String> = setOf(
     "UserStatisticsDetail",
     "UserDetail",
 )
+
+/**
+ * Maps a [Route] to a coarse [NavRouteClass] for transition selection.
+ * Ambient is checked first (before fullscreen) because [Route.Ambient] is a
+ * distinct immersive overlay that should always cross-fade.
+ */
+val Route?.toNavRouteClass: com.raulshma.jellyplay.core.ui.animation.NavRouteClass
+    get() = when {
+        this == null ->
+            com.raulshma.jellyplay.core.ui.animation.NavRouteClass.DEFAULT
+        this is Route.Ambient ->
+            com.raulshma.jellyplay.core.ui.animation.NavRouteClass.AMBIENT
+        this.isFullScreen ->
+            com.raulshma.jellyplay.core.ui.animation.NavRouteClass.FULLSCREEN
+        this.isModal ->
+            com.raulshma.jellyplay.core.ui.animation.NavRouteClass.MODAL
+        this.isDetail ->
+            com.raulshma.jellyplay.core.ui.animation.NavRouteClass.DETAIL
+        com.raulshma.jellyplay.core.ui.navigation.ALL_TOP_LEVEL_ROUTE_KEYS.contains(this) ->
+            com.raulshma.jellyplay.core.ui.animation.NavRouteClass.TOP_LEVEL_TAB
+        else ->
+            com.raulshma.jellyplay.core.ui.animation.NavRouteClass.DEFAULT
+    }

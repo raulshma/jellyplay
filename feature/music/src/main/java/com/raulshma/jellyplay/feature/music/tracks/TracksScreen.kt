@@ -28,7 +28,6 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.paging.LoadState
 import androidx.paging.compose.collectAsLazyPagingItems
-import androidx.paging.compose.itemKey
 import com.raulshma.jellyplay.core.ui.components.ErrorScreen
 import com.raulshma.jellyplay.core.ui.components.HeaderStatusIndicator
 import com.raulshma.jellyplay.core.ui.components.JellyPlayScreenScaffold
@@ -45,6 +44,7 @@ import com.raulshma.jellyplay.core.ui.tv.TvGrabInitialFocus
 import com.raulshma.jellyplay.core.ui.tv.rememberTvFocusState
 import com.raulshma.jellyplay.core.ui.tv.tvFocusIndicator
 import com.raulshma.jellyplay.core.ui.tv.tvFocusRestorer
+import com.raulshma.jellyplay.core.ui.util.safeItemKey
 import com.composables.icons.tabler.Tabler
 import com.composables.icons.tabler.outline.*
 
@@ -111,22 +111,23 @@ fun TracksScreen(
         },
     ) { _ ->
         PullToRefreshBox(
-            isRefreshing = tracks.loadState.refresh is LoadState.Loading,
+            isRefreshing = tracks.loadState.refresh is LoadState.Loading && tracks.itemCount > 0,
             onRefresh = { tracks.refresh() },
             modifier = Modifier.fillMaxSize(),
         ) {
         Box(modifier = Modifier.fillMaxSize()) {
-            when (val refreshState = tracks.loadState.refresh) {
-                is LoadState.Loading -> {
+            when {
+                tracks.loadState.refresh is LoadState.Loading && tracks.itemCount == 0 -> {
                     ScreenLoadingState()
                 }
-                is LoadState.Error -> {
+                tracks.loadState.refresh is LoadState.Error -> {
                     ErrorScreen(
-                        message = refreshState.error.localizedMessage ?: "Failed to load tracks",
+                        message = (tracks.loadState.refresh as LoadState.Error).error.localizedMessage
+                            ?: "Failed to load tracks",
                         onRetry = { tracks.refresh() },
                     )
                 }
-                is LoadState.NotLoading -> {
+                else -> {
                     if (tracks.itemCount == 0) {
                         ScreenEmptyState(
                             icon = Tabler.Outline.Music,
@@ -148,7 +149,7 @@ fun TracksScreen(
                         ) {
                             items(
                                 count = tracks.itemCount,
-                                key = tracks.itemKey { it.id },
+                                key = tracks.safeItemKey { it.id },
                                 contentType = { "mediaItem" },
                             ) { index ->
                                 val track = tracks[index]

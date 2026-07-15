@@ -29,4 +29,13 @@ class MpvSubtitleStyleMappingTest {
         val overrideEntry = entries.first { it.first == "sub-ass-override" }
         assertEquals("force", overrideEntry.second)
     }
+
+    @Test
+    fun customStyle_mapsBothTypefaceToggles() {
+        val style = SubtitleStyle(applyCustomStyle = true, bold = true, italic = true)
+        val entries = MpvStyleMapping.customStyleEntries(style).toMap()
+
+        assertEquals("yes", entries["sub-bold"])
+        assertEquals("yes", entries["sub-italic"])
+    }
 }

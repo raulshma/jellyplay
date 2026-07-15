@@ -3,7 +3,6 @@ package com.raulshma.jellyplay.feature.home
 
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
@@ -12,22 +11,14 @@ import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.focusGroup
-import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.material3.ModalNavigationDrawer
-import androidx.compose.material3.rememberDrawerState
-import androidx.compose.material3.DrawerState
-import androidx.compose.material3.DrawerValue
 import androidx.compose.material3.Icon
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -47,9 +38,7 @@ import androidx.compose.ui.unit.Dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.composables.icons.tabler.Tabler
-import com.composables.icons.tabler.outline.Menu2
 import com.raulshma.jellyplay.core.designsystem.theme.ArtworkThemeWrapper
-import com.raulshma.jellyplay.core.designsystem.theme.ShapeCache
 import com.raulshma.jellyplay.core.model.HomeMode
 import com.raulshma.jellyplay.core.model.MediaType
 import com.raulshma.jellyplay.core.model.OfflineMode
@@ -59,19 +48,16 @@ import com.raulshma.jellyplay.core.model.seerr.SeerrSearchItem
 import com.raulshma.jellyplay.core.ui.adaptive.LocalAdaptiveInfo
 import com.raulshma.jellyplay.core.ui.adaptive.contentPadding
 import com.raulshma.jellyplay.core.ui.components.ErrorScreen
-import com.raulshma.jellyplay.core.ui.components.LocalFloatingNavVisibility
 import com.raulshma.jellyplay.core.ui.components.LocalNavigationBarColor
 import com.raulshma.jellyplay.core.ui.components.LocalNetworkStatus
 import com.raulshma.jellyplay.core.ui.components.LocalServerHealth
 import com.raulshma.jellyplay.core.ui.components.SeerrRequestDialog
-import com.raulshma.jellyplay.core.ui.components.focusIndicator
 import com.raulshma.jellyplay.core.ui.components.rememberSeerrCardLoadingState
 import com.raulshma.jellyplay.core.ui.components.resolveHeaderStatus
 import com.raulshma.jellyplay.core.ui.components.HeaderStatus
 import com.raulshma.jellyplay.core.ui.tv.LocalTvMode
 import com.raulshma.jellyplay.core.ui.tv.input.onDpadKey
 import com.raulshma.jellyplay.core.ui.tv.tryRequestFocus
-import kotlinx.coroutines.launch
 
 /**
  * Aggregates every navigation callback the Home screen needs so that
@@ -101,18 +87,10 @@ data class HomeCallbacks(
     val onModeChange: (HomeMode) -> Unit = {},
     val onSearchItemClick: (String) -> Unit = {},
     val onSearchSeerrClick: (Int, String) -> Unit = { _, _ -> },
+    /** Open a settings destination surfaced by the home search bar. The [Route]
+     *  carries its own `highlightSettingId` for deep-link scroll/highlight. */
+    val onSettingsSearchItemClick: (com.raulshma.jellyplay.core.ui.navigation.Route) -> Unit = {},
     val onNewsletterClick: () -> Unit = {},
-    val onServerManagementClick: () -> Unit = {},
-    val onUserManagementClick: () -> Unit = {},
-    val onSeerrSettingsClick: () -> Unit = {},
-    val onAdminDashboardClick: () -> Unit = {},
-    val onSetupWizardClick: () -> Unit = {},
-    val onFavoritesClick: () -> Unit = {},
-    val onAboutClick: () -> Unit = {},
-    val onWatchProgressHeatmapClick: () -> Unit = {},
-    val onRequestsClick: () -> Unit = {},
-    val onActivityQueueClick: () -> Unit = {},
-    val onUpcomingClick: () -> Unit = {},
 )
 
 @Composable
@@ -232,14 +210,19 @@ private fun MainHomeContent(
     } }
 
     val photoFolderChildUrls by viewModel.photoFolderChildUrls.collectAsStateWithLifecycle()
-    // Memoize the flattened photo-folder item list so the LaunchedEffect only
-    // re-keys when the actual items change, not on every sections emission
-    // (partial loads emit updated sections repeatedly). The flatMap allocation
-    // now runs once per content change instead of once per StateFlow tick.
+    // Only photo-folder items are relevant to the prefetcher (it filters to
+    // PHOTO_FOLDER internally), so narrow the list to those items. This keeps
+    // both the per-emission allocation and the effect-key proportional to the
+    // number of photo folders rather than every item across all sections.
     val photoFolderItems = remember(state.sections) {
-        state.sections.flatMap { it.items }
+        state.sections.flatMap { it.items }.filter { it.mediaType == MediaType.PHOTO_FOLDER }
     }
-    androidx.compose.runtime.LaunchedEffect(photoFolderItems) {
+    // Structural fingerprint so the effect only re-runs when the photo-folder
+    // set actually changes, not on every partial-load emission that produces a
+    // new list instance with the same ids. Computed once per sections change
+    // (not per recomposition) so scrolling never allocates here.
+    val photoFolderKey = remember(photoFolderItems) { photoFolderItems.map { it.id } }
+    androidx.compose.runtime.LaunchedEffect(photoFolderKey) {
         viewModel.prefetchPhotoFolderChildUrls(photoFolderItems)
     }
 
@@ -259,28 +242,8 @@ private fun MainHomeContent(
 
     val navOffsetPx = com.raulshma.jellyplay.core.ui.components.LocalFloatingNavOffset.current
 
-    val drawerState = rememberDrawerState(initialValue = DrawerValue.Closed)
-    val scope = rememberCoroutineScope()
-    val isDrawerOpen = drawerState.isOpen
-
-    val floatingNavVisibility = LocalFloatingNavVisibility.current
-    DisposableEffect(isDrawerOpen) {
-        if (isDrawerOpen) {
-            floatingNavVisibility.value = false
-        } else {
-            floatingNavVisibility.value = true
-        }
-        onDispose {
-            if (isDrawerOpen) {
-                floatingNavVisibility.value = true
-            }
-        }
-    }
-
-    BackHandler(enabled = isFabExpanded || isSearchFocused || isDrawerOpen) {
-        if (isDrawerOpen) {
-            scope.launch { drawerState.close() }
-        } else if (isFabExpanded) {
+    BackHandler(enabled = isFabExpanded || isSearchFocused) {
+        if (isFabExpanded) {
             isFabExpanded = false
         } else if (isSearchFocused) {
             isSearchExpanded = false
@@ -297,19 +260,6 @@ private fun MainHomeContent(
         colorStyle = state.colorStyle,
         accentColorSwatch = state.accentColorSwatch,
     ) {
-        HomeScreenDrawer(
-            showDrawer = !isTv,
-            drawerState = drawerState,
-            drawerContent = {
-                HomeDrawerBody(
-                    currentUser = state.currentUser,
-                    backgroundColor = backgroundColor,
-                    drawerState = drawerState,
-                    scope = scope,
-                    callbacks = callbacks,
-                )
-            }
-        ) {
         PullToRefreshBox(
             isRefreshing = state.isRefreshing,
             onRefresh = { viewModel.onEvent(HomeUiEvent.PullToRefresh) },
@@ -458,6 +408,15 @@ private fun MainHomeContent(
                     { id: Long -> viewModel.deleteSearchHistoryItem(id) }
                 }
                 val searchOnClearHistory = remember(viewModel) { { viewModel.clearSearchHistory() } }
+                val searchOnSettingsClick = remember(viewModel, callbacks) {
+                    { item: com.raulshma.jellyplay.core.ui.settingssearch.SettingsSearchItem ->
+                        isSearchExpanded = false
+                        viewModel.onEvent(HomeUiEvent.ClearSearch)
+                        focusManager.clearFocus()
+                        viewModel.onSettingsResultClicked(item)
+                        callbacks.onSettingsSearchItemClick(item.route)
+                    }
+                }
 
                 // Lift the HomeTopDock lambdas too. MainHomeContent recomposes
                 // on every keystroke (state.searchState.query is read above),
@@ -499,9 +458,6 @@ private fun MainHomeContent(
                     onHeroFocusDown = remember(heroFocusRequester) {
                         { heroFocusRequester.tryRequestFocus("top_dock_down_hero") }
                     },
-                    onOpenDrawer = remember(scope, drawerState) {
-                        { scope.launch { drawerState.open() } }
-                    },
                     searchResultsContent = {
                         if (state.searchState.query.isNotBlank() || searchHistory.isNotEmpty()) {
                             HomeSearchResultsOverlay(
@@ -515,6 +471,8 @@ private fun MainHomeContent(
                                 onHistoryClick = searchOnHistoryClick,
                                 onDeleteHistoryItem = searchOnDeleteHistoryItem,
                                 onClearHistory = searchOnClearHistory,
+                                settingsResults = if (state.showSettingsInHomeSearch) state.searchState.settingsResults else emptyList(),
+                                onSettingsClick = searchOnSettingsClick,
                             )
                         }
                     },
@@ -543,7 +501,6 @@ private fun MainHomeContent(
                     )
                 }
         }
-    }
     }
     }
 
@@ -609,7 +566,6 @@ private fun HomeTopDockScrim(
     onClearSearch: () -> Unit,
     onToggleOffline: () -> Unit,
     onHeroFocusDown: () -> Boolean,
-    onOpenDrawer: () -> Unit,
     searchResultsContent: @Composable () -> Unit,
 ) {
     val onSurface = androidx.compose.material3.MaterialTheme.colorScheme.onSurface
@@ -647,35 +603,6 @@ private fun HomeTopDockScrim(
             } else Modifier
         )
     )
-
-    if (!isTv && !isSearchFocused) {
-        Box(
-            modifier = Modifier
-                .statusBarsPadding()
-                .padding(horizontal = 16.dp, vertical = 4.dp)
-                .align(Alignment.TopStart)
-        ) {
-            Box(
-                modifier = Modifier
-                    .size(width = 40.dp, height = 64.dp)
-                    .clip(ShapeCache.smooth16)
-                    .focusIndicator(CircleShape)
-                    .clickable(
-                        interactionSource = remember { MutableInteractionSource() },
-                        indication = null,
-                        onClick = onOpenDrawer,
-                    ),
-                contentAlignment = Alignment.Center
-            ) {
-                Icon(
-                    imageVector = Tabler.Outline.Menu2,
-                    contentDescription = "Open Shortcuts Menu",
-                    tint = appBarIconColorFaded,
-                    modifier = Modifier.size(24.dp)
-                )
-            }
-        }
-    }
     } // end Box(fillMaxSize) wrapper providing BoxScope for align()
 }
 
@@ -683,7 +610,7 @@ private fun HomeTopDockScrim(
 private fun rememberFallbackUrls(
     viewModel: HomeViewModel,
 ): (com.raulshma.jellyplay.core.model.MediaItem) -> List<String> {
-    return remember {
+    return remember(viewModel) {
         { item: com.raulshma.jellyplay.core.model.MediaItem ->
             if (item.mediaType == MediaType.AUDIO || item.mediaType == MediaType.MUSIC) {
                 listOfNotNull(
@@ -692,25 +619,5 @@ private fun rememberFallbackUrls(
                 )
             } else emptyList()
         }
-    }
-}
-
-@OptIn(androidx.compose.material3.ExperimentalMaterial3Api::class)
-@Composable
-private fun HomeScreenDrawer(
-    showDrawer: Boolean,
-    drawerState: DrawerState,
-    drawerContent: @Composable () -> Unit,
-    content: @Composable () -> Unit,
-) {
-    if (showDrawer) {
-        ModalNavigationDrawer(
-            drawerState = drawerState,
-            drawerContent = drawerContent,
-        ) {
-            content()
-        }
-    } else {
-        content()
     }
 }

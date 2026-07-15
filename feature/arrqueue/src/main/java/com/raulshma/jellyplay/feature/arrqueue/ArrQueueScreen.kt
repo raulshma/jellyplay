@@ -275,25 +275,22 @@ private fun QueueRow(
 
             Spacer(Modifier.height(12.dp))
 
-            // Progress bar. Hide when there's no progress signal (e.g. QUEUED).
-            if (item.status == ArrDownloadStatus.DOWNLOADING ||
-                item.status == ArrDownloadStatus.PAUSED ||
-                item.status == ArrDownloadStatus.COMPLETED
-            ) {
-                LinearProgressIndicator(
-                    progress = { item.percent / 100f },
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(6.dp),
-                    color = progressColor(item.status),
-                    trackColor = MaterialTheme.colorScheme.surfaceContainerHighest,
-                )
-                Spacer(Modifier.height(6.dp))
-            }
+            // Progress bar — shown for every item so the list stays visually
+            // consistent. Queued items show an empty track, failed/warning
+            // items show how far they got, completed/imported show full.
+            LinearProgressIndicator(
+                progress = { item.percent / 100f },
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(6.dp),
+                color = progressColor(item.status),
+                trackColor = MaterialTheme.colorScheme.surfaceContainerHighest,
+            )
+            Spacer(Modifier.height(6.dp))
 
             // Subtitle: percent · size left · time left · quality.
             val subtitle = buildString {
-                if (item.percent in 1..99) append("${item.percent}%")
+                if (item.percent in 1..100) append("${item.percent}%")
                 item.sizeLeft?.toReadableBytes()?.let { if (isNotEmpty()) append(" · "); append(it) }
                 item.timeLeft?.takeIf { it.isNotBlank() }?.let { if (isNotEmpty()) append(" · "); append(it) }
                 item.quality?.takeIf { it.isNotBlank() }?.let { if (isNotEmpty()) append(" · "); append(it) }
@@ -412,8 +409,11 @@ private fun StatusChip(status: ArrDownloadStatus) {
 
 private fun progressColor(status: ArrDownloadStatus): Color = when (status) {
     ArrDownloadStatus.COMPLETED -> StatusColors.available
+    ArrDownloadStatus.IMPORTED -> StatusColors.success
     ArrDownloadStatus.PAUSED -> StatusColors.pending
     ArrDownloadStatus.DOWNLOADING -> Color(0xFF42A5F5) // matches StatusColors.requested/info blue
+    ArrDownloadStatus.FAILED -> StatusColors.error
+    ArrDownloadStatus.WARNING -> StatusColors.warning
     else -> StatusColors.info
 }
 

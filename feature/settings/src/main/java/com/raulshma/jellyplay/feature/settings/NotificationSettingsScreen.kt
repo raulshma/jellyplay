@@ -1,5 +1,6 @@
 package com.raulshma.jellyplay.feature.settings
 
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
@@ -73,10 +74,11 @@ sealed class NotificationSettingsDialog {
 fun NotificationSettingsScreen(
     onBack: () -> Unit,
     highlightSettingId: String? = null,
-    viewModel: SettingsViewModel = hiltViewModel(),
+    viewModel: NotificationSettingsViewModel = hiltViewModel(),
 ) {
-    val preferences = viewModel.preferences
-    val showAdvanced = preferences.showAdvancedSettings
+    val preferences by viewModel.preferences.collectAsStateWithLifecycle()
+    val showAdvanced by viewModel.showAdvancedSettings.collectAsStateWithLifecycle()
+    val libraryFolders by viewModel.libraryFolders.collectAsStateWithLifecycle()
     val context = LocalContext.current
     val adaptiveInfo = LocalAdaptiveInfo.current
     val isTv = LocalTvMode.current
@@ -100,7 +102,7 @@ fun NotificationSettingsScreen(
             )
         },
     ) { innerPadding ->
-        val notifPrefs = preferences.notificationPreferences
+        val notifPrefs = preferences
 
         // Center a highlighted (search-navigated) setting in the viewport instead of parking it
         // at the bottom edge, which is the default BringIntoViewSpec behaviour.
@@ -266,8 +268,8 @@ fun NotificationSettingsScreen(
                                 index = notifIdx++, count = notifTotal,
                                 onClick = { activeDialog = NotificationSettingsDialog.MaxPerCheckPicker },
                             )
-                            val libraryCount = viewModel.libraryFolders.size
-                            val enabledLibraries = viewModel.libraryFolders.count { folder ->
+                            val libraryCount = libraryFolders.size
+                            val enabledLibraries = libraryFolders.count { folder ->
                                 notifPrefs.libraryConfigs[folder.id]?.enabled ?: true
                             }
                             SettingListItem(
@@ -296,7 +298,7 @@ fun NotificationSettingsScreen(
     }
 
     if (activeDialog is NotificationSettingsDialog.FrequencyPicker) {
-        val notifPrefs = preferences.notificationPreferences
+        val notifPrefs = preferences
         AlertDialog(
             onDismissRequest = { activeDialog = NotificationSettingsDialog.None },
             title = { Text(stringResource(R.string.settings_check_frequency)) },
@@ -340,7 +342,7 @@ fun NotificationSettingsScreen(
     }
 
     if (activeDialog is NotificationSettingsDialog.QuietStartPicker) {
-        val notifPrefs = preferences.notificationPreferences
+        val notifPrefs = preferences
         val timePickerState = rememberTimePickerState(
             initialHour = notifPrefs.quietHoursStart / 60,
             initialMinute = notifPrefs.quietHoursStart % 60,
@@ -369,7 +371,7 @@ fun NotificationSettingsScreen(
     }
 
     if (activeDialog is NotificationSettingsDialog.QuietEndPicker) {
-        val notifPrefs = preferences.notificationPreferences
+        val notifPrefs = preferences
         val timePickerState = rememberTimePickerState(
             initialHour = notifPrefs.quietHoursEnd / 60,
             initialMinute = notifPrefs.quietHoursEnd % 60,
@@ -398,7 +400,7 @@ fun NotificationSettingsScreen(
     }
 
     if (activeDialog is NotificationSettingsDialog.MaxPerCheckPicker) {
-        val notifPrefs = preferences.notificationPreferences
+        val notifPrefs = preferences
         val options = listOf(5, 10, 15, 20, 30, 50, 100)
         AlertDialog(
             onDismissRequest = { activeDialog = NotificationSettingsDialog.None },
@@ -436,20 +438,20 @@ fun NotificationSettingsScreen(
     }
 
     if (activeDialog is NotificationSettingsDialog.LibrariesPicker) {
-        val notifPrefs = preferences.notificationPreferences
+        val notifPrefs = preferences
         AlertDialog(
             onDismissRequest = { activeDialog = NotificationSettingsDialog.None },
             title = { Text(stringResource(R.string.settings_monitored_libraries)) },
             text = {
                 Column(modifier = Modifier.verticalScroll(rememberScrollState())) {
-                    if (viewModel.libraryFolders.isEmpty()) {
+                    if (libraryFolders.isEmpty()) {
                         Text(
                             text = stringResource(R.string.settings_no_libraries_found),
                             style = MaterialTheme.typography.bodyMedium,
                             modifier = Modifier.padding(16.dp)
                         )
                     } else {
-                        viewModel.libraryFolders.forEach { folder ->
+                        libraryFolders.forEach { folder ->
                             val currentConfig = notifPrefs.libraryConfigs[folder.id] ?: LibraryNotificationConfig(enabled = true)
                             Row(
                                 modifier = Modifier

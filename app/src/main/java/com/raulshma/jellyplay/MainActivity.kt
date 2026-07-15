@@ -192,7 +192,8 @@ class MainActivity : FragmentActivity() {
 
         setContent {
             val preferences by viewModel.preferences.collectAsStateWithLifecycle()
-            var pinError by rememberSaveable { mutableStateOf<String?>(null) }
+                var pinError by rememberSaveable { mutableStateOf<String?>(null) }
+                var pinVerifying by rememberSaveable { mutableStateOf(false) }
             val context = androidx.compose.ui.platform.LocalContext.current
 
             Box(
@@ -311,15 +312,18 @@ class MainActivity : FragmentActivity() {
                                     subtitle = "Unlock JellyPlay",
                                     pinHash = preferences.pinHash,
                                     biometricEnabled = preferences.biometricLockEnabled,
-                                    enabled = !lockoutActive,
+                                    enabled = !lockoutActive && !pinVerifying,
+                                    verifying = pinVerifying,
                                     onPinEntered = { pin ->
                                         if (pin.isEmpty()) {
                                             isPinUnlocked.value = true
                                             pinError = null
                                         } else if (preferences.pinHash != null) {
+                                            if (pinVerifying) return@AuthChallengeScreen
                                             // Re-check the lockout at click time: the user
                                             // may have triggered it on a previous attempt
-                                            // since the last composition.
+                                            // since the last composition. This counter read
+                                            // is cheap and stays on the caller thread.
                                             val currentLockout = viewModel.preferencesStore.getPinLockoutState()
                                             val currentNow = System.currentTimeMillis()
                                             if (currentLockout.isLockedOut && currentLockout.lockoutUntilEpochMs > currentNow) {
@@ -327,26 +331,17 @@ class MainActivity : FragmentActivity() {
                                                 pinError = formatLockoutMessage(remainingMs)
                                                 return@AuthChallengeScreen
                                             }
-                                            val valid = viewModel.preferencesStore.verifyPin(
-                                                pin,
-                                                preferences.pinHash,
-                                            )
-                                            if (valid) {
-                                                isPinUnlocked.value = true
-                                                pinError = null
-                                                // Reset the failed-attempt counter and clear
-                                                // any active lockout, then silently upgrade
-                                                // a legacy unsalted-SHA-256 PIN hash to
-                                                // PBKDF2 (v2) now that the user has proven
-                                                // they know the PIN.
-                                                lifecycleScope.launch {
+                                            // PBKDF2 verification is deliberately slow, so run
+                                            // it off the main thread; the success/failure
+                                            // accounting and optional hash upgrade follow it.
+                                            pinVerifying = true
+                                            lifecycleScope.launch {
+                                                val valid = viewModel.preferencesStore.verifyPinOffMainThread(pin)
+                                                if (valid) {
+                                                    isPinUnlocked.value = true
+                                                    pinError = null
                                                     viewModel.preferencesStore.resetPinLockout()
-                                                    if (viewModel.preferencesStore.pinHashNeedsMigration(preferences.pinHash)) {
-                                                        viewModel.preferencesStore.upgradePinHashIfLegacy(pin)
-                                                    }
-                                                }
-                                            } else {
-                                                lifecycleScope.launch {
+                                                } else {
                                                     val newState = viewModel.preferencesStore.recordFailedPinAttempt()
                                                     pinError = if (newState.isLockedOut) {
                                                         formatLockoutMessage(newState.lockoutUntilEpochMs - System.currentTimeMillis())
@@ -354,6 +349,7 @@ class MainActivity : FragmentActivity() {
                                                         "Incorrect PIN"
                                                     }
                                                 }
+                                                pinVerifying = false
                                             }
                                         }
                                     },

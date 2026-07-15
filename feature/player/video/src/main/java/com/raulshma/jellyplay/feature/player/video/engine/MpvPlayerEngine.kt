@@ -316,6 +316,11 @@ class MpvPlayerEngine(
             mpv.setOptionString("sub-ass-force-margins", "no")
 
             mpv.setOptionString("scale", mpvCfg.scaler.key)
+            // dscale (downscaler) was previously left unset, so mpv fell back
+            // to its soft bilinear default — the dominant case on phones where
+            // 1080p+ video is downscaled to the display. Mirror the upscaler so
+            // both up- and down-scaled content stay sharp.
+            mpv.setOptionString("dscale", mpvCfg.scaler.key)
             if (mpvCfg.deband) {
                 mpv.setOptionString("deband", "yes")
             }
@@ -1142,7 +1147,11 @@ class MpvPlayerEngine(
         if (subtitles.isEmpty()) return
 
         subtitles.forEach { sub ->
-            val flags = "auto"
+            // "select" forces the track active; "auto" leaves selection to mpv's
+            // slang/sub-auto heuristics, which drop a side-loaded track that has
+            // no language and no matching slang. A subtitle flagged isDefault is
+            // the source explicitly asking for it to be shown, so select it.
+            val flags = if (sub.isDefault) "select" else "auto"
             try {
                 Log.d(
                     TAG,

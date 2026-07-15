@@ -1404,8 +1404,8 @@ class VideoPlayerViewModel @Inject constructor(
         _uiState.update { it.copy(isScreenLocked = locked) }
     }
 
-    fun verifyPlayerLockPin(pin: String): Boolean {
-        return preferencesStore.verifyPin(pin)
+    suspend fun verifyPlayerLockPin(pin: String): Boolean {
+        return preferencesStore.verifyPinOffMainThread(pin)
     }
 
     fun setPlaybackSpeed(speed: Float) {

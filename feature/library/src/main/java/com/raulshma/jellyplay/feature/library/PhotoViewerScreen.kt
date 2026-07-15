@@ -78,6 +78,7 @@ import com.composables.icons.tabler.outline.PlayerPause
 import com.composables.icons.tabler.outline.PlayerPlay
 import com.composables.icons.tabler.outline.Share
 import com.composables.icons.tabler.outline.X
+import com.raulshma.jellyplay.core.ui.animation.lazyItemPlacementSpec
 import com.raulshma.jellyplay.core.ui.components.DelayedLoadingScreen
 import com.raulshma.jellyplay.core.ui.components.focusIndicator
 import com.raulshma.jellyplay.core.ui.components.LoadingScreen
@@ -270,8 +271,8 @@ fun PhotoViewerScreen(
                     onScaleChange = { scale = it },
                     onOffsetChange = { x, y -> offsetX = x; offsetY = y },
                     onTap = { if (!isTv) showControls = !showControls },
-                    onDoubleTap = {
-                        if (scale > 1f) {
+                    onDoubleTap = { currentScale ->
+                        if (currentScale > 1f) {
                             scale = 1f; offsetX = 0f; offsetY = 0f
                         } else {
                             scale = 2.5f
@@ -285,18 +286,17 @@ fun PhotoViewerScreen(
                     enter = fadeIn(MaterialTheme.motionScheme.defaultEffectsSpec()),
                     exit = fadeOut(MaterialTheme.motionScheme.defaultEffectsSpec()),
                 ) {
-                    Box(
-                        modifier = Modifier
-                            .fillMaxSize()
-                            .statusBarsPadding()
-                            .navigationBarsPadding()
-                            .padding(horizontal = 12.dp, vertical = 8.dp),
-                    ) {
+                    Box(modifier = Modifier.fillMaxSize()) {
+                        // Full-bleed scrim gradient behind the top controls: it
+                        // spans from the very top of the screen (including the
+                        // status bar inset) out to the left/right edges, so the
+                        // controls stay legible over bright photos. The controls
+                        // themselves are padded with the system insets below.
                         Box(
                             modifier = Modifier
-                                .align(Alignment.TopCenter)
                                 .fillMaxWidth()
-                                .height(112.dp)
+                                .height(160.dp)
+                                .align(Alignment.TopCenter)
                                 .background(
                                     Brush.verticalGradient(
                                         0f to MaterialTheme.colorScheme.scrim.copy(alpha = 0.7f),
@@ -304,7 +304,14 @@ fun PhotoViewerScreen(
                                     )
                                 )
                         )
-                        Row(
+                        Box(
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .statusBarsPadding()
+                                .navigationBarsPadding()
+                                .padding(horizontal = 12.dp, vertical = 8.dp),
+                        ) {
+                            Row(
                             modifier = Modifier
                                 .align(Alignment.TopStart)
                                 .fillMaxWidth(),
@@ -444,6 +451,7 @@ fun PhotoViewerScreen(
 
 
                     }
+                    }
                 }
 
                 AnimatedVisibility(
@@ -562,13 +570,23 @@ private fun PhotoImage(
     onScaleChange: (Float) -> Unit,
     onOffsetChange: (x: Float, y: Float) -> Unit,
     onTap: () -> Unit,
-    onDoubleTap: () -> Unit,
+    onDoubleTap: (currentScale: Float) -> Unit,
     colorFilter: androidx.compose.ui.graphics.ColorFilter? = null,
 ) {
     val imageUrl = remember(photo.id) {
         viewModel.getImageUrl(photo.id, maxWidth = null)
     }
     var lastTapTime by remember { mutableStateOf(0L) }
+
+    // Read the live transform values inside the gesture coroutine. The
+    // pointerInput key is `photo.id`, so without this the lambda captures the
+    // scale/offset that were current when the gesture handler was set up
+    // (always 1f / 0f after a navigation reset) — a subsequent zoom (e.g. via
+    // double-tap) would not be reflected, so the pan branch never ran and the
+    // swipe-to-navigate branch fired instead, jumping to the next photo.
+    val currentScale by rememberUpdatedState(scale)
+    val currentOffsetX by rememberUpdatedState(offsetX)
+    val currentOffsetY by rememberUpdatedState(offsetY)
 
     Box(
         modifier = Modifier
@@ -578,9 +596,9 @@ private fun PhotoImage(
                     val firstDown = awaitFirstDown()
                     firstDown.consume()
 
-                    var gestureScale = scale
-                    var gestureOffsetX = offsetX
-                    var gestureOffsetY = offsetY
+                    var gestureScale = currentScale
+                    var gestureOffsetX = currentOffsetX
+                    var gestureOffsetY = currentOffsetY
 
                     val downPosition = firstDown.position
                     var isMultiTouch = false
@@ -648,7 +666,7 @@ private fun PhotoImage(
                     if (!pastSlop && !isMultiTouch) {
                         val now = System.currentTimeMillis()
                         if (now - lastTapTime < 300) {
-                            onDoubleTap()
+                            onDoubleTap(gestureScale)
                             lastTapTime = 0L
                         } else {
                             onTap()
@@ -678,6 +696,10 @@ private fun PhotoImage(
             url = imageUrl,
             contentDescription = photo.name,
             blurHash = photo.blurHashes.primary,
+            // The photo is Fit (letterboxed) so the actual image keeps its
+            // aspect ratio, but the blurHash background should fill the whole
+            // screen behind it instead of letterboxing the same way.
+            blurHashContentScale = ContentScale.Crop,
             modifier = Modifier
                 .fillMaxSize()
                 .graphicsLayer {
@@ -845,9 +867,11 @@ private fun PhotoFilmstrip(
                 val interactionSource = remember { MutableInteractionSource() }
                 val isFocused by interactionSource.collectIsFocusedAsState()
                 val isHighlighted = isSelected || isFocused
+                val placementSpec = lazyItemPlacementSpec()
 
                 Box(
                     modifier = Modifier
+                        .animateItem(placementSpec = placementSpec)
                         .size(if (isHighlighted) 64.dp else 52.dp)
                         .clip(smoothCornerShape(6.dp))
                         .background(Color.DarkGray.copy(alpha = 0.5f))
