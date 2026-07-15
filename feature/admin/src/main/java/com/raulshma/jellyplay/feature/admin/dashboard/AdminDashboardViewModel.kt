@@ -1,7 +1,6 @@
 package com.raulshma.jellyplay.feature.admin.dashboard
 
 import androidx.compose.runtime.Immutable
-import com.raulshma.jellyplay.core.data.repository.AuthRepository
 import com.raulshma.jellyplay.core.model.ItemCounts
 import com.raulshma.jellyplay.core.model.ScheduledTaskInfo
 import com.raulshma.jellyplay.core.model.SessionInfo
@@ -16,7 +15,6 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.collectLatest
-import kotlinx.coroutines.flow.first
 import javax.inject.Inject
 
 @Immutable
@@ -35,30 +33,21 @@ data class AdminDashboardState(
 @HiltViewModel
 class AdminDashboardViewModel @Inject constructor(
     private val apiClient: JellyfinApiClient,
-    private val authRepository: AuthRepository,
 ) : JellyPlayViewModel() {
 
     private val _uiState = stateFlow(AdminDashboardState())
     val uiState: StateFlow<AdminDashboardState> = _uiState.flow
 
-    private val _isAdmin = stateFlow(false)
-    val isAdmin: StateFlow<Boolean> = _isAdmin.flow
-
     private val hasRunningTasks = MutableStateFlow(false)
 
     init {
-        launch {
-            authRepository.currentUser.collect { user ->
-                _isAdmin.set(user?.isAdmin == true)
-            }
-        }
         loadDashboard()
     }
 
     fun loadDashboard() {
         launch {
-            val isAdmin = authRepository.currentUser.first()?.isAdmin == true
-            if (!isAdmin) return@launch
+            // Access control is enforced by AdminRouteContainer before this
+            // screen is reached; the server still 403s as a backstop.
             _uiState.update { it.copy(isLoading = true, error = null) }
             try {
                 coroutineScope {

@@ -28,6 +28,10 @@ class UserApiClientImpl @Inject constructor(
         engine.requireApi().userApi.getCurrentUser().content.id.toString()
     }
 
+    override suspend fun getCurrentUser(): Result<ManagedUser> = engine.apiResultWithRetry {
+        engine.requireApi().userApi.getCurrentUser().content.toManagedUser()
+    }
+
     override suspend fun createUser(name: String, password: String?): Result<ManagedUser> = engine.apiResultWithRetry {
         engine.requireApi().userApi.createUserByName(
             CreateUserByName(name = name, password = password),
