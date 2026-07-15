@@ -70,8 +70,12 @@ class LiveTvApiClientImpl @Inject constructor(
         engine.requireApi().liveTvApi.getLiveTvPrograms(
             channelIds = listOf(channelId.toUUID()),
             userId = userIdUuid(),
-            minEndDate = endDateUtc?.toDateTime(),
-            maxStartDate = startDateUtc?.toDateTime(),
+            // minEndDate filters out programs that already ended before the
+            // range start (now); maxStartDate filters out programs starting
+            // after the range end (end of day). These were previously swapped,
+            // which made minEndDate > maxStartDate and yielded an empty list.
+            minEndDate = startDateUtc?.toDateTime(),
+            maxStartDate = endDateUtc?.toDateTime(),
             fields = listOf(ItemFields.OVERVIEW),
         ).content.items.map { it.toLiveTvProgram() }
     }

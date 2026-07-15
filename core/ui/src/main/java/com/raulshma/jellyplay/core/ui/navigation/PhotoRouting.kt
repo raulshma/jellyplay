@@ -3,10 +3,10 @@ package com.raulshma.jellyplay.core.ui.navigation
 import com.raulshma.jellyplay.core.model.MediaType
 
 /**
- * Resolves the destination [Route] for an item click, branching on photo-aware
- * media types. PHOTO_FOLDER opens the folder's album (the clicked item's id
- * becomes the album parent), PHOTO opens the single-photo viewer, anything
- * else opens the media detail screen.
+ * Resolves the destination [Route] for an item click, branching on the item's
+ * media type: PHOTO_FOLDER opens the folder's album, PHOTO opens the single
+ * photo viewer, CHANNEL/LIVE_TV opens the live tv channel detail screen, and
+ * anything else opens the media detail screen.
  */
 fun resolveItemDestination(
     itemId: String,
@@ -16,6 +16,8 @@ fun resolveItemDestination(
 ): Route = when (mediaType) {
     MediaType.PHOTO_FOLDER -> Route.PhotoAlbum(parentId = itemId, folderName = itemName)
     MediaType.PHOTO -> Route.PhotoViewer(itemId, parentId)
+    MediaType.CHANNEL, MediaType.LIVE_TV ->
+        Route.ChannelDetail(channelId = itemId, channelName = itemName)
     else -> Route.MediaDetail(itemId)
 }
 
