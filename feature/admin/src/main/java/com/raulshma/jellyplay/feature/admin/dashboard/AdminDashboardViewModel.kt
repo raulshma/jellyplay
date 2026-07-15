@@ -16,6 +16,7 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.collectLatest
+import kotlinx.coroutines.flow.first
 import javax.inject.Inject
 
 @Immutable
@@ -56,6 +57,8 @@ class AdminDashboardViewModel @Inject constructor(
 
     fun loadDashboard() {
         launch {
+            val isAdmin = authRepository.currentUser.first()?.isAdmin == true
+            if (!isAdmin) return@launch
             _uiState.update { it.copy(isLoading = true, error = null) }
             try {
                 coroutineScope {

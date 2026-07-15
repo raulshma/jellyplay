@@ -27,6 +27,7 @@ import com.raulshma.jellyplay.core.model.seerr.SeerrSonarrServiceDetail
 import com.raulshma.jellyplay.core.data.playback.AdaptiveBitrateManager
 import com.raulshma.jellyplay.core.data.playback.toAudioQueueItem
 import com.raulshma.jellyplay.core.network.seerr.buildPosterUrl
+import com.raulshma.jellyplay.core.network.api.ApiException
 import com.raulshma.jellyplay.core.network.api.TmdbApiClient
 import com.raulshma.jellyplay.core.model.seerr.SeerrRelatedVideo
 import com.raulshma.jellyplay.core.ui.viewmodel.JellyPlayViewModel
@@ -312,7 +313,13 @@ class DetailViewModel @Inject constructor(
                     }
                 }
                 .onFailure { err ->
-                    _uiState.update { it.copy(error = err.message ?: context.getString(R.string.detail_error_load_failed)) }
+                    val accessDenied = (err as? ApiException)?.isAccessDenied == true
+                    val message = if (accessDenied) {
+                        context.getString(R.string.detail_error_access_denied)
+                    } else {
+                        err.message ?: context.getString(R.string.detail_error_load_failed)
+                    }
+                    _uiState.update { it.copy(error = message, isAccessDenied = accessDenied) }
                 }
             _uiState.update { it.copy(isLoading = false) }
         }
