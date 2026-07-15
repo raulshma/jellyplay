@@ -46,6 +46,7 @@ import com.raulshma.jellyplay.core.ui.animation.lazyItemPlacementSpec
 import com.raulshma.jellyplay.core.ui.components.OfflineMediaCard
 import com.raulshma.jellyplay.core.ui.components.ScreenEmptyState
 import com.raulshma.jellyplay.core.ui.tv.LocalTvMode
+import java.util.PriorityQueue
 
 /**
  * Offline home — shown on the Home screen when the app is offline (or the
@@ -88,14 +89,20 @@ fun OfflineHomeContent(
     // Single-pass partition + accumulate. Previously this was six independent
     // full-library traversals (continue-watching filter+sort, recent sort+take,
     // movies/series/music filters, totalBytes sum) = O(6n) + 6 intermediate
-    // lists on every offline-library emission. Now O(n) for the partition and
-    // byte sum; the two sorts below run on their (small) partition inputs only.
+    // lists on every offline-library emission. Now O(n) for the partition,
+    // byte sum, and top-10 recent tracking; the continue-watching sort runs on
+    // its (small) partition input only.
     val offlineSections = remember(offlineLibrary) {
         val continueWatching = ArrayList<OfflineMediaItem>()
         val movies = ArrayList<OfflineMediaItem>()
         val series = ArrayList<OfflineMediaItem>()
         val music = ArrayList<OfflineMediaItem>()
         var totalBytes = 0L
+        // Bounded min-heap of size RECENT_LIMIT tracks the newest items during
+        // the single pass, replacing the prior O(n log n) full-library sort
+        // with an effectively O(n) pass (n log 10). Comparing by createdAt so
+        // the heap root is the smallest (oldest) of the current top-10.
+        val recentHeap = PriorityQueue<OfflineMediaItem>(compareBy { it.createdAt })
         for (item in offlineLibrary) {
             totalBytes += item.totalSizeBytes
             if (item.playedPercentage in 1.0..94.99) continueWatching += item
@@ -106,16 +113,23 @@ fun OfflineHomeContent(
                 // Other types (PHOTO, PHOTO_FOLDER, etc.) have no home row here.
                 else -> Unit
             }
+            if (recentHeap.size < RECENT_LIMIT) {
+                recentHeap.add(item)
+            } else {
+                val oldest = recentHeap.peek()
+                if (oldest != null && item.createdAt > oldest.createdAt) {
+                    recentHeap.poll()
+                    recentHeap.add(item)
+                }
+            }
         }
         // Preserve original comparators for sort stability.
         continueWatching.sortWith(
             compareByDescending<OfflineMediaItem> { it.lastPlayedDate ?: "" }
                 .thenByDescending { it.createdAt }
         )
-        // "Recently Downloaded" = 10 newest by createdAt. Folded into this
-        // single-pass block (was a separate full-library sort) so we traverse
-        // the library once, not twice.
-        val recent = offlineLibrary.sortedByDescending { it.createdAt }.take(10)
+        // Drain the heap newest-first. sortedByDescending is over ≤10 items.
+        val recent = recentHeap.sortedByDescending { it.createdAt }
         OfflineSections(
             continueWatching = continueWatching,
             recent = recent,
@@ -274,6 +288,9 @@ private fun OfflineSection(
         }
     }
 }
+
+/** Number of items shown in the "Recently Downloaded" row. */
+private const val RECENT_LIMIT = 10
 
 /**
  * Holder for the single-pass partition of the offline library, replacing

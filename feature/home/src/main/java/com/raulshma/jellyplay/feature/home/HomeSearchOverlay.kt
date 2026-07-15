@@ -44,6 +44,7 @@ import com.raulshma.jellyplay.core.model.seerr.SeerrSearchItem
 import com.raulshma.jellyplay.core.ui.animation.lazyItemPlacementSpec
 import com.raulshma.jellyplay.core.ui.image.MediaImage
 import androidx.compose.ui.graphics.Color
+import coil3.size.Size as CoilSize
 import com.raulshma.jellyplay.core.ui.tv.LocalTvMode
 import com.raulshma.jellyplay.core.ui.tv.rememberTvFocusState
 import com.raulshma.jellyplay.core.ui.tv.tvFocusIndicator
@@ -400,6 +401,10 @@ private fun SearchItemRow(
                         .fillMaxSize()
                         .clip(ShapeCache.smooth10),
                     contentScale = ContentScale.Crop,
+                    // 44dp thumbnail at 3× density ≈ 132px; decode at 128² instead
+                    // of the 384² default to cut memory and decode cost during
+                    // search-as-you-type.
+                    size = CoilSize(128, 128),
                 )
             } else {
                 androidx.compose.material3.Icon(
