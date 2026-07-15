@@ -173,7 +173,9 @@ internal fun HomeContentList(
         val dedupedOfflineLibrary = remember(state.offlineLibrary, sections) {
             if (state.offlineLibrary.isEmpty()) state.offlineLibrary
             else {
-                val onlineIds = sections.flatMap { it.items }.mapTo(mutableSetOf()) { it.id }
+                val onlineIds = buildSet {
+                    for (section in sections) for (item in section.items) add(item.id)
+                }
                 if (onlineIds.isEmpty()) state.offlineLibrary else state.offlineLibrary.filter { it.id !in onlineIds }
             }
         }

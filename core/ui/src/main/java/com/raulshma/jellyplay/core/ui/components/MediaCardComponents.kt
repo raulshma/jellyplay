@@ -292,6 +292,7 @@ fun PosterCard(
     photoFolderChildImageUrls: List<String> = emptyList(),
     clipToShape: Boolean = false,
     showEpisodeSeriesBadge: Boolean = false,
+    gradientBrush: Brush? = null,
 ) {
     val uiEnvironment = LocalJellyPlayUi.current
     val cardPrefs = LocalCardDisplayPreferences.current
@@ -368,7 +369,7 @@ fun PosterCard(
         )
 
         val surfaceColor = MaterialTheme.colorScheme.surface
-        val gradientBrush = remember(surfaceColor) {
+        val resolvedGradientBrush = gradientBrush ?: remember(surfaceColor) {
             Brush.verticalGradient(
                 colors = listOf(
                     Color.Transparent,
@@ -429,7 +430,7 @@ fun PosterCard(
                         .align(Alignment.BottomCenter)
                         .fillMaxWidth()
                         .height(60.dp)
-                        .background(gradientBrush)
+                        .background(resolvedGradientBrush)
                 )
 
                 if (item.isPlayed && cardPrefs.showWatchedCheckmark) {

@@ -207,14 +207,19 @@ private fun MainHomeContent(
     } }
 
     val photoFolderChildUrls by viewModel.photoFolderChildUrls.collectAsStateWithLifecycle()
-    // Memoize the flattened photo-folder item list so the LaunchedEffect only
-    // re-keys when the actual items change, not on every sections emission
-    // (partial loads emit updated sections repeatedly). The flatMap allocation
-    // now runs once per content change instead of once per StateFlow tick.
+    // Only photo-folder items are relevant to the prefetcher (it filters to
+    // PHOTO_FOLDER internally), so narrow the list to those items. This keeps
+    // both the per-emission allocation and the effect-key proportional to the
+    // number of photo folders rather than every item across all sections.
     val photoFolderItems = remember(state.sections) {
-        state.sections.flatMap { it.items }
+        state.sections.flatMap { it.items }.filter { it.mediaType == MediaType.PHOTO_FOLDER }
     }
-    androidx.compose.runtime.LaunchedEffect(photoFolderItems) {
+    // Structural fingerprint so the effect only re-runs when the photo-folder
+    // set actually changes, not on every partial-load emission that produces a
+    // new list instance with the same ids. Computed once per sections change
+    // (not per recomposition) so scrolling never allocates here.
+    val photoFolderKey = remember(photoFolderItems) { photoFolderItems.map { it.id } }
+    androidx.compose.runtime.LaunchedEffect(photoFolderKey) {
         viewModel.prefetchPhotoFolderChildUrls(photoFolderItems)
     }
 
@@ -591,7 +596,7 @@ private fun HomeTopDockScrim(
 private fun rememberFallbackUrls(
     viewModel: HomeViewModel,
 ): (com.raulshma.jellyplay.core.model.MediaItem) -> List<String> {
-    return remember {
+    return remember(viewModel) {
         { item: com.raulshma.jellyplay.core.model.MediaItem ->
             if (item.mediaType == MediaType.AUDIO || item.mediaType == MediaType.MUSIC) {
                 listOfNotNull(

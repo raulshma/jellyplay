@@ -38,7 +38,6 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.relocation.BringIntoViewResponder
 import androidx.compose.foundation.relocation.bringIntoViewResponder
 import androidx.compose.foundation.horizontalScroll
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -54,6 +53,7 @@ import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.RectangleShape
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
@@ -323,7 +323,7 @@ fun HeroHeader(
                 cornerRadiusBR = 14.dp,
             )
         } else {
-            RoundedCornerShape(0.dp)
+            RectangleShape
         }
     }
 
@@ -368,6 +368,13 @@ fun HeroHeader(
             size = CoilSize(1920, 1080),
         )
 
+        // The scrim gradient is remember-ed on backgroundColor, which is an
+        // animated color (the dynamic-theming lerp). Each animation frame
+        // invalidates the remember and allocates a new 5-stop Brush. This is a
+        // draw-phase cost on a single hero instance (not a per-card grid), so
+        // it is an accepted trade-off — the constant Black stops and the
+        // variable background stops can't be split cheaply without a custom
+        // drawBehind that still allocates a Brush internally.
         Box(
             modifier = Modifier
                 .fillMaxSize()
