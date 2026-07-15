@@ -104,6 +104,7 @@ class AppearanceSettingsViewModel @Inject constructor(
         editor.edit { setShowExternalRatings(enabled) }
     fun setShowClockOnHome(enabled: Boolean) =
         editor.edit { setShowClockOnHome(enabled) }
+    fun setShowSettingsInHomeSearch(enabled: Boolean) = editor.setShowSettingsInHomeSearch(enabled)
     fun setContinueWatchingClickBehavior(behavior: ContinueWatchingClickBehavior) =
         editor.edit { setContinueWatchingClickBehavior(behavior) }
     fun setMergeContinueWatchingAndNextUp(enabled: Boolean) =

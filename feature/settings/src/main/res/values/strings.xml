@@ -416,6 +416,9 @@
     <string name="settings_show_clock_home">Show Clock on Home</string>
     <string name="settings_show_clock_on">Display current time in top bar</string>
     <string name="settings_show_clock_off">No clock on home</string>
+    <string name="settings_show_settings_in_home_search">Settings in Home Search</string>
+    <string name="settings_show_settings_in_home_search_on">Settings appear in home search results</string>
+    <string name="settings_show_settings_in_home_search_off">Search home for media only</string>
     <string name="settings_continue_watching_tap">Continue Watching Tap</string>
 
     <!-- AudioSettingsScreen.kt -->

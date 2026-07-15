@@ -306,6 +306,7 @@ class UserPreferencesStore @Inject constructor(
         val SHOW_TIME_REMAINING = booleanPreferencesKey("show_time_remaining")
         val SHOW_CLOCK_ON_HOME = booleanPreferencesKey("show_clock_on_home")
         val SHOW_CLOCK_IN_PLAYER = booleanPreferencesKey("show_clock_in_player")
+        val SHOW_SETTINGS_IN_HOME_SEARCH = booleanPreferencesKey("show_settings_in_home_search")
         val PAUSE_ON_AUDIO_FOCUS_LOSS = booleanPreferencesKey("pause_on_audio_focus_loss")
         val DUCK_ON_TRANSIENT_FOCUS_LOSS = booleanPreferencesKey("duck_on_transient_focus_loss")
         val VOLUME_BOOST_ENABLED = booleanPreferencesKey("volume_boost_enabled")
@@ -1108,6 +1109,7 @@ class UserPreferencesStore @Inject constructor(
             showTimeRemaining = readBool(prefs, Keys.SHOW_TIME_REMAINING, "show_time_remaining", false),
             showClockOnHome = readBool(prefs, Keys.SHOW_CLOCK_ON_HOME, "show_clock_on_home", false),
             showClockInPlayer = readBool(prefs, Keys.SHOW_CLOCK_IN_PLAYER, "show_clock_in_player", false),
+            showSettingsInHomeSearch = readBool(prefs, Keys.SHOW_SETTINGS_IN_HOME_SEARCH, "show_settings_in_home_search", true),
             pauseOnAudioFocusLoss = readBool(prefs, Keys.PAUSE_ON_AUDIO_FOCUS_LOSS, "pause_on_audio_focus_loss", true),
             duckOnTransientFocusLoss = readBool(prefs, Keys.DUCK_ON_TRANSIENT_FOCUS_LOSS, "duck_on_transient_focus_loss", false),
             volumeBoostEnabled = readBool(prefs, Keys.VOLUME_BOOST_ENABLED, "volume_boost_enabled", false),
@@ -1885,6 +1887,10 @@ class UserPreferencesStore @Inject constructor(
 
     suspend fun setShowClockOnHome(enabled: Boolean) {
         context.dataStore.edit { it[Keys.SHOW_CLOCK_ON_HOME] = enabled }
+    }
+
+    suspend fun setShowSettingsInHomeSearch(enabled: Boolean) {
+        context.dataStore.edit { it[Keys.SHOW_SETTINGS_IN_HOME_SEARCH] = enabled }
     }
 
     suspend fun setShowClockInPlayer(enabled: Boolean) {
@@ -2673,6 +2679,7 @@ class UserPreferencesStore @Inject constructor(
             settings[Keys.SHOW_TIME_REMAINING] = prefs.showTimeRemaining
             settings[Keys.SHOW_CLOCK_ON_HOME] = prefs.showClockOnHome
             settings[Keys.SHOW_CLOCK_IN_PLAYER] = prefs.showClockInPlayer
+            settings[Keys.SHOW_SETTINGS_IN_HOME_SEARCH] = prefs.showSettingsInHomeSearch
             settings[Keys.PAUSE_ON_AUDIO_FOCUS_LOSS] = prefs.pauseOnAudioFocusLoss
             settings[Keys.VOLUME_BOOST_ENABLED] = prefs.volumeBoostEnabled
             settings[Keys.VOLUME_BOOST_GAIN] = prefs.volumeBoostGain

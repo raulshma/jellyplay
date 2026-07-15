@@ -66,6 +66,7 @@ fun EntryProviderScope<NavKey>.homeSection(
                 onSearchSeerrClick = { tmdbId, mediaType ->
                     navigator.navigate(Route.SeerrDetail(tmdbId, mediaType))
                 },
+                onSettingsSearchItemClick = { route -> navigator.navigate(route) },
                 onNewsletterClick = { navigator.navigate(Route.Newsletter) },
             )
         }

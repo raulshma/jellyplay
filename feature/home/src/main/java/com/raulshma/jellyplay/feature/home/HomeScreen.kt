@@ -87,6 +87,9 @@ data class HomeCallbacks(
     val onModeChange: (HomeMode) -> Unit = {},
     val onSearchItemClick: (String) -> Unit = {},
     val onSearchSeerrClick: (Int, String) -> Unit = { _, _ -> },
+    /** Open a settings destination surfaced by the home search bar. The [Route]
+     *  carries its own `highlightSettingId` for deep-link scroll/highlight. */
+    val onSettingsSearchItemClick: (com.raulshma.jellyplay.core.ui.navigation.Route) -> Unit = {},
     val onNewsletterClick: () -> Unit = {},
 )
 
@@ -405,6 +408,15 @@ private fun MainHomeContent(
                     { id: Long -> viewModel.deleteSearchHistoryItem(id) }
                 }
                 val searchOnClearHistory = remember(viewModel) { { viewModel.clearSearchHistory() } }
+                val searchOnSettingsClick = remember(viewModel, callbacks) {
+                    { item: com.raulshma.jellyplay.core.ui.settingssearch.SettingsSearchItem ->
+                        isSearchExpanded = false
+                        viewModel.onEvent(HomeUiEvent.ClearSearch)
+                        focusManager.clearFocus()
+                        viewModel.onSettingsResultClicked(item)
+                        callbacks.onSettingsSearchItemClick(item.route)
+                    }
+                }
 
                 // Lift the HomeTopDock lambdas too. MainHomeContent recomposes
                 // on every keystroke (state.searchState.query is read above),
@@ -459,6 +471,8 @@ private fun MainHomeContent(
                                 onHistoryClick = searchOnHistoryClick,
                                 onDeleteHistoryItem = searchOnDeleteHistoryItem,
                                 onClearHistory = searchOnClearHistory,
+                                settingsResults = if (state.showSettingsInHomeSearch) state.searchState.settingsResults else emptyList(),
+                                onSettingsClick = searchOnSettingsClick,
                             )
                         }
                     },

@@ -21,7 +21,6 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -51,7 +50,14 @@ import com.raulshma.jellyplay.core.ui.components.TvSafeSheet
 import com.raulshma.jellyplay.core.ui.tv.LocalTvMode
 import com.raulshma.jellyplay.core.ui.tv.rememberTvFocusState
 import com.raulshma.jellyplay.core.ui.tv.tvFocusIndicator
-import kotlinx.coroutines.delay
+
+// Per-index delay subtracted from the shared entrance progress. The driver
+// (rememberDetailEntranceProgress) animates to 1f + DETAIL_MAX_STAGGER_INDEX *
+// DETAIL_STAGGER_STEP so that the stagger only offsets each section's *start* —
+// every section still settles at exactly alpha 1. If this max is bumped, the
+// driver target must cover it too, otherwise high-index sections are left dim.
+internal const val DETAIL_STAGGER_STEP = 0.045f
+internal const val DETAIL_MAX_STAGGER_INDEX = 12
 
 @Composable
 internal fun StaggeredDetailSection(
@@ -60,32 +66,19 @@ internal fun StaggeredDetailSection(
     content: @Composable () -> Unit,
 ) {
     if (!visible) return
-    // Stagger the entrance of each section by its index so the detail body
-    // reveals top-to-bottom rather than all at once. Per-index delay is applied
-    // here (not at call sites) so callers only pass an ordinal.
-    val progress = rememberStaggerProgress(delayIndex)
+    // Stagger the entrance of each section against the single shared
+    // [LocalDetailEntrance] progress so the detail body reveals top-to-bottom
+    // rather than all at once. The stagger is a pure arithmetic offset (no
+    // per-section coroutine / animateFloatAsState), collapsing ~13 coroutines
+    // into the one driving the shared progress.
+    val progress = LocalDetailEntrance.current
+    val sectionProgress = (progress - delayIndex * DETAIL_STAGGER_STEP).coerceIn(0f, 1f)
     Box(modifier = Modifier.graphicsLayer {
-        alpha = progress
-        translationY = (1f - progress) * 24f
+        alpha = sectionProgress
+        translationY = (1f - sectionProgress) * 24f
     }) {
         content()
     }
-}
-
-@Composable
-private fun rememberStaggerProgress(delayIndex: Int): Float {
-    // Each section starts ~45ms after the previous one; the whole reveal fits
-    // within ~300ms so it never delays interaction.
-    var revealed by remember { mutableStateOf(false) }
-    LaunchedEffect(Unit) {
-        delay(delayIndex * 45L)
-        revealed = true
-    }
-    return animateFloatAsState(
-        targetValue = if (revealed) 1f else 0f,
-        animationSpec = MaterialTheme.motionScheme.defaultEffectsSpec(),
-        label = "staggerSection$delayIndex",
-    ).value
 }
 
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalMaterial3ExpressiveApi::class)
