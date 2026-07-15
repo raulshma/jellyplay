@@ -83,6 +83,13 @@ sealed class Route : NavKey {
     @Serializable data class ExperimentalSettings(val highlightSettingId: String? = null) : Route()
 
     /**
+     * Integrations hub — top-level list of every third-party service JellyPlay
+     * talks to (Seerr, Radarr/Sonarr). Each entry drills into its own screen
+     * ([SeerrSettings] / [ArrSettings]).
+     */
+    @Serializable data class Integrations(val highlightSettingId: String? = null) : Route()
+
+    /**
      * Direct Radarr/Sonarr integration settings — manual server override +
      * Seerr auto-discovery toggle. Gated by
      * [com.raulshma.jellyplay.core.model.ExperimentalFeature.DIRECT_ARR_INTEGRATION].
@@ -224,6 +231,7 @@ val Route.isModal: Boolean
         Route.SyncPlay,
         Route.PlayOnCompanion,
         Route.SeerrSettings,
+        Route.Integrations,
         Route.ArrSettings,
         Route.AdminDashboard,
         Route.ScheduledTasks,
