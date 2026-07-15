@@ -1,6 +1,6 @@
 package com.raulshma.jellyplay.feature.details
 
-import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.Animatable
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -26,10 +26,8 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
+import androidx.compose.runtime.compositionLocalOf
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -70,23 +68,53 @@ import com.raulshma.jellyplay.core.ui.tv.rememberTvFocusState
 import com.raulshma.jellyplay.core.ui.tv.tvFocusIndicator
 import com.raulshma.jellyplay.core.ui.tv.tvFocusRestorer
 
+/**
+ * Shared entrance-reveal progress (0f → 1f) for the whole detail body.
+ *
+ * Previously each [FadingItem] and [StaggeredDetailSection] ran its own
+ * `LaunchedEffect(Unit) + animateFloatAsState` pair — ~33 independent
+ * coroutines and ~66 snapshot-state subscriptions fired on screen entry and
+ * never fully released. This local is provided once (by [DetailContentBody])
+ * from a single [Animatable], so every entrance-animated element reads the
+ * same one snapshot/state and applies its stagger as pure arithmetic.
+ *
+ * `1f` is the default so elements outside a provider scope (e.g. tests) render
+ * immediately instead of stuck at alpha 0.
+ */
+internal val LocalDetailEntrance = compositionLocalOf<Float> { 1f }
+
+/**
+ * Drives the single shared entrance animation. Returns the current progress as a
+ * snapshot-read [Float] so consumers re-render only while the animation runs.
+ *
+ * The target is `1f + maxStaggerSpan` (not `1f`) because [StaggeredDetailSection]
+ * subtracts a per-index offset from this value: animating only to `1f` would
+ * leave every section with delayIndex > 0 permanently stuck below full alpha
+ * (e.g. the lowest section at alpha ~0.46), making the lower half of the detail
+ * body look dim once the animation finishes. Driving past `1f` lets the stagger
+ * only delay each section's *start* — all of them clamp to alpha 1.0 at rest.
+ */
+@Composable
+private fun rememberDetailEntranceProgress(): Float {
+    val animatable = remember { Animatable(0f) }
+    val spec = MaterialTheme.motionScheme.defaultEffectsSpec<Float>()
+    val target = 1f + DETAIL_MAX_STAGGER_INDEX * DETAIL_STAGGER_STEP
+    LaunchedEffect(spec) {
+        animatable.animateTo(target, spec)
+    }
+    return animatable.asState().value
+}
+
 @Composable
 internal fun FadingItem(
     modifier: Modifier = Modifier,
+    delayIndex: Int = 0,
     content: @Composable () -> Unit,
 ) {
-    var visible by remember { mutableStateOf(false) }
-    LaunchedEffect(Unit) {
-        visible = true
-    }
-    val alpha by animateFloatAsState(
-        targetValue = if (visible) 1f else 0f,
-        animationSpec = MaterialTheme.motionScheme.defaultEffectsSpec(),
-        label = "itemAlpha"
-    )
-    // Render-thread blur animation dropped (was the most expensive piece of the
-    // entrance animation, applied to ~20 nested FadingItems during screen entry).
-    // Alpha-only fade preserves the entrance feel at a fraction of the cost.
+    val entrance = LocalDetailEntrance.current
+    // Per-element stagger is a pure offset against the shared progress — no
+    // coroutine, no extra snapshot subscription.
+    val alpha = (entrance - delayIndex * 0.03f).coerceIn(0f, 1f)
     Box(
         modifier = modifier
             .graphicsLayer { this.alpha = alpha }
@@ -154,6 +182,11 @@ internal fun DetailContentBody(
     // while the poster row used adaptiveInfo.contentPadding, causing misalignment on phones).
     val bodyContentPad = adaptiveInfo.contentPadding(isTv)
 
+    // Single shared entrance animation drives every FadingItem / StaggeredDetailSection
+    // in the body — replaces ~33 per-element LaunchedEffect + animateFloatAsState pairs.
+    val entranceProgress = rememberDetailEntranceProgress()
+
+    CompositionLocalProvider(LocalDetailEntrance provides entranceProgress) {
     Box(
         modifier = modifier.fillMaxWidth(),
         contentAlignment = contentAlignment,
@@ -526,17 +559,15 @@ internal fun DetailContentBody(
                         horizontalArrangement = Arrangement.spacedBy(12.dp),
                     ) { _, collectionItem, focusModifier ->
                             val collectionClick = remember(collectionItem.id) { { onItemClick(collectionItem.id) } }
-                            FadingItem {
-                                val collectionProgress = collectionItem.progressFraction()
-                                PosterCard(
-                                    item = collectionItem,
-                                    imageUrl = getImageUrl(collectionItem.id),
-                                    onClick = collectionClick,
-                                    showProgress = collectionProgress != null && collectionProgress > 0f,
-                                    progressPercent = collectionProgress ?: 0f,
-                                    modifier = focusModifier.width(160.dp),
-                                )
-                            }
+                            val collectionProgress = collectionItem.progressFraction()
+                            PosterCard(
+                                item = collectionItem,
+                                imageUrl = getImageUrl(collectionItem.id),
+                                onClick = collectionClick,
+                                showProgress = collectionProgress != null && collectionProgress > 0f,
+                                progressPercent = collectionProgress ?: 0f,
+                                modifier = focusModifier.width(160.dp),
+                            )
                     }
                 }
             }
@@ -562,14 +593,12 @@ internal fun DetailContentBody(
                             horizontalArrangement = Arrangement.spacedBy(16.dp),
                         ) { _, person, focusModifier ->
                                 val personClick = remember(person.id) { { onPersonClick(person.id) } }
-                                FadingItem {
-                                    PersonItem(
-                                        person = person,
-                                        imageUrl = getImageUrl(person.id),
-                                        onClick = personClick,
-                                        modifier = focusModifier,
-                                    )
-                                }
+                                PersonItem(
+                                    person = person,
+                                    imageUrl = getImageUrl(person.id),
+                                    onClick = personClick,
+                                    modifier = focusModifier,
+                                )
                 }
 
         }
@@ -606,14 +635,12 @@ internal fun DetailContentBody(
                         horizontalArrangement = Arrangement.spacedBy(12.dp),
                     ) { _, related, focusModifier ->
                             val relatedClick = remember(related.id) { { onItemClick(related.id) } }
-                            FadingItem {
-                                PosterCard(
-                                    item = related,
-                                    imageUrl = getImageUrl(related.id),
-                                    onClick = relatedClick,
-                                    modifier = focusModifier.width(relatedCardWidth),
-                                )
-                            }
+                            PosterCard(
+                                item = related,
+                                imageUrl = getImageUrl(related.id),
+                                onClick = relatedClick,
+                                modifier = focusModifier.width(relatedCardWidth),
+                            )
                     }
                 }
             }
@@ -660,6 +687,7 @@ internal fun DetailContentBody(
         }
     }
     }
+    }
 }
 
 @Composable
@@ -693,26 +721,24 @@ internal fun SeerrItemsRow(
             contentPadding = PaddingValues(horizontal = bodyContentPad),
             horizontalArrangement = Arrangement.spacedBy(12.dp),
         ) { _, seerrItem, focusModifier ->
-                FadingItem {
-                    SeerrMediaCard(
-                        item = seerrItem,
-                        imageUrl = seerrItem.posterUrl,
-                        isLoading = loadingState?.isLoading(seerrItem.id) == true,
-                        onClick = {
-                            if (loadingState != null && prefetch != null) {
-                                loadingState.startLoading(seerrItem.id)
-                                prefetch(seerrItem.id, seerrItem.mediaType) {
-                                    loadingState.stopLoading(seerrItem.id)
-                                    onNavigate(com.raulshma.jellyplay.core.ui.navigation.Route.SeerrDetail(seerrItem.id, seerrItem.mediaType))
-                                }
-                            } else {
+                SeerrMediaCard(
+                    item = seerrItem,
+                    imageUrl = seerrItem.posterUrl,
+                    isLoading = loadingState?.isLoading(seerrItem.id) == true,
+                    onClick = {
+                        if (loadingState != null && prefetch != null) {
+                            loadingState.startLoading(seerrItem.id)
+                            prefetch(seerrItem.id, seerrItem.mediaType) {
+                                loadingState.stopLoading(seerrItem.id)
                                 onNavigate(com.raulshma.jellyplay.core.ui.navigation.Route.SeerrDetail(seerrItem.id, seerrItem.mediaType))
                             }
-                        },
-                        onRequestClick = { onSeerrRequest(seerrItem) },
-                        modifier = focusModifier.width(cardWidth),
-                    )
-                }
+                        } else {
+                            onNavigate(com.raulshma.jellyplay.core.ui.navigation.Route.SeerrDetail(seerrItem.id, seerrItem.mediaType))
+                        }
+                    },
+                    onRequestClick = { onSeerrRequest(seerrItem) },
+                    modifier = focusModifier.width(cardWidth),
+                )
         }
     }
 }
@@ -772,19 +798,18 @@ private fun VideosSection(
 
                 val videoCardFocusState = rememberTvFocusState(focusedScale = 1.05f)
 
-                FadingItem {
-                    Card(
-                        modifier = focusModifier
-                            .width(240.dp)
-                            .aspectRatio(16f / 9f)
-                            .then(videoCardFocusState.focusModifier)
-                            .then(Modifier.tvFocusIndicator(videoCardFocusState, ShapeCache.smooth8))
-                            .clickable {
-                                onVideoClick(video)
-                            },
-                        shape = ShapeCache.smooth8,
-                        border = videoCardBorder,
-                    ) {
+                Card(
+                    modifier = focusModifier
+                        .width(240.dp)
+                        .aspectRatio(16f / 9f)
+                        .then(videoCardFocusState.focusModifier)
+                        .then(Modifier.tvFocusIndicator(videoCardFocusState, ShapeCache.smooth8))
+                        .clickable {
+                            onVideoClick(video)
+                        },
+                    shape = ShapeCache.smooth8,
+                    border = videoCardBorder,
+                ) {
                         Box(modifier = Modifier.fillMaxSize()) {
                             if (thumbnailUrl != null) {
                                 MediaImage(
@@ -837,7 +862,6 @@ private fun VideosSection(
                             )
                         }
                     }
-                }
         }
     }
 }

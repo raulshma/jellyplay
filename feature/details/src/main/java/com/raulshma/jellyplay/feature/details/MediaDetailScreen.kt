@@ -186,6 +186,14 @@ fun MediaDetailScreen(
                 val rememberedGetBackdropUrl = remember(viewModel) { { id: String -> viewModel.getBackdropUrl(id) } }
                 val rememberedGetSeerrPosterUrl = remember(viewModel) { { path: String? -> viewModel.getSeerrPosterUrl(path) } }
 
+                // Series id used by season-episode fetches. Depends only on the
+                // item id (stable across favorite/played toggles) so the on-season
+                // callback captures a value that doesn't invalidate on unrelated
+                // detail mutations.
+                val seriesIdForSeasons = remember(itemId) {
+                    detail?.item?.seriesId ?: itemId
+                }
+
                 val state = remember(
                     itemId, detail, uiState.seasons, uiState.episodes, uiState.fetchedSeasonIds,
                     uiState.smartPlayTarget, uiState.selectedSubtitleIndex, uiState.selectedAudioIndex,
@@ -256,8 +264,7 @@ fun MediaDetailScreen(
                         onPersonClick = onPersonClick,
                         onNavigateToSeries = onNavigateToSeries,
                         onSeasonSelected = { seasonId: String ->
-                            val seriesId = detail?.item?.seriesId ?: itemId
-                            viewModel.loadEpisodesForSeason(seriesId, seasonId)
+                            viewModel.loadEpisodesForSeason(seriesIdForSeasons, seasonId)
                         },
                         onLoadSeerrData = { detail?.let { viewModel.loadSeerrDataIfNeeded(it) } },
                         onBack = onBack,

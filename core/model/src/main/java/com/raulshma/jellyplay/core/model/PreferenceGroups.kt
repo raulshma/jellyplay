@@ -666,6 +666,8 @@ data class AppearanceScreenPreferences(
     val showShareMediaOption: Boolean = true,
     val hideSearchHistory: Boolean = false,
     val showClockOnHome: Boolean = false,
+    /** Show settings search results alongside media in the home search bar. */
+    val showSettingsInHomeSearch: Boolean = true,
     val newsletterEnabled: Boolean = true,
     val newsletterDayOfWeek: Int = 7,
     val enabledNewsletterSections: Set<NewsletterSectionType> = setOf(
@@ -726,6 +728,7 @@ val UserPreferences.appearanceScreen: AppearanceScreenPreferences
         showShareMediaOption = showShareMediaOption,
         hideSearchHistory = hideSearchHistory,
         showClockOnHome = showClockOnHome,
+        showSettingsInHomeSearch = showSettingsInHomeSearch,
         newsletterEnabled = newsletterEnabled,
         newsletterDayOfWeek = newsletterDayOfWeek,
         enabledNewsletterSections = enabledNewsletterSections,

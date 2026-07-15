@@ -95,6 +95,9 @@ import com.raulshma.jellyplay.core.ui.tv.TvFocusDefaults
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.graphics.Color
 import com.raulshma.jellyplay.core.ui.feedback.uiTextOf
+import com.raulshma.jellyplay.core.ui.settingssearch.SettingsSearchItem
+import com.raulshma.jellyplay.core.ui.settingssearch.SettingsSearchMatcher
+import com.raulshma.jellyplay.core.ui.settingssearch.SettingsSearchRegistry
 import com.raulshma.jellyplay.feature.settings.R
 import com.composables.icons.tabler.Tabler
 import com.composables.icons.tabler.outline.*
