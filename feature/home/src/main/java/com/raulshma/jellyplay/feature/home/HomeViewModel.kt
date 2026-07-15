@@ -40,6 +40,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.collectLatest
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.debounce
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.first
@@ -293,34 +294,45 @@ class HomeViewModel @Inject constructor(
         }
 
         // Fold the shared SeerrRequestStateHolder into HomeUiState so the UI
-        // observes a single object. Each slice writes its own field, matching the
-        // per-field collector style used for every other source flow in this VM.
+        // observes a single object. The holder's five StateFlows are combined
+        // into one SeerrRequestState so concurrent emissions (e.g. loading
+        // services + seasons firing together when the request dialog opens)
+        // coalesce into a single _uiState update instead of five back-to-back
+        // copies. `requestItem` is set separately (selectSeerrRequestItem) and
+        // is preserved by copying only the five merged fields here.
         launch {
-            seerrRequestStateHolder.requestResult.collect { result ->
-                _uiState.update { it.copy(seerrRequestState = it.seerrRequestState.copy(result = result)) }
-            }
-        }
-        launch {
-            seerrRequestStateHolder.radarrServers.collect { servers ->
-                _uiState.update { it.copy(seerrRequestState = it.seerrRequestState.copy(radarrServers = servers)) }
-            }
-        }
-        launch {
-            seerrRequestStateHolder.sonarrServers.collect { servers ->
-                _uiState.update { it.copy(seerrRequestState = it.seerrRequestState.copy(sonarrServers = servers)) }
-            }
-        }
-        launch {
-            seerrRequestStateHolder.isLoadingServices.collect { loading ->
-                _uiState.update { it.copy(seerrRequestState = it.seerrRequestState.copy(isLoadingServices = loading)) }
-            }
-        }
-        launch {
-            seerrRequestStateHolder.tvSeasons.collect { seasons ->
-                _uiState.update { it.copy(seerrRequestState = it.seerrRequestState.copy(tvSeasons = seasons)) }
+            combine(
+                seerrRequestStateHolder.requestResult,
+                seerrRequestStateHolder.radarrServers,
+                seerrRequestStateHolder.sonarrServers,
+                seerrRequestStateHolder.isLoadingServices,
+                seerrRequestStateHolder.tvSeasons,
+            ) { result, radarr, sonarr, loading, seasons ->
+                SeerrRequestSlice(result, radarr, sonarr, loading, seasons)
+            }.distinctUntilChanged().collect { slice ->
+                _uiState.update {
+                    it.copy(
+                        seerrRequestState = it.seerrRequestState.copy(
+                            result = slice.result,
+                            radarrServers = slice.radarrServers,
+                            sonarrServers = slice.sonarrServers,
+                            isLoadingServices = slice.isLoadingServices,
+                            tvSeasons = slice.tvSeasons,
+                        ),
+                    )
+                }
             }
         }
     }
+
+    /** Intermediate holder for the five combined Seerr flows. */
+    private data class SeerrRequestSlice(
+        val result: com.raulshma.jellyplay.core.model.seerr.SeerrRequestResult?,
+        val radarrServers: List<com.raulshma.jellyplay.core.model.seerr.SeerrRadarrServiceDetail>,
+        val sonarrServers: List<com.raulshma.jellyplay.core.model.seerr.SeerrSonarrServiceDetail>,
+        val isLoadingServices: Boolean,
+        val tvSeasons: List<com.raulshma.jellyplay.core.model.seerr.SeerrSeason>,
+    )
 
     fun onEvent(event: HomeUiEvent) {
         when (event) {
@@ -681,7 +693,15 @@ class HomeViewModel @Inject constructor(
         refreshJob = launch {
             while (true) {
                 val interval = if (isAppInForeground) REFRESH_INTERVAL_FOREGROUND_MS else REFRESH_INTERVAL_BACKGROUND_MS
-                delay(interval)
+                // ±10% jitter avoids synchronized refresh storms when multiple
+                // devices hit the server on the same fixed mark.
+                val jitter = (interval * 0.1f * (kotlin.random.Random.nextFloat() * 2f - 1f)).toLong()
+                delay(interval + jitter)
+
+                // Skip while device has no network: fetchAndUpdateSections
+                // would no-op after acquiring the refresh mutex anyway, so this
+                // avoids the mutex churn and the lastRefreshTime bookkeeping.
+                if (offlineModeManager.isOffline) continue
 
                 val now = System.currentTimeMillis()
                 if (now - lastRefreshTime < MIN_REFRESH_INTERVAL_MS) continue
