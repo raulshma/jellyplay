@@ -92,8 +92,8 @@ internal fun BaseItemKind.toMediaType(): MediaType = when (this) {
     BaseItemKind.BOX_SET -> MediaType.COLLECTION
     BaseItemKind.PHOTO -> MediaType.PHOTO
     BaseItemKind.PHOTO_ALBUM -> MediaType.PHOTO_FOLDER
-    BaseItemKind.LIVE_TV_CHANNEL -> MediaType.CHANNEL
-    BaseItemKind.LIVE_TV_PROGRAM -> MediaType.LIVE_TV
+    BaseItemKind.LIVE_TV_CHANNEL, BaseItemKind.TV_CHANNEL -> MediaType.CHANNEL
+    BaseItemKind.LIVE_TV_PROGRAM, BaseItemKind.TV_PROGRAM -> MediaType.LIVE_TV
     else -> MediaType.UNKNOWN
 }
 
