@@ -60,6 +60,8 @@ class PreferencesEditor @Inject constructor(
     fun setShowSettingsInHomeSearch(enabled: Boolean) = edit { setShowSettingsInHomeSearch(enabled) }
     fun setHomeMode(mode: HomeMode) = edit { setHomeMode(mode) }
     fun setEnabledHomeSectionTypes(types: Set<HomeSectionType>) = edit { setEnabledHomeSectionTypes(types) }
+    fun setLibraryHomeSectionOverrides(overrides: Map<String, Set<HomeSectionType>>) =
+        edit { setLibraryHomeSectionOverrides(overrides) }
     fun setNavBarShowLabels(show: Boolean) = edit { setNavBarShowLabels(show) }
     fun setPreferredPlayer(playerType: PlayerType) = edit { setPreferredPlayer(playerType) }
     fun setStreamingQuality(quality: StreamingQuality) = edit { setStreamingQuality(quality) }

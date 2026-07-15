@@ -10,7 +10,7 @@ class GetHomeSectionsUseCase @Inject constructor(
 ) {
     suspend operator fun invoke(
         enabledSections: Set<HomeSectionType>,
-        hiddenLibraryIds: Set<String>,
+        libraryHomeSectionOverrides: Map<String, Set<HomeSectionType>>,
     ): Result<HomeSectionsResult> =
-        mediaRepository.getHomeSections(enabledSections, hiddenLibraryIds)
+        mediaRepository.getHomeSections(enabledSections, libraryHomeSectionOverrides)
 }

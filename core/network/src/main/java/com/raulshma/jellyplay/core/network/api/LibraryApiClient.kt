@@ -19,7 +19,7 @@ import com.raulshma.jellyplay.core.model.Studio
 interface LibraryApiClient {
     suspend fun getHomeSections(
         enabledSections: Set<HomeSectionType> = HomeSectionType.CONFIGURABLE.toSet(),
-        hiddenLibraryIds: Set<String> = emptySet(),
+        libraryHomeSectionOverrides: Map<String, Set<HomeSectionType>> = emptyMap(),
         nextUpRewatching: Boolean = false,
         nextUpMaxDays: Int = 0,
         nextUpExcludedSeriesIds: Set<String> = emptySet(),
