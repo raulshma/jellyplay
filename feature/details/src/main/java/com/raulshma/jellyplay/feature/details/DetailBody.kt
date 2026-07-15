@@ -116,7 +116,7 @@ internal fun DetailBodyLandscape(
         } else if (state.error != null) {
             ErrorScreen(
                 message = state.error,
-                onRetry = callbacks.onRetry,
+                onRetry = if (state.isAccessDenied) null else callbacks.onRetry,
                 modifier = Modifier.weight(1f),
             )
         }
@@ -212,7 +212,7 @@ internal fun DetailBodyPortrait(
         } else if (state.error != null) {
             ErrorScreen(
                 message = state.error,
-                onRetry = callbacks.onRetry,
+                onRetry = if (state.isAccessDenied) null else callbacks.onRetry,
             )
         }
     }

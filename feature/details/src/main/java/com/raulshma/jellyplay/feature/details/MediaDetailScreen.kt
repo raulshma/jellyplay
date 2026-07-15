@@ -217,6 +217,7 @@ fun MediaDetailScreen(
                         activeDownload = activeDownload,
                         isLoading = uiState.isLoading,
                         error = uiState.error,
+                        isAccessDenied = uiState.isAccessDenied,
                         albumTracks = uiState.albumTracks,
                         collectionItems = uiState.collectionItems,
                         relatedItems = uiState.relatedItems,

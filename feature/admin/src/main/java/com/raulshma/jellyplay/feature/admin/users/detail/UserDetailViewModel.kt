@@ -2,12 +2,14 @@ package com.raulshma.jellyplay.feature.admin.users.detail
 
 import android.util.Log
 import androidx.compose.runtime.Immutable
+import com.raulshma.jellyplay.core.data.repository.AuthRepository
 import com.raulshma.jellyplay.core.model.LibraryFolder
 import com.raulshma.jellyplay.core.model.ManagedUser
 import com.raulshma.jellyplay.core.model.ManagedUserPolicy
 import com.raulshma.jellyplay.core.network.JellyfinApiClient
 import com.raulshma.jellyplay.core.ui.viewmodel.JellyPlayViewModel
 import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.coroutines.flow.first
 import javax.inject.Inject
 
 @Immutable
@@ -32,6 +34,7 @@ data class UserDetailState(
 @HiltViewModel
 class UserDetailViewModel @Inject constructor(
     private val apiClient: JellyfinApiClient,
+    private val authRepository: AuthRepository,
 ) : JellyPlayViewModel() {
 
     private val _uiState = stateFlow(UserDetailState())
@@ -44,6 +47,11 @@ class UserDetailViewModel @Inject constructor(
         this.userId = userId
         _uiState.set(UserDetailState())
         launch {
+            val isAdmin = authRepository.currentUser.first()?.isAdmin == true
+            if (!isAdmin) {
+                _uiState.update { it.copy(isLoading = false) }
+                return@launch
+            }
             val userResult = apiClient.getManagedUser(userId)
             val libsResult = apiClient.getLibraryFoldersForEditor()
             val meResult = apiClient.getCurrentUserId()
