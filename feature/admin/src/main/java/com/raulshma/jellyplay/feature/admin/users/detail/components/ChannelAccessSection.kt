@@ -3,7 +3,6 @@ package com.raulshma.jellyplay.feature.admin.users.detail.components
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -24,18 +23,17 @@ fun ChannelAccessSection(
     modifier: Modifier = Modifier,
 ) {
     if (channels.isEmpty()) return
-    Column(
-        modifier = modifier.fillMaxWidth().padding(horizontal = 8.dp),
-        verticalArrangement = Arrangement.spacedBy(4.dp),
-    ) {
-        Text("Channel access", style = MaterialTheme.typography.titleSmall)
+    val rows = if (policy.enableAllChannels) 1 else 1 + channels.size
+    UserEditSection(title = "Channel access", modifier = modifier) {
         ToggleRow(
             label = "Enable access to all channels",
+            description = if (policy.enableAllChannels) null else "Restrict to the channels below",
             checked = policy.enableAllChannels,
             onCheckedChange = { onPolicyChange(policy.copy(enableAllChannels = it)) },
+            index = 0, count = rows,
         )
         if (!policy.enableAllChannels) {
-            channels.forEach { ch ->
+            channels.forEachIndexed { i, ch ->
                 val checked = ch.id in policy.enabledChannels
                 ToggleRow(
                     label = ch.name.ifBlank { ch.number ?: ch.id },
@@ -45,6 +43,7 @@ fun ChannelAccessSection(
                         else policy.enabledChannels - ch.id
                         onPolicyChange(policy.copy(enabledChannels = next))
                     },
+                    index = i + 1, count = rows,
                 )
             }
         }

@@ -43,6 +43,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.raulshma.jellyplay.core.ui.components.ErrorScreen
 import com.raulshma.jellyplay.core.ui.components.JellyPlayScreenScaffold
 import com.raulshma.jellyplay.core.ui.components.ScreenLoadingState
+import com.raulshma.jellyplay.core.ui.components.StaggeredSection
 import com.raulshma.jellyplay.core.ui.components.rememberScreenBackgroundColor
 import com.raulshma.jellyplay.feature.admin.users.detail.components.AccessTab
 import com.raulshma.jellyplay.feature.admin.users.detail.components.AccountTab
@@ -159,33 +160,37 @@ fun UserDetailScreen(
                         HorizontalPager(state = pagerState, modifier = Modifier.fillMaxSize()) { page ->
                             // Lazy-load whatever aux data this tab needs, once.
                             LaunchedEffect(tabs[page]) { viewModel.loadAuxFor(tabs[page]) }
-                            when (tabs[page]) {
-                                UserEditTab.PROFILE -> ProfileTab(
-                                    name = effectiveName,
-                                    policy = effectivePolicy,
-                                    isSelf = state.isSelf,
-                                    isLastAdmin = state.isLastAdmin,
-                                    onNameChange = viewModel::editName,
-                                    onPolicyChange = viewModel::onPolicyChange,
-                                )
-                                UserEditTab.ACCESS -> AccessTab(
-                                    policy = effectivePolicy,
-                                    libraries = state.libraries,
-                                    devices = state.devices,
-                                    channels = state.channels,
-                                    onPolicyChange = viewModel::onPolicyChange,
-                                )
-                                UserEditTab.PARENTAL -> ParentalControlTab(
-                                    policy = effectivePolicy,
-                                    parentalRatings = state.parentalRatings,
-                                    tags = state.tags,
-                                    onPolicyChange = viewModel::onPolicyChange,
-                                )
-                                UserEditTab.ACCOUNT -> AccountTab(
-                                    isSelf = state.isSelf,
-                                    onChangePassword = viewModel::showPasswordDialog,
-                                    onDelete = viewModel::showDeleteDialog,
-                                )
+                            // Staggered fade-and-rise reveal so the active tab's
+                            // content animates in (matches other admin detail screens).
+                            StaggeredSection(delayIndex = page) {
+                                when (tabs[page]) {
+                                    UserEditTab.PROFILE -> ProfileTab(
+                                        name = effectiveName,
+                                        policy = effectivePolicy,
+                                        isSelf = state.isSelf,
+                                        isLastAdmin = state.isLastAdmin,
+                                        onNameChange = viewModel::editName,
+                                        onPolicyChange = viewModel::onPolicyChange,
+                                    )
+                                    UserEditTab.ACCESS -> AccessTab(
+                                        policy = effectivePolicy,
+                                        libraries = state.libraries,
+                                        devices = state.devices,
+                                        channels = state.channels,
+                                        onPolicyChange = viewModel::onPolicyChange,
+                                    )
+                                    UserEditTab.PARENTAL -> ParentalControlTab(
+                                        policy = effectivePolicy,
+                                        parentalRatings = state.parentalRatings,
+                                        tags = state.tags,
+                                        onPolicyChange = viewModel::onPolicyChange,
+                                    )
+                                    UserEditTab.ACCOUNT -> AccountTab(
+                                        isSelf = state.isSelf,
+                                        onChangePassword = viewModel::showPasswordDialog,
+                                        onDelete = viewModel::showDeleteDialog,
+                                    )
+                                }
                             }
                         }
                     }
