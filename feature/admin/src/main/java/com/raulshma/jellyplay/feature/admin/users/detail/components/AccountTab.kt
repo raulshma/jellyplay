@@ -25,10 +25,20 @@ fun AccountTab(
         modifier = modifier
             .fillMaxSize()
             .verticalScroll(rememberScrollState())
-            .padding(bottom = 96.dp),
+            .padding(top = 16.dp, bottom = 96.dp),
         verticalArrangement = Arrangement.spacedBy(16.dp),
     ) {
-        PasswordSection(onChangePassword = onChangePassword)
-        DangerSection(isSelf = isSelf, onDelete = onDelete)
+        UserEditSection(
+            title = "Sign-in",
+            description = "Set or reset this user's password.",
+        ) {
+            PasswordSection(onChangePassword = onChangePassword)
+        }
+        UserEditSection(
+            title = "Danger zone",
+            description = "Permanently remove this user from the server.",
+        ) {
+            DangerSection(isSelf = isSelf, onDelete = onDelete)
+        }
     }
 }

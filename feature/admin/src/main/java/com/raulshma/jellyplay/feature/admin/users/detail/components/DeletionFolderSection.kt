@@ -1,14 +1,7 @@
 package com.raulshma.jellyplay.feature.admin.users.detail.components
 
-import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.padding
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.unit.dp
 import com.raulshma.jellyplay.core.model.LibraryFolder
 import com.raulshma.jellyplay.core.model.ManagedUserPolicy
 
@@ -25,18 +18,17 @@ fun DeletionFolderSection(
     onPolicyChange: (ManagedUserPolicy) -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    Column(
-        modifier = modifier.fillMaxWidth().padding(horizontal = 8.dp),
-        verticalArrangement = Arrangement.spacedBy(4.dp),
-    ) {
-        Text("Media deletion from", style = MaterialTheme.typography.titleSmall)
+    val rows = if (policy.enableContentDeletion) 1 else 1 + libraries.size
+    UserEditSection(title = "Media deletion from", modifier = modifier) {
         ToggleRow(
             label = "All libraries",
+            description = if (policy.enableContentDeletion) "User may delete from anywhere" else "User may only delete from the libraries below",
             checked = policy.enableContentDeletion,
             onCheckedChange = { onPolicyChange(policy.copy(enableContentDeletion = it)) },
+            index = 0, count = rows,
         )
         if (!policy.enableContentDeletion) {
-            libraries.forEach { folder ->
+            libraries.forEachIndexed { i, folder ->
                 val checked = folder.id in policy.enableContentDeletionFromFolders
                 ToggleRow(
                     label = folder.name.ifBlank { folder.collectionType ?: folder.id },
@@ -46,6 +38,7 @@ fun DeletionFolderSection(
                         else policy.enableContentDeletionFromFolders - folder.id
                         onPolicyChange(policy.copy(enableContentDeletionFromFolders = next))
                     },
+                    index = i + 1, count = rows,
                 )
             }
         }
