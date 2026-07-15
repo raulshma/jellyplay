@@ -8,6 +8,14 @@ interface UserApiClient {
     suspend fun getManagedUsers(): Result<List<ManagedUser>>
     suspend fun getManagedUser(userId: String): Result<ManagedUser>
     suspend fun getCurrentUserId(): Result<String>
+
+    /**
+     * Fetches the *current* authenticated user with their full
+     * [ManagedUserPolicy]. Used to re-validate admin status against the
+     * server rather than trusting the value cached at login — so a
+     * server-side demotion is reflected without requiring re-login.
+     */
+    suspend fun getCurrentUser(): Result<ManagedUser>
     suspend fun createUser(name: String, password: String?): Result<ManagedUser>
     suspend fun renameUser(userId: String, newName: String): Result<ManagedUser>
     suspend fun updateUserPolicy(userId: String, policy: ManagedUserPolicy): Result<Unit>

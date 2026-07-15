@@ -1,12 +1,10 @@
 package com.raulshma.jellyplay.feature.admin.users
 
 import android.util.Log
-import com.raulshma.jellyplay.core.data.repository.AuthRepository
 import com.raulshma.jellyplay.core.model.ManagedUser
 import com.raulshma.jellyplay.core.network.JellyfinApiClient
 import com.raulshma.jellyplay.core.ui.viewmodel.JellyPlayViewModel
 import dagger.hilt.android.lifecycle.HiltViewModel
-import kotlinx.coroutines.flow.first
 import javax.inject.Inject
 
 data class UsersState(
@@ -24,7 +22,6 @@ data class UsersState(
 @HiltViewModel
 class UsersViewModel @Inject constructor(
     private val apiClient: JellyfinApiClient,
-    private val authRepository: AuthRepository,
 ) : JellyPlayViewModel() {
 
     private val _state = composeState(UsersState())
@@ -46,11 +43,8 @@ class UsersViewModel @Inject constructor(
     }
 
     private suspend fun loadInto(refreshing: Boolean) {
-        val isAdmin = authRepository.currentUser.first()?.isAdmin == true
-        if (!isAdmin) {
-            _state.value = _state.value.copy(isLoading = false, error = null)
-            return
-        }
+        // Access control is enforced by AdminRouteContainer before this screen
+        // is reached; the server still 403s as a backstop if state is stale.
         if (!refreshing) {
             _state.value = _state.value.copy(isLoading = true, error = null)
         }

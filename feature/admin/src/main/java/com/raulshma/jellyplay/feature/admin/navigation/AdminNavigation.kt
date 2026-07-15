@@ -20,104 +20,203 @@ import com.raulshma.jellyplay.feature.admin.watchedremoval.WatchedMediaCleanupSc
 
 fun EntryProviderScope<NavKey>.adminSection(
     navigator: Navigator,
+    isAdmin: () -> Boolean,
+    isRefreshingAdmin: () -> Boolean,
+    onRefreshAdmin: () -> Unit,
 ) {
+    // Every admin route is wrapped by AdminRouteContainer, which enforces
+    // access control in one place: it re-validates admin status against the
+    // server on entry and renders an AccessDeniedScreen for non-admins. This
+    // covers navigate(), deep-links, and start-destination alike — closing the
+    // gap where admin routes were reachable without any client-side check.
     entry<Route.AdminDashboard> {
-        AdminDashboardScreen(
+        AdminRouteContainer(
             onBack = { navigator.goBack() },
-            onScheduledTasks = { navigator.navigate(Route.ScheduledTasks) },
-            onDevices = { navigator.navigate(Route.Devices) },
-            onLogs = { navigator.navigate(Route.Logs) },
-            onUserStatistics = { navigator.navigate(Route.UserStatistics) },
-            onStaleMedia = { navigator.navigate(Route.StaleMedia) },
-            onWatchedMediaCleanup = { navigator.navigate(Route.WatchedMediaCleanup) },
-            onPlugins = { navigator.navigate(Route.Plugins) },
-            onUsers = { navigator.navigate(Route.Users) },
-        )
+            isAdmin = isAdmin,
+            isRefreshingAdmin = isRefreshingAdmin,
+            onRefreshAdmin = onRefreshAdmin,
+        ) {
+            AdminDashboardScreen(
+                onBack = { navigator.goBack() },
+                onScheduledTasks = { navigator.navigate(Route.ScheduledTasks) },
+                onDevices = { navigator.navigate(Route.Devices) },
+                onLogs = { navigator.navigate(Route.Logs) },
+                onUserStatistics = { navigator.navigate(Route.UserStatistics) },
+                onStaleMedia = { navigator.navigate(Route.StaleMedia) },
+                onWatchedMediaCleanup = { navigator.navigate(Route.WatchedMediaCleanup) },
+                onPlugins = { navigator.navigate(Route.Plugins) },
+                onUsers = { navigator.navigate(Route.Users) },
+            )
+        }
     }
 
     entry<Route.ScheduledTasks> {
-        ScheduledTasksScreen(
+        AdminRouteContainer(
             onBack = { navigator.goBack() },
-        )
+            isAdmin = isAdmin,
+            isRefreshingAdmin = isRefreshingAdmin,
+            onRefreshAdmin = onRefreshAdmin,
+        ) {
+            ScheduledTasksScreen(
+                onBack = { navigator.goBack() },
+            )
+        }
     }
 
     entry<Route.Devices> {
-        DevicesScreen(
+        AdminRouteContainer(
             onBack = { navigator.goBack() },
-        )
+            isAdmin = isAdmin,
+            isRefreshingAdmin = isRefreshingAdmin,
+            onRefreshAdmin = onRefreshAdmin,
+        ) {
+            DevicesScreen(
+                onBack = { navigator.goBack() },
+            )
+        }
     }
 
     entry<Route.Logs> {
-        LogsScreen(
+        AdminRouteContainer(
             onBack = { navigator.goBack() },
-        )
+            isAdmin = isAdmin,
+            isRefreshingAdmin = isRefreshingAdmin,
+            onRefreshAdmin = onRefreshAdmin,
+        ) {
+            LogsScreen(
+                onBack = { navigator.goBack() },
+            )
+        }
     }
 
     entry<Route.UserStatistics> {
-        UserStatisticsScreen(
+        AdminRouteContainer(
             onBack = { navigator.goBack() },
-            onUserDetail = { userId -> navigator.navigate(Route.UserStatisticsDetail(userId)) },
-        )
+            isAdmin = isAdmin,
+            isRefreshingAdmin = isRefreshingAdmin,
+            onRefreshAdmin = onRefreshAdmin,
+        ) {
+            UserStatisticsScreen(
+                onBack = { navigator.goBack() },
+                onUserDetail = { userId -> navigator.navigate(Route.UserStatisticsDetail(userId)) },
+            )
+        }
     }
 
     entry<Route.UserStatisticsDetail> { route ->
-        UserStatisticsDetailScreen(
-            userId = route.userId,
+        AdminRouteContainer(
             onBack = { navigator.goBack() },
-        )
+            isAdmin = isAdmin,
+            isRefreshingAdmin = isRefreshingAdmin,
+            onRefreshAdmin = onRefreshAdmin,
+        ) {
+            UserStatisticsDetailScreen(
+                userId = route.userId,
+                onBack = { navigator.goBack() },
+            )
+        }
     }
 
     entry<Route.StaleMedia> {
-        StaleMediaScreen(
+        AdminRouteContainer(
             onBack = { navigator.goBack() },
-        )
+            isAdmin = isAdmin,
+            isRefreshingAdmin = isRefreshingAdmin,
+            onRefreshAdmin = onRefreshAdmin,
+        ) {
+            StaleMediaScreen(
+                onBack = { navigator.goBack() },
+            )
+        }
     }
 
     entry<Route.WatchedMediaCleanup> {
-        WatchedMediaCleanupScreen(
+        AdminRouteContainer(
             onBack = { navigator.goBack() },
-        )
+            isAdmin = isAdmin,
+            isRefreshingAdmin = isRefreshingAdmin,
+            onRefreshAdmin = onRefreshAdmin,
+        ) {
+            WatchedMediaCleanupScreen(
+                onBack = { navigator.goBack() },
+            )
+        }
     }
 
     entry<Route.Users> {
-        UsersScreen(
+        AdminRouteContainer(
             onBack = { navigator.goBack() },
-            onUserDetail = { userId -> navigator.navigate(Route.UserDetail(userId)) },
-        )
+            isAdmin = isAdmin,
+            isRefreshingAdmin = isRefreshingAdmin,
+            onRefreshAdmin = onRefreshAdmin,
+        ) {
+            UsersScreen(
+                onBack = { navigator.goBack() },
+                onUserDetail = { userId -> navigator.navigate(Route.UserDetail(userId)) },
+            )
+        }
     }
 
     entry<Route.UserDetail> { route ->
-        UserDetailScreen(
-            userId = route.userId,
+        AdminRouteContainer(
             onBack = { navigator.goBack() },
-        )
+            isAdmin = isAdmin,
+            isRefreshingAdmin = isRefreshingAdmin,
+            onRefreshAdmin = onRefreshAdmin,
+        ) {
+            UserDetailScreen(
+                userId = route.userId,
+                onBack = { navigator.goBack() },
+            )
+        }
     }
 
     entry<Route.Plugins> {
-        PluginsScreen(
+        AdminRouteContainer(
             onBack = { navigator.goBack() },
-            onPluginDetail = { pluginId, pluginName ->
-                navigator.navigate(Route.PluginDetail(pluginId, pluginName))
-            },
-        )
+            isAdmin = isAdmin,
+            isRefreshingAdmin = isRefreshingAdmin,
+            onRefreshAdmin = onRefreshAdmin,
+        ) {
+            PluginsScreen(
+                onBack = { navigator.goBack() },
+                onPluginDetail = { pluginId, pluginName ->
+                    navigator.navigate(Route.PluginDetail(pluginId, pluginName))
+                },
+            )
+        }
     }
 
     entry<Route.PluginDetail> { route ->
-        PluginDetailScreen(
-            pluginId = route.pluginId,
-            pluginName = route.pluginName,
+        AdminRouteContainer(
             onBack = { navigator.goBack() },
-            onConfig = { pluginId, pluginName ->
-                navigator.navigate(Route.PluginConfig(pluginId, pluginName))
-            },
-        )
+            isAdmin = isAdmin,
+            isRefreshingAdmin = isRefreshingAdmin,
+            onRefreshAdmin = onRefreshAdmin,
+        ) {
+            PluginDetailScreen(
+                pluginId = route.pluginId,
+                pluginName = route.pluginName,
+                onBack = { navigator.goBack() },
+                onConfig = { pluginId, pluginName ->
+                    navigator.navigate(Route.PluginConfig(pluginId, pluginName))
+                },
+            )
+        }
     }
 
     entry<Route.PluginConfig> { route ->
-        PluginConfigScreen(
-            pluginId = route.pluginId,
-            pluginName = route.pluginName,
+        AdminRouteContainer(
             onBack = { navigator.goBack() },
-        )
+            isAdmin = isAdmin,
+            isRefreshingAdmin = isRefreshingAdmin,
+            onRefreshAdmin = onRefreshAdmin,
+        ) {
+            PluginConfigScreen(
+                pluginId = route.pluginId,
+                pluginName = route.pluginName,
+                onBack = { navigator.goBack() },
+            )
+        }
     }
 }
