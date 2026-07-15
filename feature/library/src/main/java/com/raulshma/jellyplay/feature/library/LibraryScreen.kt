@@ -107,6 +107,7 @@ import com.raulshma.jellyplay.core.model.LibraryViewMode
 import com.raulshma.jellyplay.core.model.MediaType
 import com.raulshma.jellyplay.feature.library.components.LibraryFilterSheet
 import com.raulshma.jellyplay.feature.library.components.LibraryListItem
+import com.raulshma.jellyplay.feature.library.components.ThumbCard
 import com.raulshma.jellyplay.core.ui.animation.animateContentSizeNoClip
 import com.raulshma.jellyplay.core.ui.animation.lazyItemPlacementSpec
 import com.composables.icons.tabler.Tabler
@@ -199,6 +200,10 @@ fun LibraryScreen(
     )
 
     val gridCellSize = adaptiveInfo.gridCellSize(isTv)
+    // Landscape thumbnails are wider than they are tall (16:9), so the THUMB
+    // grid needs a larger min cell width than the poster (2:3) grid to avoid
+    // rendering tiny cards. Scaled from the same adaptive baseline.
+    val thumbCellSize = adaptiveInfo.gridCellSize(isTv) * (16f / 9f) * (3f / 4f)
     val navOffsetPx = com.raulshma.jellyplay.core.ui.components.LocalFloatingNavOffset.current
 
     Box(
@@ -513,89 +518,129 @@ fun LibraryScreen(
                                     }
                                 }
                             } else {
-                                if (viewMode == LibraryViewMode.LIST) {
-                                    LazyColumn(
-                                        state = listState,
-                                        contentPadding = gridPadding,
-                                        verticalArrangement = Arrangement.spacedBy(4.dp),
-                                        modifier = Modifier.fillMaxSize(),
-                                    ) {
-                                        items(
-                                            count = pagedItems.itemCount,
+                                when (viewMode) {
+                                    LibraryViewMode.LIST -> {
+                                        LazyColumn(
+                                            state = listState,
+                                            contentPadding = gridPadding,
+                                            verticalArrangement = Arrangement.spacedBy(4.dp),
+                                            modifier = Modifier.fillMaxSize(),
+                                        ) {
+                                            items(
+                                                count = pagedItems.itemCount,
+                                                key = pagedItems.safeItemKey { it.id },
+                                                contentType = { "mediaItem" },
+                                            ) { index ->
+                                                val item = pagedItems[index]
+                                                if (item != null) {
+                                                    val placementSpec = lazyItemPlacementSpec()
+                                                    val memoizedClick = remember(item.id, item.mediaType, item.parentId, item.name) {
+                                                        { onItemClick(item.id, item.mediaType, item.parentId, item.name) }
+                                                    }
+                                                    val subtitle = remember(item.year, item.mediaType) {
+                                                        buildString {
+                                                            if (item.year != null) append("${item.year}")
+                                                            val typeLabel = when (item.mediaType) {
+                                                                MediaType.EPISODE -> "Episode"
+                                                                MediaType.SERIES -> "Series"
+                                                                MediaType.MOVIE -> "Movie"
+                                                                MediaType.AUDIO -> "Audio"
+                                                                MediaType.MUSIC -> "Music"
+                                                                MediaType.PHOTO, MediaType.PHOTO_FOLDER -> "Photo"
+                                                                else -> null
+                                                            }
+                                                            if (typeLabel != null) {
+                                                                if (isNotEmpty()) append(" · ")
+                                                                append(typeLabel)
+                                                            }
+                                                        }
+                                                    }
+                                                    LibraryListItem(
+                                                        title = item.name,
+                                                        subtitle = subtitle,
+                                                        imageUrl = remember(item.id) { viewModel.getImageUrl(item.id) },
+                                                        blurHash = item.blurHashes.primary,
+                                                        onClick = memoizedClick,
+                                                        modifier = Modifier.animateItem(placementSpec = placementSpec),
+                                                    )
+                                                }
+                                            }
+                                        }
+                                    }
+                                    LibraryViewMode.THUMB -> {
+                                        // 16:9 landscape grid — wider cells than the poster grid
+                                        // so backdrop thumbnails aren't tiny. One card per row
+                                        // on compact widths, more on tablet/TV.
+                                        TvFocusableGrid(
+                                            itemCount = pagedItems.itemCount,
                                             key = pagedItems.safeItemKey { it.id },
+                                            columns = GridCells.Adaptive(thumbCellSize),
+                                            state = gridState,
+                                            contentPadding = gridPadding,
+                                            horizontalArrangement = Arrangement.spacedBy(spacing),
+                                            verticalArrangement = Arrangement.spacedBy(spacing),
+                                            modifier = Modifier.fillMaxSize(),
                                             contentType = { "mediaItem" },
-                                        ) { index ->
+                                        ) { index, itemModifier ->
                                             val item = pagedItems[index]
                                             if (item != null) {
-                                                val placementSpec = lazyItemPlacementSpec()
                                                 val memoizedClick = remember(item.id, item.mediaType, item.parentId, item.name) {
                                                     { onItemClick(item.id, item.mediaType, item.parentId, item.name) }
                                                 }
-                                                val subtitle = remember(item.year, item.mediaType) {
-                                                    buildString {
-                                                        if (item.year != null) append("${item.year}")
-                                                        val typeLabel = when (item.mediaType) {
-                                                            MediaType.EPISODE -> "Episode"
-                                                            MediaType.SERIES -> "Series"
-                                                            MediaType.MOVIE -> "Movie"
-                                                            MediaType.AUDIO -> "Audio"
-                                                            MediaType.MUSIC -> "Music"
-                                                            MediaType.PHOTO, MediaType.PHOTO_FOLDER -> "Photo"
-                                                            else -> null
-                                                        }
-                                                        if (typeLabel != null) {
-                                                            if (isNotEmpty()) append(" · ")
-                                                            append(typeLabel)
-                                                        }
-                                                    }
-                                                }
-                                                LibraryListItem(
-                                                    title = item.name,
-                                                    subtitle = subtitle,
-                                                    imageUrl = remember(item.id) { viewModel.getImageUrl(item.id) },
-                                                    blurHash = item.blurHashes.primary,
+                                                val itemProgress = item.progressFraction()
+                                                ThumbCard(
+                                                    item = item,
+                                                    imageUrl = remember(item.id) {
+                                                        // Prefer the backdrop for landscape cards; fall back
+                                                        // to the poster so items without a backdrop still render.
+                                                        viewModel.getBackdropUrl(item.id)
+                                                    },
                                                     onClick = memoizedClick,
-                                                    modifier = Modifier.animateItem(placementSpec = placementSpec),
+                                                    showProgress = itemProgress != null && itemProgress > 0f,
+                                                    progressPercent = itemProgress ?: 0f,
+                                                    blurHash = item.blurHashes.backdrop,
+                                                    modifier = itemModifier,
                                                 )
                                             }
                                         }
                                     }
-                                } else {
-                                    TvFocusableGrid(
-                                        itemCount = pagedItems.itemCount,
-                                        key = pagedItems.safeItemKey { it.id },
-                                        columns = GridCells.Adaptive(gridCellSize),
-                                        state = gridState,
-                                        contentPadding = gridPadding,
-                                        horizontalArrangement = Arrangement.spacedBy(spacing),
-                                        verticalArrangement = Arrangement.spacedBy(spacing),
-                                        modifier = Modifier.fillMaxSize(),
-                                        contentType = { "mediaItem" },
-                                    ) { index, itemModifier ->
-                                        val item = pagedItems[index]
-                                        if (item != null) {
-                                            val memoizedClick = remember(item.id, item.mediaType, item.parentId, item.name) {
-                                                { onItemClick(item.id, item.mediaType, item.parentId, item.name) }
+                                    LibraryViewMode.GRID -> {
+                                        TvFocusableGrid(
+                                            itemCount = pagedItems.itemCount,
+                                            key = pagedItems.safeItemKey { it.id },
+                                            columns = GridCells.Adaptive(gridCellSize),
+                                            state = gridState,
+                                            contentPadding = gridPadding,
+                                            horizontalArrangement = Arrangement.spacedBy(spacing),
+                                            verticalArrangement = Arrangement.spacedBy(spacing),
+                                            modifier = Modifier.fillMaxSize(),
+                                            contentType = { "mediaItem" },
+                                        ) { index, itemModifier ->
+                                            val item = pagedItems[index]
+                                            if (item != null) {
+                                                val memoizedClick = remember(item.id, item.mediaType, item.parentId, item.name) {
+                                                    { onItemClick(item.id, item.mediaType, item.parentId, item.name) }
+                                                }
+                                                val itemProgress = item.progressFraction()
+                                                // Per-item collection: only photo-folder cards subscribe,
+                                                // and only the affected card recomposes on a prefetch merge.
+                                                val photoFolderChildImageUrls by if (item.mediaType == MediaType.PHOTO_FOLDER) {
+                                                    viewModel.photoFolderChildUrlsFor(item.id).collectAsStateWithLifecycle(emptyList())
+                                                } else {
+                                                    androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf(emptyList()) }
+                                                }
+                                                PosterCard(
+                                                    item = item,
+                                                    imageUrl = remember(item.id) { viewModel.getImageUrl(item.id) },
+                                                    onClick = memoizedClick,
+                                                    showProgress = itemProgress != null && itemProgress > 0f,
+                                                    progressPercent = itemProgress ?: 0f,
+                                                    blurHash = item.blurHashes.primary,
+                                                    sharedElementKey = "poster_${item.id}",
+                                                    photoFolderChildImageUrls = photoFolderChildImageUrls,
+                                                    modifier = itemModifier,
+                                                )
                                             }
-                                            val itemProgress = item.progressFraction()
-                                            // Per-item collection: only photo-folder cards subscribe,
-                                            // and only the affected card recomposes on a prefetch merge.
-                                            val photoFolderChildImageUrls by if (item.mediaType == MediaType.PHOTO_FOLDER) {
-                                                viewModel.photoFolderChildUrlsFor(item.id).collectAsStateWithLifecycle(emptyList())
-                                            } else {
-                                                androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf(emptyList()) }
-                                            }
-                                            PosterCard(
-                                                item = item,
-                                                imageUrl = remember(item.id) { viewModel.getImageUrl(item.id) },
-                                                onClick = memoizedClick,
-                                                showProgress = itemProgress != null && itemProgress > 0f,
-                                                progressPercent = itemProgress ?: 0f,
-                                                blurHash = item.blurHashes.primary,
-                                                sharedElementKey = "poster_${item.id}",
-                                                photoFolderChildImageUrls = photoFolderChildImageUrls,
-                                                modifier = itemModifier,
-                                            )
                                         }
                                     }
                                 }
@@ -644,15 +689,27 @@ fun LibraryScreen(
                             ) {
                                 IconButton(
                                     onClick = {
+                                        // Cycle GRID → THUMB → LIST → GRID so each tap
+                                        // advances to the next layout mode.
                                         viewModel.setViewMode(
-                                            if (viewMode == LibraryViewMode.GRID) LibraryViewMode.LIST else LibraryViewMode.GRID
+                                            when (viewMode) {
+                                                LibraryViewMode.GRID -> LibraryViewMode.THUMB
+                                                LibraryViewMode.THUMB -> LibraryViewMode.LIST
+                                                LibraryViewMode.LIST -> LibraryViewMode.GRID
+                                            }
                                         )
                                     },
                                     shapes = IconButtonDefaults.shapes(),
                                 ) {
+                                    // Icon shows the mode a tap will switch *to*.
+                                    val (nextIcon, nextDesc) = when (viewMode) {
+                                        LibraryViewMode.GRID -> Tabler.Outline.Stack2 to R.string.library_thumb_view
+                                        LibraryViewMode.THUMB -> Tabler.Outline.List to R.string.library_list_view
+                                        LibraryViewMode.LIST -> Tabler.Outline.LayoutGrid to R.string.library_grid_view
+                                    }
                                     Icon(
-                                        if (viewMode == LibraryViewMode.GRID) Tabler.Outline.List else Tabler.Outline.GridDots,
-                                        contentDescription = stringResource(if (viewMode == LibraryViewMode.GRID) R.string.library_list_view else R.string.library_grid_view),
+                                        nextIcon,
+                                        contentDescription = stringResource(nextDesc),
                                         modifier = Modifier.size(20.dp),
                                     )
                                 }

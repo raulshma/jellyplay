@@ -58,7 +58,7 @@ class MediaInfoApiClientImpl @Inject constructor(
             val serverName = async { getCachedServerName() }
             val recentlyAdded = async {
                 try {
-                    val folders = engine.requireApi().libraryApi.getMediaFolders().content?.items ?: emptyList()
+                    val folders = engine.requireApi().userViewsApi.getUserViews().content?.items ?: emptyList()
                     val candidateFolders = folders.filter { folder ->
                         folder.collectionType?.serialName != "music"
                     }

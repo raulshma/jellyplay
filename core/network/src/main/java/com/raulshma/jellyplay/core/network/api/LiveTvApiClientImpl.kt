@@ -169,7 +169,7 @@ class LiveTvApiClientImpl @Inject constructor(
     }
 
     /**
-     * Records a single program. Matches jellyfin-web/Wholphin: fetch the
+     * Records a single program. fetch the
      * server-derived defaults for the program, then `POST /LiveTv/Timers` with
      * a [TimerInfoDto] seeded from those defaults (so padding/priority/etc.
      * come from server settings rather than being hand-rolled).

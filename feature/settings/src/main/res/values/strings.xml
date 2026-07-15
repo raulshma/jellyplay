@@ -407,6 +407,7 @@
     <string name="settings_library_view_mode">Library View Mode</string>
     <string name="settings_library_view_grid">Display items in a grid layout</string>
     <string name="settings_library_view_list">Display items in a list layout</string>
+    <string name="settings_library_view_thumb">Display items as landscape thumbnails</string>
     <string name="settings_home_mode">Home Mode</string>
     <string name="settings_home_mode_video">Video-focused home screen</string>
     <string name="settings_home_mode_music">Music-focused home screen</string>
