@@ -9,6 +9,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.MotionScheme
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.IntSize
 
 @Suppress("UNCHECKED_CAST")
@@ -111,3 +112,37 @@ fun fastSpatialSpringDp() = MaterialTheme.motionScheme.fastSpatialSpec<Dp>()
 
 @Composable
 fun defaultContentSizeSpec() = MaterialTheme.motionScheme.defaultSpatialSpec<IntSize>()
+
+// ---------------------------------------------------------------------------
+// Expressive spec helpers.
+//
+// MotionScheme is a fixed Material 3 interface (6 methods) and cannot be
+// extended with new tokens. These standalone helpers provide the richer specs
+// the NavTransitionPolicy mapper needs. They are only reached in the expressive
+// (non-reduced-motion) path — the policy returns INSTANT otherwise — so they do
+// not need their own reduce-motion guard.
+// ---------------------------------------------------------------------------
+
+/** Deliberate horizontal-slide easing (previously-unused OverslideEasing). */
+fun expressiveSlideSpec(): FiniteAnimationSpec<IntOffset> =
+    tween(
+        durationMillis = 300,
+        easing = OverslideEasing,
+    )
+
+/** Spring for the modal vertical slide — visible settle. */
+fun modalSpringSpec(): FiniteAnimationSpec<IntOffset> =
+    spring(
+        dampingRatio = Spring.DampingRatioMediumBouncy,
+        stiffness = Spring.StiffnessMediumLow,
+    )
+
+/**
+ * Spring for shared-element bounds transforms — physical, slightly bouncy match.
+ * Use as [androidx.compose.animation.SharedTransitionScope.BoundsTransform].
+ */
+fun sharedElementBoundsSpec(): androidx.compose.animation.core.FiniteAnimationSpec<androidx.compose.ui.geometry.Rect> =
+    spring(
+        dampingRatio = Spring.DampingRatioLowBouncy,
+        stiffness = Spring.StiffnessMediumLow,
+    )

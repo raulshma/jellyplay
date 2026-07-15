@@ -1,5 +1,6 @@
 package com.raulshma.jellyplay.feature.settings
 
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
@@ -80,10 +81,10 @@ sealed class AudioSettingsDialog {
 fun AudioSettingsScreen(
     onBack: () -> Unit,
     highlightSettingId: String? = null,
-    viewModel: SettingsViewModel = hiltViewModel(),
+    viewModel: AudioSettingsViewModel = hiltViewModel(),
 ) {
-    val preferences = viewModel.preferences
-    val showAdvanced = preferences.showAdvancedSettings
+    val preferences by viewModel.preferences.collectAsStateWithLifecycle()
+    val showAdvanced by viewModel.showAdvancedSettings.collectAsStateWithLifecycle()
     val adaptiveInfo = LocalAdaptiveInfo.current
     val isTv = LocalTvMode.current
     var activeDialog by remember { mutableStateOf<AudioSettingsDialog>(AudioSettingsDialog.None) }

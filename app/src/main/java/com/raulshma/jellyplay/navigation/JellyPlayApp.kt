@@ -10,13 +10,8 @@ import androidx.compose.animation.animateContentSize
 import androidx.compose.animation.core.Spring
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.animation.core.spring
+import androidx.compose.animation.ContentTransform
 import androidx.compose.animation.core.tween
-import androidx.compose.animation.fadeIn
-import androidx.compose.animation.fadeOut
-import androidx.compose.animation.slideInHorizontally
-import androidx.compose.animation.slideInVertically
-import androidx.compose.animation.slideOutHorizontally
-import androidx.compose.animation.slideOutVertically
 import androidx.compose.animation.togetherWith
 import com.raulshma.jellyplay.core.designsystem.theme.AlphaEasing
 import com.raulshma.jellyplay.core.designsystem.theme.FancyTransitionEasing
@@ -29,7 +24,6 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -49,12 +43,6 @@ import androidx.compose.material3.adaptive.navigationsuite.NavigationSuiteScaffo
 import androidx.compose.material3.adaptive.navigationsuite.NavigationSuiteDefaults
 import androidx.compose.material3.adaptive.navigationsuite.NavigationSuiteItem
 import androidx.compose.material3.adaptive.navigationsuite.NavigationSuiteType
-import androidx.compose.material3.DrawerValue
-import androidx.compose.material3.ModalDrawerSheet
-import androidx.compose.material3.ModalNavigationDrawer
-import androidx.compose.material3.rememberDrawerState
-import androidx.tv.material3.NavigationDrawer
-import androidx.tv.material3.NavigationDrawerItem
 import androidx.tv.material3.MaterialTheme as TvMaterial3Theme
 import androidx.tv.material3.darkColorScheme as tvDarkColorScheme
 import androidx.tv.material3.Icon as TvIcon
@@ -85,7 +73,6 @@ import androidx.navigation3.runtime.rememberNavBackStack
 import androidx.navigation3.runtime.rememberSaveableStateHolderNavEntryDecorator
 import androidx.navigation3.runtime.NavEntryDecorator
 import androidx.navigation3.runtime.NavEntry
-import androidx.navigation3.scene.Scene
 import androidx.navigation3.ui.NavDisplay
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.navigationBars
@@ -136,15 +123,19 @@ import com.raulshma.jellyplay.core.ui.components.LocalFloatingNavVisibility
 import com.raulshma.jellyplay.core.ui.feedback.LocalUserMessageBus
 import com.raulshma.jellyplay.core.ui.feedback.UserMessage
 import com.raulshma.jellyplay.core.ui.feedback.resolve
+import com.raulshma.jellyplay.core.ui.animation.DefaultNavTransitionPolicy
+import com.raulshma.jellyplay.core.ui.animation.NavDirection
+import com.raulshma.jellyplay.core.ui.animation.NavTransitionContext
+import com.raulshma.jellyplay.core.ui.animation.isReducedMotion
+import com.raulshma.jellyplay.core.ui.animation.toTransition
 import com.raulshma.jellyplay.core.ui.navigation.ALL_TOP_LEVEL_ROUTE_KEYS
-import com.raulshma.jellyplay.core.ui.navigation.DETAIL_ROUTE_CLASS_NAMES
-import com.raulshma.jellyplay.core.ui.navigation.isDetail
-import com.raulshma.jellyplay.core.ui.navigation.isModal
+import com.raulshma.jellyplay.core.ui.navigation.isFullScreen
 import com.raulshma.jellyplay.core.ui.navigation.MUSIC_TOP_LEVEL_ROUTES
 import com.raulshma.jellyplay.core.ui.navigation.Navigator
 import com.raulshma.jellyplay.core.ui.navigation.Route
 import com.raulshma.jellyplay.core.ui.navigation.VIDEO_TOP_LEVEL_ROUTES
 import com.raulshma.jellyplay.core.ui.navigation.rememberNavigationState
+import com.raulshma.jellyplay.core.ui.navigation.toNavRouteClass
 import com.raulshma.jellyplay.core.ui.tv.TvScaffold
 import com.raulshma.jellyplay.core.ui.tv.LocalTvMode
 import com.raulshma.jellyplay.core.ui.tv.LocalTvTypography
@@ -184,24 +175,10 @@ import com.raulshma.jellyplay.feature.requests.navigation.requestsSection
 import com.raulshma.jellyplay.feature.arrqueue.navigation.arrQueueSection
 import com.raulshma.jellyplay.feature.calendar.navigation.calendarSection
 import com.raulshma.jellyplay.feature.shortcuts.navigation.shortcutsSection
+import com.raulshma.jellyplay.feature.subtitle.tester.navigation.subtitleTesterSection
 import kotlinx.coroutines.launch
 import com.composables.icons.tabler.Tabler
 import com.composables.icons.tabler.outline.*
-
-internal val LocalDrawerOpener = androidx.compose.runtime.compositionLocalOf { {} }
-
-
-
-private fun isDetailScene(scene: Scene<NavKey>): Boolean {
-    // Prefer the typed Route.isDetail extension when the content key is a
-    // Route (the common case). Fall back to class-name string matching for
-    // any non-Route NavKey the host might encounter.
-    val key = scene.entries.lastOrNull()?.contentKey ?: return false
-    val route = key as? Route
-    if (route != null) return route.isDetail
-    val className = key.toString().substringBefore('(')
-    return className in DETAIL_ROUTE_CLASS_NAMES
-}
 
 @Composable
 fun JellyPlayApp(
@@ -373,9 +350,16 @@ private fun MainContent(
 
     val isAudioPlayerScreen = currentRoute is Route.AudioPlayer
 
-    val isFullScreenRoute = isPlayerScreen || isAudioPlayerScreen ||
-            currentRoute is Route.Ambient || currentRoute is Route.Onboarding ||
-            currentRoute is Route.PhotoViewer
+    // A full-screen route may sit below the top of the back stack (e.g. the
+    // video player with the subtitle tester pushed on top of it). Keep the
+    // full-screen layout branch active while *any* full-screen route is on the
+    // current stack: switching the branch mid-round-trip re-registers the
+    // player's NavKey in a second NavDisplay subtree against the shared
+    // SaveableStateHolder, crashing with "Key VideoPlayer(...) was used
+    // multiple times" on the back-pop. isPlayerScreen/isAudioPlayerScreen stay
+    // top-only since they only drive chrome styling.
+    val currentBackStack = navigationState.backStacks[navigationState.topLevelRoute.value]
+    val isFullScreenRoute = currentBackStack?.any { it is Route && it.isFullScreen } ?: false
 
     // Memoize the route filter+reorder so it only re-runs when homeMode /
     // hiddenNavItems / navItemOrder actually change. MainContent recomposes
@@ -581,9 +565,6 @@ private fun MainContent(
         }
     }
 
-    val drawerState = rememberDrawerState(DrawerValue.Closed)
-    val drawerScope = rememberCoroutineScope()
-
     val adaptiveInfo = rememberAdaptiveInfo()
     val uiEnvironment = rememberJellyPlayUiEnvironment(
         adaptiveInfo = adaptiveInfo,
@@ -622,15 +603,11 @@ private fun MainContent(
     // so a fresh lambda per recomposition forces downstream invalidation even
     // when the captured state hasn't changed. MainContent recomposes often
     // (audio metadata, nav color, mini-player), so hoist these out.
-    val openDrawer: () -> Unit = remember(drawerScope, drawerState) {
-        { drawerScope.launch { drawerState.open() } }
-    }
     val consumeSearchQuery: () -> Unit = remember(viewModel) {
         { viewModel.consumePendingSearchQuery() }
     }
 
     CompositionLocalProvider(
-        LocalDrawerOpener provides openDrawer,
         LocalTvMode provides isTv,
         LocalAdaptiveInfo provides adaptiveInfo,
         LocalJellyPlayUi provides uiEnvironment,
@@ -689,8 +666,8 @@ private fun MainContent(
             Box(Modifier.fillMaxSize().then(previewBlurModifier)) {
             // Hoist the TV drawer state above the isFullScreenRoute branch so it survives visiting a
             // full-screen route (e.g. the player) and back, instead of being recreated when
-            // TvNavigationDrawer leaves and re-enters composition. Fully-qualified to avoid clashing with the mobile
-            // androidx.compose.material3 DrawerState used by LocalDrawerOpener below.
+            // TvNavigationDrawer leaves and re-enters composition. Fully-qualified to keep the TV
+            // DrawerState type distinct from any mobile-material3 names.
             val tvDrawerState = androidx.tv.material3.rememberDrawerState(androidx.tv.material3.DrawerValue.Closed)
             val tvDrawerListState = androidx.compose.foundation.lazy.rememberLazyListState()
             if (isTv && !isFullScreenRoute) {
@@ -737,8 +714,6 @@ private fun MainContent(
                         entryDecorator = entryDecorator,
                         onNowPlayingClick = onNowPlayingClick,
                         onAmbientClick = onAmbientClick,
-                        drawerState = drawerState,
-                        drawerScope = drawerScope,
                         isAudioPlayerScreen = isAudioPlayerScreen,
                         isSynthwave = isSynthwave,
                         isExpanded = isExpanded,
@@ -966,9 +941,9 @@ private fun TvContent(
 }
 
 /**
- * Phone (and large-screen NavigationRail) layout: hamburger [ModalNavigationDrawer] +
- * [NavigationSuiteScaffold] hosting [MainNavDisplay] with floating mini-player(s) and the
- * optional [FloatingNavigationBar]. All scroll-coupled bottom-nav state is owned here.
+ * Phone (and large-screen NavigationRail) layout: [NavigationSuiteScaffold] hosting
+ * [MainNavDisplay] with floating mini-player(s) and the optional [FloatingNavigationBar].
+ * All scroll-coupled bottom-nav state is owned here.
  */
 @Composable
 private fun PhoneContent(
@@ -985,8 +960,6 @@ private fun PhoneContent(
     entryDecorator: NavEntryDecorator<NavKey>,
     onNowPlayingClick: () -> Unit,
     onAmbientClick: () -> Unit,
-    drawerState: androidx.compose.material3.DrawerState,
-    drawerScope: kotlinx.coroutines.CoroutineScope,
     isAudioPlayerScreen: Boolean,
     isSynthwave: Boolean,
     isExpanded: Boolean,
@@ -1029,71 +1002,7 @@ private fun PhoneContent(
         if (showPlayOnSheet) playOnViewModel.startDiscovery(playOnContext)
     }
 
-    ModalNavigationDrawer(
-        drawerState = drawerState,
-        drawerContent = {
-            ModalDrawerSheet(
-                drawerShape = RoundedCornerShape(topEnd = 28.dp, bottomEnd = 28.dp),
-                drawerContainerColor = MaterialTheme.colorScheme.surfaceContainer,
-            ) {
-                Column(
-                    modifier = Modifier
-                        .fillMaxHeight()
-                        .padding(vertical = 48.dp),
-                ) {
-                    Text(
-                        "JellyPlay",
-                        style = MaterialTheme.typography.headlineSmall,
-                        fontWeight = FontWeight.Bold,
-                        color = MaterialTheme.colorScheme.primary,
-                        modifier = Modifier.padding(horizontal = 28.dp, vertical = 16.dp),
-                    )
-                    Spacer(Modifier.height(8.dp))
-                    DrawerItem(
-                        icon = Tabler.Outline.Inbox,
-                        label = "Requests",
-                        onClick = {
-                            navigator.navigate(Route.Requests)
-                            drawerScope.launch { drawerState.close() }
-                        },
-                    )
-                    DrawerItem(
-                        icon = Tabler.Outline.Database,
-                        label = "Activity Queue",
-                        onClick = {
-                            navigator.navigate(Route.ArrQueue)
-                            drawerScope.launch { drawerState.close() }
-                        },
-                    )
-                    DrawerItem(
-                        icon = Tabler.Outline.Calendar,
-                        label = "Upcoming",
-                        onClick = {
-                            navigator.navigate(Route.UpcomingCalendar)
-                            drawerScope.launch { drawerState.close() }
-                        },
-                    )
-                    DrawerItem(
-                        icon = Tabler.Outline.Settings,
-                        label = "Settings",
-                        onClick = {
-                            navigator.navigate(Route.Settings)
-                            drawerScope.launch { drawerState.close() }
-                        },
-                    )
-                    DrawerItem(
-                        icon = Tabler.Outline.InfoCircle,
-                        label = "About",
-                        onClick = {
-                            navigator.navigate(Route.About)
-                            drawerScope.launch { drawerState.close() }
-                        },
-                    )
-                }
-            }
-        },
-    ) {
-        // When hide-on-scroll is disabled, keep the nav bar permanently visible
+    // When hide-on-scroll is disabled, keep the nav bar permanently visible
         //. The nestedScrollConnection is still constructed so its
         // identity stays stable, but it is only attached to the tree when the
         // setting is on.
@@ -1315,7 +1224,6 @@ private fun PhoneContent(
             }
         }
     }
-}
 
 /**
  * Full-screen layout (player / onboarding / ambient / photo viewer): bare [Box] with
@@ -1467,10 +1375,34 @@ private fun MainNavDisplay(
         )
     }
 
+    // Read @Composable values ONCE in the composable body — the transition
+    // spec lambdas below are NOT composable scopes and cannot call these.
     val motionScheme = MaterialTheme.motionScheme
-    val defaultEffects = motionScheme.defaultEffectsSpec<Float>()
-    val fastEffects = motionScheme.fastEffectsSpec<Float>()
-    val defaultSpatialOffset = motionScheme.defaultSpatialSpec<androidx.compose.ui.unit.IntOffset>()
+    val reducedMotion = isReducedMotion()
+    val navPolicy = DefaultNavTransitionPolicy
+
+    /**
+     * Resolve a [ContentTransform] for a route pair + direction. Plain (non-
+     * composable) local fn: it only uses the [motionScheme]/[reducedMotion]
+     * vals captured above, so it is safe to call from the non-composable spec
+     * lambdas. Returns a [ContentTransform] so the spec lambdas can call it
+     * directly.
+     */
+    fun resolveTransition(
+        targetRoute: Route?,
+        initialRoute: Route?,
+        direction: NavDirection,
+    ): ContentTransform {
+        val context = NavTransitionContext(
+            targetClass = targetRoute.toNavRouteClass,
+            initialClass = initialRoute.toNavRouteClass,
+            direction = direction,
+            isReducedMotion = reducedMotion,
+        )
+        val kind = navPolicy.kind(context)
+        val transition = kind.toTransition(motionScheme)
+        return transition.enter togetherWith transition.exit
+    }
 
     // Remember the entry provider graph so the ~25 section builders aren't
     // re-invoked (allocating fresh lambdas + entry objects) on every
@@ -1528,6 +1460,7 @@ private fun MainNavDisplay(
             arrQueueSection(navigator)
             calendarSection(navigator)
             shortcutsSection(navigator)
+            subtitleTesterSection(navigator)
             // Play On companion — full-screen remote-control surface reached by
             // tapping the persistent PlayOnMiniBar. Reuses the activity-scoped
             // PlayOnViewModel (same instance the mini bar holds), so state stays
@@ -1545,124 +1478,19 @@ private fun MainNavDisplay(
         onBack = { navigator.goBack() },
         entryDecorators = listOf(entryDecorator, paddingDecorator),
         transitionSpec = {
-            val targetLast = targetState
-            val initialLast = initialState
-            val targetRoute = targetLast.entries.lastOrNull()?.contentKey as? Route
-            val initialRoute = initialLast.entries.lastOrNull()?.contentKey as? Route
-            val isModalRoute = targetRoute?.isModal == true
-            val isModalPop = initialRoute?.isModal == true
-            val isTabSwitch = targetRoute != null && initialRoute != null &&
-                    ALL_TOP_LEVEL_ROUTE_KEYS.contains(targetRoute) &&
-                    ALL_TOP_LEVEL_ROUTE_KEYS.contains(initialRoute)
-            val isAmbient = targetRoute is Route.Ambient || initialRoute is Route.Ambient
-
-            when {
-                isAmbient -> {
-                    fadeIn(defaultEffects) togetherWith fadeOut(fastEffects)
-                }
-                isModalRoute -> {
-                    fadeIn(
-                        defaultEffects
-                    ) + slideInVertically(
-                        initialOffsetY = { it / 4 },
-                        animationSpec = defaultSpatialOffset,
-                    ) togetherWith fadeOut(
-                        fastEffects
-                    )
-                }
-                isModalPop -> {
-                    fadeIn(fastEffects) togetherWith fadeOut(
-                        fastEffects
-                    ) + slideOutVertically(
-                        targetOffsetY = { it / 4 },
-                        animationSpec = defaultSpatialOffset,
-                    )
-                }
-                isTabSwitch -> {
-                    fadeIn(fastEffects) togetherWith fadeOut(
-                        fastEffects
-                    )
-                }
-                isDetailScene(targetLast) || isDetailScene(initialLast) -> {
-                    fadeIn(
-                        animationSpec = defaultEffects,
-                    ) togetherWith fadeOut(
-                        animationSpec = fastEffects,
-                    )
-                }
-                else -> {
-                    fadeIn(
-                        animationSpec = defaultEffects,
-                    ) + slideInHorizontally(
-                        initialOffsetX = { it / 8 },
-                        animationSpec = defaultSpatialOffset,
-                    ) togetherWith fadeOut(
-                        animationSpec = fastEffects,
-                    ) + slideOutHorizontally(
-                        targetOffsetX = { -it / 18 },
-                        animationSpec = defaultSpatialOffset,
-                    )
-                }
-            }
+            val targetRoute = targetState.entries.lastOrNull()?.contentKey as? Route
+            val initialRoute = initialState.entries.lastOrNull()?.contentKey as? Route
+            resolveTransition(targetRoute, initialRoute, NavDirection.FORWARD)
         },
         popTransitionSpec = {
-            val targetLast = targetState
-            val initialLast = initialState
-            val initialRoute = initialLast.entries.lastOrNull()?.contentKey as? Route
-            val isModalPop = initialRoute?.isModal == true
-            when {
-                isModalPop -> {
-                    fadeIn(fastEffects) togetherWith fadeOut(
-                        fastEffects
-                    ) + slideOutVertically(
-                            targetOffsetY = { it / 4 },
-                            animationSpec = defaultSpatialOffset,
-                        )
-                }
-                isDetailScene(initialLast) || isDetailScene(targetLast) -> {
-                    fadeIn(
-                        animationSpec = defaultEffects,
-                    ) togetherWith fadeOut(
-                        animationSpec = defaultEffects,
-                    )
-                }
-                else -> {
-                    fadeIn(
-                            animationSpec = defaultEffects,
-                        ) + slideInHorizontally(
-                            initialOffsetX = { -it / 12 },
-                            animationSpec = defaultSpatialOffset,
-                        ) togetherWith fadeOut(
-                            animationSpec = fastEffects,
-                        ) + slideOutHorizontally(
-                            targetOffsetX = { it / 10 },
-                            animationSpec = defaultSpatialOffset,
-                        )
-                }
-            }
+            val targetRoute = targetState.entries.lastOrNull()?.contentKey as? Route
+            val initialRoute = initialState.entries.lastOrNull()?.contentKey as? Route
+            resolveTransition(targetRoute, initialRoute, NavDirection.POP)
         },
         predictivePopTransitionSpec = { _ ->
-            val targetLast = targetState
-            val initialLast = initialState
-            if (isDetailScene(initialLast) || isDetailScene(targetLast)) {
-                fadeIn(
-                    animationSpec = defaultEffects,
-                ) togetherWith fadeOut(
-                    animationSpec = defaultEffects,
-                )
-            } else {
-                fadeIn(
-                    animationSpec = defaultEffects,
-                ) + slideInHorizontally(
-                    initialOffsetX = { -it / 12 },
-                    animationSpec = defaultSpatialOffset,
-                ) togetherWith fadeOut(
-                    animationSpec = fastEffects,
-                ) + slideOutHorizontally(
-                    targetOffsetX = { it / 10 },
-                    animationSpec = defaultSpatialOffset,
-                )
-            }
+            val targetRoute = targetState.entries.lastOrNull()?.contentKey as? Route
+            val initialRoute = initialState.entries.lastOrNull()?.contentKey as? Route
+            resolveTransition(targetRoute, initialRoute, NavDirection.PREDICTIVE_POP)
         },
         entryProvider = sharedEntryProvider,
         modifier = modifier,
@@ -1726,35 +1554,5 @@ private fun FloatingNavigationBar(
                 }
             }
         }
-    }
-}
-
-@Composable
-private fun DrawerItem(
-    icon: androidx.compose.ui.graphics.vector.ImageVector,
-    label: String,
-    onClick: () -> Unit,
-) {
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .clip(ShapeCache.smooth12)
-            .focusIndicator()
-            .clickable { onClick() }
-            .padding(horizontal = 28.dp, vertical = 14.dp),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        Icon(
-            icon,
-            contentDescription = label,
-            modifier = Modifier.size(24.dp),
-            tint = MaterialTheme.colorScheme.onSurfaceVariant,
-        )
-        Spacer(Modifier.width(16.dp))
-        Text(
-            label,
-            style = MaterialTheme.typography.bodyLarge,
-            color = MaterialTheme.colorScheme.onSurface,
-        )
     }
 }

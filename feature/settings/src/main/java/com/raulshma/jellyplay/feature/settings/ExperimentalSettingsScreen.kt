@@ -1,5 +1,6 @@
 package com.raulshma.jellyplay.feature.settings
 
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
@@ -45,9 +46,9 @@ import com.raulshma.jellyplay.core.ui.tv.tvFocusRestorer
 fun ExperimentalSettingsScreen(
     onBack: () -> Unit,
     highlightSettingId: String? = null,
-    viewModel: SettingsViewModel = hiltViewModel(),
+    viewModel: ExperimentalSettingsViewModel = hiltViewModel(),
 ) {
-    val preferences = viewModel.preferences
+    val preferences by viewModel.preferences.collectAsStateWithLifecycle()
     val adaptiveInfo = LocalAdaptiveInfo.current
     val isTv = LocalTvMode.current
     val backgroundColor = rememberScreenBackgroundColor()

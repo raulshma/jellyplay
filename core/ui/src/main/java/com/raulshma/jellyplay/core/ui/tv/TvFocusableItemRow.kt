@@ -22,6 +22,7 @@ import androidx.compose.ui.focus.focusProperties
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.unit.dp
+import com.raulshma.jellyplay.core.ui.animation.lazyItemPlacementSpec
 
 /**
  * Default cache window for TV horizontal rows — prefetch 2× the viewport ahead and 0.5× behind.
@@ -110,7 +111,13 @@ fun <T> TvFocusableItemRow(
             key = { _, item -> key(item) },
             contentType = { index, item -> contentType(index, item) },
         ) { index, item ->
-            val itemModifier = if (isTv) {
+            // animateItem (LazyItemScope) animates placement so reorders/removals
+            // glide instead of snapping. Placement spec routes through
+            // lazyItemPlacementSpec() so it snaps under reduce-motion. Keys are
+            // required for placement tracking; the `key` param above is mandatory
+            // in TvFocusableItemRow's contract.
+            val placementSpec = lazyItemPlacementSpec()
+            val itemModifier = (if (isTv) {
                 Modifier
                     .ifElse(index == currentFocusedIndex, Modifier.focusRequester(fallbackFocusRequester))
                     .onFocusChanged {
@@ -121,7 +128,7 @@ fun <T> TvFocusableItemRow(
                     }
             } else {
                 Modifier
-            }
+            }).animateItem(placementSpec = placementSpec)
             itemContent(index, item, itemModifier)
         }
     }

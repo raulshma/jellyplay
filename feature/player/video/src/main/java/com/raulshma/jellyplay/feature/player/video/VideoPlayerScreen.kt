@@ -179,6 +179,7 @@ fun VideoPlayerScreen(
     onBack: () -> Unit,
     onEnterPip: () -> Unit = {},
     onEnterMiniMode: () -> Unit = {},
+    onOpenSubtitleTester: () -> Unit = {},
     viewModel: VideoPlayerViewModel = hiltViewModel(),
 ) {
     val context = LocalContext.current
@@ -1452,6 +1453,7 @@ fun VideoPlayerScreen(
         onPickFont = {
             fontPickerLauncher.launch(arrayOf("*/*"))
         },
+        onOpenSubtitleTester = onOpenSubtitleTester,
     )
 
     val playerError = uiState.playerError
@@ -1565,6 +1567,7 @@ private fun PlayerSheetRouter(
     syncPlayIgnoreWait: Boolean,
     onLoadLocalSubtitle: () -> Unit,
     onPickFont: () -> Unit,
+    onOpenSubtitleTester: () -> Unit,
 ) {
     val context = LocalContext.current
 
@@ -1687,6 +1690,7 @@ private fun PlayerSheetRouter(
                 onStyleChange = { viewModel.setSubtitleStyle(it) },
                 onPickFont = onPickFont,
                 onDismiss = dismissSheet,
+                onOpenTester = onOpenSubtitleTester,
                 capabilities = uiState.engineCapabilities,
             )
         }

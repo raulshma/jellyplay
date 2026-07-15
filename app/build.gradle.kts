@@ -148,6 +148,7 @@ dependencies {
     implementation(project(":feature:music"))
     implementation(project(":feature:livetv"))
     implementation(project(":feature:syncplay"))
+    implementation(project(":feature:subtitle-tester"))
     implementation(project(":feature:editor"))
     implementation(project(":feature:admin"))
     implementation(project(":feature:onboarding"))

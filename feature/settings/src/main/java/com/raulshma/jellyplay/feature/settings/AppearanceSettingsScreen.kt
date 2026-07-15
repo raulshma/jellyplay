@@ -26,6 +26,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.ui.Modifier
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
@@ -63,10 +64,10 @@ fun AppearanceSettingsScreen(
     onPinnedHomeSections: (String?) -> Unit = {},
     onHomeLayoutPresets: (String?) -> Unit = {},
     highlightSettingId: String? = null,
-    viewModel: SettingsViewModel = hiltViewModel(),
+    viewModel: AppearanceSettingsViewModel = hiltViewModel(),
 ) {
-    val preferences = viewModel.preferences
-    val showAdvanced = preferences.showAdvancedSettings
+    val preferences by viewModel.preferences.collectAsStateWithLifecycle()
+    val showAdvanced by viewModel.showAdvancedSettings.collectAsStateWithLifecycle()
     val adaptiveInfo = LocalAdaptiveInfo.current
     val isTv = LocalTvMode.current
     val backgroundColor = com.raulshma.jellyplay.core.ui.components.rememberScreenBackgroundColor()
@@ -84,7 +85,7 @@ fun AppearanceSettingsScreen(
         val themeGroup = listOf(
             "theme_mode", "theme_scheduler", "synthwave_mode", "soothing_mode", "monochrome_mode",
             "dynamic_theming", "oled_mode", "contrast", "library_view_mode", "home_mode", "hero_section",
-            "clock_home", "continue_watching_click", "unhide_cw", "merge_continue_next_up", "next_up_max_days",
+            "clock_home", "settings_in_home_search", "continue_watching_click", "unhide_cw", "merge_continue_next_up", "next_up_max_days",
             "next_up_rewatching", "theme_music", "nav_labels", "date_format", "font_scale", "color_blind_mode",
             "hand_mode", "scheduled_start", "scheduled_end",
         )
@@ -225,6 +226,7 @@ fun AppearanceSettingsScreen(
                             add("home_mode")
                             add("hero_section")
                             add("clock_home")
+                            add("settings_in_home_search")
                             add("continue_watching_click")
                             if (preferences.hiddenCwItemIds.isNotEmpty()) {
                                 add("unhide_cw")
@@ -444,6 +446,17 @@ fun AppearanceSettingsScreen(
                                     onCheckedChange = { viewModel.setShowClockOnHome(it) },
                                 )
                             }
+                            "settings_in_home_search" -> {
+                                SettingToggleItem(
+                                    icon = Tabler.Outline.Adjustments,
+                                    title = stringResource(R.string.settings_show_settings_in_home_search),
+                                    subtitle = if (preferences.showSettingsInHomeSearch) stringResource(R.string.settings_show_settings_in_home_search_on) else stringResource(R.string.settings_show_settings_in_home_search_off),
+                                    checked = preferences.showSettingsInHomeSearch,
+                                    highlighted = highlightSettingId == "settings_in_home_search",
+                                    index = currentIdx++, count = totalCount,
+                                    onCheckedChange = { viewModel.setShowSettingsInHomeSearch(it) },
+                                )
+                            }
                             "continue_watching_click" -> {
                                 SettingListItem(
                                     icon = Tabler.Outline.PlayerPlay,
@@ -641,8 +654,9 @@ fun AppearanceSettingsScreen(
             // Floating navigation bar customization (enable/disable items, reorder,
             // hide-on-scroll).
             item {
+                val navPrefs by viewModel.navigationCustomizationPreferences.collectAsStateWithLifecycle()
                 NavigationCustomizationGroup(
-                    preferences = preferences,
+                    preferences = navPrefs,
                     viewModel = viewModel,
                 )
             }

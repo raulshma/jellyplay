@@ -14,6 +14,7 @@ import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import com.raulshma.jellyplay.core.model.seerr.SeerrSearchItem
+import com.raulshma.jellyplay.core.ui.animation.lazyItemPlacementSpec
 import com.raulshma.jellyplay.core.ui.components.LocalSeerrCardLoadingState
 import com.raulshma.jellyplay.core.ui.components.LocalSeerrPrefetch
 import com.raulshma.jellyplay.core.ui.components.SeerrCardLoadingState
@@ -99,7 +100,7 @@ internal fun SeerrDiscoverRow(
                     clipToShape = clippingEnabled,
                     onClick = { onCardClick(seerrItem) },
                     onRequestClick = { onCardRequestClick(seerrItem) },
-                    modifier = Modifier.width(itemWidth),
+                    modifier = Modifier.animateItem(placementSpec = lazyItemPlacementSpec()).width(itemWidth),
                 )
             }
         }

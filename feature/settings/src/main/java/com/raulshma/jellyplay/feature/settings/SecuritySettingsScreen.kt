@@ -5,11 +5,13 @@ import androidx.compose.animation.expandVertically
 import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -28,11 +30,13 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.fragment.app.FragmentActivity
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.raulshma.jellyplay.core.ui.adaptive.LocalAdaptiveInfo
 import com.raulshma.jellyplay.core.ui.adaptive.bottomPadding
 import com.raulshma.jellyplay.core.ui.adaptive.contentPadding
 import com.raulshma.jellyplay.core.ui.components.BiometricAuthHelper
+import com.raulshma.jellyplay.core.ui.components.JellyPlayCircularProgressIndicator
 import com.raulshma.jellyplay.core.ui.components.JellyPlayScreenScaffold
 import com.raulshma.jellyplay.core.ui.components.findFragmentActivity
 import com.raulshma.jellyplay.core.ui.components.rememberBiometricAvailability
@@ -41,6 +45,7 @@ import com.raulshma.jellyplay.core.ui.tv.tvFocusRestorer
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.runtime.LaunchedEffect
+import kotlinx.coroutines.launch
 import com.raulshma.jellyplay.core.ui.tv.TvGrabInitialFocus
 import com.raulshma.jellyplay.core.ui.tv.tryRequestFocus
 import com.composables.icons.tabler.Tabler
@@ -58,10 +63,10 @@ sealed class SecuritySettingsDialog {
 fun SecuritySettingsScreen(
     onBack: () -> Unit,
     highlightSettingId: String? = null,
-    viewModel: SettingsViewModel = hiltViewModel(),
+    viewModel: SecuritySettingsViewModel = hiltViewModel(),
 ) {
-    val preferences = viewModel.preferences
-    val showAdvanced = preferences.showAdvancedSettings
+    val preferences by viewModel.securityPreferences.collectAsStateWithLifecycle()
+    val showAdvanced by viewModel.showAdvancedSettings.collectAsStateWithLifecycle()
     val adaptiveInfo = LocalAdaptiveInfo.current
     val isTv = LocalTvMode.current
     var activeDialog by remember { mutableStateOf<SecuritySettingsDialog>(SecuritySettingsDialog.None) }
@@ -69,9 +74,11 @@ fun SecuritySettingsScreen(
     var pinConfirm by remember { mutableStateOf("") }
     var pinError by remember { mutableStateOf<String?>(null) }
     var pinDisableAuthError by remember { mutableStateOf<String?>(null) }
+    var verifyingDisablePin by remember { mutableStateOf(false) }
     var qcCode by remember { mutableStateOf("") }
     var qcError by remember { mutableStateOf<String?>(null) }
     var qcLoading by remember { mutableStateOf(false) }
+    val scope = androidx.compose.runtime.rememberCoroutineScope()
 
     val biometricAvailability = rememberBiometricAvailability()
     val canShowBiometric = biometricAvailability == BiometricAuthHelper.Availability.AVAILABLE
@@ -91,27 +98,15 @@ fun SecuritySettingsScreen(
     )
 
     val scrollState = androidx.compose.foundation.lazy.rememberLazyListState()
-    val scrollIndex = remember(highlightSettingId) {
-        // 0 = Security (PIN/Biometric/Auto-lock), 1 = Quick Connect Authorizer, 2 = Remote Control.
-        when (highlightSettingId) {
-            in listOf("pin_lock", "biometric_lock", "pin_for_player_lock", "auto_lock_timer") -> 0
-            "quick_connect_authorize" -> 1
-            "remote_control_enabled" -> 2
-            else -> -1
-        }
-    }
-
-    // Phase 1 (coarse): scroll the containing group into the LazyColumn's composition window so the
-    // target item is actually composed — items in off-screen groups (later sections) are otherwise
-    // never mounted and their bringIntoViewRequester has no target. Phase 2 (centering) is then
-    // performed by the highlighted item itself via CenterBringIntoViewSpec.
-    LaunchedEffect(scrollIndex) {
-        if (scrollIndex >= 0) {
-            try {
-                scrollState.animateScrollToItem(scrollIndex)
-            } catch (_: Exception) {}
-        }
-    }
+    val scrollIndex = rememberHighlightScrollIndex(
+        highlightSettingId = highlightSettingId,
+        groupSettingIds = listOf(
+            setOf("pin_lock", "biometric_lock", "pin_for_player_lock", "auto_lock_timer"),
+            setOf("quick_connect_authorize"),
+            setOf("remote_control_enabled"),
+        ),
+    )
+    HighlightScrollEffect(scrollState, scrollIndex)
 
     JellyPlayScreenScaffold(
         title = stringResource(R.string.settings_security),
@@ -430,17 +425,33 @@ fun SecuritySettingsScreen(
                 }
             },
             confirmButton = {
-                TextButton(onClick = {
-                    val valid = viewModel.verifyPin(pinInput)
-                    if (valid) {
-                        viewModel.clearPin()
-                        activeDialog = SecuritySettingsDialog.None
-                        pinInput = ""
-                        pinDisableAuthError = null
+                TextButton(
+                    enabled = !verifyingDisablePin,
+                    onClick = {
+                        if (verifyingDisablePin) return@TextButton
+                        verifyingDisablePin = true
+                        scope.launch {
+                            val valid = viewModel.verifyPin(pinInput)
+                            if (valid) {
+                                viewModel.clearPin()
+                                activeDialog = SecuritySettingsDialog.None
+                                pinInput = ""
+                                pinDisableAuthError = null
+                            } else {
+                                pinDisableAuthError = incorrectPin
+                            }
+                            verifyingDisablePin = false
+                        }
+                    },
+                ) {
+                    if (verifyingDisablePin) {
+                        JellyPlayCircularProgressIndicator(
+                            modifier = Modifier.size(18.dp),
+                        )
                     } else {
-                        pinDisableAuthError = incorrectPin
+                        Text(stringResource(R.string.settings_confirm))
                     }
-                }) { Text(stringResource(R.string.settings_confirm)) }
+                }
             },
             dismissButton = {
                 TextButton(onClick = {

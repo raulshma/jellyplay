@@ -26,7 +26,6 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.paging.LoadState
 import androidx.paging.compose.collectAsLazyPagingItems
-import androidx.paging.compose.itemKey
 import com.raulshma.jellyplay.core.ui.components.ErrorScreen
 import com.raulshma.jellyplay.core.ui.components.HeaderStatusIndicator
 import com.raulshma.jellyplay.core.ui.components.JellyPlayScreenScaffold
@@ -42,6 +41,7 @@ import com.raulshma.jellyplay.core.ui.tv.LocalTvMode
 import com.raulshma.jellyplay.core.ui.tv.TvFocusableGrid
 import com.raulshma.jellyplay.core.ui.tv.rememberTvFocusState
 import com.raulshma.jellyplay.core.ui.tv.tvFocusIndicator
+import com.raulshma.jellyplay.core.ui.util.safeItemKey
 import com.composables.icons.tabler.Tabler
 import com.composables.icons.tabler.outline.*
 
@@ -100,22 +100,23 @@ fun AlbumsScreen(
         },
     ) { _ ->
         PullToRefreshBox(
-            isRefreshing = albums.loadState.refresh is LoadState.Loading,
+            isRefreshing = albums.loadState.refresh is LoadState.Loading && albums.itemCount > 0,
             onRefresh = { albums.refresh() },
             modifier = Modifier.fillMaxSize(),
         ) {
         Box(modifier = Modifier.fillMaxSize()) {
-            when (val refreshState = albums.loadState.refresh) {
-                is LoadState.Loading -> {
+            when {
+                albums.loadState.refresh is LoadState.Loading && albums.itemCount == 0 -> {
                     ScreenLoadingState()
                 }
-                is LoadState.Error -> {
+                albums.loadState.refresh is LoadState.Error -> {
                     ErrorScreen(
-                        message = refreshState.error.localizedMessage ?: "Failed to load albums",
+                        message = (albums.loadState.refresh as LoadState.Error).error.localizedMessage
+                            ?: "Failed to load albums",
                         onRetry = { albums.refresh() },
                     )
                 }
-                is LoadState.NotLoading -> {
+                else -> {
                     if (albums.itemCount == 0) {
                         ScreenEmptyState(
                             icon = Tabler.Outline.Disc,
@@ -126,7 +127,7 @@ fun AlbumsScreen(
                         val isTv = LocalTvMode.current
                         TvFocusableGrid(
                             itemCount = albums.itemCount,
-                            key = albums.itemKey { it.id },
+                            key = albums.safeItemKey { it.id },
                             columns = GridCells.Adaptive(adaptiveInfo.gridCellSize(isTv)),
                             contentPadding = PaddingValues(
                                 start = adaptiveInfo.contentPadding(isTv),

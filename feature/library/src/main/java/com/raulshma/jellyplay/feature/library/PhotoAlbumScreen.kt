@@ -40,7 +40,6 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.paging.LoadState
 import androidx.paging.compose.collectAsLazyPagingItems
-import androidx.paging.compose.itemKey
 import com.composables.icons.tabler.Tabler
 import com.composables.icons.tabler.outline.Check
 import com.composables.icons.tabler.outline.DotsVertical
@@ -62,6 +61,7 @@ import com.raulshma.jellyplay.core.ui.tv.LocalTvMode
 import com.raulshma.jellyplay.core.ui.tv.TvFocusableGrid
 import com.raulshma.jellyplay.core.ui.tv.rememberTvFocusState
 import com.raulshma.jellyplay.core.ui.tv.tvFocusIndicator
+import com.raulshma.jellyplay.core.ui.util.safeItemKey
 import com.raulshma.jellyplay.feature.library.R
 import com.raulshma.jellyplay.feature.library.components.PhotoGridCard
 
@@ -150,7 +150,7 @@ fun PhotoAlbumScreen(
         },
     ) { _ ->
         PullToRefreshBox(
-            isRefreshing = photos.loadState.refresh is LoadState.Loading,
+            isRefreshing = photos.loadState.refresh is LoadState.Loading && photos.itemCount > 0,
             onRefresh = { photos.refresh() },
             enabled = !isTv,
             modifier = Modifier.fillMaxSize(),
@@ -177,7 +177,7 @@ fun PhotoAlbumScreen(
                     else -> {
                         TvFocusableGrid(
                             itemCount = photos.itemCount,
-                            key = photos.itemKey { it.id },
+                            key = photos.safeItemKey { it.id },
                             columns = GridCells.Adaptive(adaptiveInfo.gridCellSize(isTv)),
                             state = gridState,
                             contentPadding = PaddingValues(

@@ -47,12 +47,14 @@ import com.raulshma.jellyplay.core.model.HomeSectionType
 import com.raulshma.jellyplay.core.model.MediaItem
 import com.raulshma.jellyplay.core.model.MediaType
 import com.raulshma.jellyplay.core.ui.adaptive.LocalAdaptiveInfo
+import com.raulshma.jellyplay.core.ui.animation.lazyItemPlacementSpec
 import com.raulshma.jellyplay.core.ui.adaptive.WindowSizeClass
 import com.raulshma.jellyplay.core.ui.adaptive.contentPadding
 import com.raulshma.jellyplay.core.ui.adaptive.itemSpacing
 import com.raulshma.jellyplay.core.ui.adaptive.rowCardWidth
 import com.raulshma.jellyplay.core.ui.components.PlayButtonWithProgress
 import com.raulshma.jellyplay.core.ui.components.PosterCard
+import com.raulshma.jellyplay.core.ui.components.RatingBadge
 import com.raulshma.jellyplay.core.ui.components.formatDurationFromTicks
 import com.raulshma.jellyplay.core.ui.components.progressFraction
 import com.raulshma.jellyplay.core.ui.components.formatRemainingTimeFromTicks
@@ -110,7 +112,16 @@ private fun HorizontalMediaScroller(
                 count = itemCount,
                 key = key,
                 contentType = { "mediaCard" },
-            ) { index -> itemContent(index) }
+            ) { index ->
+                // animateItem (LazyItemScope) animates placement. Placement spec
+                // routes through lazyItemPlacementSpec() so it snaps under
+                // reduce-motion. Wrapping itemContent in a Box is required because
+                // itemContent has no modifier param.
+                val placementSpec = lazyItemPlacementSpec()
+                Box(modifier = Modifier.animateItem(placementSpec = placementSpec)) {
+                    itemContent(index)
+                }
+            }
         }
     }
 }
@@ -135,6 +146,13 @@ fun ContinueWatchingRow(
     val cardWidth = (adaptiveInfo.rowCardWidth(isTv) * 1.6f).coerceAtLeast(260.dp)
     val contentPad = adaptiveInfo.contentPadding(isTv)
     val spacing = adaptiveInfo.itemSpacing(isTv)
+    // The bottom scrim gradient is identical across every card in the same theme
+    // state, so compute it once per row instead of allocating a Brush per card
+    // as cards scroll in/out of view.
+    val surfaceColor = MaterialTheme.colorScheme.surface
+    val surfaceScrimBrush = remember(surfaceColor) {
+        Brush.verticalGradient(listOf(Color.Transparent, surfaceColor.copy(alpha = 0.4f)))
+    }
 
     Column(modifier = modifier) {
         Text(
@@ -163,6 +181,7 @@ fun ContinueWatchingRow(
                     onClick = memoizedClick,
                     onPlayClick = memoizedPlayClick,
                     cardWidth = cardWidth,
+                    surfaceScrimBrush = surfaceScrimBrush,
                     modifier = focusModifier,
                     clipToShape = clippingEnabled,
                 )
@@ -187,6 +206,7 @@ fun ContinueWatchingRow(
                     onClick = memoizedClick,
                     onPlayClick = memoizedPlayClick,
                     cardWidth = cardWidth,
+                    surfaceScrimBrush = surfaceScrimBrush,
                     clipToShape = clippingEnabled,
                 )
             }
@@ -202,6 +222,7 @@ fun WideMediaCard(
     onClick: () -> Unit,
     onPlayClick: (() -> Unit)? = null,
     cardWidth: Dp,
+    surfaceScrimBrush: Brush,
     modifier: Modifier = Modifier,
     clipToShape: Boolean = false,
 ) {
@@ -298,52 +319,21 @@ fun WideMediaCard(
                     )
                 }
 
-                val surfaceColor = MaterialTheme.colorScheme.surface
                 Box(
                     modifier = Modifier
                         .align(Alignment.BottomCenter)
                         .fillMaxWidth()
                         .height(50.dp)
-                        .background(
-                            remember(surfaceColor) {
-                                Brush.verticalGradient(
-                                    colors = listOf(
-                                        Color.Transparent,
-                                        surfaceColor.copy(alpha = 0.4f),
-                                    ),
-                                )
-                            }
-                        )
+                        .background(surfaceScrimBrush)
                 )
 
                 if (item.communityRating != null) {
-                    val ratingText = remember(item.communityRating) { "%.1f".format(item.communityRating) }
-                    Box(
+                    RatingBadge(
+                        rating = item.communityRating,
                         modifier = Modifier
                             .align(Alignment.TopStart)
-                            .padding(6.dp)
-                            .background(
-                                MaterialTheme.colorScheme.surface.copy(alpha = 0.7f),
-                                ShapeCache.smooth4,
-                            )
-                            .padding(horizontal = 6.dp, vertical = 2.dp),
-                    ) {
-                        Row(
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(2.dp),
-                        ) {
-                            Text(
-                                text = "★",
-                                style = MaterialTheme.typography.labelSmall,
-                                color = RatingColors.star,
-                            )
-                            Text(
-                                text = ratingText,
-                                style = MaterialTheme.typography.labelSmall,
-                                color = MaterialTheme.colorScheme.onSurface,
-                            )
-                        }
-                    }
+                            .padding(6.dp),
+                    )
                 }
 
                 if (onPlayClick != null) {
@@ -405,7 +395,7 @@ fun WideMediaCard(
 
             val timeText = remainingTime ?: totalTime
 
-            val subtitleText = remember(item) {
+            val subtitleText = remember(item.seriesName, item.seasonNumber, item.episodeNumber) {
                 val parts = mutableListOf<String>()
                 item.seriesName?.takeIf { it.isNotBlank() }?.let { parts.add(it) }
                 item.seasonNumber?.let { season ->
@@ -482,6 +472,15 @@ fun HomeMediaRow(
     val effectiveItems = remember(items, cardPrefs.hideWatchedItems) {
         if (cardPrefs.hideWatchedItems) items.filterNot { it.isPlayed } else items
     }
+    // When the filter empties a row, hide the whole row (header included) so
+    // the user doesn't see section titles for fully-watched content.
+    if (effectiveItems.isEmpty()) return
+    // The poster bottom-scrim gradient is identical across every card in the
+    // same theme state, so compute it once per row instead of per card.
+    val posterSurfaceColor = MaterialTheme.colorScheme.surface
+    val posterScrimBrush = remember(posterSurfaceColor) {
+        Brush.verticalGradient(listOf(Color.Transparent, posterSurfaceColor.copy(alpha = 0.45f)))
+    }
 
     Column(modifier = modifier) {
         Text(
@@ -491,7 +490,6 @@ fun HomeMediaRow(
             color = MaterialTheme.colorScheme.onSurface,
             modifier = Modifier.padding(horizontal = contentPad, vertical = 8.dp),
         )
-        if (effectiveItems.isEmpty()) return@Column
         if (isTv) {
             TvFocusableItemRow(
                 items = effectiveItems,
@@ -523,6 +521,7 @@ fun HomeMediaRow(
                     photoFolderChildImageUrls = photoFolderChildUrls[item.id].orEmpty(),
                     clipToShape = clippingEnabled,
                     showEpisodeSeriesBadge = showEpisodeSeriesBadge,
+                    gradientBrush = posterScrimBrush,
                 )
             }
         } else {
@@ -557,6 +556,7 @@ fun HomeMediaRow(
                     photoFolderChildImageUrls = photoFolderChildUrls[item.id].orEmpty(),
                     clipToShape = clippingEnabled,
                     showEpisodeSeriesBadge = showEpisodeSeriesBadge,
+                    gradientBrush = posterScrimBrush,
                 )
             }
         }

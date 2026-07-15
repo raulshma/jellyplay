@@ -35,6 +35,28 @@
     <string name="settings_sign_out_subtitle">Log out of current account</string>
     <string name="settings_sign_out_from_server">Sign Out from Server</string>
     <string name="settings_sign_out_from_server_subtitle">Revoke this device\'s session on the server</string>
+    <string name="settings_server_management_subtitle">Switch servers or add new connections</string>
+    <string name="settings_switch_user_subtitle">Manage server users and profiles</string>
+    <string name="settings_activity_insights">Activity &amp; Insights</string>
+    <string name="settings_activity_insights_subtitle">Favorites, history, queue, and upcoming</string>
+    <string name="settings_browse_favorites">Browse Favorites</string>
+    <string name="settings_browse_favorites_subtitle">View your favourited media</string>
+    <string name="settings_watch_history_heatmap">Watch History Heatmap</string>
+    <string name="settings_watch_history_heatmap_subtitle">Visualize your viewing activity</string>
+    <string name="settings_activity_queue">Activity Queue</string>
+    <string name="settings_activity_queue_subtitle">Download and import queue</string>
+    <string name="settings_upcoming">Upcoming</string>
+    <string name="settings_upcoming_subtitle">Calendar of upcoming episodes</string>
+    <string name="settings_requests">Requests</string>
+    <string name="settings_requests_subtitle">Review Seerr/Jellyseerr requests</string>
+    <string name="settings_system">System</string>
+    <string name="settings_system_subtitle">Admin and setup wizard</string>
+    <string name="settings_admin_dashboard">Admin Dashboard</string>
+    <string name="settings_admin_dashboard_subtitle">Server admin tools and sessions</string>
+    <string name="settings_seerr_integration">Seerr Integration</string>
+    <string name="settings_seerr_integration_subtitle">Configure Seerr/Jellyseerr</string>
+    <string name="settings_setup_wizard">Setup Wizard</string>
+    <string name="settings_setup_wizard_subtitle">Re-run initial onboarding</string>
     <string name="settings_appearance">Appearance</string>
     <string name="settings_playback">Playback</string>
     <string name="settings_playback_subtitle">Player Engine: %1$s</string>
@@ -71,7 +93,10 @@
     <string name="settings_about">About</string>
     <string name="settings_about_subtitle">App version and licenses</string>
     <string name="settings_integrations">Integrations</string>
-    <string name="settings_integrations_subtitle">Radarr &amp; Sonarr servers</string>
+    <string name="settings_integrations_subtitle">Seerr, Radarr &amp; Sonarr</string>
+    <string name="settings_integrations_title">Integrations</string>
+    <string name="settings_integrations_arr">Radarr / Sonarr</string>
+    <string name="settings_integrations_arr_subtitle">Direct server connections</string>
     <string name="settings_sign_out_confirm_title_server">Sign Out from Server?</string>
     <string name="settings_sign_out_confirm_title">Sign Out?</string>
     <string name="settings_sign_out_confirm_message_server">This will revoke this device\'s session on the server. You\'ll need to sign in again to use the app.</string>
@@ -391,6 +416,9 @@
     <string name="settings_show_clock_home">Show Clock on Home</string>
     <string name="settings_show_clock_on">Display current time in top bar</string>
     <string name="settings_show_clock_off">No clock on home</string>
+    <string name="settings_show_settings_in_home_search">Settings in Home Search</string>
+    <string name="settings_show_settings_in_home_search_on">Settings appear in home search results</string>
+    <string name="settings_show_settings_in_home_search_off">Search home for media only</string>
     <string name="settings_continue_watching_tap">Continue Watching Tap</string>
 
     <!-- AudioSettingsScreen.kt -->
@@ -470,6 +498,8 @@
     <string name="settings_subtitles_summary">Font size: %1$dsp</string>
     <string name="settings_font_size">Font Size</string>
     <string name="settings_font_size_subtitle">Subtitle text size</string>
+    <string name="settings_open_subtitle_tester">Subtitle style tester</string>
+    <string name="settings_open_subtitle_tester_subtitle">Preview styles across engines</string>
     <string name="settings_forced_subtitles">Forced Subtitles Only</string>
     <string name="settings_forced_subtitles_on">Show subtitles only when forced tracks are present</string>
     <string name="settings_forced_subtitles_off">Show subtitles per preferred language</string>

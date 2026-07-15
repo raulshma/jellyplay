@@ -9,6 +9,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.snapshotFlow
+import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.dp
 import com.raulshma.jellyplay.core.ui.tv.LocalTvMode
@@ -92,6 +93,10 @@ internal fun rememberHomeScrollState(
  * -state holder. Scrolled the saved row fully into view (so its FocusRequester
  * is attached, avoiding the half-clipped hero a minimal bring-into-view caused
  * previously) then re-requests focus.
+ *
+ * The scroll is deferred one frame (`withFrameNanos`) so the first frame
+ * paints before the measure/layout work `scrollToItem` performs, avoiding
+ * first-frame jank on a back-stack pop.
  */
 @Composable
 internal fun RestoreHomeRowFocus(
@@ -105,6 +110,7 @@ internal fun RestoreHomeRowFocus(
     val savedRowIsValid = savedRow in 0..(sectionCount - 1)
     LaunchedEffect(Unit) {
         if (isTv && savedRowIsValid && sectionCount > 0) {
+            withFrameNanos { }
             val headerOffset = 1 + (if (newsletterBannerVisible) 1 else 0)
             listState.scrollToItem(savedRow + headerOffset)
             rowFocusRequesters().getOrNull(savedRow)?.tryRequestFocus("home_row_restore")

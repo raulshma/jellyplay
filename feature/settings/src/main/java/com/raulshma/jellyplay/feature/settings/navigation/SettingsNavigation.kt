@@ -11,6 +11,7 @@ import com.raulshma.jellyplay.feature.settings.AppearanceSettingsScreen
 import com.raulshma.jellyplay.feature.settings.AudioSettingsScreen
 import com.raulshma.jellyplay.feature.settings.BackupSettingsScreen
 import com.raulshma.jellyplay.feature.settings.ExperimentalSettingsScreen
+import com.raulshma.jellyplay.feature.settings.IntegrationsScreen
 import com.raulshma.jellyplay.feature.settings.LanguageSettingsScreen
 import com.raulshma.jellyplay.feature.settings.LicensesScreen
 import com.raulshma.jellyplay.feature.settings.HomeLayoutPresetsScreen
@@ -41,12 +42,16 @@ fun EntryProviderScope<NavKey>.settingsSection(
                 onUserManagement = { id -> navigator.navigate(Route.UserManagement(id)) },
                 onSeerrSettings = { id -> navigator.navigate(Route.SeerrSettings(id)) },
                 onArrSettings = { id -> navigator.navigate(Route.ArrSettings(id)) },
+                onIntegrations = { id -> navigator.navigate(Route.Integrations(id)) },
                 onAdminDashboard = { navigator.navigate(Route.AdminDashboard) },
                 onSetupWizard = onSetupWizard,
                 onNewsletterClick = { navigator.navigate(Route.Newsletter) },
                 onFavoritesClick = { navigator.navigate(Route.Favorites) },
                 onAboutClick = { navigator.navigate(Route.About) },
                 onWatchProgressHeatmapClick = { navigator.navigate(Route.WatchProgressHeatmap) },
+                onActivityQueueClick = { navigator.navigate(Route.ArrQueue) },
+                onUpcomingClick = { navigator.navigate(Route.UpcomingCalendar) },
+                onRequestsClick = { navigator.navigate(Route.Requests) },
                 onAppearanceSettings = { id -> navigator.navigate(Route.AppearanceSettings(id)) },
                 onPinnedHomeSections = { id -> navigator.navigate(Route.PinnedHomeSections(id)) },
                 onHomeLayoutPresets = { id -> navigator.navigate(Route.HomeLayoutPresets(id)) },
@@ -131,6 +136,7 @@ fun EntryProviderScope<NavKey>.settingsSection(
     entry<Route.LanguageSettings> { entry ->
         LanguageSettingsScreen(
             onBack = { navigator.goBack() },
+            onOpenSubtitleTester = { navigator.navigate(Route.SubtitleTester) },
             highlightSettingId = entry.highlightSettingId,
         )
     }
@@ -166,6 +172,15 @@ fun EntryProviderScope<NavKey>.settingsSection(
     entry<Route.ExperimentalSettings> { entry ->
         ExperimentalSettingsScreen(
             onBack = { navigator.goBack() },
+            highlightSettingId = entry.highlightSettingId,
+        )
+    }
+
+    entry<Route.Integrations> { entry ->
+        IntegrationsScreen(
+            onBack = { navigator.goBack() },
+            onSeerrSettings = { navigator.navigate(Route.SeerrSettings()) },
+            onArrSettings = { navigator.navigate(Route.ArrSettings()) },
             highlightSettingId = entry.highlightSettingId,
         )
     }

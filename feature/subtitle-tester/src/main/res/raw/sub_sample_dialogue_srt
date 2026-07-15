@@ -1,0 +1,11 @@
+1
+00:00:00,200 --> 00:00:02,500
+Welcome to the subtitle style tester.
+
+2
+00:00:02,600 --> 00:00:05,000
+<i>This is a narration line in italics.</i>
+
+3
+00:00:05,100 --> 00:00:07,500
+A LONGER LINE IN ALL CAPS TO TEST EDGES.
