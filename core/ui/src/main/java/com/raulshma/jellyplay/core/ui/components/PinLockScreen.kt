@@ -22,6 +22,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
+import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -53,7 +54,7 @@ import androidx.compose.foundation.style.rememberUpdatedStyleState
 import androidx.compose.foundation.style.styleable
 import com.raulshma.jellyplay.core.designsystem.theme.ComponentStyles
 
-@OptIn(ExperimentalFoundationStyleApi::class)
+@OptIn(ExperimentalFoundationStyleApi::class, ExperimentalMaterial3ExpressiveApi::class)
 @Composable
 fun PinLockScreen(
     title: String = "Enter PIN",
@@ -63,6 +64,7 @@ fun PinLockScreen(
     errorMessage: String? = null,
     compactMode: Boolean = false,
     enabled: Boolean = true,
+    verifying: Boolean = false,
 ) {
     var pin by remember { mutableStateOf("") }
     val maxDigits = 4
@@ -114,22 +116,28 @@ fun PinLockScreen(
         )
         Spacer(Modifier.height(32.dp))
 
-        Row(
-            horizontalArrangement = Arrangement.spacedBy(keySpacing),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            repeat(maxDigits) { index ->
-                val filled = index < pin.length
-                val interactionSource = remember { MutableInteractionSource() }
-                val styleState = rememberUpdatedStyleState(interactionSource)
-                
-                Box(
-                    modifier = Modifier
-                        .styleable(
-                            styleState,
-                            if (filled) ComponentStyles.pinDotFilledStyle(dotFilledSize) else ComponentStyles.pinDotStyle(dotSize)
-                        )
-                )
+        if (verifying) {
+            // PBKDF2 verification is deliberately slow; show a spinner in
+            // place of the dots so the user knows the entry is being checked.
+            JellyPlayLoadingIndicator()
+        } else {
+            Row(
+                horizontalArrangement = Arrangement.spacedBy(keySpacing),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                repeat(maxDigits) { index ->
+                    val filled = index < pin.length
+                    val interactionSource = remember { MutableInteractionSource() }
+                    val styleState = rememberUpdatedStyleState(interactionSource)
+
+                    Box(
+                        modifier = Modifier
+                            .styleable(
+                                styleState,
+                                if (filled) ComponentStyles.pinDotFilledStyle(dotFilledSize) else ComponentStyles.pinDotStyle(dotSize)
+                            )
+                    )
+                }
             }
         }
 

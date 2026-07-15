@@ -169,23 +169,21 @@ internal fun SeasonsSection(
                     label = "seasonContentColor",
                 )
                 val seasonTabFocusState = rememberTvFocusState(focusedScale = 1.05f)
-                FadingItem {
-                    Surface(
-                        modifier = focusModifier
-                            .clip(ShapeCache.smooth16)
-                            .then(seasonTabFocusState.focusModifier)
-                            .then(Modifier.tvFocusIndicator(seasonTabFocusState, ShapeCache.smooth16))
-                            .clickable { selectedSeasonIndex = index },
-                        color = surfaceColor,
-                        contentColor = contentColor,
-                    ) {
-                        Text(
-                            text = season.name ?: stringResource(R.string.detail_season_format, season.indexNumber ?: (index + 1)),
-                            modifier = Modifier.padding(horizontal = 16.dp, vertical = 10.dp),
-                            style = MaterialTheme.typography.titleSmall,
-                            fontWeight = FontWeight.Bold,
-                        )
-                    }
+                Surface(
+                    modifier = focusModifier
+                        .clip(ShapeCache.smooth16)
+                        .then(seasonTabFocusState.focusModifier)
+                        .then(Modifier.tvFocusIndicator(seasonTabFocusState, ShapeCache.smooth16))
+                        .clickable { selectedSeasonIndex = index },
+                    color = surfaceColor,
+                    contentColor = contentColor,
+                ) {
+                    Text(
+                        text = season.name ?: stringResource(R.string.detail_season_format, season.indexNumber ?: (index + 1)),
+                        modifier = Modifier.padding(horizontal = 16.dp, vertical = 10.dp),
+                        style = MaterialTheme.typography.titleSmall,
+                        fontWeight = FontWeight.Bold,
+                    )
                 }
         }
 
@@ -210,9 +208,14 @@ internal fun SeasonsSection(
             },
             label = "seasonEpisodes",
         ) { (seasonIdx, episodeCount) ->
-            val currentEpisodes = seasons.getOrNull(seasonIdx)?.let { episodes[it.id] }
-                ?.sortedBy { it.episodeNumber ?: it.indexNumber ?: Int.MAX_VALUE }
-                ?.let { sorted -> if (episodesDescending) sorted.reversed() else sorted }
+            // Memoize the sort + reverse so a recomposition triggered by an
+            // unrelated parent state change (e.g. sibling animation) doesn't
+            // re-sort this season's episode list.
+            val currentEpisodes = remember(seasonIdx, episodes, episodesDescending) {
+                seasons.getOrNull(seasonIdx)?.let { episodes[it.id] }
+                    ?.sortedBy { it.episodeNumber ?: it.indexNumber ?: Int.MAX_VALUE }
+                    ?.let { sorted -> if (episodesDescending) sorted.reversed() else sorted }
+            }
             val currentIsFetched = seasons.getOrNull(seasonIdx)?.id?.let { fetchedSeasonIds.contains(it) } ?: false
             val currentIsLoading = currentEpisodes == null && seasons.getOrNull(seasonIdx) != null && !currentIsFetched
 
@@ -237,17 +240,15 @@ internal fun SeasonsSection(
                         contentPadding = PaddingValues(horizontal = 24.dp),
                         horizontalArrangement = Arrangement.spacedBy(16.dp),
                     ) { _, episode, focusModifier ->
-                            FadingItem {
-                                EpisodeCard(
-                                    episode = episode,
-                                    getImageUrl = getImageUrl,
-                                    isCurrentEpisode = episode.id == currentItemId,
-                                    onPlayClick = { onEpisodePlayClick(episode) },
-                                    onDetailClick = { onEpisodeDetailClick(episode) },
-                                    modifier = focusModifier,
-                                    hideThumbnail = hideEpisodeThumbnails,
-                                )
-                            }
+                            EpisodeCard(
+                                episode = episode,
+                                getImageUrl = getImageUrl,
+                                isCurrentEpisode = episode.id == currentItemId,
+                                onPlayClick = { onEpisodePlayClick(episode) },
+                                onDetailClick = { onEpisodeDetailClick(episode) },
+                                modifier = focusModifier,
+                                hideThumbnail = hideEpisodeThumbnails,
+                            )
                     }
                 }
                 else -> {
@@ -298,11 +299,14 @@ internal fun EpisodeCard(
     val isTv = LocalTvMode.current
     val cardWidth = (adaptiveInfo.rowCardWidth(isTv) * 1.5f).coerceAtLeast(260.dp)
 
+    // Build the episode image URL once per episode instead of 3× per recomposition.
+    val episodeImageUrl = remember(episode.id) { getImageUrl(episode.id) }
+
     // Press-and-hold "peek" preview; no-op on TV / when no controller is wired.
     val peek = rememberMediaPeek(
         item = episode,
-        posterUrl = getImageUrl(episode.id),
-        backdropUrl = getImageUrl(episode.id),
+        posterUrl = episodeImageUrl,
+        backdropUrl = episodeImageUrl,
         blurHash = episode.blurHashes.primary,
     )
     rememberReleaseDismiss(isCardPressed)
@@ -367,7 +371,7 @@ internal fun EpisodeCard(
         ) {
             if (!hideThumbnail) {
                 MediaImage(
-                    url = getImageUrl(episode.id),
+                    url = episodeImageUrl,
                     contentDescription = episode.name,
                     blurHash = episode.blurHashes.primary,
                     // Episode thumbnails render up to ~480 dp wide × 16:9. Decode a

@@ -71,11 +71,11 @@ fun UserManagementScreen(
     onBack: () -> Unit,
     onAddUser: () -> Unit,
     highlightSettingId: String? = null,
-    viewModel: SettingsViewModel = hiltViewModel(),
+    viewModel: ServerSettingsViewModel = hiltViewModel(),
 ) {
-    val currentUser = viewModel.currentUser
-    val serverUsers = viewModel.currentServerUsers
-    val isLoading = viewModel.isLoadingUsers
+    val currentUser by viewModel.currentUser.collectAsStateWithLifecycle()
+    val serverUsers by viewModel.currentServerUsers.collectAsStateWithLifecycle()
+    val isLoading by viewModel.isLoadingUsers.collectAsStateWithLifecycle()
     val networkStatus by LocalNetworkStatus.current
         .collectAsStateWithLifecycle()
     val headerStatus = resolveHeaderStatus(
@@ -130,7 +130,12 @@ fun UserManagementScreen(
                             .fillMaxSize()
                             .tvFocusRestorer()
                             .focusRequester(focusRequester),
-                        contentPadding = PaddingValues(contentPad),
+                        contentPadding = PaddingValues(
+                            start = contentPad,
+                            end = contentPad,
+                            top = contentPad,
+                            bottom = contentPad + com.raulshma.jellyplay.core.designsystem.theme.Dimensions.floatingNavHeight + WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding(),
+                        ),
                         verticalArrangement = Arrangement.spacedBy(spacing),
                     ) {
                         itemsIndexed(serverUsers, key = { _, it -> it.id }, contentType = { _, _ -> "user" }) { index, user ->
@@ -166,29 +171,33 @@ fun UserManagementScreen(
                 }
             }
 
-            AnimatedVisibility(
-                visible = serverUsers.isNotEmpty(),
-                enter = fadeIn(MaterialTheme.motionScheme.defaultEffectsSpec()) +
-                        slideInVertically(initialOffsetY = { it }),
-                exit = androidx.compose.animation.fadeOut(MaterialTheme.motionScheme.fastEffectsSpec()) +
-                        androidx.compose.animation.slideOutVertically(targetOffsetY = { it }),
-                modifier = Modifier
-                    .align(Alignment.BottomEnd)
-                    .padding(end = 16.dp, bottom = 64.dp + WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding())
-                    .offset {
-                        val maxOffset = com.raulshma.jellyplay.core.designsystem.theme.Dimensions.floatingNavHeight.toPx()
-                        val yOffset = (-navOffsetPx()).coerceAtMost(maxOffset)
-                        androidx.compose.ui.unit.IntOffset(x = 0, y = yOffset.toInt())
-                    },
-            ) {
-                ExtendedFloatingActionButton(
-                    onClick = onAddUser,
-                    modifier = Modifier
-                        .then(addUserFocusState.focusModifier)
-                        .tvFocusIndicator(addUserFocusState, ShapeCache.smooth16),
-                    icon = { Icon(Tabler.Outline.Plus, contentDescription = null) },
-                    text = { Text(stringResource(R.string.settings_add_user)) },
-                )
+            if (!isTv) {
+                AnimatedVisibility(
+                    visible = serverUsers.isNotEmpty(),
+                    enter = fadeIn(MaterialTheme.motionScheme.defaultEffectsSpec()) +
+                            slideInVertically(initialOffsetY = { it }),
+                    exit = androidx.compose.animation.fadeOut(MaterialTheme.motionScheme.fastEffectsSpec()) +
+                            androidx.compose.animation.slideOutVertically(targetOffsetY = { it }),
+                    modifier = Modifier.align(Alignment.BottomEnd),
+                ) {
+                    ExtendedFloatingActionButton(
+                        onClick = onAddUser,
+                        modifier = Modifier
+                            .then(addUserFocusState.focusModifier)
+                            .tvFocusIndicator(addUserFocusState, ShapeCache.smooth16)
+                            .padding(
+                                end = 16.dp,
+                                bottom = 16.dp + com.raulshma.jellyplay.core.designsystem.theme.Dimensions.floatingNavHeight + WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding(),
+                            )
+                            .offset {
+                                val maxOffset = com.raulshma.jellyplay.core.designsystem.theme.Dimensions.floatingNavHeight.toPx()
+                                val yOffset = (-navOffsetPx()).coerceAtMost(maxOffset)
+                                androidx.compose.ui.unit.IntOffset(x = 0, y = yOffset.toInt())
+                            },
+                        icon = { Icon(Tabler.Outline.Plus, contentDescription = null) },
+                        text = { Text(stringResource(R.string.settings_add_user)) },
+                    )
+                }
             }
         }
     }

@@ -59,12 +59,14 @@ import com.raulshma.jellyplay.core.designsystem.theme.LocalIsSoothingTheme
 import com.raulshma.jellyplay.core.designsystem.theme.LocalIsSynthwave
 import com.raulshma.jellyplay.core.designsystem.theme.LocalThemeVariant
 import com.raulshma.jellyplay.core.designsystem.theme.RatingColors
+import com.raulshma.jellyplay.core.designsystem.theme.isLightColor
 import com.raulshma.jellyplay.core.designsystem.theme.ShapeCache
 import com.raulshma.jellyplay.core.designsystem.theme.cardBorder
 import com.raulshma.jellyplay.core.designsystem.theme.cardElevation
 import com.raulshma.jellyplay.core.model.MediaItem
 import com.raulshma.jellyplay.core.model.MediaType
 import com.raulshma.jellyplay.core.ui.animation.fastEffectsSpec
+import com.raulshma.jellyplay.core.ui.animation.pressScale
 import com.raulshma.jellyplay.core.ui.adaptive.LocalJellyPlayUi
 import com.raulshma.jellyplay.core.ui.image.MediaImage
 import com.raulshma.jellyplay.core.ui.image.PhotoFolderPoster
@@ -290,6 +292,7 @@ fun PosterCard(
     photoFolderChildImageUrls: List<String> = emptyList(),
     clipToShape: Boolean = false,
     showEpisodeSeriesBadge: Boolean = false,
+    gradientBrush: Brush? = null,
 ) {
     val uiEnvironment = LocalJellyPlayUi.current
     val cardPrefs = LocalCardDisplayPreferences.current
@@ -301,12 +304,11 @@ fun PosterCard(
     val focusInteraction = rememberJellyFocusableInteraction()
     val interactionSource = remember { MutableInteractionSource() }
     val isPressed by interactionSource.collectIsPressedAsState()
-    val baseScale by animateFloatAsState(
-        targetValue = if (isPressed) 0.95f else 1f,
-        animationSpec = MaterialTheme.motionScheme.defaultSpatialSpec(),
-        label = "cardScale",
-    )
-    val scale = baseScale * focusInteraction.scale
+    // Press feedback is applied via Modifier.pressScale(interactionSource) below
+    // (its own graphicsLayer, animated through motionScheme so it flattens under
+    // reduce-motion). Focus feedback is applied via the focus graphicsLayer that
+    // follows it. Two nested graphicsLayers multiply: press (0.95) × focus (1.05).
+    val focusScale = focusInteraction.scale
     val themeVariant = com.raulshma.jellyplay.core.designsystem.theme.LocalThemeVariant.current
     val elevation = themeVariant.cardElevation(
         isPressed = isPressed,
@@ -367,7 +369,7 @@ fun PosterCard(
         )
 
         val surfaceColor = MaterialTheme.colorScheme.surface
-        val gradientBrush = remember(surfaceColor) {
+        val resolvedGradientBrush = gradientBrush ?: remember(surfaceColor) {
             Brush.verticalGradient(
                 colors = listOf(
                     Color.Transparent,
@@ -381,9 +383,10 @@ fun PosterCard(
                 .fillMaxWidth()
                 .then(focusInteraction.modifier)
                 .then(peek?.boundsModifier ?: Modifier)
+                .pressScale(interactionSource = interactionSource)
                 .graphicsLayer {
-                    scaleX = scale
-                    scaleY = scale
+                    scaleX = focusScale
+                    scaleY = focusScale
                     shadowElevation = if (performanceMode) 0f else elevation.toPx()
                     clip = clipToShape
                     shape = cardShape
@@ -427,117 +430,54 @@ fun PosterCard(
                         .align(Alignment.BottomCenter)
                         .fillMaxWidth()
                         .height(60.dp)
-                        .background(gradientBrush)
+                        .background(resolvedGradientBrush)
                 )
 
                 if (item.isPlayed && cardPrefs.showWatchedCheckmark) {
-                    val playedBadgeColor = dominantColor
-                    val playedBadgeText = remember(playedBadgeColor) {
-                        if ((playedBadgeColor.red * 0.299f + playedBadgeColor.green * 0.587f + playedBadgeColor.blue * 0.114f) > 0.5f) Color.Black else Color.White
-                    }
-                    Box(
+                    WatchedBadge(
+                        accentTint = dominantColor,
+                        iconColor = remember(dominantColor) {
+                            if (isLightColor(dominantColor)) Color.Black else Color.White
+                        },
                         modifier = Modifier
                             .align(Alignment.TopEnd)
-                            .padding(6.dp)
-                            .background(
-                                playedBadgeColor.copy(alpha = 0.9f),
-                                ShapeCache.smooth4,
-                            )
-                            .padding(horizontal = 6.dp, vertical = 2.dp),
-                    ) {
-                        Text(
-                            text = "✓",
-                            style = MaterialTheme.typography.labelSmall,
-                            color = playedBadgeText,
-                        )
-                    }
+                            .padding(6.dp),
+                    )
                 } else if (!item.isPlayed && cardPrefs.showUnwatchedBadge) {
                     val unplayedCount = item.unplayedItemCount
                     // Unwatched-count badge for series/seasons/collections. Only
                     // rendered when the user has enabled the unwatched badge
                     // and the underlying MediaItem exposes a non-zero count.
                     if (unplayedCount != null && unplayedCount > 0) {
-                        Box(
+                        UnwatchedCountBadge(
+                            count = unplayedCount,
                             modifier = Modifier
                                 .align(Alignment.TopEnd)
-                                .padding(6.dp)
-                                .background(
-                                    MaterialTheme.colorScheme.surface.copy(alpha = 0.85f),
-                                    ShapeCache.smooth4,
-                                )
-                                .padding(horizontal = 6.dp, vertical = 2.dp),
-                        ) {
-                            Text(
-                                text = "$unplayedCount",
-                                style = MaterialTheme.typography.labelSmall,
-                                color = MaterialTheme.colorScheme.onSurface,
-                                fontWeight = FontWeight.Bold,
-                            )
-                        }
+                                .padding(6.dp),
+                        )
                     }
                 }
 
                 if (item.communityRating != null) {
-                    val ratingText = remember(item.communityRating) { "%.1f".format(item.communityRating) }
-                    Box(
+                    RatingBadge(
+                        rating = item.communityRating,
                         modifier = Modifier
                             .align(Alignment.TopStart)
-                            .padding(6.dp)
-                            .background(
-                                MaterialTheme.colorScheme.surface.copy(alpha = 0.7f),
-                                ShapeCache.smooth4,
-                            )
-                            .padding(horizontal = 6.dp, vertical = 2.dp),
-                    ) {
-                        Row(
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(2.dp),
-                        ) {
-                            Text(
-                                text = "★",
-                                style = MaterialTheme.typography.labelSmall,
-                                color = RatingColors.star,
-                            )
-                            Text(
-                                text = ratingText,
-                                style = MaterialTheme.typography.labelSmall,
-                                color = MaterialTheme.colorScheme.onSurface,
-                            )
-                        }
-                    }
+                            .padding(6.dp),
+                    )
                 }
 
                 // Bottom-left season/episode chip for episode cards surfaced in
                 // Latest Media rows. The series name is shown as the card title
                 // (see below) so the chip only needs to carry the S# E# context.
                 if (showEpisodeSeriesBadge && item.mediaType == MediaType.EPISODE) {
-                    val seasonNumber = item.seasonNumber
-                    val episodeNumber = item.episodeNumber
-                    val episodeChip = remember(seasonNumber, episodeNumber) {
-                        when {
-                            seasonNumber != null && episodeNumber != null ->
-                                "S${seasonNumber} E${episodeNumber.toString().padStart(2, '0')}"
-                            episodeNumber != null -> "E${episodeNumber.toString().padStart(2, '0')}"
-                            seasonNumber != null -> "S$seasonNumber"
-                            else -> null
-                        }
-                    }
-                    if (episodeChip != null) {
-                        Text(
-                            text = episodeChip,
-                            style = MaterialTheme.typography.labelSmall,
-                            color = Color.White,
-                            fontWeight = FontWeight.SemiBold,
-                            modifier = Modifier
-                                .align(Alignment.BottomStart)
-                                .padding(start = 6.dp, bottom = 6.dp)
-                                .background(
-                                    MaterialTheme.colorScheme.primary,
-                                    ShapeCache.smooth4,
-                                )
-                                .padding(horizontal = 6.dp, vertical = 2.dp),
-                        )
-                    }
+                    EpisodeChip(
+                        seasonNumber = item.seasonNumber,
+                        episodeNumber = item.episodeNumber,
+                        modifier = Modifier
+                            .align(Alignment.BottomStart)
+                            .padding(start = 6.dp, bottom = 6.dp),
+                    )
                 }
 
                 if (onPlayClick != null) {

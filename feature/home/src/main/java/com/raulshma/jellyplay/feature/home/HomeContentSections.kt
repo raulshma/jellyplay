@@ -47,6 +47,7 @@ import com.raulshma.jellyplay.core.model.HomeSectionType
 import com.raulshma.jellyplay.core.model.MediaItem
 import com.raulshma.jellyplay.core.model.OfflineMediaItem
 import com.raulshma.jellyplay.core.ui.adaptive.LocalAdaptiveInfo
+import com.raulshma.jellyplay.core.ui.animation.lazyItemPlacementSpec
 import com.raulshma.jellyplay.core.ui.adaptive.WindowSizeClass
 import com.raulshma.jellyplay.core.ui.adaptive.bottomPadding
 import com.raulshma.jellyplay.core.ui.adaptive.itemSpacing
@@ -172,7 +173,9 @@ internal fun HomeContentList(
         val dedupedOfflineLibrary = remember(state.offlineLibrary, sections) {
             if (state.offlineLibrary.isEmpty()) state.offlineLibrary
             else {
-                val onlineIds = sections.flatMap { it.items }.mapTo(mutableSetOf()) { it.id }
+                val onlineIds = buildSet {
+                    for (section in sections) for (item in section.items) add(item.id)
+                }
                 if (onlineIds.isEmpty()) state.offlineLibrary else state.offlineLibrary.filter { it.id !in onlineIds }
             }
         }
@@ -283,7 +286,9 @@ internal fun HomeContentList(
                     label = "sectionAnimation",
                 )
 
+                val placementSpec = lazyItemPlacementSpec()
                 val sectionModifier = Modifier
+                    .animateItem(placementSpec = placementSpec)
                     .fillMaxWidth()
                     .then(
                         if (isFirstAfterHero) {

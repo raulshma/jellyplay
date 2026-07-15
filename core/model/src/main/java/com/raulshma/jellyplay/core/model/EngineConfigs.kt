@@ -83,8 +83,12 @@ enum class MpvDemuxerMaxBytes(val displayName: String, val key: String, val byte
 @Immutable
 @Serializable
 data class MpvEngineConfig(
-    val videoOutput: MpvVideoOutput = MpvVideoOutput.GPU,
-    val scaler: MpvScaler = MpvScaler.BILINEAR,
+    // gpu-next is the modern vo with better HDR / 10-bit handling; the legacy
+    // `gpu` vo is the historical default but is no longer recommended.
+    val videoOutput: MpvVideoOutput = MpvVideoOutput.GPU_NEXT,
+    // Lanczos is a sharp, well-rounded scaler; the previous bilinear default
+    // produced visibly soft output, especially for downscaled (phone) content.
+    val scaler: MpvScaler = MpvScaler.LANCZOS,
     val deband: Boolean = false,
     val interpolation: Boolean = false,
     val audioOutput: MpvAudioOutput = MpvAudioOutput.AUDIOTRACK,

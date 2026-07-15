@@ -19,7 +19,11 @@ import com.raulshma.jellyplay.core.model.MediaType
 import com.raulshma.jellyplay.core.model.NetworkStatus
 import com.raulshma.jellyplay.core.model.UserPreferences
 import com.raulshma.jellyplay.core.model.isExperimentalEnabled
+import com.raulshma.jellyplay.core.model.seerr.SeerrRadarrServiceDetail
+import com.raulshma.jellyplay.core.model.seerr.SeerrRequestResult
 import com.raulshma.jellyplay.core.model.seerr.SeerrSearchItem
+import com.raulshma.jellyplay.core.model.seerr.SeerrSeason
+import com.raulshma.jellyplay.core.model.seerr.SeerrSonarrServiceDetail
 import com.raulshma.jellyplay.core.data.playback.AdaptiveBitrateManager
 import com.raulshma.jellyplay.core.data.playback.toAudioQueueItem
 import com.raulshma.jellyplay.core.network.seerr.buildPosterUrl
@@ -42,10 +46,21 @@ import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
+import kotlinx.coroutines.sync.Semaphore
+import kotlinx.coroutines.sync.withPermit
 import kotlinx.coroutines.withContext
+import java.util.concurrent.atomic.AtomicInteger
 import javax.inject.Inject
 
 private val TMDB_ID_REGEX = Regex("""/(\d+)(?:$|/|\?)""")
+
+/**
+ * Ceiling on the number of season-episode fetches that may run concurrently.
+ * Without a cap, a long-running series (30+ seasons) fires that many
+ * [MediaRepository.getEpisodes] requests at once, saturating the connection
+ * pool and contending with the still-in-flight core detail response.
+ */
+private const val MAX_PARALLEL_SEASON_FETCHES = 5
 
 @OptIn(ExperimentalCoroutinesApi::class)
 @HiltViewModel
@@ -87,46 +102,71 @@ class DetailViewModel @Inject constructor(
      * lookup happens inside ManageSeriesScreen.
      */
     val canManageSeries: StateFlow<Boolean> = combine(
-        _uiState.map { it.detail?.item },
-        _uiState.map { it.detail?.providerIds },
+        // Map to identity-relevant fields only so favorite/played toggles (which
+        // change isFavorite/isPlayed but not id/mediaType) produce structurally
+        // equal emissions that StateFlow deduplicates — otherwise every toggle
+        // re-triggered the combine and called arrRepository.resolveServers().
+        _uiState.map { it.detail?.item?.let { item -> ItemIdentity(item.id, item.mediaType) } },
+        _uiState.map { it.detail?.providerIds?.get("tvdb") },
         preferencesStore.preferences.map { it.isExperimentalEnabled(ExperimentalFeature.DIRECT_ARR_INTEGRATION) },
-    ) { item, providerIds, flagEnabled ->
-        if (!flagEnabled || item == null) return@combine false
-        if (item.mediaType != MediaType.SERIES) return@combine false
-        if (providerIds?.get("tvdb")?.toIntOrNull() == null) return@combine false
+    ) { itemIdentity, tvdbId, flagEnabled ->
+        if (!flagEnabled || itemIdentity == null) return@combine false
+        if (itemIdentity.mediaType != MediaType.SERIES) return@combine false
+        if (tvdbId?.toIntOrNull() == null) return@combine false
         val summary = arrRepository.resolveServers().getOrDefault(com.raulshma.jellyplay.core.model.arr.ArrServiceSummary())
         summary.sonarrServers.isNotEmpty()
     }.stateIn(scope, SharingStarted.WhileSubscribed(5_000), false)
 
     private val seerrRequestState = com.raulshma.jellyplay.core.data.seerr.SeerrRequestStateHolder(scope, seerrRequestDelegate)
 
-    val uiState: StateFlow<DetailUiState> = combine(
-        _uiState,
-        seerrRequestState.requestResult,
-        seerrRequestState.radarrServers,
-        seerrRequestState.sonarrServers,
-        seerrRequestState.isLoadingServices,
-    ) { primary, requestResult, radarrServers, sonarrServers, isLoadingServices ->
-        primary.copy(
-            seerrRequestResult = requestResult,
-            seerrRadarrServers = radarrServers,
-            seerrSonarrServers = sonarrServers,
-            isLoadingSeerrServices = isLoadingServices,
-        )
-    }.let { intermediate ->
-        combine(
-            intermediate,
+    /**
+     * Aggregated detail-screen state. Eight upstream flows feed this [StateFlow],
+     * but they are split into three independently-`stateIn`'d groups so a tick in
+     * one group (e.g. Seerr connection polling) doesn't re-run the combine logic of
+     * an unrelated group (e.g. the core detail/seasons/episodes tree). A final
+     * outer [combine] folds the three snapshots into a single [DetailUiState] so
+     * observers see one atomic snapshot, while each group's [StateFlow] deduplicates
+     * its own emissions upstream of the merge.
+     */
+    val uiState: StateFlow<DetailUiState> = run {
+        // Group 1 — core load state (detail/seasons/episodes/smart-play/...).
+        val core = _uiState.stateIn(scope, SharingStarted.WhileSubscribed(5_000), DetailUiState())
+        // Group 2 — Seerr request-flow ephemera (radarr/sonarr/result/dialog state).
+        val seerrRequest = combine(
+            seerrRequestState.requestResult,
+            seerrRequestState.radarrServers,
+            seerrRequestState.sonarrServers,
+            seerrRequestState.isLoadingServices,
             seerrRequestState.tvSeasons,
+        ) { requestResult, radarrServers, sonarrServers, isLoadingServices, tvSeasons ->
+            SeerrRequestSnapshot(
+                requestResult = requestResult,
+                radarrServers = radarrServers,
+                sonarrServers = sonarrServers,
+                isLoadingServices = isLoadingServices,
+                tvSeasons = tvSeasons,
+            )
+        }.stateIn(scope, SharingStarted.WhileSubscribed(5_000), SeerrRequestSnapshot())
+        // Group 3 — Seerr connection flags that only gate recommendation visibility.
+        val seerrFlags = combine(
             seerrRepository.isConnected(),
             seerrRepository.isRecommendationsEnabled(),
-        ) { partial, tvSeasons, isSeerrConnected, isSeerrRecommendationsEnabled ->
-            partial.copy(
-                seerrTvSeasons = tvSeasons,
-                isSeerrConnected = isSeerrConnected,
-                isSeerrRecommendationsEnabled = isSeerrRecommendationsEnabled,
+        ) { isConnected, isRecommendationsEnabled ->
+            SeerrConnectionFlags(isConnected, isRecommendationsEnabled)
+        }.stateIn(scope, SharingStarted.WhileSubscribed(5_000), SeerrConnectionFlags())
+
+        combine(core, seerrRequest, seerrFlags) { primary, request, flags ->
+            primary.copy(
+                seerrRequestResult = request.requestResult,
+                seerrRadarrServers = request.radarrServers,
+                seerrSonarrServers = request.sonarrServers,
+                isLoadingSeerrServices = request.isLoadingServices,
+                seerrTvSeasons = request.tvSeasons,
+                isSeerrConnected = flags.isConnected,
+                isSeerrRecommendationsEnabled = flags.isRecommendationsEnabled,
             )
-        }
-    }.stateIn(scope, SharingStarted.WhileSubscribed(5_000), DetailUiState())
+        }.stateIn(scope, SharingStarted.WhileSubscribed(5_000), DetailUiState())
+    }
 
     // Direct (non-observable) readers for the two stream-selection indices.
     // These are read synchronously at click time inside the play callback
@@ -136,9 +176,11 @@ class DetailViewModel @Inject constructor(
     val selectedSubtitleIndex: Int? get() = _uiState.value.selectedSubtitleIndex
     val selectedAudioIndex: Int? get() = _uiState.value.selectedAudioIndex
 
-    // Internal caches (not observable UI state).
-    private val episodesMap = java.util.Collections.synchronizedMap(mutableMapOf<String, List<MediaItem>>())
-    private val downloadSheetEpisodesMap = java.util.Collections.synchronizedMap(mutableMapOf<String, List<MediaItem>>())
+    // Internal caches (not observable UI state). All access happens on the
+    // Main dispatcher (viewModelScope), so a plain MutableMap suffices — the
+    // previous synchronizedMap wrappers added lock overhead with no contention.
+    private val episodesMap = mutableMapOf<String, List<MediaItem>>()
+    private val downloadSheetEpisodesMap = mutableMapOf<String, List<MediaItem>>()
     private var downloadSheetFetchedSeasonIds: Set<String> = emptySet()
     private var loadJob: Job? = null
     private var currentItemId: String? = null
@@ -282,19 +324,51 @@ class DetailViewModel @Inject constructor(
             mediaRepository.getSeasons(seriesId)
                 .onSuccess { seasonList ->
                     _uiState.update { it.copy(seasons = seasonList) }
-                    if (seasonList.isNotEmpty()) {
-                        // Fetch ALL seasons' episodes in parallel up-front.
-                        // Previously this fetched only the first season and
-                        // recursed serially through empty seasons (one network
-                        // round-trip at a time) before the Play button label
-                        // could resolve. Parallel fetch collapses N serial
-                        // round-trips into one concurrent batch; smart-play
-                        // is computed once all land.
-                        seasonList.forEach { season ->
-                            loadEpisodes(seriesId, season.id)
-                        }
-                    }
+                    if (seasonList.isEmpty()) return@onSuccess
+                    loadAllSeasonsBatched(seriesId, seasonList)
                 }
+        }
+    }
+
+    /**
+     * Fetches every season's episodes concurrently, but folds all results into a
+     * single [DetailUiState] emission once the batch completes. This replaces the
+     * previous pattern of fanning out N independent [loadEpisodes] calls, each of
+     * which performed its own `episodesMap.toMap()` full copy (O(N²) total) and its
+     * own smart-play recomputation (O(N × E) total).
+     *
+     * Concurrency is capped at [MAX_PARALLEL_SEASON_FETCHES] via a [Semaphore] so a
+     * long-running series (30+ seasons) doesn't burst that many simultaneous
+     * requests. Results land into the shared [episodesMap] as they arrive, but the
+     * UI only sees one atomic snapshot when the last season resolves — and smart
+     * play is computed exactly once.
+     */
+    private fun loadAllSeasonsBatched(seriesId: String, seasonList: List<MediaItem>) {
+        val pending = AtomicInteger(seasonList.size)
+        val semaphore = Semaphore(MAX_PARALLEL_SEASON_FETCHES)
+        seasonList.forEach { season ->
+            launch {
+                semaphore.withPermit {
+                    mediaRepository.getEpisodes(seriesId, season.id)
+                        .onSuccess { episodeList ->
+                            episodesMap[season.id] = episodeList
+                        }
+                        .onFailure {
+                            if (!episodesMap.containsKey(season.id)) {
+                                episodesMap[season.id] = emptyList()
+                            }
+                        }
+                }
+                if (pending.decrementAndGet() == 0) {
+                    _uiState.update {
+                        it.copy(
+                            episodes = episodesMap.toMap(),
+                            fetchedSeasonIds = episodesMap.keys.toSet(),
+                        )
+                    }
+                    maybeComputeSmartPlayTarget()
+                }
+            }
         }
     }
 
@@ -380,16 +454,13 @@ class DetailViewModel @Inject constructor(
     private fun computeSeriesSmartPlayTarget() {
         launch(Dispatchers.Default) {
             val state = _uiState.value
+            // Check pending seasons BEFORE flattening — flattening all episode
+            // lists is O(total episodes) and was previously paid N times (once
+            // per season landing) even when the early-return below would fire.
+            val seasonsPending = state.seasons.any { s -> !state.fetchedSeasonIds.contains(s.id) }
+            if (seasonsPending) return@launch
             val allEpisodes = state.episodes.values.flatten()
-            // If there are still seasons in-flight (parallel batch from
-            // loadSeasons hasn't fully resolved), defer: do not set a target
-            // yet, and do NOT re-trigger fetches (all seasons are already
-            // launched in parallel). The next season landing will call
-            // maybeComputeSmartPlayTarget() again.
             if (allEpisodes.isEmpty()) {
-                if (state.seasons.any { s -> !state.fetchedSeasonIds.contains(s.id) }) {
-                    return@launch // more seasons pending — wait
-                }
                 _uiState.update { it.copy(smartPlayTarget = null) }
                 return@launch
             }
@@ -432,12 +503,9 @@ class DetailViewModel @Inject constructor(
                 return@launch
             }
 
-            // All episodes played — check whether more seasons are still
-            // in-flight before falling back to a replay target.
-            if (state.seasons.any { s -> !state.fetchedSeasonIds.contains(s.id) }) {
-                return@launch // wait for remaining seasons
-            }
-
+            // All episodes played — fall back to a replay of the first episode.
+            // (Seasons-pending was already ruled out by the early-return at the
+            // top of this function, so no further guard is needed here.)
             val first = sorted.first()
             val s = first.seasonNumber ?: 1
             val e = first.episodeNumber ?: first.indexNumber ?: 1
@@ -725,15 +793,24 @@ class DetailViewModel @Inject constructor(
         val seriesId = currentSeriesId ?: return
         _uiState.update { it.copy(downloadSheetLoadingSeasons = it.downloadSheetLoadingSeasons + seasonId) }
         launch {
-            mediaRepository.getEpisodes(seriesId, seasonId)
-                .onSuccess { episodeList ->
-                    downloadSheetEpisodesMap[seasonId] = episodeList
-                    _uiState.update { it.copy(downloadSheetEpisodes = downloadSheetEpisodesMap.toMap()) }
-                }
-                .onFailure {
-                    downloadSheetEpisodesMap[seasonId] = emptyList()
-                    _uiState.update { it.copy(downloadSheetEpisodes = downloadSheetEpisodesMap.toMap()) }
-                }
+            // Reuse episodes already fetched by the main seasons display when
+            // available, avoiding a duplicate network round-trip and a second
+            // in-memory copy of the same episode list.
+            val cached = episodesMap[seasonId]
+            if (cached != null) {
+                downloadSheetEpisodesMap[seasonId] = cached
+                _uiState.update { it.copy(downloadSheetEpisodes = downloadSheetEpisodesMap.toMap()) }
+            } else {
+                mediaRepository.getEpisodes(seriesId, seasonId)
+                    .onSuccess { episodeList ->
+                        downloadSheetEpisodesMap[seasonId] = episodeList
+                        _uiState.update { it.copy(downloadSheetEpisodes = downloadSheetEpisodesMap.toMap()) }
+                    }
+                    .onFailure {
+                        downloadSheetEpisodesMap[seasonId] = emptyList()
+                        _uiState.update { it.copy(downloadSheetEpisodes = downloadSheetEpisodesMap.toMap()) }
+                    }
+            }
             downloadSheetFetchedSeasonIds = downloadSheetFetchedSeasonIds + seasonId
             _uiState.update { it.copy(downloadSheetLoadingSeasons = it.downloadSheetLoadingSeasons - seasonId) }
         }
@@ -918,3 +995,37 @@ data class SeriesDownloadResult(
     val queuedCount: Int = 0,
     val error: String? = null,
 )
+
+/**
+ * Snapshot of the Seerr request-flow ephemera (dialog picker state + result
+ * banner). Grouped so its upstream flows get a dedicated [StateFlow] in the
+ * [DetailViewModel.uiState] combine chain — a tick here doesn't invalidate the
+ * core detail or Seerr-connection groups.
+ */
+@Immutable
+private data class SeerrRequestSnapshot(
+    val requestResult: SeerrRequestResult? = null,
+    val radarrServers: List<SeerrRadarrServiceDetail> = emptyList(),
+    val sonarrServers: List<SeerrSonarrServiceDetail> = emptyList(),
+    val isLoadingServices: Boolean = false,
+    val tvSeasons: List<SeerrSeason> = emptyList(),
+)
+
+/**
+ * Snapshot of the Seerr connection flags that only gate recommendation
+ * visibility. Grouped for the same reason as [SeerrRequestSnapshot].
+ */
+@Immutable
+private data class SeerrConnectionFlags(
+    val isConnected: Boolean = false,
+    val isRecommendationsEnabled: Boolean = false,
+)
+
+/**
+ * Identity-only projection of a [MediaItem] used as a [StateFlow] deduplication
+ * key. Because favorite/played toggles mutate the item in place but never change
+ * its id or mediaType, mapping to [ItemIdentity] collapses those toggles into a
+ * single distinct emission.
+ */
+@Immutable
+private data class ItemIdentity(val id: String, val mediaType: MediaType)

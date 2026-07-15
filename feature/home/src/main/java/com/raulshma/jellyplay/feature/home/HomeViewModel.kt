@@ -17,6 +17,7 @@ import com.raulshma.jellyplay.core.data.util.ImageUrlProvider
 import com.raulshma.jellyplay.core.data.util.PhotoFolderPrefetcher
 import com.raulshma.jellyplay.core.datastore.SeerrPreferencesStore
 import com.raulshma.jellyplay.core.datastore.UserPreferencesStore
+import com.raulshma.jellyplay.core.datastore.PreferencesEditor
 import com.raulshma.jellyplay.core.data.repository.AuthRepository
 import com.raulshma.jellyplay.core.data.worker.TvWatchNextScheduler
 import com.raulshma.jellyplay.core.model.UserInfo
@@ -28,6 +29,9 @@ import com.raulshma.jellyplay.core.model.OfflineMode
 import com.raulshma.jellyplay.core.model.PinnedHomeSection
 import com.raulshma.jellyplay.core.model.seerr.SeerrPreferences
 import com.raulshma.jellyplay.core.model.seerr.SeerrSearchItem
+import com.raulshma.jellyplay.core.ui.settingssearch.SettingsSearchItem
+import com.raulshma.jellyplay.core.ui.settingssearch.SettingsSearchMatcher
+import com.raulshma.jellyplay.core.ui.settingssearch.SettingsSearchRegistry
 import com.raulshma.jellyplay.core.ui.viewmodel.JellyPlayViewModel
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.FlowPreview
@@ -35,15 +39,20 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.collectLatest
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.debounce
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.flowOf
+import kotlinx.coroutines.flow.flowOn
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.sync.Mutex
 import java.time.LocalDate
@@ -61,6 +70,7 @@ class HomeViewModel @Inject constructor(
     private val offlineModeManager: OfflineModeManager,
     private val newsletterTriggerManager: NewsletterTriggerManager,
     private val preferencesStore: UserPreferencesStore,
+    private val preferencesEditor: PreferencesEditor,
     private val searchHistoryRepository: SearchHistoryRepository,
     private val seerrRepository: SeerrRepository,
     private val seerrRequestDelegate: SeerrRequestDelegate,
@@ -142,15 +152,27 @@ class HomeViewModel @Inject constructor(
         runCatching { ProcessLifecycleOwner.get().lifecycle.addObserver(this) }
 
         launch {
-            authRepository.currentUser.collect { user ->
-                _uiState.update { it.copy(currentUser = user) }
-            }
-        }
-
-        launch {
             var previousUserId: String? = null
-            preferencesStore.activeUserId.collect { userId ->
-                if (previousUserId != null && previousUserId != userId) {
+            authRepository.currentUser.collectLatest { user ->
+                _uiState.update { it.copy(currentUser = user) }
+
+                val userId = user?.id
+                if (userId == null) {
+                    if (previousUserId != null) {
+                        refreshJob?.cancel()
+                        resetHomeScrollPosition()
+                        resetHomeFocusPosition()
+                        _uiState.update {
+                            it.copy(
+                                sections = emptyList(),
+                                favorites = emptyList(),
+                                discoverSections = emptyMap(),
+                                error = null,
+                                isLoading = true,
+                            )
+                        }
+                    }
+                } else if (previousUserId != userId) {
                     refreshJob?.cancel()
                     resetHomeScrollPosition()
                     resetHomeFocusPosition()
@@ -196,6 +218,7 @@ class HomeViewModel @Inject constructor(
                     accentColorSwatch = prefs.accentColorSwatch,
                     homeHeroEnabled = prefs.homeHeroEnabled,
                     showClock = prefs.showClockOnHome,
+                    showSettingsInHomeSearch = prefs.showSettingsInHomeSearch,
                     continueWatchingClickBehavior = prefs.continueWatchingClickBehavior,
                     experimentalCardClippingEnabled = com.raulshma.jellyplay.core.model.ExperimentalFeature.HOME_CARD_CLIPPING in prefs.enabledExperimentalFeatures,
                     directArrEnabled = com.raulshma.jellyplay.core.model.ExperimentalFeature.DIRECT_ARR_INTEGRATION in prefs.enabledExperimentalFeatures,
@@ -272,44 +295,78 @@ class HomeViewModel @Inject constructor(
                 .collect { query ->
                     searchJob?.cancel()
                     if (query.isBlank()) {
-                        _uiState.update { it.copy(searchState = it.searchState.copy(jellyfinResults = emptyList(), seerrResults = emptyList(), isSearching = false)) }
+                        _uiState.update { it.copy(searchState = it.searchState.copy(jellyfinResults = emptyList(), seerrResults = emptyList(), settingsResults = emptyList(), isSearching = false)) }
                     } else {
                         searchJob = launch { performSearch(query) }
                     }
                 }
         }
 
-        // Fold the shared SeerrRequestStateHolder into HomeUiState so the UI
-        // observes a single object. Each slice writes its own field, matching the
-        // per-field collector style used for every other source flow in this VM.
+        // Local settings search runs on a shorter debounce than the networked
+        // media search above: the fuzzy matcher is pure and sub-millisecond, so
+        // results feel instant while the Jellyfin/Seerr requests are still in
+        // flight. Gated entirely behind the user's Appearance toggle; when off
+        // the collector still drains but emits nothing and clears results.
+        @OptIn(FlowPreview::class)
         launch {
-            seerrRequestStateHolder.requestResult.collect { result ->
-                _uiState.update { it.copy(seerrRequestState = it.seerrRequestState.copy(result = result)) }
-            }
-        }
-        launch {
-            seerrRequestStateHolder.radarrServers.collect { servers ->
-                _uiState.update { it.copy(seerrRequestState = it.seerrRequestState.copy(radarrServers = servers)) }
-            }
-        }
-        launch {
-            seerrRequestStateHolder.sonarrServers.collect { servers ->
-                _uiState.update { it.copy(seerrRequestState = it.seerrRequestState.copy(sonarrServers = servers)) }
-            }
-        }
-        launch {
-            seerrRequestStateHolder.isLoadingServices.collect { loading ->
-                _uiState.update { it.copy(seerrRequestState = it.seerrRequestState.copy(isLoadingServices = loading)) }
-            }
-        }
-        launch {
-            seerrRequestStateHolder.tvSeasons.collect { seasons ->
-                _uiState.update { it.copy(seerrRequestState = it.seerrRequestState.copy(tvSeasons = seasons)) }
-            }
+            searchQueryFlow
+                .debounce(120)
+                .distinctUntilChanged()
+                .map { query ->
+                    if (query.isBlank() || !_uiState.value.showSettingsInHomeSearch) {
+                        emptyList()
+                    } else {
+                        SettingsSearchMatcher.search(query, SettingsSearchRegistry.items)
+                    }
+                }
+                .flowOn(Dispatchers.Default)
+                .collect { results ->
+                    _uiState.update {
+                        it.copy(searchState = it.searchState.copy(settingsResults = results))
+                    }
+                }
         }
 
-        loadInitial()
+        // Fold the shared SeerrRequestStateHolder into HomeUiState so the UI
+        // observes a single object. The holder's five StateFlows are combined
+        // into one SeerrRequestState so concurrent emissions (e.g. loading
+        // services + seasons firing together when the request dialog opens)
+        // coalesce into a single _uiState update instead of five back-to-back
+        // copies. `requestItem` is set separately (selectSeerrRequestItem) and
+        // is preserved by copying only the five merged fields here.
+        launch {
+            combine(
+                seerrRequestStateHolder.requestResult,
+                seerrRequestStateHolder.radarrServers,
+                seerrRequestStateHolder.sonarrServers,
+                seerrRequestStateHolder.isLoadingServices,
+                seerrRequestStateHolder.tvSeasons,
+            ) { result, radarr, sonarr, loading, seasons ->
+                SeerrRequestSlice(result, radarr, sonarr, loading, seasons)
+            }.distinctUntilChanged().collect { slice ->
+                _uiState.update {
+                    it.copy(
+                        seerrRequestState = it.seerrRequestState.copy(
+                            result = slice.result,
+                            radarrServers = slice.radarrServers,
+                            sonarrServers = slice.sonarrServers,
+                            isLoadingServices = slice.isLoadingServices,
+                            tvSeasons = slice.tvSeasons,
+                        ),
+                    )
+                }
+            }
+        }
     }
+
+    /** Intermediate holder for the five combined Seerr flows. */
+    private data class SeerrRequestSlice(
+        val result: com.raulshma.jellyplay.core.model.seerr.SeerrRequestResult?,
+        val radarrServers: List<com.raulshma.jellyplay.core.model.seerr.SeerrRadarrServiceDetail>,
+        val sonarrServers: List<com.raulshma.jellyplay.core.model.seerr.SeerrSonarrServiceDetail>,
+        val isLoadingServices: Boolean,
+        val tvSeasons: List<com.raulshma.jellyplay.core.model.seerr.SeerrSeason>,
+    )
 
     fun onEvent(event: HomeUiEvent) {
         when (event) {
@@ -372,14 +429,6 @@ class HomeViewModel @Inject constructor(
 
     private fun resetHomeFocusPosition() {
         homeFocusPosition = HomeFocusPosition()
-    }
-
-    private fun loadInitial() {
-        launch {
-            _uiState.update { it.copy(isLoading = true, error = null) }
-            fetchAndUpdateSections()
-            startPeriodicRefresh()
-        }
     }
 
     private fun refresh() {
@@ -461,6 +510,19 @@ class HomeViewModel @Inject constructor(
         }
     }
 
+    /**
+     * Called when a settings search result is tapped from the home search bar.
+     * If the target is an advanced setting that's currently hidden, enable
+     * advanced settings first so the deep-linked screen actually shows it —
+     * parity with the Settings screen's own search (see SettingsScreen.kt).
+     * Navigation to [SettingsSearchItem.route] is performed by the caller.
+     */
+    fun onSettingsResultClicked(item: SettingsSearchItem) {
+        if (item.isAdvanced) {
+            launch { preferencesEditor.edit { setShowAdvancedSettings(true) } }
+        }
+    }
+
     fun excludeSeriesFromNextUp(seriesId: String) {
         launch {
             preferencesStore.excludeSeriesFromNextUp(seriesId)
@@ -468,12 +530,16 @@ class HomeViewModel @Inject constructor(
     }
 
     private suspend fun fetchAndUpdateSections() {
-        if (!refreshMutex.tryLock()) return
+        // Do not drop a refresh that arrives while another request is running.
+        // In particular, a sign-in can complete while Home's earlier request is
+        // still failing with the just-cleared session. Waiting for the lock
+        // ensures the authenticated follow-up request runs and clears that
+        // transient error without requiring the user to tap Retry.
+        refreshMutex.lock()
         // Deferred widget / TV Watch Next side-effects. Captured inside the
         // mutex (where we can detect a Continue-Watching change) but fired
         // after unlock so a slow broadcast IPC or WorkManager enqueue can't
-        // hold the refresh lock and silently drop the next refresh attempt
-        // (refreshMutex.tryLock() above returns immediately if contended).
+        // hold the refresh lock.
         var pendingCwSideEffect: (() -> Unit)? = null
         try {
             offlineModeManager.checkNetworkAndAutoDetect()
@@ -674,7 +740,15 @@ class HomeViewModel @Inject constructor(
         refreshJob = launch {
             while (true) {
                 val interval = if (isAppInForeground) REFRESH_INTERVAL_FOREGROUND_MS else REFRESH_INTERVAL_BACKGROUND_MS
-                delay(interval)
+                // ±10% jitter avoids synchronized refresh storms when multiple
+                // devices hit the server on the same fixed mark.
+                val jitter = (interval * 0.1f * (kotlin.random.Random.nextFloat() * 2f - 1f)).toLong()
+                delay(interval + jitter)
+
+                // Skip while device has no network: fetchAndUpdateSections
+                // would no-op after acquiring the refresh mutex anyway, so this
+                // avoids the mutex churn and the lastRefreshTime bookkeeping.
+                if (offlineModeManager.isOffline) continue
 
                 val now = System.currentTimeMillis()
                 if (now - lastRefreshTime < MIN_REFRESH_INTERVAL_MS) continue

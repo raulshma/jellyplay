@@ -1,5 +1,6 @@
 package com.raulshma.jellyplay.feature.settings
 
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.expandVertically
 import androidx.compose.animation.shrinkVertically
@@ -95,11 +96,12 @@ internal val appLanguages = listOf(
 @Composable
 fun LanguageSettingsScreen(
     onBack: () -> Unit,
+    onOpenSubtitleTester: () -> Unit = {},
     highlightSettingId: String? = null,
-    viewModel: SettingsViewModel = hiltViewModel(),
+    viewModel: LanguageSettingsViewModel = hiltViewModel(),
 ) {
-    val preferences = viewModel.preferences
-    val showAdvanced = preferences.showAdvancedSettings
+    val preferences by viewModel.preferences.collectAsStateWithLifecycle()
+    val showAdvanced by viewModel.showAdvancedSettings.collectAsStateWithLifecycle()
     val adaptiveInfo = LocalAdaptiveInfo.current
     val isTv = LocalTvMode.current
     var activeDialog by remember { mutableStateOf<LanguageSettingsDialog>(LanguageSettingsDialog.None) }
@@ -222,10 +224,18 @@ fun LanguageSettingsScreen(
                 ) {
                     var subIdx = 0
                     val subTotal = when {
-                        !showAdvanced -> 3
-                        preferences.hdrSubtitleStyleEnabled -> 11
-                        else -> 10
+                        !showAdvanced -> 4
+                        preferences.hdrSubtitleStyleEnabled -> 12
+                        else -> 11
                     }
+                    SettingListItem(
+                        icon = Tabler.Outline.Eye,
+                        title = stringResource(R.string.settings_open_subtitle_tester),
+                        subtitle = stringResource(R.string.settings_open_subtitle_tester_subtitle),
+                        highlighted = highlightSettingId == "subtitle_tester",
+                        index = subIdx++, count = subTotal,
+                        onClick = onOpenSubtitleTester,
+                    )
                     SettingListItem(
                         icon = Tabler.Outline.Typography,
                         title = stringResource(R.string.settings_font_size),

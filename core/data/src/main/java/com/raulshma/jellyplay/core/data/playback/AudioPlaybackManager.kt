@@ -135,8 +135,8 @@ class AudioPlaybackManager @Inject constructor(
         audioPrefetchEngine.bindProviders(
             queueProvider = { _queue.value },
             currentIndexProvider = { _currentIndex.value },
-            positionProvider = { exoPlayer?.currentPosition ?: 0L },
-            durationProvider = { exoPlayer?.duration ?: 0L },
+            positionProvider = { _currentPosition.value },
+            durationProvider = { _duration.value },
         )
         audioPrefetchEngine.start()
         scope.launch(Dispatchers.IO) {

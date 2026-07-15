@@ -28,7 +28,6 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.paging.LoadState
 import androidx.paging.compose.collectAsLazyPagingItems
-import androidx.paging.compose.itemKey
 import com.raulshma.jellyplay.core.ui.adaptive.LocalAdaptiveInfo
 import com.raulshma.jellyplay.core.ui.adaptive.contentPadding
 import com.raulshma.jellyplay.core.ui.adaptive.gridMinSize
@@ -40,6 +39,7 @@ import com.raulshma.jellyplay.feature.music.components.PagedGrid
 import com.raulshma.jellyplay.core.ui.components.ScreenLoadingState
 import com.raulshma.jellyplay.core.ui.tv.LocalTvMode
 import com.raulshma.jellyplay.core.ui.tv.TvFocusableGrid
+import com.raulshma.jellyplay.core.ui.util.safeItemKey
 import com.raulshma.jellyplay.feature.music.components.AlbumCard
 import com.raulshma.jellyplay.feature.music.components.ArtistCard
 import com.raulshma.jellyplay.feature.music.components.GenreChip
@@ -191,7 +191,7 @@ private fun TracksPage(
                     ) {
                         items(
                             count = tracks.itemCount,
-                            key = tracks.itemKey { it.id },
+                            key = tracks.safeItemKey { it.id },
                             contentType = { "mediaItem" },
                         ) { index ->
                             val track = tracks[index] ?: return@items

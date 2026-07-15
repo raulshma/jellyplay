@@ -12,6 +12,7 @@ import com.raulshma.jellyplay.core.model.seerr.SeerrRequestResult
 import com.raulshma.jellyplay.core.model.seerr.SeerrSearchItem
 import com.raulshma.jellyplay.core.model.seerr.SeerrSeason
 import com.raulshma.jellyplay.core.model.seerr.SeerrSonarrServiceDetail
+import com.raulshma.jellyplay.core.ui.settingssearch.SettingsSearchItem
 
 import com.raulshma.jellyplay.core.model.UserInfo
 
@@ -37,6 +38,8 @@ data class HomeUiState(
     val continueWatchingClickBehavior: com.raulshma.jellyplay.core.model.ContinueWatchingClickBehavior = com.raulshma.jellyplay.core.model.ContinueWatchingClickBehavior.DETAILS,
     val discoverSections: Map<DiscoverSectionType, List<SeerrSearchItem>> = emptyMap(),
     val searchState: HomeSearchState = HomeSearchState(),
+    /** Whether to include settings results in the home search bar. Driven by Appearance prefs. */
+    val showSettingsInHomeSearch: Boolean = true,
     val seerrRequestState: SeerrRequestState = SeerrRequestState(),
     val newsletterBannerVisible: Boolean = false,
     val experimentalCardClippingEnabled: Boolean = false,
@@ -52,6 +55,7 @@ data class HomeSearchState(
     val query: String = "",
     val jellyfinResults: List<MediaItem> = emptyList(),
     val seerrResults: List<SeerrSearchItem> = emptyList(),
+    val settingsResults: List<SettingsSearchItem> = emptyList(),
     val isSearching: Boolean = false,
 )
 

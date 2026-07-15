@@ -85,7 +85,7 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.paging.LoadState
 import androidx.paging.compose.collectAsLazyPagingItems
-import androidx.paging.compose.itemKey
+import com.raulshma.jellyplay.core.ui.util.safeItemKey
 import com.raulshma.jellyplay.core.designsystem.theme.LocalIsLightTheme
 import com.raulshma.jellyplay.core.designsystem.theme.ShapeCache
 import com.raulshma.jellyplay.core.ui.components.AppendErrorFooter
@@ -108,6 +108,7 @@ import com.raulshma.jellyplay.core.model.MediaType
 import com.raulshma.jellyplay.feature.library.components.LibraryFilterSheet
 import com.raulshma.jellyplay.feature.library.components.LibraryListItem
 import com.raulshma.jellyplay.core.ui.animation.animateContentSizeNoClip
+import com.raulshma.jellyplay.core.ui.animation.lazyItemPlacementSpec
 import com.composables.icons.tabler.Tabler
 import com.composables.icons.tabler.outline.*
 import androidx.compose.ui.res.pluralStringResource
@@ -327,11 +328,14 @@ fun LibraryScreen(
                             }
                             items(folders.size, key = { folders[it].id }, contentType = { "folder" }) { index ->
                                 val folder = folders[index]
-                                GlassPill(
-                                    label = folder.name,
-                                    selected = selectedFolder?.id == folder.id,
-                                    onClick = { viewModel.selectFolder(folder) },
-                                )
+                                val placementSpec = lazyItemPlacementSpec()
+                                Box(modifier = Modifier.animateItem(placementSpec = placementSpec)) {
+                                    GlassPill(
+                                        label = folder.name,
+                                        selected = selectedFolder?.id == folder.id,
+                                        onClick = { viewModel.selectFolder(folder) },
+                                    )
+                                }
                             }
                         }
                     }
@@ -452,19 +456,23 @@ fun LibraryScreen(
                 }
 
                 PullToRefreshBox(
-                    isRefreshing = pagedItems.loadState.refresh is LoadState.Loading || isLoading,
+                    isRefreshing = pagedItems.loadState.refresh is LoadState.Loading && pagedItems.itemCount > 0,
                     onRefresh = {
                         viewModel.refresh()
                     },
                     enabled = !isTv,
                     modifier = Modifier.fillMaxSize(),
                 ) {
-                    when (pagedItems.loadState.refresh) {
-                        is LoadState.Loading -> {
+                    // Initial load (no items yet) shows the center indicator only;
+                    // a refresh with existing items shows the pull-to-refresh
+                    // indicator above (via isRefreshing) and keeps the content
+                    // visible — the two must never render together.
+                    when {
+                        pagedItems.loadState.refresh is LoadState.Loading && pagedItems.itemCount == 0 -> {
                             DelayedLoadingScreen()
                         }
 
-                        is LoadState.Error -> {
+                        pagedItems.loadState.refresh is LoadState.Error -> {
                             val refreshError = pagedItems.loadState.refresh as LoadState.Error
                             ErrorScreen(
                                 message = refreshError.error.localizedMessage
@@ -474,7 +482,7 @@ fun LibraryScreen(
                             )
                         }
 
-                        is LoadState.NotLoading -> {
+                        else -> {
                             if (pagedItems.itemCount == 0) {
                                 Box(
                                     modifier = Modifier.fillMaxSize(),
@@ -514,11 +522,12 @@ fun LibraryScreen(
                                     ) {
                                         items(
                                             count = pagedItems.itemCount,
-                                            key = pagedItems.itemKey { it.id },
+                                            key = pagedItems.safeItemKey { it.id },
                                             contentType = { "mediaItem" },
                                         ) { index ->
                                             val item = pagedItems[index]
                                             if (item != null) {
+                                                val placementSpec = lazyItemPlacementSpec()
                                                 val memoizedClick = remember(item.id, item.mediaType, item.parentId, item.name) {
                                                     { onItemClick(item.id, item.mediaType, item.parentId, item.name) }
                                                 }
@@ -546,6 +555,7 @@ fun LibraryScreen(
                                                     imageUrl = remember(item.id) { viewModel.getImageUrl(item.id) },
                                                     blurHash = item.blurHashes.primary,
                                                     onClick = memoizedClick,
+                                                    modifier = Modifier.animateItem(placementSpec = placementSpec),
                                                 )
                                             }
                                         }
@@ -553,7 +563,7 @@ fun LibraryScreen(
                                 } else {
                                     TvFocusableGrid(
                                         itemCount = pagedItems.itemCount,
-                                        key = pagedItems.itemKey { it.id },
+                                        key = pagedItems.safeItemKey { it.id },
                                         columns = GridCells.Adaptive(gridCellSize),
                                         state = gridState,
                                         contentPadding = gridPadding,

@@ -23,6 +23,7 @@ import androidx.compose.ui.focus.focusProperties
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.unit.dp
+import com.raulshma.jellyplay.core.ui.animation.lazyItemPlacementSpec
 
 /**
  * Default cache window for TV grids — prefetch 2× the viewport ahead and 0.5× behind so paged cards
@@ -116,7 +117,13 @@ fun TvFocusableGrid(
             key = key,
             contentType = contentType,
         ) { index ->
-            val itemModifier = if (isTv) {
+            // animateItem (LazyItemScope) animates placement so reorders/removals
+            // glide instead of snapping. Placement spec routes through
+            // lazyItemPlacementSpec() so it snaps under reduce-motion. Keys are
+            // required for placement tracking; the `key` param above is mandatory
+            // in TvFocusableGrid's contract.
+            val placementSpec = lazyItemPlacementSpec()
+            val itemModifier = (if (isTv) {
                 Modifier
                     .ifElse(index == currentFocusedIndex, Modifier.focusRequester(fallbackFocusRequester))
                     .onFocusChanged {
@@ -127,7 +134,7 @@ fun TvFocusableGrid(
                     }
             } else {
                 Modifier
-            }
+            }).animateItem(placementSpec = placementSpec)
             itemContent(index, itemModifier)
         }
         extraContent()

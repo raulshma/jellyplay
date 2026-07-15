@@ -18,7 +18,6 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.paging.LoadState
 import androidx.paging.compose.collectAsLazyPagingItems
-import androidx.paging.compose.itemKey
 import com.raulshma.jellyplay.core.ui.components.ErrorScreen
 import com.raulshma.jellyplay.core.ui.components.HeaderStatusIndicator
 import com.raulshma.jellyplay.core.ui.components.JellyPlayScreenScaffold
@@ -33,6 +32,7 @@ import com.raulshma.jellyplay.core.ui.components.resolveHeaderStatus
 import com.raulshma.jellyplay.core.ui.adaptive.LocalAdaptiveInfo
 import com.raulshma.jellyplay.core.ui.adaptive.bottomPadding
 import com.raulshma.jellyplay.core.ui.tv.LocalTvMode
+import com.raulshma.jellyplay.core.ui.util.safeItemKey
 import com.raulshma.jellyplay.core.ui.tv.TvFocusableGrid
 import com.composables.icons.tabler.Tabler
 import com.composables.icons.tabler.outline.*
@@ -93,7 +93,7 @@ fun StudioDetailScreen(
                         }
                         TvFocusableGrid(
                             itemCount = items.itemCount,
-                            key = items.itemKey { it.id },
+                            key = items.safeItemKey { it.id },
                             columns = GridCells.Fixed(spanCount),
                             contentPadding = PaddingValues(
                                 start = 16.dp,

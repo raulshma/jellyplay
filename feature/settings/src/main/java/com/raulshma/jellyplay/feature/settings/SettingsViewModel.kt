@@ -87,9 +87,8 @@ class SettingsViewModel @Inject constructor(
     private val autoDownloadScheduler: com.raulshma.jellyplay.core.data.worker.AutoDownloadScheduler,
     private val tvWatchNextScheduler: com.raulshma.jellyplay.core.data.worker.TvWatchNextScheduler,
     private val audioStreamCache: com.raulshma.jellyplay.core.data.playback.AudioStreamCache,
+    private val editor: PreferencesEditor,
 ) : JellyPlayViewModel() {
-
-    private val editor = PreferencesEditor(scope, preferencesStore)
 
     var preferences by composeState(UserPreferences())
         private set
@@ -103,9 +102,11 @@ class SettingsViewModel @Inject constructor(
     var storageBreakdown by composeState(StorageBreakdown())
         private set
 
-    val appVersion: String by lazy {
-        context.packageManager.getPackageInfo(context.packageName, 0).versionName ?: "1.0"
-    }
+    var cacheError by composeState<String?>(null)
+        private set
+
+    var libraryError by composeState<String?>(null)
+        private set
 
     var currentUser by composeState<UserInfo?>(null)
         private set
@@ -137,45 +138,6 @@ class SettingsViewModel @Inject constructor(
 
     private var sessionRefreshJob: Job? = null
 
-    // Each is derived from the existing composeState fields via [snapshotFlow]
-    // so any mutation that fires inside a single Compose snapshot batch emits
-    // exactly one consolidated update. Existing per-field property accessors
-    // are preserved for backward compatibility.
-
-    val serverState: kotlinx.coroutines.flow.StateFlow<ServerState> = snapshotFlow {
-        ServerState(
-            currentUser = currentUser,
-            currentUserName = currentUserName,
-            currentServerUsers = currentServerUsers,
-            isLoadingUsers = isLoadingUsers,
-            activeSessions = activeSessions,
-            isLoadingSessions = isLoadingSessions,
-            messageSentEvent = messageSentEvent,
-        )
-    }.distinctUntilChanged().stateIn(scope, SharingStarted.WhileSubscribed(5_000), ServerState())
-
-    val libraryState: kotlinx.coroutines.flow.StateFlow<LibraryState> = snapshotFlow {
-        LibraryState(
-            libraryFolders = libraryFolders,
-            isLoadingLibraries = isLoadingLibraries,
-        )
-    }.distinctUntilChanged().stateIn(scope, SharingStarted.WhileSubscribed(5_000), LibraryState())
-
-    val pinnedBrowseState: kotlinx.coroutines.flow.StateFlow<PinnedBrowseState> = snapshotFlow {
-        PinnedBrowseState(
-            options = pinnedBrowseOptions,
-            isLoading = pinnedBrowseLoading,
-            error = pinnedBrowseError,
-        )
-    }.distinctUntilChanged().stateIn(scope, SharingStarted.WhileSubscribed(5_000), PinnedBrowseState())
-
-    val backupRestoreState: kotlinx.coroutines.flow.StateFlow<BackupRestoreState> = snapshotFlow {
-        BackupRestoreState(
-            presetImportError = presetImportError,
-            backupRestoreStatus = backupRestoreStatus,
-        )
-    }.distinctUntilChanged().stateIn(scope, SharingStarted.WhileSubscribed(5_000), BackupRestoreState())
-
     init {
         launch {
             preferencesStore.preferences.collect { prefs ->
@@ -188,9 +150,8 @@ class SettingsViewModel @Inject constructor(
                 currentUserName = user?.name ?: ""
                 if (user?.isAdmin == true) {
                     loadSessions()
-                    startSessionAutoRefresh()
                 } else {
-                    sessionRefreshJob?.cancel()
+                    stopSessionAutoRefresh()
                     activeSessions = emptyList()
                 }
             }
@@ -208,10 +169,12 @@ class SettingsViewModel @Inject constructor(
     private fun loadLibraryFolders() {
         launch {
             isLoadingLibraries = true
+            libraryError = null
             mediaRepository.getLibraryFolders()
                 .onSuccess { folders ->
                     libraryFolders = folders.filter { it.collectionType != "music" }
                 }
+                .onFailure { error -> libraryError = error.message ?: error::class.simpleName }
             isLoadingLibraries = false
         }
     }
@@ -220,33 +183,47 @@ class SettingsViewModel @Inject constructor(
         launch {
             isLoadingSessions = true
             apiClient.getSessions()
-                .onSuccess { sessions ->
-                    val cutoff = java.time.Instant.now().minusSeconds(5 * 60)
-                    activeSessions = sessions.filter {
-                        val lastActivity = try { java.time.Instant.parse(it.lastActivityDate) } catch (_: Exception) { java.time.Instant.MIN }
-                        it.isActive && it.client.isNotBlank() && it.deviceName.isNotBlank() && it.client != "Jellyfin Server" &&
-                        (it.nowPlayingItem != null || lastActivity.isAfter(cutoff))
-                    }
-                }
+                .onSuccess { sessions -> activeSessions = sessions.filterActiveSessions() }
             isLoadingSessions = false
         }
     }
 
-    private fun startSessionAutoRefresh() {
+    /**
+     * Starts polling `/Sessions` every 30s for admin users. Should be tied to
+     * screen visibility (STARTED) by the caller via [stopSessionAutoRefresh] on
+     * exit so polling does not run while settings is in the back stack.
+     */
+    fun startSessionAutoRefresh() {
         sessionRefreshJob?.cancel()
         sessionRefreshJob = launch {
             while (true) {
                 kotlinx.coroutines.delay(30_000)
                 apiClient.getSessions()
-                    .onSuccess { sessions ->
-                        val cutoff = java.time.Instant.now().minusSeconds(5 * 60)
-                        activeSessions = sessions.filter {
-                            val lastActivity = try { java.time.Instant.parse(it.lastActivityDate) } catch (_: Exception) { java.time.Instant.MIN }
-                            it.isActive && it.client.isNotBlank() && it.deviceName.isNotBlank() && it.client != "Jellyfin Server" &&
-                            (it.nowPlayingItem != null || lastActivity.isAfter(cutoff))
-                        }
-                    }
+                    .onSuccess { sessions -> activeSessions = sessions.filterActiveSessions() }
             }
+        }
+    }
+
+    /** Stops the session auto-refresh loop started by [startSessionAutoRefresh]. */
+    fun stopSessionAutoRefresh() {
+        sessionRefreshJob?.cancel()
+        sessionRefreshJob = null
+    }
+
+    /**
+     * Keeps only active, non-server Jellyfin sessions: drops the headless
+     * "Jellyfin Server" entry and any session inactive for more than 5 minutes
+     * (unless it is currently playing). An unparseable `lastActivityDate`
+     * resolves to [java.time.Instant.MIN], which predates the cutoff and so
+     * excludes the session — deliberate, since a session with no resolvable
+     * activity timestamp should not appear as live.
+     */
+    private fun List<com.raulshma.jellyplay.core.model.SessionInfo>.filterActiveSessions(): List<com.raulshma.jellyplay.core.model.SessionInfo> {
+        val cutoff = java.time.Instant.now().minusSeconds(5 * 60)
+        return filter {
+            val lastActivity = try { java.time.Instant.parse(it.lastActivityDate) } catch (_: Exception) { java.time.Instant.MIN }
+            it.isActive && it.client.isNotBlank() && it.deviceName.isNotBlank() && it.client != "Jellyfin Server" &&
+                (it.nowPlayingItem != null || lastActivity.isAfter(cutoff))
         }
     }
 
@@ -286,15 +263,15 @@ class SettingsViewModel @Inject constructor(
     fun setPreferredPlayer(playerType: PlayerType) = editor.setPreferredPlayer(playerType)
 
     fun setTrailerAutoplay(enabled: Boolean) {
-        launch { preferencesStore.setTrailerAutoplay(enabled) }
+        editor.edit { setTrailerAutoplay(enabled) }
     }
 
     fun setCinemaModeEnabled(enabled: Boolean) {
-        launch { preferencesStore.setCinemaModeEnabled(enabled) }
+        editor.edit { setCinemaModeEnabled(enabled) }
     }
 
     fun setPreferredAudioLanguage(language: String?) {
-        launch { preferencesStore.setPreferredAudioLanguage(language) }
+        editor.edit { setPreferredAudioLanguage(language) }
     }
 
     fun setPreferredSubtitleLanguage(language: String?) = editor.setPreferredSubtitleLanguage(language)
@@ -302,35 +279,39 @@ class SettingsViewModel @Inject constructor(
     fun setStreamingQuality(quality: StreamingQuality) = editor.setStreamingQuality(quality)
 
     fun setWifiOnlyDownloads(enabled: Boolean) {
-        launch { preferencesStore.setWifiOnlyDownloads(enabled) }
+        editor.edit { setWifiOnlyDownloads(enabled) }
     }
 
     fun setDownloadConnections(count: Int) {
-        launch { preferencesStore.setDownloadConnections(count) }
+        editor.edit { setDownloadConnections(count) }
     }
 
     fun setMaxConcurrentDownloads(count: Int) {
-        launch { preferencesStore.setMaxConcurrentDownloads(count) }
+        editor.edit { setMaxConcurrentDownloads(count) }
     }
 
     fun setMaxCacheSize(sizeMb: Int) {
-        launch { preferencesStore.setMaxCacheSize(sizeMb) }
+        editor.edit { setMaxCacheSize(sizeMb) }
     }
 
     fun setAutoDeleteCache(enabled: Boolean) {
-        launch { preferencesStore.setAutoDeleteCache(enabled) }
+        editor.edit { setAutoDeleteCache(enabled) }
     }
 
     fun clearCache() {
         launch {
+            cacheError = null
             try {
                 context.cacheDir.deleteRecursively()
                 val externalCache = context.externalCacheDir
                 if (externalCache != null && externalCache.exists()) {
                     externalCache.deleteRecursively()
                 }
+            } catch (error: Exception) {
+                cacheError = error.message ?: error::class.simpleName
+            } finally {
                 calculateCacheSize()
-            } catch (_: Exception) {}
+            }
         }
     }
 
@@ -387,12 +368,20 @@ class SettingsViewModel @Inject constructor(
 
     private fun getDirSize(dir: File): Long {
         var size = 0L
-        if (dir.isDirectory) {
-            dir.listFiles()?.forEach { file ->
-                size += if (file.isDirectory) getDirSize(file) else file.length()
+        // (file, depth, isRoot) — the root is never skipped on symlink, so a
+        // symlinked cache/downloads location still reports its size.
+        val stack = ArrayDeque<Triple<File, Int, Boolean>>()
+        stack.addLast(Triple(dir, 0, true))
+        val maxDepth = 10
+        while (stack.isNotEmpty()) {
+            val (current, depth, isRoot) = stack.removeLast()
+            if (!isRoot && java.nio.file.Files.isSymbolicLink(current.toPath())) continue
+            if (current.isDirectory) {
+                if (depth >= maxDepth) continue
+                current.listFiles()?.forEach { file -> stack.addLast(Triple(file, depth + 1, false)) }
+            } else if (current.isFile) {
+                size += current.length()
             }
-        } else if (dir.isFile) {
-            size = dir.length()
         }
         return size
     }
@@ -402,107 +391,85 @@ class SettingsViewModel @Inject constructor(
     fun setPinLockEnabled(enabled: Boolean) = editor.setPinLockEnabled(enabled)
 
     fun setPin(pin: String) {
-        launch {
-            val hash = preferencesStore.hashPin(pin)
-            preferencesStore.setPinHash(hash)
-            preferencesStore.setPinLockEnabled(true)
-        }
+        editor.edit { setPin(pin) }
     }
 
     fun clearPin() {
-        launch {
-            preferencesStore.setPinLockEnabled(false)
-            preferencesStore.setPinHash(null)
-        }
+        editor.edit { clearPin() }
     }
 
-    fun verifyPin(pin: String): Boolean {
-        val stored = preferences.pinHash ?: return false
-        // Don't rate-limit the in-settings PIN verification as aggressively as
-        // the lock-screen unlock — the user is already authenticated to reach
-        // this point. We still upgrade the hash on success.
-        val valid = preferencesStore.verifyPin(pin, stored)
-        // Silently upgrade a legacy unsalted-SHA-256 PIN hash to PBKDF2 (v2)
-        // after a successful verify, so existing users get the stronger hash
-        // without having to re-enter their PIN via the "set PIN" flow.
-        if (valid && preferencesStore.pinHashNeedsMigration(stored)) {
-            launch { preferencesStore.upgradePinHashIfLegacy(pin) }
-        }
-        return valid
-    }
+    suspend fun verifyPin(pin: String): Boolean = preferencesStore.verifyPinOffMainThread(pin)
 
     fun setBiometricLockEnabled(enabled: Boolean) = editor.setBiometricLockEnabled(enabled)
 
     fun setUsePinForPlayerLock(enabled: Boolean) = editor.setUsePinForPlayerLock(enabled)
 
     fun setShowAdvancedSettings(enabled: Boolean) {
-        launch { preferencesStore.setShowAdvancedSettings(enabled) }
+        editor.edit { setShowAdvancedSettings(enabled) }
     }
 
     fun setExperimentalFeatureEnabled(feature: ExperimentalFeature, enabled: Boolean) {
-        launch {
-            val current = preferences.enabledExperimentalFeatures
-            val updated = if (enabled) current + feature else current - feature
-            preferencesStore.setEnabledExperimentalFeatures(updated)
-        }
+        val current = preferences.enabledExperimentalFeatures
+        val updated = if (enabled) current + feature else current - feature
+        editor.edit { setEnabledExperimentalFeatures(updated) }
     }
 
     fun setAutoLockTimerMs(ms: Long) = editor.setAutoLockTimerMs(ms)
 
     fun setDialogueBoostEnabled(enabled: Boolean) {
-        launch { preferencesStore.setDialogueBoostEnabled(enabled) }
+        editor.edit { setDialogueBoostEnabled(enabled) }
     }
 
     fun setDialogueBoostStrength(strength: EffectStrength) {
-        launch { preferencesStore.setDialogueBoostStrength(strength) }
+        editor.edit { setDialogueBoostStrength(strength) }
     }
 
     fun setEqualizerEnabled(enabled: Boolean) {
-        launch { preferencesStore.setEqualizerEnabled(enabled) }
+        editor.edit { setEqualizerEnabled(enabled) }
     }
 
     fun setNightModeEnabled(enabled: Boolean) {
-        launch { preferencesStore.setNightModeEnabled(enabled) }
+        editor.edit { setNightModeEnabled(enabled) }
     }
 
     fun setNightModeStrength(strength: EffectStrength) {
-        launch { preferencesStore.setNightModeStrength(strength) }
+        editor.edit { setNightModeStrength(strength) }
     }
 
     fun setBassBoostEnabled(enabled: Boolean) {
-        launch { preferencesStore.setBassBoostEnabled(enabled) }
+        editor.edit { setBassBoostEnabled(enabled) }
     }
 
     fun setBassBoostStrength(strength: EffectStrength) {
-        launch { preferencesStore.setBassBoostStrength(strength) }
+        editor.edit { setBassBoostStrength(strength) }
     }
 
     fun setVirtualizerEnabled(enabled: Boolean) {
-        launch { preferencesStore.setVirtualizerEnabled(enabled) }
+        editor.edit { setVirtualizerEnabled(enabled) }
     }
 
     fun setVirtualizerStrength(strength: Int) {
-        launch { preferencesStore.setVirtualizerStrength(strength) }
+        editor.edit { setVirtualizerStrength(strength) }
     }
 
     fun setReverbPreset(preset: com.raulshma.jellyplay.core.model.ReverbPreset) {
-        launch { preferencesStore.setReverbPreset(preset) }
+        editor.edit { setReverbPreset(preset) }
     }
 
     fun setAutoEqByGenre(enabled: Boolean) {
-        launch { preferencesStore.setAutoEqByGenre(enabled) }
+        editor.edit { setAutoEqByGenre(enabled) }
     }
 
     fun setDecoderMode(mode: DecoderMode) {
-        launch { preferencesStore.setDecoderMode(mode) }
+        editor.edit { setDecoderMode(mode) }
     }
 
     fun setAudioPassthrough(enabled: Boolean) {
-        launch { preferencesStore.setAudioPassthrough(enabled) }
+        editor.edit { setAudioPassthrough(enabled) }
     }
 
     fun setFrameRateMatching(enabled: Boolean) {
-        launch { preferencesStore.setFrameRateMatching(enabled) }
+        editor.edit { setFrameRateMatching(enabled) }
     }
 
     fun switchUser(userId: String, onComplete: () -> Unit) {
@@ -523,67 +490,67 @@ class SettingsViewModel @Inject constructor(
     fun setVideoDefaultOrientation(mode: OrientationMode) = editor.setVideoDefaultOrientation(mode)
 
     fun setVideoControlsTimeoutMs(ms: Long) {
-        launch { preferencesStore.setVideoControlsTimeoutMs(ms) }
+        editor.edit { setVideoControlsTimeoutMs(ms) }
     }
 
     fun setVideoGesturesEnabled(enabled: Boolean) = editor.setVideoGesturesEnabled(enabled)
 
     fun setVideoSkipBackOnResumeMs(ms: Long) {
-        launch { preferencesStore.setVideoSkipBackOnResumeMs(ms) }
+        editor.edit { setVideoSkipBackOnResumeMs(ms) }
     }
 
     fun setVideoPassOutProtectionHours(hours: Int) {
-        launch { preferencesStore.setVideoPassOutProtectionHours(hours) }
+        editor.edit { setVideoPassOutProtectionHours(hours) }
     }
 
     fun setVideoDefaultSpeed(speed: Float) {
-        launch { preferencesStore.setVideoDefaultSpeed(speed) }
+        editor.edit { setVideoDefaultSpeed(speed) }
     }
 
     fun setVideoHoldSpeedEnabled(enabled: Boolean) {
-        launch { preferencesStore.setVideoHoldSpeedEnabled(enabled) }
+        editor.edit { setVideoHoldSpeedEnabled(enabled) }
     }
 
     fun setVideoHoldSpeedMultiplier(multiplier: Float) {
-        launch { preferencesStore.setVideoHoldSpeedMultiplier(multiplier) }
+        editor.edit { setVideoHoldSpeedMultiplier(multiplier) }
     }
 
     fun setVideoDefaultAspectRatio(ratio: String) {
-        launch { preferencesStore.setVideoDefaultAspectRatio(ratio) }
+        editor.edit { setVideoDefaultAspectRatio(ratio) }
     }
 
     fun setVideoAutoplayNext(enabled: Boolean) = editor.setVideoAutoplayNext(enabled)
 
     fun setVideoSwipeSeekMaxMs(ms: Long) {
-        launch { preferencesStore.setVideoSwipeSeekMaxMs(ms) }
+        editor.edit { setVideoSwipeSeekMaxMs(ms) }
     }
 
     fun setVideoRememberBrightness(enabled: Boolean) {
-        launch { preferencesStore.setVideoRememberBrightness(enabled) }
+        editor.edit { setVideoRememberBrightness(enabled) }
     }
 
     fun setVideoBrightnessLevel(level: Float) {
-        launch { preferencesStore.setVideoBrightnessLevel(level) }
+        editor.edit { setVideoBrightnessLevel(level) }
     }
 
     fun setAudioDefaultSpeed(speed: Float) = editor.setAudioDefaultSpeed(speed)
 
     fun setAudioNightModeVolume(volume: Float) {
-        launch { preferencesStore.setAudioNightModeVolume(volume) }
+        editor.edit { setAudioNightModeVolume(volume) }
     }
 
     fun setAudioNightModeGain(gain: Int) {
-        launch { preferencesStore.setAudioNightModeGain(gain) }
+        editor.edit { setAudioNightModeGain(gain) }
     }
 
     fun setAudioSkipPreviousThresholdMs(ms: Long) {
-        launch { preferencesStore.setAudioSkipPreviousThresholdMs(ms) }
+        editor.edit { setAudioSkipPreviousThresholdMs(ms) }
     }
 
     fun setAudioAutoplayNext(enabled: Boolean) = editor.setAudioAutoplayNext(enabled)
 
     fun setAudioDelayMs(ms: Long) {
-        launch { preferencesStore.setAudioDelay(ms) }
+        editor.edit { setAudioDelay(ms) }
     }
 
     fun setHomeMode(mode: HomeMode) = editor.setHomeMode(mode)
@@ -591,38 +558,38 @@ class SettingsViewModel @Inject constructor(
     fun setSubtitleStyle(style: SubtitleStyle) = editor.setSubtitleStyle(style)
 
     fun setEqualizerSettings(settings: EqualizerSettings) {
-        launch { preferencesStore.setEqualizerSettings(settings) }
+        editor.edit { setEqualizerSettings(settings) }
     }
 
     fun setTrickplayEnabled(enabled: Boolean) {
-        launch { preferencesStore.setTrickplayEnabled(enabled) }
+        editor.edit { setTrickplayEnabled(enabled) }
     }
 
     fun setTrickplayOnSeekGesture(enabled: Boolean) {
-        launch { preferencesStore.setTrickplayOnSeekGesture(enabled) }
+        editor.edit { setTrickplayOnSeekGesture(enabled) }
     }
 
     fun setVideoPreloadBufferSize(size: com.raulshma.jellyplay.core.model.PreloadBufferSize) {
-        launch { preferencesStore.setVideoPreloadBufferSize(size) }
+        editor.edit { setVideoPreloadBufferSize(size) }
     }
 
     fun setAudioPreloadBufferSize(size: com.raulshma.jellyplay.core.model.PreloadBufferSize) {
-        launch { preferencesStore.setAudioPreloadBufferSize(size) }
+        editor.edit { setAudioPreloadBufferSize(size) }
     }
 
     fun setSegmentBehavior(
         type: com.raulshma.jellyplay.core.model.MediaSegmentType,
         behavior: com.raulshma.jellyplay.core.model.SegmentBehavior,
     ) {
-        launch { preferencesStore.setSegmentBehavior(type, behavior) }
+        editor.edit { setSegmentBehavior(type, behavior) }
     }
 
     fun setVideoEpisodeBrowserEnabled(enabled: Boolean) {
-        launch { preferencesStore.setVideoEpisodeBrowserEnabled(enabled) }
+        editor.edit { setVideoEpisodeBrowserEnabled(enabled) }
     }
 
     fun setVideoShowPlaybackMetadata(enabled: Boolean) {
-        launch { preferencesStore.setVideoShowPlaybackMetadata(enabled) }
+        editor.edit { setVideoShowPlaybackMetadata(enabled) }
     }
 
     fun setGaplessEnabled(enabled: Boolean) = editor.setGaplessEnabled(enabled)
@@ -630,27 +597,27 @@ class SettingsViewModel @Inject constructor(
     fun setCrossfadeDurationMs(ms: Long) = editor.setCrossfadeDurationMs(ms)
 
     fun setAudioCachingEnabled(enabled: Boolean) {
-        launch { preferencesStore.setAudioCachingEnabled(enabled) }
+        editor.edit { setAudioCachingEnabled(enabled) }
     }
 
     fun setAudioCacheSizeMb(sizeMb: Int) {
-        launch { preferencesStore.setAudioCacheSizeMb(sizeMb) }
+        editor.edit { setAudioCacheSizeMb(sizeMb) }
     }
 
     fun setAudioPrefetchLookahead(lookahead: Int) {
-        launch { preferencesStore.setAudioPrefetchLookahead(lookahead) }
+        editor.edit { setAudioPrefetchLookahead(lookahead) }
     }
 
     fun setAudioPrefetchBackfill(backfill: Int) {
-        launch { preferencesStore.setAudioPrefetchBackfill(backfill) }
+        editor.edit { setAudioPrefetchBackfill(backfill) }
     }
 
     fun setAudioCacheNetworkPolicy(policy: com.raulshma.jellyplay.core.model.AudioCacheNetworkPolicy) {
-        launch { preferencesStore.setAudioCacheNetworkPolicy(policy) }
+        editor.edit { setAudioCacheNetworkPolicy(policy) }
     }
 
     fun setAudioCacheCellularMonthlyCapMb(capMb: Int) {
-        launch { preferencesStore.setAudioCacheCellularMonthlyCapMb(capMb) }
+        editor.edit { setAudioCacheCellularMonthlyCapMb(capMb) }
     }
 
     fun clearAudioCache() {
@@ -658,41 +625,41 @@ class SettingsViewModel @Inject constructor(
     }
 
     fun setAudioNormalizationMode(mode: AudioNormalizationMode) {
-        launch { preferencesStore.setAudioNormalizationMode(mode) }
+        editor.edit { setAudioNormalizationMode(mode) }
     }
 
     fun setReplayGainPreAmpDb(db: Float) {
-        launch { preferencesStore.setReplayGainPreAmpDb(db) }
+        editor.edit { setReplayGainPreAmpDb(db) }
     }
 
     fun setDreamImageCategories(categories: Set<DreamImageCategory>) {
-        launch { preferencesStore.setDreamImageCategories(categories) }
+        editor.edit { setDreamImageCategories(categories) }
     }
 
     fun setDreamSlideshowIntervalMs(ms: Long) {
-        launch { preferencesStore.setDreamSlideshowIntervalMs(ms) }
+        editor.edit { setDreamSlideshowIntervalMs(ms) }
     }
 
     fun setDreamKenBurnsEnabled(enabled: Boolean) {
-        launch { preferencesStore.setDreamKenBurnsEnabled(enabled) }
+        editor.edit { setDreamKenBurnsEnabled(enabled) }
     }
 
     fun setDreamTransitionStyle(style: DreamTransitionStyle) {
-        launch { preferencesStore.setDreamTransitionStyle(style) }
+        editor.edit { setDreamTransitionStyle(style) }
     }
 
     fun setDreamShowTitle(enabled: Boolean) {
-        launch { preferencesStore.setDreamShowTitle(enabled) }
+        editor.edit { setDreamShowTitle(enabled) }
     }
 
     fun setEnabledHomeSectionTypes(types: Set<HomeSectionType>) = editor.setEnabledHomeSectionTypes(types)
 
     fun setHomeSectionOrder(order: List<HomeSectionType>) {
-        launch { preferencesStore.setHomeSectionOrder(order) }
+        editor.edit { setHomeSectionOrder(order) }
     }
 
     fun setHiddenLibrarySectionIds(ids: Set<String>) {
-        launch { preferencesStore.setHiddenLibrarySectionIds(ids) }
+        editor.edit { setHiddenLibrarySectionIds(ids) }
     }
 
     fun toggleHomeSectionType(type: HomeSectionType, enabled: Boolean) {
@@ -732,15 +699,15 @@ class SettingsViewModel @Inject constructor(
         get() = preferences.pinnedHomeSections
 
     fun addPinnedHomeSection(section: com.raulshma.jellyplay.core.model.PinnedHomeSection) {
-        launch { preferencesStore.addPinnedHomeSection(section) }
+        editor.edit { addPinnedHomeSection(section) }
     }
 
     fun removePinnedHomeSection(sectionId: String) {
-        launch { preferencesStore.removePinnedHomeSection(sectionId) }
+        editor.edit { removePinnedHomeSection(sectionId) }
     }
 
     fun setPinnedHomeSections(sections: List<com.raulshma.jellyplay.core.model.PinnedHomeSection>) {
-        launch { preferencesStore.setPinnedHomeSections(sections) }
+        editor.edit { setPinnedHomeSections(sections) }
     }
 
     /** Moves a pinned section from [from] to [to], clamped to valid bounds. */
@@ -840,26 +807,26 @@ class SettingsViewModel @Inject constructor(
             name = name.trim().ifBlank { "Preset" },
             config = config,
         )
-        launch { preferencesStore.saveHomeLayoutPreset(preset) }
+        editor.edit { saveHomeLayoutPreset(preset) }
     }
 
     /** Applies a preset's layout to the current preferences. */
     fun applyPreset(config: com.raulshma.jellyplay.core.model.HomeLayoutConfig) {
-        launch {
-            preferencesStore.setEnabledHomeSectionTypes(config.enabledHomeSectionTypes)
-            preferencesStore.setHomeSectionOrder(config.homeSectionOrder)
-            preferencesStore.setHiddenLibrarySectionIds(config.hiddenLibrarySectionIds)
-            preferencesStore.setMergeContinueWatchingAndNextUp(config.mergeContinueWatchingAndNextUp)
-            preferencesStore.setNextUpMaxDays(config.nextUpMaxDays)
-            preferencesStore.setNextUpRewatching(config.nextUpRewatching)
-            preferencesStore.setPinnedHomeSections(config.pinnedHomeSections)
-            preferencesStore.setHomeHeroEnabled(config.homeHeroEnabled)
-            preferencesStore.setContinueWatchingClickBehavior(config.continueWatchingClickBehavior)
+        editor.edit {
+            setEnabledHomeSectionTypes(config.enabledHomeSectionTypes)
+            setHomeSectionOrder(config.homeSectionOrder)
+            setHiddenLibrarySectionIds(config.hiddenLibrarySectionIds)
+            setMergeContinueWatchingAndNextUp(config.mergeContinueWatchingAndNextUp)
+            setNextUpMaxDays(config.nextUpMaxDays)
+            setNextUpRewatching(config.nextUpRewatching)
+            setPinnedHomeSections(config.pinnedHomeSections)
+            setHomeHeroEnabled(config.homeHeroEnabled)
+            setContinueWatchingClickBehavior(config.continueWatchingClickBehavior)
         }
     }
 
     fun deleteHomeLayoutPreset(presetId: String) {
-        launch { preferencesStore.deleteHomeLayoutPreset(presetId) }
+        editor.edit { deleteHomeLayoutPreset(presetId) }
     }
 
     /** Serializes a preset to a shareable pretty-printed JSON string. */
@@ -930,7 +897,7 @@ class SettingsViewModel @Inject constructor(
     fun setNavBarShowLabels(show: Boolean) = editor.setNavBarShowLabels(show)
 
     fun setHideBottomNavOnScroll(hide: Boolean) {
-        launch { preferencesStore.setHideBottomNavOnScroll(hide) }
+        editor.edit { setHideBottomNavOnScroll(hide) }
     }
 
     fun setHomeHeroEnabled(enabled: Boolean) = editor.setHomeHeroEnabled(enabled)
@@ -938,296 +905,296 @@ class SettingsViewModel @Inject constructor(
     fun setPerformanceMode(enabled: Boolean) = editor.setPerformanceMode(enabled)
 
     fun setLibraryViewMode(mode: LibraryViewMode) {
-        launch { preferencesStore.setLibraryViewMode(mode) }
+        editor.edit { setLibraryViewMode(mode) }
     }
 
     fun setAudioVisualizerEnabled(enabled: Boolean) {
-        launch { preferencesStore.setAudioVisualizerEnabled(enabled) }
+        editor.edit { setAudioVisualizerEnabled(enabled) }
     }
 
     fun setEqualizerPreset(preset: EqualizerPreset) {
-        launch { preferencesStore.setEqualizerPreset(preset) }
+        editor.edit { setEqualizerPreset(preset) }
     }
 
     fun setChannelMixEnabled(enabled: Boolean) {
-        launch { preferencesStore.setChannelMixEnabled(enabled) }
+        editor.edit { setChannelMixEnabled(enabled) }
     }
 
     fun setChannelMixMode(mode: ChannelMixMode) {
-        launch { preferencesStore.setChannelMixMode(mode) }
+        editor.edit { setChannelMixMode(mode) }
     }
 
     fun setSleepTimerDurationMs(ms: Long) {
-        launch { preferencesStore.setSleepTimerDurationMs(ms) }
+        editor.edit { setSleepTimerDurationMs(ms) }
     }
 
     fun setLrBalance(balance: Float) {
-        launch { preferencesStore.setLrBalance(balance) }
+        editor.edit { setLrBalance(balance) }
     }
 
     fun setSyncPlayJoinBehavior(behavior: SyncPlayJoinBehavior) {
-        launch { preferencesStore.setSyncPlayJoinBehavior(behavior) }
+        editor.edit { setSyncPlayJoinBehavior(behavior) }
     }
 
     fun setSyncPlayToleranceMs(ms: Long) {
-        launch { preferencesStore.setSyncPlayToleranceMs(ms) }
+        editor.edit { setSyncPlayToleranceMs(ms) }
     }
 
     fun setSyncPlayAutoAcceptInvites(enabled: Boolean) {
-        launch { preferencesStore.setSyncPlayAutoAcceptInvites(enabled) }
+        editor.edit { setSyncPlayAutoAcceptInvites(enabled) }
     }
 
     fun setDefaultCastingStrategy(strategy: CastingStrategy) {
-        launch { preferencesStore.setDefaultCastingStrategy(strategy) }
+        editor.edit { setDefaultCastingStrategy(strategy) }
     }
 
     fun setBackgroundCastingEnabled(enabled: Boolean) {
-        launch { preferencesStore.setBackgroundCastingEnabled(enabled) }
+        editor.edit { setBackgroundCastingEnabled(enabled) }
     }
 
     fun setPreferredRenderer(renderer: String?) {
-        launch { preferencesStore.setPreferredRenderer(renderer) }
+        editor.edit { setPreferredRenderer(renderer) }
     }
 
     fun setDvrPrePaddingMinutes(minutes: Int) {
-        launch { preferencesStore.setDvrPrePaddingMinutes(minutes) }
+        editor.edit { setDvrPrePaddingMinutes(minutes) }
     }
 
     fun setDvrPostPaddingMinutes(minutes: Int) {
-        launch { preferencesStore.setDvrPostPaddingMinutes(minutes) }
+        editor.edit { setDvrPostPaddingMinutes(minutes) }
     }
 
     fun setDvrRecordingQuality(quality: String) {
-        launch { preferencesStore.setDvrRecordingQuality(quality) }
+        editor.edit { setDvrRecordingQuality(quality) }
     }
 
     fun setFavoriteChannels(channels: Set<String>) {
-        launch { preferencesStore.setFavoriteChannels(channels) }
+        editor.edit { setFavoriteChannels(channels) }
     }
 
     fun setEnabledNewsletterSections(sections: Set<NewsletterSectionType>) {
-        launch { preferencesStore.setEnabledNewsletterSections(sections) }
+        editor.edit { setEnabledNewsletterSections(sections) }
     }
 
     fun setNewsletterSectionOrder(order: List<NewsletterSectionType>) {
-        launch { preferencesStore.setNewsletterSectionOrder(order) }
+        editor.edit { setNewsletterSectionOrder(order) }
     }
 
     fun setNewsletterEnabled(enabled: Boolean) {
-        launch { preferencesStore.setNewsletterEnabled(enabled) }
+        editor.edit { setNewsletterEnabled(enabled) }
     }
 
     fun setNewsletterDayOfWeek(day: Int) {
-        launch { preferencesStore.setNewsletterDayOfWeek(day) }
+        editor.edit { setNewsletterDayOfWeek(day) }
     }
 
     fun setManualOffline(enabled: Boolean) {
-        launch { preferencesStore.setManualOffline(enabled) }
+        editor.edit { setManualOffline(enabled) }
     }
 
     fun setAutoOfflineEnabled(enabled: Boolean) {
-        launch { preferencesStore.setAutoOfflineEnabled(enabled) }
+        editor.edit { setAutoOfflineEnabled(enabled) }
     }
 
     fun setManualBandwidthCap(cap: Long) {
-        launch { preferencesStore.setManualBandwidthCap(cap) }
+        editor.edit { setManualBandwidthCap(cap) }
     }
 
     fun setMeteredNetworkBehavior(behavior: MeteredNetworkBehavior) {
-        launch { preferencesStore.setMeteredNetworkBehavior(behavior) }
+        editor.edit { setMeteredNetworkBehavior(behavior) }
     }
 
     fun setAdaptiveBitrateEnabled(enabled: Boolean) {
-        launch { preferencesStore.setAdaptiveBitrateEnabled(enabled) }
+        editor.edit { setAdaptiveBitrateEnabled(enabled) }
     }
 
     fun setPitchSemitones(semitones: Float) {
-        launch { preferencesStore.setPitchSemitones(semitones) }
+        editor.edit { setPitchSemitones(semitones) }
     }
 
 
     fun setBackgroundVideoAudioEnabled(enabled: Boolean) {
-        launch { preferencesStore.setBackgroundVideoAudioEnabled(enabled) }
+        editor.edit { setBackgroundVideoAudioEnabled(enabled) }
     }
 
     fun setAutoPlayCountdownSec(sec: Int) {
-        launch { preferencesStore.setAutoPlayCountdownSec(sec) }
+        editor.edit { setAutoPlayCountdownSec(sec) }
     }
 
     fun setShowUnwatchedBadge(enabled: Boolean) {
-        launch { preferencesStore.setShowUnwatchedBadge(enabled) }
+        editor.edit { setShowUnwatchedBadge(enabled) }
     }
 
     fun setHideWatchedItems(enabled: Boolean) {
-        launch { preferencesStore.setHideWatchedItems(enabled) }
+        editor.edit { setHideWatchedItems(enabled) }
     }
 
     fun setHideEpisodeThumbnails(enabled: Boolean) {
-        launch { preferencesStore.setHideEpisodeThumbnails(enabled) }
+        editor.edit { setHideEpisodeThumbnails(enabled) }
     }
 
     fun setSkipSpecials(enabled: Boolean) {
-        launch { preferencesStore.setSkipSpecials(enabled) }
+        editor.edit { setSkipSpecials(enabled) }
     }
 
     fun setCellularDownloadSizeWarningMb(sizeMb: Int) {
-        launch { preferencesStore.setCellularDownloadSizeWarningMb(sizeMb) }
+        editor.edit { setCellularDownloadSizeWarningMb(sizeMb) }
     }
 
     fun setHapticsEnabled(enabled: Boolean) {
-        launch { preferencesStore.setHapticsEnabled(enabled) }
+        editor.edit { setHapticsEnabled(enabled) }
     }
 
     fun setDateFormatPreference(preference: DateFormatPreference) {
-        launch { preferencesStore.setDateFormatPreference(preference) }
+        editor.edit { setDateFormatPreference(preference) }
     }
 
     fun setAppFontScale(scale: AppFontScale) {
-        launch { preferencesStore.setAppFontScale(scale) }
+        editor.edit { setAppFontScale(scale) }
     }
 
     fun setScheduledThemeStartHour(hour: Int) {
-        launch { preferencesStore.setScheduledThemeStartHour(hour) }
+        editor.edit { setScheduledThemeStartHour(hour) }
     }
 
     fun setScheduledThemeEndHour(hour: Int) {
-        launch { preferencesStore.setScheduledThemeEndHour(hour) }
+        editor.edit { setScheduledThemeEndHour(hour) }
     }
 
     fun setColorBlindMode(mode: ColorBlindMode) {
-        launch { preferencesStore.setColorBlindMode(mode) }
+        editor.edit { setColorBlindMode(mode) }
     }
 
     fun setHandMode(mode: HandMode) {
-        launch { preferencesStore.setHandMode(mode) }
+        editor.edit { setHandMode(mode) }
     }
 
     fun setDownloadScheduleEnabled(enabled: Boolean) {
-        launch { preferencesStore.setDownloadScheduleEnabled(enabled) }
+        editor.edit { setDownloadScheduleEnabled(enabled) }
     }
 
     fun setDownloadScheduleWindow(window: DownloadScheduleWindow) {
-        launch { preferencesStore.setDownloadScheduleWindow(window) }
+        editor.edit { setDownloadScheduleWindow(window) }
     }
 
     fun setCellularStreamingQuality(quality: StreamingQuality) {
-        launch { preferencesStore.setCellularStreamingQuality(quality) }
+        editor.edit { setCellularStreamingQuality(quality) }
     }
 
     fun setShowWatchedCheckmark(enabled: Boolean) {
-        launch { preferencesStore.setShowWatchedCheckmark(enabled) }
+        editor.edit { setShowWatchedCheckmark(enabled) }
     }
 
     fun setDefaultLibrarySortOrder(libraryId: String, order: String) {
-        launch { preferencesStore.setDefaultLibrarySortOrder(libraryId, order) }
+        editor.edit { setDefaultLibrarySortOrder(libraryId, order) }
     }
 
     fun setKeepScreenOnDuringVideo(enabled: Boolean) {
-        launch { preferencesStore.setKeepScreenOnDuringVideo(enabled) }
+        editor.edit { setKeepScreenOnDuringVideo(enabled) }
     }
 
     fun setDownloadQuality(quality: DownloadQuality) {
-        launch { preferencesStore.setDownloadQuality(quality) }
+        editor.edit { setDownloadQuality(quality) }
     }
 
     fun setSmartDownloadsEnabled(enabled: Boolean) {
-        launch { preferencesStore.setSmartDownloadsEnabled(enabled) }
+        editor.edit { setSmartDownloadsEnabled(enabled) }
     }
 
     fun setAutoDownloadNewEpisodes(enabled: Boolean) {
-        launch {
-            preferencesStore.setAutoDownloadNewEpisodes(enabled)
+        editor.edit {
+            setAutoDownloadNewEpisodes(enabled)
             autoDownloadScheduler.sync()
         }
     }
 
     fun setIncognitoModeEnabled(enabled: Boolean) {
-        launch { preferencesStore.setIncognitoModeEnabled(enabled) }
+        editor.edit { setIncognitoModeEnabled(enabled) }
     }
 
     fun setShowTimeRemaining(enabled: Boolean) {
-        launch { preferencesStore.setShowTimeRemaining(enabled) }
+        editor.edit { setShowTimeRemaining(enabled) }
     }
 
     fun setShowClockOnHome(enabled: Boolean) {
-        launch { preferencesStore.setShowClockOnHome(enabled) }
+        editor.edit { setShowClockOnHome(enabled) }
     }
 
     fun setShowClockInPlayer(enabled: Boolean) {
-        launch { preferencesStore.setShowClockInPlayer(enabled) }
+        editor.edit { setShowClockInPlayer(enabled) }
     }
 
     fun setPauseOnAudioFocusLoss(enabled: Boolean) {
-        launch { preferencesStore.setPauseOnAudioFocusLoss(enabled) }
+        editor.edit { setPauseOnAudioFocusLoss(enabled) }
     }
 
     fun setDuckOnTransientFocusLoss(enabled: Boolean) {
-        launch { preferencesStore.setDuckOnTransientFocusLoss(enabled) }
+        editor.edit { setDuckOnTransientFocusLoss(enabled) }
     }
 
     fun setVolumeBoostEnabled(enabled: Boolean) {
-        launch { preferencesStore.setVolumeBoostEnabled(enabled) }
+        editor.edit { setVolumeBoostEnabled(enabled) }
     }
 
     fun setVolumeBoostGain(gain: Int) {
-        launch { preferencesStore.setVolumeBoostGain(gain) }
+        editor.edit { setVolumeBoostGain(gain) }
     }
 
     fun setShowShareMediaOption(enabled: Boolean) {
-        launch { preferencesStore.setShowShareMediaOption(enabled) }
+        editor.edit { setShowShareMediaOption(enabled) }
     }
 
     fun setShowExternalRatings(enabled: Boolean) {
-        launch { preferencesStore.setShowExternalRatings(enabled) }
+        editor.edit { setShowExternalRatings(enabled) }
     }
 
     fun setMpvConfig(config: MpvEngineConfig) {
-        launch { preferencesStore.setMpvConfig(config) }
+        editor.edit { setMpvConfig(config) }
     }
 
     fun setLibVlcConfig(config: LibVlcEngineConfig) {
-        launch { preferencesStore.setLibVlcConfig(config) }
+        editor.edit { setLibVlcConfig(config) }
     }
 
     fun setExoPlayerConfig(config: ExoPlayerEngineConfig) {
-        launch { preferencesStore.setExoPlayerConfig(config) }
+        editor.edit { setExoPlayerConfig(config) }
     }
 
     fun setDataSaverEnabled(enabled: Boolean) {
-        launch { preferencesStore.setDataSaverEnabled(enabled) }
+        editor.edit { setDataSaverEnabled(enabled) }
     }
 
     fun setVerboseNetworkLogging(enabled: Boolean) {
-        launch { preferencesStore.setVerboseNetworkLogging(enabled) }
+        editor.edit { setVerboseNetworkLogging(enabled) }
     }
 
     fun setNetworkTimeoutPreset(preset: com.raulshma.jellyplay.core.model.NetworkTimeoutPreset) {
-        launch { preferencesStore.setNetworkTimeoutPreset(preset) }
+        editor.edit { setNetworkTimeoutPreset(preset) }
     }
 
     fun setContinueWatchingClickBehavior(behavior: com.raulshma.jellyplay.core.model.ContinueWatchingClickBehavior) {
-        launch { preferencesStore.setContinueWatchingClickBehavior(behavior) }
+        editor.edit { setContinueWatchingClickBehavior(behavior) }
     }
 
     fun setMergeContinueWatchingAndNextUp(enabled: Boolean) {
-        launch { preferencesStore.setMergeContinueWatchingAndNextUp(enabled) }
+        editor.edit { setMergeContinueWatchingAndNextUp(enabled) }
     }
 
     fun unhideAllCwItems() {
-        launch { preferencesStore.unhideAllCwItems() }
+        editor.edit { unhideAllCwItems() }
     }
 
     fun setNextUpMaxDays(days: Int) {
-        launch { preferencesStore.setNextUpMaxDays(days) }
+        editor.edit { setNextUpMaxDays(days) }
     }
 
     fun setNextUpRewatching(enabled: Boolean) {
-        launch { preferencesStore.setNextUpRewatching(enabled) }
+        editor.edit { setNextUpRewatching(enabled) }
     }
 
     fun setAppLanguage(language: String?) {
         launch {
-            preferencesStore.setAppLanguage(language)
+            editor.edit { setAppLanguage(language) }
             if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.TIRAMISU) {
                 val localeManager = context.getSystemService(android.app.LocaleManager::class.java)
                 localeManager?.applicationLocales = if (language != null) {
@@ -1242,31 +1209,31 @@ class SettingsViewModel @Inject constructor(
     }
 
     fun setPgsSubtitleDirectPlay(enabled: Boolean) {
-        launch { preferencesStore.setPgsSubtitleDirectPlay(enabled) }
+        editor.edit { setPgsSubtitleDirectPlay(enabled) }
     }
 
     fun setBackdropThemeMusicEnabled(enabled: Boolean) {
-        launch { preferencesStore.setBackdropThemeMusicEnabled(enabled) }
+        editor.edit { setBackdropThemeMusicEnabled(enabled) }
     }
 
     fun setHiddenNavItems(items: Set<String>) {
-        launch { preferencesStore.setHiddenNavItems(items) }
+        editor.edit { setHiddenNavItems(items) }
     }
 
     fun setNavItemOrder(order: List<String>) {
-        launch { preferencesStore.setNavItemOrder(order) }
+        editor.edit { setNavItemOrder(order) }
     }
 
     fun setSelfUpdateCheckEnabled(enabled: Boolean) {
-        launch { preferencesStore.setSelfUpdateCheckEnabled(enabled) }
+        editor.edit { setSelfUpdateCheckEnabled(enabled) }
     }
 
     fun setHdrSubtitleStyleEnabled(enabled: Boolean) {
-        launch { preferencesStore.setHdrSubtitleStyleEnabled(enabled) }
+        editor.edit { setHdrSubtitleStyleEnabled(enabled) }
     }
 
     fun setHdrSubtitleStyle(style: com.raulshma.jellyplay.core.model.SubtitleStyle) {
-        launch { preferencesStore.setHdrSubtitleStyle(style) }
+        editor.edit { setHdrSubtitleStyle(style) }
     }
 
     fun authorizeQuickConnect(code: String, onResult: (success: Boolean, error: String?) -> Unit) {
@@ -1286,83 +1253,83 @@ class SettingsViewModel @Inject constructor(
     }
 
     fun setReduceMotionEnabled(enabled: Boolean) {
-        launch { preferencesStore.setReduceMotionEnabled(enabled) }
+        editor.edit { setReduceMotionEnabled(enabled) }
     }
 
     fun setPreferAudioDescription(enabled: Boolean) {
-        launch { preferencesStore.setPreferAudioDescription(enabled) }
+        editor.edit { setPreferAudioDescription(enabled) }
     }
 
     fun setHighContrastSubtitles(enabled: Boolean) {
-        launch { preferencesStore.setHighContrastSubtitles(enabled) }
+        editor.edit { setHighContrastSubtitles(enabled) }
     }
 
     fun setSubtitlesForcedOnly(enabled: Boolean) {
-        launch { preferencesStore.setSubtitlesForcedOnly(enabled) }
+        editor.edit { setSubtitlesForcedOnly(enabled) }
     }
 
     fun setHideSearchHistory(enabled: Boolean) {
-        launch { preferencesStore.setHideSearchHistory(enabled) }
+        editor.edit { setHideSearchHistory(enabled) }
     }
 
     fun setBlueLightFilterEnabled(enabled: Boolean) {
-        launch { preferencesStore.setBlueLightFilterEnabled(enabled) }
+        editor.edit { setBlueLightFilterEnabled(enabled) }
     }
 
     fun setBlueLightFilterStrength(strength: Float) {
-        launch { preferencesStore.setBlueLightFilterStrength(strength) }
+        editor.edit { setBlueLightFilterStrength(strength) }
     }
 
     fun setTvZoomModePercent(percent: Float) {
-        launch { preferencesStore.setTvZoomModePercent(percent) }
+        editor.edit { setTvZoomModePercent(percent) }
     }
 
     fun setRemoteControlEnabled(enabled: Boolean) {
-        launch { preferencesStore.setRemoteControlEnabled(enabled) }
+        editor.edit { setRemoteControlEnabled(enabled) }
     }
 
     fun setMaxDownloadStorageGb(gb: Int) {
-        launch { preferencesStore.setMaxDownloadStorageGb(gb) }
+        editor.edit { setMaxDownloadStorageGb(gb) }
     }
 
     fun setDownloadStorageLocation(location: String) {
-        launch { preferencesStore.setDownloadStorageLocation(location) }
+        editor.edit { setDownloadStorageLocation(location) }
     }
 
     fun setAndroidTvWatchNextEnabled(enabled: Boolean) {
-        launch {
-            preferencesStore.setAndroidTvWatchNextEnabled(enabled)
+        editor.edit {
+            setAndroidTvWatchNextEnabled(enabled)
             tvWatchNextScheduler.scheduleRefresh()
         }
     }
 
     fun setUserDataSyncEnabled(enabled: Boolean) {
-        launch { preferencesStore.setUserDataSyncEnabled(enabled) }
+        editor.edit { setUserDataSyncEnabled(enabled) }
     }
 
     fun setSynthwaveMode(enabled: Boolean) {
-        launch { preferencesStore.setSynthwaveMode(enabled) }
+        editor.edit { setSynthwaveMode(enabled) }
     }
 
     fun setSynthwaveAccent(accent: String) {
-        launch { preferencesStore.setSynthwaveAccent(accent) }
+        editor.edit { setSynthwaveAccent(accent) }
     }
 
     fun setSoothingMode(enabled: Boolean) {
-        launch { preferencesStore.setSoothingMode(enabled) }
+        editor.edit { setSoothingMode(enabled) }
     }
 
     fun setSoothingAccent(accent: String) {
-        launch { preferencesStore.setSoothingAccent(accent) }
+        editor.edit { setSoothingAccent(accent) }
     }
 
     fun setMonochromeMode(enabled: Boolean) {
-        launch { preferencesStore.setMonochromeMode(enabled) }
+        editor.edit { setMonochromeMode(enabled) }
     }
 
     fun updateNotificationPreferences(transform: (NotificationPreferences) -> NotificationPreferences) {
-        launch {
-            preferencesStore.updateNotificationPreferences(transform)
+        editor.edit {
+            updateNotificationPreferences(transform)
             notificationScheduler.scheduleOrUpdate()
         }
     }
@@ -1375,8 +1342,8 @@ class SettingsViewModel @Inject constructor(
             backupRestoreStatus = null
             runCatching {
                 val prefs = preferences
-                val json = presetJson
-                val jsonString = json.encodeToString(UserPreferences.serializer(), prefs)
+                val jsonString = com.raulshma.jellyplay.core.datastore.PreferencesJson.fullPreferences
+                    .encodeToString(UserPreferences.serializer(), prefs)
                 withContext(Dispatchers.IO) {
                     context.contentResolver.openOutputStream(uri)?.use { stream ->
                         stream.writer().use { it.write(jsonString) }
@@ -1398,9 +1365,9 @@ class SettingsViewModel @Inject constructor(
                         stream.reader().use { it.readText() }
                     } ?: throw IOException("Cannot open input stream")
                 }
-                val json = importExportJson
-                val imported = json.decodeFromString(UserPreferences.serializer(), jsonString)
-                preferencesStore.restorePreferences(imported)
+                val imported = com.raulshma.jellyplay.core.datastore.PreferencesJson.import
+                    .decodeFromString(UserPreferences.serializer(), jsonString)
+                editor.edit { restorePreferences(imported) }
                 backupRestoreStatus = "Settings imported successfully"
             }.onFailure {
                 backupRestoreStatus = "Import failed: ${it.message}"

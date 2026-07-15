@@ -914,13 +914,14 @@ class ExoPlayerEngine(
     override fun applySubtitleStyleToView(view: View, style: SubtitleStyle) {
         val pv = (view as? PlayerView) ?: playerView ?: return
         val bgAlpha = (style.backgroundOpacity * 255).toInt()
-        val bgColorWithAlpha = (bgAlpha shl 24) or (style.backgroundColor.value and 0x00FFFFFF)
+        val bgColorWithAlpha = (bgAlpha shl 24) or
+            (com.raulshma.jellyplay.feature.player.video.subtitle.SubtitleColorResolver.resolveBackgroundColor(style) and 0x00FFFFFF)
         pv.subtitleView?.let { sv ->
             if (style.applyCustomStyle) {
                 sv.setApplyEmbeddedStyles(false)
                 sv.setStyle(
                     CaptionStyleCompat(
-                        style.fontColor.value,
+                        com.raulshma.jellyplay.feature.player.video.subtitle.SubtitleColorResolver.resolveTextColor(style),
                         bgColorWithAlpha,
                         Color.TRANSPARENT,
                         when (style.edgeType) {
@@ -930,8 +931,8 @@ class ExoPlayerEngine(
                             com.raulshma.jellyplay.core.model.SubtitleEdgeType.DEPRESSED -> CaptionStyleCompat.EDGE_TYPE_DEPRESSED
                             else -> CaptionStyleCompat.EDGE_TYPE_NONE
                         },
-                        style.edgeColor.value,
-                        null,
+                        com.raulshma.jellyplay.feature.player.video.subtitle.SubtitleColorResolver.resolveEdgeColor(style),
+                        fontProvider.typefaceFor(style),
                     )
                 )
                 sv.setFixedTextSize(android.util.TypedValue.COMPLEX_UNIT_SP, style.fontSize.toFloat())

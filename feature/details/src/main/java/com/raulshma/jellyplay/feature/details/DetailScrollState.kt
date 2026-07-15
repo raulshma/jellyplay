@@ -4,6 +4,7 @@ import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.runtime.Immutable
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.derivedStateOf
@@ -47,7 +48,8 @@ enum class DetailBackdropTier(val dp: Dp) {
  * `MediaDetailScreen.kt`; this groups it so `DetailContent` no longer owns
  * scroll plumbing.
  */
-class DetailScrollState internal constructor(
+@Immutable
+data class DetailScrollState internal constructor(
     val backdropHeight: Dp,
     val baseBackdropHeight: Dp,
     val scrollOffset: Float,
@@ -111,15 +113,20 @@ internal fun rememberDetailScrollState(
     val artworkColors = LocalArtworkColors.current
     val isSynthwave = LocalIsSynthwave.current
     val isSoothing = LocalIsSoothingTheme.current
+    val schemeBackground = MaterialTheme.colorScheme.background
 
     val baseOverlayColor = artworkColors?.darkMuted
         ?: artworkColors?.dominant
-        ?: MaterialTheme.colorScheme.background
-    val targetBackgroundColor = when {
-        isSynthwave -> ThemeVariantColors.SYNTHWAVE_DETAIL_BG
-        isSoothing -> MaterialTheme.colorScheme.background
-        isLightTheme -> MaterialTheme.colorScheme.background
-        else -> lerp(baseOverlayColor, Color.Black, 0.65f)
+        ?: schemeBackground
+    // Depends only on artwork + theme flags, not on scroll state — so memoize
+    // it to avoid recomputing the lerp + when on every scroll-driven recompose.
+    val targetBackgroundColor = remember(baseOverlayColor, schemeBackground, isSynthwave, isSoothing, isLightTheme) {
+        when {
+            isSynthwave -> ThemeVariantColors.SYNTHWAVE_DETAIL_BG
+            isSoothing -> schemeBackground
+            isLightTheme -> schemeBackground
+            else -> lerp(baseOverlayColor, Color.Black, 0.65f)
+        }
     }
     val backgroundColor by animateColorAsState(
         targetValue = targetBackgroundColor,

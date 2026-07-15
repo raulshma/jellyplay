@@ -1,7 +1,12 @@
 package com.raulshma.jellyplay.core.ui.animation
 
+import androidx.compose.animation.core.FiniteAnimationSpec
+import androidx.compose.animation.core.Spring
+import androidx.compose.animation.core.snap
+import androidx.compose.animation.core.spring
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.ReadOnlyComposable
+import androidx.compose.ui.unit.IntOffset
 import com.raulshma.jellyplay.core.ui.components.LocalReducedMotion
 
 object AnimationTokens {
@@ -38,3 +43,28 @@ fun performanceAwareScale(default: Float): Float {
 fun performanceAwareStaggerDelay(defaultMs: Int): Int {
     return if (LocalReducedMotion.current) 0 else defaultMs
 }
+
+/**
+ * Placement spec for `LazyItemScope.animateItem`. The no-arg
+ * [androidx.compose.foundation.lazy.animateItem] uses a fixed library-default
+ * spring that does NOT consult `motionScheme`/`LocalReducedMotion`, so
+ * reduced-motion users still see animated item placement. Pass this as the
+ * `placementSpec` to honor the reduce-motion contract: spring normally, snap
+ * when reduced.
+ *
+ * Hoist the result into a local val inside the `items { }` lambda and pass it
+ * by name to `animateItem(placementSpec = ...)` — this is unambiguous and
+ * version-portable (a @Composable default arg is not reliably supported).
+ */
+@Composable
+@ReadOnlyComposable
+fun lazyItemPlacementSpec(): FiniteAnimationSpec<IntOffset> =
+    if (LocalReducedMotion.current) {
+        snap()
+    } else {
+        spring(
+            dampingRatio = Spring.DampingRatioNoBouncy,
+            stiffness = Spring.StiffnessMedium,
+        )
+    }
+

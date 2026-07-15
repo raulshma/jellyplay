@@ -26,7 +26,6 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.paging.LoadState
 import androidx.paging.compose.collectAsLazyPagingItems
-import androidx.paging.compose.itemKey
 import com.raulshma.jellyplay.core.ui.components.ErrorScreen
 import com.raulshma.jellyplay.core.ui.components.HeaderStatusIndicator
 import com.raulshma.jellyplay.core.ui.components.JellyPlayScreenScaffold
@@ -42,6 +41,7 @@ import com.raulshma.jellyplay.core.ui.tv.LocalTvMode
 import com.raulshma.jellyplay.core.ui.tv.TvFocusableGrid
 import com.raulshma.jellyplay.core.ui.tv.rememberTvFocusState
 import com.raulshma.jellyplay.core.ui.tv.tvFocusIndicator
+import com.raulshma.jellyplay.core.ui.util.safeItemKey
 import com.composables.icons.tabler.Tabler
 import com.composables.icons.tabler.outline.*
 
@@ -99,22 +99,23 @@ fun ArtistsScreen(
         },
     ) { _ ->
         PullToRefreshBox(
-            isRefreshing = artists.loadState.refresh is LoadState.Loading,
+            isRefreshing = artists.loadState.refresh is LoadState.Loading && artists.itemCount > 0,
             onRefresh = { artists.refresh() },
             modifier = Modifier.fillMaxSize(),
         ) {
         Box(modifier = Modifier.fillMaxSize()) {
-            when (val refreshState = artists.loadState.refresh) {
-                is LoadState.Loading -> {
+            when {
+                artists.loadState.refresh is LoadState.Loading && artists.itemCount == 0 -> {
                     ScreenLoadingState()
                 }
-                is LoadState.Error -> {
+                artists.loadState.refresh is LoadState.Error -> {
                     ErrorScreen(
-                        message = refreshState.error.localizedMessage ?: "Failed to load artists",
+                        message = (artists.loadState.refresh as LoadState.Error).error.localizedMessage
+                            ?: "Failed to load artists",
                         onRetry = { artists.refresh() },
                     )
                 }
-                is LoadState.NotLoading -> {
+                else -> {
                     if (artists.itemCount == 0) {
                         ScreenEmptyState(
                             icon = Tabler.Outline.Music,
@@ -125,7 +126,7 @@ fun ArtistsScreen(
                         val isTv = LocalTvMode.current
                         TvFocusableGrid(
                             itemCount = artists.itemCount,
-                            key = artists.itemKey { it.id },
+                            key = artists.safeItemKey { it.id },
                             columns = GridCells.Adaptive(adaptiveInfo.gridCellSize(isTv)),
                             contentPadding = PaddingValues(
                                 start = adaptiveInfo.contentPadding(isTv),
