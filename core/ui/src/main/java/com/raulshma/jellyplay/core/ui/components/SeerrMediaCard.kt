@@ -376,33 +376,12 @@ fun SeerrMediaCard(
                 }
 
                 if (!isLoading && item.voteAverage != null) {
-                    Box(
+                    RatingBadge(
+                        rating = item.voteAverage,
                         modifier = Modifier
                             .align(Alignment.TopStart)
-                            .padding(6.dp)
-                            .background(
-                                MaterialTheme.colorScheme.surface.copy(alpha = 0.7f),
-                                ShapeCache.smooth4,
-                            )
-                            .padding(horizontal = 6.dp, vertical = 2.dp),
-                    ) {
-                        Row(
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(2.dp),
-                        ) {
-                            Text(
-                                text = "★",
-                                style = MaterialTheme.typography.labelSmall,
-                                color = RatingColors.star,
-                            )
-                            val ratingText = remember(item.voteAverage) { "%.1f".format(item.voteAverage) }
-                            Text(
-                                text = ratingText,
-                                style = MaterialTheme.typography.labelSmall,
-                                color = MaterialTheme.colorScheme.onSurface,
-                            )
-                        }
-                    }
+                            .padding(6.dp),
+                    )
                 }
 
                 if (!isLoading) {

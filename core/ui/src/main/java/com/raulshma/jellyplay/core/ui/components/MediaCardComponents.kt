@@ -59,6 +59,7 @@ import com.raulshma.jellyplay.core.designsystem.theme.LocalIsSoothingTheme
 import com.raulshma.jellyplay.core.designsystem.theme.LocalIsSynthwave
 import com.raulshma.jellyplay.core.designsystem.theme.LocalThemeVariant
 import com.raulshma.jellyplay.core.designsystem.theme.RatingColors
+import com.raulshma.jellyplay.core.designsystem.theme.isLightColor
 import com.raulshma.jellyplay.core.designsystem.theme.ShapeCache
 import com.raulshma.jellyplay.core.designsystem.theme.cardBorder
 import com.raulshma.jellyplay.core.designsystem.theme.cardElevation
@@ -432,117 +433,50 @@ fun PosterCard(
                 )
 
                 if (item.isPlayed && cardPrefs.showWatchedCheckmark) {
-                    val playedBadgeColor = dominantColor
-                    val playedBadgeText = remember(playedBadgeColor) {
-                        if ((playedBadgeColor.red * 0.299f + playedBadgeColor.green * 0.587f + playedBadgeColor.blue * 0.114f) > 0.5f) Color.Black else Color.White
-                    }
-                    Box(
+                    WatchedBadge(
+                        accentTint = dominantColor,
+                        iconColor = remember(dominantColor) {
+                            if (isLightColor(dominantColor)) Color.Black else Color.White
+                        },
                         modifier = Modifier
                             .align(Alignment.TopEnd)
-                            .padding(6.dp)
-                            .background(
-                                playedBadgeColor.copy(alpha = 0.9f),
-                                ShapeCache.smooth4,
-                            )
-                            .padding(horizontal = 6.dp, vertical = 2.dp),
-                    ) {
-                        Text(
-                            text = "✓",
-                            style = MaterialTheme.typography.labelSmall,
-                            color = playedBadgeText,
-                        )
-                    }
+                            .padding(6.dp),
+                    )
                 } else if (!item.isPlayed && cardPrefs.showUnwatchedBadge) {
                     val unplayedCount = item.unplayedItemCount
                     // Unwatched-count badge for series/seasons/collections. Only
                     // rendered when the user has enabled the unwatched badge
                     // and the underlying MediaItem exposes a non-zero count.
                     if (unplayedCount != null && unplayedCount > 0) {
-                        Box(
+                        UnwatchedCountBadge(
+                            count = unplayedCount,
                             modifier = Modifier
                                 .align(Alignment.TopEnd)
-                                .padding(6.dp)
-                                .background(
-                                    MaterialTheme.colorScheme.surface.copy(alpha = 0.85f),
-                                    ShapeCache.smooth4,
-                                )
-                                .padding(horizontal = 6.dp, vertical = 2.dp),
-                        ) {
-                            Text(
-                                text = "$unplayedCount",
-                                style = MaterialTheme.typography.labelSmall,
-                                color = MaterialTheme.colorScheme.onSurface,
-                                fontWeight = FontWeight.Bold,
-                            )
-                        }
+                                .padding(6.dp),
+                        )
                     }
                 }
 
                 if (item.communityRating != null) {
-                    val ratingText = remember(item.communityRating) { "%.1f".format(item.communityRating) }
-                    Box(
+                    RatingBadge(
+                        rating = item.communityRating,
                         modifier = Modifier
                             .align(Alignment.TopStart)
-                            .padding(6.dp)
-                            .background(
-                                MaterialTheme.colorScheme.surface.copy(alpha = 0.7f),
-                                ShapeCache.smooth4,
-                            )
-                            .padding(horizontal = 6.dp, vertical = 2.dp),
-                    ) {
-                        Row(
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(2.dp),
-                        ) {
-                            Text(
-                                text = "★",
-                                style = MaterialTheme.typography.labelSmall,
-                                color = RatingColors.star,
-                            )
-                            Text(
-                                text = ratingText,
-                                style = MaterialTheme.typography.labelSmall,
-                                color = MaterialTheme.colorScheme.onSurface,
-                            )
-                        }
-                    }
+                            .padding(6.dp),
+                    )
                 }
 
                 // Bottom-left season/episode chip for episode cards surfaced in
                 // Latest Media rows. The series name is shown as the card title
                 // (see below) so the chip only needs to carry the S# E# context.
                 if (showEpisodeSeriesBadge && item.mediaType == MediaType.EPISODE) {
-                    val seasonNumber = item.seasonNumber
-                    val episodeNumber = item.episodeNumber
-                    val episodeChip = remember(seasonNumber, episodeNumber) {
-                        when {
-                            seasonNumber != null && episodeNumber != null ->
-                                "S${seasonNumber} E${episodeNumber.toString().padStart(2, '0')}"
-                            episodeNumber != null -> "E${episodeNumber.toString().padStart(2, '0')}"
-                            seasonNumber != null -> "S$seasonNumber"
-                            else -> null
-                        }
-                    }
-                    if (episodeChip != null) {
-                        Text(
-                            text = episodeChip,
-                            style = MaterialTheme.typography.labelSmall,
-                            // Use the theme's onPrimary so the chip text matches its
-                            // primary background with correct contrast across all
-                            // themes. The previous Color.White was unreadable on the
-                            // light primary of the dark/OLED themes.
-                            color = MaterialTheme.colorScheme.onPrimary,
-                            fontWeight = FontWeight.SemiBold,
-                            modifier = Modifier
-                                .align(Alignment.BottomStart)
-                                .padding(start = 6.dp, bottom = 6.dp)
-                                .background(
-                                    MaterialTheme.colorScheme.primary,
-                                    ShapeCache.smooth4,
-                                )
-                                .padding(horizontal = 6.dp, vertical = 2.dp),
-                        )
-                    }
+                    EpisodeChip(
+                        seasonNumber = item.seasonNumber,
+                        episodeNumber = item.episodeNumber,
+                        modifier = Modifier
+                            .align(Alignment.BottomStart)
+                            .padding(start = 6.dp, bottom = 6.dp),
+                    )
                 }
 
                 if (onPlayClick != null) {
