@@ -1,4 +1,4 @@
-package com.raulshma.jellyplay.feature.settings
+package com.raulshma.jellyplay.core.ui.settingssearch
 
 /**
  * Fuzzy, ranked matcher for the settings search registry.

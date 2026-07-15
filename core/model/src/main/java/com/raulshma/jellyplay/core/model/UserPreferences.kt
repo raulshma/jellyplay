@@ -188,6 +188,8 @@ data class UserPreferences(
     val showTimeRemaining: Boolean = false,
     val showClockOnHome: Boolean = false,
     val showClockInPlayer: Boolean = false,
+    /** Show settings search results alongside media in the home search bar. */
+    val showSettingsInHomeSearch: Boolean = true,
     val pauseOnAudioFocusLoss: Boolean = true,
     val duckOnTransientFocusLoss: Boolean = false,
     val volumeBoostEnabled: Boolean = false,

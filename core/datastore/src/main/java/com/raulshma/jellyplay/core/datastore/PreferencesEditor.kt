@@ -57,6 +57,7 @@ class PreferencesEditor @Inject constructor(
     fun setColorStyle(style: ColorStyle) = edit { setColorStyle(style) }
     fun setPerformanceMode(enabled: Boolean) = edit { setPerformanceMode(enabled) }
     fun setHomeHeroEnabled(enabled: Boolean) = edit { setHomeHeroEnabled(enabled) }
+    fun setShowSettingsInHomeSearch(enabled: Boolean) = edit { setShowSettingsInHomeSearch(enabled) }
     fun setHomeMode(mode: HomeMode) = edit { setHomeMode(mode) }
     fun setEnabledHomeSectionTypes(types: Set<HomeSectionType>) = edit { setEnabledHomeSectionTypes(types) }
     fun setNavBarShowLabels(show: Boolean) = edit { setNavBarShowLabels(show) }

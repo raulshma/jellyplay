@@ -1,4 +1,4 @@
-package com.raulshma.jellyplay.feature.settings
+package com.raulshma.jellyplay.core.ui.settingssearch
 
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse

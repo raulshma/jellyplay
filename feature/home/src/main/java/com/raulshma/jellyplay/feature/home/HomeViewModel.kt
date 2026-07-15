@@ -17,6 +17,7 @@ import com.raulshma.jellyplay.core.data.util.ImageUrlProvider
 import com.raulshma.jellyplay.core.data.util.PhotoFolderPrefetcher
 import com.raulshma.jellyplay.core.datastore.SeerrPreferencesStore
 import com.raulshma.jellyplay.core.datastore.UserPreferencesStore
+import com.raulshma.jellyplay.core.datastore.PreferencesEditor
 import com.raulshma.jellyplay.core.data.repository.AuthRepository
 import com.raulshma.jellyplay.core.data.worker.TvWatchNextScheduler
 import com.raulshma.jellyplay.core.model.UserInfo
@@ -28,6 +29,9 @@ import com.raulshma.jellyplay.core.model.OfflineMode
 import com.raulshma.jellyplay.core.model.PinnedHomeSection
 import com.raulshma.jellyplay.core.model.seerr.SeerrPreferences
 import com.raulshma.jellyplay.core.model.seerr.SeerrSearchItem
+import com.raulshma.jellyplay.core.ui.settingssearch.SettingsSearchItem
+import com.raulshma.jellyplay.core.ui.settingssearch.SettingsSearchMatcher
+import com.raulshma.jellyplay.core.ui.settingssearch.SettingsSearchRegistry
 import com.raulshma.jellyplay.core.ui.viewmodel.JellyPlayViewModel
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.FlowPreview
@@ -35,6 +39,7 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
@@ -46,6 +51,8 @@ import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.flowOf
+import kotlinx.coroutines.flow.flowOn
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.sync.Mutex
 import java.time.LocalDate
@@ -63,6 +70,7 @@ class HomeViewModel @Inject constructor(
     private val offlineModeManager: OfflineModeManager,
     private val newsletterTriggerManager: NewsletterTriggerManager,
     private val preferencesStore: UserPreferencesStore,
+    private val preferencesEditor: PreferencesEditor,
     private val searchHistoryRepository: SearchHistoryRepository,
     private val seerrRepository: SeerrRepository,
     private val seerrRequestDelegate: SeerrRequestDelegate,
@@ -210,6 +218,7 @@ class HomeViewModel @Inject constructor(
                     accentColorSwatch = prefs.accentColorSwatch,
                     homeHeroEnabled = prefs.homeHeroEnabled,
                     showClock = prefs.showClockOnHome,
+                    showSettingsInHomeSearch = prefs.showSettingsInHomeSearch,
                     continueWatchingClickBehavior = prefs.continueWatchingClickBehavior,
                     experimentalCardClippingEnabled = com.raulshma.jellyplay.core.model.ExperimentalFeature.HOME_CARD_CLIPPING in prefs.enabledExperimentalFeatures,
                     directArrEnabled = com.raulshma.jellyplay.core.model.ExperimentalFeature.DIRECT_ARR_INTEGRATION in prefs.enabledExperimentalFeatures,
@@ -286,9 +295,34 @@ class HomeViewModel @Inject constructor(
                 .collect { query ->
                     searchJob?.cancel()
                     if (query.isBlank()) {
-                        _uiState.update { it.copy(searchState = it.searchState.copy(jellyfinResults = emptyList(), seerrResults = emptyList(), isSearching = false)) }
+                        _uiState.update { it.copy(searchState = it.searchState.copy(jellyfinResults = emptyList(), seerrResults = emptyList(), settingsResults = emptyList(), isSearching = false)) }
                     } else {
                         searchJob = launch { performSearch(query) }
+                    }
+                }
+        }
+
+        // Local settings search runs on a shorter debounce than the networked
+        // media search above: the fuzzy matcher is pure and sub-millisecond, so
+        // results feel instant while the Jellyfin/Seerr requests are still in
+        // flight. Gated entirely behind the user's Appearance toggle; when off
+        // the collector still drains but emits nothing and clears results.
+        @OptIn(FlowPreview::class)
+        launch {
+            searchQueryFlow
+                .debounce(120)
+                .distinctUntilChanged()
+                .map { query ->
+                    if (query.isBlank() || !_uiState.value.showSettingsInHomeSearch) {
+                        emptyList()
+                    } else {
+                        SettingsSearchMatcher.search(query, SettingsSearchRegistry.items)
+                    }
+                }
+                .flowOn(Dispatchers.Default)
+                .collect { results ->
+                    _uiState.update {
+                        it.copy(searchState = it.searchState.copy(settingsResults = results))
                     }
                 }
         }
@@ -473,6 +507,19 @@ class HomeViewModel @Inject constructor(
         launch {
             val userId = preferencesStore.activeUserId.first() ?: return@launch
             searchHistoryRepository.clearAll(userId)
+        }
+    }
+
+    /**
+     * Called when a settings search result is tapped from the home search bar.
+     * If the target is an advanced setting that's currently hidden, enable
+     * advanced settings first so the deep-linked screen actually shows it —
+     * parity with the Settings screen's own search (see SettingsScreen.kt).
+     * Navigation to [SettingsSearchItem.route] is performed by the caller.
+     */
+    fun onSettingsResultClicked(item: SettingsSearchItem) {
+        if (item.isAdvanced) {
+            launch { preferencesEditor.edit { setShowAdvancedSettings(true) } }
         }
     }
 

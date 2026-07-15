@@ -1,4 +1,4 @@
-package com.raulshma.jellyplay.feature.settings
+package com.raulshma.jellyplay.core.ui.settingssearch
 
 import androidx.compose.ui.graphics.vector.ImageVector
 import com.raulshma.jellyplay.core.ui.navigation.Route
@@ -150,6 +150,15 @@ object SettingsSearchRegistry {
             keywords = listOf("preset", "layout", "home", "save", "load", "import", "export", "share", "reset", "backup", "configuration"),
             route = Route.HomeLayoutPresets(),
             icon = Tabler.Outline.Bookmarks
+        ),
+        SettingsSearchItem(
+            id = "settings_in_home_search",
+            title = "Settings in Home Search",
+            subtitle = "Show settings results in the home search bar",
+            category = "Appearance",
+            keywords = listOf("search", "settings", "home", "find", "discover", "quick", "shortcut"),
+            route = Route.AppearanceSettings(),
+            icon = Tabler.Outline.Adjustments,
         ),
         SettingsSearchItem(
             id = "date_format",
