@@ -145,14 +145,14 @@ class MediaRepositoryImpl @Inject constructor(
 
     override suspend fun getHomeSections(
         enabledSections: Set<HomeSectionType>,
-        hiddenLibraryIds: Set<String>,
+        libraryHomeSectionOverrides: Map<String, Set<HomeSectionType>>,
         nextUpRewatching: Boolean,
         nextUpMaxDays: Int,
         nextUpExcludedSeriesIds: Set<String>,
         hiddenCwItemIds: Set<String>,
         pinnedSections: List<PinnedHomeSection>,
     ): Result<HomeSectionsResult> {
-        val cacheKey = "${enabledSections.sortedBy { it.name }}|$hiddenLibraryIds|$nextUpRewatching|$nextUpMaxDays|$nextUpExcludedSeriesIds|$hiddenCwItemIds|$pinnedSections"
+        val cacheKey = "${enabledSections.sortedBy { it.name }}|$libraryHomeSectionOverrides|$nextUpRewatching|$nextUpMaxDays|$nextUpExcludedSeriesIds|$hiddenCwItemIds|$pinnedSections"
         val cached = cachedHomeSections
         val timestamp = cachedHomeSectionsTimestamp
         if (cached != null && cacheKey == cachedHomeSectionsKey &&
@@ -162,7 +162,7 @@ class MediaRepositoryImpl @Inject constructor(
         }
         return apiClient.getHomeSections(
             enabledSections,
-            hiddenLibraryIds,
+            libraryHomeSectionOverrides,
             nextUpRewatching,
             nextUpMaxDays,
             nextUpExcludedSeriesIds,

@@ -73,6 +73,7 @@ sealed class Route : NavKey {
     @Serializable data class AppearanceSettings(val highlightSettingId: String? = null) : Route()
     @Serializable data class PinnedHomeSections(val highlightSettingId: String? = null) : Route()
     @Serializable data class HomeLayoutPresets(val highlightSettingId: String? = null) : Route()
+    @Serializable data class LibraryHomeSections(val highlightSettingId: String? = null) : Route()
     @Serializable data class PlaybackSettings(val highlightSettingId: String? = null) : Route()
     @Serializable data class AudioSettings(val highlightSettingId: String? = null) : Route()
     @Serializable data class LanguageSettings(val highlightSettingId: String? = null) : Route()

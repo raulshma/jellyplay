@@ -111,7 +111,7 @@ class HomeViewModel @Inject constructor(
 
     private var enabledHomeSectionTypes = HomeSectionType.CONFIGURABLE.toSet()
     private var homeSectionOrder = HomeSectionType.CONFIGURABLE
-    private var hiddenLibrarySectionIds = emptySet<String>()
+    private var libraryHomeSectionOverrides = emptyMap<String, Set<HomeSectionType>>()
     private var mergeContinueWatchingAndNextUp = false
     private var nextUpMaxDays = 0
     private var nextUpRewatching = false
@@ -190,7 +190,7 @@ class HomeViewModel @Inject constructor(
                 val homeSectionPrefsChanged = hasSeenHomePreferences && (
                     prefs.enabledHomeSectionTypes != enabledHomeSectionTypes ||
                         prefs.homeSectionOrder != homeSectionOrder ||
-                        prefs.hiddenLibrarySectionIds != hiddenLibrarySectionIds ||
+                        prefs.libraryHomeSectionOverrides != libraryHomeSectionOverrides ||
                         prefs.mergeContinueWatchingAndNextUp != mergeContinueWatchingAndNextUp ||
                         prefs.nextUpMaxDays != nextUpMaxDays ||
                         prefs.nextUpRewatching != nextUpRewatching ||
@@ -202,7 +202,7 @@ class HomeViewModel @Inject constructor(
                 hasSeenHomePreferences = true
                 enabledHomeSectionTypes = prefs.enabledHomeSectionTypes
                 homeSectionOrder = prefs.homeSectionOrder
-                hiddenLibrarySectionIds = prefs.hiddenLibrarySectionIds
+                libraryHomeSectionOverrides = prefs.libraryHomeSectionOverrides
                 mergeContinueWatchingAndNextUp = prefs.mergeContinueWatchingAndNextUp
                 nextUpMaxDays = prefs.nextUpMaxDays
                 nextUpRewatching = prefs.nextUpRewatching
@@ -551,10 +551,10 @@ class HomeViewModel @Inject constructor(
 
             lastRefreshTime = System.currentTimeMillis()
             val enabledSections = enabledHomeSectionTypes
-            val hiddenLibIds = hiddenLibrarySectionIds
+            val overrides = libraryHomeSectionOverrides
             mediaRepository.getHomeSections(
                 enabledSections,
-                hiddenLibIds,
+                overrides,
                 nextUpRewatching,
                 nextUpMaxDays,
                 nextUpExcludedSeriesIds,
