@@ -561,13 +561,14 @@ class HomeViewModel @Inject constructor(
                 hiddenCwItemIds,
                 pinnedHomeSections,
             )
-                .onSuccess { fetchedSections ->
-                    // Surface a non-blocking notice when some enabled sections didn't
-                    // load (e.g. a per-section 403/empty response) so the user knows the
-                    // home page isn't intentionally sparse.
-                    val partial = fetchedSections.size < enabledSections.size &&
-                        fetchedSections.isNotEmpty()
-                    _uiState.update { it.copy(partialLoadError = partial) }
+                .onSuccess { homeResult ->
+                    val fetchedSections = homeResult.sections
+                    // Surface a non-blocking notice only when a section type
+                    // actually failed to load (403/500/network). Sections that
+                    // returned zero items (e.g. no watch history, no Next Up) are
+                    // NOT failures — previously the size-mismatch heuristic
+                    // false-positived on new users and after merges.
+                    _uiState.update { it.copy(partialLoadError = homeResult.failedSectionTypes.isNotEmpty()) }
                     val finalSections = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Default) {
                         val orderIndex = homeSectionOrder.withIndex().associate { it.value to it.index }
                         val ordered = fetchedSections

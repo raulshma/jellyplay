@@ -35,8 +35,7 @@ interface LiveTvApiClient {
 
     /**
      * `POST /LiveTv/Programs` — bulk programs for a set of channels within a
-     * time window (the EPG Guide data source, matching jellyfin-web's guide
-     * query and Wholphin's `GetProgramsDto` flow).
+     * time window (the EPG Guide data source).
      */
     suspend fun getPrograms(
         channelIds: List<String>,

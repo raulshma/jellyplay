@@ -21,6 +21,20 @@ data class HomeSection(
     val seedItem: MediaItem? = null,
 )
 
+/**
+ * Result of a home-sections fetch. [sections] are the rendered rows (empty
+ * sections are dropped). [failedSectionTypes] records the section *types*
+ * that actually errored (403/500/network), so the UI can surface a partial-
+ * failure banner only for real failures — never for sections that legitimately
+ * returned zero items (e.g. no Continue Watching history).
+ */
+@Immutable
+@Serializable
+data class HomeSectionsResult(
+    val sections: List<HomeSection>,
+    val failedSectionTypes: Set<HomeSectionType> = emptySet(),
+)
+
 @Immutable
 @Serializable
 data class RecommendationResult(
@@ -151,4 +165,23 @@ data class Studio(
 enum class LibraryViewMode {
     GRID,
     LIST,
+    THUMB,
+}
+
+/**
+ * Picks a sensible default [LibraryViewMode] for a library folder based on its
+ * server-configured [collectionType]. This is the server-driven default — it
+ * respects the admin's library-type choice so a music library shows as a list,
+ * not the same poster grid as movies. Users can still override per-folder via
+ * the toolbar toggle (see [LibraryViewModel.loadViewMode] precedence).
+ *
+ * - music → LIST (tracks/albums are best browsed as rows)
+ * - musicvideos / homevideos / trailers → THUMB (16:9 landscape grid)
+ * - movies / tvshows / boxsets / photos / unknown → GRID (poster grid; photo
+ *   folders already render as 1:1 squares via PhotoGridCard)
+ */
+fun LibraryFolder.defaultViewMode(): LibraryViewMode = when (collectionType) {
+    "music" -> LibraryViewMode.LIST
+    "musicvideos", "homevideos", "trailers" -> LibraryViewMode.THUMB
+    else -> LibraryViewMode.GRID
 }

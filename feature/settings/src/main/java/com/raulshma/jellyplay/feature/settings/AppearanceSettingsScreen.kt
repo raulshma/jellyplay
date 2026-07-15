@@ -397,13 +397,15 @@ fun AppearanceSettingsScreen(
                                     subtitle = when (preferences.libraryViewMode) {
                                         LibraryViewMode.GRID -> stringResource(R.string.settings_library_view_grid)
                                         LibraryViewMode.LIST -> stringResource(R.string.settings_library_view_list)
+                                        LibraryViewMode.THUMB -> stringResource(R.string.settings_library_view_thumb)
                                     },
                                     trailingText = preferences.libraryViewMode.name,
                                     highlighted = highlightSettingId == "library_view_mode",
                                     index = currentIdx++, count = totalCount,
                                     onClick = {
                                         val next = when (preferences.libraryViewMode) {
-                                            LibraryViewMode.GRID -> LibraryViewMode.LIST
+                                            LibraryViewMode.GRID -> LibraryViewMode.THUMB
+                                            LibraryViewMode.THUMB -> LibraryViewMode.LIST
                                             LibraryViewMode.LIST -> LibraryViewMode.GRID
                                         }
                                         viewModel.setLibraryViewMode(next)

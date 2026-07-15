@@ -4,6 +4,7 @@ import androidx.paging.PagingData
 import com.raulshma.jellyplay.core.model.Genre
 import com.raulshma.jellyplay.core.model.HomeSection
 import com.raulshma.jellyplay.core.model.HomeSectionType
+import com.raulshma.jellyplay.core.model.HomeSectionsResult
 import com.raulshma.jellyplay.core.model.LibraryFolder
 import com.raulshma.jellyplay.core.model.MediaDetail
 import com.raulshma.jellyplay.core.model.MediaItem
@@ -23,7 +24,7 @@ interface MediaRepository : LiveTvRepository, SyncPlayRepository, NewsletterRepo
         nextUpExcludedSeriesIds: Set<String> = emptySet(),
         hiddenCwItemIds: Set<String> = emptySet(),
         pinnedSections: List<PinnedHomeSection> = emptyList(),
-    ): Result<List<HomeSection>>
+    ): Result<HomeSectionsResult>
 
     suspend fun getLibraryFolders(): Result<List<LibraryFolder>>
 

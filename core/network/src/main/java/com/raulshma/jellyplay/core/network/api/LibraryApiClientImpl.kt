@@ -4,6 +4,7 @@ import com.raulshma.jellyplay.core.model.ChapterInfo
 import com.raulshma.jellyplay.core.model.Genre
 import com.raulshma.jellyplay.core.model.HomeSection
 import com.raulshma.jellyplay.core.model.HomeSectionType
+import com.raulshma.jellyplay.core.model.HomeSectionsResult
 import com.raulshma.jellyplay.core.model.LibraryFolder
 import com.raulshma.jellyplay.core.model.LyricsResult
 import com.raulshma.jellyplay.core.model.MediaDetail
@@ -52,9 +53,10 @@ class LibraryApiClientImpl @Inject constructor(
         nextUpExcludedSeriesIds: Set<String>,
         hiddenCwItemIds: Set<String>,
         pinnedSections: List<PinnedHomeSection>,
-    ): Result<List<HomeSection>> = engine.apiResultWithRetry {
+    ): Result<HomeSectionsResult> = engine.apiResultWithRetry {
         coroutineScope {
             val sections = mutableListOf<HomeSection>()
+            val failedTypes = mutableSetOf<HomeSectionType>()
             var firstError: Throwable? = null
 
             val continueWatchingDeferred = async {
@@ -94,7 +96,10 @@ class LibraryApiClientImpl @Inject constructor(
                             sections.add(HomeSection("continue_watching", "Continue Watching", HomeSectionType.CONTINUE_WATCHING, filtered))
                         }
                     }
-                    .onFailure { if (firstError == null) firstError = it }
+                    .onFailure {
+                        if (firstError == null) firstError = it
+                        failedTypes.add(HomeSectionType.CONTINUE_WATCHING)
+                    }
             }
 
             if (HomeSectionType.NEXT_UP in enabledSections) {
@@ -104,10 +109,13 @@ class LibraryApiClientImpl @Inject constructor(
                         val filtered = list.filter { it.id !in continueWatchingIds }
                             .filter { it.seriesId == null || it.seriesId !in nextUpExcludedSeriesIds }
                         if (filtered.isNotEmpty()) {
-                            sections.add(HomeSection("next_up", "Next Up", HomeSectionType.NEXT_UP, filtered))
+                            sections.add(HomeSection("next_up", "NextUp", HomeSectionType.NEXT_UP, filtered))
                         }
                     }
-                    .onFailure { if (firstError == null) firstError = it }
+                    .onFailure {
+                        if (firstError == null) firstError = it
+                        failedTypes.add(HomeSectionType.NEXT_UP)
+                    }
             }
 
             val allLatestItems = mutableListOf<MediaItem>()
@@ -135,10 +143,29 @@ class LibraryApiClientImpl @Inject constructor(
                                     val sectionId = "latest_${folder.id}"
                                     sections.add(HomeSection(sectionId, "Latest ${folder.name}", HomeSectionType.LATEST_MEDIA, latest))
                                 }
+                            }.onFailure {
+                                // A per-folder Latest Media 403 (e.g. a stale
+                                // cached folder list racing with a permission
+                                // change) should surface as a partial-load
+                                // banner, not vanish silently.
+                                if (firstError == null) firstError = it
+                                if (HomeSectionType.LATEST_MEDIA in enabledSections) {
+                                    failedTypes.add(HomeSectionType.LATEST_MEDIA)
+                                }
                             }
                         }
                     }
-                    .onFailure { if (firstError == null) firstError = it }
+                    .onFailure {
+                        if (firstError == null) firstError = it
+                        // The shared folders fetch backs both Latest Media and
+                        // Recently Added rows; a failure starves both sections.
+                        if (HomeSectionType.LATEST_MEDIA in enabledSections) {
+                            failedTypes.add(HomeSectionType.LATEST_MEDIA)
+                        }
+                        if (HomeSectionType.RECENTLY_ADDED in enabledSections) {
+                            failedTypes.add(HomeSectionType.RECENTLY_ADDED)
+                        }
+                    }
             }
 
             if (HomeSectionType.RECENTLY_ADDED in enabledSections) {
@@ -187,7 +214,10 @@ class LibraryApiClientImpl @Inject constructor(
                                 }
                         }
                     }
-                    .onFailure { if (firstError == null) firstError = it }
+                    .onFailure {
+                        if (firstError == null) firstError = it
+                        failedTypes.add(HomeSectionType.RECOMMENDATIONS)
+                    }
             }
 
             // Append user-pinned sections (collections / playlists / favorites /
@@ -200,7 +230,7 @@ class LibraryApiClientImpl @Inject constructor(
             if (sections.isEmpty() && firstError != null) {
                 throw firstError!!
             }
-            sections
+            HomeSectionsResult(sections, failedTypes.toSet())
         }
     }
 
@@ -315,9 +345,15 @@ class LibraryApiClientImpl @Inject constructor(
     }
 
     override suspend fun getLibraryFolders(): Result<List<LibraryFolder>> = engine.apiResultWithRetry {
-        val response = engine.requireApi().libraryApi.getMediaFolders().content
+        // Use the server-filtered user-views endpoint (/Users/{userId}/Views)
+        // instead of /Library/MediaFolders. MediaFolders is admin-only and
+        // returns ALL physical folders with no per-user access filtering,
+        // which forced a fragile client-side filter on a login-time snapshot
+        // of enabledFolderIds — a snapshot that goes stale the moment an
+        // admin changes the user's library access. getUserViews returns only
+        // the libraries the current user can access, live.
+        val response = engine.requireApi().userViewsApi.getUserViews().content
             ?: throw IllegalStateException("Server returned empty response")
-        val enabledFolders = engine.currentUser.value?.enabledFolderIds
         (response.items ?: emptyList()).map { item ->
             LibraryFolder(
                 id = item.id.toString(),
@@ -325,8 +361,6 @@ class LibraryApiClientImpl @Inject constructor(
                 collectionType = item.collectionType?.serialName,
                 type = item.type?.serialName,
             )
-        }.filter { folder ->
-            enabledFolders.isNullOrEmpty() || folder.id in enabledFolders
         }
     }
 

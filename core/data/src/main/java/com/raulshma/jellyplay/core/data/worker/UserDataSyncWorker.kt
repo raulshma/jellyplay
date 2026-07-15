@@ -44,6 +44,8 @@ class UserDataSyncWorker @AssistedInject constructor(
         return runCatching {
             mediaRepository.invalidateCaches()
             // Re-fetch home sections to repopulate the cache with fresh user-data.
+            // Only success/failure matters here; the sections themselves are
+            // consumed elsewhere from the repopulated cache.
             mediaRepository.getHomeSections(
                 enabledSections = setOf(
                     HomeSectionType.CONTINUE_WATCHING,

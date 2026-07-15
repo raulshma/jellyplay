@@ -16,6 +16,7 @@ import com.raulshma.jellyplay.core.model.Genre
 import com.raulshma.jellyplay.core.model.HomeSection
 import com.raulshma.jellyplay.core.model.TtlCache
 import com.raulshma.jellyplay.core.model.HomeSectionType
+import com.raulshma.jellyplay.core.model.HomeSectionsResult
 import com.raulshma.jellyplay.core.model.LibraryFolder
 import com.raulshma.jellyplay.core.model.LiveTvChannel
 import com.raulshma.jellyplay.core.model.LiveTvProgram
@@ -81,7 +82,7 @@ class MediaRepositoryImpl @Inject constructor(
     }
 
     @Volatile
-    private var cachedHomeSections: List<HomeSection>? = null
+    private var cachedHomeSections: HomeSectionsResult? = null
     @Volatile
     private var cachedHomeSectionsTimestamp: Long = 0L
     @Volatile
@@ -150,7 +151,7 @@ class MediaRepositoryImpl @Inject constructor(
         nextUpExcludedSeriesIds: Set<String>,
         hiddenCwItemIds: Set<String>,
         pinnedSections: List<PinnedHomeSection>,
-    ): Result<List<HomeSection>> {
+    ): Result<HomeSectionsResult> {
         val cacheKey = "${enabledSections.sortedBy { it.name }}|$hiddenLibraryIds|$nextUpRewatching|$nextUpMaxDays|$nextUpExcludedSeriesIds|$hiddenCwItemIds|$pinnedSections"
         val cached = cachedHomeSections
         val timestamp = cachedHomeSectionsTimestamp
@@ -168,9 +169,9 @@ class MediaRepositoryImpl @Inject constructor(
             hiddenCwItemIds,
             pinnedSections,
         ).also { result ->
-            result.getOrNull()?.let { sections ->
+            result.getOrNull()?.let { homeResult ->
                 synchronized(homeSectionsLock) {
-                    cachedHomeSections = sections
+                    cachedHomeSections = homeResult
                     cachedHomeSectionsKey = cacheKey
                     cachedHomeSectionsTimestamp = android.os.SystemClock.elapsedRealtime()
                 }

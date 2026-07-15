@@ -10,6 +10,7 @@ import com.raulshma.jellyplay.core.datastore.UserPreferencesStore
 import com.raulshma.jellyplay.core.model.Genre
 import com.raulshma.jellyplay.core.model.LibraryFolder
 import com.raulshma.jellyplay.core.model.LibraryViewMode
+import com.raulshma.jellyplay.core.model.defaultViewMode
 import com.raulshma.jellyplay.core.model.MediaItem
 import com.raulshma.jellyplay.core.model.MediaType
 import com.raulshma.jellyplay.core.ui.viewmodel.JellyPlayViewModel
@@ -154,6 +155,12 @@ class LibraryViewModel @Inject constructor(
         // folder change also triggers re-evaluation (was a latent correctness
         // edge: the old collector only read _selectedFolder inside the prefs
         // collector, so a folder-only change wouldn't re-derive the mode).
+        //
+        // Precedence: explicit per-folder user override > collectionType-driven
+        // default (see LibraryFolder.defaultViewMode) > global pref default.
+        // This makes the layout server-driven by default — a music library shows
+        // as a list, a movies library as a poster grid — while still letting the
+        // user override per-folder via the toolbar toggle.
         launch {
             combine(
                 preferencesStore.preferences
@@ -166,7 +173,7 @@ class LibraryViewModel @Inject constructor(
                         runCatching { LibraryViewMode.valueOf(modeName) }.getOrNull()
                     }
                 }
-                perLibrary ?: viewModePrefs.libraryViewMode
+                perLibrary ?: folder?.defaultViewMode() ?: viewModePrefs.libraryViewMode
             }.collect { mode -> _viewMode.set(mode) }
         }
     }
@@ -330,6 +337,9 @@ class LibraryViewModel @Inject constructor(
 
     fun getImageUrl(itemId: String): String =
         imageUrlProvider.getImageUrl(itemId)
+
+    fun getBackdropUrl(itemId: String): String =
+        imageUrlProvider.getBackdropUrl(itemId)
 
     fun prefetchPhotoFolderChildUrls(items: List<MediaItem>) {
         launch {
