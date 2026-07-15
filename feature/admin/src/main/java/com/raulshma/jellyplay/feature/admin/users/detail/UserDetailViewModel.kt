@@ -2,9 +2,12 @@ package com.raulshma.jellyplay.feature.admin.users.detail
 
 import android.util.Log
 import androidx.compose.runtime.Immutable
+import com.raulshma.jellyplay.core.model.DeviceInfo
 import com.raulshma.jellyplay.core.model.LibraryFolder
+import com.raulshma.jellyplay.core.model.LiveTvChannel
 import com.raulshma.jellyplay.core.model.ManagedUser
 import com.raulshma.jellyplay.core.model.ManagedUserPolicy
+import com.raulshma.jellyplay.core.model.ParentalRatingOption
 import com.raulshma.jellyplay.core.network.JellyfinApiClient
 import com.raulshma.jellyplay.core.ui.viewmodel.JellyPlayViewModel
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -25,6 +28,13 @@ data class UserDetailState(
     val showPasswordDialog: Boolean = false,
     val isSelf: Boolean = false,
     val isLastAdmin: Boolean = false,
+    // Auxiliary data for the new editors, lazily loaded per tab.
+    val parentalRatings: List<ParentalRatingOption> = emptyList(),
+    val devices: List<DeviceInfo> = emptyList(),
+    val channels: List<LiveTvChannel> = emptyList(),
+    val tags: List<String> = emptyList(),
+    val auxLoadedTabs: Set<UserEditTab> = emptySet(),
+    val auxError: String? = null,
 ) {
     val isDirty: Boolean get() = editedPolicy != null || editedName != null
 }
@@ -82,6 +92,53 @@ class UserDetailViewModel @Inject constructor(
     fun discard() {
         _uiState.update { it.copy(editedPolicy = null, editedName = null, saveError = null) }
     }
+
+    /**
+     * Lazily loads the auxiliary lists a tab needs (devices/channels for Access,
+     * ratings/tags for Parental). Idempotent: a tab fetches at most once per
+     * loaded user. Failures are non-fatal — [UserDetailState.auxError] is set
+     * and the affected list renders empty, but editing/saving other fields
+     * remains possible.
+     */
+    fun loadAuxFor(tab: UserEditTab) {
+        if (tab == UserEditTab.PROFILE || tab == UserEditTab.ACCOUNT) return
+        if (tab in _uiState.value.auxLoadedTabs) return
+        _uiState.update { it.copy(auxLoadedTabs = it.auxLoadedTabs + tab) }
+        launch {
+            runCatching {
+                when (tab) {
+                    UserEditTab.ACCESS -> {
+                        val devs = apiClient.getDevices().getOrThrow()
+                        val chans = apiClient.getLiveTvChannels(limit = 500).getOrThrow()
+                        _uiState.update { it.copy(devices = devs, channels = chans) }
+                    }
+                    UserEditTab.PARENTAL -> {
+                        val ratings = apiClient.getParentalRatings().getOrThrow()
+                        val tagList = apiClient.getTags(limit = 500).getOrThrow()
+                        _uiState.update { it.copy(parentalRatings = ratings, tags = tagList) }
+                    }
+                    else -> Unit
+                }
+            }.onFailure { e ->
+                Log.e("UserDetail", "aux load failed for $tab", e)
+                _uiState.update { it.copy(auxError = e.message) }
+            }
+        }
+    }
+
+    /** Unsaved-change counts per tab (value-based diff). Account never dirty. */
+    fun profileDirtyCount(): Int {
+        val st = _uiState.value
+        var n = PolicyDiff.changedCount(st.editedPolicy, st.user?.policy, PolicyDiff.PROFILE_FIELDS)
+        if (st.editedName != null && st.editedName != st.user?.name) n++
+        return n
+    }
+
+    fun accessDirtyCount(): Int =
+        PolicyDiff.changedCount(_uiState.value.editedPolicy, _uiState.value.user?.policy, PolicyDiff.ACCESS_FIELDS)
+
+    fun parentalDirtyCount(): Int =
+        PolicyDiff.changedCount(_uiState.value.editedPolicy, _uiState.value.user?.policy, PolicyDiff.PARENTAL_FIELDS)
 
     fun save() {
         val id = userId
