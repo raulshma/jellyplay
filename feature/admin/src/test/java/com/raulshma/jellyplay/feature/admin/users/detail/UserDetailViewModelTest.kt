@@ -1,8 +1,11 @@
 package com.raulshma.jellyplay.feature.admin.users.detail
 
+import com.raulshma.jellyplay.core.model.DeviceInfo
 import com.raulshma.jellyplay.core.model.LibraryFolder
+import com.raulshma.jellyplay.core.model.LiveTvChannel
 import com.raulshma.jellyplay.core.model.ManagedUser
 import com.raulshma.jellyplay.core.model.ManagedUserPolicy
+import com.raulshma.jellyplay.core.model.ParentalRatingOption
 import com.raulshma.jellyplay.core.network.JellyfinApiClient
 import com.raulshma.jellyplay.core.testing.MainDispatcherRule
 import io.mockk.coEvery
@@ -181,5 +184,100 @@ class UserDetailViewModelTest {
         assertNotNull(actual)
         assertTrue("message must not lie with '$disallowed'", actual != disallowed)
         assertTrue(actual!!.contains("reload", ignoreCase = true))
+    }
+
+    @Test
+    fun `loadAuxFor ACCESS fetches devices and channels once`() = runTest {
+        val vm = loadViewModel(admin, listOf(admin))
+        val devs = listOf(DeviceInfo(id = "d1", name = "Phone"))
+        val chans = listOf(LiveTvChannel(id = "c1", name = "News"))
+        coEvery { apiClient.getDevices() } returns Result.success(devs)
+        coEvery { apiClient.getLiveTvChannels(limit = 500) } returns Result.success(chans)
+
+        vm.loadAuxFor(UserEditTab.ACCESS)
+        advanceUntilIdle()
+
+        assertEquals(devs, vm.uiState.value.devices)
+        assertEquals(chans, vm.uiState.value.channels)
+        assertTrue(UserEditTab.ACCESS in vm.uiState.value.auxLoadedTabs)
+
+        coVerify(exactly = 1) { apiClient.getDevices() }
+        coVerify(exactly = 1) { apiClient.getLiveTvChannels(limit = 500) }
+
+        // second call does not refetch
+        vm.loadAuxFor(UserEditTab.ACCESS)
+        advanceUntilIdle()
+        coVerify(exactly = 1) { apiClient.getDevices() }
+    }
+
+    @Test
+    fun `loadAuxFor PARENTAL fetches ratings and tags`() = runTest {
+        val vm = loadViewModel(admin, listOf(admin))
+        val ratings = listOf(ParentalRatingOption("PG", 10, null))
+        coEvery { apiClient.getParentalRatings() } returns Result.success(ratings)
+        coEvery { apiClient.getTags(limit = 500) } returns Result.success(listOf("kids"))
+
+        vm.loadAuxFor(UserEditTab.PARENTAL)
+        advanceUntilIdle()
+
+        assertEquals(ratings, vm.uiState.value.parentalRatings)
+        assertEquals(listOf("kids"), vm.uiState.value.tags)
+    }
+
+    @Test
+    fun `loadAuxFor PROFILE and ACCOUNT do nothing`() = runTest {
+        val vm = loadViewModel(admin, listOf(admin))
+        vm.loadAuxFor(UserEditTab.PROFILE)
+        vm.loadAuxFor(UserEditTab.ACCOUNT)
+        advanceUntilIdle()
+        assertTrue(vm.uiState.value.auxLoadedTabs.isEmpty())
+    }
+
+    @Test
+    fun `loadAuxFor failure sets auxError without throwing`() = runTest {
+        val vm = loadViewModel(admin, listOf(admin))
+        coEvery { apiClient.getDevices() } returns Result.failure(RuntimeException("boom"))
+        coEvery { apiClient.getLiveTvChannels(limit = 500) } returns Result.success(emptyList())
+
+        vm.loadAuxFor(UserEditTab.ACCESS)
+        advanceUntilIdle()
+
+        assertNotNull(vm.uiState.value.auxError)
+    }
+
+    @Test
+    fun `per-tab dirty counts track edits per tab`() = runTest {
+        val vm = loadViewModel(admin, listOf(admin))
+        assertEquals(0, vm.profileDirtyCount())
+        assertEquals(0, vm.accessDirtyCount())
+        assertEquals(0, vm.parentalDirtyCount())
+
+        // profile change
+        vm.onPolicyChange(admin.policy.copy(enableCollectionManagement = true))
+        assertEquals(1, vm.profileDirtyCount())
+        assertEquals(0, vm.accessDirtyCount())
+        assertEquals(0, vm.parentalDirtyCount())
+
+        // access change stacks on top
+        val withProfile = vm.uiState.value.editedPolicy!!
+        vm.onPolicyChange(withProfile.copy(enabledDevices = listOf("d1")))
+        assertEquals(1, vm.profileDirtyCount())
+        assertEquals(1, vm.accessDirtyCount())
+
+        // name edit counts toward profile only
+        vm.editName("NewName")
+        assertEquals(2, vm.profileDirtyCount())
+    }
+
+    @Test
+    fun `discard clears all dirty counts`() = runTest {
+        val vm = loadViewModel(admin, listOf(admin))
+        vm.onPolicyChange(admin.policy.copy(enableCollectionManagement = true))
+        vm.editName("X")
+        vm.discard()
+
+        assertEquals(0, vm.profileDirtyCount())
+        assertEquals(0, vm.accessDirtyCount())
+        assertEquals(0, vm.parentalDirtyCount())
     }
 }

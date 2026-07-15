@@ -54,4 +54,7 @@ dependencies {
     implementation(libs.aboutlibraries.core)
 
     testImplementation(libs.junit)
+    testImplementation(libs.mockk)
+    testImplementation(libs.coroutines.test)
+    testImplementation(project(":core:testing"))
 }

@@ -1,7 +1,12 @@
 package com.raulshma.jellyplay.core.network.api
 
 import com.raulshma.jellyplay.core.model.ManagedUserPolicy
+import com.raulshma.jellyplay.core.model.SyncPlayAccessOption
+import com.raulshma.jellyplay.core.model.UnratedItemOption
+import org.jellyfin.sdk.model.api.AccessSchedule
+import org.jellyfin.sdk.model.api.DynamicDayOfWeek
 import org.jellyfin.sdk.model.api.SyncPlayUserAccessType
+import org.jellyfin.sdk.model.api.UnratedItem
 import org.jellyfin.sdk.model.api.UserPolicy
 import java.util.UUID
 import org.junit.Assert.assertEquals
@@ -11,6 +16,8 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class UserDtoMappingTest {
+
+    private val testUserId = "00000000-0000-0000-0000-000000000002"
 
     private fun fullServerPolicy(
         isAdministrator: Boolean = true,
@@ -78,7 +85,7 @@ class UserDtoMappingTest {
     }
 
     @Test
-    fun `overlayWith writes only the 19 edited fields and retains bookkeeping`() {
+    fun `overlayWith applies edited fields and retains true bookkeeping`() {
         val serverPolicy = fullServerPolicy(
             isAdministrator = false,
             blockedTags = listOf("secret"),
@@ -89,20 +96,23 @@ class UserDtoMappingTest {
         val edited = ManagedUserPolicy(
             isAdministrator = true, // flipped
             maxActiveSessions = 5,  // changed
-            // everything else default
+            // everything else default: blockedTags=[], syncPlay=CREATE_AND_JOIN,
+            // subtitleMgmt=false — these are now EDITABLE, so defaults overwrite server.
         )
 
-        val merged = serverPolicy.overlayWith(edited)
+        val merged = serverPolicy.overlayWith(edited, testUserId)
 
         // edited fields applied
         assertTrue(merged.isAdministrator)
         assertEquals(5, merged.maxActiveSessions)
-        // bookkeeping fields retained verbatim (the whole point of overlayWith)
-        assertEquals(listOf("secret"), merged.blockedTags)
-        assertEquals("keep-me", merged.authenticationProviderId)
+        // syncPlay/subtitle/tags are now editable -> overwritten by edited's defaults
+        assertEquals(emptyList<String>(), merged.blockedTags)
         assertEquals(SyncPlayUserAccessType.CREATE_AND_JOIN_GROUPS, merged.syncPlayAccess)
-        assertTrue(merged.enableSubtitleManagement)
+        assertFalse(merged.enableSubtitleManagement)
+        // true bookkeeping fields still retained verbatim (never editable)
+        assertEquals("keep-me", merged.authenticationProviderId)
         assertEquals("Default", merged.passwordResetProviderId)
+        assertEquals(0, merged.invalidLoginAttemptCount)
         assertTrue(merged.enableAllFolders)
     }
 
@@ -115,7 +125,7 @@ class UserDtoMappingTest {
             enabledFolders = listOf(id1.toString()),
         )
 
-        val merged = serverPolicy.overlayWith(edited)
+        val merged = serverPolicy.overlayWith(edited, testUserId)
 
         assertFalse(merged.enableAllFolders)
         assertEquals(listOf(id1), merged.enabledFolders)
@@ -126,8 +136,94 @@ class UserDtoMappingTest {
         val serverPolicy = fullServerPolicy().copy(maxParentalRating = 100)
         val edited = ManagedUserPolicy(maxParentalRating = null)
 
-        val merged = serverPolicy.overlayWith(edited)
+        val merged = serverPolicy.overlayWith(edited, testUserId)
 
         assertNull(merged.maxParentalRating)
+    }
+
+    @Test
+    fun `managed policy round-trips all new fields`() {
+        val channelId = "00000000-0000-0000-0000-000000000001"
+        val sdkPolicy = fullServerPolicy().copy(
+            enableCollectionManagement = true,
+            enableSubtitleManagement = true,
+            forceRemoteSourceTranscoding = true,
+            enableSharedDeviceControl = true,
+            remoteClientBitrateLimit = 8_000_000,
+            syncPlayAccess = SyncPlayUserAccessType.JOIN_GROUPS,
+            enableAllChannels = false,
+            enabledChannels = listOf(UUID.fromString(channelId)),
+            enableAllDevices = false,
+            enabledDevices = listOf("dev1"),
+            enableContentDeletionFromFolders = listOf("folder1"),
+            maxParentalRating = 200,
+            maxParentalSubRating = 1,
+            blockUnratedItems = listOf(UnratedItem.MOVIE, UnratedItem.SERIES),
+            allowedTags = listOf("kids"),
+            blockedTags = listOf("horror"),
+            accessSchedules = listOf(
+                AccessSchedule(
+                    id = 5,
+                    userId = UUID.fromString(testUserId),
+                    dayOfWeek = DynamicDayOfWeek.WEEKDAY,
+                    startHour = 8.0,
+                    endHour = 22.0,
+                ),
+            ),
+        )
+
+        val managed = sdkPolicy.toManagedPolicy()
+        // SDK -> app
+        assertTrue(managed.enableCollectionManagement)
+        assertTrue(managed.forceRemoteSourceTranscoding)
+        assertTrue(managed.enableSharedDeviceControl)
+        assertEquals(8_000_000, managed.remoteClientBitrateLimit)
+        assertEquals(SyncPlayAccessOption.JOIN_ONLY, managed.syncPlayAccess)
+        assertFalse(managed.enableAllChannels)
+        assertEquals(listOf(channelId), managed.enabledChannels)
+        assertEquals(listOf("dev1"), managed.enabledDevices)
+        assertEquals(listOf("folder1"), managed.enableContentDeletionFromFolders)
+        assertEquals(200, managed.maxParentalRating)
+        assertEquals(1, managed.maxParentalSubRating)
+        assertEquals(listOf(UnratedItemOption.MOVIE, UnratedItemOption.SERIES), managed.blockUnratedItems)
+        assertEquals(listOf("kids"), managed.allowedTags)
+        assertEquals(listOf("horror"), managed.blockedTags)
+        assertEquals(1, managed.accessSchedules.size)
+        assertEquals("Weekday", managed.accessSchedules.single().dayOfWeek)
+        assertEquals(8.0, managed.accessSchedules.single().startHour, 0.0)
+
+        // app -> SDK round-trip
+        val overlaid = sdkPolicy.overlayWith(managed, testUserId)
+        assertEquals(8_000_000, overlaid.remoteClientBitrateLimit)
+        assertEquals(SyncPlayUserAccessType.JOIN_GROUPS, overlaid.syncPlayAccess)
+        assertEquals(listOf(UUID.fromString(channelId)), overlaid.enabledChannels)
+        assertEquals(listOf("dev1"), overlaid.enabledDevices)
+        assertEquals(listOf(UnratedItem.MOVIE, UnratedItem.SERIES), overlaid.blockUnratedItems)
+        assertEquals(listOf("kids"), overlaid.allowedTags)
+        assertEquals(listOf("horror"), overlaid.blockedTags)
+        assertEquals(1, overlaid.accessSchedules!!.size)
+        assertEquals(8.0, overlaid.accessSchedules!!.single().startHour, 0.0)
+        assertEquals(DynamicDayOfWeek.WEEKDAY, overlaid.accessSchedules!!.single().dayOfWeek)
+    }
+
+    @Test
+    fun `toManagedPolicy handles null list fields`() {
+        val sdkPolicy = fullServerPolicy().copy(
+            enabledChannels = null,
+            enabledDevices = null,
+            enableContentDeletionFromFolders = null,
+            blockUnratedItems = null,
+            allowedTags = null,
+            blockedTags = null,
+            accessSchedules = null,
+        )
+        val managed = sdkPolicy.toManagedPolicy()
+        assertTrue(managed.enabledChannels.isEmpty())
+        assertTrue(managed.enabledDevices.isEmpty())
+        assertTrue(managed.enableContentDeletionFromFolders.isEmpty())
+        assertTrue(managed.blockUnratedItems.isEmpty())
+        assertTrue(managed.allowedTags.isEmpty())
+        assertTrue(managed.blockedTags.isEmpty())
+        assertTrue(managed.accessSchedules.isEmpty())
     }
 }
