@@ -120,6 +120,7 @@ data class SettingsCallbacks(
     val onUserManagement: (String?) -> Unit = {},
     val onSeerrSettings: (String?) -> Unit = {},
     val onArrSettings: (String?) -> Unit = {},
+    val onIntegrations: (String?) -> Unit = {},
     val onAdminDashboard: () -> Unit = {},
     val onSetupWizard: () -> Unit = {},
     val onNewsletterClick: () -> Unit = {},
@@ -154,6 +155,7 @@ fun SettingsScreen(
     val onUserManagement = callbacks.onUserManagement
     val onSeerrSettings = callbacks.onSeerrSettings
     val onArrSettings = callbacks.onArrSettings
+    val onIntegrations = callbacks.onIntegrations
     val onNewsletterClick = callbacks.onNewsletterClick
     val onAboutClick = callbacks.onAboutClick
     val onActivityQueueClick = callbacks.onActivityQueueClick
@@ -627,6 +629,10 @@ fun SettingsScreen(
                                                             lastClickedSettingId = "integrations"
                                                             onArrSettings(item.id)
                                                         }
+                                                        is Route.Integrations -> {
+                                                            lastClickedSettingId = "integrations"
+                                                            onIntegrations(item.id)
+                                                        }
                                                         is Route.AppearanceSettings -> {
                                                             lastClickedSettingId = "appearance"
                                                             onAppearanceSettings(item.id)
@@ -881,7 +887,7 @@ fun SettingsScreen(
                             summary = { stringResource(R.string.settings_system_subtitle) },
                             initiallyExpanded = false,
                         ) {
-                            val systemCount = if (viewModel.currentUser?.isAdmin == true) 4 else 3
+                            val systemCount = if (viewModel.currentUser?.isAdmin == true) 3 else 2
                             var systemIndex = 0
                             if (viewModel.currentUser?.isAdmin == true) {
                                 SettingListItem(
@@ -896,17 +902,6 @@ fun SettingsScreen(
                                     },
                                 )
                             }
-                            SettingListItem(
-                                icon = Tabler.Outline.Puzzle,
-                                title = stringResource(R.string.settings_seerr_integration),
-                                subtitle = stringResource(R.string.settings_seerr_integration_subtitle),
-                                index = systemIndex++, count = systemCount,
-                                highlighted = lastClickedSettingId == "seerr_settings",
-                                onClick = {
-                                    lastClickedSettingId = "seerr_settings"
-                                    onSeerrSettings(null)
-                                },
-                            )
                             SettingListItem(
                                 icon = Tabler.Outline.Wand,
                                 title = stringResource(R.string.settings_setup_wizard),
@@ -1162,14 +1157,14 @@ fun SettingsScreen(
                 item {
                     AnimatedSettingsEntrance(if (isTv) 14 else 13) {
                         SettingListItem(
-                            icon = Tabler.Outline.Download,
+                            icon = Tabler.Outline.PlugConnected,
                             title = stringResource(R.string.settings_integrations),
                             subtitle = stringResource(R.string.settings_integrations_subtitle),
                             index = 0, count = 1,
                             highlighted = lastClickedSettingId == "integrations",
                             onClick = {
                                 lastClickedSettingId = "integrations"
-                                onArrSettings(null)
+                                onIntegrations(null)
                             },
                         )
                     }
