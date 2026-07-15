@@ -12,13 +12,13 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.paging.LoadState
 import androidx.paging.compose.LazyPagingItems
-import androidx.paging.compose.itemKey
 import com.composables.icons.tabler.Tabler
 import com.composables.icons.tabler.outline.Search
 import com.raulshma.jellyplay.core.ui.components.ErrorScreen
 import com.raulshma.jellyplay.core.ui.components.ScreenEmptyState
 import com.raulshma.jellyplay.core.ui.components.ScreenLoadingState
 import com.raulshma.jellyplay.core.ui.tv.TvFocusableGrid
+import com.raulshma.jellyplay.core.ui.util.safeItemKey
 
 @Composable
 fun <T : Any> PagedGrid(
@@ -48,7 +48,7 @@ fun <T : Any> PagedGrid(
                 } else {
                     TvFocusableGrid(
                         itemCount = items.itemCount,
-                        key = items.itemKey(itemKey),
+                        key = items.safeItemKey(itemKey),
                         columns = GridCells.Adaptive(gridMin),
                         contentPadding = PaddingValues(contentPad),
                         horizontalArrangement = Arrangement.spacedBy(spacing),

@@ -26,7 +26,6 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.paging.LoadState
 import androidx.paging.compose.collectAsLazyPagingItems
-import androidx.paging.compose.itemKey
 import com.raulshma.jellyplay.core.ui.components.ErrorScreen
 import com.raulshma.jellyplay.core.ui.components.HeaderStatusIndicator
 import com.raulshma.jellyplay.core.ui.components.JellyPlayScreenScaffold
@@ -42,6 +41,7 @@ import com.raulshma.jellyplay.core.ui.tv.LocalTvMode
 import com.raulshma.jellyplay.core.ui.tv.TvFocusableGrid
 import com.raulshma.jellyplay.core.ui.tv.rememberTvFocusState
 import com.raulshma.jellyplay.core.ui.tv.tvFocusIndicator
+import com.raulshma.jellyplay.core.ui.util.safeItemKey
 import com.composables.icons.tabler.Tabler
 import com.composables.icons.tabler.outline.*
 
@@ -127,7 +127,7 @@ fun AlbumsScreen(
                         val isTv = LocalTvMode.current
                         TvFocusableGrid(
                             itemCount = albums.itemCount,
-                            key = albums.itemKey { it.id },
+                            key = albums.safeItemKey { it.id },
                             columns = GridCells.Adaptive(adaptiveInfo.gridCellSize(isTv)),
                             contentPadding = PaddingValues(
                                 start = adaptiveInfo.contentPadding(isTv),
