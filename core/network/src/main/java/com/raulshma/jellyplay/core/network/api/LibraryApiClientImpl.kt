@@ -421,6 +421,11 @@ class LibraryApiClientImpl @Inject constructor(
         // returns as soon as the item fetch completes; the VM fetches similar
         // concurrently and merges it into state so the screen renders
         // incrementally.
+        //
+        // filterByParentalRating() is intentionally not applied here: the server
+        // applies its own parental controls to userLibraryApi.getItem, and the
+        // detail screen is reached only after the item already surfaced in a
+        // filtered list — double-filtering a single detail adds no protection.
         val client = engine.requireApi()
         val uuid = itemId.toUUID()
         val item = client.userLibraryApi.getItem(itemId = uuid).content
@@ -546,6 +551,10 @@ class LibraryApiClientImpl @Inject constructor(
 
     override suspend fun findItemByProviderId(provider: String, id: String): Result<String?> =
         engine.apiResultWithRetry {
+            // filterByParentalRating() is intentionally not applied: the result
+            // is a bare item id used for matching, not display, and the server
+            // scopes the query to the authenticated user's libraries.
+            //
             // The Jellyfin SDK's typed getItems() doesn't expose the AnyProviderId
             // filter, so use the raw GET with a custom query parameter. Jellyfin's
             // /Items endpoint accepts "AnyProviderId" in the "tmdb:123" format.
@@ -789,6 +798,9 @@ class LibraryApiClientImpl @Inject constructor(
         startIndex: Int,
         limit: Int,
     ): Result<List<String>> = engine.apiResultWithRetry {
+        // filterByParentalRating() is intentionally not applied: tags are
+        // plain strings with no rating attribute to filter on, and the server
+        // already enforces library-access scoping on the underlying item query.
         val response = engine.requireApi().itemsApi.getItems(
             parentId = parentId?.let { it.toUUID() },
             startIndex = startIndex,
@@ -861,6 +873,9 @@ class LibraryApiClientImpl @Inject constructor(
         startIndex: Int,
         limit: Int,
     ): Result<List<PlaylistItem>> = engine.apiResultWithRetry {
+        // filterByParentalRating() is intentionally not applied: PlaylistItem
+        // does not carry an officialRating, and the server enforces playlist
+        // ACLs plus parental controls on the underlying item query.
         val response = engine.requireApi().itemsApi.getItems(
             parentId = playlistId.toUUID(),
             startIndex = startIndex,
@@ -983,10 +998,11 @@ class LibraryApiClientImpl @Inject constructor(
         val userId = engine.currentUser.value?.id
             ?: throw IllegalStateException("Not authenticated")
         val uuid = itemId.toUUID()
-        val cached = favoriteCache[uuid]
+        val cacheKey = "$userId:$uuid"
+        val cached = favoriteCache[cacheKey]
         val isFavorite = currentIsFavorite ?: cached ?: run {
             val fetched = engine.requireApi().userLibraryApi.getItem(itemId = uuid).content.userData?.isFavorite == true
-            favoriteCache.put(uuid, fetched)
+            favoriteCache.put(cacheKey, fetched)
             fetched
         }
         if (isFavorite) {
@@ -994,24 +1010,25 @@ class LibraryApiClientImpl @Inject constructor(
                 userId = userId.toUUID(),
                 itemId = uuid,
             )
-            favoriteCache.put(uuid, false)
+            favoriteCache.put(cacheKey, false)
             false
         } else {
             engine.requireApi().userLibraryApi.markFavoriteItem(
                 userId = userId.toUUID(),
                 itemId = uuid,
             )
-            favoriteCache.put(uuid, true)
+            favoriteCache.put(cacheKey, true)
             true
         }
     }
 
-    private val favoriteCache = androidx.collection.LruCache<UUID, Boolean>(200)
+    private val favoriteCache = androidx.collection.LruCache<String, Boolean>(200)
 
     /**
      * Clears the in-memory favorite cache. Called on disconnect / server switch
      * so stale favorite flags from a previous server don't linger until evicted
-     * by access count. Defensive; no behavior change in normal use.
+     * by access count. Defensive — entries are also scoped per-user so a stale
+     * entry can only ever resolve for the user that wrote it.
      */
     override fun clearFavoriteCache() {
         favoriteCache.evictAll()

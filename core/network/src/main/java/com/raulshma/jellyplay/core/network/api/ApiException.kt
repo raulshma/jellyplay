@@ -18,15 +18,21 @@ import java.net.UnknownHostException
  *
  * Classification happens **before** the friendly mapping (see [JellyfinErrorMapper]) so the
  * retry decision sees the real exception type / HTTP status rather than a localized string.
+ *
+ * [isAccessDenied] is set for HTTP 401/403 so callers can branch into a dedicated
+ * "you don't have access" UX instead of showing a generic network-error string.
  */
 class ApiException(
     val isRetryable: Boolean,
     val httpCode: Int? = null,
+    val isAccessDenied: Boolean = false,
     message: String,
     cause: Throwable? = null,
 ) : RuntimeException(message, cause) {
 
     companion object {
+        private val ACCESS_DENIED_CODES = setOf(401, 403)
+
         /**
          * Classify a throwable thrown from the **Jellyfin SDK** path into an [ApiException].
          *
@@ -43,6 +49,7 @@ class ApiException(
             return ApiException(
                 isRetryable = retryable,
                 httpCode = code,
+                isAccessDenied = code in ACCESS_DENIED_CODES,
                 message = JellyfinErrorMapper.map(throwable),
                 cause = throwable,
             )
@@ -57,6 +64,7 @@ class ApiException(
         fun fromHttp(httpCode: Int, message: String): ApiException = ApiException(
             isRetryable = httpCode in com.raulshma.jellyplay.core.network.RetryPolicy.RETRYABLE_STATUS_CODES,
             httpCode = httpCode,
+            isAccessDenied = httpCode in ACCESS_DENIED_CODES,
             message = message,
         )
 

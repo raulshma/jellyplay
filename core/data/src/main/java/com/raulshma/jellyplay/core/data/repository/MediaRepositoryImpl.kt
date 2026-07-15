@@ -775,12 +775,13 @@ class MediaRepositoryImpl @Inject constructor(
             cachedHomeSectionsKey = ""
         }
         // Also clear the secondary caches — they hold user-scoped data (library folders,
-        // latest media, genres, studios) that would otherwise leak across user/server
-        // switches until their TTL expires.
+        // latest media, genres, studios, photo folder child URLs) that would otherwise
+        // leak across user/server switches until their TTL expires.
         libraryFoldersCache.clear()
         latestMediaCache.clear()
         genresCache.clear()
         studiosCache.clear()
+        photoFolderChildUrlCache.clear()
     }
 
     override suspend fun getNewsletterData(sinceDate: String, limit: Int): Result<NewsletterData> =

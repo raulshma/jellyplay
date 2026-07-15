@@ -29,6 +29,10 @@ data class DetailUiState(
     val detail: MediaDetail? = null,
     val isLoading: Boolean = false,
     val error: String? = null,
+    // True when the item load failed because the user lacks permission (HTTP
+    // 401/403). Lets the screen render a dedicated "no access" treatment
+    // instead of a generic network-error string.
+    val isAccessDenied: Boolean = false,
     // Transient, user-facing feedback (snackbar) for one-shot actions such as
     // favorite / watched toggles that fail after an optimistic UI update. The
     // screen is responsible for showing and then clearing it.
