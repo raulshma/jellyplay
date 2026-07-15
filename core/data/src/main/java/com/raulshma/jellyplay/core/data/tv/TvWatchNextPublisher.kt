@@ -43,7 +43,7 @@ class TvWatchNextPublisher(
 
         val sections = mediaRepository.getHomeSections(
             enabledSections = setOf(HomeSectionType.CONTINUE_WATCHING, HomeSectionType.NEXT_UP),
-        ).getOrThrow()
+        ).getOrThrow().sections
 
         val continueWatching = sections.firstOrNull { it.type == HomeSectionType.CONTINUE_WATCHING }?.items.orEmpty()
         val nextUp = sections.firstOrNull { it.type == HomeSectionType.NEXT_UP }?.items.orEmpty()

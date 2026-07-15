@@ -448,7 +448,7 @@ class PlayerSessionManager(
      * — mpv cannot switch audio in-place on an HLS manifest, and embedded subs
      * aren't delivered in the transcode, so the server must re-issue the
      * stream with the chosen index baked in (standard Jellyfin PlaybackInfo
-     * re-POST, mirroring Wholphin's changeStreams).
+     * re-POST).
      *
      * The current playback mode / quality / max-bitrate are preserved from the
      * existing session; only the stream indices change. Subtitles are rebuilt
