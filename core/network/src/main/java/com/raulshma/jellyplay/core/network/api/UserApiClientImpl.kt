@@ -3,6 +3,7 @@ package com.raulshma.jellyplay.core.network.api
 import com.raulshma.jellyplay.core.model.LibraryFolder
 import com.raulshma.jellyplay.core.model.ManagedUser
 import com.raulshma.jellyplay.core.model.ManagedUserPolicy
+import com.raulshma.jellyplay.core.model.ParentalRatingOption
 import org.jellyfin.sdk.model.api.CreateUserByName
 import org.jellyfin.sdk.model.api.UpdateUserPassword
 import org.jellyfin.sdk.api.client.extensions.*
@@ -54,7 +55,7 @@ class UserApiClientImpl @Inject constructor(
         policy: ManagedUserPolicy,
     ): Result<Unit> = engine.apiResultWithRetry {
         val api = engine.requireApi()
-        // Rehydrate the full server policy, overlay the 19 edited fields,
+        // Rehydrate the full server policy, overlay the edited fields,
         // POST the merged object. Preserves all bookkeeping fields.
         val current = api.userApi.getUserById(userId.toUUID()).content
         val serverPolicy = current.policy ?: org.jellyfin.sdk.model.api.UserPolicy(
@@ -88,7 +89,7 @@ class UserApiClientImpl @Inject constructor(
             passwordResetProviderId = "",
             syncPlayAccess = org.jellyfin.sdk.model.api.SyncPlayUserAccessType.NONE,
         )
-        val merged = serverPolicy.overlayWith(policy)
+        val merged = serverPolicy.overlayWith(policy, userId)
         api.userApi.updateUserPolicy(userId.toUUID(), merged)
     }
 
@@ -120,5 +121,22 @@ class UserApiClientImpl @Inject constructor(
         }
         // NOTE: deliberately NOT filtered by engine.currentUser.enabledFolderIds —
         // the editor needs the full server folder list.
+    }
+
+    override suspend fun getParentalRatings(): Result<List<ParentalRatingOption>> = engine.apiResultWithRetry {
+        val ratings = engine.requireApi().localizationApi.getParentalRatings().content
+        // Group by (score, subScore), concatenating names on collision so ratings
+        // sharing a score/subScore collapse into one label (web parity, e.g. "PG-13/TV-14").
+        ratings
+            .filter { it.ratingScore != null }
+            .groupBy { it.ratingScore!!.score to it.ratingScore!!.subScore }
+            .map { (key, group) ->
+                ParentalRatingOption(
+                    name = group.joinToString("/") { it.name },
+                    score = key.first,
+                    subScore = key.second,
+                )
+            }
+            .sortedBy { it.score }
     }
 }
