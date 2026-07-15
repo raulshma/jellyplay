@@ -67,17 +67,6 @@ fun EntryProviderScope<NavKey>.homeSection(
                     navigator.navigate(Route.SeerrDetail(tmdbId, mediaType))
                 },
                 onNewsletterClick = { navigator.navigate(Route.Newsletter) },
-                onServerManagementClick = { navigator.navigate(Route.ServerManagement()) },
-                onUserManagementClick = { navigator.navigate(Route.UserManagement()) },
-                onSeerrSettingsClick = { navigator.navigate(Route.SeerrSettings()) },
-                onAdminDashboardClick = { navigator.navigate(Route.AdminDashboard) },
-                onSetupWizardClick = { navigator.navigate(Route.Onboarding) },
-                onFavoritesClick = { navigator.navigate(Route.Favorites) },
-                onAboutClick = { navigator.navigate(Route.About) },
-                onWatchProgressHeatmapClick = { navigator.navigate(Route.WatchProgressHeatmap) },
-                onRequestsClick = { navigator.navigate(Route.Requests) },
-                onActivityQueueClick = { navigator.navigate(Route.ArrQueue) },
-                onUpcomingClick = { navigator.navigate(Route.UpcomingCalendar) },
             )
         }
         HomeScreen(

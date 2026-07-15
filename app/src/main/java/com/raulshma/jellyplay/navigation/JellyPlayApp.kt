@@ -24,7 +24,6 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -44,12 +43,6 @@ import androidx.compose.material3.adaptive.navigationsuite.NavigationSuiteScaffo
 import androidx.compose.material3.adaptive.navigationsuite.NavigationSuiteDefaults
 import androidx.compose.material3.adaptive.navigationsuite.NavigationSuiteItem
 import androidx.compose.material3.adaptive.navigationsuite.NavigationSuiteType
-import androidx.compose.material3.DrawerValue
-import androidx.compose.material3.ModalDrawerSheet
-import androidx.compose.material3.ModalNavigationDrawer
-import androidx.compose.material3.rememberDrawerState
-import androidx.tv.material3.NavigationDrawer
-import androidx.tv.material3.NavigationDrawerItem
 import androidx.tv.material3.MaterialTheme as TvMaterial3Theme
 import androidx.tv.material3.darkColorScheme as tvDarkColorScheme
 import androidx.tv.material3.Icon as TvIcon
@@ -186,10 +179,6 @@ import com.raulshma.jellyplay.feature.subtitle.tester.navigation.subtitleTesterS
 import kotlinx.coroutines.launch
 import com.composables.icons.tabler.Tabler
 import com.composables.icons.tabler.outline.*
-
-internal val LocalDrawerOpener = androidx.compose.runtime.compositionLocalOf { {} }
-
-
 
 @Composable
 fun JellyPlayApp(
@@ -576,9 +565,6 @@ private fun MainContent(
         }
     }
 
-    val drawerState = rememberDrawerState(DrawerValue.Closed)
-    val drawerScope = rememberCoroutineScope()
-
     val adaptiveInfo = rememberAdaptiveInfo()
     val uiEnvironment = rememberJellyPlayUiEnvironment(
         adaptiveInfo = adaptiveInfo,
@@ -617,15 +603,11 @@ private fun MainContent(
     // so a fresh lambda per recomposition forces downstream invalidation even
     // when the captured state hasn't changed. MainContent recomposes often
     // (audio metadata, nav color, mini-player), so hoist these out.
-    val openDrawer: () -> Unit = remember(drawerScope, drawerState) {
-        { drawerScope.launch { drawerState.open() } }
-    }
     val consumeSearchQuery: () -> Unit = remember(viewModel) {
         { viewModel.consumePendingSearchQuery() }
     }
 
     CompositionLocalProvider(
-        LocalDrawerOpener provides openDrawer,
         LocalTvMode provides isTv,
         LocalAdaptiveInfo provides adaptiveInfo,
         LocalJellyPlayUi provides uiEnvironment,
@@ -684,8 +666,8 @@ private fun MainContent(
             Box(Modifier.fillMaxSize().then(previewBlurModifier)) {
             // Hoist the TV drawer state above the isFullScreenRoute branch so it survives visiting a
             // full-screen route (e.g. the player) and back, instead of being recreated when
-            // TvNavigationDrawer leaves and re-enters composition. Fully-qualified to avoid clashing with the mobile
-            // androidx.compose.material3 DrawerState used by LocalDrawerOpener below.
+            // TvNavigationDrawer leaves and re-enters composition. Fully-qualified to keep the TV
+            // DrawerState type distinct from any mobile-material3 names.
             val tvDrawerState = androidx.tv.material3.rememberDrawerState(androidx.tv.material3.DrawerValue.Closed)
             val tvDrawerListState = androidx.compose.foundation.lazy.rememberLazyListState()
             if (isTv && !isFullScreenRoute) {
@@ -732,8 +714,6 @@ private fun MainContent(
                         entryDecorator = entryDecorator,
                         onNowPlayingClick = onNowPlayingClick,
                         onAmbientClick = onAmbientClick,
-                        drawerState = drawerState,
-                        drawerScope = drawerScope,
                         isAudioPlayerScreen = isAudioPlayerScreen,
                         isSynthwave = isSynthwave,
                         isExpanded = isExpanded,
@@ -961,9 +941,9 @@ private fun TvContent(
 }
 
 /**
- * Phone (and large-screen NavigationRail) layout: hamburger [ModalNavigationDrawer] +
- * [NavigationSuiteScaffold] hosting [MainNavDisplay] with floating mini-player(s) and the
- * optional [FloatingNavigationBar]. All scroll-coupled bottom-nav state is owned here.
+ * Phone (and large-screen NavigationRail) layout: [NavigationSuiteScaffold] hosting
+ * [MainNavDisplay] with floating mini-player(s) and the optional [FloatingNavigationBar].
+ * All scroll-coupled bottom-nav state is owned here.
  */
 @Composable
 private fun PhoneContent(
@@ -980,8 +960,6 @@ private fun PhoneContent(
     entryDecorator: NavEntryDecorator<NavKey>,
     onNowPlayingClick: () -> Unit,
     onAmbientClick: () -> Unit,
-    drawerState: androidx.compose.material3.DrawerState,
-    drawerScope: kotlinx.coroutines.CoroutineScope,
     isAudioPlayerScreen: Boolean,
     isSynthwave: Boolean,
     isExpanded: Boolean,
@@ -1024,71 +1002,7 @@ private fun PhoneContent(
         if (showPlayOnSheet) playOnViewModel.startDiscovery(playOnContext)
     }
 
-    ModalNavigationDrawer(
-        drawerState = drawerState,
-        drawerContent = {
-            ModalDrawerSheet(
-                drawerShape = RoundedCornerShape(topEnd = 28.dp, bottomEnd = 28.dp),
-                drawerContainerColor = MaterialTheme.colorScheme.surfaceContainer,
-            ) {
-                Column(
-                    modifier = Modifier
-                        .fillMaxHeight()
-                        .padding(vertical = 48.dp),
-                ) {
-                    Text(
-                        "JellyPlay",
-                        style = MaterialTheme.typography.headlineSmall,
-                        fontWeight = FontWeight.Bold,
-                        color = MaterialTheme.colorScheme.primary,
-                        modifier = Modifier.padding(horizontal = 28.dp, vertical = 16.dp),
-                    )
-                    Spacer(Modifier.height(8.dp))
-                    DrawerItem(
-                        icon = Tabler.Outline.Inbox,
-                        label = "Requests",
-                        onClick = {
-                            navigator.navigate(Route.Requests)
-                            drawerScope.launch { drawerState.close() }
-                        },
-                    )
-                    DrawerItem(
-                        icon = Tabler.Outline.Database,
-                        label = "Activity Queue",
-                        onClick = {
-                            navigator.navigate(Route.ArrQueue)
-                            drawerScope.launch { drawerState.close() }
-                        },
-                    )
-                    DrawerItem(
-                        icon = Tabler.Outline.Calendar,
-                        label = "Upcoming",
-                        onClick = {
-                            navigator.navigate(Route.UpcomingCalendar)
-                            drawerScope.launch { drawerState.close() }
-                        },
-                    )
-                    DrawerItem(
-                        icon = Tabler.Outline.Settings,
-                        label = "Settings",
-                        onClick = {
-                            navigator.navigate(Route.Settings)
-                            drawerScope.launch { drawerState.close() }
-                        },
-                    )
-                    DrawerItem(
-                        icon = Tabler.Outline.InfoCircle,
-                        label = "About",
-                        onClick = {
-                            navigator.navigate(Route.About)
-                            drawerScope.launch { drawerState.close() }
-                        },
-                    )
-                }
-            }
-        },
-    ) {
-        // When hide-on-scroll is disabled, keep the nav bar permanently visible
+    // When hide-on-scroll is disabled, keep the nav bar permanently visible
         //. The nestedScrollConnection is still constructed so its
         // identity stays stable, but it is only attached to the tree when the
         // setting is on.
@@ -1310,7 +1224,6 @@ private fun PhoneContent(
             }
         }
     }
-}
 
 /**
  * Full-screen layout (player / onboarding / ambient / photo viewer): bare [Box] with
@@ -1641,35 +1554,5 @@ private fun FloatingNavigationBar(
                 }
             }
         }
-    }
-}
-
-@Composable
-private fun DrawerItem(
-    icon: androidx.compose.ui.graphics.vector.ImageVector,
-    label: String,
-    onClick: () -> Unit,
-) {
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .clip(ShapeCache.smooth12)
-            .focusIndicator()
-            .clickable { onClick() }
-            .padding(horizontal = 28.dp, vertical = 14.dp),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        Icon(
-            icon,
-            contentDescription = label,
-            modifier = Modifier.size(24.dp),
-            tint = MaterialTheme.colorScheme.onSurfaceVariant,
-        )
-        Spacer(Modifier.width(16.dp))
-        Text(
-            label,
-            style = MaterialTheme.typography.bodyLarge,
-            color = MaterialTheme.colorScheme.onSurface,
-        )
     }
 }
