@@ -9,7 +9,10 @@ import com.raulshma.jellyplay.core.database.crypto.TokenCipher
 import com.raulshma.jellyplay.core.datastore.UserPreferencesStore
 import com.raulshma.jellyplay.core.model.ServerInfo
 import com.raulshma.jellyplay.core.model.UserInfo
+import com.raulshma.jellyplay.core.model.ManagedUser
+import com.raulshma.jellyplay.core.model.ManagedUserPolicy
 import com.raulshma.jellyplay.core.network.JellyfinApiClient
+import com.raulshma.jellyplay.core.network.api.ApiException
 import androidx.room.withTransaction
 import io.mockk.coEvery
 import io.mockk.coVerify
@@ -271,6 +274,111 @@ class AuthRepositoryImplTest {
 
         val flow = repository.isAuthenticated
         assertFalse(flow.first() ?: true)
+    }
+
+    // ------------------------------------------------------------------
+    // refreshCurrentUser — re-validates admin status against the server.
+    // The failure-handling asymmetry here is security-critical:
+    //   - 401/403 must demote locally (server has revoked/demoted the user)
+    //   - any other failure must KEEP the cached value (flaky network must
+    //     not lock an admin out; the server 403s on the real call as backstop)
+    // ------------------------------------------------------------------
+
+    private val adminUser = testUser.copy(isAdmin = true, canDeleteContent = true)
+
+    @Test
+    fun `refreshCurrentUser updates and persists flags from server policy`() = runTest {
+        every { apiClient.currentUser } returns flowOf(adminUser)
+        coEvery { apiClient.getCurrentUser() } returns Result.success(
+            ManagedUser(
+                id = "user-1",
+                name = "testuser",
+                policy = ManagedUserPolicy(isAdministrator = true, enableContentDeletion = false),
+            )
+        )
+        coEvery { userDao.getUserById("user-1") } returns testUserEntity.copy(
+            isAdmin = false, canDeleteContent = false,
+        )
+
+        val result = repository.refreshCurrentUser()
+
+        assertTrue(result.isSuccess)
+        assertEquals(true, result.getOrNull()?.isAdmin)
+        assertEquals(false, result.getOrNull()?.canDeleteContent)
+        coVerify { apiClient.setUser(match { it.isAdmin && !it.canDeleteContent }) }
+        // Persisted the refreshed flags.
+        coVerify { userDao.updateUser(match { it.isAdmin && !it.canDeleteContent }) }
+    }
+
+    @Test
+    fun `refreshCurrentUser demotes locally and persists on 403 access denied`() = runTest {
+        every { apiClient.currentUser } returns flowOf(adminUser)
+        coEvery { apiClient.getCurrentUser() } returns Result.failure(
+            ApiException.fromHttp(403, "Forbidden"),
+        )
+        coEvery { userDao.getUserById("user-1") } returns testUserEntity.copy(
+            isAdmin = true, canDeleteContent = true,
+        )
+
+        val result = repository.refreshCurrentUser()
+
+        // Demote is a *success* result (a definite answer: no longer admin),
+        // distinct from a transient failure which returns Result.failure.
+        assertTrue(result.isSuccess)
+        assertEquals(false, result.getOrNull()?.isAdmin)
+        coVerify { apiClient.setUser(match { !it.isAdmin && !it.canDeleteContent }) }
+        coVerify { userDao.updateUser(match { !it.isAdmin && !it.canDeleteContent }) }
+    }
+
+    @Test
+    fun `refreshCurrentUser keeps cached value and does not persist on transient failure`() = runTest {
+        every { apiClient.currentUser } returns flowOf(adminUser)
+        coEvery { apiClient.getCurrentUser() } returns Result.failure(
+            java.io.IOException("Connection reset"),
+        )
+
+        val result = repository.refreshCurrentUser()
+
+        // Transient failure → no answer; cached value must be preserved so a
+        // flaky network can't lock an admin out.
+        assertTrue(result.isFailure)
+        // setUser must NOT be called with a demoted value.
+        coVerify(exactly = 0) { apiClient.setUser(any()) }
+        coVerify(exactly = 0) { userDao.updateUser(any()) }
+    }
+
+    @Test
+    fun `refreshCurrentUser skips DB write when flags are unchanged`() = runTest {
+        every { apiClient.currentUser } returns flowOf(adminUser)
+        coEvery { apiClient.getCurrentUser() } returns Result.success(
+            ManagedUser(
+                id = "user-1",
+                name = "testuser",
+                policy = ManagedUserPolicy(isAdministrator = true, enableContentDeletion = true),
+            )
+        )
+        // DB already reflects the same flags → no write needed.
+        coEvery { userDao.getUserById("user-1") } returns testUserEntity.copy(
+            isAdmin = true, canDeleteContent = true,
+        )
+
+        repository.refreshCurrentUser()
+
+        // setUser still publishes the refreshed object (idempotent), but the
+        // persist step short-circuits because nothing changed.
+        coVerify { apiClient.setUser(any()) }
+        coVerify(exactly = 0) { userDao.updateUser(any()) }
+    }
+
+    @Test
+    fun `refreshCurrentUser fails when no active user`() = runTest {
+        every { apiClient.currentUser } returns flowOf(null)
+
+        val result = repository.refreshCurrentUser()
+
+        assertTrue(result.isFailure)
+        coVerify(exactly = 0) { apiClient.getCurrentUser() }
+        coVerify(exactly = 0) { apiClient.setUser(any()) }
     }
 
     // ------------------------------------------------------------------
