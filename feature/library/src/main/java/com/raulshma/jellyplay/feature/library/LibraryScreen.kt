@@ -85,7 +85,7 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.paging.LoadState
 import androidx.paging.compose.collectAsLazyPagingItems
-import androidx.paging.compose.itemKey
+import com.raulshma.jellyplay.core.ui.util.safeItemKey
 import com.raulshma.jellyplay.core.designsystem.theme.LocalIsLightTheme
 import com.raulshma.jellyplay.core.designsystem.theme.ShapeCache
 import com.raulshma.jellyplay.core.ui.components.AppendErrorFooter
@@ -522,7 +522,7 @@ fun LibraryScreen(
                                     ) {
                                         items(
                                             count = pagedItems.itemCount,
-                                            key = pagedItems.itemKey { it.id },
+                                            key = pagedItems.safeItemKey { it.id },
                                             contentType = { "mediaItem" },
                                         ) { index ->
                                             val item = pagedItems[index]
@@ -563,7 +563,7 @@ fun LibraryScreen(
                                 } else {
                                     TvFocusableGrid(
                                         itemCount = pagedItems.itemCount,
-                                        key = pagedItems.itemKey { it.id },
+                                        key = pagedItems.safeItemKey { it.id },
                                         columns = GridCells.Adaptive(gridCellSize),
                                         state = gridState,
                                         contentPadding = gridPadding,
