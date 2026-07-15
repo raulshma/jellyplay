@@ -5,6 +5,7 @@ import androidx.navigation3.runtime.NavKey
 import com.raulshma.jellyplay.core.ui.navigation.Navigator
 import com.raulshma.jellyplay.core.ui.navigation.Route
 import com.raulshma.jellyplay.feature.livetv.LiveTvScreen
+import com.raulshma.jellyplay.feature.livetv.channeldetail.ChannelDetailScreen
 
 /**
  * Registers the Live TV feature's navigation entries.
@@ -33,6 +34,17 @@ fun EntryProviderScope<NavKey>.liveTvSection(navigator: Navigator) {
                     )
                 )
             },
+        )
+    }
+
+    entry<Route.ChannelDetail> { key ->
+        ChannelDetailScreen(
+            channelId = key.channelId,
+            channelName = key.channelName,
+            onPlayChannel = {
+                navigator.navigate(Route.LiveTvChannelPlayer(key.channelId, key.channelName))
+            },
+            onBack = { navigator.goBack() },
         )
     }
 }

@@ -126,6 +126,17 @@ sealed class Route : NavKey {
         val audioStreamIndex: Int? = null,
     ) : Route()
 
+    /**
+     * Drill-in detail screen for a Live TV channel, reached from the home /
+     * search / related-items item-routing surfaces. Shows a today program
+     * timeline with a live progress bar and a current-program backdrop, and
+     * tunes the live channel via [LiveTvChannelPlayer] on play.
+     */
+    @Serializable data class ChannelDetail(
+        val channelId: String,
+        val channelName: String = "",
+    ) : Route()
+
     @Serializable data object SyncPlay : Route()
 
     @Serializable data class Ambient(
@@ -268,6 +279,7 @@ val Route.isDetail: Boolean
         is Route.StudioDetail,
         is Route.NewsletterSectionList,
         is Route.UserStatisticsDetail,
+        is Route.ChannelDetail,
         is Route.UserDetail -> true
         else -> false
     }
@@ -293,6 +305,7 @@ val DETAIL_ROUTE_CLASS_NAMES: Set<String> = setOf(
     "StudioDetail",
     "NewsletterSectionList",
     "UserStatisticsDetail",
+    "ChannelDetail",
     "UserDetail",
 )
 

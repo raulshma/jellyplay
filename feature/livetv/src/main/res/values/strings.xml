@@ -33,4 +33,11 @@
     <string name="livetv_cancel_series">Cancel Series</string>
     <string name="livetv_record_success">Recording scheduled</string>
     <string name="livetv_record_failed">Failed to set recording</string>
+
+    <!-- Channel detail screen -->
+    <string name="livetv_channel_watch_live">Watch Live</string>
+    <string name="livetv_channel_on_today">On Today</string>
+    <string name="livetv_channel_live">LIVE</string>
+    <string name="livetv_channel_no_program_info">No program information</string>
+    <string name="livetv_channel_load_failed">Failed to load program guide</string>
 </resources>
