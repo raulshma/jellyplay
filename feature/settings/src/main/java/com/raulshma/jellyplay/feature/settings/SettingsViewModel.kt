@@ -658,20 +658,10 @@ class SettingsViewModel @Inject constructor(
         editor.edit { setHomeSectionOrder(order) }
     }
 
-    fun setHiddenLibrarySectionIds(ids: Set<String>) {
-        editor.edit { setHiddenLibrarySectionIds(ids) }
-    }
-
     fun toggleHomeSectionType(type: HomeSectionType, enabled: Boolean) {
         val current = preferences.enabledHomeSectionTypes.toMutableSet()
         if (enabled) current.add(type) else current.remove(type)
         setEnabledHomeSectionTypes(current)
-    }
-
-    fun toggleLibrarySection(libraryId: String, visible: Boolean) {
-        val current = preferences.hiddenLibrarySectionIds.toMutableSet()
-        if (visible) current.remove(libraryId) else current.add(libraryId)
-        setHiddenLibrarySectionIds(current)
     }
 
     // Pinned home sections (collections / playlists / favorites / genres /
@@ -794,7 +784,7 @@ class SettingsViewModel @Inject constructor(
         val config = com.raulshma.jellyplay.core.model.HomeLayoutConfig(
             enabledHomeSectionTypes = preferences.enabledHomeSectionTypes,
             homeSectionOrder = preferences.homeSectionOrder,
-            hiddenLibrarySectionIds = preferences.hiddenLibrarySectionIds,
+            libraryHomeSectionOverrides = preferences.libraryHomeSectionOverrides,
             mergeContinueWatchingAndNextUp = preferences.mergeContinueWatchingAndNextUp,
             nextUpMaxDays = preferences.nextUpMaxDays,
             nextUpRewatching = preferences.nextUpRewatching,
@@ -815,7 +805,7 @@ class SettingsViewModel @Inject constructor(
         editor.edit {
             setEnabledHomeSectionTypes(config.enabledHomeSectionTypes)
             setHomeSectionOrder(config.homeSectionOrder)
-            setHiddenLibrarySectionIds(config.hiddenLibrarySectionIds)
+            setLibraryHomeSectionOverrides(config.libraryHomeSectionOverrides)
             setMergeContinueWatchingAndNextUp(config.mergeContinueWatchingAndNextUp)
             setNextUpMaxDays(config.nextUpMaxDays)
             setNextUpRewatching(config.nextUpRewatching)
@@ -838,7 +828,7 @@ class SettingsViewModel @Inject constructor(
         val config = com.raulshma.jellyplay.core.model.HomeLayoutConfig(
             enabledHomeSectionTypes = preferences.enabledHomeSectionTypes,
             homeSectionOrder = preferences.homeSectionOrder,
-            hiddenLibrarySectionIds = preferences.hiddenLibrarySectionIds,
+            libraryHomeSectionOverrides = preferences.libraryHomeSectionOverrides,
             mergeContinueWatchingAndNextUp = preferences.mergeContinueWatchingAndNextUp,
             nextUpMaxDays = preferences.nextUpMaxDays,
             nextUpRewatching = preferences.nextUpRewatching,

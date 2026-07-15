@@ -63,6 +63,7 @@ fun AppearanceSettingsScreen(
     onBack: () -> Unit,
     onPinnedHomeSections: (String?) -> Unit = {},
     onHomeLayoutPresets: (String?) -> Unit = {},
+    onConfigureLibraries: (String?) -> Unit = {},
     highlightSettingId: String? = null,
     viewModel: AppearanceSettingsViewModel = hiltViewModel(),
 ) {
@@ -79,7 +80,7 @@ fun AppearanceSettingsScreen(
         tag = "appearance_init",
     )
 
-    val homeLayoutGroup = remember { listOf("pinned_home_sections", "home_layout_presets") }
+    val homeLayoutGroup = remember { listOf("pinned_home_sections", "home_layout_presets", "configure_libraries") }
     val scrollState = rememberLazyListState()
     val scrollIndex = remember(highlightSettingId, showAdvanced) {
         val themeGroup = listOf(
@@ -805,6 +806,16 @@ fun AppearanceSettingsScreen(
                         highlighted = highlightSettingId == "home_layout_presets",
                         index = 0, count = 1,
                         onClick = { onHomeLayoutPresets(if (highlightSettingId == "home_layout_presets") "preset_list" else null) },
+                    )
+
+                    SettingListItem(
+                        icon = Tabler.Outline.Folders,
+                        title = stringResource(R.string.settings_configure_libraries),
+                        subtitle = stringResource(R.string.settings_configure_libraries_desc),
+                        trailingText = "",
+                        highlighted = highlightSettingId == "configure_libraries",
+                        index = 0, count = 1,
+                        onClick = { onConfigureLibraries(if (highlightSettingId == "configure_libraries") "configure_libraries" else null) },
                     )
 
                     val homeSectionOrder = remember { mutableStateListOf<HomeSectionType>().apply { addAll(preferences.homeSectionOrder) } }

@@ -15,6 +15,7 @@ import com.raulshma.jellyplay.feature.settings.IntegrationsScreen
 import com.raulshma.jellyplay.feature.settings.LanguageSettingsScreen
 import com.raulshma.jellyplay.feature.settings.LicensesScreen
 import com.raulshma.jellyplay.feature.settings.HomeLayoutPresetsScreen
+import com.raulshma.jellyplay.feature.settings.LibraryHomeSectionsScreen
 import com.raulshma.jellyplay.feature.settings.NotificationSettingsScreen
 import com.raulshma.jellyplay.feature.settings.PinnedHomeSectionsScreen
 import com.raulshma.jellyplay.feature.settings.PlaybackSettingsScreen
@@ -55,6 +56,7 @@ fun EntryProviderScope<NavKey>.settingsSection(
                 onAppearanceSettings = { id -> navigator.navigate(Route.AppearanceSettings(id)) },
                 onPinnedHomeSections = { id -> navigator.navigate(Route.PinnedHomeSections(id)) },
                 onHomeLayoutPresets = { id -> navigator.navigate(Route.HomeLayoutPresets(id)) },
+                onConfigureLibraries = { id -> navigator.navigate(Route.LibraryHomeSections(id)) },
                 onPlaybackSettings = { id -> navigator.navigate(Route.PlaybackSettings(id)) },
                 onAudioSettings = { id -> navigator.navigate(Route.AudioSettings(id)) },
                 onLanguageSettings = { id -> navigator.navigate(Route.LanguageSettings(id)) },
@@ -101,6 +103,7 @@ fun EntryProviderScope<NavKey>.settingsSection(
             onBack = { navigator.goBack() },
             onPinnedHomeSections = { id -> navigator.navigate(Route.PinnedHomeSections(id)) },
             onHomeLayoutPresets = { id -> navigator.navigate(Route.HomeLayoutPresets(id)) },
+            onConfigureLibraries = { id -> navigator.navigate(Route.LibraryHomeSections(id)) },
             highlightSettingId = entry.highlightSettingId,
         )
     }
@@ -114,6 +117,13 @@ fun EntryProviderScope<NavKey>.settingsSection(
 
     entry<Route.HomeLayoutPresets> { entry ->
         HomeLayoutPresetsScreen(
+            onBack = { navigator.goBack() },
+            highlightSettingId = entry.highlightSettingId,
+        )
+    }
+
+    entry<Route.LibraryHomeSections> { entry ->
+        LibraryHomeSectionsScreen(
             onBack = { navigator.goBack() },
             highlightSettingId = entry.highlightSettingId,
         )

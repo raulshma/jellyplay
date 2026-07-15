@@ -47,7 +47,7 @@ class LibraryApiClientImpl @Inject constructor(
 
     override suspend fun getHomeSections(
         enabledSections: Set<HomeSectionType>,
-        hiddenLibraryIds: Set<String>,
+        libraryHomeSectionOverrides: Map<String, Set<HomeSectionType>>,
         nextUpRewatching: Boolean,
         nextUpMaxDays: Int,
         nextUpExcludedSeriesIds: Set<String>,
@@ -125,7 +125,6 @@ class LibraryApiClientImpl @Inject constructor(
                     .onSuccess { folders ->
                         val filteredFolders = folders
                             .filter { it.collectionType != "music" }
-                            .filter { it.id !in hiddenLibraryIds }
                         val semaphore = Semaphore(4)
                         val latestDeferred = filteredFolders
                             .map { folder ->
@@ -137,9 +136,16 @@ class LibraryApiClientImpl @Inject constructor(
                             }
                         latestDeferred.forEach { deferred ->
                             val (folder, result) = deferred.await()
+                            val disabledForFolder = libraryHomeSectionOverrides[folder.id].orEmpty()
                             result.onSuccess { latest ->
-                                allLatestItems.addAll(latest)
-                                if (latest.isNotEmpty() && HomeSectionType.LATEST_MEDIA in enabledSections) {
+                                // Only feed the aggregated Recently Added row from
+                                // libraries the user hasn't disabled it for.
+                                if (HomeSectionType.RECENTLY_ADDED !in disabledForFolder) {
+                                    allLatestItems.addAll(latest)
+                                }
+                                val latestEnabledForFolder = HomeSectionType.LATEST_MEDIA in enabledSections &&
+                                    HomeSectionType.LATEST_MEDIA !in disabledForFolder
+                                if (latest.isNotEmpty() && latestEnabledForFolder) {
                                     val sectionId = "latest_${folder.id}"
                                     sections.add(HomeSection(sectionId, "Latest ${folder.name}", HomeSectionType.LATEST_MEDIA, latest))
                                 }

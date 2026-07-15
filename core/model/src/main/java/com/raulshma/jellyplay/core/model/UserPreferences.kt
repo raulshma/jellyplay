@@ -107,7 +107,7 @@ data class UserPreferences(
     val maxConcurrentDownloads: Int = 3,
     val enabledHomeSectionTypes: Set<HomeSectionType> = HomeSectionType.CONFIGURABLE.toSet(),
     val homeSectionOrder: List<HomeSectionType> = HomeSectionType.CONFIGURABLE,
-    val hiddenLibrarySectionIds: Set<String> = emptySet(),
+    val libraryHomeSectionOverrides: Map<String, Set<HomeSectionType>> = emptyMap(),
     val navBarShowLabels: Boolean = true,
     /**
      * Whether the floating navigation bar auto-hides on scroll-down. When false

@@ -7,6 +7,8 @@ import com.raulshma.jellyplay.core.datastore.PreferencesJson
 import com.raulshma.jellyplay.core.datastore.UserPreferencesStore
 import com.raulshma.jellyplay.core.model.HomeLayoutConfig
 import com.raulshma.jellyplay.core.model.HomeLayoutPreset
+import com.raulshma.jellyplay.core.model.HomeSectionType
+import com.raulshma.jellyplay.core.model.LibraryFolder
 import com.raulshma.jellyplay.core.model.MediaType
 import com.raulshma.jellyplay.core.model.PinnedHomeSection
 import com.raulshma.jellyplay.core.model.PinnedSectionType
@@ -14,8 +16,10 @@ import com.raulshma.jellyplay.core.model.SearchResult
 import com.raulshma.jellyplay.core.ui.viewmodel.JellyPlayViewModel
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.stateIn
 import javax.inject.Inject
 
@@ -41,6 +45,47 @@ class LibraryLayoutViewModel @Inject constructor(
      * One-shot reads of other preference fields use [store].preferences.value.
      */
     val pinnedHomeSectionsFlow: StateFlow<List<PinnedHomeSection>> = store.pinnedHomeSectionsFlow
+
+    /**
+     * Slice of the per-library disabled-section map. The configure-libraries
+     * screen recomposes only when the map changes.
+     */
+    val libraryHomeSectionOverridesFlow: StateFlow<Map<String, Set<HomeSectionType>>> =
+        store.libraryHomeSectionOverridesFlow
+
+    private val _libraryFolders = MutableStateFlow<List<LibraryFolder>>(emptyList())
+    val libraryFolders: StateFlow<List<LibraryFolder>> = _libraryFolders.asStateFlow()
+
+    var libraryError by composeState<String?>(null)
+        private set
+
+    init {
+        loadLibraryFolders()
+    }
+
+    private fun loadLibraryFolders() {
+        launch {
+            libraryError = null
+            mediaRepository.getLibraryFolders()
+                .onSuccess { folders ->
+                    _libraryFolders.value = folders.filter { it.collectionType != "music" }
+                }
+                .onFailure { error -> libraryError = error.message ?: error::class.simpleName }
+        }
+    }
+
+    /**
+     * Enables or disables a home sub-section ([type]) for a single library
+     * ([libraryId]). Disabling adds the type to the library's override set;
+     * enabling removes it and drops the key when the set becomes empty.
+     */
+    fun setLibrarySectionEnabled(libraryId: String, type: HomeSectionType, enabled: Boolean) {
+        val current = store.preferences.value.libraryHomeSectionOverrides.toMutableMap()
+        val set = current[libraryId].orEmpty().toMutableSet()
+        if (enabled) set.remove(type) else set.add(type)
+        if (set.isEmpty()) current.remove(libraryId) else current[libraryId] = set
+        editor.setLibraryHomeSectionOverrides(current)
+    }
 
     // ----- Pinned home sections -------------------------------------------
 
@@ -160,7 +205,7 @@ class LibraryLayoutViewModel @Inject constructor(
         editor.edit {
             setEnabledHomeSectionTypes(config.enabledHomeSectionTypes)
             setHomeSectionOrder(config.homeSectionOrder)
-            setHiddenLibrarySectionIds(config.hiddenLibrarySectionIds)
+            setLibraryHomeSectionOverrides(config.libraryHomeSectionOverrides)
             setMergeContinueWatchingAndNextUp(config.mergeContinueWatchingAndNextUp)
             setNextUpMaxDays(config.nextUpMaxDays)
             setNextUpRewatching(config.nextUpRewatching)
@@ -224,7 +269,7 @@ class LibraryLayoutViewModel @Inject constructor(
         return HomeLayoutConfig(
             enabledHomeSectionTypes = prefs.enabledHomeSectionTypes,
             homeSectionOrder = prefs.homeSectionOrder,
-            hiddenLibrarySectionIds = prefs.hiddenLibrarySectionIds,
+            libraryHomeSectionOverrides = prefs.libraryHomeSectionOverrides,
             mergeContinueWatchingAndNextUp = prefs.mergeContinueWatchingAndNextUp,
             nextUpMaxDays = prefs.nextUpMaxDays,
             nextUpRewatching = prefs.nextUpRewatching,
