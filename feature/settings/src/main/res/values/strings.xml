@@ -50,7 +50,7 @@
     <string name="settings_requests">Requests</string>
     <string name="settings_requests_subtitle">Review Seerr/Jellyseerr requests</string>
     <string name="settings_system">System</string>
-    <string name="settings_system_subtitle">Admin, integrations, and setup</string>
+    <string name="settings_system_subtitle">Admin and setup wizard</string>
     <string name="settings_admin_dashboard">Admin Dashboard</string>
     <string name="settings_admin_dashboard_subtitle">Server admin tools and sessions</string>
     <string name="settings_seerr_integration">Seerr Integration</string>
@@ -93,7 +93,10 @@
     <string name="settings_about">About</string>
     <string name="settings_about_subtitle">App version and licenses</string>
     <string name="settings_integrations">Integrations</string>
-    <string name="settings_integrations_subtitle">Radarr &amp; Sonarr servers</string>
+    <string name="settings_integrations_subtitle">Seerr, Radarr &amp; Sonarr</string>
+    <string name="settings_integrations_title">Integrations</string>
+    <string name="settings_integrations_arr">Radarr / Sonarr</string>
+    <string name="settings_integrations_arr_subtitle">Direct server connections</string>
     <string name="settings_sign_out_confirm_title_server">Sign Out from Server?</string>
     <string name="settings_sign_out_confirm_title">Sign Out?</string>
     <string name="settings_sign_out_confirm_message_server">This will revoke this device\'s session on the server. You\'ll need to sign in again to use the app.</string>

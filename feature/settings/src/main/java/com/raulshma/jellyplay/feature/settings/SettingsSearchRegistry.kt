@@ -50,10 +50,19 @@ object SettingsSearchRegistry {
             id = "seerr_settings",
             title = "Seerr Integration",
             subtitle = "Configure Seerr/Jellyseerr requests and options",
-            category = "System",
-            keywords = listOf("seerr", "jellyseerr", "request", "movies", "shows", "approve"),
+            category = "Integrations",
+            keywords = listOf("seerr", "jellyseerr", "request", "movies", "shows", "approve", "integration"),
             route = Route.SeerrSettings(),
             icon = Tabler.Outline.Puzzle
+        ),
+        SettingsSearchItem(
+            id = "integrations",
+            title = "Integrations",
+            subtitle = "Seerr, Radarr & Sonarr",
+            category = "Integrations",
+            keywords = listOf("integration", "seerr", "radarr", "sonarr", "arr", "server", "connection", "external"),
+            route = Route.Integrations(),
+            icon = Tabler.Outline.PlugConnected
         ),
 
         // Activity & Insights (migrated from the Home drawer)
