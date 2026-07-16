@@ -43,7 +43,7 @@ class MainViewModel @Inject constructor(
     val preferencesStore: UserPreferencesStore,
     val networkMonitor: NetworkMonitor,
     val syncPlayManager: com.raulshma.jellyplay.core.data.syncplay.SyncPlayManager,
-    val webSocketClient: com.raulshma.jellyplay.core.data.syncplay.JellyfinWebSocketClient,
+    val webSocketClient: com.raulshma.jellyplay.core.network.websocket.JellyfinWebSocketClient,
     private val apiClient: com.raulshma.jellyplay.core.network.JellyfinApiClient,
     val audioPlaybackManager: AudioPlaybackManager,
     val videoMiniPlayerState: VideoMiniPlayerState,
