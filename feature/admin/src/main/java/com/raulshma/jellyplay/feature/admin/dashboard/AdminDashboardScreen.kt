@@ -161,6 +161,7 @@ fun AdminDashboardScreen(
                     bottomPadding = adaptiveInfo.bottomPadding(isTv),
                     onRestart = { showRestartDialog = true },
                     onShutdown = { showShutdownDialog = true },
+                    onScanLibrary = viewModel::scanLibrary,
                     onScheduledTasks = onScheduledTasks,
                     onDevices = onDevices,
                     onLogs = onLogs,
@@ -185,6 +186,7 @@ private fun DashboardContent(
     bottomPadding: androidx.compose.ui.unit.Dp,
     onRestart: () -> Unit,
     onShutdown: () -> Unit,
+    onScanLibrary: () -> Unit,
     onScheduledTasks: () -> Unit,
     onDevices: () -> Unit,
     onLogs: () -> Unit,
@@ -218,8 +220,10 @@ private fun DashboardContent(
                     systemInfo = info,
                     isRestarting = state.isRestarting,
                     isShuttingDown = state.isShuttingDown,
+                    libraryScanState = state.libraryScanState,
                     onRestart = onRestart,
                     onShutdown = onShutdown,
+                    onScanLibrary = onScanLibrary,
                     modifier = Modifier.padding(horizontal = 8.dp),
                 )
             }

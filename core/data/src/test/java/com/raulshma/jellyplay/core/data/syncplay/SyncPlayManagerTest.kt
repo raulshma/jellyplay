@@ -3,6 +3,7 @@ package com.raulshma.jellyplay.core.data.syncplay
 import com.raulshma.jellyplay.core.data.repository.AuthRepository
 import com.raulshma.jellyplay.core.datastore.UserPreferencesStore
 import com.raulshma.jellyplay.core.network.JellyfinApiClient
+import com.raulshma.jellyplay.core.network.websocket.JellyfinWebSocketClient
 import io.mockk.coEvery
 import io.mockk.every
 import io.mockk.mockk

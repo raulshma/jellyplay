@@ -1,28 +1,42 @@
-package com.raulshma.jellyplay.core.data.syncplay
+package com.raulshma.jellyplay.core.network.websocket
 
 import android.util.Log
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.delay
-import kotlinx.coroutines.launch
 import kotlinx.coroutines.flow.MutableSharedFlow
+import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharedFlow
+import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asSharedFlow
+import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.launch
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.Response
 import okhttp3.WebSocket
 import okhttp3.WebSocketListener
 import org.json.JSONObject
-import kotlin.random.Random
 import java.util.concurrent.atomic.AtomicInteger
 import javax.inject.Inject
 import javax.inject.Singleton
+import kotlin.random.Random
 
+/**
+ * One entry in the inbound Jellyfin WebSocket message stream.
+ *
+ * @param type raw Jellyfin `MessageType` string (e.g. `"ScheduledTasksInfo"`, `"Sessions"`)
+ * @param data the `Data` payload as a [JSONObject]. For message types whose payload is an
+ *   array (e.g. `ScheduledTasksInfo.Data` is `TaskInfo[]`) or a primitive string
+ *   (`ForceKeepAlive.Data` is a number), the consumer must read the raw text instead —
+ *   see [messageType] for that escape hatch.
+ */
 data class WebSocketEvent(
     val type: String,
     val data: JSONObject,
+    val rawText: String,
 )
 
 @Singleton
@@ -41,13 +55,28 @@ class JellyfinWebSocketClient @Inject constructor(
     @Volatile private var clientName: String? = null
     private val reconnectAttempts = AtomicInteger(0)
     private val maxReconnectAttempts = 5
-    private var backgroundRetryJob: kotlinx.coroutines.Job? = null
-    private var reconnectJob: kotlinx.coroutines.Job? = null
+    private var backgroundRetryJob: Job? = null
+    private var reconnectJob: Job? = null
 
-    private val _isConnected = kotlinx.coroutines.flow.MutableStateFlow(false)
-    val isConnected: kotlinx.coroutines.flow.StateFlow<Boolean> = _isConnected
+    private val _isConnected = MutableStateFlow(false)
+    val isConnected: StateFlow<Boolean> = _isConnected.asStateFlow()
 
-    fun connect(serverAddress: String, accessToken: String, device: String, deviceName: String = "JellyPlay", client: String = "JellyPlay") {
+    // KeepAlive engine -------------------------------------------------------
+    // The server drops the socket after its idle timeout (default 60s) unless the
+    // client pings. Jellyfin's TS SDK handles this inside the socket service; we
+    // mirror it here so the app-lifetime socket owned by MainViewModel stays up
+    // for non-SyncPlay consumers (admin dashboards, remote-control receivers).
+    // Previously this ran only while a SyncPlay session was active, which timed
+    // out the socket in admin-only sessions and broke realtime task updates.
+    private var keepAliveJob: Job? = null
+
+    fun connect(
+        serverAddress: String,
+        accessToken: String,
+        device: String,
+        deviceName: String = "JellyPlay",
+        client: String = "JellyPlay",
+    ) {
         if (isConnected.value &&
             serverUrl == serverAddress &&
             token == accessToken &&
@@ -83,6 +112,7 @@ class JellyfinWebSocketClient @Inject constructor(
                 Log.d(TAG, "WebSocket connected")
                 reconnectAttempts.set(0)
                 _isConnected.value = true
+                startKeepAlive()
             }
 
             override fun onMessage(webSocket: WebSocket, text: String) {
@@ -95,6 +125,7 @@ class JellyfinWebSocketClient @Inject constructor(
             override fun onFailure(webSocket: WebSocket, t: Throwable, response: Response?) {
                 Log.w(TAG, "WebSocket failure", t)
                 _isConnected.value = false
+                stopKeepAlive()
                 webSocket.close(1000, "reconnecting after failure")
                 scheduleReconnect()
             }
@@ -102,8 +133,50 @@ class JellyfinWebSocketClient @Inject constructor(
             override fun onClosed(webSocket: WebSocket, code: Int, reason: String) {
                 Log.d(TAG, "WebSocket closed: $code $reason")
                 _isConnected.value = false
+                stopKeepAlive()
             }
         })
+    }
+
+    /**
+     * Self-pings the server at the current keep-alive interval. Default 30s is safe
+     * under the server's default 60s timeout; an inbound `ForceKeepAlive` message
+     * (Data = timeoutMs) tightens the interval to timeoutMs/2.
+     */
+    private fun startKeepAlive() {
+        keepAliveJob?.cancel()
+        keepAliveJob = scope.launch {
+            try {
+                while (true) {
+                    delay(keepAliveIntervalMs.get())
+                    try {
+                        sendKeepAlive()
+                    } catch (ce: kotlinx.coroutines.CancellationException) {
+                        throw ce
+                    } catch (_: Exception) {
+                    }
+                }
+            } catch (_: kotlinx.coroutines.CancellationException) {
+                // Expected on disconnect / reconnect.
+            }
+        }
+    }
+
+    private fun stopKeepAlive() {
+        keepAliveJob?.cancel()
+        keepAliveJob = null
+    }
+
+    private val keepAliveIntervalMs = java.util.concurrent.atomic.AtomicLong(DEFAULT_KEEP_ALIVE_INTERVAL_MS)
+
+    private fun handleForceKeepAlive(timeoutMs: Long) {
+        val half = (timeoutMs / 2).coerceAtLeast(1_000L)
+        if (half != keepAliveIntervalMs.get()) {
+            keepAliveIntervalMs.set(half)
+            Log.d(TAG, "ForceKeepAlive: server timeout=${timeoutMs}ms, pinging every ${half}ms")
+            // Restart the loop so the new interval takes effect immediately.
+            if (_isConnected.value) startKeepAlive()
+        }
     }
 
     private fun scheduleReconnect() {
@@ -147,6 +220,7 @@ class JellyfinWebSocketClient @Inject constructor(
         reconnectJob?.cancel()
         reconnectAttempts.set(maxReconnectAttempts + 1)
         _isConnected.value = false
+        stopKeepAlive()
         webSocket?.close(1000, "Client disconnecting")
         webSocket = null
     }
@@ -164,6 +238,13 @@ class JellyfinWebSocketClient @Inject constructor(
         try {
             val json = JSONObject(text)
             val messageType = json.optString("MessageType", "")
+            // ForceKeepAlive is protocol-level: it adjusts the keep-alive cadence
+            // and must not leak to feature consumers.
+            if (messageType == "ForceKeepAlive") {
+                val timeoutMs = json.opt("Data")?.toString()?.toLongOrNull() ?: return
+                handleForceKeepAlive(timeoutMs)
+                return
+            }
             val data = json.optJSONObject("Data") ?: JSONObject()
 
             when (messageType) {
@@ -175,8 +256,12 @@ class JellyfinWebSocketClient @Inject constructor(
                 "Sessions",
                 "KeepAlive",
                 "GroupJoined",
-                "GroupLeft" -> {
-                    _events.tryEmit(WebSocketEvent(type = messageType, data = data))
+                "GroupLeft",
+                // Scheduled-task realtime updates. Server only pushes these once
+                // the client sends ScheduledTasksInfoStart (handled by the
+                // realtime channel, not here).
+                "ScheduledTasksInfo" -> {
+                    _events.tryEmit(WebSocketEvent(type = messageType, data = data, rawText = text))
                 }
             }
         } catch (e: Exception) {
@@ -201,7 +286,27 @@ class JellyfinWebSocketClient @Inject constructor(
         webSocket?.send(msg.toString())
     }
 
+    /**
+     * Sends a message whose payload is a plain string rather than a JSON object —
+     * used by `ScheduledTasksInfoStart` whose `Data` is `"0,1000"`
+     * (initialDelayMs,intervalMs).
+     */
+    fun sendMessageWithDataString(messageType: String, dataString: String) {
+        val msg = JSONObject().apply {
+            put("MessageType", messageType)
+            put("Data", dataString)
+        }
+        if (Log.isLoggable(TAG, Log.DEBUG)) {
+            Log.d(TAG, "Sending WS message: ${msg.toString().take(200)}")
+        }
+        webSocket?.send(msg.toString())
+    }
+
     companion object {
         private const val TAG = "JellyfinWS"
+
+        // Safe under the server's default 60s idle timeout. A server-sent
+        // ForceKeepAlive can tighten this at runtime.
+        private const val DEFAULT_KEEP_ALIVE_INTERVAL_MS = 30_000L
     }
 }

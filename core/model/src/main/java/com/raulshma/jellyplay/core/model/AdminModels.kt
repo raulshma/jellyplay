@@ -44,6 +44,7 @@ data class ItemCounts(
 @Serializable
 data class ScheduledTaskInfo(
     val id: String = "",
+    val key: String = "",
     val name: String = "",
     val state: TaskState = TaskState.IDLE,
     val isHidden: Boolean = false,
