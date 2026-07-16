@@ -2,6 +2,7 @@ package com.raulshma.jellyplay.core.ui.viewmodel
 
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.FloatState
+import androidx.compose.runtime.Stable
 import androidx.compose.runtime.IntState
 import androidx.compose.runtime.LongState
 import androidx.compose.runtime.MutableFloatState
@@ -47,7 +48,13 @@ import kotlinx.coroutines.launch
  * Subclasses should prefer Compose state for screen-local UI; reserve
  * StateFlow for state that crosses module boundaries or is consumed by
  * multiple Composables.
+ *
+ * Marked [Stable] so ViewModels passed as composable parameters don't force
+ * recomposition. A ViewModel instance is stable for Compose's purposes: it is
+ * scoped to the nav entry / activity and never structurally replaced, so any
+ * state it publishes must be read through Compose state holders instead.
  */
+@Stable
 abstract class JellyPlayViewModel : ViewModel() {
 
     /** Convenience alias for [viewModelScope]. */
