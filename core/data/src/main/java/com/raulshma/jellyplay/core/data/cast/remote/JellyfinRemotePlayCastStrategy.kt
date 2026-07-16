@@ -31,7 +31,7 @@ class JellyfinRemotePlayCastStrategy @Inject constructor(
     @ApplicationContext private val appContext: Context,
     private val adminApiClient: AdminApiClient,
     private val preferencesStore: UserPreferencesStore,
-    private val webSocketClient: com.raulshma.jellyplay.core.data.syncplay.JellyfinWebSocketClient,
+    private val webSocketClient: com.raulshma.jellyplay.core.network.websocket.JellyfinWebSocketClient,
     private val imageUrlProvider: ImageUrlProvider,
 ) : CastStrategy {
 

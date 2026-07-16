@@ -8,6 +8,7 @@ import com.raulshma.jellyplay.core.model.SyncPlayGroup
 import com.raulshma.jellyplay.core.model.SyncPlayRepeatMode
 import com.raulshma.jellyplay.core.model.SyncPlayShuffleMode
 import com.raulshma.jellyplay.core.network.JellyfinApiClient
+import com.raulshma.jellyplay.core.network.websocket.JellyfinWebSocketClient
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -48,7 +49,6 @@ class SyncPlayManager @Inject constructor(
     private val cachedGroup = AtomicReference<SyncPlayGroup?>(null)
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
     private var eventJob: Job? = null
-    private var keepAliveJob: Job? = null
     private var pingReportJob: Job? = null
 
     private val queuedEvent = AtomicReference<SyncPlayEvent?>(null)
@@ -71,22 +71,10 @@ class SyncPlayManager @Inject constructor(
                 handleEvent(typedEvent)
             }
         }
-        keepAliveJob?.cancel()
-        keepAliveJob = scope.launch {
-            try {
-                while (true) {
-                    delay(60_000)
-                    try {
-                        webSocketClient.sendKeepAlive()
-                    } catch (ce: CancellationException) {
-                        throw ce
-                    } catch (_: Exception) {
-                    }
-                }
-            } catch (_: CancellationException) {
-                // Expected when leaveGroup()/reset() cancels the job.
-            }
-        }
+        // KeepAlive is now owned by JellyfinWebSocketClient itself (it self-pings
+        // while connected and reacts to the server's ForceKeepAlive). SyncPlay no
+        // longer needs its own loop, which previously left the app-lifetime socket
+        // un-kept during non-SyncPlay sessions (e.g. admin dashboards).
     }
 
     private fun handleEvent(event: SyncPlayEvent) {
@@ -261,7 +249,6 @@ class SyncPlayManager @Inject constructor(
         queuedEvent.set(null)
         syncPlayEnabledAtMs.set(0L)
         eventJob?.cancel()
-        keepAliveJob?.cancel()
         pingReportJob?.cancel()
         queueCore.clear()
         playbackCore.onGroupLeft()
@@ -345,7 +332,6 @@ class SyncPlayManager @Inject constructor(
         syncPlayEnabledAtMs.set(0L)
         queuedEvent.set(null)
         eventJob?.cancel()
-        keepAliveJob?.cancel()
         pingReportJob?.cancel()
         queueCore.clear()
         playbackCore.onGroupLeft()

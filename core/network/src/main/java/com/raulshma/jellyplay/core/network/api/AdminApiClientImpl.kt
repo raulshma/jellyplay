@@ -85,6 +85,13 @@ class AdminApiClientImpl @Inject constructor(
         engine.requireApi().systemApi.shutdownApplication()
     }
 
+    override suspend fun scanLibrary(): Result<Unit> = engine.apiResultWithRetry {
+        // POST /Library/Refresh — fires a server-side library scan. No progress
+        // payload; the scheduled-task path (startTask with "RefreshLibrary") is
+        // preferred where available so the UI can poll currentProgressPercentage.
+        engine.requireApi().libraryApi.refreshLibrary()
+    }
+
     override suspend fun getScheduledTasks(isHidden: Boolean?, isEnabled: Boolean?): Result<List<ScheduledTaskInfo>> = engine.apiResultWithRetry {
         val response = engine.requireApi().scheduledTasksApi.getTasks(
             isHidden = isHidden,
