@@ -137,7 +137,17 @@ fun ScheduledTasksScreen(
                         ),
                         verticalArrangement = Arrangement.spacedBy(6.dp),
                     ) {
-                        val groupedTasks = state.tasks.groupBy { it.category ?: "General" }
+                        // Group by Category, mirroring jellyfin-web's
+                        // getCategories()/getTasksByCategory(): tasks with a
+                        // blank category are dropped, categories and tasks are
+                        // sorted alphabetically (locale-aware).
+                        val groupedTasks = state.tasks
+                            .filter { !it.category.isNullOrBlank() }
+                            .groupBy { it.category!! }
+                            .toSortedMap(compareBy(String.CASE_INSENSITIVE_ORDER) { it })
+                            .mapValues { (_, tasks) ->
+                                tasks.sortedBy { it.name.lowercase() }
+                            }
                         groupedTasks.forEach { (category, tasks) ->
                             item(key = "header_$category") {
                                 Text(

@@ -36,6 +36,7 @@ internal data class DetailContentState(
     val activeDownload: DownloadItem?,
     val isLoading: Boolean,
     val error: String?,
+    val isAccessDenied: Boolean,
     val albumTracks: List<MediaItem>,
     val collectionItems: List<MediaItem>,
     val relatedItems: List<MediaItem>,

@@ -70,8 +70,12 @@ class LiveTvApiClientImpl @Inject constructor(
         engine.requireApi().liveTvApi.getLiveTvPrograms(
             channelIds = listOf(channelId.toUUID()),
             userId = userIdUuid(),
-            minEndDate = endDateUtc?.toDateTime(),
-            maxStartDate = startDateUtc?.toDateTime(),
+            // minEndDate filters out programs that already ended before the
+            // range start (now); maxStartDate filters out programs starting
+            // after the range end (end of day). These were previously swapped,
+            // which made minEndDate > maxStartDate and yielded an empty list.
+            minEndDate = startDateUtc?.toDateTime(),
+            maxStartDate = endDateUtc?.toDateTime(),
             fields = listOf(ItemFields.OVERVIEW),
         ).content.items.map { it.toLiveTvProgram() }
     }
@@ -169,7 +173,7 @@ class LiveTvApiClientImpl @Inject constructor(
     }
 
     /**
-     * Records a single program. Matches jellyfin-web/Wholphin: fetch the
+     * Records a single program. fetch the
      * server-derived defaults for the program, then `POST /LiveTv/Timers` with
      * a [TimerInfoDto] seeded from those defaults (so padding/priority/etc.
      * come from server settings rather than being hand-rolled).

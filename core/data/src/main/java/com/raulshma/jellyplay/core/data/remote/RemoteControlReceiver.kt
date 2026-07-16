@@ -3,8 +3,8 @@ package com.raulshma.jellyplay.core.data.remote
 import android.util.Log
 import com.raulshma.jellyplay.core.data.repository.AuthRepository
 import com.raulshma.jellyplay.core.data.repository.MediaRepository
-import com.raulshma.jellyplay.core.data.syncplay.JellyfinWebSocketClient
-import com.raulshma.jellyplay.core.data.syncplay.WebSocketEvent
+import com.raulshma.jellyplay.core.network.websocket.JellyfinWebSocketClient
+import com.raulshma.jellyplay.core.network.websocket.WebSocketEvent
 import com.raulshma.jellyplay.core.datastore.UserPreferencesStore
 import com.raulshma.jellyplay.core.model.MediaType
 import com.raulshma.jellyplay.core.model.remote.GeneralCommand

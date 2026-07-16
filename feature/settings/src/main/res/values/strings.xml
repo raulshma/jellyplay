@@ -407,6 +407,7 @@
     <string name="settings_library_view_mode">Library View Mode</string>
     <string name="settings_library_view_grid">Display items in a grid layout</string>
     <string name="settings_library_view_list">Display items in a list layout</string>
+    <string name="settings_library_view_thumb">Display items as landscape thumbnails</string>
     <string name="settings_home_mode">Home Mode</string>
     <string name="settings_home_mode_video">Video-focused home screen</string>
     <string name="settings_home_mode_music">Music-focused home screen</string>
@@ -610,6 +611,15 @@
     <string name="settings_pinned_sections">Pinned Sections</string>
     <string name="settings_no_pinned_sections">No pinned sections yet</string>
     <string name="settings_pinned_helper">Pin collections, playlists, favorites, genres or studios to your home screen for quick access.</string>
+    <string name="settings_configure_libraries">Configure libraries</string>
+    <string name="settings_configure_libraries_desc">Choose which libraries show Latest Media and Recently Added on home</string>
+    <string name="settings_library_sections">Libraries on Home</string>
+    <string name="settings_library_no_libraries">No libraries found</string>
+    <string name="settings_library_load_error">Couldn\'t load libraries</string>
+    <string name="settings_subsection_latest_media">Latest Media</string>
+    <string name="settings_subsection_recently_added">Recently Added</string>
+    <string name="settings_subsection_latest_media_desc">Show a \"Latest\" row for this library</string>
+    <string name="settings_subsection_recently_added_desc">Include this library in \"Recently Added\"</string>
     <string name="settings_move_up_cd">Move up</string>
     <string name="settings_move_down_cd">Move down</string>
     <string name="settings_remove_section_cd">Remove %1$s</string>

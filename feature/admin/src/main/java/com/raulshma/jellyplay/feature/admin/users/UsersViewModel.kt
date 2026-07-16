@@ -43,6 +43,8 @@ class UsersViewModel @Inject constructor(
     }
 
     private suspend fun loadInto(refreshing: Boolean) {
+        // Access control is enforced by AdminRouteContainer before this screen
+        // is reached; the server still 403s as a backstop if state is stale.
         if (!refreshing) {
             _state.value = _state.value.copy(isLoading = true, error = null)
         }

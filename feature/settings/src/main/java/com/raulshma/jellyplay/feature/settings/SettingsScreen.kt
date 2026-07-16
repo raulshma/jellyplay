@@ -136,6 +136,7 @@ data class SettingsCallbacks(
     val onAppearanceSettings: (String?) -> Unit = {},
     val onPinnedHomeSections: (String?) -> Unit = {},
     val onHomeLayoutPresets: (String?) -> Unit = {},
+    val onConfigureLibraries: (String?) -> Unit = {},
     val onPlaybackSettings: (String?) -> Unit = {},
     val onAudioSettings: (String?) -> Unit = {},
     val onLanguageSettings: (String?) -> Unit = {},

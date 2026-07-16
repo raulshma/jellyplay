@@ -1,14 +1,9 @@
 package com.raulshma.jellyplay.feature.admin.users.detail.components
 
-import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.unit.dp
 import com.raulshma.jellyplay.core.model.LibraryFolder
 import com.raulshma.jellyplay.core.model.ManagedUserPolicy
 
@@ -19,27 +14,36 @@ fun AccessSection(
     onPolicyChange: (ManagedUserPolicy) -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    Column(modifier = modifier.fillMaxWidth().padding(horizontal = 8.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+    val rows = if (policy.enableAllFolders) 1 else 1 + libraries.size
+    UserEditSection(title = "Library access", modifier = modifier) {
         ToggleRow(
-            label = "Enable all libraries",
+            label = "Enable access to all libraries",
+            description = if (policy.enableAllFolders) null else "Restrict to the libraries below",
             checked = policy.enableAllFolders,
             onCheckedChange = { onPolicyChange(policy.copy(enableAllFolders = it)) },
+            index = 0, count = rows,
         )
-        if (policy.enableAllFolders) {
-            Text("All libraries enabled", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(start = 4.dp))
-        } else if (libraries.isEmpty()) {
-            Text("No libraries found", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(start = 4.dp))
-        } else {
-            libraries.forEach { folder ->
-                val checked = folder.id in policy.enabledFolders
-                ToggleRow(
-                    label = folder.name.ifBlank { folder.collectionType ?: folder.id },
-                    checked = checked,
-                    onCheckedChange = { enable ->
-                        val next = if (enable) policy.enabledFolders + folder.id else policy.enabledFolders - folder.id
-                        onPolicyChange(policy.copy(enabledFolders = next))
-                    },
+        if (!policy.enableAllFolders) {
+            if (libraries.isEmpty()) {
+                Text(
+                    "No libraries found",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
+            } else {
+                libraries.forEachIndexed { i, folder ->
+                    val checked = folder.id in policy.enabledFolders
+                    ToggleRow(
+                        label = folder.name.ifBlank { folder.collectionType ?: folder.id },
+                        checked = checked,
+                        onCheckedChange = { enable ->
+                            val next = if (enable) policy.enabledFolders + folder.id
+                            else policy.enabledFolders - folder.id
+                            onPolicyChange(policy.copy(enabledFolders = next))
+                        },
+                        index = i + 1, count = rows,
+                    )
+                }
             }
         }
     }

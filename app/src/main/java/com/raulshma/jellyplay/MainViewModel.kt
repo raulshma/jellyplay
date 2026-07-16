@@ -43,7 +43,7 @@ class MainViewModel @Inject constructor(
     val preferencesStore: UserPreferencesStore,
     val networkMonitor: NetworkMonitor,
     val syncPlayManager: com.raulshma.jellyplay.core.data.syncplay.SyncPlayManager,
-    val webSocketClient: com.raulshma.jellyplay.core.data.syncplay.JellyfinWebSocketClient,
+    val webSocketClient: com.raulshma.jellyplay.core.network.websocket.JellyfinWebSocketClient,
     private val apiClient: com.raulshma.jellyplay.core.network.JellyfinApiClient,
     val audioPlaybackManager: AudioPlaybackManager,
     val videoMiniPlayerState: VideoMiniPlayerState,
@@ -73,6 +73,25 @@ class MainViewModel @Inject constructor(
     val isAdmin = authRepository.currentUser
         .map { it?.isAdmin == true }
         .stateIn(scope, SharingStarted.WhileSubscribed(5_000), false)
+
+    /**
+     * True while a server admin-status refresh is in flight. Collected by the
+     * [com.raulshma.jellyplay.feature.admin.navigation.AdminRouteContainer]
+     * guard so it can show a brief loading state instead of flashing the
+     * access-denied screen before the first refresh completes.
+     */
+    private val _isRefreshingAdmin = stateFlow(false)
+    val isRefreshingAdmin = _isRefreshingAdmin.flow
+
+    /**
+     * Wall-clock millis of the last successful [refreshAdminStatus]. Prevents
+     * every admin screen from re-fetching the policy on rapid back/forward
+     * navigation within the admin area. Read/written only on the Main thread
+     * (all callers run via [launch] on the viewModelScope's Main dispatcher),
+     * so a plain non-volatile field is safe here.
+     */
+    private var lastAdminRefreshAt = 0L
+    private val adminRefreshIntervalMs = 30_000L
 
     val preferences = preferencesStore.preferences
         .stateIn(scope, SharingStarted.WhileSubscribed(5_000), UserPreferences())
@@ -174,6 +193,33 @@ class MainViewModel @Inject constructor(
         launch {
             mediaRepository.getLibraryFolders()
                 .onSuccess { _libraryFolders.set(it) }
+        }
+    }
+
+    /**
+     * Re-validates the current user's admin status against the server. Called
+     * by [com.raulshma.jellyplay.feature.admin.navigation.AdminRouteContainer]
+     * on entering any admin screen, but de-duplicated to at most once per
+     * [adminRefreshIntervalMs] so navigation between admin screens doesn't
+     * hammer the server. Failures other than access-denied are swallowed
+     * (the cached value is kept) — see [AuthRepository.refreshCurrentUser].
+     */
+    fun refreshAdminStatus() {
+        // Early-out synchronously (before launch) to guard against the window
+        // where two admin entries compose simultaneously during a transition
+        // and both fire LaunchedEffect. The in-flight flag serializes genuine
+        // concurrent entries; the timestamp bounds re-fetches to one per window.
+        if (_isRefreshingAdmin.value) return
+        val now = System.currentTimeMillis()
+        if (now - lastAdminRefreshAt < adminRefreshIntervalMs) return
+        launch {
+            _isRefreshingAdmin.set(true)
+            try {
+                authRepository.refreshCurrentUser()
+                lastAdminRefreshAt = System.currentTimeMillis()
+            } finally {
+                _isRefreshingAdmin.set(false)
+            }
         }
     }
 

@@ -99,15 +99,25 @@ class EditorViewModel @Inject constructor(
         launch {
             _uiState.update { it.copy(isLoading = true, error = null) }
             try {
+                val isAdmin = isAdminFlow.value?.isAdmin == true
                 val detail: MediaDetail
                 val editorInfo: MetadataEditorInfo?
                 val imageInfos: List<ImageInfo>
                 val providers: List<ImageProviderInfo>
                 coroutineScope {
                     val detailDeferred = async { apiClient.getMediaDetail(itemId) }
-                    val editorInfoDeferred = async { apiClient.getMetadataEditorInfo(itemId).getOrNull() }
-                    val imageInfoDeferred = async { apiClient.getItemImageInfo(itemId).getOrNull() }
-                    val providersDeferred = async { apiClient.getRemoteImageProviders(itemId).getOrNull() }
+                    // Editor metadata / image providers are admin-only endpoints.
+                    // Skip them for non-admins instead of firing guaranteed-to-fail
+                    // 403s (the server still enforces; this is defense-in-depth).
+                    val editorInfoDeferred = async {
+                        if (isAdmin) apiClient.getMetadataEditorInfo(itemId).getOrNull() else null
+                    }
+                    val imageInfoDeferred = async {
+                        if (isAdmin) apiClient.getItemImageInfo(itemId).getOrNull() else null
+                    }
+                    val providersDeferred = async {
+                        if (isAdmin) apiClient.getRemoteImageProviders(itemId).getOrNull() else null
+                    }
 
                     detail = detailDeferred.await().getOrThrow()
                     editorInfo = editorInfoDeferred.await()
