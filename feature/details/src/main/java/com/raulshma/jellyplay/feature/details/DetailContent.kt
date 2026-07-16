@@ -128,10 +128,16 @@ internal fun DetailContent(
         onTechnicalInfo = { callbacks.onNavigate(Route.MediaInfo(state.itemId)) },
     )
 
-    val backgroundModifier = if (com.raulshma.jellyplay.core.designsystem.theme.LocalIsSynthwave.current) {
-        Modifier.background(com.raulshma.jellyplay.core.designsystem.theme.synthwaveBackgroundBrush())
-    } else {
-        Modifier.drawBehind { drawRect(scrollState.backgroundColor) }
+    val isSynthwave = com.raulshma.jellyplay.core.designsystem.theme.LocalIsSynthwave.current
+    val backgroundColorState = scrollState.backgroundColorState
+    val backgroundModifier = remember(isSynthwave) {
+        if (isSynthwave) {
+            Modifier.background(com.raulshma.jellyplay.core.designsystem.theme.synthwaveBackgroundBrush())
+        } else {
+            // Read the snapshot state inside drawBehind so a scroll-driven
+            // background-colour change re-draws without recomposing DetailContent.
+            Modifier.drawBehind { drawRect(backgroundColorState.value) }
+        }
     }
 
     Box(

@@ -447,15 +447,15 @@ fun SeerrSettingsScreen(
                             icon = Tabler.Outline.World,
                             title = stringResource(R.string.settings_content_regions),
                             summary = {
-                                val streamingLabel = COMMON_REGIONS.find { it.first == preferences.streamingRegion }?.second?.substringAfter(" ") ?: preferences.streamingRegion
-                                val discoverLabel = COMMON_REGIONS.find { it.first == preferences.discoverRegion }?.second?.substringAfter(" ") ?: preferences.discoverRegion
+                                val streamingLabel = regionNameByCode[preferences.streamingRegion]?.substringAfter(" ") ?: preferences.streamingRegion
+                                val discoverLabel = regionNameByCode[preferences.discoverRegion]?.substringAfter(" ") ?: preferences.discoverRegion
                                 stringResource(R.string.settings_content_regions_summary, streamingLabel, discoverLabel)
                             },
                             modifier = Modifier.padding(vertical = 4.dp),
                             initiallyExpanded = true,
                         ) {
-                            val streamingFlagAndName = COMMON_REGIONS.find { it.first == preferences.streamingRegion }?.second ?: preferences.streamingRegion
-                            val discoverFlagAndName = COMMON_REGIONS.find { it.first == preferences.discoverRegion }?.second ?: preferences.discoverRegion
+                            val streamingFlagAndName = regionNameByCode[preferences.streamingRegion] ?: preferences.streamingRegion
+                            val discoverFlagAndName = regionNameByCode[preferences.discoverRegion] ?: preferences.discoverRegion
 
                             SettingListItem(
                                 icon = Tabler.Outline.DeviceTv,
@@ -485,8 +485,8 @@ fun SeerrSettingsScreen(
     if (activeDialog is SeerrSettingsDialog.StreamingRegionPicker) {
         SettingsListPickerSheet(
             title = "Streaming Region",
-            items = COMMON_REGIONS.map { it.first },
-            label = { code -> COMMON_REGIONS.find { it.first == code }?.second ?: code },
+            items = regionCodes,
+            label = { code -> regionNameByCode[code] ?: code },
             isSelected = { it == preferences.streamingRegion },
             onDismiss = { activeDialog = SeerrSettingsDialog.None },
             onSelect = {
@@ -499,8 +499,8 @@ fun SeerrSettingsScreen(
     if (activeDialog is SeerrSettingsDialog.DiscoverRegionPicker) {
         SettingsListPickerSheet(
             title = "Discover Region",
-            items = COMMON_REGIONS.map { it.first },
-            label = { code -> COMMON_REGIONS.find { it.first == code }?.second ?: code },
+            items = regionCodes,
+            label = { code -> regionNameByCode[code] ?: code },
             isSelected = { it == preferences.discoverRegion },
             onDismiss = { activeDialog = SeerrSettingsDialog.None },
             onSelect = {
@@ -785,3 +785,6 @@ private val COMMON_REGIONS = listOf(
     "NL" to "\uD83C\uDDF3\uD83C\uDDF1 Netherlands",
     "SE" to "\uD83C\uDDF8\uD83C\uDDEA Sweden",
 )
+
+private val regionNameByCode: Map<String, String> = COMMON_REGIONS.associate { it.first to it.second }
+private val regionCodes: List<String> = COMMON_REGIONS.map { it.first }

@@ -6,7 +6,9 @@ import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Immutable
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.SideEffect
+import androidx.compose.runtime.State
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
@@ -15,11 +17,11 @@ import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+import com.raulshma.jellyplay.core.designsystem.theme.LocalArtworkColors
 import com.raulshma.jellyplay.core.designsystem.theme.LocalIsSoothingTheme
 import com.raulshma.jellyplay.core.designsystem.theme.LocalIsSynthwave
 import com.raulshma.jellyplay.core.designsystem.theme.ThemeVariantColors
 import com.raulshma.jellyplay.core.designsystem.theme.rememberIsLightTheme
-import com.raulshma.jellyplay.core.designsystem.theme.LocalArtworkColors
 import com.raulshma.jellyplay.core.ui.adaptive.AdaptiveBackdropHeight
 import com.raulshma.jellyplay.core.ui.adaptive.LocalAdaptiveInfo
 import com.raulshma.jellyplay.core.ui.adaptive.WindowSizeClass
@@ -44,9 +46,19 @@ enum class DetailBackdropTier(val dp: Dp) {
  * backdrop dimensions, the animated background/container/title-alpha states,
  * and the navigation-bar colour sync side-effect.
  *
- * Behaviour is identical to the inline implementation previously in
- * `MediaDetailScreen.kt`; this groups it so `DetailContent` no longer owns
- * scroll plumbing.
+ * Scroll-derived values are exposed both as plain snapshot values (read at the
+ * call site to pass into non-lambda APIs) and as [State]s (read *inside*
+ * `graphicsLayer`/`drawBehind` lambdas). Reading the [State] form inside a
+ * draw-phase lambda defers invalidation to the draw phase only, so scroll-driven
+ * *visuals* update without recomposing the subtree.
+ *
+ * Note: this holder is reconstructed fresh each recomposition (the underlying
+ * `derivedStateOf`/animation states are remembered by their factories), and its
+ * plain `Float`/`Color` fields change every scroll frame, so it is structurally
+ * unequal each frame. Composables that take the whole `DetailScrollState` still
+ * recompose while scrolling — they just no longer need to. Fully removing them
+ * from scroll recomposition requires passing only the individual derived values
+ * (e.g. `contentAlpha`) instead of the whole holder; tracked separately.
  */
 @Immutable
 data class DetailScrollState internal constructor(
@@ -59,6 +71,18 @@ data class DetailScrollState internal constructor(
     val backgroundColor: Color,
     val animatedContainerColor: Color,
     val animatedTitleAlpha: Float,
+    /**
+     * Snapshot-read scroll offset. Read this inside a `graphicsLayer`/`drawBehind`
+     * lambda so the consumer only re-invalidates the draw phase (not recomposition)
+     * while scrolling.
+     */
+    val scrollOffsetState: State<Float>,
+    val scrollFractionState: State<Float>,
+    /**
+     * Snapshot-read background color. Read inside a `drawBehind` lambda so a
+     * scroll-driven color change re-draws without recomposing the subtree.
+     */
+    val backgroundColorState: State<Color>,
 )
 
 /**
@@ -98,16 +122,18 @@ internal fun rememberDetailScrollState(
             Triple(base, collapsed, spacer)
         }
     }
-    val scrollOffset by remember(spacerHeightPx) {
+    val scrollOffsetState = remember(spacerHeightPx) {
         derivedStateOf {
             (if (listState.firstVisibleItemIndex > 0) spacerHeightPx else 0f) + listState.firstVisibleItemScrollOffset.toFloat()
         }
     }
-    val scrollFraction by remember(collapsedHeight) {
+    val scrollOffset by scrollOffsetState
+    val scrollFractionState = remember(collapsedHeight) {
         derivedStateOf {
             (scrollOffset / collapsedHeight).coerceIn(0f, 1f)
         }
     }
+    val scrollFraction by scrollFractionState
 
     val isLightTheme = rememberIsLightTheme()
     val artworkColors = LocalArtworkColors.current
@@ -128,17 +154,19 @@ internal fun rememberDetailScrollState(
             else -> lerp(baseOverlayColor, Color.Black, 0.65f)
         }
     }
-    val backgroundColor by animateColorAsState(
+    val backgroundColorState: State<Color> = animateColorAsState(
         targetValue = targetBackgroundColor,
         animationSpec = MaterialTheme.motionScheme.slowEffectsSpec(),
         label = "backgroundColor",
     )
+    val backgroundColor by backgroundColorState
 
     val navBarColor = LocalNavigationBarColor.current
-    SideEffect {
-        // Write the settled target, not each interpolated animation frame —
-        // this state drives an animateColorAsState at the app root, so feeding
-        // it every frame recomposes the whole nav subtree ~18x per transition.
+    // Write the nav-bar colour only when the target actually changes — a plain
+    // SideEffect runs after every recomposition of this caller, which during
+    // scroll is every frame. Keying on the target makes this a no-op except on
+    // transitions.
+    LaunchedEffect(targetBackgroundColor) {
         if (navBarColor.value != targetBackgroundColor) navBarColor.value = targetBackgroundColor
     }
 
@@ -174,5 +202,8 @@ internal fun rememberDetailScrollState(
         backgroundColor = backgroundColor,
         animatedContainerColor = animatedContainerColor,
         animatedTitleAlpha = animatedTitleAlpha,
+        scrollOffsetState = scrollOffsetState,
+        scrollFractionState = scrollFractionState,
+        backgroundColorState = backgroundColorState,
     )
 }

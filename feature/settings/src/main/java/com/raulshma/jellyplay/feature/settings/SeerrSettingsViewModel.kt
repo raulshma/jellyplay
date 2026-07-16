@@ -7,9 +7,14 @@ import com.raulshma.jellyplay.core.model.seerr.SeerrAuthMethod
 import com.raulshma.jellyplay.core.model.seerr.SeerrPreferences
 import com.raulshma.jellyplay.core.ui.viewmodel.JellyPlayViewModel
 import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.stateIn
+import kotlinx.coroutines.withContext
 import javax.inject.Inject
 
 @HiltViewModel
@@ -46,20 +51,59 @@ class SeerrSettingsViewModel @Inject constructor(
     private val _isTesting = composeState(false)
     val isTesting: Boolean get() = _isTesting.value
 
+    // Tracks the in-flight connection test so a rapid second tap cancels the
+    // first instead of letting two logins race on _connectionStatus / _isTesting.
+    private var testJob: Job? = null
+
+    private fun launchTest(block: suspend CoroutineScope.() -> Unit) {
+        testJob?.cancel()
+        testJob = launch {
+            _isTesting.value = true
+            try {
+                block()
+            } finally {
+                // Reset in `finally` so cancellation (a rapid second tap via
+                // [launchTest], or VM clearing) still clears the spinner. A plain
+                // statement after the body would be skipped on the
+                // CancellationException thrown at the next suspension point,
+                // leaving the UI stuck on "testing".
+                _isTesting.value = false
+            }
+        }
+    }
+
+    override fun onCleared() {
+        super.onCleared()
+        // Cancel the in-flight test so its `finally` resets _isTesting before
+        // the VM goes away. viewModelScope cancellation would eventually do this,
+        // but matching [ArrSettingsViewModel.onCleared] keeps the two test-tracked
+        // VMs consistent and makes the cancellation deterministic.
+        testJob?.cancel()
+    }
+
     init {
         launch {
             val prefs = seerrPreferencesStore.preferences.first()
+            // EncryptedSharedPreferences / Keystore-backed reads are crypto +
+            // disk work; push them off the Main dispatcher.
+            val (apiKey, password, sessionCookie) = withContext(Dispatchers.IO) {
+                Triple(
+                    secureCredentialsStore.getApiKey(),
+                    secureCredentialsStore.getPassword(),
+                    if (prefs.serverUrl.isNotBlank()) secureCredentialsStore.getSessionCookie() else "",
+                )
+            }
             _serverUrl.value = prefs.serverUrl
             _authMethod.value = prefs.authMethod
             _username.value = prefs.username
             _email.value = prefs.email
-            _apiKey.value = secureCredentialsStore.getApiKey()
-            _password.value = secureCredentialsStore.getPassword()
+            _apiKey.value = apiKey
+            _password.value = password
             if (prefs.serverUrl.isNotBlank()) {
                 val hasCreds = when (prefs.authMethod) {
-                    SeerrAuthMethod.API_KEY -> secureCredentialsStore.getApiKey().isNotBlank()
+                    SeerrAuthMethod.API_KEY -> apiKey.isNotBlank()
                     SeerrAuthMethod.JELLYFIN,
-                    SeerrAuthMethod.LOCAL -> secureCredentialsStore.getSessionCookie().isNotBlank()
+                    SeerrAuthMethod.LOCAL -> sessionCookie.isNotBlank()
                 }
                 if (hasCreds) {
                     _connectionStatus.value = ConnectionStatus.Connected("", true)
@@ -127,8 +171,7 @@ class SeerrSettingsViewModel @Inject constructor(
             _connectionStatus.value = ConnectionStatus.Error("API key is required")
             return
         }
-        launch {
-            _isTesting.value = true
+        launchTest {
             try {
                 seerrPreferencesStore.setServerUrl(serverUrl)
                 seerrPreferencesStore.setAuthMethod(SeerrAuthMethod.API_KEY)
@@ -143,12 +186,13 @@ class SeerrSettingsViewModel @Inject constructor(
                             error.message ?: "Connection failed"
                         )
                     }
+            } catch (e: CancellationException) {
+                throw e
             } catch (e: Exception) {
                 _connectionStatus.value = ConnectionStatus.Error(
                     e.message ?: "Unexpected error occurred"
                 )
             }
-            _isTesting.value = false
         }
     }
 
@@ -157,8 +201,7 @@ class SeerrSettingsViewModel @Inject constructor(
             _connectionStatus.value = ConnectionStatus.Error("Username and password are required")
             return
         }
-        launch {
-            _isTesting.value = true
+        launchTest {
             try {
                 // Persist the server URL up-front: the repository resolves it from
                 // the saved preferences when making the login request, so it must be
@@ -177,12 +220,13 @@ class SeerrSettingsViewModel @Inject constructor(
                             error.message ?: "Login failed"
                         )
                     }
+            } catch (e: CancellationException) {
+                throw e
             } catch (e: Exception) {
                 _connectionStatus.value = ConnectionStatus.Error(
                     e.message ?: "Unexpected error occurred"
                 )
             }
-            _isTesting.value = false
         }
     }
 
@@ -191,8 +235,7 @@ class SeerrSettingsViewModel @Inject constructor(
             _connectionStatus.value = ConnectionStatus.Error("Email and password are required")
             return
         }
-        launch {
-            _isTesting.value = true
+        launchTest {
             try {
                 // Persist the server URL up-front: the repository resolves it from
                 // the saved preferences when making the login request, so it must be
@@ -211,12 +254,13 @@ class SeerrSettingsViewModel @Inject constructor(
                             error.message ?: "Login failed"
                         )
                     }
+            } catch (e: CancellationException) {
+                throw e
             } catch (e: Exception) {
                 _connectionStatus.value = ConnectionStatus.Error(
                     e.message ?: "Unexpected error occurred"
                 )
             }
-            _isTesting.value = false
         }
     }
 

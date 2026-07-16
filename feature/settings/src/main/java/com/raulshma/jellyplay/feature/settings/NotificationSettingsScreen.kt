@@ -25,9 +25,11 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.selection.toggleable
 import androidx.compose.material3.rememberTimePickerState
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.compose.runtime.LaunchedEffect
@@ -453,28 +455,27 @@ fun NotificationSettingsScreen(
                     } else {
                         libraryFolders.forEach { folder ->
                             val currentConfig = notifPrefs.libraryConfigs[folder.id] ?: LibraryNotificationConfig(enabled = true)
+                            val toggleLibrary = {
+                                val newConfig = currentConfig.copy(enabled = !currentConfig.enabled)
+                                val newConfigs = notifPrefs.libraryConfigs.toMutableMap().apply {
+                                    put(folder.id, newConfig)
+                                }
+                                viewModel.updateNotificationPreferences { it.copy(libraryConfigs = newConfigs) }
+                            }
                             Row(
                                 modifier = Modifier
                                     .fillMaxWidth()
-                                    .clickable {
-                                        val newConfig = currentConfig.copy(enabled = !currentConfig.enabled)
-                                        val newConfigs = notifPrefs.libraryConfigs.toMutableMap().apply {
-                                            put(folder.id, newConfig)
-                                        }
-                                        viewModel.updateNotificationPreferences { it.copy(libraryConfigs = newConfigs) }
-                                    }
+                                    .toggleable(
+                                        value = currentConfig.enabled,
+                                        role = Role.Checkbox,
+                                        onValueChange = { toggleLibrary() },
+                                    )
                                     .padding(vertical = 8.dp, horizontal = 8.dp),
                                 verticalAlignment = Alignment.CenterVertically
                             ) {
                                 Checkbox(
                                     checked = currentConfig.enabled,
-                                    onCheckedChange = { checked ->
-                                        val newConfig = currentConfig.copy(enabled = checked)
-                                        val newConfigs = notifPrefs.libraryConfigs.toMutableMap().apply {
-                                            put(folder.id, newConfig)
-                                        }
-                                        viewModel.updateNotificationPreferences { it.copy(libraryConfigs = newConfigs) }
-                                    }
+                                    onCheckedChange = null,
                                 )
                                 Spacer(Modifier.width(8.dp))
                                 Text(text = folder.name, style = MaterialTheme.typography.bodyLarge)

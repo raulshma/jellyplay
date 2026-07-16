@@ -105,10 +105,12 @@ class StorageSettingsViewModel @Inject constructor(
         launch {
             cacheError = null
             try {
-                context.cacheDir.deleteRecursively()
-                val externalCache = context.externalCacheDir
-                if (externalCache != null && externalCache.exists()) {
-                    externalCache.deleteRecursively()
+                withContext(Dispatchers.IO) {
+                    context.cacheDir.deleteRecursively()
+                    val externalCache = context.externalCacheDir
+                    if (externalCache != null && externalCache.exists()) {
+                        externalCache.deleteRecursively()
+                    }
                 }
             } catch (error: Exception) {
                 cacheError = error.message ?: error::class.simpleName

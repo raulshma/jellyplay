@@ -764,7 +764,11 @@ class DownloadRepositoryImpl @Inject constructor(
             val imageLoader = SingletonImageLoader.get(context)
             val request = ImageRequest.Builder(context)
                 .data(url)
-                .size(512, 512)
+                // Match MediaImage's default decode size (384²). Decoding the
+                // preload at a different size produces a separate memory-cache
+                // key, so the display path would re-decode and the larger
+                // bitmap would sit stranded until evicted.
+                .size(384, 384)
                 .build()
             imageLoader.enqueue(request)
         } catch (e: Exception) { Log.d(TAG, "Failed to preload image to cache", e) }

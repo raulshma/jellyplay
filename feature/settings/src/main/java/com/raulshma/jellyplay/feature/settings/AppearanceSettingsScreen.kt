@@ -57,6 +57,12 @@ import com.raulshma.jellyplay.core.ui.components.focusIndicator
 import com.composables.icons.tabler.Tabler
 import com.composables.icons.tabler.outline.*
 
+private val THEME_HIGHLIGHT_IDS = setOf("theme_mode", "theme_scheduler")
+private val APPEARANCE_LIBRARY_GROUP_IDS = setOf("show_unwatched_badge", "show_watched_checkmark", "hide_watched_items", "hide_episode_thumbnails", "skip_specials", "show_share_media", "show_external_ratings")
+private val PERFORMANCE_GROUP_IDS = setOf("performance_mode", "reduce_motion")
+private val BLUE_LIGHT_GROUP_IDS = setOf("blue_light_filter", "blue_light_strength")
+private val NEWSLETTER_GROUP_IDS = setOf("newsletter_enabled", "newsletter_delivery_day")
+
 @OptIn(ExperimentalMaterial3Api::class, androidx.compose.material3.ExperimentalMaterial3ExpressiveApi::class, androidx.compose.foundation.ExperimentalFoundationApi::class)
 @Composable
 fun AppearanceSettingsScreen(
@@ -204,46 +210,57 @@ fun AppearanceSettingsScreen(
                         }
                     }
 
-                    val appearanceItems = buildList {
-                        add("theme_mode")
-                        add("synthwave_mode")
-                        if (preferences.synthwaveMode) {
-                            add("synthwave_accent")
-                        }
-                        add("soothing_mode")
-                        if (preferences.soothingMode) {
-                            add("soothing_accent")
-                        }
-                        add("monochrome_mode")
-                        if (!preferences.synthwaveMode && !preferences.soothingMode && !preferences.monochromeMode) {
-                            add("accent_color")
-                            add("color_style")
-                            if (isAndroid12) add("dynamic_theming")
-                        }
-                        if (isDarkActive && !preferences.synthwaveMode && !preferences.soothingMode && !preferences.monochromeMode) add("oled_mode")
-                        if (showAdvanced) {
-                            add("contrast")
-                            add("library_view_mode")
-                            add("home_mode")
-                            add("hero_section")
-                            add("clock_home")
-                            add("settings_in_home_search")
-                            add("continue_watching_click")
-                            if (preferences.hiddenCwItemIds.isNotEmpty()) {
-                                add("unhide_cw")
+                    val appearanceItems = remember(
+                        preferences.synthwaveMode,
+                        preferences.soothingMode,
+                        preferences.monochromeMode,
+                        preferences.themeMode,
+                        preferences.hiddenCwItemIds,
+                        showAdvanced,
+                        isDarkActive,
+                        isAndroid12,
+                    ) {
+                        buildList {
+                            add("theme_mode")
+                            add("synthwave_mode")
+                            if (preferences.synthwaveMode) {
+                                add("synthwave_accent")
                             }
-                            add("merge_continue_next_up")
-                            add("next_up_max_days")
-                            add("next_up_rewatching")
-                            add("theme_music")
-                            add("nav_labels")
-                            add("date_format")
-                            add("font_scale")
-                            add("color_blind_mode")
-                            add("hand_mode")
-                            if (preferences.themeMode == ThemeMode.SCHEDULED) {
-                                add("scheduled_start")
-                                add("scheduled_end")
+                            add("soothing_mode")
+                            if (preferences.soothingMode) {
+                                add("soothing_accent")
+                            }
+                            add("monochrome_mode")
+                            if (!preferences.synthwaveMode && !preferences.soothingMode && !preferences.monochromeMode) {
+                                add("accent_color")
+                                add("color_style")
+                                if (isAndroid12) add("dynamic_theming")
+                            }
+                            if (isDarkActive && !preferences.synthwaveMode && !preferences.soothingMode && !preferences.monochromeMode) add("oled_mode")
+                            if (showAdvanced) {
+                                add("contrast")
+                                add("library_view_mode")
+                                add("home_mode")
+                                add("hero_section")
+                                add("clock_home")
+                                add("settings_in_home_search")
+                                add("continue_watching_click")
+                                if (preferences.hiddenCwItemIds.isNotEmpty()) {
+                                    add("unhide_cw")
+                                }
+                                add("merge_continue_next_up")
+                                add("next_up_max_days")
+                                add("next_up_rewatching")
+                                add("theme_music")
+                                add("nav_labels")
+                                add("date_format")
+                                add("font_scale")
+                                add("color_blind_mode")
+                                add("hand_mode")
+                                if (preferences.themeMode == ThemeMode.SCHEDULED) {
+                                    add("scheduled_start")
+                                    add("scheduled_end")
+                                }
                             }
                         }
                     }
@@ -271,7 +288,7 @@ fun AppearanceSettingsScreen(
                                         }
                                     },
                                     trailingText = if (preferences.synthwaveMode) "-" else if (preferences.soothingMode) "-" else if (preferences.monochromeMode) "-" else preferences.themeMode.name,
-                                    highlighted = highlightSettingId in listOf("theme_mode", "theme_scheduler"),
+                                    highlighted = highlightSettingId in THEME_HIGHLIGHT_IDS,
                                     index = currentIdx++, count = totalCount,
                                     onClick = {
                                         if (!preferences.synthwaveMode && !preferences.soothingMode && !preferences.monochromeMode) {
@@ -680,7 +697,7 @@ fun AppearanceSettingsScreen(
                         listOfNotNull(unwatched, checkmarks, hideWatched, hideThumbnails, skipSpecials, shareOpt, ratingsOpt).joinToString(", ").ifEmpty { "All badges/checkmarks hidden" }
                     },
                     modifier = Modifier.padding(vertical = 8.dp),
-                    initiallyExpanded = highlightSettingId in listOf("show_unwatched_badge", "show_watched_checkmark", "hide_watched_items", "hide_episode_thumbnails", "skip_specials", "show_share_media", "show_external_ratings"),
+                    initiallyExpanded = highlightSettingId in APPEARANCE_LIBRARY_GROUP_IDS,
                 ) {
                     val cardTotal = 8
                     var cardIdx = 0
@@ -916,7 +933,7 @@ fun AppearanceSettingsScreen(
                         parts.joinToString(", ").ifEmpty { "Standard experience" }
                     },
                     modifier = Modifier.padding(vertical = 8.dp),
-                    initiallyExpanded = highlightSettingId in listOf("performance_mode", "reduce_motion"),
+                    initiallyExpanded = highlightSettingId in PERFORMANCE_GROUP_IDS,
                 ) {
                     val perfTotal = 2
                     SettingToggleItem(
@@ -952,7 +969,7 @@ fun AppearanceSettingsScreen(
                         }
                     },
                     modifier = Modifier.padding(vertical = 8.dp),
-                    initiallyExpanded = highlightSettingId in listOf("blue_light_filter", "blue_light_strength"),
+                    initiallyExpanded = highlightSettingId in BLUE_LIGHT_GROUP_IDS,
                 ) {
                     val eyeCareTotal = 2
                     SettingToggleItem(
@@ -989,7 +1006,7 @@ fun AppearanceSettingsScreen(
                         }
                     },
                     modifier = Modifier.padding(vertical = 8.dp),
-                    initiallyExpanded = highlightSettingId in listOf("newsletter_enabled", "newsletter_delivery_day"),
+                    initiallyExpanded = highlightSettingId in NEWSLETTER_GROUP_IDS,
                 ) {
                     val newsletterSections = remember { mutableStateListOf<NewsletterSectionType>().apply { addAll(preferences.newsletterSectionOrder) } }
                     val itemHeights = remember { mutableStateMapOf<NewsletterSectionType, Int>() }
