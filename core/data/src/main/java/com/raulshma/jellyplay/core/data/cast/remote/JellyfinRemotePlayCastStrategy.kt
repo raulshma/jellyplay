@@ -1,6 +1,7 @@
 package com.raulshma.jellyplay.core.data.cast.remote
 
 import android.content.Context
+import androidx.compose.runtime.Stable
 import android.util.Log
 import com.raulshma.jellyplay.core.data.cast.CastDevice
 import com.raulshma.jellyplay.core.data.cast.CastStrategy
@@ -26,6 +27,7 @@ import kotlinx.serialization.json.Json
 import javax.inject.Inject
 import javax.inject.Singleton
 
+@Stable
 @Singleton
 class JellyfinRemotePlayCastStrategy @Inject constructor(
     @ApplicationContext private val appContext: Context,

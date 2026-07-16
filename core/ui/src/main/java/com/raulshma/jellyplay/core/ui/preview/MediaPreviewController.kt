@@ -2,6 +2,7 @@ package com.raulshma.jellyplay.core.ui.preview
 
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.Immutable
+import androidx.compose.runtime.Stable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -57,6 +58,7 @@ data class MediaPreview(
  * purely transient UI state, so it is `remember`-ed once at the app root and
  * provided via [LocalMediaPreviewController] — no DI graph changes required.
  */
+@Stable
 class MediaPreviewController {
     private val _state = MutableStateFlow<MediaPreview?>(null)
 

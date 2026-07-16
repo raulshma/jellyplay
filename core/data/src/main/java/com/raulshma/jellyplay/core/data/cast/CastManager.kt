@@ -1,6 +1,7 @@
 package com.raulshma.jellyplay.core.data.cast
 
 import android.content.Context
+import androidx.compose.runtime.Stable
 import android.util.Log
 import androidx.media3.cast.CastPlayer
 import androidx.media3.cast.SessionAvailabilityListener
@@ -42,6 +43,7 @@ sealed class CastSessionEvent {
 }
 
 @OptIn(UnstableApi::class)
+@Stable
 @Singleton
 class CastManager @Inject constructor(
     @ApplicationContext private val context: Context,

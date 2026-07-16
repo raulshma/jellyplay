@@ -1,9 +1,11 @@
 package com.raulshma.jellyplay.feature.subtitle.tester
 
 import androidx.annotation.RawRes
+import androidx.compose.runtime.Immutable
 import com.raulshma.jellyplay.feature.subtitle.tester.R
 
 /** A built-in sample subtitle track used by the tester. */
+@Immutable
 data class SampleSubtitlePreset(
     val id: String,
     val displayNameRes: Int,
