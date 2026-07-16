@@ -3,6 +3,7 @@ package com.raulshma.jellyplay.core.network.api
 import com.raulshma.jellyplay.core.model.Genre
 import com.raulshma.jellyplay.core.model.HomeSection
 import com.raulshma.jellyplay.core.model.HomeSectionType
+import com.raulshma.jellyplay.core.model.HomeSectionsResult
 import com.raulshma.jellyplay.core.model.LibraryFolder
 import com.raulshma.jellyplay.core.model.LyricsResult
 import com.raulshma.jellyplay.core.model.MediaDetail
@@ -18,13 +19,13 @@ import com.raulshma.jellyplay.core.model.Studio
 interface LibraryApiClient {
     suspend fun getHomeSections(
         enabledSections: Set<HomeSectionType> = HomeSectionType.CONFIGURABLE.toSet(),
-        hiddenLibraryIds: Set<String> = emptySet(),
+        libraryHomeSectionOverrides: Map<String, Set<HomeSectionType>> = emptyMap(),
         nextUpRewatching: Boolean = false,
         nextUpMaxDays: Int = 0,
         nextUpExcludedSeriesIds: Set<String> = emptySet(),
         hiddenCwItemIds: Set<String> = emptySet(),
         pinnedSections: List<PinnedHomeSection> = emptyList(),
-    ): Result<List<HomeSection>>
+    ): Result<HomeSectionsResult>
 
     suspend fun getLatestMedia(parentId: String, limit: Int = 16): Result<List<MediaItem>>
     suspend fun getNextUp(limit: Int = 20, enableRewatching: Boolean = false, maxDays: Int = 0): Result<List<MediaItem>>

@@ -1,13 +1,13 @@
 package com.raulshma.jellyplay.feature.admin.dashboard
 
 import androidx.compose.runtime.Immutable
-import com.raulshma.jellyplay.core.data.repository.AuthRepository
 import com.raulshma.jellyplay.core.model.ItemCounts
 import com.raulshma.jellyplay.core.model.ScheduledTaskInfo
 import com.raulshma.jellyplay.core.model.SessionInfo
 import com.raulshma.jellyplay.core.model.SystemInfo
 import com.raulshma.jellyplay.core.model.TaskState
 import com.raulshma.jellyplay.core.network.JellyfinApiClient
+import com.raulshma.jellyplay.core.network.realtime.ScheduledTasksRealtimeChannel
 import com.raulshma.jellyplay.core.ui.viewmodel.JellyPlayViewModel
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.async
@@ -29,33 +29,41 @@ data class AdminDashboardState(
     val recentActivity: List<com.raulshma.jellyplay.core.model.ActivityLogEntry> = emptyList(),
     val isRestarting: Boolean = false,
     val isShuttingDown: Boolean = false,
+    val libraryScanState: LibraryScanState = LibraryScanState.Idle,
 )
 
 @HiltViewModel
 class AdminDashboardViewModel @Inject constructor(
     private val apiClient: JellyfinApiClient,
-    private val authRepository: AuthRepository,
+    private val realtimeTasks: ScheduledTasksRealtimeChannel,
 ) : JellyPlayViewModel() {
 
     private val _uiState = stateFlow(AdminDashboardState())
     val uiState: StateFlow<AdminDashboardState> = _uiState.flow
 
-    private val _isAdmin = stateFlow(false)
-    val isAdmin: StateFlow<Boolean> = _isAdmin.flow
-
     private val hasRunningTasks = MutableStateFlow(false)
 
+    /**
+     * Deadline (via [System.currentTimeMillis]) up to which an IDLE scan task
+     * is treated as RUNNING. Set when the user triggers a scan: the server
+     * takes a moment to flip the scheduled task from IDLE to RUNNING after
+     * [apiClient.startTask], and a WS push landing on IDLE during that window
+     * would otherwise collapse the optimistic [LibraryScanState.Running] and
+     * hide the progress UI. Cleared as soon as the WS confirms RUNNING, so a
+     * later IDLE genuinely means the scan finished.
+     */
+    private val scanOptimisticUntilMs = java.util.concurrent.atomic.AtomicLong(0L)
+
     init {
-        launch {
-            authRepository.currentUser.collect { user ->
-                _isAdmin.set(user?.isAdmin == true)
-            }
-        }
         loadDashboard()
+        startAutoRefresh()
+        observeScanLibraryTask()
     }
 
     fun loadDashboard() {
         launch {
+            // Access control is enforced by AdminRouteContainer before this
+            // screen is reached; the server still 403s as a backstop.
             _uiState.update { it.copy(isLoading = true, error = null) }
             try {
                 coroutineScope {
@@ -73,6 +81,10 @@ class AdminDashboardViewModel @Inject constructor(
 
                     val running = allTasks.filter { task -> task.state == TaskState.RUNNING }
                     hasRunningTasks.value = running.isNotEmpty()
+                    // Seed the scan state from the initial REST snapshot so the
+                    // button reflects an in-progress scan before the first WS
+                    // push lands. Subsequent updates come from [observeScanLibraryTask].
+                    applyScanTask(allTasks.firstOrNull { it.key == KEY_SCAN_LIBRARY })
                     _uiState.update {
                         it.copy(
                             isLoading = false,
@@ -88,7 +100,6 @@ class AdminDashboardViewModel @Inject constructor(
                 _uiState.update { it.copy(isLoading = false, error = e.message) }
             }
         }
-        startAutoRefresh()
     }
 
     private var refreshJob: kotlinx.coroutines.Job? = null
@@ -133,8 +144,96 @@ class AdminDashboardViewModel @Inject constructor(
         }
     }
 
+    /**
+     * Starts a media-library scan by triggering Jellyfin's built-in
+     * "Scan media library" scheduled task ([KEY_SCAN_LIBRARY]). Live progress
+     * then flows in over WebSocket via [ScheduledTasksRealtimeChannel]
+     * (the same `ScheduledTasksInfo` push jellyfin-web relies on).
+     *
+     * We set an optimistic grace window because the server takes a beat to
+     * flip the task IDLE → RUNNING after [apiClient.startTask], and a WS push
+     * landing in that window would report IDLE and collapse the UI. Once the
+     * WS confirms RUNNING the window is cleared; a later IDLE means "done".
+     */
+    fun scanLibrary() {
+        if (_uiState.value.libraryScanState is LibraryScanState.Running) return
+        scanOptimisticUntilMs.set(System.currentTimeMillis() + scanOptimisticGraceMs)
+        launch {
+            _uiState.update { it.copy(libraryScanState = LibraryScanState.Running(progress = null)) }
+            val tasks = apiClient.getScheduledTasks().getOrNull().orEmpty()
+            val scanTask = tasks.firstOrNull { it.key == KEY_SCAN_LIBRARY }
+            val taskId = scanTask?.id ?: tasks.firstOrNull { it.name.equals(NAME_SCAN_LIBRARY, ignoreCase = true) }?.id
+            if (taskId != null) {
+                apiClient.startTask(taskId)
+            } else {
+                // Fall back to the library refresh endpoint (no progress).
+                apiClient.scanLibrary()
+            }
+        }
+    }
+
+    /**
+     * Live library-scan state from the WebSocket `ScheduledTasksInfo` push.
+     * Replaces the prior REST polling loop, which could not deliver progress
+     * updates faster than its 2s interval and raced the server's IDLE→RUNNING
+     * flip.
+     */
+    private fun observeScanLibraryTask() {
+        launch {
+            realtimeTasks.scanLibraryTask.collect { task -> applyScanTask(task) }
+        }
+    }
+
+    /**
+     * Reflects the "Scan media library" task's [ScheduledTaskInfo] into
+     * [libraryScanState], honoring the optimistic window started by [scanLibrary].
+     */
+    private fun applyScanTask(scanTask: ScheduledTaskInfo?) {
+        // Server has actually started running — no more optimistic hold.
+        if (scanTask?.state == TaskState.RUNNING) {
+            scanOptimisticUntilMs.set(0L)
+        }
+        val withinOptimisticWindow = scanOptimisticUntilMs.get() != 0L &&
+            System.currentTimeMillis() < scanOptimisticUntilMs.get()
+        val nextState = when {
+            scanTask?.state == TaskState.RUNNING ->
+                LibraryScanState.Running(progress = scanTask.currentProgressPercentage)
+            // Server still IDLE but within the grace window following a user
+            // tap: preserve the optimistic Running(null) state.
+            withinOptimisticWindow -> LibraryScanState.Running(progress = null)
+            else -> LibraryScanState.Idle
+        }
+        // If the grace window expired without ever observing RUNNING, give up
+        // the optimistic hold so the UI can settle to Idle.
+        if (nextState is LibraryScanState.Idle) {
+            scanOptimisticUntilMs.set(0L)
+        }
+        _uiState.update { it.copy(libraryScanState = nextState) }
+    }
+
     override fun onCleared() {
         super.onCleared()
         refreshJob?.cancel()
     }
+
+    private companion object {
+        // Jellyfin scheduled-task key / display name for "Scan media library".
+        const val KEY_SCAN_LIBRARY = "RefreshLibrary"
+        const val NAME_SCAN_LIBRARY = "Scan Media Library"
+
+        // How long to keep the optimistic Running state after the user taps
+        // "Scan Library", waiting for the server to flip the task to RUNNING.
+        // Generous enough to cover startTask latency + the IDLE→RUNNING flip,
+        // short enough to recover the UI if the start request silently failed.
+        const val scanOptimisticGraceMs = 15_000L
+    }
+}
+
+/**
+ * State of the media-library scan surfaced on the dashboard hero card.
+ */
+@Immutable
+sealed interface LibraryScanState {
+    data object Idle : LibraryScanState
+    data class Running(val progress: Double?) : LibraryScanState
 }

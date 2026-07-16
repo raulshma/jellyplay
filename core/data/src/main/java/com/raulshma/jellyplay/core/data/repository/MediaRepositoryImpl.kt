@@ -16,6 +16,7 @@ import com.raulshma.jellyplay.core.model.Genre
 import com.raulshma.jellyplay.core.model.HomeSection
 import com.raulshma.jellyplay.core.model.TtlCache
 import com.raulshma.jellyplay.core.model.HomeSectionType
+import com.raulshma.jellyplay.core.model.HomeSectionsResult
 import com.raulshma.jellyplay.core.model.LibraryFolder
 import com.raulshma.jellyplay.core.model.LiveTvChannel
 import com.raulshma.jellyplay.core.model.LiveTvProgram
@@ -81,7 +82,7 @@ class MediaRepositoryImpl @Inject constructor(
     }
 
     @Volatile
-    private var cachedHomeSections: List<HomeSection>? = null
+    private var cachedHomeSections: HomeSectionsResult? = null
     @Volatile
     private var cachedHomeSectionsTimestamp: Long = 0L
     @Volatile
@@ -144,14 +145,14 @@ class MediaRepositoryImpl @Inject constructor(
 
     override suspend fun getHomeSections(
         enabledSections: Set<HomeSectionType>,
-        hiddenLibraryIds: Set<String>,
+        libraryHomeSectionOverrides: Map<String, Set<HomeSectionType>>,
         nextUpRewatching: Boolean,
         nextUpMaxDays: Int,
         nextUpExcludedSeriesIds: Set<String>,
         hiddenCwItemIds: Set<String>,
         pinnedSections: List<PinnedHomeSection>,
-    ): Result<List<HomeSection>> {
-        val cacheKey = "${enabledSections.sortedBy { it.name }}|$hiddenLibraryIds|$nextUpRewatching|$nextUpMaxDays|$nextUpExcludedSeriesIds|$hiddenCwItemIds|$pinnedSections"
+    ): Result<HomeSectionsResult> {
+        val cacheKey = "${enabledSections.sortedBy { it.name }}|$libraryHomeSectionOverrides|$nextUpRewatching|$nextUpMaxDays|$nextUpExcludedSeriesIds|$hiddenCwItemIds|$pinnedSections"
         val cached = cachedHomeSections
         val timestamp = cachedHomeSectionsTimestamp
         if (cached != null && cacheKey == cachedHomeSectionsKey &&
@@ -161,16 +162,16 @@ class MediaRepositoryImpl @Inject constructor(
         }
         return apiClient.getHomeSections(
             enabledSections,
-            hiddenLibraryIds,
+            libraryHomeSectionOverrides,
             nextUpRewatching,
             nextUpMaxDays,
             nextUpExcludedSeriesIds,
             hiddenCwItemIds,
             pinnedSections,
         ).also { result ->
-            result.getOrNull()?.let { sections ->
+            result.getOrNull()?.let { homeResult ->
                 synchronized(homeSectionsLock) {
-                    cachedHomeSections = sections
+                    cachedHomeSections = homeResult
                     cachedHomeSectionsKey = cacheKey
                     cachedHomeSectionsTimestamp = android.os.SystemClock.elapsedRealtime()
                 }
@@ -774,12 +775,13 @@ class MediaRepositoryImpl @Inject constructor(
             cachedHomeSectionsKey = ""
         }
         // Also clear the secondary caches — they hold user-scoped data (library folders,
-        // latest media, genres, studios) that would otherwise leak across user/server
-        // switches until their TTL expires.
+        // latest media, genres, studios, photo folder child URLs) that would otherwise
+        // leak across user/server switches until their TTL expires.
         libraryFoldersCache.clear()
         latestMediaCache.clear()
         genresCache.clear()
         studiosCache.clear()
+        photoFolderChildUrlCache.clear()
     }
 
     override suspend fun getNewsletterData(sinceDate: String, limit: Int): Result<NewsletterData> =
