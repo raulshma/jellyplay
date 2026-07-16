@@ -28,7 +28,6 @@ import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
@@ -57,7 +56,6 @@ fun ServerHeroHeader(
     onScanLibrary: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    val primaryContainer = MaterialTheme.colorScheme.primaryContainer
     val surface = MaterialTheme.colorScheme.surface
 
     val restartFocusState = rememberTvFocusState(focusedScale = 1.05f)
@@ -98,14 +96,7 @@ fun ServerHeroHeader(
         modifier = modifier
             .fillMaxWidth()
             .clip(ShapeCache.smooth28)
-            .background(
-                brush = Brush.verticalGradient(
-                    colors = listOf(
-                        primaryContainer.copy(alpha = 0.55f),
-                        surface,
-                    ),
-                ),
-            ),
+            .background(surface),
     ) {
         Column(
             modifier = Modifier.padding(24.dp),
