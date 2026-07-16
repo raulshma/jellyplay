@@ -115,6 +115,7 @@ data class AudioEffectsConfig(
     val volumeBoostGain: Int = 0,
 )
 
+@Immutable
 data class EngineCapabilities(
     val supportsPip: Boolean = false,
     val supportsMiniMode: Boolean = false,
