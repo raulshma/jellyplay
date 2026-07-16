@@ -57,6 +57,10 @@ private fun streamingQualityLabel(quality: StreamingQuality): String = when (qua
     StreamingQuality.UHD_4K -> "4K (Ultra HD)"
 }
 
+private val STORAGE_CACHE_GROUP_IDS = setOf("clear_cache", "wifi_only_downloads", "download_connections", "max_concurrent_downloads", "auto_delete_cache", "max_cache_size")
+private val STORAGE_NETWORK_GROUP_IDS = setOf("offline_mode", "auto_offline", "adaptive_bitrate", "bandwidth_cap", "metered_network_behavior", "cellular_streaming_quality", "cellular_download_warning", "data_saver", "network_timeout", "verbose_logging", "user_data_sync")
+private val STORAGE_DOWNLOADS_GROUP_IDS = setOf("download_quality", "smart_downloads", "auto_download_new_episodes", "download_schedule", "download_schedule_start", "download_schedule_end", "download_schedule_wifi_only", "max_download_storage_limit", "download_storage_location")
+
 @OptIn(ExperimentalMaterial3Api::class, androidx.compose.material3.ExperimentalMaterial3ExpressiveApi::class, androidx.compose.foundation.ExperimentalFoundationApi::class)
 @Composable
 fun StorageSettingsScreen(
@@ -77,9 +81,9 @@ fun StorageSettingsScreen(
     val scrollState = rememberLazyListState()
     val scrollIndex = remember(highlightSettingId) {
         when (highlightSettingId) {
-            in listOf("clear_cache", "wifi_only_downloads", "download_connections", "max_concurrent_downloads", "auto_delete_cache", "max_cache_size") -> 0
-            in listOf("offline_mode", "auto_offline", "adaptive_bitrate", "bandwidth_cap", "metered_network_behavior", "cellular_streaming_quality", "cellular_download_warning", "data_saver", "network_timeout", "verbose_logging", "user_data_sync") -> 1
-            in listOf("download_quality", "smart_downloads", "auto_download_new_episodes", "download_schedule", "download_schedule_start", "download_schedule_end", "download_schedule_wifi_only", "max_download_storage_limit", "download_storage_location") -> 2
+            in STORAGE_CACHE_GROUP_IDS -> 0
+            in STORAGE_NETWORK_GROUP_IDS -> 1
+            in STORAGE_DOWNLOADS_GROUP_IDS -> 2
             else -> -1
         }
     }
@@ -293,7 +297,7 @@ fun StorageSettingsScreen(
                         stringResource(R.string.settings_status_value, status)
                     },
                     modifier = Modifier.padding(vertical = 8.dp),
-                    initiallyExpanded = highlightSettingId in listOf("offline_mode", "auto_offline", "adaptive_bitrate", "bandwidth_cap", "metered_network_behavior", "cellular_streaming_quality", "cellular_download_warning", "data_saver", "network_timeout", "verbose_logging", "user_data_sync"),
+                    initiallyExpanded = highlightSettingId in STORAGE_NETWORK_GROUP_IDS,
                 ) {
                     val networkTotal = 11
                     var networkIdx = 0

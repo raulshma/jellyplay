@@ -186,11 +186,13 @@ fun MediaDetailScreen(
                 val rememberedGetBackdropUrl = remember(viewModel) { { id: String -> viewModel.getBackdropUrl(id) } }
                 val rememberedGetSeerrPosterUrl = remember(viewModel) { { path: String? -> viewModel.getSeerrPosterUrl(path) } }
 
-                // Series id used by season-episode fetches. Depends only on the
-                // item id (stable across favorite/played toggles) so the on-season
-                // callback captures a value that doesn't invalidate on unrelated
-                // detail mutations.
-                val seriesIdForSeasons = remember(itemId) {
+                // Series id used by season-episode fetches. Keyed on BOTH the
+                // item id and the resolved series id so it recomputes once the
+                // detail arrives. Previously this keyed only on `itemId`, so on
+                // first composition (detail still null) an episode resolved to
+                // its own id as the series id — producing wrong/empty season
+                // fetches and wasted refetches.
+                val seriesIdForSeasons = remember(itemId, detail?.item?.seriesId) {
                     detail?.item?.seriesId ?: itemId
                 }
 

@@ -78,6 +78,10 @@ data class DetailUiState(
     // id when the experimental flag is on; server resolution is deferred to the
     // ManageSeriesScreen itself (cheap gate here — no network on the detail screen).
     val canManageSeries: Boolean = false,
+    // Resolved once per series load (in loadItem) so the canManageSeries combine
+    // stays a pure derivation over snapshot state instead of issuing network I/O
+    // on every identity tick.
+    val sonarrServersResolved: Boolean = false,
 ) {
     @Immutable
     data class SmartPlayTarget(

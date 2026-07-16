@@ -50,11 +50,14 @@ internal fun DetailBackdrop(
     isExpanded: Boolean,
     modifier: Modifier = Modifier,
 ) {
-    val scrollOffset = scrollState.scrollOffset
-    val scrollFraction = scrollState.scrollFraction
-    val backgroundColor = scrollState.backgroundColor
     val baseBackdropHeight = scrollState.baseBackdropHeight
     val backdropHeight = scrollState.backdropHeight
+    // Capture the State refs once so the graphicsLayer/drawBehind lambdas read
+    // snapshot state *inside* the lambda. This defers invalidation to the draw
+    // phase only — the backdrop subtree is NOT recomposed every scroll frame.
+    val scrollOffsetState = scrollState.scrollOffsetState
+    val scrollFractionState = scrollState.scrollFractionState
+    val backgroundColorState = scrollState.backgroundColorState
 
     val trailerVideo = remember(relatedVideos) {
         relatedVideos.firstOrNull {
@@ -65,14 +68,16 @@ internal fun DetailBackdrop(
     var autoplayEmbedFailed by remember(targetBackdropId) { mutableStateOf(false) }
 
     val adaptiveInfo = LocalAdaptiveInfo.current
+    val isLandscapeExpanded = isExpanded && adaptiveInfo.isLandscape
 
     Box(
         modifier = modifier
             .fillMaxWidth()
             .height(backdropHeight)
             .graphicsLayer {
+                val scrollOffset = scrollOffsetState.value
                 translationY = -scrollOffset * 0.5f
-                alpha = 1f - (scrollFraction * 0.8f)
+                alpha = 1f - (scrollFractionState.value * 0.8f)
             },
     ) {
         // Capture in composable scope; AnimatedContent's transitionSpec is not composable.
@@ -100,7 +105,7 @@ internal fun DetailBackdrop(
             val backdropModifier = Modifier
                 .fillMaxSize()
                 .graphicsLayer {
-                    val scale = 1f + (scrollOffset * 0.001f).coerceAtLeast(0f)
+                    val scale = 1f + (scrollOffsetState.value * 0.001f).coerceAtLeast(0f)
                     scaleX = scale
                     scaleY = scale
                 }
@@ -129,7 +134,7 @@ internal fun DetailBackdrop(
                 modifier = Modifier
                     .fillMaxSize()
                     .graphicsLayer {
-                        val scale = 1f + (scrollOffset * 0.001f).coerceAtLeast(0f)
+                        val scale = 1f + (scrollOffsetState.value * 0.001f).coerceAtLeast(0f)
                         scaleX = scale
                         scaleY = scale
                     },
@@ -142,11 +147,11 @@ internal fun DetailBackdrop(
             )
         }
 
-        val isLandscapeExpanded = isExpanded && adaptiveInfo.isLandscape
         Box(
             modifier = Modifier
                 .fillMaxSize()
                 .drawBehind {
+                    val backgroundColor = backgroundColorState.value
                     drawRect(
                         Brush.verticalGradient(
                             colors = listOf(

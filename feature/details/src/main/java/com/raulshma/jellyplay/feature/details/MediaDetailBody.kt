@@ -560,9 +560,10 @@ internal fun DetailContentBody(
                     ) { _, collectionItem, focusModifier ->
                             val collectionClick = remember(collectionItem.id) { { onItemClick(collectionItem.id) } }
                             val collectionProgress = collectionItem.progressFraction()
+                            val collectionImageUrl = remember(collectionItem.id) { getImageUrl(collectionItem.id) }
                             PosterCard(
                                 item = collectionItem,
-                                imageUrl = getImageUrl(collectionItem.id),
+                                imageUrl = collectionImageUrl,
                                 onClick = collectionClick,
                                 showProgress = collectionProgress != null && collectionProgress > 0f,
                                 progressPercent = collectionProgress ?: 0f,
@@ -593,9 +594,10 @@ internal fun DetailContentBody(
                             horizontalArrangement = Arrangement.spacedBy(16.dp),
                         ) { _, person, focusModifier ->
                                 val personClick = remember(person.id) { { onPersonClick(person.id) } }
+                                val personImageUrl = remember(person.id) { getImageUrl(person.id) }
                                 PersonItem(
                                     person = person,
-                                    imageUrl = getImageUrl(person.id),
+                                    imageUrl = personImageUrl,
                                     onClick = personClick,
                                     modifier = focusModifier,
                                 )
@@ -635,9 +637,10 @@ internal fun DetailContentBody(
                         horizontalArrangement = Arrangement.spacedBy(12.dp),
                     ) { _, related, focusModifier ->
                             val relatedClick = remember(related.id) { { onItemClick(related.id) } }
+                            val relatedImageUrl = remember(related.id) { getImageUrl(related.id) }
                             PosterCard(
                                 item = related,
-                                imageUrl = getImageUrl(related.id),
+                                imageUrl = relatedImageUrl,
                                 onClick = relatedClick,
                                 modifier = focusModifier.width(relatedCardWidth),
                             )
@@ -786,7 +789,10 @@ private fun VideosSection(
         Spacer(Modifier.height(16.dp))
         TvFocusableItemRow(
             items = videos,
-            key = { it.key ?: "" },
+            // Fall back to the video name when its key is null so two null-key
+            // videos don't collide and collapse their composition slots.
+            key = { video -> video.key ?: video.name ?: "video" },
+            contentType = { _, _ -> "video" },
             contentPadding = PaddingValues(horizontal = bodyContentPad),
             horizontalArrangement = Arrangement.spacedBy(12.dp),
         ) { _, video, focusModifier ->

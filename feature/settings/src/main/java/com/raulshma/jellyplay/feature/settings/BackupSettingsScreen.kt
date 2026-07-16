@@ -40,7 +40,6 @@ fun BackupSettingsScreen(
     highlightSettingId: String? = null,
     viewModel: SettingsViewModel = hiltViewModel(),
 ) {
-    val preferences = viewModel.preferences
     val adaptiveInfo = LocalAdaptiveInfo.current
     val isTv = LocalTvMode.current
     val userMessageBus = LocalUserMessageBus.current

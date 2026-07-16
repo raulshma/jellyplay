@@ -109,11 +109,26 @@ interface LibraryApiClient {
     suspend fun getAlbumTracks(albumId: String): Result<List<MediaItem>>
     suspend fun getSimilarItems(itemId: String, limit: Int = 12): Result<List<MediaItem>>
     suspend fun getInstantMix(itemId: String, limit: Int = 100): Result<List<MediaItem>>
-    suspend fun getRecommendations(limit: Int = 20): Result<RecommendationResult>
+    suspend fun getRecommendations(
+        limit: Int = 20,
+        // Pre-fetched seed items (e.g. Continue Watching + Next Up already loaded
+        // by getHomeSections). When non-empty the implementation reuses them as
+        // seeds instead of re-fetching; when empty it fetches its own.
+        seeds: List<MediaItem> = emptyList(),
+    ): Result<RecommendationResult>
     suspend fun getItemsByPerson(personId: String, limit: Int = 50): Result<List<MediaItem>>
     suspend fun getThemeSongs(itemId: String): Result<List<MediaItem>>
     suspend fun getSeasons(seriesId: String): Result<List<MediaItem>>
     suspend fun getEpisodes(seriesId: String, seasonId: String): Result<List<MediaItem>>
+
+    /**
+     * Fetches every episode for a series in a single round-trip. The Jellyfin
+     * `/Shows/{seriesId}/Episodes` endpoint returns the full set when
+     * `seasonId` is omitted, which collapses an N-season fan-out (one request
+     * per season) into a single call. Callers that need per-season grouping
+     * can `groupBy { it.seasonId }` the result locally.
+     */
+    suspend fun getAllEpisodes(seriesId: String): Result<List<MediaItem>>
 
     suspend fun getCollectionItems(
         collectionId: String,

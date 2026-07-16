@@ -81,6 +81,7 @@ fun ArrSettingsScreen(
     val servers by viewModel.servers.collectAsStateWithLifecycle()
     val isRefreshing by viewModel.isRefreshing.collectAsStateWithLifecycle()
     val serverStatus by viewModel.serverStatus.collectAsStateWithLifecycle()
+    val allServers = remember(servers) { servers.radarrServers + servers.sonarrServers }
 
     var showAddDialog by remember { mutableStateOf(false) }
 
@@ -164,7 +165,6 @@ fun ArrSettingsScreen(
                             .padding(top = 8.dp)
                             .weight(1f),
                     )
-                    val allServers = (servers.radarrServers + servers.sonarrServers)
                     if (allServers.isNotEmpty()) {
                         TextButton(onClick = { viewModel.testAllServers() }) {
                             Text("Test all")
@@ -173,7 +173,6 @@ fun ArrSettingsScreen(
                 }
             }
 
-            val allServers = (servers.radarrServers + servers.sonarrServers)
             if (allServers.isEmpty()) {
                 item {
                     val text = when {

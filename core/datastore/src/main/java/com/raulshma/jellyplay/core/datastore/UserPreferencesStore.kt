@@ -1504,7 +1504,7 @@ class UserPreferencesStore @Inject constructor(
      */
     suspend fun setPin(pin: String) {
         if (pin.isBlank()) return
-        val hash = PinHasher.hash(pin)
+        val hash = withContext(Dispatchers.Default) { PinHasher.hash(pin) }
         context.dataStore.edit { prefs ->
             prefs[Keys.PIN_HASH] = hash
             prefs[Keys.PIN_LOCK_ENABLED] = true
