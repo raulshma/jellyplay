@@ -18,24 +18,22 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.FilledTonalButton
+import androidx.compose.material3.FilledTonalIconButton
 import androidx.compose.material3.Icon
+import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Brush
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.composables.icons.tabler.Tabler
-import com.composables.icons.tabler.outline.BrandWindows
-import com.composables.icons.tabler.outline.Cpu
+import com.composables.icons.tabler.outline.Database
 import com.composables.icons.tabler.outline.Power
 import com.composables.icons.tabler.outline.Refresh
 import com.composables.icons.tabler.outline.Server
@@ -45,21 +43,24 @@ import com.raulshma.jellyplay.core.model.SystemInfo
 import com.raulshma.jellyplay.core.ui.components.LocalReducedMotion
 import com.raulshma.jellyplay.core.ui.tv.rememberTvFocusState
 import com.raulshma.jellyplay.core.ui.tv.tvFocusIndicator
+import com.raulshma.jellyplay.feature.admin.dashboard.LibraryScanState
 
 @Composable
 fun ServerHeroHeader(
     systemInfo: SystemInfo,
     isRestarting: Boolean,
     isShuttingDown: Boolean,
+    libraryScanState: LibraryScanState,
     onRestart: () -> Unit,
     onShutdown: () -> Unit,
+    onScanLibrary: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    val primaryContainer = MaterialTheme.colorScheme.primaryContainer
     val surface = MaterialTheme.colorScheme.surface
 
     val restartFocusState = rememberTvFocusState(focusedScale = 1.05f)
     val shutdownFocusState = rememberTvFocusState(focusedScale = 1.04f)
+    val scanFocusState = rememberTvFocusState(focusedScale = 1.05f)
 
     val reducedMotion = LocalReducedMotion.current
     // Server status pulse is a continuous two-channel infinite animation. In
@@ -95,14 +96,7 @@ fun ServerHeroHeader(
         modifier = modifier
             .fillMaxWidth()
             .clip(ShapeCache.smooth28)
-            .background(
-                brush = Brush.verticalGradient(
-                    colors = listOf(
-                        primaryContainer.copy(alpha = 0.55f),
-                        surface,
-                    ),
-                ),
-            ),
+            .background(surface),
     ) {
         Column(
             modifier = Modifier.padding(24.dp),
@@ -188,6 +182,16 @@ fun ServerHeroHeader(
                 }
             }
 
+            ScanLibraryButton(
+                state = libraryScanState,
+                enabled = !isRestarting && !isShuttingDown,
+                onClick = onScanLibrary,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .then(scanFocusState.focusModifier)
+                    .tvFocusIndicator(scanFocusState, ShapeCache.smooth20),
+            )
+
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.spacedBy(10.dp),
@@ -200,31 +204,96 @@ fun ServerHeroHeader(
                         .then(restartFocusState.focusModifier)
                         .tvFocusIndicator(restartFocusState, ShapeCache.smooth12),
                 ) {
+                    // Show loading indicator OR the restart icon — never both simultaneously.
                     if (isRestarting) {
                         com.raulshma.jellyplay.core.ui.components.JellyPlayLoadingIndicator(
                             modifier = Modifier.size(16.dp),
                         )
-                        Spacer(Modifier.width(8.dp))
+                    } else {
+                        Icon(Tabler.Outline.Refresh, contentDescription = null, modifier = Modifier.size(18.dp))
                     }
-                    Icon(Tabler.Outline.Refresh, contentDescription = null, modifier = Modifier.size(18.dp))
                     Spacer(Modifier.width(6.dp))
                     Text(if (isRestarting) "Restarting" else "Restart")
                 }
-                OutlinedButton(
+                FilledTonalIconButton(
                     onClick = onShutdown,
                     enabled = !isRestarting && !isShuttingDown,
                     modifier = Modifier
-                        .weight(1f)
                         .then(shutdownFocusState.focusModifier)
                         .tvFocusIndicator(shutdownFocusState, ShapeCache.smooth12),
-                    colors = androidx.compose.material3.ButtonDefaults.outlinedButtonColors(
-                        contentColor = MaterialTheme.colorScheme.error,
-                    ),
                 ) {
-                    Icon(Tabler.Outline.Power, contentDescription = null, modifier = Modifier.size(18.dp))
-                    Spacer(Modifier.width(6.dp))
-                    Text("Shutdown")
+                    Icon(Tabler.Outline.Power, contentDescription = "Shutdown", modifier = Modifier.size(18.dp))
                 }
+            }
+        }
+    }
+}
+
+/**
+ * Material 3 Expressive scan-library action. When idle it is a tonal button;
+ * while a scan is running it surfaces the live percentage and a determinate
+ * progress bar embedded directly beneath the label.
+ */
+@Composable
+private fun ScanLibraryButton(
+    state: LibraryScanState,
+    enabled: Boolean,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    val isScanning = state is LibraryScanState.Running
+    // Jellyfin reports this value from the running task. Treat it as untrusted:
+    // some server versions can send NaN or a value outside the 0–100 range.
+    // Passing either into a progress indicator can cause rendering issues.
+    val progress = (state as? LibraryScanState.Running)
+        ?.progress
+        ?.takeIf(Double::isFinite)
+        ?.coerceIn(0.0, 100.0)
+
+    Column(modifier = modifier, verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        FilledTonalButton(
+            onClick = onClick,
+            enabled = enabled && !isScanning,
+            modifier = Modifier.fillMaxWidth(),
+        ) {
+            if (isScanning) {
+                com.raulshma.jellyplay.core.ui.components.JellyPlayLoadingIndicator(
+                    modifier = Modifier.size(16.dp),
+                )
+                Spacer(Modifier.width(8.dp))
+            } else {
+                Icon(Tabler.Outline.Database, contentDescription = null, modifier = Modifier.size(18.dp))
+                Spacer(Modifier.width(6.dp))
+            }
+            Text(
+                text = if (isScanning) {
+                    progress?.let { "Scanning ${it.toInt()}%" } ?: "Scanning library"
+                } else {
+                    "Scan Library"
+                },
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
+        }
+
+        if (isScanning) {
+            // Match jellyfin-web's TaskProgress: determinate with a percentage
+            // when the server reports one, indeterminate otherwise. The server
+            // reports currentProgressPercentage = null through most of a library
+            // scan (only emits a real value once the progress-reporting phase
+            // kicks in), so rendering a determinate bar pinned to % during that
+            // window looks frozen — the reported "shows then never updates".
+            val progressModifier = Modifier
+                .fillMaxWidth()
+                .height(6.dp)
+                .clip(ShapeCache.smooth4)
+            if (progress != null) {
+                LinearProgressIndicator(
+                    progress = { (progress / 100.0).toFloat() },
+                    modifier = progressModifier,
+                )
+            } else {
+                LinearProgressIndicator(modifier = progressModifier)
             }
         }
     }

@@ -3,22 +3,28 @@ package com.raulshma.jellyplay.feature.admin.users.detail
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutVertically
-import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.verticalScroll
+import androidx.compose.foundation.pager.HorizontalPager
+import androidx.compose.foundation.pager.rememberPagerState
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.Badge
+import androidx.compose.material3.BadgedBox
 import androidx.compose.material3.BottomAppBar
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.PrimaryScrollableTabRow
+import androidx.compose.material3.Tab
+import androidx.compose.material3.TabRowDefaults
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -26,6 +32,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -38,12 +45,11 @@ import com.raulshma.jellyplay.core.ui.components.JellyPlayScreenScaffold
 import com.raulshma.jellyplay.core.ui.components.ScreenLoadingState
 import com.raulshma.jellyplay.core.ui.components.StaggeredSection
 import com.raulshma.jellyplay.core.ui.components.rememberScreenBackgroundColor
-import com.raulshma.jellyplay.feature.admin.users.detail.components.AccessSection
-import com.raulshma.jellyplay.feature.admin.users.detail.components.DangerSection
-import com.raulshma.jellyplay.feature.admin.users.detail.components.GeneralSection
-import com.raulshma.jellyplay.feature.admin.users.detail.components.LimitsSection
-import com.raulshma.jellyplay.feature.admin.users.detail.components.PasswordSection
-import com.raulshma.jellyplay.feature.admin.users.detail.components.PermissionsSection
+import com.raulshma.jellyplay.feature.admin.users.detail.components.AccessTab
+import com.raulshma.jellyplay.feature.admin.users.detail.components.AccountTab
+import com.raulshma.jellyplay.feature.admin.users.detail.components.ParentalControlTab
+import com.raulshma.jellyplay.feature.admin.users.detail.components.ProfileTab
+import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -134,50 +140,62 @@ fun UserDetailScreen(
                 modifier = Modifier.fillMaxSize(),
             )
             user != null && effectivePolicy != null -> {
-                // JellyPlayScreenScaffold's content lambda renders into a Column, so to overlay
-                // the sticky BottomAppBar we wrap the content branch in our own Box first. The
-                // scrollable Column is child 1 and the AnimatedVisibility{BottomAppBar} is
-                // child 2 with Modifier.align(Alignment.BottomCenter). This Box is ours, so
-                // align works as expected.
+                // JellyPlayScreenScaffold's content lambda renders into a Column. Wrap
+                // in our own Box so the sticky BottomAppBar can align BottomCenter.
+                val tabs = UserEditTab.entries
+                val pagerState = rememberPagerState(pageCount = { tabs.size })
+                val scope = rememberCoroutineScope()
+
                 Box(modifier = Modifier.fillMaxSize()) {
-                    Column(
-                        modifier = Modifier
-                            .fillMaxSize()
-                            .verticalScroll(rememberScrollState())
-                            .padding(bottom = 96.dp),
-                        verticalArrangement = Arrangement.spacedBy(16.dp),
-                    ) {
-                        var i = 0
-                        StaggeredSection(delayIndex = i++) {
-                            GeneralSection(
-                                name = effectiveName,
-                                policy = effectivePolicy,
-                                isSelf = state.isSelf,
-                                isLastAdmin = state.isLastAdmin,
-                                onNameChange = viewModel::editName,
-                                onPolicyChange = viewModel::onPolicyChange,
-                            )
-                        }
-                        StaggeredSection(delayIndex = i++) {
-                            AccessSection(
-                                policy = effectivePolicy,
-                                libraries = state.libraries,
-                                onPolicyChange = viewModel::onPolicyChange,
-                            )
-                        }
-                        StaggeredSection(delayIndex = i++) {
-                            PermissionsSection(policy = effectivePolicy, onPolicyChange = viewModel::onPolicyChange)
-                        }
-                        StaggeredSection(delayIndex = i++) {
-                            LimitsSection(policy = effectivePolicy, onPolicyChange = viewModel::onPolicyChange)
-                        }
-                        StaggeredSection(delayIndex = i++) {
-                            PasswordSection(onChangePassword = viewModel::showPasswordDialog)
-                        }
-                        StaggeredSection(delayIndex = i) {
-                            DangerSection(isSelf = state.isSelf, onDelete = viewModel::showDeleteDialog)
+                    Column(modifier = Modifier.fillMaxSize()) {
+                        UserEditTabBar(
+                            selectedTabIndex = pagerState.currentPage,
+                            profileCount = viewModel.profileDirtyCount(),
+                            accessCount = viewModel.accessDirtyCount(),
+                            parentalCount = viewModel.parentalDirtyCount(),
+                            onTabSelected = { index -> scope.launch { pagerState.animateScrollToPage(index) } },
+                            backgroundColor = backgroundColor,
+                        )
+
+                        HorizontalPager(state = pagerState, modifier = Modifier.fillMaxSize()) { page ->
+                            // Lazy-load whatever aux data this tab needs, once.
+                            LaunchedEffect(tabs[page]) { viewModel.loadAuxFor(tabs[page]) }
+                            // Staggered fade-and-rise reveal so the active tab's
+                            // content animates in (matches other admin detail screens).
+                            StaggeredSection(delayIndex = page) {
+                                when (tabs[page]) {
+                                    UserEditTab.PROFILE -> ProfileTab(
+                                        name = effectiveName,
+                                        policy = effectivePolicy,
+                                        isSelf = state.isSelf,
+                                        isLastAdmin = state.isLastAdmin,
+                                        onNameChange = viewModel::editName,
+                                        onPolicyChange = viewModel::onPolicyChange,
+                                    )
+                                    UserEditTab.ACCESS -> AccessTab(
+                                        policy = effectivePolicy,
+                                        libraries = state.libraries,
+                                        devices = state.devices,
+                                        channels = state.channels,
+                                        onPolicyChange = viewModel::onPolicyChange,
+                                    )
+                                    UserEditTab.PARENTAL -> ParentalControlTab(
+                                        policy = effectivePolicy,
+                                        parentalRatings = state.parentalRatings,
+                                        tags = state.tags,
+                                        onPolicyChange = viewModel::onPolicyChange,
+                                    )
+                                    UserEditTab.ACCOUNT -> AccountTab(
+                                        isSelf = state.isSelf,
+                                        onChangePassword = viewModel::showPasswordDialog,
+                                        onDelete = viewModel::showDeleteDialog,
+                                    )
+                                }
+                            }
                         }
                     }
+
+                    // Sticky Save/Discard bar (unchanged logic).
                     AnimatedVisibility(
                         visible = state.isDirty && !state.isSaving,
                         modifier = Modifier.align(Alignment.BottomCenter),
@@ -192,6 +210,57 @@ fun UserDetailScreen(
                     }
                 }
             }
+        }
+    }
+}
+
+@OptIn(ExperimentalMaterial3ExpressiveApi::class)
+@Composable
+private fun UserEditTabBar(
+    selectedTabIndex: Int,
+    profileCount: Int,
+    accessCount: Int,
+    parentalCount: Int,
+    onTabSelected: (Int) -> Unit,
+    backgroundColor: androidx.compose.ui.graphics.Color,
+) {
+    val labels = listOf("Profile", "Access", "Parental", "Account")
+    val counts = listOf(profileCount, accessCount, parentalCount, 0)
+
+    PrimaryScrollableTabRow(
+        selectedTabIndex = selectedTabIndex,
+        containerColor = backgroundColor,
+        contentColor = MaterialTheme.colorScheme.onSurface,
+        edgePadding = 12.dp,
+        indicator = {
+            TabRowDefaults.PrimaryIndicator(
+                modifier = Modifier.tabIndicatorOffset(
+                    selectedTabIndex = selectedTabIndex,
+                    matchContentSize = true,
+                ),
+                width = androidx.compose.ui.unit.Dp.Unspecified,
+                height = 6.dp,
+                color = MaterialTheme.colorScheme.primary,
+                shape = RoundedCornerShape(50),
+            )
+        },
+        divider = {},
+    ) {
+        labels.forEachIndexed { index, label ->
+            val count = counts[index]
+            Tab(
+                selected = selectedTabIndex == index,
+                onClick = { onTabSelected(index) },
+                selectedContentColor = MaterialTheme.colorScheme.primary,
+                unselectedContentColor = MaterialTheme.colorScheme.onSurfaceVariant,
+                text = {
+                    BadgedBox(
+                        badge = { if (count > 0) Badge { Text("$count") } },
+                    ) {
+                        Text(label, style = MaterialTheme.typography.labelLarge, maxLines = 1)
+                    }
+                },
+            )
         }
     }
 }

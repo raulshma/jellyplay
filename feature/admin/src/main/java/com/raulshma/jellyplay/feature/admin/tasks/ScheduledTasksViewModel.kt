@@ -4,17 +4,11 @@ import android.util.Log
 import com.raulshma.jellyplay.core.model.ScheduledTaskInfo
 import com.raulshma.jellyplay.core.model.TaskState
 import com.raulshma.jellyplay.core.network.JellyfinApiClient
+import com.raulshma.jellyplay.core.network.realtime.ScheduledTasksRealtimeChannel
 import com.raulshma.jellyplay.core.ui.viewmodel.JellyPlayViewModel
 import dagger.hilt.android.lifecycle.HiltViewModel
-import kotlinx.coroutines.currentCoroutineContext
-import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.flow.combine
-import kotlinx.coroutines.isActive
 import javax.inject.Inject
-
-/** Poll interval while at least one task is RUNNING — short enough for live progress. */
-private const val POLL_INTERVAL_MS = 2_000L
 
 data class ScheduledTasksState(
     val isLoading: Boolean = true,
@@ -26,6 +20,7 @@ data class ScheduledTasksState(
 @HiltViewModel
 class ScheduledTasksViewModel @Inject constructor(
     private val apiClient: JellyfinApiClient,
+    private val realtimeTasks: ScheduledTasksRealtimeChannel,
 ) : JellyPlayViewModel() {
 
     private val _state = composeState(ScheduledTasksState())
@@ -35,7 +30,7 @@ class ScheduledTasksViewModel @Inject constructor(
 
     init {
         loadTasks()
-        startAutoRefresh()
+        observeRealtimeTasks()
     }
 
     fun loadTasks() {
@@ -67,26 +62,58 @@ class ScheduledTasksViewModel @Inject constructor(
         }
     }
 
-    private fun startAutoRefresh() {
+    /**
+     * Live task updates over WebSocket (`ScheduledTasksInfo` push). Replaces the
+     * prior REST polling loop, which could not deliver progress faster than its
+     * 2s interval.
+     *
+     * Rather than wholesale-replacing the task list (which would discard fields
+     * a given server build may omit from the WS payload, causing the "last run"
+     * row and trigger chips to flicker off), each WS push is merged onto the
+     * REST-loaded snapshot by [ScheduledTaskInfo.key]: WS values win for the
+     * live fields (state, progress), and REST values are retained for any field
+     * the WS push leaves blank. This mirrors how jellyfin-web's cache behaves
+     * in practice — the server's WS TaskInfo is normally complete, but merging
+     * is robust against partial pushes across server versions.
+     *
+     * Hidden tasks are filtered out to match the REST `isHidden = false` fetch.
+     */
+    private fun observeRealtimeTasks() {
         launch {
-            // Re-check the current value on each iteration instead of capturing the
-            // emitted `running` param: that snapshot would never change within a single
-            // emission, so the loop would either never engage (if the task was still
-            // IDLE at subscribe time) or run forever.
-            while (currentCoroutineContext().isActive) {
-                delay(POLL_INTERVAL_MS)
-                if (hasRunningTasks.value) fetchTasks()
+            realtimeTasks.tasks.collect { wsTasks ->
+                val existingByKey = _state.value.tasks.associateBy { it.key }
+                val merged = wsTasks
+                    .filter { !it.isHidden }
+                    .map { ws ->
+                        val rest = existingByKey[ws.key]
+                        if (rest == null) {
+                            ws
+                        } else {
+                            rest.copy(
+                                state = ws.state,
+                                currentProgressPercentage = ws.currentProgressPercentage,
+                                // Refresh last-run + name/description/category only when
+                                // the WS push actually carries a value; otherwise keep
+                                // the REST snapshot's richer data.
+                                lastExecutionResult = ws.lastExecutionResult ?: rest.lastExecutionResult,
+                                name = ws.name.ifBlank { rest.name },
+                                description = ws.description ?: rest.description,
+                                category = ws.category ?: rest.category,
+                                triggers = ws.triggers.ifEmpty { rest.triggers },
+                            )
+                        }
+                    }
+                _state.value = _state.value.copy(tasks = merged)
+                hasRunningTasks.value = merged.any { it.state == TaskState.RUNNING }
             }
         }
     }
 
     fun startTask(taskId: String) {
         launch {
-            // Optimistically engage the auto-refresh loop — the server may take longer
-            // than one fetch to flip the task to RUNNING, and a single fetch landing on
-            // IDLE would otherwise leave hasRunningTasks false and polling off.
-            hasRunningTasks.value = true
             apiClient.startTask(taskId)
+            // The WS push overlays the new state within ~1s; refresh once to
+            // populate immediately rather than waiting for the next push.
             fetchTasks()
         }
     }
@@ -98,3 +125,4 @@ class ScheduledTasksViewModel @Inject constructor(
         }
     }
 }
+

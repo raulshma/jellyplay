@@ -66,7 +66,7 @@ class LinearDpadSeekAcceleration(
 }
 
 /**
- * Duration-aware ramp (Wholphin-style tiered curve).
+ * Duration-aware ramp.
  *
  * The raw Android key-repeat count is divided by [repeatCountScale] because repeat cadence
  * varies by device; this stretches ramp-up to engage over multi-second holds rather than

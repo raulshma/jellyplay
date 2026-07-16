@@ -76,8 +76,7 @@ class DeviceProfileProvider @Inject constructor(
      *
      * Consequence: the server hands back a static URL even for codecs the
      * player may not actually decode; the player surfaces a runtime error and
-     * the UI offers a transcode fallback (mirrors Wholphin's `onPlayerError`
-     * retry pattern). This is the explicit trade-off of "force direct play" —
+     * the UI offers a transcode fallback. This is the explicit trade-off of "force direct play" —
      * the user has asked the server not to transcode, so we trust the static
      * URL and let the player be the arbiter.
      */

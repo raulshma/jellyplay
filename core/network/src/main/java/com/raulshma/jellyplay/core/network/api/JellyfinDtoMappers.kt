@@ -92,8 +92,8 @@ internal fun BaseItemKind.toMediaType(): MediaType = when (this) {
     BaseItemKind.BOX_SET -> MediaType.COLLECTION
     BaseItemKind.PHOTO -> MediaType.PHOTO
     BaseItemKind.PHOTO_ALBUM -> MediaType.PHOTO_FOLDER
-    BaseItemKind.LIVE_TV_CHANNEL -> MediaType.CHANNEL
-    BaseItemKind.LIVE_TV_PROGRAM -> MediaType.LIVE_TV
+    BaseItemKind.LIVE_TV_CHANNEL, BaseItemKind.TV_CHANNEL -> MediaType.CHANNEL
+    BaseItemKind.LIVE_TV_PROGRAM, BaseItemKind.TV_PROGRAM -> MediaType.LIVE_TV
     else -> MediaType.UNKNOWN
 }
 
@@ -299,6 +299,7 @@ internal fun org.jellyfin.sdk.model.api.SeriesTimerInfoDto.toDvrSeriesTimer() = 
 
 internal fun org.jellyfin.sdk.model.api.TaskInfo.toTaskModel() = ScheduledTaskInfo(
     id = id?.toString() ?: "",
+    key = key ?: "",
     name = name ?: "",
     state = when (state) {
         org.jellyfin.sdk.model.api.TaskState.RUNNING -> TaskState.RUNNING
@@ -312,6 +313,98 @@ internal fun org.jellyfin.sdk.model.api.TaskInfo.toTaskModel() = ScheduledTaskIn
     currentProgressPercentage = currentProgressPercentage,
     description = description,
     category = category,
+)
+
+/**
+ * Parses a PascalCase [org.json.JSONObject] `TaskInfo` from the Jellyfin
+ * WebSocket `ScheduledTasksInfo` push payload into the app's
+ * [ScheduledTaskInfo] model. The server emits the full task list every push
+ * (see ScheduledTasksRealtimeChannel), and the JSON casing differs from the
+ * SDK's camelCase DTOs, so a dedicated parser is simpler than coercing the SDK
+ * deserializer onto a raw WS string.
+ *
+ * Reads every field the admin UI displays: identity (Id/Key/Name), runtime
+ * state (State/CurrentProgressPercentage), metadata for grouping/display
+ * (Category/Description), schedule triggers, and last-execution history.
+ * PascalCase field names match the Jellyfin server's `TaskInfo` JSON contract.
+ */
+internal fun org.json.JSONObject.toScheduledTaskInfo(): ScheduledTaskInfo {
+    val stateStr = optString("State")
+    val state = when (stateStr) {
+        "Running" -> TaskState.RUNNING
+        "Cancelling" -> TaskState.CANCELLING
+        else -> TaskState.IDLE
+    }
+    // currentProgressPercentage may be absent or null when the server cannot
+    // report a concrete value (most of a library scan).
+    val progress = if (has("CurrentProgressPercentage") && !isNull("CurrentProgressPercentage")) {
+        optDouble("CurrentProgressPercentage", Double.NaN).takeIf { it.isFinite() }
+    } else {
+        null
+    }
+    // Category drives the section grouping on the Scheduled Tasks screen —
+    // match jellyfin-web's getCategories(): empty/blank is treated as absent.
+    val category = optString("Category").takeIf { it.isNotBlank() }
+    val description = optString("Description").takeIf { it.isNotBlank() }
+    val triggers = optTriggers()
+    val lastExecutionResult = optJSONObject("LastExecutionResult")?.toExecutionModel()
+    return ScheduledTaskInfo(
+        id = optString("Id"),
+        key = optString("Key"),
+        name = optString("Name"),
+        state = state,
+        isHidden = optBoolean("Hidden", false),
+        isEnabled = true,
+        currentProgressPercentage = progress,
+        category = category,
+        description = description,
+        triggers = triggers,
+        lastExecutionResult = lastExecutionResult,
+    )
+}
+
+private fun org.json.JSONObject.optTriggers(): List<TaskTriggerInfo> {
+    val arr = optJSONArray("Triggers") ?: return emptyList()
+    return buildList {
+        for (i in 0 until arr.length()) {
+            val obj = arr.optJSONObject(i) ?: continue
+            add(
+                TaskTriggerInfo(
+                    type = obj.optString("Type"),
+                    timeOfDayTicks = obj.optLongOrNull("TimeOfDayTicks"),
+                    intervalTicks = obj.optLongOrNull("IntervalTicks"),
+                    dayOfWeek = obj.optString("DayOfWeek").takeIf { it.isNotBlank() },
+                    maxRuntimeTicks = obj.optLongOrNull("MaxRuntimeMs"),
+                ),
+            )
+        }
+    }
+}
+
+private fun org.json.JSONObject.optLongOrNull(key: String): Long? {
+    if (!has(key) || isNull(key)) return null
+    // optLong returns 0 on parse failure; use the Number coercion path so we
+    // can distinguish a genuine 0 from a missing/garbage value.
+    return when (val num = opt(key)) {
+        is Number -> num.toLong()
+        is String -> num.toLongOrNull()
+        else -> null
+    }
+}
+
+/**
+ * Parses a PascalCase `TaskResult` (the `LastExecutionResult` field of a WS
+ * TaskInfo) into [TaskExecutionInfo]. The server sends ISO-8601 timestamps
+ * directly as strings (unlike the SDK, which strips the offset), so they are
+ * passed through verbatim.
+ */
+private fun org.json.JSONObject.toExecutionModel(): TaskExecutionInfo = TaskExecutionInfo(
+    name = optString("Name"),
+    key = optString("Key"),
+    startTimeUtc = optString("StartTimeUtc").takeIf { it.isNotBlank() },
+    endTimeUtc = optString("EndTimeUtc").takeIf { it.isNotBlank() },
+    status = optString("Status").ifBlank { "Success" },
+    errorMessage = optString("ErrorMessage").takeIf { it.isNotBlank() },
 )
 
 internal fun org.jellyfin.sdk.model.api.TaskTriggerInfo.toTriggerModel() = TaskTriggerInfo(
@@ -467,18 +560,36 @@ internal fun org.jellyfin.sdk.model.api.UserPolicy.toManagedPolicy() = ManagedUs
     enableRemoteControlOfOtherUsers = enableRemoteControlOfOtherUsers,
     enableRemoteAccess = enableRemoteAccess,
     maxParentalRating = maxParentalRating,
+    maxParentalSubRating = maxParentalSubRating,
     maxActiveSessions = maxActiveSessions,
     loginAttemptsBeforeLockout = loginAttemptsBeforeLockout,
+    enableCollectionManagement = enableCollectionManagement,
+    enableSubtitleManagement = enableSubtitleManagement,
+    forceRemoteSourceTranscoding = forceRemoteSourceTranscoding,
+    enableSharedDeviceControl = enableSharedDeviceControl,
+    remoteClientBitrateLimit = remoteClientBitrateLimit,
+    syncPlayAccess = syncPlayAccess.toAppOption(),
+    enableAllChannels = enableAllChannels,
+    enabledChannels = (enabledChannels ?: emptyList()).map { it.toString() },
+    enableAllDevices = enableAllDevices,
+    enabledDevices = enabledDevices ?: emptyList(),
+    enableContentDeletionFromFolders = enableContentDeletionFromFolders ?: emptyList(),
+    blockUnratedItems = (blockUnratedItems ?: emptyList()).map { it.toAppOption() },
+    allowedTags = allowedTags ?: emptyList(),
+    blockedTags = blockedTags ?: emptyList(),
+    accessSchedules = (accessSchedules ?: emptyList()).map { it.toAppSchedule() },
 )
 
 /**
- * Copies the 19 editable [ManagedUserPolicy] fields onto a full SDK
- * [UserPolicy], preserving every bookkeeping field (auth provider ids,
- * syncPlayAccess, accessSchedules, blocked/allowed tags, etc.). Used by
+ * Copies every editable [ManagedUserPolicy] field onto a full SDK
+ * [UserPolicy], preserving bookkeeping fields (auth provider ids,
+ * invalid-login count, etc.). [userId] is the target user's UUID,
+ * required to reconstruct [AccessSchedule]s. Used by
  * [UserApiClientImpl.updateUserPolicy] so non-edited server state is never reset.
  */
 internal fun org.jellyfin.sdk.model.api.UserPolicy.overlayWith(
     edited: ManagedUserPolicy,
+    userId: String,
 ): org.jellyfin.sdk.model.api.UserPolicy = copy(
     isAdministrator = edited.isAdministrator,
     isHidden = edited.isHidden,
@@ -497,6 +608,85 @@ internal fun org.jellyfin.sdk.model.api.UserPolicy.overlayWith(
     enableRemoteControlOfOtherUsers = edited.enableRemoteControlOfOtherUsers,
     enableRemoteAccess = edited.enableRemoteAccess,
     maxParentalRating = edited.maxParentalRating,
+    maxParentalSubRating = edited.maxParentalSubRating,
     maxActiveSessions = edited.maxActiveSessions,
     loginAttemptsBeforeLockout = edited.loginAttemptsBeforeLockout,
+    enableCollectionManagement = edited.enableCollectionManagement,
+    enableSubtitleManagement = edited.enableSubtitleManagement,
+    forceRemoteSourceTranscoding = edited.forceRemoteSourceTranscoding,
+    enableSharedDeviceControl = edited.enableSharedDeviceControl,
+    remoteClientBitrateLimit = edited.remoteClientBitrateLimit,
+    syncPlayAccess = edited.syncPlayAccess.toSdk(),
+    enableAllChannels = edited.enableAllChannels,
+    enabledChannels = edited.enabledChannels.map { it.toUUID() },
+    enableAllDevices = edited.enableAllDevices,
+    enabledDevices = edited.enabledDevices,
+    enableContentDeletionFromFolders = edited.enableContentDeletionFromFolders,
+    blockUnratedItems = edited.blockUnratedItems.map { it.toSdk() },
+    allowedTags = edited.allowedTags,
+    blockedTags = edited.blockedTags,
+    accessSchedules = edited.accessSchedules.map { it.toSdk(userId.toUUID()) },
+)
+
+// --- SDK ↔ app enum/model mappers for the extended policy fields ---
+
+private fun org.jellyfin.sdk.model.api.SyncPlayUserAccessType.toAppOption() = when (this) {
+    org.jellyfin.sdk.model.api.SyncPlayUserAccessType.CREATE_AND_JOIN_GROUPS ->
+        com.raulshma.jellyplay.core.model.SyncPlayAccessOption.CREATE_AND_JOIN
+    org.jellyfin.sdk.model.api.SyncPlayUserAccessType.JOIN_GROUPS ->
+        com.raulshma.jellyplay.core.model.SyncPlayAccessOption.JOIN_ONLY
+    org.jellyfin.sdk.model.api.SyncPlayUserAccessType.NONE ->
+        com.raulshma.jellyplay.core.model.SyncPlayAccessOption.NONE
+}
+
+private fun com.raulshma.jellyplay.core.model.SyncPlayAccessOption.toSdk() =
+    when (this) {
+        com.raulshma.jellyplay.core.model.SyncPlayAccessOption.CREATE_AND_JOIN ->
+            org.jellyfin.sdk.model.api.SyncPlayUserAccessType.CREATE_AND_JOIN_GROUPS
+        com.raulshma.jellyplay.core.model.SyncPlayAccessOption.JOIN_ONLY ->
+            org.jellyfin.sdk.model.api.SyncPlayUserAccessType.JOIN_GROUPS
+        com.raulshma.jellyplay.core.model.SyncPlayAccessOption.NONE ->
+            org.jellyfin.sdk.model.api.SyncPlayUserAccessType.NONE
+    }
+
+private fun org.jellyfin.sdk.model.api.UnratedItem.toAppOption():
+    com.raulshma.jellyplay.core.model.UnratedItemOption = when (this) {
+    org.jellyfin.sdk.model.api.UnratedItem.BOOK -> com.raulshma.jellyplay.core.model.UnratedItemOption.BOOK
+    org.jellyfin.sdk.model.api.UnratedItem.CHANNEL_CONTENT -> com.raulshma.jellyplay.core.model.UnratedItemOption.CHANNEL_CONTENT
+    org.jellyfin.sdk.model.api.UnratedItem.LIVE_TV_CHANNEL -> com.raulshma.jellyplay.core.model.UnratedItemOption.LIVE_TV_CHANNEL
+    org.jellyfin.sdk.model.api.UnratedItem.MOVIE -> com.raulshma.jellyplay.core.model.UnratedItemOption.MOVIE
+    org.jellyfin.sdk.model.api.UnratedItem.MUSIC -> com.raulshma.jellyplay.core.model.UnratedItemOption.MUSIC
+    org.jellyfin.sdk.model.api.UnratedItem.TRAILER -> com.raulshma.jellyplay.core.model.UnratedItemOption.TRAILER
+    org.jellyfin.sdk.model.api.UnratedItem.SERIES -> com.raulshma.jellyplay.core.model.UnratedItemOption.SERIES
+    // LIVE_TV_PROGRAM / OTHER are not exposed in the app UI; map to a safe default.
+    else -> com.raulshma.jellyplay.core.model.UnratedItemOption.MOVIE
+}
+
+private fun com.raulshma.jellyplay.core.model.UnratedItemOption.toSdk(): org.jellyfin.sdk.model.api.UnratedItem =
+    when (this) {
+        com.raulshma.jellyplay.core.model.UnratedItemOption.BOOK -> org.jellyfin.sdk.model.api.UnratedItem.BOOK
+        com.raulshma.jellyplay.core.model.UnratedItemOption.CHANNEL_CONTENT -> org.jellyfin.sdk.model.api.UnratedItem.CHANNEL_CONTENT
+        com.raulshma.jellyplay.core.model.UnratedItemOption.LIVE_TV_CHANNEL -> org.jellyfin.sdk.model.api.UnratedItem.LIVE_TV_CHANNEL
+        com.raulshma.jellyplay.core.model.UnratedItemOption.MOVIE -> org.jellyfin.sdk.model.api.UnratedItem.MOVIE
+        com.raulshma.jellyplay.core.model.UnratedItemOption.MUSIC -> org.jellyfin.sdk.model.api.UnratedItem.MUSIC
+        com.raulshma.jellyplay.core.model.UnratedItemOption.TRAILER -> org.jellyfin.sdk.model.api.UnratedItem.TRAILER
+        com.raulshma.jellyplay.core.model.UnratedItemOption.SERIES -> org.jellyfin.sdk.model.api.UnratedItem.SERIES
+    }
+
+private fun org.jellyfin.sdk.model.api.AccessSchedule.toAppSchedule() =
+    com.raulshma.jellyplay.core.model.UserAccessSchedule(
+        id = id,
+        dayOfWeek = dayOfWeek.serialName,
+        startHour = startHour,
+        endHour = endHour,
+    )
+
+private fun com.raulshma.jellyplay.core.model.UserAccessSchedule.toSdk(
+    userId: org.jellyfin.sdk.model.UUID,
+) = org.jellyfin.sdk.model.api.AccessSchedule(
+    id = id,
+    userId = userId,
+    dayOfWeek = org.jellyfin.sdk.model.api.DynamicDayOfWeek.fromName(dayOfWeek),
+    startHour = startHour,
+    endHour = endHour,
 )

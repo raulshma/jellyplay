@@ -95,7 +95,7 @@ class LibraryRecommendationsWidgetWorker @AssistedInject constructor(
                 com.raulshma.jellyplay.core.model.HomeSectionType.RECENTLY_ADDED,
             ),
         )
-        val items = sectionsResult.getOrNull().orEmpty()
+        val items = sectionsResult.getOrNull()?.sections.orEmpty()
             .flatMap { it.items }
             .distinctBy { it.id }
             .take(MAX_ITEMS)

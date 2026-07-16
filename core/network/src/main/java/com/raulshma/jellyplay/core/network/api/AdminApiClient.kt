@@ -14,6 +14,7 @@ interface AdminApiClient {
     suspend fun getItemCounts(): Result<ItemCounts>
     suspend fun restartServer(): Result<Unit>
     suspend fun shutdownServer(): Result<Unit>
+    suspend fun scanLibrary(): Result<Unit>
     suspend fun getScheduledTasks(isHidden: Boolean? = null, isEnabled: Boolean? = null): Result<List<ScheduledTaskInfo>>
     suspend fun getScheduledTask(taskId: String): Result<ScheduledTaskInfo>
     suspend fun startTask(taskId: String): Result<Unit>

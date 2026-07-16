@@ -1,8 +1,8 @@
 package com.raulshma.jellyplay.core.data.usecase
 
 import com.raulshma.jellyplay.core.data.repository.MediaRepository
-import com.raulshma.jellyplay.core.model.HomeSection
 import com.raulshma.jellyplay.core.model.HomeSectionType
+import com.raulshma.jellyplay.core.model.HomeSectionsResult
 import javax.inject.Inject
 
 class GetHomeSectionsUseCase @Inject constructor(
@@ -10,7 +10,7 @@ class GetHomeSectionsUseCase @Inject constructor(
 ) {
     suspend operator fun invoke(
         enabledSections: Set<HomeSectionType>,
-        hiddenLibraryIds: Set<String>,
-    ): Result<List<HomeSection>> =
-        mediaRepository.getHomeSections(enabledSections, hiddenLibraryIds)
+        libraryHomeSectionOverrides: Map<String, Set<HomeSectionType>>,
+    ): Result<HomeSectionsResult> =
+        mediaRepository.getHomeSections(enabledSections, libraryHomeSectionOverrides)
 }

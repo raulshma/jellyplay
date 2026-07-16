@@ -73,6 +73,7 @@ sealed class Route : NavKey {
     @Serializable data class AppearanceSettings(val highlightSettingId: String? = null) : Route()
     @Serializable data class PinnedHomeSections(val highlightSettingId: String? = null) : Route()
     @Serializable data class HomeLayoutPresets(val highlightSettingId: String? = null) : Route()
+    @Serializable data class LibraryHomeSections(val highlightSettingId: String? = null) : Route()
     @Serializable data class PlaybackSettings(val highlightSettingId: String? = null) : Route()
     @Serializable data class AudioSettings(val highlightSettingId: String? = null) : Route()
     @Serializable data class LanguageSettings(val highlightSettingId: String? = null) : Route()
@@ -124,6 +125,17 @@ sealed class Route : NavKey {
         // closing the previous inconsistency between the two entry points.
         val subtitleStreamIndex: Int? = null,
         val audioStreamIndex: Int? = null,
+    ) : Route()
+
+    /**
+     * Drill-in detail screen for a Live TV channel, reached from the home /
+     * search / related-items item-routing surfaces. Shows a today program
+     * timeline with a live progress bar and a current-program backdrop, and
+     * tunes the live channel via [LiveTvChannelPlayer] on play.
+     */
+    @Serializable data class ChannelDetail(
+        val channelId: String,
+        val channelName: String = "",
     ) : Route()
 
     @Serializable data object SyncPlay : Route()
@@ -268,6 +280,7 @@ val Route.isDetail: Boolean
         is Route.StudioDetail,
         is Route.NewsletterSectionList,
         is Route.UserStatisticsDetail,
+        is Route.ChannelDetail,
         is Route.UserDetail -> true
         else -> false
     }
@@ -293,6 +306,7 @@ val DETAIL_ROUTE_CLASS_NAMES: Set<String> = setOf(
     "StudioDetail",
     "NewsletterSectionList",
     "UserStatisticsDetail",
+    "ChannelDetail",
     "UserDetail",
 )
 

@@ -44,6 +44,20 @@ interface AuthRepository {
 
     suspend fun restoreSession(): Result<Unit>
 
+    /**
+     * Re-fetches the current user's policy from the server and updates the
+     * cached [UserInfo] (and its encrypted persistence). Used to catch a
+     * server-side admin demotion without forcing re-login.
+     *
+     * Failure handling:
+     *  - HTTP 401/403 → the cached user is treated as no longer authorized
+     *    (admin status cleared); the server is the ultimate authority.
+     *  - Any other failure (network, 5xx) → the cached value is preserved so
+     *    a flaky connection can't lock an admin out; the server still 403s
+     *    on the actual privileged call as a backstop.
+     */
+    suspend fun refreshCurrentUser(): Result<UserInfo>
+
     suspend fun logout()
 
     /**

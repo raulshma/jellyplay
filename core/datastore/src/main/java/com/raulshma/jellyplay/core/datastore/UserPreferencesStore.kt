@@ -150,6 +150,8 @@ class UserPreferencesStore @Inject constructor(
         val REVERB_PRESET = stringPreferencesKey("reverb_preset")
         val HOME_ENABLED_SECTION_TYPES = stringPreferencesKey("home_enabled_section_types")
         val HOME_SECTION_ORDER = stringPreferencesKey("home_section_order")
+        val HOME_LIBRARY_SECTION_OVERRIDES = stringPreferencesKey("home_library_section_overrides")
+        /** Legacy all-or-nothing "hide library from home" key — kept only to migrate. */
         val HOME_HIDDEN_LIBRARY_SECTION_IDS = stringPreferencesKey("home_hidden_library_section_ids")
         val MPV_CONFIG = stringPreferencesKey("mpv_config")
         val LIBVLC_CONFIG = stringPreferencesKey("libvlc_config")
@@ -618,7 +620,7 @@ class UserPreferencesStore @Inject constructor(
     private var cachedDreamImageCategories: ParsedCache<Set<DreamImageCategory>> = ParsedCache(null, setOf(DreamImageCategory.MOVIES, DreamImageCategory.SERIES))
     private var cachedEnabledHomeSectionTypes: ParsedCache<Set<HomeSectionType>> = ParsedCache(null, HomeSectionType.CONFIGURABLE.toSet())
     private var cachedHomeSectionOrder: ParsedCache<List<HomeSectionType>> = ParsedCache(null, HomeSectionType.CONFIGURABLE)
-    private var cachedHiddenLibrarySectionIds: ParsedCache<Set<String>> = ParsedCache(null, emptySet())
+    private var cachedLibraryHomeSectionOverrides: ParsedCache<Map<String, Set<HomeSectionType>>> = ParsedCache(null, emptyMap())
     private var cachedMediaStreamSelections: ParsedCache<Map<String, MediaStreamSelection>> = ParsedCache(null, emptyMap())
     private var cachedVideoEffectsByItem: ParsedCache<Map<String, VideoEffectsConfig>> = ParsedCache(null, emptyMap())
     private var cachedSegmentBehaviors: ParsedCache<Map<MediaSegmentType, SegmentBehavior>> = ParsedCache(null, SegmentBehavior.DEFAULT_BEHAVIORS)
@@ -720,13 +722,37 @@ class UserPreferencesStore @Inject constructor(
                 .also { cachedHomeSectionOrder = ParsedCache(homeSectionOrderRaw, it) }
         } else cachedHomeSectionOrder.value
 
-        val hiddenLibrarySectionIdsRaw = prefs[Keys.HOME_HIDDEN_LIBRARY_SECTION_IDS]
-        val hiddenLibrarySectionIds = if (hiddenLibrarySectionIdsRaw != cachedHiddenLibrarySectionIds.raw) {
+        val libraryHomeSectionOverridesRaw = prefs[Keys.HOME_LIBRARY_SECTION_OVERRIDES]
+        val libraryHomeSectionOverrides = if (libraryHomeSectionOverridesRaw != cachedLibraryHomeSectionOverrides.raw) {
             try {
-                hiddenLibrarySectionIdsRaw?.let { json.decodeFromString<Set<String>>(it) } ?: emptySet()
-            } catch (_: Exception) { emptySet() }
-                .also { cachedHiddenLibrarySectionIds = ParsedCache(hiddenLibrarySectionIdsRaw, it) }
-        } else cachedHiddenLibrarySectionIds.value
+                libraryHomeSectionOverridesRaw?.let {
+                    json.decodeFromString<Map<String, Set<HomeSectionType>>>(it)
+                } ?: emptyMap()
+            } catch (_: Exception) { emptyMap() }
+                .also { cachedLibraryHomeSectionOverrides = ParsedCache(libraryHomeSectionOverridesRaw, it) }
+        } else cachedLibraryHomeSectionOverrides.value
+
+        // One-shot migration: a prior version stored an all-or-nothing
+        // "hide library from home" Set<String>. Migrate each id to
+        // {LATEST_MEDIA, RECENTLY_ADDED} disabled, then drop the legacy key.
+        val legacyHiddenLibraryIdsRaw = prefs[Keys.HOME_HIDDEN_LIBRARY_SECTION_IDS]
+        val libraryHomeSectionOverridesMigrated = if (
+            legacyHiddenLibraryIdsRaw != null && libraryHomeSectionOverrides.isEmpty()
+        ) {
+            try {
+                val legacyIds = json.decodeFromString<Set<String>>(legacyHiddenLibraryIdsRaw)
+                if (legacyIds.isNotEmpty()) {
+                    val migrated = legacyIds.associateWith {
+                        setOf(HomeSectionType.LATEST_MEDIA, HomeSectionType.RECENTLY_ADDED)
+                    }
+                    context.dataStore.edit {
+                        it.remove(Keys.HOME_HIDDEN_LIBRARY_SECTION_IDS)
+                        it[Keys.HOME_LIBRARY_SECTION_OVERRIDES] = json.encodeToString(migrated)
+                    }
+                    migrated
+                } else libraryHomeSectionOverrides
+            } catch (_: Exception) { libraryHomeSectionOverrides }
+        } else libraryHomeSectionOverrides
 
         val mediaStreamSelectionsRaw = prefs[Keys.MEDIA_STREAM_SELECTIONS]
         val mediaStreamSelections = if (mediaStreamSelectionsRaw != cachedMediaStreamSelections.raw) {
@@ -1015,7 +1041,7 @@ class UserPreferencesStore @Inject constructor(
                 .coerceIn(1, 6),
             enabledHomeSectionTypes = enabledHomeSectionTypes,
             homeSectionOrder = homeSectionOrder,
-            hiddenLibrarySectionIds = hiddenLibrarySectionIds,
+            libraryHomeSectionOverrides = libraryHomeSectionOverridesMigrated,
             navBarShowLabels = readBool(prefs, Keys.NAV_BAR_SHOW_LABELS, "nav_bar_show_labels", true),
             hideBottomNavOnScroll = readBool(prefs, Keys.HIDE_BOTTOM_NAV_ON_SCROLL, "hide_bottom_nav_on_scroll", true),
             homeHeroEnabled = readBool(prefs, Keys.HOME_HERO_ENABLED, "home_hero_enabled", true),
@@ -1255,6 +1281,15 @@ class UserPreferencesStore @Inject constructor(
         preferences.map { it.pinnedHomeSections }
             .distinctUntilChanged()
             .stateIn(scope, SharingStarted.WhileSubscribed(5_000), emptyList())
+
+    /**
+     * Per-library disabled home sub-sections slice. The configure-libraries
+     * screen collects this so it recomposes only when the override map changes.
+     */
+    val libraryHomeSectionOverridesFlow: StateFlow<Map<String, Set<HomeSectionType>>> =
+        preferences.map { it.libraryHomeSectionOverrides }
+            .distinctUntilChanged()
+            .stateIn(scope, SharingStarted.WhileSubscribed(5_000), emptyMap())
 
     suspend fun ensureDeviceId(): String {
         var id: String? = null
@@ -2269,9 +2304,12 @@ class UserPreferencesStore @Inject constructor(
         }
     }
 
-    suspend fun setHiddenLibrarySectionIds(ids: Set<String>) {
+    suspend fun setLibraryHomeSectionOverrides(overrides: Map<String, Set<HomeSectionType>>) {
+        // Drop entries with empty disabled-sets so the map stays clean and
+        // "fully enabled" libraries simply have no key.
+        val cleaned = overrides.filterValues { it.isNotEmpty() }
         context.dataStore.edit {
-            it[Keys.HOME_HIDDEN_LIBRARY_SECTION_IDS] = json.encodeToString(ids)
+            it[Keys.HOME_LIBRARY_SECTION_OVERRIDES] = json.encodeToString(cleaned)
         }
     }
 
@@ -2589,9 +2627,9 @@ class UserPreferencesStore @Inject constructor(
                 kotlinx.serialization.serializer<List<com.raulshma.jellyplay.core.model.HomeSectionType>>(),
                 prefs.homeSectionOrder,
             )
-            settings[Keys.HOME_HIDDEN_LIBRARY_SECTION_IDS] = json.encodeToString(
-                kotlinx.serialization.serializer<Set<String>>(),
-                prefs.hiddenLibrarySectionIds,
+            settings[Keys.HOME_LIBRARY_SECTION_OVERRIDES] = json.encodeToString(
+                kotlinx.serialization.serializer<Map<String, Set<HomeSectionType>>>(),
+                prefs.libraryHomeSectionOverrides,
             )
             settings[Keys.NAV_BAR_SHOW_LABELS] = prefs.navBarShowLabels
             settings[Keys.HIDE_BOTTOM_NAV_ON_SCROLL] = prefs.hideBottomNavOnScroll

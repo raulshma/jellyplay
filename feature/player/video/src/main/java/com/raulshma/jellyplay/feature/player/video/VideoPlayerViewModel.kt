@@ -898,7 +898,7 @@ class VideoPlayerViewModel @Inject constructor(
                                     // codecs the player can't decode, so a runtime error here
                                     // usually means the direct-played container/codec is
                                     // undecodable. Offer a one-shot automatic transcode
-                                    // fallback (mirrors Wholphin's onPlayerError retry) rather
+                                    // fallback rather
                                     // than surfacing a dead-end error dialog.
                                     if (_uiState.value.playbackMode == PlaybackMode.FORCE_DIRECT_PLAY &&
                                         !directPlayFallbackOffered
@@ -1445,7 +1445,6 @@ class VideoPlayerViewModel @Inject constructor(
      * audio or subtitle track during transcoded playback — mpv cannot switch
      * audio in-place on an HLS manifest, and embedded subs aren't in the
      * transcode, so the server must re-issue the stream with the chosen index.
-     * Mirrors the Wholphin changeStreams / Jellyfin PlaybackInfo re-POST path.
      */
     private fun reloadForStreamChange(audioStreamIndex: Int?, subtitleStreamIndex: Int?) {
         val engine = playerSessionManager.engine ?: return

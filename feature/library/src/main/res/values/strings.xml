@@ -17,6 +17,7 @@
     <string name="library_try_adjusting_filters">Try adjusting your filters</string>
     <string name="library_list_view">List view</string>
     <string name="library_grid_view">Grid view</string>
+    <string name="library_thumb_view">Thumbnail view</string>
     <string name="library_smart_playlists">Smart Playlists</string>
     <string name="library_mood_playlists">Mood Playlists</string>
     <string name="library_playlists">Playlists</string>

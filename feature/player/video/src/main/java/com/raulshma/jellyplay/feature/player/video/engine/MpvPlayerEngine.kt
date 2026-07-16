@@ -144,8 +144,8 @@ class MpvPlayerEngine(
      * from the Compose `onDispose` on the main thread; `BaseMPVView.destroy()`
      * runs `mpv_terminate_destroy()` which synchronously tears down the GPU
      * context, demuxer, network threads, and libass — blocking for hundreds of
-     * ms to seconds. Routing stop+destroy onto this thread (like Wholphin's
-     * "MpvPlayer:Playback" HandlerThread) keeps the main looper responsive on
+     * ms to seconds. Routing stop+destroy onto this thread keeps the main 
+     * looper responsive on
      * player close. Created lazily so non-mpv engines pay nothing.
      */
     private val releaseThread: HandlerThread by lazy {

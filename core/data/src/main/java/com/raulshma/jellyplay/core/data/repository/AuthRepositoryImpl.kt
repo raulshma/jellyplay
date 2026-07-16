@@ -295,6 +295,56 @@ class AuthRepositoryImpl @Inject constructor(
         Log.e("AuthRepository", "restoreSession failed", e)
     }
 
+    override suspend fun refreshCurrentUser(): Result<UserInfo> {
+        val cached = apiClient.currentUser.first()
+            ?: return Result.failure(Exception("No active user to refresh"))
+
+        val result = apiClient.getCurrentUser()
+        return result.fold(
+            onSuccess = { managed ->
+                val refreshed = cached.copy(
+                    isAdmin = managed.policy.isAdministrator,
+                    canDeleteContent = managed.policy.enableContentDeletion,
+                )
+                apiClient.setUser(refreshed)
+                persistRefreshedFlags(refreshed)
+                Result.success(refreshed)
+            },
+            onFailure = { e ->
+                // 401/403 = the server has revoked/demoted this user. Clear
+                // admin status so the admin area is blocked immediately; the
+                // server remains the ultimate authority on the next call.
+                if (e is com.raulshma.jellyplay.core.network.api.ApiException && e.isAccessDenied) {
+                    val demoted = cached.copy(isAdmin = false, canDeleteContent = false)
+                    apiClient.setUser(demoted)
+                    persistRefreshedFlags(demoted)
+                    Result.success(demoted)
+                } else {
+                    // Transient/non-access failure — keep the cached value so a
+                    // flaky network can't lock an admin out. The server still
+                    // 403s on the real privileged call as a backstop.
+                    Result.failure(e)
+                }
+            },
+        )
+    }
+
+    /**
+     * Persists just the refreshed permission flags ([UserEntity.isAdmin] and
+     * [UserEntity.canDeleteContent]) for the active user without rewriting the
+     * whole entity (avoids clobbering the encrypted token, image tag, etc.).
+     */
+    private suspend fun persistRefreshedFlags(user: UserInfo) {
+        val existing = userDao.getUserById(user.id) ?: return
+        if (existing.isAdmin == user.isAdmin && existing.canDeleteContent == user.canDeleteContent) return
+        userDao.updateUser(
+            existing.copy(
+                isAdmin = user.isAdmin,
+                canDeleteContent = user.canDeleteContent,
+            )
+        )
+    }
+
     override suspend fun logout() {
         apiClient.disconnect()
         // Clear only the active session selection — preserve the stable

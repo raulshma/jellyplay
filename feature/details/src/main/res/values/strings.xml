@@ -124,6 +124,7 @@
 
     <!-- ── ViewModel error messages (shown via ErrorScreen / snackbar) ──── -->
     <string name="detail_error_load_failed">Couldn\'t load details</string>
+    <string name="detail_error_access_denied">You don\'t have access to this item.</string>
     <string name="detail_error_details_not_loaded">Media details not loaded</string>
     <string name="detail_error_no_source">No media source available for download</string>
     <string name="detail_error_no_stream_url">Could not get stream URL</string>

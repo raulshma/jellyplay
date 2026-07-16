@@ -152,6 +152,15 @@ object SettingsSearchRegistry {
             icon = Tabler.Outline.Bookmarks
         ),
         SettingsSearchItem(
+            id = "configure_libraries",
+            title = "Configure libraries",
+            subtitle = "Latest Media, Recently Added per library",
+            category = "Appearance",
+            keywords = listOf("library", "libraries", "latest", "recently", "added", "home", "row", "shelf", "hide", "show"),
+            route = Route.LibraryHomeSections(),
+            icon = Tabler.Outline.Folders
+        ),
+        SettingsSearchItem(
             id = "settings_in_home_search",
             title = "Settings in Home Search",
             subtitle = "Show settings results in the home search bar",

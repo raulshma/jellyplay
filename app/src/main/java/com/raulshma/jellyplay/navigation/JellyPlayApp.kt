@@ -1404,6 +1404,15 @@ private fun MainNavDisplay(
         return transition.enter togetherWith transition.exit
     }
 
+    // Admin access-control state, collected once here (a @Composable context)
+    // and threaded into the admin section as read lambdas so the navigation
+    // entries — which are composed lazily — observe the latest value without
+    // re-building the entry graph. MainViewModel is activity-scoped, so this
+    // resolves to the same instance held by JellyPlayApp/MainActivity.
+    val mainViewModel: MainViewModel = androidx.hilt.navigation.compose.hiltViewModel()
+    val isAdminState = mainViewModel.isAdmin.collectAsStateWithLifecycle()
+    val isRefreshingAdminState = mainViewModel.isRefreshingAdmin.collectAsStateWithLifecycle()
+
     // Remember the entry provider graph so the ~25 section builders aren't
     // re-invoked (allocating fresh lambdas + entry objects) on every
     // MainNavDisplay recomposition. Re-key on the values it captures.
@@ -1450,7 +1459,12 @@ private fun MainNavDisplay(
             downloadsSection(navigator)
             authSection(navigator) { navigator.goBack() }
             settingsSection(navigator, onLogout) { navigator.navigate(Route.Onboarding) }
-            adminSection(navigator)
+            adminSection(
+                navigator = navigator,
+                isAdmin = { isAdminState.value },
+                isRefreshingAdmin = { isRefreshingAdminState.value },
+                onRefreshAdmin = { mainViewModel.refreshAdminStatus() },
+            )
             musicSection(navigator)
             syncPlaySection(navigator)
             onboardingSection { navigator.goBack() }
