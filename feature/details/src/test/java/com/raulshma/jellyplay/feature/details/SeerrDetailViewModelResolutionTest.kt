@@ -125,6 +125,38 @@ class SeerrDetailViewModelResolutionTest {
         assertNull(viewModel.uiState.value.jellyfinItemId)
     }
 
+    @Test
+    fun `requestMedia flips status to PENDING when mediaInfo was absent`() = runTest {
+        // Regression: Overseerr omits mediaInfo from /movie/{id} for media that
+        // has never been requested. The optimistic update previously keyed on
+        // mediaInfo.tmdbId, which was null, so neither branch matched and the
+        // action button stayed on "Request" even after a successful request.
+        backgroundScope.launch { viewModel.uiState.collect {} }
+        // Movie with NO mediaInfo — the never-requested case.
+        coEvery { seerrRepository.getMovieDetails(123) } returns Result.success(
+            SeerrMovieDetails(id = 123)
+        )
+        coEvery {
+            seerrRequestDelegate.requestMedia(
+                mediaType = any(), tmdbId = any(), seasons = any(),
+                serverId = any(), profileId = any(), rootFolder = any(), tags = any(),
+            )
+        } returns Result.success(
+            io.mockk.mockk(relaxed = true)
+        )
+
+        viewModel.loadDetails(123, "movie")
+        advanceUntilIdle()
+
+        viewModel.requestMedia(
+            item = com.raulshma.jellyplay.core.model.seerr.SeerrSearchItem(id = 123, mediaType = "movie"),
+        )
+        advanceUntilIdle()
+
+        val status = viewModel.uiState.value.movieDetails?.mediaInfo?.status
+        assertEquals(SeerrMediaStatus.PENDING.value, status)
+    }
+
     private fun availableMovie(
         tmdbId: Int,
         externalIds: SeerrExternalIds? = null,
