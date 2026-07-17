@@ -22,6 +22,7 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import com.raulshma.jellyplay.core.designsystem.theme.ShapeCache
 import androidx.compose.material3.Icon
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
@@ -132,9 +133,9 @@ private fun ChannelHeader(state: ChannelDetailUiState, onWatchLive: () -> Unit) 
         // Watch Live button — styled like a primary play action.
         Row(
             modifier = Modifier
-                .clip(RoundedCornerShape(28.dp))
+                .clip(ShapeCache.smooth28)
                 .background(MaterialTheme.colorScheme.primary)
-                .focusIndicator(RoundedCornerShape(28.dp))
+                .focusIndicator(ShapeCache.smooth28)
                 .clickable(onClick = onWatchLive)
                 .padding(horizontal = 32.dp, vertical = 14.dp),
             verticalAlignment = Alignment.CenterVertically,
@@ -169,7 +170,7 @@ private fun NowPlayingHero(program: LiveTvProgram) {
         modifier = Modifier
             .fillMaxWidth()
             .padding(top = 16.dp)
-            .clip(RoundedCornerShape(20.dp))
+            .clip(ShapeCache.smooth20)
             .background(MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.35f))
             .padding(16.dp),
     ) {
@@ -241,7 +242,7 @@ private fun ProgramTimelineRow(program: LiveTvProgram, isAiring: Boolean) {
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .clip(RoundedCornerShape(14.dp))
+            .clip(ShapeCache.smooth14)
             .background(
                 if (isAiring) MaterialTheme.colorScheme.primary.copy(alpha = 0.12f)
                 else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.04f)

@@ -11,7 +11,6 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.rememberPagerState
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Badge
 import androidx.compose.material3.BadgedBox
@@ -45,6 +44,7 @@ import com.raulshma.jellyplay.core.ui.components.JellyPlayScreenScaffold
 import com.raulshma.jellyplay.core.ui.components.ScreenLoadingState
 import com.raulshma.jellyplay.core.ui.components.StaggeredSection
 import com.raulshma.jellyplay.core.ui.components.rememberScreenBackgroundColor
+import com.raulshma.jellyplay.core.designsystem.theme.ShapeCache
 import com.raulshma.jellyplay.feature.admin.users.detail.components.AccessTab
 import com.raulshma.jellyplay.feature.admin.users.detail.components.AccountTab
 import com.raulshma.jellyplay.feature.admin.users.detail.components.ParentalControlTab
@@ -241,7 +241,7 @@ private fun UserEditTabBar(
                 width = androidx.compose.ui.unit.Dp.Unspecified,
                 height = 6.dp,
                 color = MaterialTheme.colorScheme.primary,
-                shape = RoundedCornerShape(50),
+                shape = ShapeCache.smoothPill,
             )
         },
         divider = {},

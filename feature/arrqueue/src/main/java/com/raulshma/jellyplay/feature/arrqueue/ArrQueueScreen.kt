@@ -411,7 +411,7 @@ private fun progressColor(status: ArrDownloadStatus): Color = when (status) {
     ArrDownloadStatus.COMPLETED -> StatusColors.available
     ArrDownloadStatus.IMPORTED -> StatusColors.success
     ArrDownloadStatus.PAUSED -> StatusColors.pending
-    ArrDownloadStatus.DOWNLOADING -> Color(0xFF42A5F5) // matches StatusColors.requested/info blue
+    ArrDownloadStatus.DOWNLOADING -> StatusColors.requested
     ArrDownloadStatus.FAILED -> StatusColors.error
     ArrDownloadStatus.WARNING -> StatusColors.warning
     else -> StatusColors.info

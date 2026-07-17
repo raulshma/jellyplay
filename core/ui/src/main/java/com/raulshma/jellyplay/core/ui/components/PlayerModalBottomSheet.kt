@@ -1,4 +1,4 @@
-package com.raulshma.jellyplay.feature.player.video.components
+package com.raulshma.jellyplay.core.ui.components
 
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.core.Animatable
@@ -17,7 +17,6 @@ import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.SheetState
@@ -38,12 +37,12 @@ import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
+import com.raulshma.jellyplay.core.designsystem.theme.ShapeCache
 import com.raulshma.jellyplay.core.ui.adaptive.LocalJellyPlayUi
-import com.raulshma.jellyplay.core.ui.components.TvSafeSheet
 import kotlinx.coroutines.launch
 import kotlin.math.roundToInt
 
-private val SheetTopShape = RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp)
+private val SheetTopShape = ShapeCache.smooth28
 private const val MAX_SCRIM_ALPHA = 0.5f
 private const val DISMISS_FRACTION = 0.18f
 /**
