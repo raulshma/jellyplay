@@ -85,6 +85,7 @@ import com.raulshma.jellyplay.core.designsystem.theme.ShapeCache
 import com.raulshma.jellyplay.core.designsystem.theme.isLightColor
 import com.raulshma.jellyplay.core.ui.adaptive.LocalAdaptiveInfo
 import com.raulshma.jellyplay.core.ui.adaptive.WindowSizeClass
+import com.raulshma.jellyplay.core.ui.components.ScreenLoadingState
 import com.raulshma.jellyplay.core.ui.components.JellyPlayScreenScaffold
 import com.raulshma.jellyplay.core.ui.tv.TvGrabInitialFocus
 import com.raulshma.jellyplay.core.ui.tv.rememberTvFocusState
@@ -211,14 +212,12 @@ fun WatchProgressHeatmapScreen(
         },
     ) { innerPadding ->
         if (state.isLoading) {
-            Box(
+            ScreenLoadingState(
+                message = "Loading...",
                 modifier = Modifier
                     .fillMaxSize()
                     .padding(innerPadding),
-                contentAlignment = Alignment.Center,
-            ) {
-                Text("Loading...", style = MaterialTheme.typography.bodyMedium)
-            }
+            )
         } else {
             if (adaptiveInfo.windowSizeClass == WindowSizeClass.Compact) {
                 Column(

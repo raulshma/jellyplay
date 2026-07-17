@@ -42,8 +42,8 @@ import com.raulshma.jellyplay.core.ui.adaptive.bottomPadding
 import com.raulshma.jellyplay.core.ui.adaptive.contentPadding
 import com.raulshma.jellyplay.core.ui.adaptive.itemSpacing
 import com.raulshma.jellyplay.core.ui.components.ErrorScreen
-import com.raulshma.jellyplay.core.ui.components.JellyPlayLoadingIndicator
 import com.raulshma.jellyplay.core.ui.components.ScreenEmptyState
+import com.raulshma.jellyplay.core.ui.components.ScreenLoadingState
 import com.raulshma.jellyplay.core.ui.tv.LocalTvMode
 import com.raulshma.jellyplay.core.ui.tv.tvFocusRestorer
 import com.raulshma.jellyplay.feature.livetv.R
@@ -62,7 +62,7 @@ fun SeriesScreen(
 
     when {
         uiState.isLoading && uiState.seriesTimers.isEmpty() -> {
-            Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { JellyPlayLoadingIndicator() }
+            ScreenLoadingState(modifier = Modifier.fillMaxSize())
         }
         uiState.error != null && uiState.seriesTimers.isEmpty() -> {
             ErrorScreen(message = uiState.error!!, onRetry = { viewModel.load() })

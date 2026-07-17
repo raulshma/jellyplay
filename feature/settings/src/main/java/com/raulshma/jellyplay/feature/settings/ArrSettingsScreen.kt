@@ -41,7 +41,6 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.font.FontWeight
@@ -49,15 +48,16 @@ import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.composables.icons.tabler.Tabler
-import com.composables.icons.tabler.outline.ArrowLeft
 import com.composables.icons.tabler.outline.DeviceFloppy
 import com.composables.icons.tabler.outline.Plus
 import com.composables.icons.tabler.outline.Refresh
 import com.composables.icons.tabler.outline.Trash
+import com.raulshma.jellyplay.core.designsystem.theme.StatusColors
 import com.raulshma.jellyplay.core.model.arr.ArrDiscoveryError
 import com.raulshma.jellyplay.core.model.arr.ArrServerConfig
 import com.raulshma.jellyplay.core.model.arr.ArrServiceKind
 import com.raulshma.jellyplay.core.model.arr.ArrServiceSummary
+import com.raulshma.jellyplay.core.ui.components.CircleBgBackButton
 
 /**
  * Settings surface for the Direct *arr Integration experimental feature.
@@ -90,9 +90,7 @@ fun ArrSettingsScreen(
             TopAppBar(
                 title = { Text("Radarr / Sonarr") },
                 navigationIcon = {
-                    IconButton(onClick = onBack) {
-                        Icon(Tabler.Outline.ArrowLeft, contentDescription = "Back")
-                    }
+                    CircleBgBackButton(onClick = onBack)
                 },
                 actions = {
                     IconButton(onClick = { viewModel.refreshServers() }, enabled = !isRefreshing) {
@@ -319,8 +317,8 @@ private fun ServerRow(
 @Composable
 private fun StatusDot(status: ArrSettingsViewModel.ServerConnectionStatus) {
     val color = when (status) {
-        is ArrSettingsViewModel.ServerConnectionStatus.Connected -> Color(0xFF4CAF50)
-        is ArrSettingsViewModel.ServerConnectionStatus.Testing -> Color(0xFFFFA000)
+        is ArrSettingsViewModel.ServerConnectionStatus.Connected -> StatusColors.available
+        is ArrSettingsViewModel.ServerConnectionStatus.Testing -> StatusColors.pending
         is ArrSettingsViewModel.ServerConnectionStatus.Error -> MaterialTheme.colorScheme.error
         is ArrSettingsViewModel.ServerConnectionStatus.Idle -> MaterialTheme.colorScheme.outline
     }

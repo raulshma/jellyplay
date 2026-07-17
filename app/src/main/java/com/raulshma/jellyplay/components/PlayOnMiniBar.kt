@@ -21,7 +21,6 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -53,6 +52,7 @@ import com.composables.icons.tabler.outline.PlayerPlay
 import com.composables.icons.tabler.outline.Volume
 import com.composables.icons.tabler.outline.X
 import com.raulshma.jellyplay.core.designsystem.theme.CastColors
+import com.raulshma.jellyplay.core.designsystem.theme.ShapeCache
 
 /**
  * Persistent transport bar shown while a "Play On" session is active. Two-row
@@ -88,10 +88,10 @@ fun PlayOnMiniBar(
         exit = slideOutVertically(targetOffsetY = { it }) + fadeOut(),
         modifier = modifier,
     ) {
-        // Match FloatingNavigationBar: translucent surfaceContainer, full pill,
-        // zero elevation.
+        // Match FloatingNavigationBar: translucent surfaceContainer, smooth
+        // corners, zero elevation.
         Surface(
-            shape = RoundedCornerShape(28.dp),
+            shape = ShapeCache.smooth28,
             color = MaterialTheme.colorScheme.surfaceContainer.copy(alpha = 0.85f),
             tonalElevation = 0.dp,
             shadowElevation = 0.dp,
@@ -115,7 +115,7 @@ fun PlayOnMiniBar(
                         horizontalArrangement = Arrangement.spacedBy(12.dp),
                         modifier = Modifier
                             .weight(1f)
-                            .clip(RoundedCornerShape(16.dp))
+                            .clip(ShapeCache.smooth16)
                             .clickable(onClick = onExpand),
                     ) {
                         Icon(

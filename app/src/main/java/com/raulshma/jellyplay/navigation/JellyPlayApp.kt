@@ -14,6 +14,7 @@ import androidx.compose.animation.ContentTransform
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.togetherWith
 import com.raulshma.jellyplay.core.designsystem.theme.AlphaEasing
+import com.raulshma.jellyplay.core.designsystem.theme.Dimensions
 import com.raulshma.jellyplay.core.designsystem.theme.FancyTransitionEasing
 import com.raulshma.jellyplay.core.designsystem.theme.PointToPointEasing
 import androidx.compose.foundation.background
@@ -88,7 +89,6 @@ import androidx.compose.foundation.layout.offset
 import androidx.compose.ui.draw.scale
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.blur
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.NavigationBarItem
 import androidx.compose.material3.NavigationBarItemDefaults
 import androidx.compose.material3.Surface
@@ -573,7 +573,7 @@ private fun MainContent(
 
     val tvTypography = if (isTv) TvTypography else null
 
-    val bottomNavHeight = 80.dp // Approximate height
+    val bottomNavHeight = Dimensions.floatingNavHeight // Canonical floating nav-bar height
     val bottomNavHeightPx = with(LocalDensity.current) { bottomNavHeight.toPx() }
     val bottomNavOffsetHeightPx = remember { mutableFloatStateOf(0f) }
     val isBottomNavVisibleState = remember { mutableStateOf(true) }
@@ -1108,7 +1108,7 @@ private fun PhoneContent(
                             .align(Alignment.BottomCenter)
                             .padding(bottom = systemNavBarBottom + 60.dp)
                             .offset {
-                                val maxOffset = 60.dp.toPx()
+                                val maxOffset = Dimensions.floatingNavHeight.toPx()
                                 val yOffset = (-bottomNavOffsetHeightPx.floatValue).coerceAtMost(maxOffset)
                                 IntOffset(x = 0, y = yOffset.roundToInt())
                             }
@@ -1522,7 +1522,7 @@ private fun FloatingNavigationBar(
 ) {
     Surface(
         modifier = modifier,
-        shape = RoundedCornerShape(percent = 50),
+        shape = ShapeCache.smoothPill,
         color = containerColor.copy(alpha = 0.65f),
         tonalElevation = 0.dp,
         shadowElevation = 0.dp,

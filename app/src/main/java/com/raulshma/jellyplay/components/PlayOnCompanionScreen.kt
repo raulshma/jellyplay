@@ -20,7 +20,6 @@ import androidx.compose.foundation.layout.statusBars
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.Icon
@@ -69,6 +68,7 @@ import com.composables.icons.tabler.outline.Volume
 import com.composables.icons.tabler.outline.X
 import com.raulshma.jellyplay.PlayOnViewModel
 import com.raulshma.jellyplay.core.designsystem.theme.CastColors
+import com.raulshma.jellyplay.core.designsystem.theme.ShapeCache
 import com.raulshma.jellyplay.core.designsystem.theme.rememberArtworkColors
 import com.raulshma.jellyplay.core.ui.components.formatDurationMs
 
@@ -170,7 +170,7 @@ fun PlayOnCompanionScreen(
                 modifier = Modifier
                     .padding(horizontal = 40.dp, vertical = 16.dp)
                     .size(width = 280.dp, height = 280.dp)
-                    .clip(RoundedCornerShape(24.dp))
+                    .clip(ShapeCache.smooth24)
                     .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)),
                 contentAlignment = Alignment.Center,
             ) {
