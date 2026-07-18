@@ -134,7 +134,7 @@ class DownloadRepositoryImpl @Inject constructor(
             }
             if (existing.downloadPath.isNotBlank()) {
                 File(existing.downloadPath).let { f -> if (f.exists()) f.delete() }
-                DownloadArtifacts.cleanup(File(existing.downloadPath).parentFile)
+                DownloadArtifacts.cleanup(File(existing.downloadPath).parentFile, existing.mediaItemId)
             }
             downloadDao.deleteDownloadById(existing.id)
         }
@@ -273,18 +273,27 @@ class DownloadRepositoryImpl @Inject constructor(
     override suspend fun getTotalDownloadedBytes(): Long =
         downloadDao.getTotalDownloadedBytes()
 
-    override suspend fun saveOfflineMediaItem(item: MediaItem, imageUrl: String?, backdropUrl: String?) {
+    override suspend fun saveOfflineMediaItem(item: MediaItem, imageUrl: String?, backdropUrl: String?, downloadPath: String?) {
         saveOfflineMetadataForItem(item, imageUrl, backdropUrl)
 
         if (item.mediaType == MediaType.EPISODE) {
             val seriesId = item.seriesId
             val seasonId = item.seasonId
+            val parentDir = downloadPath?.let { File(it).parentFile }
 
             if (seriesId != null && offlineMediaDao.getById(seriesId) == null) {
                 val seriesDetail = mediaRepository.getMediaDetail(seriesId).getOrNull()
                 if (seriesDetail != null) {
-                    val seriesImageUrl = playbackRepository.getImageUrl(seriesId, maxWidth = 300)
-                    val seriesBackdropUrl = playbackRepository.getBackdropUrl(seriesId, maxWidth = 1280)
+                    val localSeriesPoster = parentDir?.let {
+                        downloadImageToDisk(seriesId, "Primary", 300, it, "${seriesId}_poster.jpg")
+                    }
+                    val localSeriesBackdrop = parentDir?.let {
+                        downloadImageToDisk(seriesId, "Backdrop", 1280, it, "${seriesId}_backdrop.jpg")
+                    }
+                    val seriesImageUrl = localSeriesPoster
+                        ?: playbackRepository.getImageUrl(seriesId, maxWidth = 300)
+                    val seriesBackdropUrl = localSeriesBackdrop
+                        ?: playbackRepository.getBackdropUrl(seriesId, maxWidth = 1280)
                     saveOfflineMetadataForItem(seriesDetail.item, seriesImageUrl, seriesBackdropUrl)
                 } else {
                     offlineMediaDao.upsert(
@@ -455,6 +464,32 @@ class DownloadRepositoryImpl @Inject constructor(
 
                                     if (download != null) {
                                         preloadImageToCache(epImageUrl)
+                                        // Download the episode poster + backdrop locally so the
+                                        // offline series-episode cards render them (otherwise only
+                                        // blurHash shows). Fall back to the remote URL on failure.
+                                        // Filenames are keyed by episode.id so sibling episodes in the
+                                        // shared downloads dir don't overwrite each other.
+                                        var localEpPoster = epImageUrl
+                                        var localEpBackdrop: String? = null
+                                        try {
+                                            val epParentDir = File(download.downloadPath).parentFile
+                                            if (epParentDir != null) {
+                                                downloadImageToDisk(
+                                                    episode.id, "Primary", 300,
+                                                    epParentDir, DownloadArtifacts.posterFile(episode.id),
+                                                )?.let { localEpPoster = it }
+                                                localEpBackdrop = downloadImageToDisk(
+                                                    episode.id, "Backdrop", 1280,
+                                                    epParentDir, DownloadArtifacts.backdropFile(episode.id),
+                                                )
+                                            }
+                                        } catch (e: Exception) {
+                                            Log.d(TAG, "Failed to download offline images for episode ${episode.id}", e)
+                                        }
+                                        val finalEntity = offlineEntity.copy(
+                                            posterPath = localEpPoster,
+                                            backdropPath = localEpBackdrop,
+                                        )
                                         enqueueDownloadWorker(download.id)
                                         source?.trickplayInfo?.let { info ->
                                             try {
@@ -470,7 +505,7 @@ class DownloadRepositoryImpl @Inject constructor(
                                         try {
                                             downloadMediaSegments(episode.id, download.downloadPath)
                                         } catch (e: Exception) { Log.d(TAG, "Failed to download media segments", e) }
-                                        Pair(offlineEntity, download.id)
+                                        Pair(finalEntity, download.id)
                                     } else {
                                         Pair(offlineEntity, null)
                                     }
@@ -623,6 +658,14 @@ class DownloadRepositoryImpl @Inject constructor(
         }
     }
 
+    override suspend fun downloadOfflineImage(
+        itemId: String,
+        imageType: String,
+        maxWidth: Int,
+        parentDir: File,
+        fileName: String,
+    ): String? = downloadImageToDisk(itemId, imageType, maxWidth, parentDir, fileName)
+
     override suspend fun loadLocalSubtitleManifest(
         downloadPath: String,
     ): OfflineSubtitleManifest? = withContext(Dispatchers.IO) {
@@ -668,6 +711,35 @@ class DownloadRepositoryImpl @Inject constructor(
         } catch (e: Exception) {
             Log.d(TAG, "Failed to download file from $url", e)
             false
+        }
+    }
+
+    /**
+     * Downloads the given item's image to a local file so it is viewable fully
+     * offline. Returns the absolute file path on success, or null if the item
+     * has no such image or the download failed — callers then fall back to the
+     * remote URL so an image fetch failure never blocks a download.
+     *
+     * @param parentDir directory that holds the downloaded media (the image is
+     *   written as a sibling file there, matching the other offline artifacts).
+     */
+    private suspend fun downloadImageToDisk(
+        itemId: String,
+        imageType: String,
+        maxWidth: Int,
+        parentDir: File,
+        fileName: String,
+    ): String? = withContext(Dispatchers.IO) {
+        val bytes = playbackRepository.getItemImageBytes(itemId, imageType, maxWidth)
+            ?: return@withContext null
+        if (bytes.isEmpty()) return@withContext null
+        val target = File(parentDir, fileName)
+        try {
+            target.writeBytes(bytes)
+            target.absolutePath
+        } catch (e: Exception) {
+            Log.d(TAG, "Failed to write offline image $fileName for $itemId", e)
+            null
         }
     }
 
@@ -852,7 +924,7 @@ class DownloadRepositoryImpl @Inject constructor(
         if (entity.downloadPath.isNotBlank()) {
             val file = File(entity.downloadPath)
             if (file.exists()) file.delete()
-            DownloadArtifacts.cleanup(file.parentFile)
+            DownloadArtifacts.cleanup(file.parentFile, entity.mediaItemId)
         }
         database.withTransaction {
             downloadDao.deleteDownloadById(entity.id)

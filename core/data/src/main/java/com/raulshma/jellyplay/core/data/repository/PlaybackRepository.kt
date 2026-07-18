@@ -24,6 +24,9 @@ interface PlaybackRepository {
 
     fun getBackdropUrl(itemId: String, maxWidth: Int = 1280): String
 
+    /** Fetches an item's image bytes via the authenticated API (for offline storage). */
+    suspend fun getItemImageBytes(itemId: String, imageType: String, maxWidth: Int): ByteArray?
+
     fun getStreamUrl(
         itemId: String,
         mediaSourceId: String,

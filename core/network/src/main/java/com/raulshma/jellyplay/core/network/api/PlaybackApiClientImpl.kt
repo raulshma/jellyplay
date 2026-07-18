@@ -326,4 +326,19 @@ class PlaybackApiClientImpl @Inject constructor(
             responseTransmissionTime = response.responseTransmissionTime?.toString() ?: "",
         )
     }
+
+    override suspend fun getItemImageBytes(itemId: String, imageType: String, maxWidth: Int): ByteArray? =
+        try {
+            withContext(Dispatchers.IO) {
+                val imageTypeEnum = org.jellyfin.sdk.model.api.ImageType.fromNameOrNull(imageType)
+                    ?: return@withContext null
+                engine.requireApi().imageApi.getItemImage(
+                    itemId = itemId.toUUID(),
+                    imageType = imageTypeEnum,
+                    maxWidth = maxWidth,
+                ).content
+            }
+        } catch (_: Exception) {
+            null
+        }
 }
