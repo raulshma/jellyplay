@@ -69,6 +69,8 @@ import com.raulshma.jellyplay.core.ui.components.JellyPlayScreenScaffold
 import com.raulshma.jellyplay.core.ui.components.LoadingScreen
 import com.raulshma.jellyplay.core.ui.components.rememberScreenBackgroundColor
 import com.raulshma.jellyplay.core.ui.tv.LocalTvMode
+import com.raulshma.jellyplay.core.ui.tv.rememberTvFocusState
+import com.raulshma.jellyplay.core.ui.tv.tvFocusIndicator
 import com.raulshma.jellyplay.core.ui.tv.tvFocusRestorer
 import com.raulshma.jellyplay.core.ui.util.formatFileSize
 import com.raulshma.jellyplay.feature.details.R
@@ -381,6 +383,7 @@ private fun SeasonHeader(
     isSearching: Boolean,
 ) {
     val containerColor = MaterialTheme.colorScheme.surfaceContainerLow
+    val focusState = rememberTvFocusState()
     Column(
         modifier = Modifier
             .fillMaxWidth()
@@ -389,7 +392,11 @@ private fun SeasonHeader(
             .padding(horizontal = 12.dp, vertical = 8.dp),
     ) {
         Row(
-            modifier = Modifier.fillMaxWidth().clickable { onToggleExpanded() },
+            modifier = Modifier
+                .fillMaxWidth()
+                .then(focusState.focusModifier)
+                .tvFocusIndicator(focusState, ShapeCache.smooth16)
+                .clickable { onToggleExpanded() },
             verticalAlignment = Alignment.CenterVertically,
         ) {
             Icon(

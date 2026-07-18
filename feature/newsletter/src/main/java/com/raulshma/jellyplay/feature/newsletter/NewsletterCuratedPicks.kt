@@ -276,6 +276,7 @@ private fun CuratedPickCard(
                 .fillMaxWidth()
                 .aspectRatio(2f / 3f)
                 .clip(ShapeCache.smooth12)
+                .focusIndicator(ShapeCache.smooth12)
                 .clickable(onClick = onClick),
         ) {
             MediaImage(

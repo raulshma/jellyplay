@@ -323,6 +323,9 @@ fun LibraryScreen(
                         LazyRow(
                             contentPadding = PaddingValues(horizontal = 24.dp),
                             horizontalArrangement = Arrangement.spacedBy(8.dp),
+                            modifier = Modifier
+                                .focusGroup()
+                                .tvFocusRestorer(),
                         ) {
                             item {
                                 GlassPill(

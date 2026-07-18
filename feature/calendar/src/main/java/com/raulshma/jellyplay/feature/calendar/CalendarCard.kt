@@ -31,6 +31,8 @@ import com.raulshma.jellyplay.core.model.arr.ArrCalendarItem
 import com.raulshma.jellyplay.core.model.arr.ArrMediaType
 import com.raulshma.jellyplay.core.model.arr.ArrServiceKind
 import com.raulshma.jellyplay.core.ui.image.MediaImage
+import com.raulshma.jellyplay.core.ui.tv.rememberTvFocusState
+import com.raulshma.jellyplay.core.ui.tv.tvFocusIndicator
 
 /**
  * Horizontal calendar row: poster + info column. Uses the *arr absolute poster
@@ -48,9 +50,12 @@ fun CalendarCard(
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
+    val focusState = rememberTvFocusState()
     Card(
         modifier = modifier
             .fillMaxWidth()
+            .then(focusState.focusModifier)
+            .tvFocusIndicator(focusState, ShapeCache.smooth12)
             .combinedClickable(onClick = onClick),
         shape = ShapeCache.smooth12,
         colors = CardDefaults.cardColors(

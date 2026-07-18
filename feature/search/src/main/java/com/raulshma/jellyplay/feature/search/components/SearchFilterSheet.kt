@@ -8,6 +8,7 @@ import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
@@ -41,6 +42,8 @@ import com.raulshma.jellyplay.core.model.Genre
 import com.raulshma.jellyplay.core.model.MediaType
 import com.raulshma.jellyplay.core.ui.model.mediaTypeDisplayNamePlural
 import com.raulshma.jellyplay.core.ui.components.GlassFilterChip
+import com.raulshma.jellyplay.core.ui.components.TvSafeSheet
+import com.raulshma.jellyplay.core.ui.tv.LocalTvMode
 import com.raulshma.jellyplay.core.ui.components.yearPresetSelection
 import com.raulshma.jellyplay.core.ui.components.yearRangePresets
 import com.raulshma.jellyplay.core.ui.components.YearPresetSelection
@@ -66,6 +69,7 @@ fun SearchFilterSheet(
     var selectedMinRating by remember { mutableFloatStateOf(currentFilters.minRating) }
 
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+    val isTv = LocalTvMode.current
 
     val isLight = LocalIsLightTheme.current
     val sheetContainerColor = if (isLight) MaterialTheme.colorScheme.surfaceContainerLow
@@ -74,11 +78,82 @@ fun SearchFilterSheet(
     val contentColor = MaterialTheme.colorScheme.onSurface
     val contentColorMedium = MaterialTheme.colorScheme.onSurfaceVariant
 
+    val showOnTv = isTv
+    if (showOnTv) {
+        TvSafeSheet(onDismissRequest = onDismiss) {
+            SearchFilterSheetBody(
+                contentColor = contentColor,
+                contentColorMedium = contentColorMedium,
+                glassBg = glassBg,
+                selectedMediaTypes = selectedMediaTypes,
+                onSelectMediaTypes = { selectedMediaTypes = it },
+                selectedGenres = selectedGenres,
+                onSelectGenres = { selectedGenres = it },
+                selectedYears = selectedYears,
+                onSelectYears = { selectedYears = it },
+                selectedTags = selectedTags,
+                onSelectTags = { selectedTags = it },
+                selectedMinRating = selectedMinRating,
+                onSelectMinRating = { selectedMinRating = it },
+                genres = genres,
+                availableTags = availableTags,
+                onApply = onApply,
+            )
+        }
+        return
+    }
+
     ModalBottomSheet(
         onDismissRequest = onDismiss,
         sheetState = sheetState,
         containerColor = sheetContainerColor,
         tonalElevation = 0.dp,
+    ) {
+        SearchFilterSheetBody(
+            contentColor = contentColor,
+            contentColorMedium = contentColorMedium,
+            glassBg = glassBg,
+            selectedMediaTypes = selectedMediaTypes,
+            onSelectMediaTypes = { selectedMediaTypes = it },
+            selectedGenres = selectedGenres,
+            onSelectGenres = { selectedGenres = it },
+            selectedYears = selectedYears,
+            onSelectYears = { selectedYears = it },
+            selectedTags = selectedTags,
+            onSelectTags = { selectedTags = it },
+            selectedMinRating = selectedMinRating,
+            onSelectMinRating = { selectedMinRating = it },
+            genres = genres,
+            availableTags = availableTags,
+            onApply = onApply,
+        )
+    }
+}
+
+@Composable
+private fun ColumnScope.SearchFilterSheetBody(
+    contentColor: Color,
+    contentColorMedium: Color,
+    glassBg: Color,
+    selectedMediaTypes: List<MediaType>,
+    onSelectMediaTypes: (List<MediaType>) -> Unit,
+    selectedGenres: List<String>,
+    onSelectGenres: (List<String>) -> Unit,
+    selectedYears: Set<Int>,
+    onSelectYears: (Set<Int>) -> Unit,
+    selectedTags: Set<String>,
+    onSelectTags: (Set<String>) -> Unit,
+    selectedMinRating: Float,
+    onSelectMinRating: (Float) -> Unit,
+    genres: List<Genre>,
+    availableTags: List<String>,
+    onApply: (SearchFilters) -> Unit,
+) {
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 24.dp)
+            .padding(bottom = 32.dp),
     ) {
         Column(
             modifier = Modifier
@@ -120,11 +195,11 @@ fun SearchFilterSheet(
                             interactionSource = resetInteractionSource,
                             indication = null,
                             onClick = {
-                                selectedMediaTypes = emptyList()
-                                selectedGenres = emptyList()
-                                selectedYears = emptySet()
-                                selectedTags = emptySet()
-                                selectedMinRating = 0f
+                                onSelectMediaTypes(emptyList())
+                                onSelectGenres(emptyList())
+                                onSelectYears(emptySet())
+                                onSelectTags(emptySet())
+                                onSelectMinRating(0f)
                             },
                         )
                         .padding(horizontal = 14.dp, vertical = 8.dp),
@@ -149,11 +224,11 @@ fun SearchFilterSheet(
                         label = mediaType.mediaTypeDisplayNamePlural(),
                         selected = mediaType in selectedMediaTypes,
                         onClick = {
-                            selectedMediaTypes = if (mediaType in selectedMediaTypes) {
+                            onSelectMediaTypes(if (mediaType in selectedMediaTypes) {
                                 selectedMediaTypes - mediaType
                             } else {
                                 selectedMediaTypes + mediaType
-                            }
+                            })
                         },
                     )
                 }
@@ -171,11 +246,11 @@ fun SearchFilterSheet(
                             label = genre.name,
                             selected = genre.name in selectedGenres,
                             onClick = {
-                                selectedGenres = if (genre.name in selectedGenres) {
+                                onSelectGenres(if (genre.name in selectedGenres) {
                                     selectedGenres - genre.name
                                 } else {
                                     selectedGenres + genre.name
-                                }
+                                })
                             },
                         )
                     }
@@ -192,7 +267,7 @@ fun SearchFilterSheet(
                 GlassFilterChip(
                     label = stringResource(R.string.search_filter_any),
                     selected = selectedYears.isEmpty(),
-                    onClick = { selectedYears = emptySet() },
+                    onClick = { onSelectYears(emptySet()) },
                 )
                 presets.forEach { preset ->
                     val selection = yearPresetSelection(preset, selectedYears)
@@ -200,7 +275,7 @@ fun SearchFilterSheet(
                         label = preset.label,
                         selected = selection == YearPresetSelection.Full,
                         onClick = {
-                            selectedYears = toggleYearPreset(preset, selectedYears)
+                            onSelectYears(toggleYearPreset(preset, selectedYears))
                         },
                     )
                 }
@@ -218,11 +293,11 @@ fun SearchFilterSheet(
                             label = tag,
                             selected = tag in selectedTags,
                             onClick = {
-                                selectedTags = if (tag in selectedTags) {
+                                onSelectTags(if (tag in selectedTags) {
                                     selectedTags - tag
                                 } else {
                                     selectedTags + tag
-                                }
+                                })
                             },
                         )
                     }
@@ -240,7 +315,7 @@ fun SearchFilterSheet(
                     GlassFilterChip(
                         label = if (rating == 0f) stringResource(R.string.search_filter_any) else stringResource(R.string.search_filter_rating_plus, rating),
                         selected = selectedMinRating == rating,
-                        onClick = { selectedMinRating = rating },
+                        onClick = { onSelectMinRating(rating) },
                     )
                 }
             }

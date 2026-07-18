@@ -4,6 +4,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -51,6 +52,8 @@ import com.raulshma.jellyplay.core.model.seerr.SeerrMediaStatus
 import com.raulshma.jellyplay.core.model.seerr.SeerrRequestItem
 import com.raulshma.jellyplay.core.model.seerr.SeerrRequestStatus
 import com.raulshma.jellyplay.core.ui.components.focusIndicator
+import com.raulshma.jellyplay.core.ui.components.TvSafeSheet
+import com.raulshma.jellyplay.core.ui.tv.LocalTvMode
 import com.raulshma.jellyplay.core.ui.image.MediaImage
 import kotlinx.coroutines.delay
 import java.time.LocalDateTime
@@ -124,12 +127,8 @@ fun RequestDetailBottomSheet(
         }
     }
 
-    ModalBottomSheet(
-        onDismissRequest = onDismiss,
-        sheetState = sheetState,
-        shape = ShapeCache.smooth20,
-        containerColor = colorScheme.surfaceContainer.copy(alpha = 0.95f),
-    ) {
+    val isTv = LocalTvMode.current
+    val content: @Composable ColumnScope.() -> Unit = {
         Column(
             modifier = Modifier
                 .fillMaxWidth()
@@ -417,6 +416,20 @@ fun RequestDetailBottomSheet(
 
             Spacer(Modifier.height(16.dp))
         }
+    }
+    if (isTv) {
+        com.raulshma.jellyplay.core.ui.components.TvSafeSheet(
+            onDismissRequest = onDismiss,
+            content = content,
+        )
+    } else {
+        ModalBottomSheet(
+            onDismissRequest = onDismiss,
+            sheetState = sheetState,
+            shape = ShapeCache.smooth20,
+            containerColor = colorScheme.surfaceContainer.copy(alpha = 0.95f),
+            content = content,
+        )
     }
 }
 

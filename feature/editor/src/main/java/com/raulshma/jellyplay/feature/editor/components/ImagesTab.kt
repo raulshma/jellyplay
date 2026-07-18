@@ -40,6 +40,8 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.MenuAnchorType
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.OutlinedTextField
+import com.raulshma.jellyplay.core.ui.tv.LocalTvMode
+import com.raulshma.jellyplay.core.ui.components.TvSafeSheet
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.rememberModalBottomSheetState
@@ -279,84 +281,168 @@ private fun ImageUploadSheet(
         selectedUri = uri
     }
 
-    ModalBottomSheet(
-        onDismissRequest = onDismiss,
-        sheetState = sheetState,
-    ) {
-        Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 16.dp)
-                .padding(bottom = 32.dp),
-            verticalArrangement = Arrangement.spacedBy(12.dp),
+    val isTv = com.raulshma.jellyplay.core.ui.tv.LocalTvMode.current
+    if (isTv) {
+        com.raulshma.jellyplay.core.ui.components.TvSafeSheet(
+            onDismissRequest = onDismiss,
         ) {
-            Text("Upload Image", style = MaterialTheme.typography.headlineSmall)
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 16.dp)
+                    .padding(bottom = 32.dp),
+                verticalArrangement = Arrangement.spacedBy(12.dp),
+            ) {
+                Text("Upload Image", style = MaterialTheme.typography.headlineSmall)
 
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                FilterChip(selected = selectedTab == 0, onClick = { selectedTab = 0 }, label = { Text("File") })
-                FilterChip(selected = selectedTab == 1, onClick = { selectedTab = 1 }, label = { Text("URL") })
-            }
-
-            ImageTypeSelector(
-                selected = selectedImageType,
-                onSelected = { selectedImageType = it },
-            )
-
-            if (selectedTab == 0) {
-                selectedUri?.let { uri ->
-                    MediaImage(
-                        url = uri.toString(),
-                        contentDescription = "Preview",
-                        size = CoilSize(512, 512),
-                        placeholderIcon = Tabler.Outline.Photo,
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .height(200.dp)
-                            .clip(ShapeCache.smooth12),
-                        contentScale = ContentScale.Fit,
-                    )
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    FilterChip(selected = selectedTab == 0, onClick = { selectedTab = 0 }, label = { Text("File") })
+                    FilterChip(selected = selectedTab == 1, onClick = { selectedTab = 1 }, label = { Text("URL") })
                 }
-                FilledTonalButton(
-                    onClick = { fileLauncher.launch(arrayOf("image/*")) },
-                    modifier = Modifier.fillMaxWidth(),
-                ) {
-                    Text(if (selectedUri != null) "Change File" else "Select Image")
-                }
-                Button(
-                    onClick = {
-                        selectedUri?.let { uri ->
-                            onUploadFile(uri, selectedImageType)
-                        }
-                    },
-                    modifier = Modifier.fillMaxWidth(),
-                    enabled = selectedUri != null,
-                ) { Text("Upload") }
-            } else {
-                OutlinedTextField(
-                    value = imageUrl,
-                    onValueChange = { imageUrl = it },
-                    label = { Text("Image URL") },
-                    modifier = Modifier.fillMaxWidth(),
-                    singleLine = true,
+
+                ImageTypeSelector(
+                    selected = selectedImageType,
+                    onSelected = { selectedImageType = it },
                 )
-                if (imageUrl.isNotBlank()) {
-                    MediaImage(
-                        url = imageUrl,
-                        contentDescription = "Preview",
-                        size = CoilSize(512, 512),
-                        placeholderIcon = Tabler.Outline.Photo,
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .height(200.dp)
-                            .clip(ShapeCache.smooth12),
-                        contentScale = ContentScale.Fit,
+
+                if (selectedTab == 0) {
+                    selectedUri?.let { uri ->
+                        MediaImage(
+                            url = uri.toString(),
+                            contentDescription = "Preview",
+                            size = CoilSize(512, 512),
+                            placeholderIcon = Tabler.Outline.Photo,
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(200.dp)
+                                .clip(ShapeCache.smooth12),
+                            contentScale = ContentScale.Fit,
+                        )
+                    }
+                    FilledTonalButton(
+                        onClick = { fileLauncher.launch(arrayOf("image/*")) },
+                        modifier = Modifier.fillMaxWidth(),
+                    ) {
+                        Text(if (selectedUri != null) "Change File" else "Select Image")
+                    }
+                    Button(
+                        onClick = {
+                            selectedUri?.let { uri ->
+                                onUploadFile(uri, selectedImageType)
+                            }
+                        },
+                        modifier = Modifier.fillMaxWidth(),
+                        enabled = selectedUri != null,
+                    ) { Text("Upload") }
+                } else {
+                    OutlinedTextField(
+                        value = imageUrl,
+                        onValueChange = { imageUrl = it },
+                        label = { Text("Image URL") },
+                        modifier = Modifier.fillMaxWidth(),
+                        singleLine = true,
                     )
+                    if (imageUrl.isNotBlank()) {
+                        MediaImage(
+                            url = imageUrl,
+                            contentDescription = "Preview",
+                            size = CoilSize(512, 512),
+                            placeholderIcon = Tabler.Outline.Photo,
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(200.dp)
+                                .clip(ShapeCache.smooth12),
+                            contentScale = ContentScale.Fit,
+                        )
+                    }
+                    Button(
+                        onClick = { onUploadUrl(imageUrl, selectedImageType) },
+                        modifier = Modifier.fillMaxWidth(),
+                        enabled = imageUrl.isNotBlank(),
+                    ) { Text("Download from URL") }
                 }
-                Button(
-                    onClick = { onUploadUrl(imageUrl, selectedImageType) },
-                    modifier = Modifier.fillMaxWidth(),
-                    enabled = imageUrl.isNotBlank(),
-                ) { Text("Download from URL") }
+            }
+        }
+    } else {
+        ModalBottomSheet(
+            onDismissRequest = onDismiss,
+            sheetState = sheetState,
+        ) {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 16.dp)
+                    .padding(bottom = 32.dp),
+                verticalArrangement = Arrangement.spacedBy(12.dp),
+            ) {
+                Text("Upload Image", style = MaterialTheme.typography.headlineSmall)
+
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    FilterChip(selected = selectedTab == 0, onClick = { selectedTab = 0 }, label = { Text("File") })
+                    FilterChip(selected = selectedTab == 1, onClick = { selectedTab = 1 }, label = { Text("URL") })
+                }
+
+                ImageTypeSelector(
+                    selected = selectedImageType,
+                    onSelected = { selectedImageType = it },
+                )
+
+                if (selectedTab == 0) {
+                    selectedUri?.let { uri ->
+                        MediaImage(
+                            url = uri.toString(),
+                            contentDescription = "Preview",
+                            size = CoilSize(512, 512),
+                            placeholderIcon = Tabler.Outline.Photo,
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(200.dp)
+                                .clip(ShapeCache.smooth12),
+                            contentScale = ContentScale.Fit,
+                        )
+                    }
+                    FilledTonalButton(
+                        onClick = { fileLauncher.launch(arrayOf("image/*")) },
+                        modifier = Modifier.fillMaxWidth(),
+                    ) {
+                        Text(if (selectedUri != null) "Change File" else "Select Image")
+                    }
+                    Button(
+                        onClick = {
+                            selectedUri?.let { uri ->
+                                onUploadFile(uri, selectedImageType)
+                            }
+                        },
+                        modifier = Modifier.fillMaxWidth(),
+                        enabled = selectedUri != null,
+                    ) { Text("Upload") }
+                } else {
+                    OutlinedTextField(
+                        value = imageUrl,
+                        onValueChange = { imageUrl = it },
+                        label = { Text("Image URL") },
+                        modifier = Modifier.fillMaxWidth(),
+                        singleLine = true,
+                    )
+                    if (imageUrl.isNotBlank()) {
+                        MediaImage(
+                            url = imageUrl,
+                            contentDescription = "Preview",
+                            size = CoilSize(512, 512),
+                            placeholderIcon = Tabler.Outline.Photo,
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(200.dp)
+                                .clip(ShapeCache.smooth12),
+                            contentScale = ContentScale.Fit,
+                        )
+                    }
+                    Button(
+                        onClick = { onUploadUrl(imageUrl, selectedImageType) },
+                        modifier = Modifier.fillMaxWidth(),
+                        enabled = imageUrl.isNotBlank(),
+                    ) { Text("Download from URL") }
+                }
             }
         }
     }
@@ -375,129 +461,261 @@ private fun ImageBrowseSheet(
     var selectedProvider by remember { mutableStateOf<String?>(null) }
     var currentPage by remember { mutableStateOf(0) }
 
-    ModalBottomSheet(
-        onDismissRequest = onDismiss,
-        sheetState = sheetState,
-    ) {
-        Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 16.dp)
-                .padding(bottom = 32.dp),
-            verticalArrangement = Arrangement.spacedBy(12.dp),
+    val isTv = com.raulshma.jellyplay.core.ui.tv.LocalTvMode.current
+    if (isTv) {
+        com.raulshma.jellyplay.core.ui.components.TvSafeSheet(
+            onDismissRequest = onDismiss,
         ) {
-            Text("Browse Online Images", style = MaterialTheme.typography.headlineSmall)
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 16.dp)
+                    .padding(bottom = 32.dp),
+                verticalArrangement = Arrangement.spacedBy(12.dp),
+            ) {
+                Text("Browse Online Images", style = MaterialTheme.typography.headlineSmall)
 
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                ImageTypeSelector(
-                    selected = selectedType ?: "",
-                    onSelected = {
-                        selectedType = it.ifBlank { null }
-                        currentPage = 0
-                        onLoadImages(it.ifBlank { null }, selectedProvider, 0)
-                    },
-                    allowBlank = true,
-                )
-            }
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    ImageTypeSelector(
+                        selected = selectedType ?: "",
+                        onSelected = {
+                            selectedType = it.ifBlank { null }
+                            currentPage = 0
+                            onLoadImages(it.ifBlank { null }, selectedProvider, 0)
+                        },
+                        allowBlank = true,
+                    )
+                }
 
-            val providers = state.imageProviders
-            if (providers.size > 1) {
-                var providerExpanded by remember { mutableStateOf(false) }
-                ExposedDropdownMenuBox(
-                    expanded = providerExpanded,
-                    onExpandedChange = { providerExpanded = it },
-                ) {
-                    OutlinedTextField(
-                        value = selectedProvider ?: "All Providers",
-                        onValueChange = {},
-                        readOnly = true,
+                val providers = state.imageProviders
+                if (providers.size > 1) {
+                    var providerExpanded by remember { mutableStateOf(false) }
+                    ExposedDropdownMenuBox(
+                        expanded = providerExpanded,
+                        onExpandedChange = { providerExpanded = it },
+                    ) {
+                        OutlinedTextField(
+                            value = selectedProvider ?: "All Providers",
+                            onValueChange = {},
+                            readOnly = true,
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .menuAnchor(MenuAnchorType.PrimaryNotEditable),
+                            trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = providerExpanded) },
+                        )
+                        ExposedDropdownMenu(
+                            expanded = providerExpanded,
+                            onDismissRequest = { providerExpanded = false },
+                        ) {
+                            DropdownMenuItem(
+                                text = { Text("All Providers") },
+                                onClick = {
+                                    selectedProvider = null
+                                    currentPage = 0
+                                    onLoadImages(selectedType, null, 0)
+                                    providerExpanded = false
+                                },
+                            )
+                            providers.forEach { provider ->
+                                DropdownMenuItem(
+                                    text = { Text(provider.name) },
+                                    onClick = {
+                                        selectedProvider = provider.name
+                                        currentPage = 0
+                                        onLoadImages(selectedType, provider.name, 0)
+                                        providerExpanded = false
+                                    },
+                                )
+                            }
+                        }
+                    }
+                }
+
+                val remoteImages = state.remoteImages?.images ?: emptyList()
+                if (remoteImages.isEmpty()) {
+                    Box(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .menuAnchor(MenuAnchorType.PrimaryNotEditable),
-                        trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = providerExpanded) },
-                    )
-                    ExposedDropdownMenu(
-                        expanded = providerExpanded,
-                        onDismissRequest = { providerExpanded = false },
+                            .height(200.dp),
+                        contentAlignment = Alignment.Center,
                     ) {
-                        DropdownMenuItem(
-                            text = { Text("All Providers") },
-                            onClick = {
-                                selectedProvider = null
-                                currentPage = 0
-                                onLoadImages(selectedType, null, 0)
-                                providerExpanded = false
-                            },
-                        )
-                        providers.forEach { provider ->
-                            DropdownMenuItem(
-                                text = { Text(provider.name) },
-                                onClick = {
-                                    selectedProvider = provider.name
-                                    currentPage = 0
-                                    onLoadImages(selectedType, provider.name, 0)
-                                    providerExpanded = false
+                        Text("No images found", color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    }
+                } else {
+                    LazyVerticalGrid(
+                        columns = GridCells.Adaptive(140.dp),
+                        modifier = Modifier.height(400.dp),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        verticalArrangement = Arrangement.spacedBy(8.dp),
+                    ) {
+                        items(remoteImages, key = { it.url }) { remoteImage ->
+                            RemoteImageCard(
+                                remoteImage = remoteImage,
+                                onDownload = {
+                                    val type = selectedType ?: "Primary"
+                                    onDownload(remoteImage.url, type)
                                 },
                             )
                         }
                     }
+
+                    val total = state.remoteImages?.totalRecordCount ?: 0
+                    if (total > 50) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
+                            Text(
+                                "${currentPage * 50 + 1}-${minOf((currentPage + 1) * 50, total)} of $total",
+                                style = MaterialTheme.typography.labelMedium,
+                            )
+                            Row {
+                                TextButton(
+                                    onClick = {
+                                        currentPage = (currentPage - 1).coerceAtLeast(0)
+                                        onLoadImages(selectedType, selectedProvider, currentPage * 50)
+                                    },
+                                    enabled = currentPage > 0,
+                                ) { Text("Previous") }
+                                TextButton(
+                                    onClick = {
+                                        currentPage++
+                                        onLoadImages(selectedType, selectedProvider, currentPage * 50)
+                                    },
+                                    enabled = (currentPage + 1) * 50 < total,
+                                ) { Text("Next") }
+                            }
+                        }
+                    }
                 }
             }
+        }
+    } else {
+        ModalBottomSheet(
+            onDismissRequest = onDismiss,
+            sheetState = sheetState,
+        ) {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 16.dp)
+                    .padding(bottom = 32.dp),
+                verticalArrangement = Arrangement.spacedBy(12.dp),
+            ) {
+                Text("Browse Online Images", style = MaterialTheme.typography.headlineSmall)
 
-            val remoteImages = state.remoteImages?.images ?: emptyList()
-            if (remoteImages.isEmpty()) {
-                Box(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(200.dp),
-                    contentAlignment = Alignment.Center,
-                ) {
-                    Text("No images found", color = MaterialTheme.colorScheme.onSurfaceVariant)
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    ImageTypeSelector(
+                        selected = selectedType ?: "",
+                        onSelected = {
+                            selectedType = it.ifBlank { null }
+                            currentPage = 0
+                            onLoadImages(it.ifBlank { null }, selectedProvider, 0)
+                        },
+                        allowBlank = true,
+                    )
                 }
-            } else {
-                LazyVerticalGrid(
-                    columns = GridCells.Adaptive(140.dp),
-                    modifier = Modifier.height(400.dp),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
-                    verticalArrangement = Arrangement.spacedBy(8.dp),
-                ) {
-                    items(remoteImages, key = { it.url }) { remoteImage ->
-                        RemoteImageCard(
-                            remoteImage = remoteImage,
-                            onDownload = {
-                                val type = selectedType ?: "Primary"
-                                onDownload(remoteImage.url, type)
-                            },
+
+                val providers = state.imageProviders
+                if (providers.size > 1) {
+                    var providerExpanded by remember { mutableStateOf(false) }
+                    ExposedDropdownMenuBox(
+                        expanded = providerExpanded,
+                        onExpandedChange = { providerExpanded = it },
+                    ) {
+                        OutlinedTextField(
+                            value = selectedProvider ?: "All Providers",
+                            onValueChange = {},
+                            readOnly = true,
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .menuAnchor(MenuAnchorType.PrimaryNotEditable),
+                            trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = providerExpanded) },
                         )
+                        ExposedDropdownMenu(
+                            expanded = providerExpanded,
+                            onDismissRequest = { providerExpanded = false },
+                        ) {
+                            DropdownMenuItem(
+                                text = { Text("All Providers") },
+                                onClick = {
+                                    selectedProvider = null
+                                    currentPage = 0
+                                    onLoadImages(selectedType, null, 0)
+                                    providerExpanded = false
+                                },
+                            )
+                            providers.forEach { provider ->
+                                DropdownMenuItem(
+                                    text = { Text(provider.name) },
+                                    onClick = {
+                                        selectedProvider = provider.name
+                                        currentPage = 0
+                                        onLoadImages(selectedType, provider.name, 0)
+                                        providerExpanded = false
+                                    },
+                                )
+                            }
+                        }
                     }
                 }
 
-                val total = state.remoteImages?.totalRecordCount ?: 0
-                if (total > 50) {
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically,
+                val remoteImages = state.remoteImages?.images ?: emptyList()
+                if (remoteImages.isEmpty()) {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(200.dp),
+                        contentAlignment = Alignment.Center,
                     ) {
-                        Text(
-                            "${currentPage * 50 + 1}-${minOf((currentPage + 1) * 50, total)} of $total",
-                            style = MaterialTheme.typography.labelMedium,
-                        )
-                        Row {
-                            TextButton(
-                                onClick = {
-                                    currentPage = (currentPage - 1).coerceAtLeast(0)
-                                    onLoadImages(selectedType, selectedProvider, currentPage * 50)
+                        Text("No images found", color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    }
+                } else {
+                    LazyVerticalGrid(
+                        columns = GridCells.Adaptive(140.dp),
+                        modifier = Modifier.height(400.dp),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        verticalArrangement = Arrangement.spacedBy(8.dp),
+                    ) {
+                        items(remoteImages, key = { it.url }) { remoteImage ->
+                            RemoteImageCard(
+                                remoteImage = remoteImage,
+                                onDownload = {
+                                    val type = selectedType ?: "Primary"
+                                    onDownload(remoteImage.url, type)
                                 },
-                                enabled = currentPage > 0,
-                            ) { Text("Previous") }
-                            TextButton(
-                                onClick = {
-                                    currentPage++
-                                    onLoadImages(selectedType, selectedProvider, currentPage * 50)
-                                },
-                                enabled = (currentPage + 1) * 50 < total,
-                            ) { Text("Next") }
+                            )
+                        }
+                    }
+
+                    val total = state.remoteImages?.totalRecordCount ?: 0
+                    if (total > 50) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
+                            Text(
+                                "${currentPage * 50 + 1}-${minOf((currentPage + 1) * 50, total)} of $total",
+                                style = MaterialTheme.typography.labelMedium,
+                            )
+                            Row {
+                                TextButton(
+                                    onClick = {
+                                        currentPage = (currentPage - 1).coerceAtLeast(0)
+                                        onLoadImages(selectedType, selectedProvider, currentPage * 50)
+                                    },
+                                    enabled = currentPage > 0,
+                                ) { Text("Previous") }
+                                TextButton(
+                                    onClick = {
+                                        currentPage++
+                                        onLoadImages(selectedType, selectedProvider, currentPage * 50)
+                                    },
+                                    enabled = (currentPage + 1) * 50 < total,
+                                ) { Text("Next") }
+                            }
                         }
                     }
                 }

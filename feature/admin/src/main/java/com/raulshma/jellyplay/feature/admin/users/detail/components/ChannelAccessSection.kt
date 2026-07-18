@@ -3,13 +3,15 @@ package com.raulshma.jellyplay.feature.admin.users.detail.components
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
+import com.composables.icons.tabler.Tabler
+import com.composables.icons.tabler.outline.Broadcast
+import com.composables.icons.tabler.outline.DeviceTv
 import com.raulshma.jellyplay.core.model.LiveTvChannel
 import com.raulshma.jellyplay.core.model.ManagedUserPolicy
+import com.raulshma.jellyplay.core.ui.components.SettingToggleItem
 
 /**
  * Channel access: "all channels" toggle + per-channel toggles. Hidden when the
@@ -25,9 +27,10 @@ fun ChannelAccessSection(
     if (channels.isEmpty()) return
     val rows = if (policy.enableAllChannels) 1 else 1 + channels.size
     UserEditSection(title = "Channel access", modifier = modifier) {
-        ToggleRow(
-            label = "Enable access to all channels",
-            description = if (policy.enableAllChannels) null else "Restrict to the channels below",
+        SettingToggleItem(
+            icon = Tabler.Outline.DeviceTv,
+            title = "Enable access to all channels",
+            subtitle = if (policy.enableAllChannels) "" else "Restrict to the channels below",
             checked = policy.enableAllChannels,
             onCheckedChange = { onPolicyChange(policy.copy(enableAllChannels = it)) },
             index = 0, count = rows,
@@ -35,8 +38,10 @@ fun ChannelAccessSection(
         if (!policy.enableAllChannels) {
             channels.forEachIndexed { i, ch ->
                 val checked = ch.id in policy.enabledChannels
-                ToggleRow(
-                    label = ch.name.ifBlank { ch.number ?: ch.id },
+                SettingToggleItem(
+                    icon = Tabler.Outline.Broadcast,
+                    title = ch.name.ifBlank { ch.number ?: ch.id },
+                    subtitle = "",
                     checked = checked,
                     onCheckedChange = { enable ->
                         val next = if (enable) policy.enabledChannels + ch.id
