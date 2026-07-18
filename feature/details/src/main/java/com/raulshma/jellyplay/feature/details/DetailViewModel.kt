@@ -891,6 +891,11 @@ class DetailViewModel @Inject constructor(
                     else -> item.mediaType.name
                 }
 
+                // For episodes, propagate the parent series/season ids so the
+                // downloads row is linked to its series. Without these,
+                // deleteOfflineSeries (WHERE seriesId = :seriesId) finds no rows
+                // and leaves the episode files + download rows orphaned.
+                val isEpisode = item.mediaType == MediaType.EPISODE
                 downloadRepository.startDownload(
                     mediaItemId = item.id,
                     name = item.name,
@@ -899,6 +904,12 @@ class DetailViewModel @Inject constructor(
                     downloadUrl = streamUrl,
                     imageUrl = imageUrl,
                     imageBlurHash = item.blurHashes.primary,
+                    seriesId = if (isEpisode) item.seriesId else null,
+                    seasonId = if (isEpisode) item.seasonId else null,
+                    seriesName = if (isEpisode) item.seriesName else null,
+                    seasonName = if (isEpisode) item.seasonName else null,
+                    episodeNumber = if (isEpisode) item.episodeNumber else null,
+                    seasonNumber = if (isEpisode) item.seasonNumber else null,
                 ).onSuccess { downloadItem ->
                     if (downloadItem.status == com.raulshma.jellyplay.core.model.DownloadStatus.PENDING) {
                         enqueueDownloadWorker(downloadItem.id)
