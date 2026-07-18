@@ -6,6 +6,7 @@ import com.raulshma.jellyplay.core.model.DownloadItem
 import com.raulshma.jellyplay.core.model.MediaDetail
 import com.raulshma.jellyplay.core.model.MediaStream
 import com.raulshma.jellyplay.core.model.MediaType
+import dagger.hilt.android.qualifiers.ApplicationContext
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -36,6 +37,7 @@ data class DownloadResult(
 
 @Singleton
 class DownloadDelegate @Inject constructor(
+    @ApplicationContext private val context: android.content.Context,
     private val downloadRepository: DownloadRepository,
     private val playbackRepository: PlaybackRepository,
 ) {
@@ -82,6 +84,27 @@ class DownloadDelegate @Inject constructor(
                     downloadRepository.enqueueDownload(downloadItem.id)
                     try {
                         val backdropUrl = playbackRepository.getBackdropUrl(request.mediaItemId, maxWidth = 1280)
+                        // Download poster + backdrop to local files so they render
+                        // offline; fall back to the remote URL if a download fails.
+                        // Filenames are keyed by mediaItemId so items sharing the
+                        // flat downloads dir don't overwrite each other.
+                        val parentDir = java.io.File(downloadItem.downloadPath).parentFile
+                        val localPoster = if (parentDir != null) {
+                            downloadRepository.downloadOfflineImage(
+                                request.mediaItemId, "Primary", 300, parentDir,
+                                com.raulshma.jellyplay.core.data.repository.DownloadArtifacts.posterFile(request.mediaItemId),
+                            ) ?: request.imageUrl
+                        } else {
+                            request.imageUrl
+                        }
+                        val localBackdrop = if (parentDir != null) {
+                            downloadRepository.downloadOfflineImage(
+                                request.mediaItemId, "Backdrop", 1280, parentDir,
+                                com.raulshma.jellyplay.core.data.repository.DownloadArtifacts.backdropFile(request.mediaItemId),
+                            ) ?: backdropUrl
+                        } else {
+                            backdropUrl
+                        }
                         // Persist full metadata when the originating MediaDetail
                         // is available (overview, cast, studios, ratings, …);
                         // otherwise fall back to the minimal item path so we
@@ -90,8 +113,8 @@ class DownloadDelegate @Inject constructor(
                         if (detail != null) {
                             downloadRepository.saveOfflineMediaDetail(
                                 detail,
-                                request.imageUrl,
-                                backdropUrl,
+                                localPoster,
+                                localBackdrop,
                             )
                         } else {
                             val minimalItem = com.raulshma.jellyplay.core.model.MediaItem(
@@ -101,11 +124,13 @@ class DownloadDelegate @Inject constructor(
                             )
                             downloadRepository.saveOfflineMediaItem(
                                 minimalItem,
-                                request.imageUrl,
-                                backdropUrl,
+                                localPoster,
+                                localBackdrop,
                             )
                         }
-                    } catch (_: Exception) {}
+                    } catch (e: Exception) {
+                        android.util.Log.d("DownloadDelegate", "Failed to persist offline images for ${request.mediaItemId}", e)
+                    }
                     request.trickplayInfo?.let { info ->
                         try {
                             downloadRepository.downloadTrickplayData(request.mediaItemId, info, downloadItem.downloadPath)

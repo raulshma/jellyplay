@@ -8,6 +8,7 @@ import kotlinx.coroutines.coroutineScope
 import com.raulshma.jellyplay.core.database.JellyPlayDatabase
 import com.raulshma.jellyplay.core.database.dao.DownloadDao
 import com.raulshma.jellyplay.core.database.dao.OfflineMediaDao
+import com.raulshma.jellyplay.core.database.entity.DownloadEntity
 import com.raulshma.jellyplay.core.database.entity.OfflineMediaEntity
 import com.raulshma.jellyplay.core.model.DownloadStatus
 import com.raulshma.jellyplay.core.model.MediaType
@@ -133,7 +134,7 @@ class OfflineRepositoryImpl @Inject constructor(
             if (it.downloadPath.isNotBlank()) {
                 val file = java.io.File(it.downloadPath)
                 if (file.exists()) file.delete()
-                DownloadArtifacts.cleanup(file.parentFile)
+                DownloadArtifacts.cleanup(file.parentFile, it.mediaItemId)
             }
         }
         database.withTransaction {
@@ -145,7 +146,7 @@ class OfflineRepositoryImpl @Inject constructor(
 
     override suspend fun deleteOfflineSeries(seriesId: String) {
         val downloads = downloadDao.getDownloadsForSeries(seriesId)
-        deleteArtifactsParallel(downloads.map { it.downloadPath })
+        deleteArtifactsParallel(downloads)
         database.withTransaction {
             val ids = downloads.map { it.id }
             if (ids.isNotEmpty()) downloadDao.deleteDownloadsByIds(ids)
@@ -156,7 +157,7 @@ class OfflineRepositoryImpl @Inject constructor(
 
     override suspend fun deleteOfflineSeason(seasonId: String) {
         val downloads = downloadDao.getDownloadsForSeason(seasonId)
-        deleteArtifactsParallel(downloads.map { it.downloadPath })
+        deleteArtifactsParallel(downloads)
         database.withTransaction {
             val ids = downloads.map { it.id }
             if (ids.isNotEmpty()) downloadDao.deleteDownloadsByIds(ids)
@@ -170,16 +171,20 @@ class OfflineRepositoryImpl @Inject constructor(
      * `File.delete()` + `cleanup()` loop — for a 100-episode series that was
      * 100+ serial FS syscalls). Runs on Dispatchers.IO; the subsequent DB
      * transaction does not depend on the file deletion result.
+     *
+     * Each download's per-item poster/backdrop are scoped by [DownloadEntity.mediaItemId]
+     * so deleting one item's artifacts never clobbers another item's images in
+     * the shared flat downloads dir.
      */
-    private suspend fun deleteArtifactsParallel(downloadPaths: List<String>) {
-        val paths = downloadPaths.filter { it.isNotBlank() }
-        if (paths.isEmpty()) return
+    private suspend fun deleteArtifactsParallel(downloads: List<DownloadEntity>) {
+        val nonBlank = downloads.filter { it.downloadPath.isNotBlank() }
+        if (nonBlank.isEmpty()) return
         coroutineScope {
-            paths.map { path ->
+            nonBlank.map { entity ->
                 async(Dispatchers.IO) {
-                    val file = java.io.File(path)
+                    val file = java.io.File(entity.downloadPath)
                     if (file.exists()) file.delete()
-                    DownloadArtifacts.cleanup(file.parentFile)
+                    DownloadArtifacts.cleanup(file.parentFile, entity.mediaItemId)
                 }
             }.awaitAll()
         }
