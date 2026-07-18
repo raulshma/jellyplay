@@ -167,7 +167,6 @@ class LibVlcPlayerEngine(
 
         val options = arrayListOf(
             "--aout=${vlcCfg.audioOutput.key}",
-            "--vout=${vlcCfg.videoOutput.key}",
         )
 
         request.preferredAudioLanguage?.takeIf { it.isNotBlank() }?.let { language ->
