@@ -18,6 +18,7 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
+import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
@@ -44,6 +45,7 @@ import com.raulshma.jellyplay.core.ui.adaptive.LocalAdaptiveInfo
 import com.raulshma.jellyplay.core.ui.adaptive.itemSpacing
 import com.raulshma.jellyplay.core.ui.adaptive.rowCardWidth
 import com.raulshma.jellyplay.core.ui.animation.lazyItemPlacementSpec
+import com.raulshma.jellyplay.core.ui.components.JellyPlayCircularProgressIndicator
 import com.raulshma.jellyplay.core.ui.components.OfflineMediaCard
 import com.raulshma.jellyplay.core.ui.tv.tvFocusRestorer
 import com.raulshma.jellyplay.core.ui.components.ScreenEmptyState
@@ -57,6 +59,7 @@ import java.util.PriorityQueue
  * Recently Downloaded, then per-type rows (Movies / Series / Music). Wires up
  * the previously-dormant "Go online" affordance.
  */
+@OptIn(ExperimentalMaterial3ExpressiveApi::class)
 @Composable
 fun OfflineHomeContent(
     offlineLibrary: List<OfflineMediaItem>,
@@ -70,6 +73,9 @@ fun OfflineHomeContent(
      * "online fetch failed, showing downloads" fallback so the implicit switch isn't silent.
      */
     statusMessage: String? = null,
+    /** True while the manual offline→online transition is in flight. Swaps the
+     *  Go-online button for a disabled spinner so the tap isn't silent. */
+    isGoingOnline: Boolean = false,
 ) {
     val isTv = LocalTvMode.current
     val adaptiveInfo = LocalAdaptiveInfo.current
@@ -83,6 +89,7 @@ fun OfflineHomeContent(
                 description = "Download media while online to access it offline.",
                 actionLabel = "Go online",
                 onAction = onGoOnline,
+                actionLoading = isGoingOnline,
             )
         }
         return
@@ -209,10 +216,22 @@ fun OfflineHomeContent(
                     Text(summary, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
                 Spacer(Modifier.height(12.dp))
-                OutlinedButton(onClick = onGoOnline, modifier = Modifier.clip(ShapeCache.smooth16)) {
-                    Icon(Tabler.Outline.Wifi, contentDescription = null, modifier = Modifier.size(16.dp))
-                    Spacer(Modifier.size(6.dp))
-                    Text("Go online")
+                OutlinedButton(
+                    onClick = onGoOnline,
+                    enabled = !isGoingOnline,
+                    modifier = Modifier.clip(ShapeCache.smooth16),
+                ) {
+                    if (isGoingOnline) {
+                        JellyPlayCircularProgressIndicator(
+                            modifier = Modifier.size(16.dp),
+                        )
+                        Spacer(Modifier.size(6.dp))
+                        Text("Going online…")
+                    } else {
+                        Icon(Tabler.Outline.Wifi, contentDescription = null, modifier = Modifier.size(16.dp))
+                        Spacer(Modifier.size(6.dp))
+                        Text("Go online")
+                    }
                 }
             }
         }

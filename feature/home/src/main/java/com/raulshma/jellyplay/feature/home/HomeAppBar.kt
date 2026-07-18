@@ -22,6 +22,7 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.wrapContentWidth
 import androidx.compose.material3.Badge
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
 import androidx.compose.material3.FloatingActionButtonMenu
 import androidx.compose.material3.FloatingActionButtonMenuItem
 import androidx.compose.material3.Icon
@@ -56,6 +57,7 @@ import com.raulshma.jellyplay.core.model.HomeMode
 import com.raulshma.jellyplay.core.model.OfflineMode
 import com.raulshma.jellyplay.core.ui.components.HeaderStatus
 import com.raulshma.jellyplay.core.ui.components.HeaderStatusIndicator
+import com.raulshma.jellyplay.core.ui.components.JellyPlayCircularProgressIndicator
 import com.raulshma.jellyplay.core.ui.components.ModeSwitch
 import com.raulshma.jellyplay.core.ui.components.rememberWallClockTimeString
 import com.composables.icons.tabler.Tabler
@@ -90,6 +92,7 @@ fun HomeTopDock(
     onSearchQueryChange: (String) -> Unit,
     onClearSearch: () -> Unit,
     onToggleOffline: () -> Unit,
+    isGoingOnline: Boolean = false,
     searchResultsContent: @Composable () -> Unit,
     modifier: Modifier = Modifier,
 ) {
@@ -172,6 +175,7 @@ fun HomeTopDock(
                         appBarIconColorFaded = appBarIconColorFaded,
                         showClock = showClock,
                         onToggleOffline = onToggleOffline,
+                        isGoingOnline = isGoingOnline,
                         onModeChange = onModeChange,
                         onSearchExpand = { onSearchExpanded(true) },
                     )
@@ -280,6 +284,7 @@ private fun RowScope.SearchExpandedContent(
     }
 }
 
+@OptIn(ExperimentalMaterial3ExpressiveApi::class)
 @Composable
 private fun CollapsedDockContent(
     offlineMode: OfflineMode,
@@ -288,6 +293,7 @@ private fun CollapsedDockContent(
     appBarIconColorFaded: Color,
     showClock: Boolean,
     onToggleOffline: () -> Unit,
+    isGoingOnline: Boolean = false,
     onModeChange: (HomeMode) -> Unit,
     onSearchExpand: () -> Unit,
 ) {
@@ -332,14 +338,21 @@ private fun CollapsedDockContent(
         ) {
             IconButton(
                 onClick = onToggleOffline,
+                enabled = !isGoingOnline,
                 modifier = Modifier.size(40.dp),
             ) {
-                Icon(
-                    Tabler.Outline.Download,
-                    contentDescription = "Go online",
-                    tint = MaterialTheme.colorScheme.primary,
-                    modifier = Modifier.size(20.dp),
-                )
+                if (isGoingOnline) {
+                    JellyPlayCircularProgressIndicator(
+                        modifier = Modifier.size(20.dp),
+                    )
+                } else {
+                    Icon(
+                        Tabler.Outline.Download,
+                        contentDescription = "Go online",
+                        tint = MaterialTheme.colorScheme.primary,
+                        modifier = Modifier.size(20.dp),
+                    )
+                }
             }
         }
     }
@@ -382,6 +395,7 @@ fun HomeFabMenu(
     onSyncPlayClick: () -> Unit,
     onDownloadsClick: () -> Unit,
     onToggleOffline: () -> Unit,
+    isGoingOnline: Boolean = false,
     onPlayOnClick: () -> Unit,
     onSettingsClick: () -> Unit,
     modifier: Modifier = Modifier,
@@ -489,17 +503,31 @@ fun HomeFabMenu(
         FloatingActionButtonMenuItem(
             onClick = {
                 onToggle(false)
-                onToggleOffline()
+                // Guard re-taps while the offline→online transition is already
+                // in flight; FloatingActionButtonMenuItem has no `enabled` arg.
+                if (!isGoingOnline) onToggleOffline()
             },
             text = {
-                Text(if (offlineMode != OfflineMode.ONLINE) "Go Online" else "Go Offline")
+                Text(
+                    when {
+                        isGoingOnline -> "Going online…"
+                        offlineMode != OfflineMode.ONLINE -> "Go Online"
+                        else -> "Go Offline"
+                    }
+                )
             },
             icon = {
-                Icon(
-                    if (offlineMode != OfflineMode.ONLINE) Tabler.Outline.Wifi else Tabler.Outline.WifiOff,
-                    contentDescription = null,
-                    modifier = Modifier.size(20.dp),
-                )
+                if (isGoingOnline) {
+                    JellyPlayCircularProgressIndicator(
+                        modifier = Modifier.size(20.dp),
+                    )
+                } else {
+                    Icon(
+                        if (offlineMode != OfflineMode.ONLINE) Tabler.Outline.Wifi else Tabler.Outline.WifiOff,
+                        contentDescription = null,
+                        modifier = Modifier.size(20.dp),
+                    )
+                }
             },
             containerColor = if (offlineMode != OfflineMode.ONLINE) {
                 MaterialTheme.colorScheme.primaryContainer
