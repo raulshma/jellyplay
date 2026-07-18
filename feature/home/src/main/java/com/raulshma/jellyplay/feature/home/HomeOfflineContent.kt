@@ -2,6 +2,7 @@ package com.raulshma.jellyplay.feature.home
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.focusGroup
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -44,6 +45,7 @@ import com.raulshma.jellyplay.core.ui.adaptive.itemSpacing
 import com.raulshma.jellyplay.core.ui.adaptive.rowCardWidth
 import com.raulshma.jellyplay.core.ui.animation.lazyItemPlacementSpec
 import com.raulshma.jellyplay.core.ui.components.OfflineMediaCard
+import com.raulshma.jellyplay.core.ui.tv.tvFocusRestorer
 import com.raulshma.jellyplay.core.ui.components.ScreenEmptyState
 import com.raulshma.jellyplay.core.ui.tv.LocalTvMode
 import java.util.PriorityQueue
@@ -273,6 +275,9 @@ private fun OfflineSection(
         LazyRow(
             contentPadding = PaddingValues(horizontal = contentPad),
             horizontalArrangement = Arrangement.spacedBy(12.dp),
+            modifier = Modifier
+                .focusGroup()
+                .tvFocusRestorer(),
         ) {
             items(items, key = { "offline_${it.id}" }, contentType = { "offlineItem" }) { item ->
                 val placementSpec = lazyItemPlacementSpec()
@@ -336,6 +341,8 @@ fun DownloadedSection(
     LazyRow(
         modifier = Modifier
             .fillMaxWidth()
+            .focusGroup()
+            .tvFocusRestorer()
             .background(backgroundColor)
             .padding(horizontal = contentPad, vertical = 4.dp),
         horizontalArrangement = Arrangement.spacedBy(spacing),

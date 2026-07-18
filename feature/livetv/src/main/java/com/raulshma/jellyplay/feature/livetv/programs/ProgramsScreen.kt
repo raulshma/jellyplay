@@ -14,6 +14,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.focusGroup
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
@@ -24,9 +25,12 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.res.stringResource
@@ -44,8 +48,11 @@ import com.raulshma.jellyplay.core.ui.adaptive.itemSpacing
 import com.raulshma.jellyplay.core.ui.components.ErrorScreen
 import com.raulshma.jellyplay.core.ui.components.ScreenEmptyState
 import com.raulshma.jellyplay.core.ui.components.ScreenLoadingState
+import com.raulshma.jellyplay.core.ui.components.focusIndicator
 import com.raulshma.jellyplay.core.ui.image.MediaImage
 import com.raulshma.jellyplay.core.ui.tv.LocalTvMode
+import com.raulshma.jellyplay.core.ui.tv.TvGrabInitialFocus
+import com.raulshma.jellyplay.core.ui.tv.tvFocusRestorer
 import com.raulshma.jellyplay.feature.livetv.R
 import com.raulshma.jellyplay.feature.livetv.components.RecordDialog
 
@@ -61,6 +68,13 @@ fun ProgramsScreen(
     val contentPad = adaptiveInfo.contentPadding(isTv)
     val spacing = adaptiveInfo.itemSpacing(isTv)
     val bottomPad = adaptiveInfo.bottomPadding(isTv)
+
+    val focusRequester = remember { FocusRequester() }
+    TvGrabInitialFocus(
+        focusRequester = focusRequester,
+        itemCount = uiState.rows.size,
+        tag = "programs_init",
+    )
 
     when {
         uiState.isLoading && uiState.rows.isEmpty() -> {
@@ -81,7 +95,11 @@ fun ProgramsScreen(
                 onRefresh = { viewModel.load() },
             ) {
                 LazyColumn(
-                    modifier = Modifier.fillMaxSize(),
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .focusGroup()
+                        .tvFocusRestorer()
+                        .focusRequester(focusRequester),
                     contentPadding = PaddingValues(top = 8.dp, bottom = bottomPad),
                     verticalArrangement = Arrangement.spacedBy(spacing + 8.dp),
                 ) {
@@ -134,6 +152,7 @@ private fun ProgramRowSection(
         LazyRow(
             contentPadding = PaddingValues(horizontal = contentPad),
             horizontalArrangement = Arrangement.spacedBy(spacing),
+            modifier = Modifier.tvFocusRestorer(),
         ) {
             items(items = row.programs, key = { it.id }) { program ->
                 ProgramCard(
@@ -158,6 +177,7 @@ private fun ProgramCard(
         modifier = Modifier
             .width(220.dp)
             .clip(ShapeCache.smooth12)
+            .focusIndicator(ShapeCache.smooth12)
             .clickable(onClick = onClick)
             .padding(4.dp),
     ) {

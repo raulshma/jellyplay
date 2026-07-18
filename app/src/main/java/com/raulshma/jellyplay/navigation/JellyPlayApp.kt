@@ -690,6 +690,19 @@ private fun MainContent(
                     libraryFolders = libraryFolders,
                     nowPlayingTitle = audioTitle.takeIf { audioItemId != null },
                     nowPlayingEnabled = audioItemId != null,
+                    showMiniPlayer = showMiniPlayer,
+                    audioPlaybackManager = audioPlaybackManager,
+                    isAudioPlaying = isAudioPlaying,
+                    audioTitle = audioTitle,
+                    audioArtist = audioArtist,
+                    audioArtworkUrl = audioArtworkUrl,
+                    onDismissMiniPlayer = { isMiniPlayerDismissed = true },
+                    isVideoMiniMode = isVideoMiniMode,
+                    videoMiniPlayerState = videoMiniPlayerState,
+                    videoMiniTitle = videoMiniTitle,
+                    videoMiniSubtitle = videoMiniSubtitle,
+                    videoMiniIsPlaying = videoMiniIsPlaying,
+                    videoMiniItemId = videoMiniItemId,
                 )
             } else {
                 if (!isFullScreenRoute) {
@@ -875,6 +888,19 @@ private fun TvContent(
     libraryFolders: List<com.raulshma.jellyplay.core.model.LibraryFolder>,
     nowPlayingTitle: String?,
     nowPlayingEnabled: Boolean,
+    showMiniPlayer: Boolean,
+    audioPlaybackManager: AudioPlaybackManager,
+    isAudioPlaying: Boolean,
+    audioTitle: String,
+    audioArtist: String,
+    audioArtworkUrl: String,
+    onDismissMiniPlayer: () -> Unit,
+    isVideoMiniMode: Boolean,
+    videoMiniPlayerState: com.raulshma.jellyplay.core.data.playback.VideoMiniPlayerState,
+    videoMiniTitle: String,
+    videoMiniSubtitle: String,
+    videoMiniIsPlaying: Boolean,
+    videoMiniItemId: String?,
 ) {
     TvMaterial3Theme(
         colorScheme = tvDarkColorScheme(
@@ -922,19 +948,75 @@ private fun TvContent(
                 nowPlayingEnabled = nowPlayingEnabled,
                 onNowPlayingClick = onNowPlayingClick,
             ) {
-                MainNavDisplay(
-                    navigationState = navigationState,
-                    navigator = navigator,
-                    onLogout = onLogout,
-                    homeMode = homeMode,
-                    onModeChange = onModeChange,
-                    enterPip = enterPip,
-                    enterVideoMiniMode = enterVideoMiniMode,
-                    saveableStateHolder = saveableStateHolder,
-                    entryDecorator = entryDecorator,
-                    onNowPlayingClick = onNowPlayingClick,
-                    onAmbientClick = onAmbientClick,
-                )
+                Box(modifier = Modifier.fillMaxSize()) {
+                    MainNavDisplay(
+                        navigationState = navigationState,
+                        navigator = navigator,
+                        onLogout = onLogout,
+                        homeMode = homeMode,
+                        onModeChange = onModeChange,
+                        enterPip = enterPip,
+                        enterVideoMiniMode = enterVideoMiniMode,
+                        saveableStateHolder = saveableStateHolder,
+                        entryDecorator = entryDecorator,
+                        onNowPlayingClick = onNowPlayingClick,
+                        onAmbientClick = onAmbientClick,
+                    )
+                    // TV mini-player transport: the drawer's "Now Playing" row only opens the
+                    // full player, so without this overlay backgrounded audio has no D-pad-
+                    // reachable pause/skip/close bar on TV. The components are already TV-aware
+                    // (MiniPlayer/VideoMiniPlayer apply tvFocusIndicator); this is the host
+                    // wiring gap called out in the TV navigation audit (H5).
+                    if (showMiniPlayer) {
+                        Box(
+                            modifier = Modifier
+                                .align(Alignment.BottomCenter)
+                                .padding(bottom = 8.dp),
+                        ) {
+                            MiniPlayer(
+                                isVisible = true,
+                                title = audioTitle,
+                                artist = audioArtist,
+                                artworkUri = audioArtworkUrl,
+                                isPlaying = isAudioPlaying,
+                                onClick = onNowPlayingClick,
+                                onClose = {
+                                    audioPlaybackManager.stopAndRelease()
+                                    onDismissMiniPlayer()
+                                },
+                                onPlayPause = {
+                                    audioPlaybackManager.togglePlayPause()
+                                },
+                                onSkipNext = {
+                                    audioPlaybackManager.skipToNext()
+                                },
+                            )
+                        }
+                    }
+                    if (isVideoMiniMode) {
+                        VideoMiniPlayer(
+                            isVisible = true,
+                            engine = videoMiniPlayerState.engine as? com.raulshma.jellyplay.feature.player.video.engine.MediaEngine,
+                            title = videoMiniTitle,
+                            subtitle = videoMiniSubtitle,
+                            isPlaying = videoMiniIsPlaying,
+                            onClick = {
+                                val itemId = videoMiniItemId ?: return@VideoMiniPlayer
+                                navigator.navigate(Route.VideoPlayer(itemId))
+                            },
+                            onClose = {
+                                videoMiniPlayerState.release()
+                            },
+                            onPlayPause = {
+                                videoMiniPlayerState.togglePlayPause()
+                            },
+                            modifier = Modifier
+                                .align(Alignment.BottomEnd)
+                                .padding(end = 8.dp, bottom = 8.dp)
+                                .fillMaxWidth(0.45f),
+                        )
+                    }
+                }
             }
         }
     }

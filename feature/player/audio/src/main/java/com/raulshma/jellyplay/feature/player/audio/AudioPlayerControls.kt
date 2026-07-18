@@ -3,6 +3,7 @@ package com.raulshma.jellyplay.feature.player.audio
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.focusGroup
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.Arrangement
@@ -102,6 +103,7 @@ internal fun PixelTransportControls(
     Row(
         modifier = Modifier
             .fillMaxWidth()
+            .focusGroup()
             .clip(ShapeCache.smoothPill)
             .background(pillSurface)
             .padding(horizontal = 16.dp, vertical = 8.dp),
@@ -183,6 +185,7 @@ internal fun PixelSecondaryControls(
     Row(
         modifier = Modifier
             .fillMaxWidth(0.8f)
+            .focusGroup()
             .clip(ShapeCache.smoothPill)
             .background(pillSurfaceDark)
             .padding(horizontal = 16.dp, vertical = 6.dp),
@@ -280,9 +283,12 @@ internal fun NextTrackBar(
     modifier: Modifier = Modifier,
     accentColor: Color,
 ) {
+    val focusState = rememberTvFocusState()
     Row(
         modifier = modifier
             .fillMaxWidth()
+            .then(focusState.focusModifier)
+            .tvFocusIndicator(focusState, ShapeCache.smooth12)
             .clickable(role = androidx.compose.ui.semantics.Role.Button, onClick = onSkipTrack)
             .padding(horizontal = 8.dp, vertical = 6.dp),
         verticalAlignment = Alignment.CenterVertically,

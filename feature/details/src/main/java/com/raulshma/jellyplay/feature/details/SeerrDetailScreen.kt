@@ -8,6 +8,7 @@ import com.raulshma.jellyplay.core.designsystem.theme.isLightColor
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.focusGroup
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
@@ -1024,6 +1025,7 @@ private fun SeerrHorizontalSection(
             horizontalArrangement = Arrangement.spacedBy(16.dp),
             contentPadding = PaddingValues(horizontal = 4.dp),
             modifier = Modifier
+                .focusGroup()
                 .tvFocusRestorer(),
         ) {
             items(uniqueItems, key = { it.id }, contentType = { "seerrSearchItem" }) { item ->
@@ -1129,6 +1131,7 @@ private fun CastSection(
             horizontalArrangement = Arrangement.spacedBy(16.dp),
             contentPadding = PaddingValues(horizontal = 4.dp),
             modifier = Modifier
+                .focusGroup()
                 .tvFocusRestorer(),
         ) {
             items(uniqueCast, key = { member -> when (member) { is SeerrAggregateCast -> member.id; is SeerrCast -> member.id; else -> member.hashCode() } }, contentType = { "castMember" }) { member ->
@@ -1224,6 +1227,7 @@ private fun SeasonsSection(
             horizontalArrangement = Arrangement.spacedBy(16.dp),
             contentPadding = PaddingValues(horizontal = 4.dp),
             modifier = Modifier
+                .focusGroup()
                 .tvFocusRestorer(),
         ) {
             items(sortedSeasons, key = { it.seasonNumber }, contentType = { "season" }) { season ->
@@ -1606,6 +1610,7 @@ private fun VideosSection(
             horizontalArrangement = Arrangement.spacedBy(16.dp),
             contentPadding = PaddingValues(horizontal = 4.dp),
             modifier = Modifier
+                .focusGroup()
                 .tvFocusRestorer(),
         ) {
             items(uniqueVideos, key = { it.key!! }, contentType = { "video" }) { video ->

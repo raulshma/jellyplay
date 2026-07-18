@@ -14,6 +14,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.focusGroup
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
@@ -24,9 +25,12 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
@@ -45,8 +49,11 @@ import com.raulshma.jellyplay.core.ui.adaptive.itemSpacing
 import com.raulshma.jellyplay.core.ui.components.ErrorScreen
 import com.raulshma.jellyplay.core.ui.components.ScreenEmptyState
 import com.raulshma.jellyplay.core.ui.components.ScreenLoadingState
+import com.raulshma.jellyplay.core.ui.components.focusIndicator
 import com.raulshma.jellyplay.core.ui.image.MediaImage
 import com.raulshma.jellyplay.core.ui.tv.LocalTvMode
+import com.raulshma.jellyplay.core.ui.tv.TvGrabInitialFocus
+import com.raulshma.jellyplay.core.ui.tv.tvFocusRestorer
 import com.raulshma.jellyplay.feature.livetv.R
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -62,6 +69,13 @@ fun RecordingsScreen(
     val contentPad = adaptiveInfo.contentPadding(isTv)
     val spacing = adaptiveInfo.itemSpacing(isTv)
     val bottomPad = adaptiveInfo.bottomPadding(isTv)
+
+    val focusRequester = remember { FocusRequester() }
+    TvGrabInitialFocus(
+        focusRequester = focusRequester,
+        itemCount = uiState.recordings.size + uiState.folders.size,
+        tag = "recordings_init",
+    )
 
     when {
         uiState.isLoading && uiState.recordings.isEmpty() && uiState.folders.isEmpty() -> {
@@ -82,7 +96,11 @@ fun RecordingsScreen(
                 onRefresh = { viewModel.load() },
             ) {
                 LazyColumn(
-                    modifier = Modifier.fillMaxSize(),
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .focusGroup()
+                        .tvFocusRestorer()
+                        .focusRequester(focusRequester),
                     contentPadding = PaddingValues(vertical = 8.dp, horizontal = 0.dp),
                 ) {
                     if (uiState.recordings.isNotEmpty()) {
@@ -93,6 +111,7 @@ fun RecordingsScreen(
                             LazyRow(
                                 contentPadding = PaddingValues(horizontal = contentPad),
                                 horizontalArrangement = Arrangement.spacedBy(spacing),
+                                modifier = Modifier.tvFocusRestorer(),
                             ) {
                                 items(items = uiState.recordings, key = { it.id }) { recording ->
                                     RecordingCard(
@@ -145,6 +164,7 @@ private fun RecordingCard(
         modifier = Modifier
             .width(200.dp)
             .clip(ShapeCache.smooth12)
+            .focusIndicator(ShapeCache.smooth12)
             .clickable(onClick = onClick)
             .padding(4.dp),
     ) {
@@ -190,6 +210,7 @@ private fun FolderRow(
             .padding(horizontal = contentPad, vertical = 6.dp)
             .clip(ShapeCache.smooth12)
             .background(MaterialTheme.colorScheme.surfaceContainerLow)
+            .focusIndicator(ShapeCache.smooth12)
             .clickable(onClick = onClick)
             .padding(14.dp),
         verticalAlignment = Alignment.CenterVertically,

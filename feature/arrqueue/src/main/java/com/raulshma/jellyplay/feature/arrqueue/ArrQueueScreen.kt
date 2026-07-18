@@ -38,6 +38,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
@@ -57,6 +58,8 @@ import com.composables.icons.tabler.outline.Settings
 import com.composables.icons.tabler.outline.Trash
 import com.composables.icons.tabler.outline.X
 import com.raulshma.jellyplay.core.designsystem.theme.ShapeCache
+import com.raulshma.jellyplay.core.ui.tv.rememberTvFocusState
+import com.raulshma.jellyplay.core.ui.tv.tvFocusIndicator
 import com.raulshma.jellyplay.core.designsystem.theme.StatusColors
 import com.raulshma.jellyplay.core.model.arr.ArrDownloadStatus
 import com.raulshma.jellyplay.core.model.arr.ArrQueueItem
@@ -78,7 +81,14 @@ fun ArrQueueScreen(
         title = "Activity Queue",
         onBack = onBack,
         actions = {
-            IconButton(onClick = { viewModel.refresh() }, enabled = !state.isLoading) {
+            val focusState = rememberTvFocusState()
+            IconButton(
+                onClick = { viewModel.refresh() },
+                enabled = !state.isLoading,
+                modifier = Modifier
+                    .then(focusState.focusModifier)
+                    .tvFocusIndicator(focusState, CircleShape),
+            ) {
                 Icon(Tabler.Outline.Refresh, contentDescription = "Refresh")
             }
         },
@@ -234,9 +244,12 @@ private fun QueueRow(
     onGrab: () -> Unit,
     onImport: () -> Unit,
 ) {
+    val focusState = rememberTvFocusState()
     Card(
         modifier = Modifier
             .fillMaxWidth()
+            .then(focusState.focusModifier)
+            .tvFocusIndicator(focusState, ShapeCache.smooth12)
             .combinedClickable(onClick = onClick, onLongClick = onLongClick),
         shape = ShapeCache.smooth12,
         colors = CardDefaults.cardColors(

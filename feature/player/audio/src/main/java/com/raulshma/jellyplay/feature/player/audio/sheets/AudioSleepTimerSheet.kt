@@ -21,6 +21,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.raulshma.jellyplay.core.designsystem.theme.ShapeCache
 import com.raulshma.jellyplay.core.ui.components.PlayerModalBottomSheet
+import com.raulshma.jellyplay.core.ui.components.focusIndicator
 import com.raulshma.jellyplay.core.ui.components.formatDurationMs
 import com.raulshma.jellyplay.feature.player.audio.R
 
@@ -83,6 +84,7 @@ internal fun AudioSleepTimerSheet(
                         color = MaterialTheme.colorScheme.error,
                         fontWeight = FontWeight.Medium,
                         modifier = Modifier
+                            .focusIndicator()
                             .clickable(
                                 role = androidx.compose.ui.semantics.Role.Button,
                                 onClick = onCancel,

@@ -2,6 +2,7 @@ package com.raulshma.jellyplay.components
 
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.foundation.background
+import androidx.compose.foundation.focusGroup
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -25,7 +26,6 @@ import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Slider
 import androidx.compose.material3.SliderDefaults
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -70,7 +70,9 @@ import com.raulshma.jellyplay.PlayOnViewModel
 import com.raulshma.jellyplay.core.designsystem.theme.CastColors
 import com.raulshma.jellyplay.core.designsystem.theme.ShapeCache
 import com.raulshma.jellyplay.core.designsystem.theme.rememberArtworkColors
+import com.raulshma.jellyplay.core.ui.components.focusIndicator
 import com.raulshma.jellyplay.core.ui.components.formatDurationMs
+import com.raulshma.jellyplay.core.ui.tv.components.DpadSlider
 
 /**
  * Full-screen remote-control companion for an active "Play On" (Jellyfin remote
@@ -261,11 +263,15 @@ private fun CompanionHeader(
     Row(
         modifier = Modifier
             .fillMaxWidth()
+            .focusGroup()
             .padding(horizontal = 8.dp, vertical = 8.dp),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.SpaceBetween,
     ) {
-        IconButton(onClick = onBack) {
+        IconButton(
+            onClick = onBack,
+            modifier = Modifier.focusIndicator(),
+        ) {
             Icon(
                 imageVector = Tabler.Outline.ArrowLeft,
                 contentDescription = "Close",
@@ -307,9 +313,10 @@ private fun CompanionSeekRow(
     Column(
         modifier = Modifier
             .fillMaxWidth()
+            .focusGroup()
             .padding(horizontal = 24.dp, vertical = 12.dp),
     ) {
-        Slider(
+        DpadSlider(
             value = seekPos.coerceIn(range),
             onValueChange = { seekPos = it },
             onValueChangeFinished = { onSeek(seekPos.toLong()) },
@@ -346,11 +353,15 @@ private fun CompanionTransportRow(
     Row(
         modifier = Modifier
             .fillMaxWidth()
+            .focusGroup()
             .padding(horizontal = 16.dp, vertical = 16.dp),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.CenterHorizontally),
     ) {
-        IconButton(onClick = onPrevious) {
+        IconButton(
+            onClick = onPrevious,
+            modifier = Modifier.focusIndicator(),
+        ) {
             Icon(
                 imageVector = Tabler.Outline.PlayerTrackPrev,
                 contentDescription = "Previous",
@@ -358,7 +369,10 @@ private fun CompanionTransportRow(
                 modifier = Modifier.size(28.dp),
             )
         }
-        IconButton(onClick = onSeekBack) {
+        IconButton(
+            onClick = onSeekBack,
+            modifier = Modifier.focusIndicator(),
+        ) {
             Icon(
                 imageVector = Tabler.Outline.PlayerSkipBack,
                 contentDescription = "Back 10 seconds",
@@ -371,7 +385,9 @@ private fun CompanionTransportRow(
             containerColor = MaterialTheme.colorScheme.primary,
             contentColor = MaterialTheme.colorScheme.onPrimary,
             shape = CircleShape,
-            modifier = Modifier.size(64.dp),
+            modifier = Modifier
+                .size(64.dp)
+                .focusIndicator(CircleShape),
         ) {
             Icon(
                 imageVector = if (isPlaying) Tabler.Outline.PlayerPause else Tabler.Outline.PlayerPlay,
@@ -379,7 +395,10 @@ private fun CompanionTransportRow(
                 modifier = Modifier.size(32.dp),
             )
         }
-        IconButton(onClick = onSeekForward) {
+        IconButton(
+            onClick = onSeekForward,
+            modifier = Modifier.focusIndicator(),
+        ) {
             Icon(
                 imageVector = Tabler.Outline.PlayerSkipForward,
                 contentDescription = "Forward 30 seconds",
@@ -387,7 +406,10 @@ private fun CompanionTransportRow(
                 modifier = Modifier.size(26.dp),
             )
         }
-        IconButton(onClick = onNext) {
+        IconButton(
+            onClick = onNext,
+            modifier = Modifier.focusIndicator(),
+        ) {
             Icon(
                 imageVector = Tabler.Outline.PlayerTrackNext,
                 contentDescription = "Next",
@@ -406,6 +428,7 @@ private fun CompanionVolumeRow(
     Row(
         modifier = Modifier
             .fillMaxWidth()
+            .focusGroup()
             .padding(horizontal = 24.dp, vertical = 8.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
@@ -416,7 +439,7 @@ private fun CompanionVolumeRow(
             modifier = Modifier.size(20.dp),
         )
         Spacer(Modifier.width(12.dp))
-        Slider(
+        DpadSlider(
             value = volume,
             onValueChange = onVolume,
             valueRange = 0f..1f,
@@ -434,6 +457,7 @@ private fun CompanionFooter(
     Row(
         modifier = Modifier
             .fillMaxWidth()
+            .focusGroup()
             .padding(horizontal = 24.dp, vertical = 16.dp),
         horizontalArrangement = Arrangement.spacedBy(12.dp, Alignment.CenterHorizontally),
         verticalAlignment = Alignment.CenterVertically,
@@ -443,6 +467,7 @@ private fun CompanionFooter(
             shape = CircleShape,
             color = MaterialTheme.colorScheme.errorContainer,
             contentColor = MaterialTheme.colorScheme.onErrorContainer,
+            modifier = Modifier.focusIndicator(CircleShape),
         ) {
             Row(
                 modifier = Modifier.padding(horizontal = 16.dp, vertical = 10.dp),
@@ -462,6 +487,7 @@ private fun CompanionFooter(
             shape = CircleShape,
             color = MaterialTheme.colorScheme.surfaceVariant,
             contentColor = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.focusIndicator(CircleShape),
         ) {
             Row(
                 modifier = Modifier.padding(horizontal = 16.dp, vertical = 10.dp),

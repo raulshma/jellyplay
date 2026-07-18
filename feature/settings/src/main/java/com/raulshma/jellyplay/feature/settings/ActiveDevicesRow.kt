@@ -12,6 +12,7 @@ import androidx.compose.animation.expandVertically
 import androidx.compose.animation.fadeIn
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.focusGroup
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.Arrangement
@@ -61,6 +62,7 @@ import com.composables.icons.tabler.outline.PlayerPause
 import androidx.compose.foundation.shape.CircleShape
 import com.raulshma.jellyplay.core.ui.components.LocalReducedMotion
 import com.raulshma.jellyplay.core.ui.components.focusIndicator
+import com.raulshma.jellyplay.core.ui.tv.tvFocusRestorer
 import com.raulshma.jellyplay.core.designsystem.theme.ShapeCache
 import com.raulshma.jellyplay.core.model.SessionInfo
 
@@ -118,6 +120,9 @@ internal fun ActiveDevicesRow(
         LazyRow(
             contentPadding = PaddingValues(horizontal = 20.dp),
             horizontalArrangement = Arrangement.spacedBy(12.dp),
+            modifier = Modifier
+                .focusGroup()
+                .tvFocusRestorer(),
         ) {
             items(sessions, key = { it.id }) { session ->
                 ActiveDeviceCard(

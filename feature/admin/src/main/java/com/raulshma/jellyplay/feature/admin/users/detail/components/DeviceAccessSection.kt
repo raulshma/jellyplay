@@ -2,8 +2,12 @@ package com.raulshma.jellyplay.feature.admin.users.detail.components
 
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
+import com.composables.icons.tabler.Tabler
+import com.composables.icons.tabler.outline.DeviceMobile
+import com.composables.icons.tabler.outline.Devices
 import com.raulshma.jellyplay.core.model.DeviceInfo
 import com.raulshma.jellyplay.core.model.ManagedUserPolicy
+import com.raulshma.jellyplay.core.ui.components.SettingToggleItem
 
 /**
  * Device access: "all devices" toggle + per-device toggles. Hidden entirely
@@ -20,9 +24,10 @@ fun DeviceAccessSection(
     if (policy.isAdministrator || devices.isEmpty()) return
     val rows = if (policy.enableAllDevices) 1 else 1 + devices.size
     UserEditSection(title = "Device access", modifier = modifier) {
-        ToggleRow(
-            label = "Enable access from all devices",
-            description = if (policy.enableAllDevices) null else "Restrict to the devices below",
+        SettingToggleItem(
+            icon = Tabler.Outline.Devices,
+            title = "Enable access from all devices",
+            subtitle = if (policy.enableAllDevices) "" else "Restrict to the devices below",
             checked = policy.enableAllDevices,
             onCheckedChange = { onPolicyChange(policy.copy(enableAllDevices = it)) },
             index = 0, count = rows,
@@ -31,8 +36,10 @@ fun DeviceAccessSection(
             devices.forEachIndexed { i, d ->
                 val label = d.customName?.ifBlank { null } ?: d.name.ifBlank { d.appName.ifBlank { d.id } }
                 val checked = d.id in policy.enabledDevices
-                ToggleRow(
-                    label = label,
+                SettingToggleItem(
+                    icon = Tabler.Outline.DeviceMobile,
+                    title = label,
+                    subtitle = "",
                     checked = checked,
                     onCheckedChange = { enable ->
                         val next = if (enable) policy.enabledDevices + d.id

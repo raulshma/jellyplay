@@ -4,8 +4,11 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
+import com.composables.icons.tabler.Tabler
+import com.composables.icons.tabler.outline.Folder
 import com.raulshma.jellyplay.core.model.LibraryFolder
 import com.raulshma.jellyplay.core.model.ManagedUserPolicy
+import com.raulshma.jellyplay.core.ui.components.SettingToggleItem
 
 @Composable
 fun AccessSection(
@@ -16,9 +19,10 @@ fun AccessSection(
 ) {
     val rows = if (policy.enableAllFolders) 1 else 1 + libraries.size
     UserEditSection(title = "Library access", modifier = modifier) {
-        ToggleRow(
-            label = "Enable access to all libraries",
-            description = if (policy.enableAllFolders) null else "Restrict to the libraries below",
+        SettingToggleItem(
+            icon = Tabler.Outline.Folder,
+            title = "Enable access to all libraries",
+            subtitle = if (policy.enableAllFolders) "" else "Restrict to the libraries below",
             checked = policy.enableAllFolders,
             onCheckedChange = { onPolicyChange(policy.copy(enableAllFolders = it)) },
             index = 0, count = rows,
@@ -33,8 +37,10 @@ fun AccessSection(
             } else {
                 libraries.forEachIndexed { i, folder ->
                     val checked = folder.id in policy.enabledFolders
-                    ToggleRow(
-                        label = folder.name.ifBlank { folder.collectionType ?: folder.id },
+                    SettingToggleItem(
+                        icon = Tabler.Outline.Folder,
+                        title = folder.name.ifBlank { folder.collectionType ?: folder.id },
+                        subtitle = "",
                         checked = checked,
                         onCheckedChange = { enable ->
                             val next = if (enable) policy.enabledFolders + folder.id

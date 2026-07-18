@@ -1,5 +1,6 @@
 package com.raulshma.jellyplay.feature.livetv.channeldetail
 
+import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
@@ -18,6 +19,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.composables.icons.tabler.Tabler
 import com.composables.icons.tabler.outline.ArrowLeft
 import com.raulshma.jellyplay.core.ui.components.ErrorScreen
+import com.raulshma.jellyplay.core.ui.components.focusIndicator
 import com.raulshma.jellyplay.core.ui.components.rememberScreenBackgroundColor
 import com.raulshma.jellyplay.feature.livetv.R
 
@@ -35,6 +37,10 @@ fun ChannelDetailScreen(
     val state by viewModel.uiState.collectAsStateWithLifecycle()
     val backgroundColor = rememberScreenBackgroundColor()
 
+    // Bespoke screen (no JellyPlayScreenScaffold) — own the remote Back path explicitly so it
+    // does not depend solely on the nav-host system pop.
+    BackHandler(enabled = true, onBack = onBack)
+
     Box(Modifier.fillMaxSize()) {
         // Backdrop follows the currently-airing program.
         val backdropProgram = state.currentProgram
@@ -50,7 +56,9 @@ fun ChannelDetailScreen(
         // Back button.
         IconButton(
             onClick = onBack,
-            modifier = Modifier.padding(start = 8.dp, top = 8.dp),
+            modifier = Modifier
+                .padding(start = 8.dp, top = 8.dp)
+                .focusIndicator(),
         ) {
             Icon(
                 imageVector = Tabler.Outline.ArrowLeft,

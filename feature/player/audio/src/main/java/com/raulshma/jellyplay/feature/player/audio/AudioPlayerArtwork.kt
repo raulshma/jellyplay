@@ -61,6 +61,7 @@ import com.composables.icons.tabler.outline.*
 import com.raulshma.jellyplay.core.designsystem.theme.ShapeCache
 import com.raulshma.jellyplay.core.designsystem.theme.defaultContentSizeSpec
 import com.raulshma.jellyplay.core.ui.components.JellyPlayLoadingIndicator
+import com.raulshma.jellyplay.core.ui.components.focusIndicator
 import com.raulshma.jellyplay.core.ui.image.MediaImage
 import com.raulshma.jellyplay.core.ui.tv.rememberTvFocusState
 import com.raulshma.jellyplay.core.ui.tv.tvFocusIndicator
@@ -290,7 +291,7 @@ internal fun LyricsOverlay(
                                             stringResource(R.string.audio_reset),
                                             style = MaterialTheme.typography.labelSmall,
                                             color = Color.White.copy(alpha = 0.7f),
-                                            modifier = Modifier.clickable {
+                                            modifier = Modifier.focusIndicator().clickable {
                                                 onLyricsOffsetChange(
                                                     com.raulshma.jellyplay.core.data.playback.AudioLyricsManager.DEFAULT_OFFSET_MS
                                                 )

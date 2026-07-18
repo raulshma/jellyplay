@@ -1,0 +1,326 @@
+package com.raulshma.jellyplay.core.ui.components
+
+import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.interaction.collectIsPressedAsState
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.relocation.BringIntoViewRequester
+import androidx.compose.foundation.relocation.bringIntoViewRequester
+import androidx.compose.material3.Icon
+import androidx.compose.material3.ListItem
+import androidx.compose.material3.ListItemDefaults
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Switch
+import androidx.compose.material3.Text
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
+import com.composables.icons.tabler.Tabler
+import com.composables.icons.tabler.outline.ChevronRight
+import com.raulshma.jellyplay.core.designsystem.theme.ShapeCache
+import com.raulshma.jellyplay.core.designsystem.theme.expressiveListShape
+import com.raulshma.jellyplay.core.ui.animation.pressScaleValue
+import com.raulshma.jellyplay.core.ui.tv.enableMarqueeOnFocus
+import com.raulshma.jellyplay.core.ui.tv.rememberTvFocusState
+import com.raulshma.jellyplay.core.ui.tv.tryRequestFocus
+import com.raulshma.jellyplay.core.ui.tv.tvFocusIndicator
+
+/**
+ * Canonical TV-aware settings row components, shared across feature modules.
+ *
+ * Moved here from `feature/settings/.../SettingsItems.kt` so non-settings surfaces (e.g. admin user
+ * detail) can reuse the same focus/press-scale/bring-into-view/marquee machinery instead of
+ * hand-rolling `ListItem` + `.clickable` rows that are invisible to the D-pad.
+ *
+ * Each item self-manages its own [FocusRequester] + [rememberTvFocusState] (focusedScale = 1.01f)
+ * + [tvFocusIndicator]; callers do NOT pass focus modifiers. Pass `highlighted = true` to grab
+ * focus and scroll the item into view (used by deep-link/highlight flows).
+ */
+@OptIn(ExperimentalFoundationApi::class)
+@Composable
+fun SettingListItem(
+    icon: ImageVector,
+    title: String,
+    subtitle: String,
+    index: Int = 0,
+    count: Int = 1,
+    trailingText: String? = null,
+    isDestructive: Boolean = false,
+    highlighted: Boolean = false,
+    modifier: Modifier = Modifier,
+    onClick: () -> Unit,
+) {
+    val tvFocusState = rememberTvFocusState(focusedScale = 1.01f)
+    val interactionSource = remember { MutableInteractionSource() }
+    val isPressed by interactionSource.collectIsPressedAsState()
+    val scale by animateFloatAsState(
+        targetValue = pressScaleValue(isPressed, 0.97f),
+        animationSpec = MaterialTheme.motionScheme.fastSpatialSpec(),
+        label = "settingItemScale",
+    )
+    val pressAlpha by animateFloatAsState(
+        targetValue = if (isPressed) 0.7f else 1f,
+        animationSpec = MaterialTheme.motionScheme.fastEffectsSpec(),
+        label = "settingItemAlpha",
+    )
+
+    val headlineColor = if (isDestructive) MaterialTheme.colorScheme.error
+    else MaterialTheme.colorScheme.onSurface
+    val supportingColor = if (isDestructive) MaterialTheme.colorScheme.error.copy(alpha = 0.7f)
+    else MaterialTheme.colorScheme.onSurfaceVariant
+    val iconColor = if (isDestructive) MaterialTheme.colorScheme.error
+    else MaterialTheme.colorScheme.onSurfaceVariant
+
+    val shape = expressiveListShape(index, count, innerRadius = 0.dp)
+
+    val focusRequester = remember { FocusRequester() }
+    val bringIntoViewRequester = remember { BringIntoViewRequester() }
+    val highlightColor = remember { androidx.compose.animation.Animatable(Color.Transparent) }
+    val primaryColor = MaterialTheme.colorScheme.primary
+    val highlightFadeSpec = MaterialTheme.motionScheme.defaultEffectsSpec<Color>()
+
+    LaunchedEffect(highlighted) {
+        if (highlighted) {
+            highlightColor.snapTo(primaryColor.copy(alpha = 0.25f))
+            highlightColor.animateTo(
+                targetValue = Color.Transparent,
+                animationSpec = highlightFadeSpec
+            )
+        }
+    }
+
+    LaunchedEffect(highlighted) {
+        if (highlighted) {
+            // Wait for BOTH (a) the screen-level coarse group-scroll to bring this item into the
+            // composition window and finish its animation, and (b) the parent SettingsGroup's
+            // expand animation to settle. Without this delay the measured offset is still
+            // mid-transition (or the item is not yet composed) and the bring-into-view either
+            // misses its target or lands at the wrong position.
+            kotlinx.coroutines.delay(400)
+            focusRequester.tryRequestFocus("settings_item")
+            bringIntoViewRequester.bringIntoView()
+        }
+    }
+
+    ListItem(
+        headlineContent = {
+            Text(
+                text = title,
+                style = MaterialTheme.typography.bodyLarge,
+                fontWeight = FontWeight.Medium,
+                color = headlineColor,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.enableMarqueeOnFocus(focused = tvFocusState.isFocused),
+            )
+        },
+        supportingContent = {
+            if (subtitle.isNotBlank()) {
+                Text(
+                    text = subtitle,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = supportingColor,
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis,
+                )
+            }
+        },
+        leadingContent = {
+            Icon(
+                imageVector = icon,
+                contentDescription = null,
+                tint = iconColor,
+                modifier = Modifier.size(22.dp),
+            )
+        },
+        trailingContent = {
+            if (trailingText != null) {
+                Text(
+                    text = trailingText,
+                    style = MaterialTheme.typography.labelMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.padding(end = 4.dp),
+                )
+            }
+            Icon(
+                Tabler.Outline.ChevronRight,
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.size(18.dp),
+            )
+        },
+        colors = ListItemDefaults.colors(
+            containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f),
+        ),
+        modifier = Modifier
+            .fillMaxWidth()
+            .then(modifier)
+            .graphicsLayer {
+                scaleX = scale
+                scaleY = scale
+                this.alpha = pressAlpha
+            }
+            .clip(shape)
+            .background(highlightColor.value)
+            .focusRequester(focusRequester)
+            .bringIntoViewRequester(bringIntoViewRequester)
+            .then(tvFocusState.focusModifier)
+            .tvFocusIndicator(tvFocusState, shape)
+            .clickable(
+                interactionSource = interactionSource,
+                indication = null,
+                onClick = onClick,
+            ),
+    )
+}
+
+@OptIn(ExperimentalFoundationApi::class)
+@Composable
+fun SettingToggleItem(
+    icon: ImageVector,
+    title: String,
+    subtitle: String,
+    checked: Boolean,
+    index: Int = 0,
+    count: Int = 1,
+    highlighted: Boolean = false,
+    enabled: Boolean = true,
+    modifier: Modifier = Modifier,
+    onCheckedChange: (Boolean) -> Unit,
+    onClick: (() -> Unit)? = null,
+) {
+    val tvFocusState = rememberTvFocusState(focusedScale = 1.01f)
+    val interactionSource = remember { MutableInteractionSource() }
+    val isPressed by interactionSource.collectIsPressedAsState()
+    val scale by animateFloatAsState(
+        targetValue = if (isPressed) 0.97f else 1f,
+        animationSpec = MaterialTheme.motionScheme.fastSpatialSpec(),
+        label = "toggleItemScale",
+    )
+    val pressAlpha by animateFloatAsState(
+        targetValue = if (isPressed) 0.7f else 1f,
+        animationSpec = MaterialTheme.motionScheme.fastEffectsSpec(),
+        label = "toggleItemAlpha",
+    )
+    val iconColor by animateColorAsState(
+        targetValue = if (!enabled) MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f)
+        else if (checked) MaterialTheme.colorScheme.primary
+        else MaterialTheme.colorScheme.onSurfaceVariant,
+        animationSpec = MaterialTheme.motionScheme.defaultEffectsSpec(),
+        label = "toggleIconColor",
+    )
+    val headlineColor = if (!enabled) MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f)
+    else MaterialTheme.colorScheme.onSurface
+
+    val shape = expressiveListShape(index, count, innerRadius = 0.dp)
+
+    val focusRequester = remember { FocusRequester() }
+    val bringIntoViewRequester = remember { BringIntoViewRequester() }
+    val highlightColor = remember { androidx.compose.animation.Animatable(Color.Transparent) }
+    val primaryColor = MaterialTheme.colorScheme.primary
+    val highlightFadeSpec = MaterialTheme.motionScheme.defaultEffectsSpec<Color>()
+
+    LaunchedEffect(highlighted) {
+        if (highlighted) {
+            highlightColor.snapTo(primaryColor.copy(alpha = 0.25f))
+            highlightColor.animateTo(
+                targetValue = Color.Transparent,
+                animationSpec = highlightFadeSpec
+            )
+        }
+    }
+
+    LaunchedEffect(highlighted) {
+        if (highlighted) {
+            // Wait for BOTH (a) the screen-level coarse group-scroll to bring this item into the
+            // composition window and finish its animation, and (b) the parent SettingsGroup's
+            // expand animation to settle. Without this delay the measured offset is still
+            // mid-transition (or the item is not yet composed) and the bring-into-view either
+            // misses its target or lands at the wrong position.
+            kotlinx.coroutines.delay(400)
+            focusRequester.tryRequestFocus("settings_item")
+            bringIntoViewRequester.bringIntoView()
+        }
+    }
+
+    ListItem(
+        headlineContent = {
+            Text(
+                text = title,
+                style = MaterialTheme.typography.bodyLarge,
+                fontWeight = FontWeight.Medium,
+                color = headlineColor,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.enableMarqueeOnFocus(focused = tvFocusState.isFocused),
+            )
+        },
+        supportingContent = {
+            if (subtitle.isNotBlank()) {
+                Text(
+                    text = subtitle,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis,
+                )
+            }
+        },
+        leadingContent = {
+            Icon(
+                imageVector = icon,
+                contentDescription = null,
+                tint = iconColor,
+                modifier = Modifier.size(22.dp),
+            )
+        },
+        trailingContent = {
+            Switch(
+                checked = checked,
+                onCheckedChange = onCheckedChange,
+                enabled = enabled,
+            )
+        },
+        colors = ListItemDefaults.colors(
+            containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f),
+        ),
+        modifier = Modifier
+            .fillMaxWidth()
+            .then(modifier)
+            .graphicsLayer {
+                scaleX = scale
+                scaleY = scale
+                this.alpha = pressAlpha
+            }
+            .clip(shape)
+            .background(highlightColor.value)
+            .focusRequester(focusRequester)
+            .bringIntoViewRequester(bringIntoViewRequester)
+            .then(tvFocusState.focusModifier)
+            .tvFocusIndicator(tvFocusState, shape)
+            .clickable(
+                interactionSource = interactionSource,
+                indication = null,
+                enabled = enabled,
+            ) { onClick?.invoke() ?: onCheckedChange(!checked) },
+    )
+}
