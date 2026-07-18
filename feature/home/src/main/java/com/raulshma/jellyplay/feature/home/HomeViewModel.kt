@@ -249,7 +249,13 @@ class HomeViewModel @Inject constructor(
                 if (mode != OfflineMode.ONLINE && !wasOffline) {
                     _uiState.update { it.copy(sections = emptyList(), discoverSections = emptyMap()) }
                 } else if (mode == OfflineMode.ONLINE && wasOffline) {
+                    // Show the full-screen loader during the post-toggle fetch so
+                    // the online branch doesn't flash blank between the mode flip
+                    // and sections arriving. isGoingOnline is cleared here once
+                    // the transition resolves (success or failure).
+                    _uiState.update { it.copy(isLoading = true) }
                     fetchAndUpdateSections()
+                    _uiState.update { it.copy(isGoingOnline = false) }
                 }
             }
         }
@@ -455,6 +461,14 @@ class HomeViewModel @Inject constructor(
     }
 
     private fun toggleOfflineMode() {
+        // Going online is async (preference write → mode flip → network fetch)
+        // and previously gave zero feedback. Flip a busy flag the UI can show a
+        // spinner on; it is cleared once the offline→online transition resolves.
+        // Going offline is instantaneous and needs no indicator.
+        val goingOnline = _uiState.value.offlineMode != OfflineMode.ONLINE
+        if (goingOnline) {
+            _uiState.update { it.copy(isGoingOnline = true) }
+        }
         offlineModeManager.toggleManualOffline()
     }
 
