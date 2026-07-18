@@ -68,6 +68,12 @@ class DownloadDelegate @Inject constructor(
     }
 
     suspend fun executeDownload(request: DownloadRequest): DownloadResult {
+        // For episodes, propagate the parent series/season ids so the downloads
+        // row is linked to its series. Without these, deleteOfflineSeries
+        // (WHERE seriesId = :seriesId) finds no rows and leaves episode files +
+        // download rows orphaned behind a deleted series.
+        val detailItem = request.detail?.item
+        val isEpisode = detailItem?.mediaType == MediaType.EPISODE
         val result = downloadRepository.startDownload(
             mediaItemId = request.mediaItemId,
             name = request.name,
@@ -77,6 +83,13 @@ class DownloadDelegate @Inject constructor(
             imageUrl = request.imageUrl,
             imageBlurHash = request.imageBlurHash,
             container = request.container,
+            // detailItem is guaranteed non-null when isEpisode is true.
+            seriesId = if (isEpisode && detailItem != null) detailItem.seriesId else null,
+            seasonId = if (isEpisode && detailItem != null) detailItem.seasonId else null,
+            seriesName = if (isEpisode && detailItem != null) detailItem.seriesName else null,
+            seasonName = if (isEpisode && detailItem != null) detailItem.seasonName else null,
+            episodeNumber = if (isEpisode && detailItem != null) detailItem.episodeNumber else null,
+            seasonNumber = if (isEpisode && detailItem != null) detailItem.seasonNumber else null,
         )
         return result.fold(
             onSuccess = { downloadItem ->

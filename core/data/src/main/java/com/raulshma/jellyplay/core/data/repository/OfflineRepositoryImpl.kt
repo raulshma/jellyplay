@@ -145,7 +145,14 @@ class OfflineRepositoryImpl @Inject constructor(
     }
 
     override suspend fun deleteOfflineSeries(seriesId: String) {
-        val downloads = downloadDao.getDownloadsForSeries(seriesId)
+        // Union the direct seriesId lookup with the offline_media join so legacy
+        // episode downloads (whose downloads.seriesId was never populated before
+        // the series link was propagated at download time) are recovered and
+        // cleaned up rather than orphaned alongside a deleted series.
+        val downloads = (
+            downloadDao.getDownloadsForSeries(seriesId) +
+            downloadDao.getDownloadsForSeriesViaOfflineMedia(seriesId)
+        ).distinctBy { it.id }
         deleteArtifactsParallel(downloads)
         database.withTransaction {
             val ids = downloads.map { it.id }
@@ -156,7 +163,10 @@ class OfflineRepositoryImpl @Inject constructor(
     }
 
     override suspend fun deleteOfflineSeason(seasonId: String) {
-        val downloads = downloadDao.getDownloadsForSeason(seasonId)
+        val downloads = (
+            downloadDao.getDownloadsForSeason(seasonId) +
+            downloadDao.getDownloadsForSeasonViaOfflineMedia(seasonId)
+        ).distinctBy { it.id }
         deleteArtifactsParallel(downloads)
         database.withTransaction {
             val ids = downloads.map { it.id }
