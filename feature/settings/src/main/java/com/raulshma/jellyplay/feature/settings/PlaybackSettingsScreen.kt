@@ -39,7 +39,6 @@ import com.raulshma.jellyplay.core.model.PlayerType
 import com.raulshma.jellyplay.core.model.PreloadBufferSize
 import com.raulshma.jellyplay.core.model.StreamingQuality
 import com.raulshma.jellyplay.core.model.VlcAudioOutput
-import com.raulshma.jellyplay.core.model.VlcVideoOutput
 import com.raulshma.jellyplay.core.model.SyncPlayJoinBehavior
 import com.raulshma.jellyplay.core.model.CastingStrategy
 import com.raulshma.jellyplay.core.ui.adaptive.LocalAdaptiveInfo
@@ -115,7 +114,6 @@ sealed class PlaybackSettingsDialog {
     object MpvSkipLoopFilterPicker : PlaybackSettingsDialog()
     object MpvFrameDropPicker : PlaybackSettingsDialog()
     object VlcAudioOutputPicker : PlaybackSettingsDialog()
-    object VlcVideoOutputPicker : PlaybackSettingsDialog()
     object VlcNetworkCachingPicker : PlaybackSettingsDialog()
     object VlcSkipLoopFilterPicker : PlaybackSettingsDialog()
     object VlcSkipFramePicker : PlaybackSettingsDialog()
@@ -139,7 +137,7 @@ private val PLAYBACK_ADVANCED_GROUP_IDS = setOf("dialogue_boost", "decoder", "au
 private val PLAYBACK_ENGINE_GROUP_IDS = setOf(
     "mpv_video_output", "mpv_scaler", "mpv_debanding", "mpv_interpolation", "mpv_audio_output",
     "mpv_audio_fallback", "mpv_buffer_size", "mpv_hwdec_override", "mpv_skip_loop_filter", "mpv_frame_drop",
-    "vlc_audio_output", "vlc_audio_time_stretch", "vlc_video_output", "vlc_network_caching",
+    "vlc_audio_output", "vlc_audio_time_stretch", "vlc_network_caching",
     "vlc_skip_loop_filter", "vlc_skip_frames", "vlc_decoder_threads", "vlc_drop_late_frames",
     "exo_video_scaling", "exo_frame_rate_strategy", "exo_skip_silence", "exo_audio_offload",
     "exo_decoder_fallback", "exo_back_buffer", "exo_preferred_codecs",
@@ -187,7 +185,7 @@ fun PlaybackSettingsScreen(
         val engineConfig = listOf(
             "mpv_video_output", "mpv_scaler", "mpv_debanding", "mpv_interpolation", "mpv_audio_output",
             "mpv_audio_fallback", "mpv_buffer_size", "mpv_hwdec_override", "mpv_skip_loop_filter", "mpv_frame_drop",
-            "vlc_audio_output", "vlc_audio_time_stretch", "vlc_video_output", "vlc_network_caching",
+            "vlc_audio_output", "vlc_audio_time_stretch", "vlc_network_caching",
             "vlc_skip_loop_filter", "vlc_skip_frames", "vlc_decoder_threads", "vlc_drop_late_frames",
             "exo_video_scaling", "exo_frame_rate_strategy", "exo_skip_silence", "exo_audio_offload",
             "exo_decoder_fallback", "exo_back_buffer", "exo_preferred_codecs",
@@ -769,7 +767,7 @@ fun PlaybackSettingsScreen(
                         PlayerType.LIBVLC -> {
                             val vlcCfg = preferences.libVlcConfig
                             val vlcDefault = LibVlcEngineConfig()
-                            val vlcTotal = 9
+                            val vlcTotal = 8
                             var vlcIdx = 0
 
                             SettingListItem(
@@ -789,15 +787,6 @@ fun PlaybackSettingsScreen(
                                 highlighted = highlightSettingId == "vlc_audio_time_stretch",
                                 index = vlcIdx++, count = vlcTotal,
                                 onCheckedChange = { viewModel.setLibVlcConfig(vlcCfg.copy(audioTimeStretch = it)) },
-                            )
-                            SettingListItem(
-                                icon = Tabler.Outline.Video,
-                                title = "Video Output",
-                                subtitle = "${vlcCfg.videoOutput.displayName} (${vlcCfg.videoOutput.key})",
-                                trailingText = vlcCfg.videoOutput.key,
-                                highlighted = highlightSettingId == "vlc_video_output",
-                                index = vlcIdx++, count = vlcTotal,
-                                onClick = { activeDialog = PlaybackSettingsDialog.VlcVideoOutputPicker },
                             )
                             SettingListItem(
                                 icon = Tabler.Outline.Wifi,
@@ -1427,22 +1416,6 @@ fun PlaybackSettingsScreen(
             onDismiss = { activeDialog = PlaybackSettingsDialog.None },
             onSelect = {
                 viewModel.setLibVlcConfig(vlcCfg.copy(audioOutput = it))
-                activeDialog = PlaybackSettingsDialog.None
-            },
-        )
-    }
-
-    if (activeDialog is PlaybackSettingsDialog.VlcVideoOutputPicker) {
-        val vlcCfg = preferences.libVlcConfig
-        SettingsListPickerSheet(
-            title = "Video Output (vout)",
-            items = VlcVideoOutput.entries,
-            label = { it.displayName },
-            subtitle = { it.key },
-            isSelected = { it == vlcCfg.videoOutput },
-            onDismiss = { activeDialog = PlaybackSettingsDialog.None },
-            onSelect = {
-                viewModel.setLibVlcConfig(vlcCfg.copy(videoOutput = it))
                 activeDialog = PlaybackSettingsDialog.None
             },
         )

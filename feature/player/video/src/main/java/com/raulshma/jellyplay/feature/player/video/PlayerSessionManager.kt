@@ -165,6 +165,24 @@ class PlayerSessionManager(
         val subtitle = offlineItem?.seriesName ?: offlineItem?.overview?.take(60) ?: ""
         val url = Uri.fromFile(localFile).toString()
 
+        var runTimeTicks = offlineItem?.runTimeTicks
+        if (runTimeTicks == null || runTimeTicks <= 0L) {
+            val extractedDurationMs = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+                try {
+                    val retriever = android.media.MediaMetadataRetriever()
+                    retriever.setDataSource(localFile.absolutePath)
+                    val durationStr = retriever.extractMetadata(android.media.MediaMetadataRetriever.METADATA_KEY_DURATION)
+                    retriever.release()
+                    durationStr?.toLongOrNull()
+                } catch (e: Exception) {
+                    null
+                }
+            }
+            if (extractedDurationMs != null && extractedDurationMs > 0) {
+                runTimeTicks = extractedDurationMs * 10_000
+            }
+        }
+
         // Resolve the real container so ExoPlayer gets the right MIME type and
         // selects the correct extractor. Precedence:
         //   1. Container persisted at download time (new downloads).
@@ -203,7 +221,7 @@ class PlayerSessionManager(
                 mediaType = download?.mediaType ?: com.raulshma.jellyplay.core.model.MediaType.UNKNOWN,
                 overview = offlineItem?.overview,
                 seriesName = offlineItem?.seriesName,
-                runTimeTicks = offlineItem?.runTimeTicks,
+                runTimeTicks = runTimeTicks,
             ),
             mediaSources = emptyList(),
             chapters = emptyList(),
