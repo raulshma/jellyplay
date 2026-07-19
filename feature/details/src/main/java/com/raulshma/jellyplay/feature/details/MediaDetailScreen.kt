@@ -7,6 +7,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.material3.Snackbar
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
@@ -336,11 +337,13 @@ fun MediaDetailScreen(
 
         val detailItem = detail?.item
         if (showSeriesDownloadSheet && detailItem?.mediaType == MediaType.SERIES) {
+            val downloadSheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
             TvSafeSheet(
                 onDismissRequest = {
                     showSeriesDownloadSheet = false
                     viewModel.resetDownloadSheetState()
                 },
+                sheetState = downloadSheetState,
             ) {
                 SeriesDownloadSheet(
                     seasons = uiState.seasons,
