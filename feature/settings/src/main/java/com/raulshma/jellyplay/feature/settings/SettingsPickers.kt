@@ -208,7 +208,7 @@ internal fun SettingsSliderSheet(
     onDismiss: () -> Unit,
     onConfirm: (Float) -> Unit,
 ) {
-    var sliderValue by remember { mutableStateOf(value) }
+    var sliderValue by remember(value) { mutableStateOf(value) }
 
     AdaptiveSheet(onDismissRequest = onDismiss) {
         Column(

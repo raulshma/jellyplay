@@ -87,6 +87,8 @@ internal fun SeasonsSection(
     onEpisodeDetailClick: (MediaItem) -> Unit,
     onSeasonSelected: (seasonId: String) -> Unit = {},
     hideEpisodeThumbnails: Boolean = false,
+    episodesDescending: Boolean = true,
+    onEpisodesDescendingChange: (Boolean) -> Unit = {},
 ) {
     val smartTargetSeasonId = smartPlayTarget?.episode?.seasonId
     val initialSeasonIndex = when {
@@ -99,8 +101,10 @@ internal fun SeasonsSection(
         else -> 0
     }
     var selectedSeasonIndex by remember { mutableStateOf(initialSeasonIndex) }
-    // Episode sort order within a season. Default: newest episode first.
-    var episodesDescending by remember { mutableStateOf(true) }
+    // Episode sort order within a season. Persisted app-wide (see
+    // [DetailViewModel.setEpisodesDescending]) so the choice carries across
+    // every series detail screen — the previous local `remember` reset it to
+    // "newest first" on each navigation.
 
     LaunchedEffect(selectedSeasonIndex) {
         val season = seasons.getOrNull(selectedSeasonIndex)
@@ -129,7 +133,7 @@ internal fun SeasonsSection(
                         .clip(ShapeCache.smooth16)
                         .then(sortFocusState.focusModifier)
                         .then(Modifier.tvFocusIndicator(sortFocusState, ShapeCache.smooth16))
-                        .clickable { episodesDescending = !episodesDescending },
+                        .clickable { onEpisodesDescendingChange(!episodesDescending) },
                     color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.08f),
                     contentColor = MaterialTheme.colorScheme.onSurface,
                     shape = ShapeCache.smooth16,

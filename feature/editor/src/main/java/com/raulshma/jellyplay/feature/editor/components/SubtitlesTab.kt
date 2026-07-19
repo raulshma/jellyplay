@@ -35,6 +35,8 @@ import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.rememberModalBottomSheetState
+import com.raulshma.jellyplay.core.ui.tv.LocalTvMode
+import com.raulshma.jellyplay.core.ui.components.TvSafeSheet
 import androidx.compose.runtime.Composable
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.runtime.getValue
@@ -204,72 +206,143 @@ private fun SubtitleUploadSheet(
         }
     }
 
-    ModalBottomSheet(
-        onDismissRequest = onDismiss,
-        sheetState = sheetState,
-    ) {
-        Column(
-            modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp).padding(bottom = 32.dp),
-            verticalArrangement = Arrangement.spacedBy(12.dp),
+    val isTv = com.raulshma.jellyplay.core.ui.tv.LocalTvMode.current
+    if (isTv) {
+        com.raulshma.jellyplay.core.ui.components.TvSafeSheet(
+            onDismissRequest = onDismiss,
         ) {
-            Text("Upload Subtitle", style = MaterialTheme.typography.headlineSmall)
-
-            FilledTonalButton(
-                onClick = {
-                    fileLauncher.launch(arrayOf("*/*"))
-                },
-                modifier = Modifier.fillMaxWidth(),
+            Column(
+                modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp).padding(bottom = 32.dp),
+                verticalArrangement = Arrangement.spacedBy(12.dp),
             ) {
-                Text(if (selectedFile != null) "Change: $selectedFileName" else "Select File (.srt, .ass, .ssa, .vtt)")
-            }
+                Text("Upload Subtitle", style = MaterialTheme.typography.headlineSmall)
 
-            var langExpanded by remember { mutableStateOf(false) }
-            ExposedDropdownMenuBox(
-                expanded = langExpanded,
-                onExpandedChange = { langExpanded = it },
-            ) {
-                OutlinedTextField(
-                    value = selectedLanguage,
-                    onValueChange = { selectedLanguage = it },
-                    label = { Text("Language") },
-                    modifier = Modifier.fillMaxWidth().menuAnchor(MenuAnchorType.PrimaryEditable),
-                    singleLine = true,
-                    trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = langExpanded) },
-                )
-                ExposedDropdownMenu(
-                    expanded = langExpanded,
-                    onDismissRequest = { langExpanded = false },
+                FilledTonalButton(
+                    onClick = {
+                        fileLauncher.launch(arrayOf("*/*"))
+                    },
+                    modifier = Modifier.fillMaxWidth(),
                 ) {
-                    cultures.forEach { culture ->
-                        androidx.compose.material3.DropdownMenuItem(
-                            text = { Text("${culture.displayName} (${culture.name})") },
-                            onClick = {
-                                selectedLanguage = culture.name
-                                langExpanded = false
-                            },
-                        )
+                    Text(if (selectedFile != null) "Change: $selectedFileName" else "Select File (.srt, .ass, .ssa, .vtt)")
+                }
+
+                var langExpanded by remember { mutableStateOf(false) }
+                ExposedDropdownMenuBox(
+                    expanded = langExpanded,
+                    onExpandedChange = { langExpanded = it },
+                ) {
+                    OutlinedTextField(
+                        value = selectedLanguage,
+                        onValueChange = { selectedLanguage = it },
+                        label = { Text("Language") },
+                        modifier = Modifier.fillMaxWidth().menuAnchor(MenuAnchorType.PrimaryEditable),
+                        singleLine = true,
+                        trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = langExpanded) },
+                    )
+                    ExposedDropdownMenu(
+                        expanded = langExpanded,
+                        onDismissRequest = { langExpanded = false },
+                    ) {
+                        cultures.forEach { culture ->
+                            androidx.compose.material3.DropdownMenuItem(
+                                text = { Text("${culture.displayName} (${culture.name})") },
+                                onClick = {
+                                    selectedLanguage = culture.name
+                                    langExpanded = false
+                                },
+                            )
+                        }
                     }
                 }
-            }
 
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Checkbox(checked = isForced, onCheckedChange = { isForced = it })
-                Text("Forced subtitle")
-            }
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Checkbox(checked = isHearingImpaired, onCheckedChange = { isHearingImpaired = it })
-                Text("Hearing impaired")
-            }
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Checkbox(checked = isForced, onCheckedChange = { isForced = it })
+                    Text("Forced subtitle")
+                }
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Checkbox(checked = isHearingImpaired, onCheckedChange = { isHearingImpaired = it })
+                    Text("Hearing impaired")
+                }
 
-            androidx.compose.material3.Button(
-                onClick = {
-                    selectedFile?.let { uri ->
-                        onUploadUri(uri, selectedFileName, selectedLanguage, isForced, isHearingImpaired)
+                androidx.compose.material3.Button(
+                    onClick = {
+                        selectedFile?.let { uri ->
+                            onUploadUri(uri, selectedFileName, selectedLanguage, isForced, isHearingImpaired)
+                        }
+                    },
+                    modifier = Modifier.fillMaxWidth(),
+                    enabled = selectedFile != null && selectedLanguage.isNotBlank(),
+                ) { Text("Upload") }
+            }
+        }
+    } else {
+        ModalBottomSheet(
+            onDismissRequest = onDismiss,
+            sheetState = sheetState,
+        ) {
+            Column(
+                modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp).padding(bottom = 32.dp),
+                verticalArrangement = Arrangement.spacedBy(12.dp),
+            ) {
+                Text("Upload Subtitle", style = MaterialTheme.typography.headlineSmall)
+
+                FilledTonalButton(
+                    onClick = {
+                        fileLauncher.launch(arrayOf("*/*"))
+                    },
+                    modifier = Modifier.fillMaxWidth(),
+                ) {
+                    Text(if (selectedFile != null) "Change: $selectedFileName" else "Select File (.srt, .ass, .ssa, .vtt)")
+                }
+
+                var langExpanded by remember { mutableStateOf(false) }
+                ExposedDropdownMenuBox(
+                    expanded = langExpanded,
+                    onExpandedChange = { langExpanded = it },
+                ) {
+                    OutlinedTextField(
+                        value = selectedLanguage,
+                        onValueChange = { selectedLanguage = it },
+                        label = { Text("Language") },
+                        modifier = Modifier.fillMaxWidth().menuAnchor(MenuAnchorType.PrimaryEditable),
+                        singleLine = true,
+                        trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = langExpanded) },
+                    )
+                    ExposedDropdownMenu(
+                        expanded = langExpanded,
+                        onDismissRequest = { langExpanded = false },
+                    ) {
+                        cultures.forEach { culture ->
+                            androidx.compose.material3.DropdownMenuItem(
+                                text = { Text("${culture.displayName} (${culture.name})") },
+                                onClick = {
+                                    selectedLanguage = culture.name
+                                    langExpanded = false
+                                },
+                            )
+                        }
                     }
-                },
-                modifier = Modifier.fillMaxWidth(),
-                enabled = selectedFile != null && selectedLanguage.isNotBlank(),
-            ) { Text("Upload") }
+                }
+
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Checkbox(checked = isForced, onCheckedChange = { isForced = it })
+                    Text("Forced subtitle")
+                }
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Checkbox(checked = isHearingImpaired, onCheckedChange = { isHearingImpaired = it })
+                    Text("Hearing impaired")
+                }
+
+                androidx.compose.material3.Button(
+                    onClick = {
+                        selectedFile?.let { uri ->
+                            onUploadUri(uri, selectedFileName, selectedLanguage, isForced, isHearingImpaired)
+                        }
+                    },
+                    modifier = Modifier.fillMaxWidth(),
+                    enabled = selectedFile != null && selectedLanguage.isNotBlank(),
+                ) { Text("Upload") }
+            }
         }
     }
 }
@@ -287,79 +360,160 @@ private fun RemoteSubtitleSearchSheet(
     var searchLanguage by remember { mutableStateOf("en") }
     var hasSearched by remember { mutableStateOf(false) }
 
-    ModalBottomSheet(
-        onDismissRequest = onDismiss,
-        sheetState = sheetState,
-    ) {
-        Column(
-            modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp).padding(bottom = 32.dp),
-            verticalArrangement = Arrangement.spacedBy(12.dp),
+    val isTv = com.raulshma.jellyplay.core.ui.tv.LocalTvMode.current
+    if (isTv) {
+        com.raulshma.jellyplay.core.ui.components.TvSafeSheet(
+            onDismissRequest = onDismiss,
         ) {
-            Text("Search Remote Subtitles", style = MaterialTheme.typography.headlineSmall)
-
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-                verticalAlignment = Alignment.CenterVertically,
+            Column(
+                modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp).padding(bottom = 32.dp),
+                verticalArrangement = Arrangement.spacedBy(12.dp),
             ) {
-                var langExpanded by remember { mutableStateOf(false) }
-                ExposedDropdownMenuBox(
-                    expanded = langExpanded,
-                    onExpandedChange = { langExpanded = it },
-                    modifier = Modifier.weight(1f),
+                Text("Search Remote Subtitles", style = MaterialTheme.typography.headlineSmall)
+
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalAlignment = Alignment.CenterVertically,
                 ) {
-                    OutlinedTextField(
-                        value = searchLanguage,
-                        onValueChange = { searchLanguage = it },
-                        label = { Text("Language") },
-                        modifier = Modifier.fillMaxWidth().menuAnchor(MenuAnchorType.PrimaryEditable),
-                        singleLine = true,
-                        trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = langExpanded) },
-                    )
-                    ExposedDropdownMenu(
+                    var langExpanded by remember { mutableStateOf(false) }
+                    ExposedDropdownMenuBox(
                         expanded = langExpanded,
-                        onDismissRequest = { langExpanded = false },
+                        onExpandedChange = { langExpanded = it },
+                        modifier = Modifier.weight(1f),
                     ) {
-                        cultures.forEach { culture ->
-                            androidx.compose.material3.DropdownMenuItem(
-                                text = { Text("${culture.displayName} (${culture.name})") },
-                                onClick = {
-                                    searchLanguage = culture.name
-                                    langExpanded = false
-                                },
+                        OutlinedTextField(
+                            value = searchLanguage,
+                            onValueChange = { searchLanguage = it },
+                            label = { Text("Language") },
+                            modifier = Modifier.fillMaxWidth().menuAnchor(MenuAnchorType.PrimaryEditable),
+                            singleLine = true,
+                            trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = langExpanded) },
+                        )
+                        ExposedDropdownMenu(
+                            expanded = langExpanded,
+                            onDismissRequest = { langExpanded = false },
+                        ) {
+                            cultures.forEach { culture ->
+                                androidx.compose.material3.DropdownMenuItem(
+                                    text = { Text("${culture.displayName} (${culture.name})") },
+                                    onClick = {
+                                        searchLanguage = culture.name
+                                        langExpanded = false
+                                    },
+                                )
+                            }
+                        }
+                    }
+                    FilledTonalButton(
+                        onClick = {
+                            onSearch(searchLanguage)
+                            hasSearched = true
+                        },
+                    ) {
+                        Icon(Tabler.Outline.Search, contentDescription = null, modifier = Modifier.size(18.dp))
+                        Spacer(modifier = Modifier.width(4.dp))
+                        Text("Search")
+                    }
+                }
+
+                if (hasSearched && results.isEmpty()) {
+                    Box(
+                        modifier = Modifier.fillMaxWidth().height(200.dp),
+                        contentAlignment = Alignment.Center,
+                    ) {
+                        Text("No results found", color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    }
+                } else {
+                    LazyColumn(
+                        modifier = Modifier.height(400.dp),
+                        verticalArrangement = Arrangement.spacedBy(4.dp),
+                    ) {
+                        items(results, key = { it.id }) { subtitle ->
+                            RemoteSubtitleCard(
+                                subtitle = subtitle,
+                                onDownload = { onDownload(subtitle.id) },
                             )
                         }
                     }
                 }
-                FilledTonalButton(
-                    onClick = {
-                        onSearch(searchLanguage)
-                        hasSearched = true
-                    },
-                ) {
-                    Icon(Tabler.Outline.Search, contentDescription = null, modifier = Modifier.size(18.dp))
-                    Spacer(modifier = Modifier.width(4.dp))
-                    Text("Search")
-                }
             }
+        }
+    } else {
+        ModalBottomSheet(
+            onDismissRequest = onDismiss,
+            sheetState = sheetState,
+        ) {
+            Column(
+                modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp).padding(bottom = 32.dp),
+                verticalArrangement = Arrangement.spacedBy(12.dp),
+            ) {
+                Text("Search Remote Subtitles", style = MaterialTheme.typography.headlineSmall)
 
-            if (hasSearched && results.isEmpty()) {
-                Box(
-                    modifier = Modifier.fillMaxWidth().height(200.dp),
-                    contentAlignment = Alignment.Center,
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalAlignment = Alignment.CenterVertically,
                 ) {
-                    Text("No results found", color = MaterialTheme.colorScheme.onSurfaceVariant)
-                }
-            } else {
-                LazyColumn(
-                    modifier = Modifier.height(400.dp),
-                    verticalArrangement = Arrangement.spacedBy(4.dp),
-                ) {
-                    items(results, key = { it.id }) { subtitle ->
-                        RemoteSubtitleCard(
-                            subtitle = subtitle,
-                            onDownload = { onDownload(subtitle.id) },
+                    var langExpanded by remember { mutableStateOf(false) }
+                    ExposedDropdownMenuBox(
+                        expanded = langExpanded,
+                        onExpandedChange = { langExpanded = it },
+                        modifier = Modifier.weight(1f),
+                    ) {
+                        OutlinedTextField(
+                            value = searchLanguage,
+                            onValueChange = { searchLanguage = it },
+                            label = { Text("Language") },
+                            modifier = Modifier.fillMaxWidth().menuAnchor(MenuAnchorType.PrimaryEditable),
+                            singleLine = true,
+                            trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = langExpanded) },
                         )
+                        ExposedDropdownMenu(
+                            expanded = langExpanded,
+                            onDismissRequest = { langExpanded = false },
+                        ) {
+                            cultures.forEach { culture ->
+                                androidx.compose.material3.DropdownMenuItem(
+                                    text = { Text("${culture.displayName} (${culture.name})") },
+                                    onClick = {
+                                        searchLanguage = culture.name
+                                        langExpanded = false
+                                    },
+                                )
+                            }
+                        }
+                    }
+                    FilledTonalButton(
+                        onClick = {
+                            onSearch(searchLanguage)
+                            hasSearched = true
+                        },
+                    ) {
+                        Icon(Tabler.Outline.Search, contentDescription = null, modifier = Modifier.size(18.dp))
+                        Spacer(modifier = Modifier.width(4.dp))
+                        Text("Search")
+                    }
+                }
+
+                if (hasSearched && results.isEmpty()) {
+                    Box(
+                        modifier = Modifier.fillMaxWidth().height(200.dp),
+                        contentAlignment = Alignment.Center,
+                    ) {
+                        Text("No results found", color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    }
+                } else {
+                    LazyColumn(
+                        modifier = Modifier.height(400.dp),
+                        verticalArrangement = Arrangement.spacedBy(4.dp),
+                    ) {
+                        items(results, key = { it.id }) { subtitle ->
+                            RemoteSubtitleCard(
+                                subtitle = subtitle,
+                                onDownload = { onDownload(subtitle.id) },
+                            )
+                        }
                     }
                 }
             }

@@ -22,6 +22,9 @@ data class HomeUiState(
     val favorites: List<MediaItem> = emptyList(),
     val isLoading: Boolean = true,
     val isRefreshing: Boolean = false,
+    /** True while a manual offline→online transition is in progress, so the
+     *  Go-online affordances can show an inline spinner instead of being silent. */
+    val isGoingOnline: Boolean = false,
     val error: String? = null,
     /** Non-blocking notice shown when some (not all) home sections failed to load. */
     val partialLoadError: Boolean = false,

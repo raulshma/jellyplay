@@ -103,6 +103,7 @@ fun UserSelectionScreen(
                 navigationIcon = { CircleBgBackButton(onClick = onBack) },
                 colors = TopAppBarDefaults.topAppBarColors(
                     containerColor = if (isSynthwave) Color.Transparent else MaterialTheme.colorScheme.surface,
+                    scrolledContainerColor = if (isSynthwave) Color.Transparent else MaterialTheme.colorScheme.surface,
                 )
             )
         },

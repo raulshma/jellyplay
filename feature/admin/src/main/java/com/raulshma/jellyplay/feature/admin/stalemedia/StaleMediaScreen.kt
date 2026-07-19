@@ -8,6 +8,7 @@ import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.PaddingValues
@@ -75,9 +76,11 @@ import com.raulshma.jellyplay.core.ui.adaptive.LocalAdaptiveInfo
 import com.raulshma.jellyplay.core.ui.adaptive.bottomPadding
 import com.raulshma.jellyplay.core.ui.components.ErrorScreen
 import com.raulshma.jellyplay.core.ui.components.JellyPlayScreenScaffold
+import com.raulshma.jellyplay.core.ui.components.TvSafeSheet
 import com.raulshma.jellyplay.core.ui.components.ScreenEmptyState
 import com.raulshma.jellyplay.core.ui.components.ScreenLoadingState
 import com.raulshma.jellyplay.core.ui.components.focusIndicator
+import com.raulshma.jellyplay.core.ui.tv.LocalTvMode
 import com.raulshma.jellyplay.core.ui.tv.TvGrabInitialFocus
 import com.raulshma.jellyplay.core.ui.tv.rememberTvFocusState
 import com.raulshma.jellyplay.core.ui.tv.tvFocusIndicator
@@ -558,14 +561,10 @@ private fun DeleteConfirmationSheet(
     onDismiss: () -> Unit,
     isDeleting: Boolean,
 ) {
+    val isTv = LocalTvMode.current
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
 
-    ModalBottomSheet(
-        onDismissRequest = onDismiss,
-        sheetState = sheetState,
-        shape = ShapeCache.smooth20,
-        containerColor = MaterialTheme.colorScheme.surfaceContainer.copy(alpha = 0.95f),
-    ) {
+    val content: @Composable ColumnScope.() -> Unit = {
         Column(modifier = Modifier.fillMaxWidth()) {
             Text(
                 "Confirm Deletion",
@@ -630,9 +629,20 @@ private fun DeleteConfirmationSheet(
                     ),
                     modifier = Modifier.weight(1f),
                     enabled = !isDeleting,
-                ) { Text(if (isDeleting) "Deleting..." else "Delete from Library") }
-            }
+            ) { Text(if (isDeleting) "Deleting..." else "Delete from Library") }
         }
+    }
+    }
+    if (isTv) {
+        TvSafeSheet(onDismissRequest = onDismiss, content = content)
+    } else {
+        ModalBottomSheet(
+            onDismissRequest = onDismiss,
+            sheetState = sheetState,
+            shape = ShapeCache.smooth20,
+            containerColor = MaterialTheme.colorScheme.surfaceContainer.copy(alpha = 0.95f),
+            content = content,
+        )
     }
 }
 

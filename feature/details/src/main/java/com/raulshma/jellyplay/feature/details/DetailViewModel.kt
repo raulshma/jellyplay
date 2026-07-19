@@ -42,7 +42,6 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
-import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.stateIn
@@ -56,10 +55,8 @@ import javax.inject.Inject
 private val TMDB_ID_REGEX = Regex("""/(\d+)(?:$|/|\?)""")
 
 /**
- * Ceiling on the number of season-episode fetches that may run concurrently.
- * Without a cap, a long-running series (30+ seasons) fires that many
- * [MediaRepository.getEpisodes] requests at once, saturating the connection
- * pool and contending with the still-in-flight core detail response.
+ * Ceiling on the number of season-episode fetches that may run concurrently
+ * for the download-sheet path (which still fetches per-season on demand).
  */
 private const val MAX_PARALLEL_SEASON_FETCHES = 5
 
@@ -99,23 +96,23 @@ class DetailViewModel @Inject constructor(
      * - The series has a tvdb id (Sonarr resolves series by tvdb), AND
      * - At least one Sonarr server is resolved.
      *
-     * Server resolution is deferred past the cheap checks; the actual series
-     * lookup happens inside ManageSeriesScreen.
+     * Server resolution is deferred past the cheap checks and performed once
+     * per series detail load (in [loadItem]) rather than inside this combine.
+     * The actual series lookup happens inside ManageSeriesScreen.
      */
     val canManageSeries: StateFlow<Boolean> = combine(
         // Map to identity-relevant fields only so favorite/played toggles (which
         // change isFavorite/isPlayed but not id/mediaType) produce structurally
-        // equal emissions that StateFlow deduplicates — otherwise every toggle
-        // re-triggered the combine and called arrRepository.resolveServers().
+        // equal emissions that StateFlow deduplicates.
         _uiState.map { it.detail?.item?.let { item -> ItemIdentity(item.id, item.mediaType) } },
         _uiState.map { it.detail?.providerIds?.get("tvdb") },
         preferencesStore.preferences.map { it.isExperimentalEnabled(ExperimentalFeature.DIRECT_ARR_INTEGRATION) },
-    ) { itemIdentity, tvdbId, flagEnabled ->
-        if (!flagEnabled || itemIdentity == null) return@combine false
-        if (itemIdentity.mediaType != MediaType.SERIES) return@combine false
-        if (tvdbId?.toIntOrNull() == null) return@combine false
-        val summary = arrRepository.resolveServers().getOrDefault(com.raulshma.jellyplay.core.model.arr.ArrServiceSummary())
-        summary.sonarrServers.isNotEmpty()
+        _uiState.map { it.sonarrServersResolved },
+    ) { itemIdentity, tvdbId, flagEnabled, sonarrResolved ->
+        if (!flagEnabled || itemIdentity == null) false
+        else if (itemIdentity.mediaType != MediaType.SERIES) false
+        else if (tvdbId?.toIntOrNull() == null) false
+        else sonarrResolved
     }.stateIn(scope, SharingStarted.WhileSubscribed(5_000), false)
 
     private val seerrRequestState = com.raulshma.jellyplay.core.data.seerr.SeerrRequestStateHolder(scope, seerrRequestDelegate)
@@ -180,7 +177,46 @@ class DetailViewModel @Inject constructor(
     // Internal caches (not observable UI state). All access happens on the
     // Main dispatcher (viewModelScope), so a plain MutableMap suffices — the
     // previous synchronizedMap wrappers added lock overhead with no contention.
+    // Internal caches (not observable UI state). Mutations happen on the Main
+    // dispatcher (viewModelScope), and cross-dispatcher reads (e.g. the smart-
+    // play computation on Dispatchers.Default) only ever observe the
+    // `.toMap()` snapshot copied into uiState — never this mutable map. Keep
+    // it that way: do NOT read or mutate [episodesMap] from a non-Main path,
+    // or switch to a thread-safe container if that changes.
     private val episodesMap = mutableMapOf<String, List<MediaItem>>()
+    // Cached flattened+sorted episode list. Keyed on BOTH the set of fetched
+    // seasons and [episodeDataEpoch]. A re-fetch (loadAllEpisodes /
+    // loadAllSeasonsBatched / loadEpisodes) can land fresh server data — updated
+    // isPlayed/playbackPositionTicks on the SAME season set — so keying on the
+    // season set alone would return a stale list and pick the wrong resume/next-
+    // up target. Bumping the epoch on every episode-map mutation invalidates the
+    // cache precisely then.
+    //
+    // NOTE: markPlayed / markUnplayed / toggleFavorite do NOT bump the epoch.
+    // They mutate the series/movie item in [DetailUiState.detail], not the
+    // episodes map, so the sorted episode list (and its playback order) is
+    // genuinely unchanged. If a future per-episode mutation (e.g. per-episode
+    // mark-played, or a playback-position refresh after returning from the
+    // player) mutates entries in [episodesMap], it MUST call
+    // [invalidateSortedEpisodesCache] or it will silently serve a stale list.
+    //
+    // Reads and writes are guarded by [sortedEpisodesSnapshot]'s `@Synchronized`
+    // (runs on Dispatchers.Default) and [resetSortedEpisodesCache] /
+    // [invalidateSortedEpisodesCache] (run on Main). `@Synchronized` locks on the
+    // VM instance, so these calls are serialized regardless of thread — the
+    // @Volatile below is belt-and-braces, the monitor is what actually makes
+    // access safe.
+    @Volatile
+    private var cachedSortedEpisodes: List<MediaItem>? = null
+    @Volatile
+    private var cachedSortedEpisodesKey: Set<String> = emptySet()
+    @Volatile
+    private var cachedSortedEpisodesEpoch: Long = 0L
+    // Bumped on every episode-map mutation (see callers of
+    // [invalidateSortedEpisodesCache]) so [sortedEpisodesSnapshot] can detect
+    // "same season set, but the contents changed" and rebuild.
+    @Volatile
+    private var episodeDataEpoch: Long = 0L
     private val downloadSheetEpisodesMap = mutableMapOf<String, List<MediaItem>>()
     private var downloadSheetFetchedSeasonIds: Set<String> = emptySet()
     private var loadJob: Job? = null
@@ -225,6 +261,16 @@ class DetailViewModel @Inject constructor(
         }
     }
 
+    /**
+     * Persists the season-episode sort order so it is shared across every
+     * series detail screen (and survives navigation/relaunch). The value is
+     * read back reactively via [preferences], so [SeasonsSection] picks it up
+     * without any per-screen plumbing.
+     */
+    fun setEpisodesDescending(descending: Boolean) {
+        launch { preferencesStore.setEpisodesDescending(descending) }
+    }
+
     fun getDownloadFlow(itemId: String): Flow<com.raulshma.jellyplay.core.model.DownloadItem?> =
         downloadRepository.getDownloadByMediaItemIdFlow(itemId)
 
@@ -259,9 +305,11 @@ class DetailViewModel @Inject constructor(
                     isDownloadingSeries = false,
                     downloadError = null,
                     seriesDownloadResult = null,
+                    sonarrServersResolved = false,
                 )
             }
             episodesMap.clear()
+            resetSortedEpisodesCache()
             seerrDataLoaded = false
             // Bump the seerr generation so any in-flight trailer/video/recommendation
             // fetch from the *previous* item is invalidated and cannot write its stale
@@ -281,19 +329,29 @@ class DetailViewModel @Inject constructor(
                         )
                     }
                     val itemType = detail.item.mediaType
-                    if (itemType == MediaType.SERIES) {
-                        loadSeasons(itemId)
-                    } else if (itemType == MediaType.EPISODE && detail.item.seriesId != null) {
-                        // For episodes: load the parent series' seasons so the
-                        // episode row + smart-play target resolve. This must
-                        // never gate the Play button, hence the non-blocking call.
-                        loadSeasons(detail.item.seriesId!!)
-                    } else if (itemType == MediaType.ALBUM) {
-                        loadAlbumTracks(itemId)
-                    } else if (itemType == MediaType.COLLECTION) {
-                        loadCollectionItems(itemId)
-                    } else {
-                        _uiState.update { state -> state.copy(smartPlayTarget = null) }
+                    // Subsidiary loads run via [launch] in viewModelScope, so they
+                    // are NOT children of loadJob (loadJob?.cancel() will not stop
+                    // them). Each subsidiary therefore captures the current item/series
+                    // id and bails before writing if navigation has moved on, so a
+                    // stale fetch can no longer clobber the new item's state. This
+                    // mirrors the seerrDataGeneration guard used by [loadSeerrData].
+                    when (itemType) {
+                        MediaType.SERIES -> {
+                            loadSeasons(itemId)
+                            resolveSonarrForSeries(detail)
+                        }
+                        MediaType.EPISODE -> {
+                            // For episodes: load the parent series' seasons so the
+                            // episode row + smart-play target resolve. This must
+                            // never gate the Play button, hence the non-blocking call.
+                            detail.item.seriesId?.let { seriesId ->
+                                loadSeasons(seriesId)
+                                resolveSonarrForSeries(detail)
+                            }
+                        }
+                        MediaType.ALBUM -> loadAlbumTracks(itemId)
+                        MediaType.COLLECTION -> loadCollectionItems(itemId)
+                        else -> _uiState.update { state -> state.copy(smartPlayTarget = null) }
                     }
                     val themeSourceId = detail.item.seriesId ?: itemId
                     themeMusicPlayer.playThemeFor(themeSourceId)
@@ -306,6 +364,10 @@ class DetailViewModel @Inject constructor(
                     launch {
                         mediaRepository.getSimilarItems(itemId, limit = 12)
                             .onSuccess { items ->
+                                // Guard: if navigation moved to another item while
+                                // this fetch was in flight, drop the result rather
+                                // than overwriting the new item's relatedItems.
+                                if (currentItemId != itemId) return@onSuccess
                                 _uiState.update {
                                     it.copy(relatedItems = items.filter { related -> related.id != itemId })
                                 }
@@ -325,30 +387,104 @@ class DetailViewModel @Inject constructor(
         }
     }
 
+    /**
+     * Resolves whether any Sonarr server is reachable, once per series load, and
+     * stores the boolean in [_uiState]. Previously [canManageSeries] called
+     * [ArrRepository.resolveServers] from inside a `combine` transform, which
+     * re-issued network I/O on every identity tick and got cancelled/restarted
+     * mid-resolution. Hoisting it here makes the combine a pure derivation.
+     */
+    private fun resolveSonarrForSeries(detail: MediaDetail) {
+        val tvdbId = detail.providerIds["tvdb"]
+        if (tvdbId?.toIntOrNull() == null) return
+        val itemId = detail.item.id
+        launch {
+            val summary = arrRepository.resolveServers()
+                .getOrDefault(com.raulshma.jellyplay.core.model.arr.ArrServiceSummary())
+            // Guard: don't write sonarr resolution onto a different item's state.
+            if (currentItemId != itemId) return@launch
+            _uiState.update { it.copy(sonarrServersResolved = summary.sonarrServers.isNotEmpty()) }
+        }
+    }
+
     private fun loadSeasons(seriesId: String) {
         currentSeriesId = seriesId
         launch {
             mediaRepository.getSeasons(seriesId)
                 .onSuccess { seasonList ->
+                    // Guard: if navigation moved to another series, drop the
+                    // result rather than overwriting the new screen's seasons.
+                    if (currentSeriesId != seriesId) return@onSuccess
                     _uiState.update { it.copy(seasons = seasonList) }
                     if (seasonList.isEmpty()) return@onSuccess
-                    loadAllSeasonsBatched(seriesId, seasonList)
+                    loadAllEpisodes(seriesId, seasonList)
                 }
         }
     }
 
     /**
-     * Fetches every season's episodes concurrently, but folds all results into a
-     * single [DetailUiState] emission once the batch completes. This replaces the
-     * previous pattern of fanning out N independent [loadEpisodes] calls, each of
-     * which performed its own `episodesMap.toMap()` full copy (O(N²) total) and its
-     * own smart-play recomputation (O(N × E) total).
-     *
-     * Concurrency is capped at [MAX_PARALLEL_SEASON_FETCHES] via a [Semaphore] so a
-     * long-running series (30+ seasons) doesn't burst that many simultaneous
-     * requests. Results land into the shared [episodesMap] as they arrive, but the
-     * UI only sees one atomic snapshot when the last season resolves — and smart
-     * play is computed exactly once.
+     * Fetches every episode for a series in a single round-trip via
+     * [MediaRepository.getAllEpisodesGrouped], which calls Jellyfin's
+     * `/Shows/{seriesId}/Episodes` endpoint with no `seasonId` so the server
+     * returns the full set. Collapses an N-season fan-out (one request per
+     * season) into a single call and a single [DetailUiState] emission.
+     */
+    private fun loadAllEpisodes(seriesId: String, seasonList: List<MediaItem>) {
+        launch {
+            mediaRepository.getAllEpisodesGrouped(seriesId)
+                .onSuccess { grouped ->
+                    // Guard: navigation moved to another series — drop the
+                    // result instead of clobbering the new screen's episodes.
+                    if (currentSeriesId != seriesId) return@onSuccess
+                    episodesMap.clear()
+                    episodesMap.putAll(grouped)
+                    // Only mark a season "fetched" when the batch actually
+                    // returned a value for THAT season's id. Previously every
+                    // season was force-inserted as emptyList() and added to
+                    // fetchedSeasonIds, so a season whose episodes grouped under
+                    // a different key (e.g. "" when an episode's seasonId came
+                    // back null) showed empty AND was marked fetched — which
+                    // short-circuited loadEpisodesForSeason and pinned it empty.
+                    // Leaving such seasons absent lets the UI show its loading
+                    // state and lets loadEpisodesForSeason fire the per-season
+                    // refetch (the proven-working old path).
+                    val fetchedIds = seasonList
+                        .filter { grouped.containsKey(it.id) }
+                        .map { it.id }
+                        .toSet()
+                    // New episode contents (fresh played/position from server)
+                    // can land with the same season set as before — bump the
+                    // epoch so [sortedEpisodesSnapshot] rebuilds.
+                    invalidateSortedEpisodesCache()
+                    _uiState.update {
+                        it.copy(
+                            episodes = episodesMap.toMap(),
+                            fetchedSeasonIds = fetchedIds,
+                        )
+                    }
+                    maybeComputeSmartPlayTarget()
+                }
+                .onFailure {
+                    // Guard also applies to the fallback: only fan out if we're
+                    // still on the same series.
+                    if (currentSeriesId != seriesId) return@onFailure
+                    // Fall back to per-season fetches only if the batched call
+                    // fails (e.g. older server that rejected the unfiltered
+                    // query). Caps concurrency at MAX_PARALLEL_SEASON_FETCHES.
+                    loadAllSeasonsBatched(seriesId, seasonList)
+                }
+        }
+    }
+
+    fun loadEpisodesForSeason(seriesId: String, seasonId: String) {
+        if (_uiState.value.fetchedSeasonIds.contains(seasonId)) return
+        loadEpisodes(seriesId, seasonId)
+    }
+
+    /**
+     * Per-season fallback used when the batched [loadAllEpisodes] call fails.
+     * Mirrors the previous fan-out: N concurrent requests capped by a semaphore,
+     * folded into one emission when the last season resolves.
      */
     private fun loadAllSeasonsBatched(seriesId: String, seasonList: List<MediaItem>) {
         val pending = AtomicInteger(seasonList.size)
@@ -367,6 +503,9 @@ class DetailViewModel @Inject constructor(
                         }
                 }
                 if (pending.decrementAndGet() == 0) {
+                    // Guard: don't emit if navigation moved to another series.
+                    if (currentSeriesId != seriesId) return@launch
+                    invalidateSortedEpisodesCache()
                     _uiState.update {
                         it.copy(
                             episodes = episodesMap.toMap(),
@@ -379,23 +518,18 @@ class DetailViewModel @Inject constructor(
         }
     }
 
-    fun loadEpisodesForSeason(seriesId: String, seasonId: String) {
-        if (_uiState.value.fetchedSeasonIds.contains(seasonId)) return
-        loadEpisodes(seriesId, seasonId)
-    }
-
     /**
-     * Fetch episodes for a single season. Each call is independent (no
-     * recursion), so [loadSeasons] can fan them out in parallel. Smart-play
-     * is re-evaluated after each season resolves; the smart-play logic itself
-     * is idempotent and will keep waiting for more seasons if none have a
-     * resumeable/unplayed episode yet.
+     * Fetch episodes for a single season (used by [loadEpisodesForSeason] for
+     * on-demand loads outside the initial batch). Smart-play is re-evaluated
+     * after the season resolves.
      */
     private fun loadEpisodes(seriesId: String, seasonId: String) {
         launch {
             mediaRepository.getEpisodes(seriesId, seasonId)
                 .onSuccess { episodeList ->
+                    if (currentSeriesId != seriesId) return@onSuccess
                     episodesMap[seasonId] = episodeList
+                    invalidateSortedEpisodesCache()
                     // Fold the fetchedSeasonIds update into the same emission as
                     // the episodes update so each call produces one uiState copy.
                     _uiState.update {
@@ -407,6 +541,7 @@ class DetailViewModel @Inject constructor(
                     maybeComputeSmartPlayTarget()
                 }
                 .onFailure {
+                    if (currentSeriesId != seriesId) return@onFailure
                     if (!_uiState.value.episodes.containsKey(seasonId)) {
                         episodesMap[seasonId] = emptyList()
                         _uiState.update {
@@ -426,27 +561,39 @@ class DetailViewModel @Inject constructor(
     private fun loadAlbumTracks(albumId: String) {
         launch {
             mediaRepository.getAlbumTracks(albumId)
-                .onSuccess { tracks -> _uiState.update { it.copy(albumTracks = tracks) } }
+                .onSuccess { tracks ->
+                    if (currentItemId != albumId) return@onSuccess
+                    _uiState.update { it.copy(albumTracks = tracks) }
+                }
         }
     }
 
     private fun loadCollectionItems(collectionId: String) {
         launch {
             mediaRepository.getCollectionItems(collectionId, limit = 100)
-                .onSuccess { result -> _uiState.update { it.copy(collectionItems = result.items) } }
+                .onSuccess { result ->
+                    if (currentItemId != collectionId) return@onSuccess
+                    _uiState.update { it.copy(collectionItems = result.items) }
+                }
         }
     }
 
     fun playAlbum(startIndex: Int = 0) {
         val tracks = _uiState.value.albumTracks
         if (tracks.isEmpty()) return
-        val queueItems = tracks.map { track ->
-            track.toAudioQueueItem(
-                imageUrl = playbackRepository.getImageUrl(track.id, maxWidth = 400),
-                albumFallback = _uiState.value.detail?.item?.name,
-            )
+        val albumName = _uiState.value.detail?.item?.name
+        // Queue construction builds N image URLs + N queue items; move it off
+        // the Main dispatcher (the click handler is a non-suspend call) so a
+        // 50–100-track album doesn't block the UI thread before playQueue.
+        launch(Dispatchers.Default) {
+            val queueItems = tracks.map { track ->
+                track.toAudioQueueItem(
+                    imageUrl = playbackRepository.getImageUrl(track.id, maxWidth = 400),
+                    albumFallback = albumName,
+                )
+            }
+            audioPlaybackManager.playQueue(queueItems, startIndex)
         }
-        audioPlaybackManager.playQueue(queueItems, startIndex)
     }
 
     private fun maybeComputeSmartPlayTarget() {
@@ -466,12 +613,11 @@ class DetailViewModel @Inject constructor(
             // per season landing) even when the early-return below would fire.
             val seasonsPending = state.seasons.any { s -> !state.fetchedSeasonIds.contains(s.id) }
             if (seasonsPending) return@launch
-            val allEpisodes = state.episodes.values.flatten()
-            if (allEpisodes.isEmpty()) {
+            val sorted = sortedEpisodesSnapshot(state)
+            if (sorted.isEmpty()) {
                 _uiState.update { it.copy(smartPlayTarget = null) }
                 return@launch
             }
-            val sorted = allEpisodes.sortedByPlaybackOrder()
 
             val resumeEpisode = sorted.firstOrNull { it.hasResumeProgress() }
             if (resumeEpisode != null) {
@@ -530,12 +676,12 @@ class DetailViewModel @Inject constructor(
 
     private fun computeEpisodeSmartPlayTarget(currentEpisode: MediaItem) {
         launch(Dispatchers.Default) {
-            val allEpisodes = _uiState.value.episodes.values.flatten().sortedByPlaybackOrder()
-            if (allEpisodes.isEmpty()) {
+            val sorted = sortedEpisodesSnapshot(_uiState.value)
+            if (sorted.isEmpty()) {
                 _uiState.update { it.copy(smartPlayTarget = null) }
                 return@launch
             }
-            val currentIndex = allEpisodes.indexOfFirst { it.id == currentEpisode.id }
+            val currentIndex = sorted.indexOfFirst { it.id == currentEpisode.id }
             if (currentIndex < 0) {
                 _uiState.update { it.copy(smartPlayTarget = null) }
                 return@launch
@@ -559,6 +705,48 @@ class DetailViewModel @Inject constructor(
 
     private fun MediaItem.hasResumeProgress(): Boolean =
         (playbackPositionTicks ?: 0L) > 0L && !isPlayed
+
+    /**
+     * Returns the flattened + playback-sorted episode list, cached keyed on
+     * [DetailUiState.fetchedSeasonIds] and [episodeDataEpoch]. A re-fetch can
+     * land fresh episode contents (played state, playback position) with the
+     * same season set, so the epoch distinguishes "same seasons, same contents"
+     * from "same seasons, contents changed"; without this cache each call
+     * re-flattened and re-sorted the entire episode set (O(N×E) on a large
+     * series). The cache is invalidated in [loadItem] and whenever the set of
+     * fetched seasons or the episode contents change.
+     */
+    @Synchronized
+    private fun sortedEpisodesSnapshot(state: DetailUiState): List<MediaItem> {
+        val key = state.fetchedSeasonIds
+        val epoch = episodeDataEpoch
+        if (cachedSortedEpisodes != null && cachedSortedEpisodesKey == key && cachedSortedEpisodesEpoch == epoch) {
+            return cachedSortedEpisodes!!
+        }
+        val sorted = state.episodes.values.flatten().sortedByPlaybackOrder()
+        cachedSortedEpisodes = sorted
+        cachedSortedEpisodesKey = key
+        cachedSortedEpisodesEpoch = epoch
+        return sorted
+    }
+
+    @Synchronized
+    private fun resetSortedEpisodesCache() {
+        cachedSortedEpisodes = null
+        cachedSortedEpisodesKey = emptySet()
+        cachedSortedEpisodesEpoch = 0L
+    }
+
+    /**
+     * Bumps the episode-data epoch so [sortedEpisodesSnapshot] rebuilds its
+     * cached list. Call after any mutation that changes the contents of the
+     * fetched episodes (played/favorite/position) without changing the set of
+     * fetched seasons.
+     */
+    @Synchronized
+    private fun invalidateSortedEpisodesCache() {
+        episodeDataEpoch++
+    }
 
     private fun List<MediaItem>.sortedByPlaybackOrder(): List<MediaItem> =
         sortedWith(
@@ -713,6 +901,11 @@ class DetailViewModel @Inject constructor(
                     else -> item.mediaType.name
                 }
 
+                // For episodes, propagate the parent series/season ids so the
+                // downloads row is linked to its series. Without these,
+                // deleteOfflineSeries (WHERE seriesId = :seriesId) finds no rows
+                // and leaves the episode files + download rows orphaned.
+                val isEpisode = item.mediaType == MediaType.EPISODE
                 downloadRepository.startDownload(
                     mediaItemId = item.id,
                     name = item.name,
@@ -721,6 +914,12 @@ class DetailViewModel @Inject constructor(
                     downloadUrl = streamUrl,
                     imageUrl = imageUrl,
                     imageBlurHash = item.blurHashes.primary,
+                    seriesId = if (isEpisode) item.seriesId else null,
+                    seasonId = if (isEpisode) item.seasonId else null,
+                    seriesName = if (isEpisode) item.seriesName else null,
+                    seasonName = if (isEpisode) item.seasonName else null,
+                    episodeNumber = if (isEpisode) item.episodeNumber else null,
+                    seasonNumber = if (isEpisode) item.seasonNumber else null,
                 ).onSuccess { downloadItem ->
                     if (downloadItem.status == com.raulshma.jellyplay.core.model.DownloadStatus.PENDING) {
                         enqueueDownloadWorker(downloadItem.id)
@@ -885,7 +1084,14 @@ class DetailViewModel @Inject constructor(
             val tmdbId = resolveTmdbId(detail)
             if (tmdbId == null) return@launch
 
-            val connected = try { seerrRepository.isConnected().first() } catch (_: Exception) { false }
+            // Read the already-resolved Seerr connection booleans from the
+            // published [uiState] aggregator — NOT [_uiState]. The flags are
+            // folded into [uiState] by the outer combine (Group 3 → seerrFlags),
+            // but are never written to [_uiState] (the Group 1 primary flow), so
+            // reading [_uiState].value here would always yield the default false
+            // and skip every Seerr fetch. [uiState] is a hot StateFlow, so .value
+            // is a snapshot read with no subscription/probe overhead.
+            val connected = uiState.value.isSeerrConnected
 
             if (generation != seerrDataGeneration) return@launch
             // 1. Fetch related videos (trailers)
@@ -908,7 +1114,7 @@ class DetailViewModel @Inject constructor(
             }
 
             // 2. Fetch recommendations and similar if enabled
-            val enabled = try { seerrRepository.isRecommendationsEnabled().first() } catch (_: Exception) { false }
+            val enabled = uiState.value.isSeerrRecommendationsEnabled
             if (connected && enabled && generation == seerrDataGeneration) {
                 coroutineScope {
                     val recsDeferred = async {

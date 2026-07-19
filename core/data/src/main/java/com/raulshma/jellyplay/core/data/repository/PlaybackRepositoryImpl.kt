@@ -54,6 +54,9 @@ class PlaybackRepositoryImpl @Inject constructor(
     override fun getBackdropUrl(itemId: String, maxWidth: Int): String =
         apiClient.getBackdropImageUrl(itemId, maxWidth)
 
+    override suspend fun getItemImageBytes(itemId: String, imageType: String, maxWidth: Int): ByteArray? =
+        apiClient.getItemImageBytes(itemId, imageType, maxWidth)
+
     override fun getStreamUrl(
         itemId: String,
         mediaSourceId: String,
@@ -146,7 +149,6 @@ class PlaybackRepositoryImpl @Inject constructor(
             playMethod = method,
             playSessionId = result.playSessionId,
             maxStreamingBitrate = maxStreamingBitrateBits,
-            isLive = isLiveStream,
         )
     }
 

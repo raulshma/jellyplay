@@ -22,17 +22,11 @@ fun EntryProviderScope<NavKey>.liveTvSection(navigator: Navigator) {
             onChannelClick = { channelId, channelName ->
                 navigator.navigate(Route.LiveTvChannelPlayer(channelId, channelName))
             },
+            onOpenChannelDetail = { channelId, channelName ->
+                navigator.navigate(Route.ChannelDetail(channelId, channelName))
+            },
             onRecordingClick = { recordingId ->
                 navigator.navigate(Route.VideoPlayer(itemId = recordingId))
-            },
-            onFolderClick = { folder ->
-                navigator.navigate(
-                    Route.LibraryBrowse(
-                        folderId = folder.id,
-                        folderName = folder.name,
-                        collectionType = folder.collectionType,
-                    )
-                )
             },
         )
     }

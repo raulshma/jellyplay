@@ -5,6 +5,7 @@ import com.raulshma.jellyplay.core.model.MediaType
 import com.raulshma.jellyplay.core.model.PlaybackActivityPoint
 import com.raulshma.jellyplay.core.model.PlaybackReportingDetail
 import com.raulshma.jellyplay.core.model.PlaybackReportingStatus
+import androidx.compose.runtime.Immutable
 import com.raulshma.jellyplay.core.network.JellyfinApiClient
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -18,6 +19,7 @@ data class DailyWatchActivity(
     val value: Long,
 )
 
+@Immutable
 data class StreakInfo(
     val currentStreak: Int,
     val longestStreak: Int,

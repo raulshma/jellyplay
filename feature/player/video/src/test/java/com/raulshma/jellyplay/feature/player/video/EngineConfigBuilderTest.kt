@@ -4,13 +4,24 @@ import com.raulshma.jellyplay.core.model.AudioNormalizationMode
 import com.raulshma.jellyplay.core.model.ChannelMixMode
 import com.raulshma.jellyplay.core.model.DecoderMode
 import com.raulshma.jellyplay.core.model.EffectStrength
+import com.raulshma.jellyplay.core.model.EngineSpecificConfig
 import com.raulshma.jellyplay.core.model.EqualizerSettings
+import com.raulshma.jellyplay.core.model.ExoPlayerEngineConfig
+import com.raulshma.jellyplay.core.model.LibVlcEngineConfig
+import com.raulshma.jellyplay.core.model.MediaStream
+import com.raulshma.jellyplay.core.model.MpvEngineConfig
 import com.raulshma.jellyplay.core.model.ReverbPreset
+import com.raulshma.jellyplay.core.model.StreamType
+import com.raulshma.jellyplay.core.model.SubtitleColor
 import com.raulshma.jellyplay.core.model.SubtitleStyle
 import com.raulshma.jellyplay.core.model.UserPreferences
+import com.raulshma.jellyplay.core.model.VideoEffectsConfig
 import com.raulshma.jellyplay.feature.player.video.engine.EngineConfig
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNotNull
+import org.junit.Assert.assertNull
+import org.junit.Assert.assertSame
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
@@ -107,5 +118,177 @@ class EngineConfigBuilderTest {
         val config = EngineConfigBuilder.build(state, equalizerEnabled = false, prefs = UserPreferences())
         assertEquals(DecoderMode.SW_ONLY, config.decoderMode)
         assertTrue(config.audioPassthrough)
+    }
+
+    @Test
+    fun build_videoEffectsPropagatedFromState() {
+        val effects = VideoEffectsConfig(brightness = 0.2f, saturation = 1.5f)
+        val state = baselineState().copy(videoEffects = effects)
+        val config = EngineConfigBuilder.build(state, equalizerEnabled = false, prefs = UserPreferences())
+        assertEquals(effects, config.videoEffects)
+    }
+
+    // ─── buildFromPreferences: initial-load / engine-swap path ──────────────────
+    // Regression guard: this entry point was added because PlayerSessionManager
+    // previously built its own inline EngineConfig literal that silently dropped
+    // bass boost / virtualizer / reverb / volume boost / video effects.
+
+    @Test
+    fun buildFromPreferences_defaultsPropagateForNeutralPrefs() {
+        val config = EngineConfigBuilder.buildFromPreferences(
+            prefs = UserPreferences(),
+            mediaStreams = emptyList(),
+            itemId = null,
+            engineSpecific = null,
+        )
+        assertEquals(DecoderMode.HW_PREFERRED, config.decoderMode)
+        assertFalse(config.audioPassthrough)
+        assertEquals(0L, config.audioDelayMs)
+        assertEquals(VideoEffectsConfig(), config.videoEffects)
+        assertNull(config.engineSpecific)
+        // Bass/virtualizer/reverb/volume-boost must survive the load path.
+        with(config.audioEffects) {
+            assertFalse(bassBoostEnabled)
+            assertEquals(500, virtualizerStrength)
+            assertEquals(ReverbPreset.NONE, reverbPreset)
+            assertFalse(volumeBoostEnabled)
+        }
+    }
+
+    @Test
+    fun buildFromPreferences_carriesAudioEffectsFromPrefs() {
+        val prefs = UserPreferences(
+            dialogueBoostEnabled = true,
+            dialogueBoostStrength = EffectStrength.HIGH,
+            nightModeEnabled = true,
+            nightModeStrength = EffectStrength.MODERATE,
+            bassBoostEnabled = true,
+            bassBoostStrength = EffectStrength.LOW,
+            virtualizerEnabled = true,
+            virtualizerStrength = 750,
+            reverbPreset = ReverbPreset.LARGE_HALL,
+            volumeBoostEnabled = true,
+            volumeBoostGain = 6,
+        )
+        val config = EngineConfigBuilder.buildFromPreferences(prefs, emptyList(), null, null)
+
+        with(config.audioEffects) {
+            assertTrue(dialogueBoostEnabled)
+            assertEquals(EffectStrength.HIGH, dialogueBoostStrength)
+            assertTrue(nightModeEnabled)
+            assertTrue(bassBoostEnabled)
+            assertTrue(virtualizerEnabled)
+            assertEquals(750, virtualizerStrength)
+            assertEquals(ReverbPreset.LARGE_HALL, reverbPreset)
+            assertTrue(volumeBoostEnabled)
+            assertEquals(6, volumeBoostGain)
+        }
+    }
+
+    @Test
+    fun buildFromPreferences_equalizerSettingsAndNightModeGainFromPrefs() {
+        val prefs = UserPreferences(
+            equalizerEnabled = true,
+            equalizerSettings = EqualizerSettings(bandLevels = listOf(1, 2, 3, 4, 5, 6, 7, 8, 9, 10)),
+            nightModeEnabled = true,
+            audioNightModeGain = 1500,
+        )
+        val config = EngineConfigBuilder.buildFromPreferences(prefs, emptyList(), null, null)
+        assertTrue(config.audioEffects.equalizerEnabled)
+        assertEquals(prefs.equalizerSettings, config.audioEffects.equalizerSettings)
+        assertEquals(1500, config.audioEffects.nightModeGain)
+    }
+
+    @Test
+    fun buildFromPreferences_pauseOnAudioFocusLossPropagated() {
+        val prefs = UserPreferences(pauseOnAudioFocusLoss = false)
+        val config = EngineConfigBuilder.buildFromPreferences(prefs, emptyList(), null, null)
+        assertFalse(config.pauseOnAudioFocusLoss)
+    }
+
+    @Test
+    fun buildFromPreferences_nullItemId_fallsBackToNeutralVideoEffects() {
+        val prefs = UserPreferences(
+            videoEffectsByItem = mapOf("known" to VideoEffectsConfig(brightness = 0.5f)),
+        )
+        val config = EngineConfigBuilder.buildFromPreferences(prefs, emptyList(), itemId = null, engineSpecific = null)
+        assertEquals(VideoEffectsConfig(), config.videoEffects)
+    }
+
+    @Test
+    fun buildFromPreferences_knownItemId_resolvesPerItemVideoEffects() {
+        val effects = VideoEffectsConfig(contrast = 1.4f, saturation = 1.2f)
+        val prefs = UserPreferences(videoEffectsByItem = mapOf("item-42" to effects))
+        val config = EngineConfigBuilder.buildFromPreferences(prefs, emptyList(), itemId = "item-42", engineSpecific = null)
+        assertEquals(effects, config.videoEffects)
+    }
+
+    @Test
+    fun buildFromPreferences_hdrStream_appliesHdrSubtitleStyleWhenEnabled() {
+        val hdrStyle = SubtitleStyle(applyCustomStyle = true, fontColor = SubtitleColor.WHITE, fontSize = 20)
+        val prefs = UserPreferences(
+            hdrSubtitleStyleEnabled = true,
+            hdrSubtitleStyle = hdrStyle,
+        )
+        val streams = listOf(MediaStream(index = 0, type = StreamType.VIDEO, videoRange = "HDR10"))
+        val config = EngineConfigBuilder.buildFromPreferences(prefs, streams, null, null)
+        assertEquals(hdrStyle, config.subtitleStyle)
+    }
+
+    @Test
+    fun buildFromPreferences_sdrStream_usesUserSubtitleStyle() {
+        val userStyle = SubtitleStyle(applyCustomStyle = true, fontSize = 18)
+        val prefs = UserPreferences(
+            subtitleStyle = userStyle,
+            hdrSubtitleStyleEnabled = true,
+            hdrSubtitleStyle = SubtitleStyle(fontSize = 30),
+        )
+        val streams = listOf(MediaStream(index = 0, type = StreamType.VIDEO, videoRange = "SDR"))
+        val config = EngineConfigBuilder.buildFromPreferences(prefs, streams, null, null)
+        assertEquals(userStyle, config.subtitleStyle)
+        assertEquals(18, config.subtitleStyle.fontSize)
+    }
+
+    @Test
+    fun buildFromPreferences_engineSpecificPropagated() {
+        val mpvConfig: EngineSpecificConfig = MpvEngineConfig()
+        val config = EngineConfigBuilder.buildFromPreferences(
+            prefs = UserPreferences(),
+            mediaStreams = emptyList(),
+            itemId = null,
+            engineSpecific = mpvConfig,
+        )
+        assertSame(mpvConfig, config.engineSpecific)
+    }
+
+    @Test
+    fun buildFromPreferences_exoAndVlcEngineConfigsPropagated() {
+        val exoConfig: EngineSpecificConfig = ExoPlayerEngineConfig(audioOffloadMode = ExoPlayerEngineConfig().audioOffloadMode)
+        val vlcConfig: EngineSpecificConfig = LibVlcEngineConfig(networkCaching = 1500)
+
+        val exoBuilt = EngineConfigBuilder.buildFromPreferences(UserPreferences(), emptyList(), null, exoConfig)
+        assertSame(exoConfig, exoBuilt.engineSpecific)
+
+        val vlcBuilt = EngineConfigBuilder.buildFromPreferences(UserPreferences(), emptyList(), null, vlcConfig)
+        assertSame(vlcConfig, vlcBuilt.engineSpecific)
+        assertNotNull(vlcBuilt.engineSpecific as LibVlcEngineConfig)
+    }
+
+    @Test
+    fun buildFromPreferences_decoderAndPassthroughReadFromPrefs() {
+        val prefs = UserPreferences(decoderMode = DecoderMode.SW_ONLY, audioPassthrough = true, audioDelayMs = 99L)
+        val config = EngineConfigBuilder.buildFromPreferences(prefs, emptyList(), null, null)
+        assertEquals(DecoderMode.SW_ONLY, config.decoderMode)
+        assertTrue(config.audioPassthrough)
+        assertEquals(99L, config.audioDelayMs)
+    }
+
+    @Test
+    fun buildFromPreferences_subtitleDelayReadsResolvedStyleOffset() {
+        val style = SubtitleStyle(applyCustomStyle = true, offsetMs = 333L)
+        val prefs = UserPreferences(subtitleStyle = style)
+        val config = EngineConfigBuilder.buildFromPreferences(prefs, emptyList(), null, null)
+        assertEquals(333L, config.subtitleDelayMs)
+        assertEquals(333L, config.subtitleStyle.offsetMs)
     }
 }

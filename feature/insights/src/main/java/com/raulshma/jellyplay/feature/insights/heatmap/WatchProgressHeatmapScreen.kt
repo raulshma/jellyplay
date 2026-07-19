@@ -39,6 +39,8 @@ import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.rememberModalBottomSheetState
+import com.raulshma.jellyplay.core.ui.tv.LocalTvMode
+import com.raulshma.jellyplay.core.ui.components.TvSafeSheet
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.Immutable
 import androidx.compose.runtime.LaunchedEffect
@@ -85,7 +87,9 @@ import com.raulshma.jellyplay.core.designsystem.theme.ShapeCache
 import com.raulshma.jellyplay.core.designsystem.theme.isLightColor
 import com.raulshma.jellyplay.core.ui.adaptive.LocalAdaptiveInfo
 import com.raulshma.jellyplay.core.ui.adaptive.WindowSizeClass
+import com.raulshma.jellyplay.core.ui.components.ScreenLoadingState
 import com.raulshma.jellyplay.core.ui.components.JellyPlayScreenScaffold
+import com.raulshma.jellyplay.core.ui.components.focusIndicator
 import com.raulshma.jellyplay.core.ui.tv.TvGrabInitialFocus
 import com.raulshma.jellyplay.core.ui.tv.rememberTvFocusState
 import com.raulshma.jellyplay.core.ui.tv.tvFocusIndicator
@@ -211,14 +215,12 @@ fun WatchProgressHeatmapScreen(
         },
     ) { innerPadding ->
         if (state.isLoading) {
-            Box(
+            ScreenLoadingState(
+                message = "Loading...",
                 modifier = Modifier
                     .fillMaxSize()
                     .padding(innerPadding),
-                contentAlignment = Alignment.Center,
-            ) {
-                Text("Loading...", style = MaterialTheme.typography.bodyMedium)
-            }
+            )
         } else {
             if (adaptiveInfo.windowSizeClass == WindowSizeClass.Compact) {
                 Column(
@@ -761,110 +763,222 @@ private fun DayDetailSheet(
 ) {
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
 
-    ModalBottomSheet(
-        onDismissRequest = onDismiss,
-        sheetState = sheetState,
-    ) {
-        Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 16.dp)
-                .padding(bottom = 32.dp),
+    val isTv = com.raulshma.jellyplay.core.ui.tv.LocalTvMode.current
+    if (isTv) {
+        com.raulshma.jellyplay.core.ui.components.TvSafeSheet(
+            onDismissRequest = onDismiss,
         ) {
-            Text(
-                text = dayInfo.dateLabel,
-                style = MaterialTheme.typography.titleMedium,
-                fontWeight = FontWeight.Bold,
-            )
-
-            Spacer(Modifier.height(4.dp))
-
-            val totalMinutes = dayInfo.sessions.sumOf {
-                kotlin.math.max(0L, it.duration / 60_000_000_000L)
-            }
-            val hours = totalMinutes / 60
-            val mins = totalMinutes % 60
-            val durationText = when {
-                hours > 0 -> "${hours}h ${mins}m"
-                mins > 0 -> "${mins}m"
-                dayInfo.sessions.isNotEmpty() -> "< 1m"
-                else -> "No activity"
-            }
-            Text(
-                text = "${dayInfo.sessions.size} session${if (dayInfo.sessions.size != 1) "s" else ""} \u00B7 $durationText watched",
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-
-            Spacer(Modifier.height(12.dp))
-
-            val uniqueItems = dayInfo.sessions
-                .groupBy { it.itemId }
-                .mapValues { (_, sessions) -> sessions.maxOf { it.duration } }
-
-            uniqueItems.forEach { (itemId, durationTicks) ->
-                val resolved = dayInfo.resolvedItems[itemId]
-                val name = resolved?.name ?: dayInfo.sessions.first { it.itemId == itemId }.name
-                val imageUrl = resolved?.imageUrl
-                val posMinutes = durationTicks / 60_000_000_000L
-
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .clip(ShapeCache.smooth8)
-                        .clickable { onItemClick(itemId) }
-                        .padding(vertical = 6.dp),
-                ) {
-                    if (imageUrl != null) {
-                        MediaImage(
-                            url = imageUrl,
-                            contentDescription = name,
-                            contentScale = ContentScale.Crop,
-                            size = CoilSize(128, 128),
-                            placeholderIcon = Tabler.Outline.Photo,
-                            modifier = Modifier
-                                .size(40.dp)
-                                .clip(ShapeCache.smooth4),
-                        )
-                        Spacer(Modifier.width(12.dp))
-                    } else {
-                        Surface(
-                            modifier = Modifier.size(40.dp),
-                            shape = ShapeCache.smooth4,
-                            color = MaterialTheme.colorScheme.surfaceContainerHigh,
-                        ) {
-                            Box(contentAlignment = Alignment.Center) {
-                                Icon(
-                                    Tabler.Outline.PlayerPlay,
-                                    contentDescription = null,
-                                    modifier = Modifier.size(20.dp),
-                                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                                )
-                            }
-                        }
-                        Spacer(Modifier.width(12.dp))
-                    }
-
-                    Column(modifier = Modifier.weight(1f)) {
-                        Text(
-                            text = name,
-                            style = MaterialTheme.typography.bodyMedium,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis,
-                        )
-                        Text(
-                            text = if (posMinutes > 0) "${posMinutes}m watched" else "Played",
-                            style = MaterialTheme.typography.labelSmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        )
-                    }
-                }
-
-                HorizontalDivider(
-                    modifier = Modifier.padding(vertical = 2.dp),
-                    color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f),
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 16.dp)
+                    .padding(bottom = 32.dp),
+            ) {
+                Text(
+                    text = dayInfo.dateLabel,
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.Bold,
                 )
+
+                Spacer(Modifier.height(4.dp))
+
+                val totalMinutes = dayInfo.sessions.sumOf {
+                    kotlin.math.max(0L, it.duration / 60_000_000_000L)
+                }
+                val hours = totalMinutes / 60
+                val mins = totalMinutes % 60
+                val durationText = when {
+                    hours > 0 -> "${hours}h ${mins}m"
+                    mins > 0 -> "${mins}m"
+                    dayInfo.sessions.isNotEmpty() -> "< 1m"
+                    else -> "No activity"
+                }
+                Text(
+                    text = "${dayInfo.sessions.size} session${if (dayInfo.sessions.size != 1) "s" else ""} \u00B7 $durationText watched",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+
+                Spacer(Modifier.height(12.dp))
+
+                val uniqueItems = dayInfo.sessions
+                    .groupBy { it.itemId }
+                    .mapValues { (_, sessions) -> sessions.maxOf { it.duration } }
+
+                uniqueItems.forEach { (itemId, durationTicks) ->
+                    val resolved = dayInfo.resolvedItems[itemId]
+                    val name = resolved?.name ?: dayInfo.sessions.first { it.itemId == itemId }.name
+                    val imageUrl = resolved?.imageUrl
+                    val posMinutes = durationTicks / 60_000_000_000L
+
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clip(ShapeCache.smooth8)
+                            .focusIndicator(ShapeCache.smooth12)
+                            .clickable { onItemClick(itemId) }
+                            .padding(vertical = 6.dp),
+                    ) {
+                        if (imageUrl != null) {
+                            MediaImage(
+                                url = imageUrl,
+                                contentDescription = name,
+                                contentScale = ContentScale.Crop,
+                                size = CoilSize(128, 128),
+                                placeholderIcon = Tabler.Outline.Photo,
+                                modifier = Modifier
+                                    .size(40.dp)
+                                    .clip(ShapeCache.smooth4),
+                            )
+                            Spacer(Modifier.width(12.dp))
+                        } else {
+                            Surface(
+                                modifier = Modifier.size(40.dp),
+                                shape = ShapeCache.smooth4,
+                                color = MaterialTheme.colorScheme.surfaceContainerHigh,
+                            ) {
+                                Box(contentAlignment = Alignment.Center) {
+                                    Icon(
+                                        Tabler.Outline.PlayerPlay,
+                                        contentDescription = null,
+                                        modifier = Modifier.size(20.dp),
+                                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    )
+                                }
+                            }
+                            Spacer(Modifier.width(12.dp))
+                        }
+
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(
+                                text = name,
+                                style = MaterialTheme.typography.bodyMedium,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis,
+                            )
+                            Text(
+                                text = if (posMinutes > 0) "${posMinutes}m watched" else "Played",
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+                        }
+                    }
+
+                    HorizontalDivider(
+                        modifier = Modifier.padding(vertical = 2.dp),
+                        color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f),
+                    )
+                }
+            }
+        }
+    } else {
+        ModalBottomSheet(
+            onDismissRequest = onDismiss,
+            sheetState = sheetState,
+        ) {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 16.dp)
+                    .padding(bottom = 32.dp),
+            ) {
+                Text(
+                    text = dayInfo.dateLabel,
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.Bold,
+                )
+
+                Spacer(Modifier.height(4.dp))
+
+                val totalMinutes = dayInfo.sessions.sumOf {
+                    kotlin.math.max(0L, it.duration / 60_000_000_000L)
+                }
+                val hours = totalMinutes / 60
+                val mins = totalMinutes % 60
+                val durationText = when {
+                    hours > 0 -> "${hours}h ${mins}m"
+                    mins > 0 -> "${mins}m"
+                    dayInfo.sessions.isNotEmpty() -> "< 1m"
+                    else -> "No activity"
+                }
+                Text(
+                    text = "${dayInfo.sessions.size} session${if (dayInfo.sessions.size != 1) "s" else ""} \u00B7 $durationText watched",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+
+                Spacer(Modifier.height(12.dp))
+
+                val uniqueItems = dayInfo.sessions
+                    .groupBy { it.itemId }
+                    .mapValues { (_, sessions) -> sessions.maxOf { it.duration } }
+
+                uniqueItems.forEach { (itemId, durationTicks) ->
+                    val resolved = dayInfo.resolvedItems[itemId]
+                    val name = resolved?.name ?: dayInfo.sessions.first { it.itemId == itemId }.name
+                    val imageUrl = resolved?.imageUrl
+                    val posMinutes = durationTicks / 60_000_000_000L
+
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clip(ShapeCache.smooth8)
+                            .focusIndicator(ShapeCache.smooth12)
+                            .clickable { onItemClick(itemId) }
+                            .padding(vertical = 6.dp),
+                    ) {
+                        if (imageUrl != null) {
+                            MediaImage(
+                                url = imageUrl,
+                                contentDescription = name,
+                                contentScale = ContentScale.Crop,
+                                size = CoilSize(128, 128),
+                                placeholderIcon = Tabler.Outline.Photo,
+                                modifier = Modifier
+                                    .size(40.dp)
+                                    .clip(ShapeCache.smooth4),
+                            )
+                            Spacer(Modifier.width(12.dp))
+                        } else {
+                            Surface(
+                                modifier = Modifier.size(40.dp),
+                                shape = ShapeCache.smooth4,
+                                color = MaterialTheme.colorScheme.surfaceContainerHigh,
+                            ) {
+                                Box(contentAlignment = Alignment.Center) {
+                                    Icon(
+                                        Tabler.Outline.PlayerPlay,
+                                        contentDescription = null,
+                                        modifier = Modifier.size(20.dp),
+                                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    )
+                                }
+                            }
+                            Spacer(Modifier.width(12.dp))
+                        }
+
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(
+                                text = name,
+                                style = MaterialTheme.typography.bodyMedium,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis,
+                            )
+                            Text(
+                                text = if (posMinutes > 0) "${posMinutes}m watched" else "Played",
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+                        }
+                    }
+
+                    HorizontalDivider(
+                        modifier = Modifier.padding(vertical = 2.dp),
+                        color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f),
+                    )
+                }
             }
         }
     }

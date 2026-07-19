@@ -21,7 +21,6 @@ import com.raulshma.jellyplay.core.model.LibraryFolder
 import com.raulshma.jellyplay.core.model.LiveTvChannel
 import com.raulshma.jellyplay.core.model.LiveTvProgram
 import com.raulshma.jellyplay.core.model.LiveTvRecording
-import com.raulshma.jellyplay.core.model.RecordingFolder
 import com.raulshma.jellyplay.core.model.GuideInfo
 import com.raulshma.jellyplay.core.model.ProgramFilters
 import com.raulshma.jellyplay.core.model.LrcLibTrack
@@ -46,11 +45,17 @@ import com.raulshma.jellyplay.core.model.NewsletterData
 import com.raulshma.jellyplay.core.network.JellyfinApiClient
 import com.raulshma.jellyplay.core.network.LrcLibApi
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Deferred
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.async
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
+import java.util.concurrent.atomic.AtomicLong
 import java.util.concurrent.atomic.AtomicReference
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -73,12 +78,34 @@ class MediaRepositoryImpl @Inject constructor(
     private val studiosCache = TtlCache<List<Studio>>(maxSize = 64, ttlMs = FOLDERS_CACHE_TTL_MS)
     private val latestMediaCache = TtlCache<List<MediaItem>>(maxSize = 64, ttlMs = LATEST_CACHE_TTL_MS)
 
+    // Series-scoped caches for the detail screen's subsidiary loads. Re-entry
+    // into the same series detail (back from player, returning from background,
+    // tab switch) used to re-issue the full episode storm + seasons + similar
+    // fetches. These share the detail cache TTL so user-data mutations that
+    // invalidate one invalidate all.
+    private val seasonsCache = TtlCache<List<MediaItem>>(ttlMs = DETAIL_CACHE_TTL_MS)
+    private val episodesCache = TtlCache<Map<String, List<MediaItem>>>(ttlMs = DETAIL_CACHE_TTL_MS)
+    private val similarCache = TtlCache<List<MediaItem>>(ttlMs = DETAIL_CACHE_TTL_MS)
+    private val albumTracksCache = TtlCache<List<MediaItem>>(ttlMs = DETAIL_CACHE_TTL_MS)
+    private val collectionItemsCache = TtlCache<SearchResult>(ttlMs = DETAIL_CACHE_TTL_MS)
+
     override fun invalidateDetailCache(itemId: String?) {
+        detailCacheEpoch.incrementAndGet()
         if (itemId != null) {
             detailCache.remove(itemId)
+            // similarCache keys are `similar_${itemId}_$limit` (the limit is
+            // part of the key so a different limit never serves a truncated
+            // list), so evict by prefix to drop every limit variant.
+            similarCache.removeByKeyPrefix("similar_$itemId")
         } else {
             detailCache.clear()
+            similarCache.clear()
         }
+    }
+
+    override fun invalidateSeriesCache(seriesId: String) {
+        seasonsCache.remove("seasons_$seriesId")
+        episodesCache.remove("episodes_$seriesId")
     }
 
     @Volatile
@@ -221,14 +248,90 @@ class MediaRepositoryImpl @Inject constructor(
         tags = tags,
     )
 
+    // Single-flight dedup for getMediaDetail: the detail screen is reachable
+    // from many entry points (home row tap, deep link, "play next"
+    // notification, cast handshake, download resume). Two near-simultaneous
+    // entries previously fired two full getItem round-trips (and, for series,
+    // two full episode storms) because TtlCache's get-check-put is not atomic.
+    // The Mutex guards the in-flight map; the Deferred is awaited by all
+    // concurrent callers for the same key so the fetch runs exactly once.
+    // The async is launched on the caller's coroutine scope (via coroutineScope)
+    // so the fetch inherits the caller's dispatcher — important for tests
+    // (runTest's test dispatcher) and for cancellation semantics.
+    private val detailInFlightMutex = Mutex()
+    private val detailInFlight = mutableMapOf<String, Deferred<Result<MediaDetail>>>()
+    // Bumped on every detail-cache invalidation. An in-flight fetch captures
+    // the epoch at start and skips re-caching if it changed by completion —
+    // otherwise a slow fetch could re-insert a pre-mutation snapshot after a
+    // concurrent markPlayed/favorite/played invalidation, pinning stale
+    // user-data for the full TTL. AtomicLong so concurrent invalidations never
+    // lose an increment (a lost update would weaken the stale-snapshot guard).
+    private val detailCacheEpoch = AtomicLong(0L)
+
     override suspend fun getMediaDetail(itemId: String): Result<MediaDetail> {
-        val cached = detailCache.get(itemId)
-        if (cached != null) {
-            return Result.success(cached)
-        }
-        return apiClient.getMediaDetail(itemId).also { result ->
-            result.getOrNull()?.let { detail ->
-                detailCache.put(itemId, detail)
+        // Fast path: serve from cache without entering coroutineScope, avoiding
+        // the scope-creation overhead on the (common) cached read. The authoritative
+        // single-flight coordination still happens below under the mutex.
+        detailCache.get(itemId)?.let { return Result.success(it) }
+        return coroutineScope {
+            // Single-flight: if another caller already started this fetch, await
+            // its result instead of issuing a duplicate request. The cache read is
+            // captured inside the lock so a concurrent fetch that completes while
+            // we waited is observed exactly once.
+            val cachedOrDeferred: Any = detailInFlightMutex.withLock {
+                detailCache.get(itemId)?.let { return@withLock it }
+                val epochAtStart = detailCacheEpoch.get()
+                detailInFlight.getOrPut(itemId) {
+                    // async on the current coroutineScope so the fetch runs on
+                    // the caller's dispatcher (not a fixed background scope).
+                    async {
+                        try {
+                            apiClient.getMediaDetail(itemId).also { result ->
+                                // Only cache the result if no invalidation landed
+                                // while the fetch was in flight; otherwise the
+                                // freshly fetched snapshot could be stale relative
+                                // to a concurrent user-data mutation.
+                                if (detailCacheEpoch.get() == epochAtStart) {
+                                    result.getOrNull()?.let { detail -> detailCache.put(itemId, detail) }
+                                }
+                            }
+                        } finally {
+                            // Clear the in-flight marker. Guarded so a concurrent
+                            // awaiter that already grabbed the Deferred still sees
+                            // the completed value, but a later caller re-fetches.
+                            detailInFlightMutex.withLock { detailInFlight.remove(itemId) }
+                        }
+                    }
+                }
+            }
+            @Suppress("UNCHECKED_CAST")
+            when (cachedOrDeferred) {
+                is MediaDetail -> Result.success(cachedOrDeferred)
+                else -> {
+                    val deferred = cachedOrDeferred as Deferred<Result<MediaDetail>>
+                    try {
+                        deferred.await()
+                    } catch (ce: kotlinx.coroutines.CancellationException) {
+                        // The shared in-flight Deferred is a child of its
+                        // originator's coroutineScope: if that caller was
+                        // cancelled (e.g. navigated away mid-fetch), the
+                        // Deferred is cancelled and every concurrent awaiter
+                        // would fail too. Re-fetch directly on this caller's
+                        // scope so a single originator's cancellation can't
+                        // take down unrelated awaiters. Re-throw only if THIS
+                        // caller was itself cancelled (its Job is marked so);
+                        // otherwise the interruption came from the originator
+                        // and a fresh fetch on this still-alive caller is safe.
+                        val job = coroutineContext[kotlinx.coroutines.Job]
+                        if (job?.isCancelled == true) throw ce
+                        val epochAtRetry = detailCacheEpoch.get()
+                        apiClient.getMediaDetail(itemId).also { result ->
+                            if (detailCacheEpoch.get() == epochAtRetry) {
+                                result.getOrNull()?.let { detail -> detailCache.put(itemId, detail) }
+                            }
+                        }
+                    }
+                }
             }
         }
     }
@@ -352,8 +455,19 @@ class MediaRepositoryImpl @Inject constructor(
     override suspend fun getArtistAlbums(artistId: String, limit: Int): Result<List<MediaItem>> =
         apiClient.getArtistAlbums(artistId, limit)
 
-    override suspend fun getAlbumTracks(albumId: String): Result<List<MediaItem>> =
-        apiClient.getAlbumTracks(albumId)
+    override suspend fun getAlbumTracks(albumId: String): Result<List<MediaItem>> {
+        val cacheKey = "tracks_$albumId"
+        albumTracksCache.get(cacheKey)?.let { return Result.success(it) }
+        val epochAtStart = detailCacheEpoch.get()
+        return apiClient.getAlbumTracks(albumId).also { result ->
+            // Skip the cache write if a user-data invalidation landed while the
+            // fetch was in flight — otherwise this (now stale) snapshot would be
+            // pinned for the full TTL. See [detailCacheEpoch] for the rationale.
+            if (detailCacheEpoch.get() == epochAtStart) {
+                result.getOrNull()?.let { albumTracksCache.put(cacheKey, it) }
+            }
+        }
+    }
 
     override suspend fun getMusicVideos(parentId: String, limit: Int): Result<List<MediaItem>> =
         apiClient.getMediaItems(
@@ -362,8 +476,21 @@ class MediaRepositoryImpl @Inject constructor(
             limit = limit,
         ).map { it.items }
 
-    override suspend fun getSimilarItems(itemId: String, limit: Int): Result<List<MediaItem>> =
-        apiClient.getSimilarItems(itemId, limit)
+    override suspend fun getSimilarItems(itemId: String, limit: Int): Result<List<MediaItem>> {
+        // Key includes the limit so a call with a different limit doesn't serve
+        // a stale truncated list.
+        val cacheKey = "similar_${itemId}_$limit"
+        similarCache.get(cacheKey)?.let { return Result.success(it) }
+        val epochAtStart = detailCacheEpoch.get()
+        return apiClient.getSimilarItems(itemId, limit).also { result ->
+            // Skip the cache write if a user-data invalidation landed while the
+            // fetch was in flight; otherwise a pre-mutation similar-items list
+            // (e.g. before a favorite toggle) would be pinned for the full TTL.
+            if (detailCacheEpoch.get() == epochAtStart) {
+                result.getOrNull()?.let { similarCache.put(cacheKey, it) }
+            }
+        }
+    }
 
     override suspend fun getInstantMix(itemId: String, limit: Int): Result<List<MediaItem>> =
         apiClient.getInstantMix(itemId, limit)
@@ -374,17 +501,74 @@ class MediaRepositoryImpl @Inject constructor(
     override suspend fun getThemeSongs(itemId: String): Result<List<MediaItem>> =
         apiClient.getThemeSongs(itemId)
 
-    override suspend fun getSeasons(seriesId: String): Result<List<MediaItem>> =
-        apiClient.getSeasons(seriesId)
+    override suspend fun getSeasons(seriesId: String): Result<List<MediaItem>> {
+        val cacheKey = "seasons_$seriesId"
+        seasonsCache.get(cacheKey)?.let { return Result.success(it) }
+        val epochAtStart = detailCacheEpoch.get()
+        return apiClient.getSeasons(seriesId).also { result ->
+            if (detailCacheEpoch.get() == epochAtStart) {
+                result.getOrNull()?.let { seasonsCache.put(cacheKey, it) }
+            }
+        }
+    }
 
-    override suspend fun getEpisodes(seriesId: String, seasonId: String): Result<List<MediaItem>> =
-        apiClient.getEpisodes(seriesId, seasonId)
+    override suspend fun getEpisodes(seriesId: String, seasonId: String): Result<List<MediaItem>> {
+        // Try the series-wide cache first; if present, slice the requested
+        // season out of it so a per-season call after a batched load doesn't
+        // re-hit the network.
+        episodesCache.get("episodes_$seriesId")?.let { grouped ->
+            grouped[seasonId]?.let { return Result.success(it) }
+        }
+        val epochAtStart = detailCacheEpoch.get()
+        return apiClient.getEpisodes(seriesId, seasonId).also { result ->
+            // Skip the cache write if a user-data invalidation landed while the
+            // fetch was in flight — [invalidateSeriesCache] already removed the
+            // entry, and re-inserting this (now stale) season would pin it for
+            // the full TTL.
+            if (detailCacheEpoch.get() != epochAtStart) return@also
+            result.getOrNull()?.let { episodes ->
+                // Merge into the series-wide cache under a single critical section
+                // so the [DetailViewModel.loadAllSeasonsBatched] fan-out (up to
+                // MAX_PARALLEL_SEASON_FETCHES concurrent calls) can't lose a
+                // season: the prior get-then-put let two near-simultaneous
+                // completions read the same `current` map and clobber each other.
+                // detailInFlightMutex is reused to avoid introducing a second
+                // lock that would have to be ordered against it.
+                val cacheKey = "episodes_$seriesId"
+                detailInFlightMutex.withLock {
+                    val current = episodesCache.get(cacheKey) ?: emptyMap()
+                    episodesCache.put(cacheKey, current + (seasonId to episodes))
+                }
+            }
+        }
+    }
+
+    override suspend fun getAllEpisodesGrouped(seriesId: String): Result<Map<String, List<MediaItem>>> {
+        val cacheKey = "episodes_$seriesId"
+        episodesCache.get(cacheKey)?.let { return Result.success(it) }
+        val epochAtStart = detailCacheEpoch.get()
+        return apiClient.getAllEpisodes(seriesId).map { all ->
+            // groupBy preserves the first occurrence per key and keeps encounter
+            // order, matching the season ordering the per-season path produced.
+            all.groupBy { it.seasonId ?: "" }
+        }.also { result ->
+            if (detailCacheEpoch.get() == epochAtStart) {
+                result.getOrNull()?.let { grouped -> episodesCache.put(cacheKey, grouped) }
+            }
+        }
+    }
 
     override suspend fun getCollectionItems(
         collectionId: String,
         startIndex: Int,
         limit: Int,
-    ): Result<SearchResult> = apiClient.getCollectionItems(collectionId, startIndex, limit)
+    ): Result<SearchResult> {
+        val cacheKey = "collection_${collectionId}_$startIndex" + "_$limit"
+        collectionItemsCache.get(cacheKey)?.let { return Result.success(it) }
+        return apiClient.getCollectionItems(collectionId, startIndex, limit).also { result ->
+            result.getOrNull()?.let { collectionItemsCache.put(cacheKey, it) }
+        }
+    }
 
     override suspend fun getTags(
         parentId: String?,
@@ -655,20 +839,38 @@ class MediaRepositoryImpl @Inject constructor(
 
     override suspend fun toggleFavorite(itemId: String): Result<Boolean> {
         cachedHomeSectionsTimestamp = 0L
-        invalidateDetailCache(itemId)
+        invalidateUserDataCaches(itemId)
         return apiClient.toggleFavorite(itemId)
     }
 
     override suspend fun markPlayed(itemId: String): Result<Unit> {
         cachedHomeSectionsTimestamp = 0L
-        invalidateDetailCache(itemId)
+        invalidateUserDataCaches(itemId)
         return apiClient.markPlayed(itemId)
     }
 
     override suspend fun markUnplayed(itemId: String): Result<Unit> {
         cachedHomeSectionsTimestamp = 0L
-        invalidateDetailCache(itemId)
+        invalidateUserDataCaches(itemId)
         return apiClient.markUnplayed(itemId)
+    }
+
+    /**
+     * Invalidates the detail + similar caches for [itemId] and, when [itemId]
+     * belongs to a series (either is the series or is an episode of one), the
+     * series-scoped seasons/episodes caches. This ensures user-data mutations
+     * (favorite, played, playback position) are reflected on re-entry instead
+     * of serving the cached pre-mutation snapshot.
+     */
+    private fun invalidateUserDataCaches(itemId: String) {
+        // Read the cached detail first to discover whether this item belongs
+        // to a series (either is the series or is an episode of one) so we can
+        // drop the series-scoped seasons/episodes caches too.
+        val cached = detailCache.get(itemId)
+        albumTracksCache.remove("tracks_$itemId")
+        invalidateDetailCache(itemId)
+        val seriesId = cached?.item?.seriesId ?: cached?.takeIf { it.item.mediaType == MediaType.SERIES }?.item?.id
+        if (seriesId != null) invalidateSeriesCache(seriesId)
     }
 
     override suspend fun getLiveTvChannels(
@@ -699,8 +901,6 @@ class MediaRepositoryImpl @Inject constructor(
 
     override suspend fun getRecordings(limit: Int?, isInProgress: Boolean?): Result<List<LiveTvRecording>> =
         apiClient.getRecordings(limit, isInProgress)
-
-    override suspend fun getRecordingFolders(): Result<List<RecordingFolder>> = apiClient.getRecordingFolders()
 
     override suspend fun getTimers(isActive: Boolean?, isScheduled: Boolean?): Result<List<DvrTimer>> =
         apiClient.getTimers(isActive, isScheduled)
@@ -781,6 +981,10 @@ class MediaRepositoryImpl @Inject constructor(
         latestMediaCache.clear()
         genresCache.clear()
         studiosCache.clear()
+        seasonsCache.clear()
+        episodesCache.clear()
+        albumTracksCache.clear()
+        collectionItemsCache.clear()
         photoFolderChildUrlCache.clear()
     }
 

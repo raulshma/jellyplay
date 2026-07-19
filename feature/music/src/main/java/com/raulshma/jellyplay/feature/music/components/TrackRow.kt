@@ -83,13 +83,16 @@ fun TrackRow(
     )
 
     var showMenu by remember { mutableStateOf(false) }
+    val rowFocusState = rememberTvFocusState(focusedScale = 1.01f)
     val favoriteFocusState = rememberTvFocusState(focusedScale = 1.1f)
     val moreOptionsFocusState = rememberTvFocusState(focusedScale = 1.1f)
 
     Row(
         modifier = modifier
             .fillMaxWidth()
-            .graphicsLayer { 
+            .then(rowFocusState.focusModifier)
+            .tvFocusIndicator(rowFocusState, ShapeCache.smooth8)
+            .graphicsLayer {
                 scaleX = scale
                 scaleY = scale
                 // Subtle rotation on press for expressive feel

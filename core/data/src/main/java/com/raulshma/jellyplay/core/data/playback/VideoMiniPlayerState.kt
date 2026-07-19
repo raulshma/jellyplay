@@ -1,5 +1,6 @@
 package com.raulshma.jellyplay.core.data.playback
 
+import androidx.compose.runtime.Stable
 import com.raulshma.jellyplay.core.data.remote.RemotePlayableEngine
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -25,6 +26,7 @@ import javax.inject.Singleton
  * [RemotePlayableEngine] (a `core.data.remote` interface) so no `feature:player:video` import
  * leaks in here. The video `MediaEngine` implements [RemotePlayableEngine] directly.
  */
+@Stable
 @Singleton
 class VideoMiniPlayerState @Inject constructor() {
     companion object {

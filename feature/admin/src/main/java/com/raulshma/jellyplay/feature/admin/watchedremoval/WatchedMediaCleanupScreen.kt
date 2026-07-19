@@ -8,6 +8,7 @@ import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -73,8 +74,10 @@ import com.raulshma.jellyplay.core.model.ScanPhase
 import com.raulshma.jellyplay.core.ui.adaptive.LocalAdaptiveInfo
 import com.raulshma.jellyplay.core.ui.adaptive.bottomPadding
 import com.raulshma.jellyplay.core.ui.components.JellyPlayScreenScaffold
+import com.raulshma.jellyplay.core.ui.components.TvSafeSheet
 import com.raulshma.jellyplay.core.ui.components.focusIndicator
 import com.raulshma.jellyplay.core.ui.components.ScreenEmptyState
+import com.raulshma.jellyplay.core.ui.tv.LocalTvMode
 import com.raulshma.jellyplay.core.ui.tv.TvGrabInitialFocus
 import com.raulshma.jellyplay.core.ui.tv.rememberTvFocusState
 import com.raulshma.jellyplay.core.ui.tv.tvFocusIndicator
@@ -491,13 +494,9 @@ private fun WatchedDeleteConfirmationSheet(
     onDismiss: () -> Unit,
     isDeleting: Boolean,
 ) {
+    val isTv = LocalTvMode.current
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
-    ModalBottomSheet(
-        onDismissRequest = onDismiss,
-        sheetState = sheetState,
-        shape = ShapeCache.smooth20,
-        containerColor = MaterialTheme.colorScheme.surfaceContainer.copy(alpha = 0.95f),
-    ) {
+    val content: @Composable ColumnScope.() -> Unit = {
         Column(modifier = Modifier.fillMaxWidth()) {
             Text("Confirm Deletion", style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.SemiBold, modifier = Modifier.padding(horizontal = 24.dp, vertical = 8.dp))
             Text("The following ${items.size} watched items will be removed from the library:", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(horizontal = 24.dp))
@@ -530,6 +529,17 @@ private fun WatchedDeleteConfirmationSheet(
                 ) { Text(if (isDeleting) "Deleting..." else "Delete from Library") }
             }
         }
+    }
+    if (isTv) {
+        TvSafeSheet(onDismissRequest = onDismiss, content = content)
+    } else {
+        ModalBottomSheet(
+            onDismissRequest = onDismiss,
+            sheetState = sheetState,
+            shape = ShapeCache.smooth20,
+            containerColor = MaterialTheme.colorScheme.surfaceContainer.copy(alpha = 0.95f),
+            content = content,
+        )
     }
 }
 

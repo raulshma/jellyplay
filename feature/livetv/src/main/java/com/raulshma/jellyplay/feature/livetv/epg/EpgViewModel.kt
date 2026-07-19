@@ -12,6 +12,10 @@ import javax.inject.Inject
 
 private const val REFRESH_INTERVAL_MS: Long = 5 * 60 * 1000L
 private const val NOW_TICK_INTERVAL_MS: Long = 30 * 1000L
+/** How far back from "now" the guide window extends (keeps recently-ended shows visible). */
+private const val GUIDE_LOOKBACK_HOURS: Long = 2L
+/** Total span of the guide window. Matches the 24h timeline used by the jellyfin-web guide. */
+private const val GUIDE_WINDOW_HOURS: Long = 24L
 
 /** State of the "Record program" confirmation dialog driven from the EPG grid. */
 sealed interface RecordDialogState {
@@ -47,8 +51,8 @@ class EpgViewModel @Inject constructor(
     val now: Instant get() = _now.value
 
     /** Half-open window [start, end) covered by the current guide fetch. */
-    private val _windowStart = composeState(Instant.now().minus(2, ChronoUnit.HOURS))
-    private val _windowEnd = composeState(Instant.now().plus(4, ChronoUnit.HOURS))
+    private val _windowStart = composeState(Instant.now().minus(GUIDE_LOOKBACK_HOURS, ChronoUnit.HOURS))
+    private val _windowEnd = composeState(Instant.now().plus(GUIDE_WINDOW_HOURS - GUIDE_LOOKBACK_HOURS, ChronoUnit.HOURS))
 
     private val _recordDialog = composeState<RecordDialogState?>(null)
     val recordDialog: RecordDialogState? get() = _recordDialog.value
@@ -91,14 +95,14 @@ class EpgViewModel @Inject constructor(
             _isLoading.value = true
             _error.value = null
             val now = Instant.now()
-            val start = now.minus(2, ChronoUnit.HOURS).toString()
-            val end = now.plus(4, ChronoUnit.HOURS).toString()
-            mediaRepository.getLiveTvGuide(startDateUtc = start, endDateUtc = end, limit = 100)
+            val start = now.minus(GUIDE_LOOKBACK_HOURS, ChronoUnit.HOURS)
+            val end = now.plus(GUIDE_WINDOW_HOURS - GUIDE_LOOKBACK_HOURS, ChronoUnit.HOURS)
+            mediaRepository.getLiveTvGuide(startDateUtc = start.toString(), endDateUtc = end.toString(), limit = 100)
                 .onSuccess { guide ->
                     _channels.value = guide.channels
                     _programs.value = guide.programs
-                    _windowStart.value = now.minus(2, ChronoUnit.HOURS)
-                    _windowEnd.value = now.plus(4, ChronoUnit.HOURS)
+                    _windowStart.value = start
+                    _windowEnd.value = end
                     rebuildGrid()
                 }
                 .onFailure { _error.value = it.message }
@@ -134,14 +138,14 @@ class EpgViewModel @Inject constructor(
             while (true) {
                 delay(REFRESH_INTERVAL_MS)
                 val now = Instant.now()
-                val start = now.minus(2, ChronoUnit.HOURS).toString()
-                val end = now.plus(4, ChronoUnit.HOURS).toString()
-                mediaRepository.getLiveTvGuide(startDateUtc = start, endDateUtc = end, limit = 100)
+                val start = now.minus(GUIDE_LOOKBACK_HOURS, ChronoUnit.HOURS)
+                val end = now.plus(GUIDE_WINDOW_HOURS - GUIDE_LOOKBACK_HOURS, ChronoUnit.HOURS)
+                mediaRepository.getLiveTvGuide(startDateUtc = start.toString(), endDateUtc = end.toString(), limit = 100)
                     .onSuccess { guide ->
                         _channels.value = guide.channels
                         _programs.value = guide.programs
-                        _windowStart.value = now.minus(2, ChronoUnit.HOURS)
-                        _windowEnd.value = now.plus(4, ChronoUnit.HOURS)
+                        _windowStart.value = start
+                        _windowEnd.value = end
                         rebuildGrid()
                     }
             }

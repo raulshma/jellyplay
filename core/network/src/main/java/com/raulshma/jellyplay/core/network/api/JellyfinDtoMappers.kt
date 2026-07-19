@@ -15,7 +15,6 @@ import com.raulshma.jellyplay.core.model.GuideInfo
 import com.raulshma.jellyplay.core.model.LiveTvChannel
 import com.raulshma.jellyplay.core.model.LiveTvProgram
 import com.raulshma.jellyplay.core.model.LiveTvRecording
-import com.raulshma.jellyplay.core.model.RecordingFolder
 import com.raulshma.jellyplay.core.model.LogFile
 import com.raulshma.jellyplay.core.model.MediaItem
 import com.raulshma.jellyplay.core.model.MediaType
@@ -228,12 +227,6 @@ internal fun BaseItemDto.toLiveTvRecording() = LiveTvRecording(
     imageTag = imageTags?.get(ImageType.PRIMARY)?.toString(),
     seriesTimerId = seriesTimerId?.toString(),
     status = DvrTimerStatus.COMPLETED,
-)
-
-internal fun BaseItemDto.toRecordingFolder() = RecordingFolder(
-    id = id.toString(),
-    name = name ?: "",
-    collectionType = collectionType?.serialName,
 )
 
 /**

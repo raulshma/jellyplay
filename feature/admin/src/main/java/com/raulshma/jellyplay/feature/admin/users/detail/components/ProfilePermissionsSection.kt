@@ -15,8 +15,14 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
+import com.composables.icons.tabler.Tabler
+import com.composables.icons.tabler.outline.Cpu
+import com.composables.icons.tabler.outline.Pointer
+import com.composables.icons.tabler.outline.Stack
+import com.composables.icons.tabler.outline.Subtitles
 import com.raulshma.jellyplay.core.model.ManagedUserPolicy
 import com.raulshma.jellyplay.core.model.SyncPlayAccessOption
+import com.raulshma.jellyplay.core.ui.components.SettingToggleItem
 
 /**
  * Profile-tab permission toggles and options that have no home in the existing
@@ -36,27 +42,34 @@ fun ProfilePermissionsSection(
             title = "Management & control",
             description = "Server, collection, and device controls.",
         ) {
-            ToggleRow(
-                label = "Allow collection management",
+            SettingToggleItem(
+                icon = Tabler.Outline.Stack,
+                title = "Allow collection management",
+                subtitle = "",
                 checked = policy.enableCollectionManagement,
                 onCheckedChange = { onPolicyChange(policy.copy(enableCollectionManagement = it)) },
                 index = 0, count = 4,
             )
-            ToggleRow(
-                label = "Allow subtitle management",
+            SettingToggleItem(
+                icon = Tabler.Outline.Subtitles,
+                title = "Allow subtitle management",
+                subtitle = "",
                 checked = policy.enableSubtitleManagement,
                 onCheckedChange = { onPolicyChange(policy.copy(enableSubtitleManagement = it)) },
                 index = 1, count = 4,
             )
-            ToggleRow(
-                label = "Allow remote control of shared devices",
+            SettingToggleItem(
+                icon = Tabler.Outline.Pointer,
+                title = "Allow remote control of shared devices",
+                subtitle = "",
                 checked = policy.enableSharedDeviceControl,
                 onCheckedChange = { onPolicyChange(policy.copy(enableSharedDeviceControl = it)) },
                 index = 2, count = 4,
             )
-            ToggleRow(
-                label = "Force transcoding of remote media sources",
-                description = "Transcode all remote streams regardless of client support",
+            SettingToggleItem(
+                icon = Tabler.Outline.Cpu,
+                title = "Force transcoding of remote media sources",
+                subtitle = "Transcode all remote streams regardless of client support",
                 checked = policy.forceRemoteSourceTranscoding,
                 onCheckedChange = { onPolicyChange(policy.copy(forceRemoteSourceTranscoding = it)) },
                 index = 3, count = 4,

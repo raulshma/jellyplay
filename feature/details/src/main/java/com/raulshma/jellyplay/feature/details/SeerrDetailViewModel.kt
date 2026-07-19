@@ -9,6 +9,7 @@ import com.raulshma.jellyplay.core.datastore.UserPreferencesStore
 import com.raulshma.jellyplay.core.model.MediaType
 import com.raulshma.jellyplay.core.model.UserPreferences
 import com.raulshma.jellyplay.core.model.seerr.SeerrEpisode
+import com.raulshma.jellyplay.core.model.seerr.SeerrMediaInfo
 import com.raulshma.jellyplay.core.model.seerr.SeerrMediaStatus
 import com.raulshma.jellyplay.core.model.seerr.SeerrMovieDetails
 import com.raulshma.jellyplay.core.model.seerr.SeerrPreferences
@@ -275,17 +276,27 @@ class SeerrDetailViewModel @Inject constructor(
                 _uiState.update { state ->
                     val currentMovie = state.movieDetails
                     val currentTv = state.tvDetails
-                    val movieMediaInfo = currentMovie?.mediaInfo
-                    val tvMediaInfo = currentTv?.mediaInfo
+                    // Match on the detail's own `id` — the same value used to
+                    // build the SeerrSearchItem passed into requestMedia — rather
+                    // than mediaInfo.tmdbId. Overseerr omits `mediaInfo` entirely
+                    // from /movie/{id} and /tv/{id} for media that has never been
+                    // requested, so mediaInfo.tmdbId was null and neither branch
+                    // matched, leaving the action button stuck on "Request" even
+                    // after a successful request. When mediaInfo is absent we
+                    // synthesize one so the PENDING status flips the button.
                     when {
-                        movieMediaInfo?.tmdbId == item.id -> state.copy(
-                            movieDetails = currentMovie!!.copy(
-                                mediaInfo = movieMediaInfo.copy(status = SeerrMediaStatus.PENDING.value),
+                        currentMovie?.id == item.id -> state.copy(
+                            movieDetails = currentMovie.copy(
+                                mediaInfo = (currentMovie.mediaInfo
+                                    ?: SeerrMediaInfo(tmdbId = item.id))
+                                    .copy(status = SeerrMediaStatus.PENDING.value),
                             ),
                         )
-                        tvMediaInfo?.tmdbId == item.id -> state.copy(
-                            tvDetails = currentTv!!.copy(
-                                mediaInfo = tvMediaInfo.copy(status = SeerrMediaStatus.PENDING.value),
+                        currentTv?.id == item.id -> state.copy(
+                            tvDetails = currentTv.copy(
+                                mediaInfo = (currentTv.mediaInfo
+                                    ?: SeerrMediaInfo(tmdbId = item.id))
+                                    .copy(status = SeerrMediaStatus.PENDING.value),
                             ),
                         )
                         else -> state

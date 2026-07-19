@@ -7,6 +7,7 @@ import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutVertically
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.focusGroup
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.Arrangement
@@ -21,11 +22,9 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Slider
 import androidx.compose.material3.SliderDefaults
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -53,6 +52,9 @@ import com.composables.icons.tabler.outline.PlayerPlay
 import com.composables.icons.tabler.outline.Volume
 import com.composables.icons.tabler.outline.X
 import com.raulshma.jellyplay.core.designsystem.theme.CastColors
+import com.raulshma.jellyplay.core.designsystem.theme.ShapeCache
+import com.raulshma.jellyplay.core.ui.components.focusIndicator
+import com.raulshma.jellyplay.core.ui.tv.components.DpadSlider
 
 /**
  * Persistent transport bar shown while a "Play On" session is active. Two-row
@@ -88,10 +90,10 @@ fun PlayOnMiniBar(
         exit = slideOutVertically(targetOffsetY = { it }) + fadeOut(),
         modifier = modifier,
     ) {
-        // Match FloatingNavigationBar: translucent surfaceContainer, full pill,
-        // zero elevation.
+        // Match FloatingNavigationBar: translucent surfaceContainer, smooth
+        // corners, zero elevation.
         Surface(
-            shape = RoundedCornerShape(28.dp),
+            shape = ShapeCache.smooth28,
             color = MaterialTheme.colorScheme.surfaceContainer.copy(alpha = 0.85f),
             tonalElevation = 0.dp,
             shadowElevation = 0.dp,
@@ -103,7 +105,9 @@ fun PlayOnMiniBar(
             ) {
                 // ---- Row 1: identity + transport ----
                 Row(
-                    modifier = Modifier.fillMaxWidth(),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .focusGroup(),
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.spacedBy(12.dp),
                 ) {
@@ -115,7 +119,8 @@ fun PlayOnMiniBar(
                         horizontalArrangement = Arrangement.spacedBy(12.dp),
                         modifier = Modifier
                             .weight(1f)
-                            .clip(RoundedCornerShape(16.dp))
+                            .clip(ShapeCache.smooth16)
+                            .focusIndicator(ShapeCache.smooth16)
                             .clickable(onClick = onExpand),
                     ) {
                         Icon(
@@ -170,12 +175,14 @@ fun PlayOnMiniBar(
 
                 // ---- Row 2: seek + volume ----
                 Row(
-                    modifier = Modifier.fillMaxWidth(),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .focusGroup(),
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
                     var seekPos by remember(positionMs) { mutableStateOf(positionMs.toFloat()) }
                     LaunchedEffect(positionMs) { seekPos = positionMs.toFloat() }
-                    Slider(
+                    DpadSlider(
                         value = seekPos,
                         onValueChange = { seekPos = it },
                         onValueChangeFinished = { onSeek(seekPos.toLong()) },
@@ -194,7 +201,7 @@ fun PlayOnMiniBar(
                         tint = MaterialTheme.colorScheme.onSurfaceVariant,
                         modifier = Modifier.size(18.dp),
                     )
-                    Slider(
+                    DpadSlider(
                         value = volume,
                         onValueChange = onVolume,
                         valueRange = 0f..1f,
@@ -237,6 +244,7 @@ private fun PlayOnIconButton(
             .size(36.dp)
             .scale(scale)
             .clip(CircleShape)
+            .focusIndicator(CircleShape)
             .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f)),
         contentAlignment = Alignment.Center,
     ) {

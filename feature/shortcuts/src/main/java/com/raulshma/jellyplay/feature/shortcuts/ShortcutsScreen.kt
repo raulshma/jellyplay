@@ -328,7 +328,7 @@ private fun HeroStatPill(
     modifier: Modifier = Modifier,
 ) {
     Surface(
-        shape = RoundedCornerShape(50),
+        shape = ShapeCache.smoothPill,
         color = color.copy(alpha = 0.12f),
         modifier = modifier,
     ) {
@@ -388,7 +388,7 @@ private fun ShortcutFilterChip(
     modifier: Modifier = Modifier,
 ) {
     val focusState = rememberTvFocusState(focusedScale = 1.05f)
-    val shape = RoundedCornerShape(50)
+    val shape = ShapeCache.smoothPill
 
     val bgColor = when {
         isSelected -> when (filter) {
@@ -463,7 +463,7 @@ private fun ShortcutSectionHeader(
                 modifier = Modifier
                     .width(3.dp)
                     .height(20.dp)
-                    .clip(RoundedCornerShape(50))
+                    .clip(ShapeCache.smoothPill)
                     .background(accentColor),
             )
             Text(
@@ -475,7 +475,7 @@ private fun ShortcutSectionHeader(
             )
         }
         Surface(
-            shape = RoundedCornerShape(50),
+            shape = ShapeCache.smoothPill,
             color = accentColor.copy(alpha = 0.14f),
         ) {
             Text(

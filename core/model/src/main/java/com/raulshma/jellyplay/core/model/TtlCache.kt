@@ -41,12 +41,19 @@ class TtlCache<V>(
         )
 
     fun get(key: String): V? {
-        val entry = map[key] ?: return null
-        if (clock() - entry.fetchedAt >= ttlMs) {
-            map.remove(key)
-            return null
+        // Synchronize the read-then-expire-check-then-remove sequence: a plain
+        // `map[key]` followed by a conditional `map.remove` is a compound
+        // operation, and `Collections.synchronizedMap` only guards each call
+        // individually. Holding the monitor across the pair makes expiry
+        // eviction atomic w.r.t. concurrent put/remove.
+        synchronized(map) {
+            val entry = map[key] ?: return null
+            if (clock() - entry.fetchedAt >= ttlMs) {
+                map.remove(key)
+                return null
+            }
+            return entry.value
         }
-        return entry.value
     }
 
     fun put(key: String, value: V) {
@@ -57,13 +64,31 @@ class TtlCache<V>(
         map.remove(key)
     }
 
+    /**
+     * Removes every entry whose key starts with [prefix]. Use when entries are
+     * keyed by `prefix_$id_$suffix` (e.g. per-limit similar-items caches) and a
+     * single logical invalidation must evict all suffix variants.
+     *
+     * Iterates a collection view of a [Collections.synchronizedMap], so the
+     * iteration must hold the map's monitor — otherwise a concurrent `put`
+     * (`getSimilarItems` populating the cache from the detail VM's scope) can
+     * throw `ConcurrentModificationException` or corrupt the access-order links.
+     */
+    fun removeByKeyPrefix(prefix: String) {
+        synchronized(map) {
+            map.entries.removeIf { it.key.startsWith(prefix) }
+        }
+    }
+
     fun clear() {
         map.clear()
     }
 
     fun evictExpired() {
         val now = clock()
-        map.entries.removeIf { now - it.value.fetchedAt >= ttlMs }
+        synchronized(map) {
+            map.entries.removeIf { now - it.value.fetchedAt >= ttlMs }
+        }
     }
 
     companion object {

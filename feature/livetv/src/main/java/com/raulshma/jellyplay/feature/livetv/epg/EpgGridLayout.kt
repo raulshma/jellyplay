@@ -14,8 +14,9 @@ import java.time.temporal.ChronoUnit
 
 /**
  * Visual layout constants for the EPG timeline grid. Values chosen so a
- * 30-minute program occupies ~120 dp (readable on both phone and TV) while
- * a 6-hour window still fits inside a typical horizontal scroll range.
+ * 30-minute program occupies ~120 dp (readable on both phone and TV). The
+ * guide window is a 24h span, so the horizontal scroll range scales with
+ * [DP_PER_MINUTE] × window minutes rather than being fixed.
  */
 object EpgGridLayout {
     /** Horizontal resolution: 4 dp per minute. 30-min slot = 120 dp. */

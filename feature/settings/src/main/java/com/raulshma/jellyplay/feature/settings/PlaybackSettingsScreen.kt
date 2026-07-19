@@ -39,7 +39,6 @@ import com.raulshma.jellyplay.core.model.PlayerType
 import com.raulshma.jellyplay.core.model.PreloadBufferSize
 import com.raulshma.jellyplay.core.model.StreamingQuality
 import com.raulshma.jellyplay.core.model.VlcAudioOutput
-import com.raulshma.jellyplay.core.model.VlcVideoOutput
 import com.raulshma.jellyplay.core.model.SyncPlayJoinBehavior
 import com.raulshma.jellyplay.core.model.CastingStrategy
 import com.raulshma.jellyplay.core.ui.adaptive.LocalAdaptiveInfo
@@ -115,7 +114,6 @@ sealed class PlaybackSettingsDialog {
     object MpvSkipLoopFilterPicker : PlaybackSettingsDialog()
     object MpvFrameDropPicker : PlaybackSettingsDialog()
     object VlcAudioOutputPicker : PlaybackSettingsDialog()
-    object VlcVideoOutputPicker : PlaybackSettingsDialog()
     object VlcNetworkCachingPicker : PlaybackSettingsDialog()
     object VlcSkipLoopFilterPicker : PlaybackSettingsDialog()
     object VlcSkipFramePicker : PlaybackSettingsDialog()
@@ -134,6 +132,19 @@ sealed class PlaybackSettingsDialog {
     object AutoPlayCountdownPicker : PlaybackSettingsDialog()
     object TvZoomModePicker : PlaybackSettingsDialog()
 }
+
+private val PLAYBACK_ADVANCED_GROUP_IDS = setOf("dialogue_boost", "decoder", "audio_passthrough", "frame_rate_matching", "streaming_quality", "audio_delay")
+private val PLAYBACK_ENGINE_GROUP_IDS = setOf(
+    "mpv_video_output", "mpv_scaler", "mpv_debanding", "mpv_interpolation", "mpv_audio_output",
+    "mpv_audio_fallback", "mpv_buffer_size", "mpv_hwdec_override", "mpv_skip_loop_filter", "mpv_frame_drop",
+    "vlc_audio_output", "vlc_audio_time_stretch", "vlc_network_caching",
+    "vlc_skip_loop_filter", "vlc_skip_frames", "vlc_decoder_threads", "vlc_drop_late_frames",
+    "exo_video_scaling", "exo_frame_rate_strategy", "exo_skip_silence", "exo_audio_offload",
+    "exo_decoder_fallback", "exo_back_buffer", "exo_preferred_codecs",
+)
+private val PLAYBACK_SYNCPLAY_GROUP_IDS = setOf("syncplay_join_behavior", "syncplay_tolerance", "syncplay_auto_accept_invites")
+private val PLAYBACK_CASTING_GROUP_IDS = setOf("casting_strategy", "background_casting", "preferred_renderer")
+private val PLAYBACK_DVR_GROUP_IDS = setOf("dvr_pre_padding", "dvr_post_padding", "dvr_recording_quality")
 
 @OptIn(ExperimentalMaterial3Api::class, androidx.compose.material3.ExperimentalMaterial3ExpressiveApi::class, androidx.compose.foundation.ExperimentalFoundationApi::class)
 @Composable
@@ -174,7 +185,7 @@ fun PlaybackSettingsScreen(
         val engineConfig = listOf(
             "mpv_video_output", "mpv_scaler", "mpv_debanding", "mpv_interpolation", "mpv_audio_output",
             "mpv_audio_fallback", "mpv_buffer_size", "mpv_hwdec_override", "mpv_skip_loop_filter", "mpv_frame_drop",
-            "vlc_audio_output", "vlc_audio_time_stretch", "vlc_video_output", "vlc_network_caching",
+            "vlc_audio_output", "vlc_audio_time_stretch", "vlc_network_caching",
             "vlc_skip_loop_filter", "vlc_skip_frames", "vlc_decoder_threads", "vlc_drop_late_frames",
             "exo_video_scaling", "exo_frame_rate_strategy", "exo_skip_silence", "exo_audio_offload",
             "exo_decoder_fallback", "exo_back_buffer", "exo_preferred_codecs",
@@ -553,19 +564,9 @@ fun PlaybackSettingsScreen(
                     title = "Advanced Video",
                     summary = { "Decoder: ${preferences.decoderMode.displayName}" },
                     modifier = Modifier.padding(vertical = 8.dp),
-                    initiallyExpanded = highlightSettingId in listOf("dialogue_boost", "decoder", "audio_passthrough", "frame_rate_matching", "streaming_quality", "audio_delay"),
+                    initiallyExpanded = highlightSettingId in PLAYBACK_ADVANCED_GROUP_IDS,
                 ) {
-                    val advancedItems = mutableListOf<Pair<String, Int>>()
-                    advancedItems.add("dialogue" to 0)
-                    if (preferences.dialogueBoostEnabled) {
-                        advancedItems.add("dialogueStrength" to advancedItems.size)
-                    }
-                    advancedItems.add("decoder" to advancedItems.size)
-                    advancedItems.add("passthrough" to advancedItems.size)
-                    advancedItems.add("framerate" to advancedItems.size)
-                    advancedItems.add("quality" to advancedItems.size)
-                    advancedItems.add("delay" to advancedItems.size)
-                    val total = advancedItems.size
+                    val total = 6 + (if (preferences.dialogueBoostEnabled) 1 else 0)
 
                     var idx = 0
                     SettingToggleItem(
@@ -656,14 +657,7 @@ fun PlaybackSettingsScreen(
                     title = "Engine Config",
                     summary = { preferences.preferredPlayer.displayName },
                     modifier = Modifier.padding(vertical = 8.dp),
-                    initiallyExpanded = highlightSettingId in listOf(
-                        "mpv_video_output", "mpv_scaler", "mpv_debanding", "mpv_interpolation", "mpv_audio_output",
-                        "mpv_audio_fallback", "mpv_buffer_size", "mpv_hwdec_override", "mpv_skip_loop_filter", "mpv_frame_drop",
-                        "vlc_audio_output", "vlc_audio_time_stretch", "vlc_video_output", "vlc_network_caching",
-                        "vlc_skip_loop_filter", "vlc_skip_frames", "vlc_decoder_threads", "vlc_drop_late_frames",
-                        "exo_video_scaling", "exo_frame_rate_strategy", "exo_skip_silence", "exo_audio_offload",
-                        "exo_decoder_fallback", "exo_back_buffer", "exo_preferred_codecs",
-                    ),
+                    initiallyExpanded = highlightSettingId in PLAYBACK_ENGINE_GROUP_IDS,
                 ) {
                     when (preferences.preferredPlayer) {
                         PlayerType.MPV -> {
@@ -773,7 +767,7 @@ fun PlaybackSettingsScreen(
                         PlayerType.LIBVLC -> {
                             val vlcCfg = preferences.libVlcConfig
                             val vlcDefault = LibVlcEngineConfig()
-                            val vlcTotal = 9
+                            val vlcTotal = 8
                             var vlcIdx = 0
 
                             SettingListItem(
@@ -793,15 +787,6 @@ fun PlaybackSettingsScreen(
                                 highlighted = highlightSettingId == "vlc_audio_time_stretch",
                                 index = vlcIdx++, count = vlcTotal,
                                 onCheckedChange = { viewModel.setLibVlcConfig(vlcCfg.copy(audioTimeStretch = it)) },
-                            )
-                            SettingListItem(
-                                icon = Tabler.Outline.Video,
-                                title = "Video Output",
-                                subtitle = "${vlcCfg.videoOutput.displayName} (${vlcCfg.videoOutput.key})",
-                                trailingText = vlcCfg.videoOutput.key,
-                                highlighted = highlightSettingId == "vlc_video_output",
-                                index = vlcIdx++, count = vlcTotal,
-                                onClick = { activeDialog = PlaybackSettingsDialog.VlcVideoOutputPicker },
                             )
                             SettingListItem(
                                 icon = Tabler.Outline.Wifi,
@@ -979,7 +964,7 @@ fun PlaybackSettingsScreen(
                     title = "SyncPlay",
                     summary = { "Join behavior: ${preferences.syncPlayJoinBehavior.displayName}" },
                     modifier = Modifier.padding(vertical = 8.dp),
-                    initiallyExpanded = highlightSettingId in listOf("syncplay_join_behavior", "syncplay_tolerance", "syncplay_auto_accept_invites"),
+                    initiallyExpanded = highlightSettingId in PLAYBACK_SYNCPLAY_GROUP_IDS,
                 ) {
                     val syncTotal = 3
                     var syncIdx = 0
@@ -1022,7 +1007,7 @@ fun PlaybackSettingsScreen(
                     title = "Casting & DLNA",
                     summary = { "Strategy: ${preferences.defaultCastingStrategy.displayName}" },
                     modifier = Modifier.padding(vertical = 8.dp),
-                    initiallyExpanded = highlightSettingId in listOf("casting_strategy", "background_casting", "preferred_renderer"),
+                    initiallyExpanded = highlightSettingId in PLAYBACK_CASTING_GROUP_IDS,
                 ) {
                     val castTotal = 3
                     var castIdx = 0
@@ -1072,7 +1057,7 @@ fun PlaybackSettingsScreen(
                     title = "Live TV & DVR",
                     summary = { "Padding: +${preferences.dvrPrePaddingMinutes}m / -${preferences.dvrPostPaddingMinutes}m" },
                     modifier = Modifier.padding(vertical = 8.dp),
-                    initiallyExpanded = highlightSettingId in listOf("dvr_pre_padding", "dvr_post_padding", "dvr_recording_quality"),
+                    initiallyExpanded = highlightSettingId in PLAYBACK_DVR_GROUP_IDS,
                 ) {
                     val dvrTotal = 3
                     var dvrIdx = 0
@@ -1431,22 +1416,6 @@ fun PlaybackSettingsScreen(
             onDismiss = { activeDialog = PlaybackSettingsDialog.None },
             onSelect = {
                 viewModel.setLibVlcConfig(vlcCfg.copy(audioOutput = it))
-                activeDialog = PlaybackSettingsDialog.None
-            },
-        )
-    }
-
-    if (activeDialog is PlaybackSettingsDialog.VlcVideoOutputPicker) {
-        val vlcCfg = preferences.libVlcConfig
-        SettingsListPickerSheet(
-            title = "Video Output (vout)",
-            items = VlcVideoOutput.entries,
-            label = { it.displayName },
-            subtitle = { it.key },
-            isSelected = { it == vlcCfg.videoOutput },
-            onDismiss = { activeDialog = PlaybackSettingsDialog.None },
-            onSelect = {
-                viewModel.setLibVlcConfig(vlcCfg.copy(videoOutput = it))
                 activeDialog = PlaybackSettingsDialog.None
             },
         )

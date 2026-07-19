@@ -56,6 +56,7 @@ import com.raulshma.jellyplay.core.model.TaskState
 import com.raulshma.jellyplay.core.ui.adaptive.LocalAdaptiveInfo
 import com.raulshma.jellyplay.core.ui.adaptive.bottomPadding
 import com.raulshma.jellyplay.core.ui.adaptive.contentPadding
+import com.raulshma.jellyplay.core.ui.components.ErrorScreen
 import com.raulshma.jellyplay.core.ui.components.JellyPlayScreenScaffold
 import com.raulshma.jellyplay.core.ui.components.ScreenLoadingState
 import com.raulshma.jellyplay.core.ui.components.rememberScreenBackgroundColor
@@ -104,20 +105,10 @@ fun ScheduledTasksScreen(
                 ScreenLoadingState(modifier = Modifier.fillMaxSize())
             }
             state.error != null -> {
-                Box(
-                    modifier = Modifier.fillMaxSize(),
-                    contentAlignment = Alignment.Center,
-                ) {
-                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                        Text(state.error ?: "Unknown error", color = MaterialTheme.colorScheme.error)
-                        Spacer(Modifier.height(16.dp))
-                        val retryFocusState = rememberTvFocusState()
-                        FilledTonalButton(
-                            onClick = { viewModel.loadTasks() },
-                            modifier = Modifier.then(retryFocusState.focusModifier).tvFocusIndicator(retryFocusState, ShapeCache.smooth12),
-                        ) { Text("Retry") }
-                    }
-                }
+                ErrorScreen(
+                    message = state.error,
+                    onRetry = { viewModel.loadTasks() },
+                )
             }
             else -> {
                 PullToRefreshBox(

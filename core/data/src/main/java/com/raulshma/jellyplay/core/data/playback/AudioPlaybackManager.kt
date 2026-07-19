@@ -1,6 +1,7 @@
 package com.raulshma.jellyplay.core.data.playback
 
 import android.content.Context
+import androidx.compose.runtime.Stable
 import android.net.Uri
 import android.os.Looper
 import androidx.media3.common.AudioAttributes
@@ -66,6 +67,7 @@ data class AudioQueueItem(
     val normalizationGain: Float? = null,
 )
 
+@Stable
 @Singleton
 class AudioPlaybackManager @Inject constructor(
     @ApplicationContext private val context: Context,

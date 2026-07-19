@@ -244,4 +244,137 @@ class LrcParserTest {
         )
         assertTrue(LrcParser.hasWordTimings(line))
     }
+
+    // ─── findCurrentWordIndex: past-last-word edge case ────────────────────────
+
+    @Test
+    fun findCurrentWordIndex_pastLastWord_returnsLastIndex() {
+        val line = LyricsLine(
+            timeMs = 1_000L,
+            text = "Hello World",
+            words = listOf(
+                LyricsWord(timeMs = 1_000L, text = "Hello"),
+                LyricsWord(timeMs = 1_500L, text = "World"),
+            )
+        )
+        // positionInLine far past the last word start (500ms in) should clamp
+        // to the last word index (1), not return -1.
+        assertEquals(1, LrcParser.findCurrentWordIndex(line, 10_000L))
+    }
+
+    @Test
+    fun findCurrentWordIndex_singleWord_alwaysAtZero() {
+        val line = LyricsLine(
+            timeMs = 0L,
+            text = "Solo",
+            words = listOf(LyricsWord(timeMs = 0L, text = "Solo")),
+        )
+        assertEquals(0, LrcParser.findCurrentWordIndex(line, 0L))
+        assertEquals(0, LrcParser.findCurrentWordIndex(line, 5_000L))
+    }
+
+    @Test
+    fun findCurrentWordIndex_threeWords_advancesAcrossBoundaries() {
+        val line = LyricsLine(
+            timeMs = 10_000L,
+            text = "A B C",
+            words = listOf(
+                LyricsWord(timeMs = 10_000L, text = "A"),
+                LyricsWord(timeMs = 10_500L, text = "B"),
+                LyricsWord(timeMs = 11_000L, text = "C"),
+            )
+        )
+        assertEquals(0, LrcParser.findCurrentWordIndex(line, 0L))      // at A (10k-10k=0)
+        assertEquals(1, LrcParser.findCurrentWordIndex(line, 500L))    // at B (10.5k-10k=500)
+        assertEquals(2, LrcParser.findCurrentWordIndex(line, 1_000L))  // at C (11k-10k=1000)
+        assertEquals(2, LrcParser.findCurrentWordIndex(line, 9_999L))  // past C → clamp
+    }
+
+    // ─── parse: 3-digit millisecond timestamp precision ────────────────────────
+
+    @Test
+    fun parse_threeDigitMsTimestamp_parsedCorrectly() {
+        val lrc = "[00:01.500]Hello"
+        val result = LrcParser.parse(lrc)
+        assertEquals(1_500L, result.lines[0].timeMs)
+    }
+
+    @Test
+    fun parse_threeDigitMsTimestamp_wordTimingParsedCorrectly() {
+        // Single line-start timestamp, then inline word timestamps.
+        val lrc = "[00:10.000]Hi [00:10.250]there"
+        val result = LrcParser.parse(lrc)
+        val line = result.lines.first { it.words.isNotEmpty() }
+        assertEquals(2, line.words.size)
+        // "Hi" precedes the first inline timestamp → anchored at line start (10000).
+        assertEquals(10_000L, line.words[0].timeMs)
+        assertEquals("Hi", line.words[0].text)
+        // "there" follows its inline [00:10.250] timestamp.
+        assertEquals(10_250L, line.words[1].timeMs)
+        assertEquals("there", line.words[1].text)
+    }
+
+    // ─── parse: word durations (computeWordDurations branches) ─────────────────
+
+    @Test
+    fun parse_wordDuration_isDifferenceToNextWord() {
+        val lrc = "[00:10.00]A [00:10.50]B\n[00:11.00]Next"
+        val result = LrcParser.parse(lrc)
+        val line = result.lines.first { it.words.isNotEmpty() }
+        // Word A (10000) → B (10500): duration 500ms
+        assertEquals(500L, line.words[0].durationMs)
+    }
+
+    @Test
+    fun parse_lastWordDuration_usesRemainingLineDuration() {
+        // Line 10s→11s (duration 1000ms); words A(10000), B(10500).
+        // B is the last word → duration = lineDuration - (B.time - A.time) = 1000 - 500 = 500.
+        val lrc = "[00:10.00]A [00:10.50]B\n[00:11.00]Next"
+        val result = LrcParser.parse(lrc)
+        val line = result.lines.first { it.words.isNotEmpty() }
+        assertEquals(500L, line.words[1].durationMs)
+    }
+
+    @Test
+    fun parse_lastLineWords_durationZeroWhenNoLineDuration() {
+        val lrc = "[00:10.00]A [00:10.50]B"
+        val result = LrcParser.parse(lrc)
+        val line = result.lines.first { it.words.isNotEmpty() }
+        // A has next word B → 500ms; B is last with no following line → 0ms.
+        assertEquals(500L, line.words[0].durationMs)
+        assertEquals(0L, line.words[1].durationMs)
+    }
+
+    // ─── parse: offset combined with inline word timings ───────────────────────
+
+    @Test
+    fun parse_offsetAppliedToWordTimings() {
+        val lrc = "[offset:1000]\n[00:05.00]Hi"
+        val result = LrcParser.parse(lrc)
+        val line = result.lines[0]
+        // Line time 5000 + 1000 offset = 6000.
+        assertEquals(6_000L, line.timeMs)
+    }
+
+    // ─── parse: metadata + offset + multi-timestamp combination ────────────────
+
+    @Test
+    fun parse_metadataOffsetAndMultitimestamp_combine() {
+        val lrc = "[ti:Title]\n[offset:500]\n[00:01.00][00:03.00]Line"
+        val result = LrcParser.parse(lrc)
+        assertEquals(2, result.lines.size)
+        // 1000 + 500 = 1500; 3000 + 500 = 3500
+        assertEquals(1_500L, result.lines[0].timeMs)
+        assertEquals(3_500L, result.lines[1].timeMs)
+        result.lines.forEach { assertEquals("Line", it.text) }
+    }
+
+    // ─── hasKaraokeLyrics state contract ───────────────────────────────────────
+
+    @Test
+    fun parse_hasKaraokeLyricsTrueWhenWordTimingsPresent() {
+        val lrc = "[00:10.00]Hello [00:10.50]World"
+        val result = LrcParser.parse(lrc)
+        assertTrue(result.lines.any { it.words.isNotEmpty() })
+    }
 }

@@ -45,7 +45,12 @@ interface DownloadRepository {
 
     suspend fun getTotalDownloadedBytes(): Long
 
-    suspend fun saveOfflineMediaItem(item: com.raulshma.jellyplay.core.model.MediaItem, imageUrl: String?, backdropUrl: String?)
+    suspend fun saveOfflineMediaItem(
+        item: com.raulshma.jellyplay.core.model.MediaItem,
+        imageUrl: String?,
+        backdropUrl: String?,
+        downloadPath: String? = null,
+    )
 
     /**
      * Persist full metadata (overview, genres, ratings, cast, studios, …) for
@@ -54,6 +59,22 @@ interface DownloadRepository {
      * detail screens can show the same information as the online ones.
      */
     suspend fun saveOfflineMediaDetail(detail: MediaDetail, imageUrl: String?, backdropUrl: String?)
+
+    /**
+     * Downloads the given item's image to a local file so it renders offline,
+     * returning the absolute path, or null if the item has no such image or the
+     * download failed. [fileName] is the sibling filename written under
+     * [parentDir]; callers should pass a per-item name (e.g.
+     * [DownloadArtifacts.posterFile]) so items sharing the flat downloads dir
+     * don't overwrite each other's images.
+     */
+    suspend fun downloadOfflineImage(
+        itemId: String,
+        imageType: String,
+        maxWidth: Int,
+        parentDir: java.io.File,
+        fileName: String,
+    ): String?
 
     suspend fun downloadSeries(
         seriesId: String,

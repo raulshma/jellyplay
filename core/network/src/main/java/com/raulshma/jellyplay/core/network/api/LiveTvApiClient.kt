@@ -8,7 +8,6 @@ import com.raulshma.jellyplay.core.model.LiveTvChannel
 import com.raulshma.jellyplay.core.model.LiveTvProgram
 import com.raulshma.jellyplay.core.model.LiveTvRecording
 import com.raulshma.jellyplay.core.model.ProgramFilters
-import com.raulshma.jellyplay.core.model.RecordingFolder
 
 interface LiveTvApiClient {
     /** `GET /LiveTv/Channels` — channels (optionally with embedded current program). */
@@ -62,9 +61,6 @@ interface LiveTvApiClient {
         limit: Int? = null,
         isInProgress: Boolean? = null,
     ): Result<List<LiveTvRecording>>
-
-    /** `GET /LiveTv/Recordings/Folders` — recording folder groupings. */
-    suspend fun getRecordingFolders(): Result<List<RecordingFolder>>
 
     /** `GET /LiveTv/Timers` — scheduled recording rules (optionally filtered). */
     suspend fun getTimers(

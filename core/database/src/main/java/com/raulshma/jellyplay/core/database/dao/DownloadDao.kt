@@ -91,6 +91,34 @@ interface DownloadDao {
     @Query("SELECT * FROM downloads WHERE seasonId = :seasonId")
     suspend fun getDownloadsForSeason(seasonId: String): List<DownloadEntity>
 
+    /**
+     * Download rows for episodes belonging to [seriesId], resolved by joining
+     * `offline_media` on `mediaItemId`. Catches legacy orphan rows whose
+     * `downloads.seriesId` is NULL (single-episode downloads queued before the
+     * series link was propagated at download time). The episode's
+     * `offline_media` row still carries the correct `seriesId`, so the join
+     * recovers them so [com.raulshma.jellyplay.core.data.repository.OfflineRepositoryImpl.deleteOfflineSeries]
+     * can clean up their files + rows.
+     */
+    @Query(
+        """
+        SELECT d.* FROM downloads d
+        INNER JOIN offline_media m ON m.id = d.mediaItemId
+        WHERE m.seriesId = :seriesId
+        """
+    )
+    suspend fun getDownloadsForSeriesViaOfflineMedia(seriesId: String): List<DownloadEntity>
+
+    /** Same recovery join as [getDownloadsForSeriesViaOfflineMedia], scoped to a season. */
+    @Query(
+        """
+        SELECT d.* FROM downloads d
+        INNER JOIN offline_media m ON m.id = d.mediaItemId
+        WHERE m.seasonId = :seasonId
+        """
+    )
+    suspend fun getDownloadsForSeasonViaOfflineMedia(seasonId: String): List<DownloadEntity>
+
     @Query("SELECT * FROM downloads WHERE mediaItemId IN (:mediaItemIds)")
     fun getDownloadsByMediaItemIdsFlow(mediaItemIds: List<String>): Flow<List<DownloadEntity>>
 

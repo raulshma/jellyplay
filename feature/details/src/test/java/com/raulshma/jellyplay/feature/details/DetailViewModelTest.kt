@@ -17,6 +17,7 @@ import com.raulshma.jellyplay.core.model.ExternalUrl
 import com.raulshma.jellyplay.core.model.MediaDetail
 import com.raulshma.jellyplay.core.model.MediaItem
 import com.raulshma.jellyplay.core.model.MediaType
+import com.raulshma.jellyplay.core.model.NetworkStatus
 import com.raulshma.jellyplay.core.model.UserPreferences
 import com.raulshma.jellyplay.core.network.api.TmdbApiClient
 import com.raulshma.jellyplay.core.testing.MainDispatcherRule
@@ -79,6 +80,10 @@ class DetailViewModelTest {
         every { preferencesStore.preferences } returns MutableStateFlow(UserPreferences())
         every { seerrRepository.isConnected() } returns flowOf(false)
         every { seerrRepository.isRecommendationsEnabled() } returns flowOf(false)
+        // Default stub for the similar-items fetch so loadItem's concurrent
+        // related-items launch doesn't crash casting the relaxed-mock default.
+        // Individual tests override this when they assert on related items.
+        coEvery { mediaRepository.getSimilarItems(any(), any()) } returns Result.success(emptyList())
 
         // The ViewModel resolves localized labels via context.getString(resId, vararg). As a
         // pure unit test (no Robolectric/instrumentation), stub the smart-play templates to
@@ -111,6 +116,16 @@ class DetailViewModelTest {
         }
         every { context.getString(R.string.detail_error_load_failed) } returns "Failed to load details"
 
+        buildViewModel()
+    }
+
+    /**
+     * Constructs (or reconstructs) the [DetailViewModel] under test. Tests that
+     * need to flip a stub the uiState combine captures at construction time
+     * (e.g. [loadSeerrData_whenConnectedAndEnabled_fetchesSeerrRecommendations])
+     * override the stub first, then call this to rebuild.
+     */
+    private fun buildViewModel() {
         viewModel = DetailViewModel(
             context = context,
             mediaRepository = mediaRepository,
@@ -251,6 +266,89 @@ class DetailViewModelTest {
         assertEquals("e1", target.episode.id)
     }
 
+    // Regression: loadSeerrData must read isSeerrConnected/isSeerrRecommendationsEnabled
+    // from the PUBLISHED uiState (where the seerr-flags combine folds them in),
+    // not from _uiState (the Group-1 primary flow, where they are never written
+    // and always read as the default false). When connected+enabled, the Seerr
+    // recommendation/similar/video fetches must actually run.
+    @Test
+    fun loadSeerrData_whenConnectedAndEnabled_fetchesSeerrRecommendations() =
+        runTest(mainDispatcherRule.testDispatcher) {
+            // Flip the connection-flag stubs BEFORE constructing the ViewModel:
+            // the uiState combine captures the flows returned by isConnected() /
+            // isRecommendationsEnabled() at construction time, so a stub flipped
+            // after construction has no effect.
+            every { seerrRepository.isConnected() } returns MutableStateFlow(true)
+            every { seerrRepository.isRecommendationsEnabled() } returns MutableStateFlow(true)
+            every { offlineModeManager.networkStatus } returns MutableStateFlow(NetworkStatus.Online)
+            buildViewModel()
+
+            backgroundScope.launch { viewModel.uiState.collect { /* warm */ } }
+
+            coEvery { mediaRepository.getMediaDetail("m1") } returns Result.success(
+                MediaDetail(
+                    item = MediaItem(id = "m1", name = "Movie", mediaType = MediaType.MOVIE),
+                    providerIds = mapOf("tmdb" to "123"),
+                ),
+            )
+            val recItem = com.raulshma.jellyplay.core.model.seerr.SeerrSearchItem(id = 99, title = "Rec")
+            coEvery { seerrRepository.getMovieDetails(123) } returns Result.success(
+                com.raulshma.jellyplay.core.model.seerr.SeerrMovieDetails(),
+            )
+            coEvery { seerrRepository.getRecommendations(123, MediaType.MOVIE) } returns Result.success(
+                com.raulshma.jellyplay.core.model.seerr.SeerrSearchResponse(results = listOf(recItem)),
+            )
+            coEvery { seerrRepository.getSimilar(123, MediaType.MOVIE) } returns Result.success(
+                com.raulshma.jellyplay.core.model.seerr.SeerrSearchResponse(results = listOf(recItem)),
+            )
+
+            viewModel.loadItem("m1")
+            advanceUntilIdle()
+            // loadSeerrDataIfNeeded is normally driven by composition; invoke it
+            // directly (after loadItem resolved currentItemId) to mirror the UI.
+            viewModel.uiState.value.detail?.let { viewModel.loadSeerrDataIfNeeded(it) }
+            advanceUntilIdle()
+
+            assertEquals(listOf(recItem), viewModel.uiState.value.seerrRecommendations)
+            assertEquals(listOf(recItem), viewModel.uiState.value.seerrSimilar)
+        }
+
+    // Regression: when the batched getAllEpisodesGrouped returns episodes grouped
+    // under a key that does NOT match any season id (e.g. "" from a null seasonId),
+    // the affected season must NOT be marked fetched — otherwise loadEpisodesForSeason
+    // short-circuits and the season is pinned empty. The per-season refetch must
+    // still fire and populate it.
+    @Test
+    fun episodes_batchReturnsMismatchedSeasonKey_leavesSeasonUnfetchedForRefetch() =
+        runTest(mainDispatcherRule.testDispatcher) {
+            backgroundScope.launch { viewModel.uiState.collect { /* warm */ } }
+            val season = MediaItem(id = "season1", name = "Season 1", mediaType = MediaType.SEASON, indexNumber = 1)
+            // Batched response groups under "" (null seasonId on the server) —
+            // does not contain a "season1" entry.
+            coEvery { mediaRepository.getMediaDetail("s1") } returns Result.success(
+                MediaDetail(item = MediaItem(id = "s1", name = "Show", mediaType = MediaType.SERIES)),
+            )
+            coEvery { mediaRepository.getSeasons("s1") } returns Result.success(listOf(season))
+            coEvery { mediaRepository.getAllEpisodesGrouped("s1") } returns Result.success(
+                mapOf("" to listOf(episode("e1", 1, 1))),
+            )
+            val eps = listOf(episode("e1", 1, 1), episode("e2", 1, 2))
+            coEvery { mediaRepository.getEpisodes("s1", "season1") } returns Result.success(eps)
+
+            viewModel.loadItem("s1")
+            advanceUntilIdle()
+
+            // season1 was not in the batched map, so it must NOT be marked fetched.
+            assertEquals(false, viewModel.uiState.value.fetchedSeasonIds.contains("season1"))
+            // On-demand load for season1 must fire the per-season refetch.
+            viewModel.loadEpisodesForSeason("s1", "season1")
+            advanceUntilIdle()
+
+            assertEquals(setOf("season1"), viewModel.uiState.value.fetchedSeasonIds)
+            assertEquals(eps, viewModel.uiState.value.episodes["season1"])
+        }
+
+
     @Test
     fun resolveTmdbId_providerIdTmdb_returnsParsed() = runTest(mainDispatcherRule.testDispatcher) {
         val detail = MediaDetail(
@@ -308,6 +406,7 @@ class DetailViewModelTest {
         )
         coEvery { mediaRepository.getSeasons(seriesId) } returns Result.success(listOf(season))
         coEvery { mediaRepository.getEpisodes(seriesId, season.id) } returns Result.success(episodes)
+        coEvery { mediaRepository.getAllEpisodesGrouped(seriesId) } returns Result.success(mapOf(season.id to episodes))
     }
 
     private fun episode(

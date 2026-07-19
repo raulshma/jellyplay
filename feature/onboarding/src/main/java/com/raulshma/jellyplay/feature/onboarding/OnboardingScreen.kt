@@ -1,5 +1,6 @@
 package com.raulshma.jellyplay.feature.onboarding
 
+import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.fadeIn
@@ -80,6 +81,14 @@ fun OnboardingScreen(
     var bottomBarVisible by remember { mutableStateOf(false) }
 
     LaunchedEffect(Unit) { bottomBarVisible = true }
+
+    // Wizard Back: step to the previous page, or fall through to the system (exit)
+    // when on the first page. Without this, remote BACK relies solely on the nav-
+    // host pop and skips the in-wizard step-back the D-pad left arrow already
+    // provides — inconsistent on TV.
+    BackHandler(enabled = pagerState.currentPage > 0) {
+        scope.launch { pagerState.animateScrollToPage(pagerState.currentPage - 1) }
+    }
 
     Surface(
         color = MaterialTheme.colorScheme.background,

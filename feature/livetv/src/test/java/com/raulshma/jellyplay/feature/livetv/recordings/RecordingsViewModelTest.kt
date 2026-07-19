@@ -3,7 +3,6 @@ package com.raulshma.jellyplay.feature.livetv.recordings
 import com.raulshma.jellyplay.core.data.repository.MediaRepository
 import com.raulshma.jellyplay.core.data.util.ImageUrlProvider
 import com.raulshma.jellyplay.core.model.LiveTvRecording
-import com.raulshma.jellyplay.core.model.RecordingFolder
 import com.raulshma.jellyplay.core.testing.MainDispatcherRule
 import io.mockk.coEvery
 import io.mockk.coVerify
@@ -32,29 +31,24 @@ class RecordingsViewModelTest {
         mediaRepository = mockk(relaxed = true)
         imageUrlProvider = mockk(relaxed = true)
         coEvery { mediaRepository.getRecordings(any(), any()) } returns Result.success(emptyList())
-        coEvery { mediaRepository.getRecordingFolders() } returns Result.success(emptyList())
         viewModel = RecordingsViewModel(mediaRepository, imageUrlProvider)
     }
 
     @Test
-    fun `load fetches recordings with limit and folders`() = runTest {
+    fun `load fetches recordings with limit`() = runTest {
         advanceUntilIdle()
         coVerify { mediaRepository.getRecordings(limit = 24, isInProgress = null) }
-        coVerify { mediaRepository.getRecordingFolders() }
     }
 
     @Test
     fun `load populates state from results`() = runTest {
         val recordings = listOf(LiveTvRecording(id = "r1", name = "Recording 1"))
-        val folders = listOf(RecordingFolder(id = "f1", name = "Folder 1"))
         coEvery { mediaRepository.getRecordings(any(), any()) } returns Result.success(recordings)
-        coEvery { mediaRepository.getRecordingFolders() } returns Result.success(folders)
 
         viewModel.load()
         advanceUntilIdle()
 
         assertEquals(recordings, viewModel.uiState.value.recordings)
-        assertEquals(folders, viewModel.uiState.value.folders)
     }
 
     @Test

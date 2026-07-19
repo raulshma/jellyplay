@@ -1,8 +1,16 @@
 package com.raulshma.jellyplay.feature.livetv.channeldetail
 
+import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.displayCutout
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.navigationBars
+import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.statusBarsPadding
+import androidx.compose.foundation.layout.union
+import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.runtime.Composable
@@ -18,6 +26,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.composables.icons.tabler.Tabler
 import com.composables.icons.tabler.outline.ArrowLeft
 import com.raulshma.jellyplay.core.ui.components.ErrorScreen
+import com.raulshma.jellyplay.core.ui.components.focusIndicator
 import com.raulshma.jellyplay.core.ui.components.rememberScreenBackgroundColor
 import com.raulshma.jellyplay.feature.livetv.R
 
@@ -35,6 +44,10 @@ fun ChannelDetailScreen(
     val state by viewModel.uiState.collectAsStateWithLifecycle()
     val backgroundColor = rememberScreenBackgroundColor()
 
+    // Bespoke screen (no JellyPlayScreenScaffold) — own the remote Back path explicitly so it
+    // does not depend solely on the nav-host system pop.
+    BackHandler(enabled = true, onBack = onBack)
+
     Box(Modifier.fillMaxSize()) {
         // Backdrop follows the currently-airing program.
         val backdropProgram = state.currentProgram
@@ -47,10 +60,14 @@ fun ChannelDetailScreen(
             backdropHeightDp = 420.dp,
         )
 
-        // Back button.
+        // Back button — inset for the status bar so it stays clear of the
+        // notch/gesture area in portrait and the cutout in landscape.
         IconButton(
             onClick = onBack,
-            modifier = Modifier.padding(start = 8.dp, top = 8.dp),
+            modifier = Modifier
+                .statusBarsPadding()
+                .padding(start = 8.dp, top = 8.dp)
+                .focusIndicator(),
         ) {
             Icon(
                 imageVector = Tabler.Outline.ArrowLeft,
@@ -77,9 +94,19 @@ fun ChannelDetailScreen(
                 ChannelDetailContent(
                     state = state,
                     onPlayChannel = onPlayChannel,
+                    onRecord = { program -> viewModel.recordProgram(program) },
+                    onRecordSeries = { program -> viewModel.recordSeries(program) },
+                    onCancelTimer = { program -> viewModel.cancelTimer(program) },
+                    onCancelSeries = { program -> viewModel.cancelSeries(program) },
                     modifier = Modifier
                         .fillMaxSize()
-                        .padding(top = 300.dp),
+                        .padding(top = 300.dp)
+                        // Keep the program list clear of the gesture nav bar and
+                        // of landscape display cutouts. Status bar is already
+                        // respected at the top via the top padding above.
+                        .windowInsetsPadding(
+                            WindowInsets.navigationBars.union(WindowInsets.displayCutout)
+                        ),
                 )
             }
         }

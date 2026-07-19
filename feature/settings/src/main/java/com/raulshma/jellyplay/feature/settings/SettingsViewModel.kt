@@ -21,7 +21,6 @@ import com.raulshma.jellyplay.core.model.ExoPlayerEngineConfig
 import com.raulshma.jellyplay.core.model.ExperimentalFeature
 import com.raulshma.jellyplay.core.model.HomeMode
 import com.raulshma.jellyplay.core.model.HomeSectionType
-import com.raulshma.jellyplay.core.model.LibraryFolder
 import com.raulshma.jellyplay.core.model.LibVlcEngineConfig
 import com.raulshma.jellyplay.core.model.MpvEngineConfig
 import com.raulshma.jellyplay.core.model.ContrastLevel
@@ -105,9 +104,6 @@ class SettingsViewModel @Inject constructor(
     var cacheError by composeState<String?>(null)
         private set
 
-    var libraryError by composeState<String?>(null)
-        private set
-
     var currentUser by composeState<UserInfo?>(null)
         private set
 
@@ -115,12 +111,6 @@ class SettingsViewModel @Inject constructor(
         private set
 
     var isLoadingUsers by composeState(false)
-        private set
-
-    var libraryFolders by composeState<List<LibraryFolder>>(emptyList())
-        private set
-
-    var isLoadingLibraries by composeState(false)
         private set
 
     val currentServerAddress = authRepository.currentServer
@@ -145,16 +135,20 @@ class SettingsViewModel @Inject constructor(
             }
         }
         launch {
-            authRepository.currentUser.collect { user ->
-                currentUser = user
-                currentUserName = user?.name ?: ""
-                if (user?.isAdmin == true) {
-                    loadSessions()
-                } else {
-                    stopSessionAutoRefresh()
-                    activeSessions = emptyList()
+            authRepository.currentUser
+                .distinctUntilChanged { old, new ->
+                    old?.id == new?.id && old?.isAdmin == new?.isAdmin && old?.name == new?.name
                 }
-            }
+                .collect { user ->
+                    currentUser = user
+                    currentUserName = user?.name ?: ""
+                    if (user?.isAdmin == true) {
+                        loadSessions()
+                    } else {
+                        stopSessionAutoRefresh()
+                        activeSessions = emptyList()
+                    }
+                }
         }
         launch {
             authRepository.currentServerUsers.collect { users ->
@@ -162,20 +156,49 @@ class SettingsViewModel @Inject constructor(
                 isLoadingUsers = false
             }
         }
-        calculateCacheSize()
-        loadLibraryFolders()
     }
 
-    private fun loadLibraryFolders() {
+    /**
+     * Recomputes cache/downloads/image-cache sizes from disk. Four recursive
+     * FS walks run concurrently under a single [Dispatchers.IO] switch.
+     * Invoked explicitly by the settings root screen on entry — not from
+     * [init] — so the walks only fire when the user actually views settings.
+     */
+    fun refreshCacheSize() {
         launch {
-            isLoadingLibraries = true
-            libraryError = null
-            mediaRepository.getLibraryFolders()
-                .onSuccess { folders ->
-                    libraryFolders = folders.filter { it.collectionType != "music" }
+            // Four independent recursive FS walks — collapse into a single IO
+            // context-switch and run the walks concurrently rather than one
+            // after another. Each walk can take seconds on large directories.
+            val (cacheSize, externalCacheSize, downloadsSize, imagesSize) = withContext(Dispatchers.IO) {
+                val cacheAsync = async { getDirSize(context.cacheDir) }
+                val extAsync = async { context.externalCacheDir?.let { getDirSize(it) } ?: 0L }
+                val dlAsync = async {
+                    val prefs = preferencesStore.preferences.value
+                    val location = prefs.downloadStorageLocation
+                    val downloadsDir = if (location == "EXTERNAL" && context.getExternalFilesDir(null) != null) {
+                        context.getExternalFilesDir(null)!!
+                    } else {
+                        context.filesDir
+                    }
+                    getDirSize(downloadsDir)
                 }
-                .onFailure { error -> libraryError = error.message ?: error::class.simpleName }
-            isLoadingLibraries = false
+                val imgAsync = async {
+                    val imageDir = File(context.cacheDir, "image_cache")
+                    if (imageDir.exists()) getDirSize(imageDir) else 0L
+                }
+                QuadLongs(cacheAsync.await(), extAsync.await(), dlAsync.await(), imgAsync.await())
+            }
+
+            cacheSizeMb = (cacheSize + externalCacheSize) / (1024 * 1024)
+            val downloadsMb = downloadsSize / (1024 * 1024)
+            val imagesMb = imagesSize / (1024 * 1024)
+            val total = cacheSizeMb + downloadsMb + imagesMb
+            storageBreakdown = StorageBreakdown(
+                cacheMb = cacheSizeMb,
+                downloadsMb = downloadsMb,
+                imagesMb = imagesMb,
+                totalMb = total,
+            )
         }
     }
 
@@ -302,54 +325,18 @@ class SettingsViewModel @Inject constructor(
         launch {
             cacheError = null
             try {
-                context.cacheDir.deleteRecursively()
-                val externalCache = context.externalCacheDir
-                if (externalCache != null && externalCache.exists()) {
-                    externalCache.deleteRecursively()
+                withContext(Dispatchers.IO) {
+                    context.cacheDir.deleteRecursively()
+                    val externalCache = context.externalCacheDir
+                    if (externalCache != null && externalCache.exists()) {
+                        externalCache.deleteRecursively()
+                    }
                 }
             } catch (error: Exception) {
                 cacheError = error.message ?: error::class.simpleName
             } finally {
-                calculateCacheSize()
+                refreshCacheSize()
             }
-        }
-    }
-
-    private fun calculateCacheSize() {
-        launch {
-            // Five independent recursive FS walks — collapse into a single IO
-            // context-switch and run the walks concurrently rather than one
-            // after another. Each walk can take seconds on large directories.
-            val (cacheSize, externalCacheSize, downloadsSize, imagesSize) = withContext(Dispatchers.IO) {
-                val cacheAsync = async { getDirSize(context.cacheDir) }
-                val extAsync = async { context.externalCacheDir?.let { getDirSize(it) } ?: 0L }
-                val dlAsync = async {
-                    val prefs = preferencesStore.preferences.value
-                    val location = prefs.downloadStorageLocation
-                    val downloadsDir = if (location == "EXTERNAL" && context.getExternalFilesDir(null) != null) {
-                        context.getExternalFilesDir(null)!!
-                    } else {
-                        context.filesDir
-                    }
-                    getDirSize(downloadsDir)
-                }
-                val imgAsync = async {
-                    val imageDir = File(context.cacheDir, "image_cache")
-                    if (imageDir.exists()) getDirSize(imageDir) else 0L
-                }
-                QuadLongs(cacheAsync.await(), extAsync.await(), dlAsync.await(), imgAsync.await())
-            }
-
-            cacheSizeMb = (cacheSize + externalCacheSize) / (1024 * 1024)
-            val downloadsMb = downloadsSize / (1024 * 1024)
-            val imagesMb = imagesSize / (1024 * 1024)
-            val total = cacheSizeMb + downloadsMb + imagesMb
-            storageBreakdown = StorageBreakdown(
-                cacheMb = cacheSizeMb,
-                downloadsMb = downloadsMb,
-                imagesMb = imagesMb,
-                totalMb = total,
-            )
         }
     }
 

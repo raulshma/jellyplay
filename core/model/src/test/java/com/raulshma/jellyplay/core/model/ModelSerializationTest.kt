@@ -144,13 +144,14 @@ class ModelSerializationTest {
     @Test
     fun `download status enum values`() {
         val statuses = DownloadStatus.entries
-        assertEquals(6, statuses.size)
+        assertEquals(7, statuses.size)
         assertEquals(DownloadStatus.PENDING, statuses[0])
-        assertEquals(DownloadStatus.DOWNLOADING, statuses[1])
-        assertEquals(DownloadStatus.PAUSED, statuses[2])
-        assertEquals(DownloadStatus.COMPLETED, statuses[3])
-        assertEquals(DownloadStatus.FAILED, statuses[4])
-        assertEquals(DownloadStatus.CANCELLED, statuses[5])
+        assertEquals(DownloadStatus.QUEUED, statuses[1])
+        assertEquals(DownloadStatus.DOWNLOADING, statuses[2])
+        assertEquals(DownloadStatus.PAUSED, statuses[3])
+        assertEquals(DownloadStatus.COMPLETED, statuses[4])
+        assertEquals(DownloadStatus.FAILED, statuses[5])
+        assertEquals(DownloadStatus.CANCELLED, statuses[6])
     }
 
     @Test

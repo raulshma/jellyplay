@@ -194,6 +194,7 @@ fun SettingsScreen(
     var animateEntrance by androidx.compose.runtime.saveable.rememberSaveable { mutableStateOf(false) }
     LaunchedEffect(Unit) {
         animateEntrance = true
+        viewModel.refreshCacheSize()
     }
 
     // On first TV entry, focus the search bar so the user can quickly type. On re-entry from a
@@ -1062,8 +1063,10 @@ fun SettingsScreen(
                                 icon = Tabler.Outline.Moon,
                                 title = stringResource(R.string.settings_screensaver),
                                 summary = {
-                                    val cats = preferences.dreamImageCategories.map { it.name.lowercase().replaceFirstChar { c -> c.uppercase() } }
-                                    cats.joinToString(", ")
+                                    val cats = preferences.dreamImageCategories
+                                    remember(cats) {
+                                        cats.joinToString(", ") { it.name.lowercase().replaceFirstChar { c -> c.uppercase() } }
+                                    }
                                 },
                             ) {
                                 val dreamTotal = 5
@@ -1082,11 +1085,13 @@ fun SettingsScreen(
                                     icon = Tabler.Outline.Movie,
                                     title = stringResource(R.string.settings_categories),
                                     subtitle = stringResource(R.string.settings_categories_subtitle),
-                                    trailingText = preferences.dreamImageCategories.joinToString(", ") {
-                                        when (it) {
-                                            DreamImageCategory.MOVIES -> categoryMovies
-                                            DreamImageCategory.SERIES -> categoryTv
-                                            DreamImageCategory.MUSIC -> categoryMusic
+                                    trailingText = remember(preferences.dreamImageCategories, categoryMovies, categoryTv, categoryMusic) {
+                                        preferences.dreamImageCategories.joinToString(", ") {
+                                            when (it) {
+                                                DreamImageCategory.MOVIES -> categoryMovies
+                                                DreamImageCategory.SERIES -> categoryTv
+                                                DreamImageCategory.MUSIC -> categoryMusic
+                                            }
                                         }
                                     },
                                     index = 1, count = dreamTotal,

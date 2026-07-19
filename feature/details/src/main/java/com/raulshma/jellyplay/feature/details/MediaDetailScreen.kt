@@ -7,6 +7,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.material3.Snackbar
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
@@ -186,11 +187,13 @@ fun MediaDetailScreen(
                 val rememberedGetBackdropUrl = remember(viewModel) { { id: String -> viewModel.getBackdropUrl(id) } }
                 val rememberedGetSeerrPosterUrl = remember(viewModel) { { path: String? -> viewModel.getSeerrPosterUrl(path) } }
 
-                // Series id used by season-episode fetches. Depends only on the
-                // item id (stable across favorite/played toggles) so the on-season
-                // callback captures a value that doesn't invalidate on unrelated
-                // detail mutations.
-                val seriesIdForSeasons = remember(itemId) {
+                // Series id used by season-episode fetches. Keyed on BOTH the
+                // item id and the resolved series id so it recomputes once the
+                // detail arrives. Previously this keyed only on `itemId`, so on
+                // first composition (detail still null) an episode resolved to
+                // its own id as the series id — producing wrong/empty season
+                // fetches and wasted refetches.
+                val seriesIdForSeasons = remember(itemId, detail?.item?.seriesId) {
                     detail?.item?.seriesId ?: itemId
                 }
 
@@ -267,6 +270,9 @@ fun MediaDetailScreen(
                         onSeasonSelected = { seasonId: String ->
                             viewModel.loadEpisodesForSeason(seriesIdForSeasons, seasonId)
                         },
+                        onEpisodesDescendingChange = { descending: Boolean ->
+                            viewModel.setEpisodesDescending(descending)
+                        },
                         onLoadSeerrData = { detail?.let { viewModel.loadSeerrDataIfNeeded(it) } },
                         onBack = onBack,
                         onSeerrRequest = { item: SeerrSearchItem -> seerrRequestItem = item },
@@ -334,11 +340,13 @@ fun MediaDetailScreen(
 
         val detailItem = detail?.item
         if (showSeriesDownloadSheet && detailItem?.mediaType == MediaType.SERIES) {
+            val downloadSheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
             TvSafeSheet(
                 onDismissRequest = {
                     showSeriesDownloadSheet = false
                     viewModel.resetDownloadSheetState()
                 },
+                sheetState = downloadSheetState,
             ) {
                 SeriesDownloadSheet(
                     seasons = uiState.seasons,

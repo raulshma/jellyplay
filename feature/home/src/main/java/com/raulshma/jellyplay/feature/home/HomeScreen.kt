@@ -311,6 +311,7 @@ private fun MainHomeContent(
                             backgroundColor = backgroundColor,
                             onGoOnline = { viewModel.onEvent(HomeUiEvent.Refresh) },
                             statusMessage = "Couldn't reach the server — showing your downloads.",
+                            isGoingOnline = state.isGoingOnline || state.isLoading,
                         )
                     }
                     state.offlineMode != OfflineMode.ONLINE -> {
@@ -324,6 +325,7 @@ private fun MainHomeContent(
                             contentPadding = contentPad,
                             backgroundColor = backgroundColor,
                             onGoOnline = { viewModel.onEvent(HomeUiEvent.ToggleOfflineMode) },
+                            isGoingOnline = state.isGoingOnline,
                         )
                     }
                     state.homeMode == HomeMode.MUSIC -> {
@@ -455,6 +457,7 @@ private fun MainHomeContent(
                     onSearchQueryChange = dockOnSearchQueryChange,
                     onClearSearch = dockOnClearSearch,
                     onToggleOffline = dockOnToggleOffline,
+                    isGoingOnline = state.isGoingOnline,
                     onHeroFocusDown = remember(heroFocusRequester) {
                         { heroFocusRequester.tryRequestFocus("top_dock_down_hero") }
                     },
@@ -488,6 +491,7 @@ private fun MainHomeContent(
                         onSyncPlayClick = callbacks.onSyncPlayClick,
                         onDownloadsClick = callbacks.onDownloadsClick,
                         onToggleOffline = { viewModel.onEvent(HomeUiEvent.ToggleOfflineMode) },
+                        isGoingOnline = state.isGoingOnline,
                         onPlayOnClick = callbacks.onPlayOnClick,
                         onSettingsClick = callbacks.onSettingsClick,
                         modifier = Modifier
@@ -565,6 +569,7 @@ private fun HomeTopDockScrim(
     onSearchQueryChange: (String) -> Unit,
     onClearSearch: () -> Unit,
     onToggleOffline: () -> Unit,
+    isGoingOnline: Boolean = false,
     onHeroFocusDown: () -> Boolean,
     searchResultsContent: @Composable () -> Unit,
 ) {
@@ -590,6 +595,7 @@ private fun HomeTopDockScrim(
         onSearchQueryChange = onSearchQueryChange,
         onClearSearch = onClearSearch,
         onToggleOffline = onToggleOffline,
+        isGoingOnline = isGoingOnline,
         searchResultsContent = searchResultsContent,
         modifier = Modifier.then(
             if (isTv) {

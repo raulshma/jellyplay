@@ -18,7 +18,6 @@ import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -31,6 +30,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.composables.icons.tabler.Tabler
@@ -38,6 +38,7 @@ import com.composables.icons.tabler.outline.X
 import com.raulshma.jellyplay.core.designsystem.theme.ShapeCache
 import com.raulshma.jellyplay.core.model.LrcLibTrack
 import com.raulshma.jellyplay.core.ui.components.JellyPlayLoadingIndicator
+import com.raulshma.jellyplay.core.ui.components.PlayerModalBottomSheet
 import com.raulshma.jellyplay.feature.player.audio.R
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -53,22 +54,27 @@ internal fun LyricsSearchSheet(
 ) {
     var searchQuery by remember { mutableStateOf(if (artist.isNotBlank()) "$artist - $title" else title) }
 
-    ModalBottomSheet(
+    PlayerModalBottomSheet(
         onDismissRequest = onDismiss,
         sheetState = rememberModalBottomSheetState(),
     ) {
         Column(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(horizontal = 16.dp)
                 .padding(bottom = 32.dp),
         ) {
-            Text(stringResource(R.string.audio_lyrics_find), style = MaterialTheme.typography.titleMedium)
-            Spacer(Modifier.height(12.dp))
+            Text(
+                stringResource(R.string.audio_lyrics_find),
+                style = MaterialTheme.typography.titleLarge.copy(
+                    fontWeight = FontWeight.Bold,
+                ),
+                modifier = Modifier.padding(horizontal = 24.dp),
+            )
+            Spacer(Modifier.height(20.dp))
             OutlinedTextField(
                 value = searchQuery,
                 onValueChange = { searchQuery = it },
-                modifier = Modifier.fillMaxWidth(),
+                modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp),
                 placeholder = { Text(stringResource(R.string.audio_lyrics_search_placeholder)) },
                 singleLine = true,
                 trailingIcon = {
@@ -81,7 +87,7 @@ internal fun LyricsSearchSheet(
             )
             Spacer(Modifier.height(8.dp))
             Row(
-                modifier = Modifier.fillMaxWidth(),
+                modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp),
                 horizontalArrangement = Arrangement.End,
             ) {
                 TextButton(onClick = onDismiss) { Text(stringResource(R.string.audio_cancel)) }
@@ -101,7 +107,7 @@ internal fun LyricsSearchSheet(
             if (searchResults.isNotEmpty()) {
                 Spacer(Modifier.height(8.dp))
                 LazyColumn(
-                    modifier = Modifier.fillMaxWidth().heightIn(max = 400.dp),
+                    modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp).heightIn(max = 400.dp),
                 ) {
                     items(searchResults.size, key = { it }, contentType = { "searchResult" }) { index ->
                         val track = searchResults[index]

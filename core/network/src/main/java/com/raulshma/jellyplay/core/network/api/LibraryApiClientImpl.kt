@@ -39,6 +39,27 @@ import javax.inject.Inject
 import javax.inject.Singleton
 import java.util.UUID
 
+/**
+ * Fields the detail mapper ([getMediaDetail]) reads from the BaseItemDto.
+ * Projected explicitly because [org.jellyfin.sdk.api.operations.UserLibraryApi.getItem]
+ * accepts no `fields` parameter and several of these (notably TRICKPLAY, used
+ * for scrub preview and download) come back null without an explicit request.
+ */
+private val DETAIL_ITEM_FIELDS = listOf(
+    ItemFields.PEOPLE,
+    ItemFields.CHAPTERS,
+    ItemFields.MEDIA_SOURCES,
+    ItemFields.TRICKPLAY,
+    ItemFields.EXTERNAL_URLS,
+    ItemFields.ORIGINAL_TITLE,
+    ItemFields.PRODUCTION_LOCATIONS,
+    ItemFields.STUDIOS,
+    ItemFields.GENRES,
+    ItemFields.OVERVIEW,
+    ItemFields.PROVIDER_IDS,
+    ItemFields.PRIMARY_IMAGE_ASPECT_RATIO,
+)
+
 @Singleton
 class LibraryApiClientImpl @Inject constructor(
     private val engine: JellyfinApiEngine,
@@ -192,7 +213,13 @@ class LibraryApiClientImpl @Inject constructor(
             }
 
             if (HomeSectionType.RECOMMENDATIONS in enabledSections) {
-                getRecommendations(limit = 20)
+                // Reuse the Continue Watching + Next Up lists already fetched
+                // above as recommendation seeds instead of re-hitting the
+                // /Items/Resume and /Shows/NextUp endpoints a second time.
+                val recommendationSeeds =
+                    continueWatchingResult.getOrDefault(emptyList()) +
+                        nextUpResult.getOrDefault(emptyList())
+                getRecommendations(limit = 20, seeds = recommendationSeeds)
                     .onSuccess { result ->
                         if (result.items.isNotEmpty()) {
                             sections.add(HomeSection(
@@ -434,7 +461,21 @@ class LibraryApiClientImpl @Inject constructor(
         // filtered list — double-filtering a single detail adds no protection.
         val client = engine.requireApi()
         val uuid = itemId.toUUID()
-        val item = client.userLibraryApi.getItem(itemId = uuid).content
+        // Project the non-default ItemFields the mapper reads. userLibraryApi.
+        // getItem accepts no `fields`, so without projection some fields
+        // (notably TRICKPLAY, used for scrub preview and download) come back
+        // null depending on server defaults, and source.trickplayInfo silently
+        // vanishes. Querying via itemsApi.getItems with an id filter + fields
+        // set both bounds the payload and guarantees the mapper's reads are
+        // populated. Fall back to getItem if the projected query returns empty
+        // (older servers occasionally omit trickplay-less items).
+        val item = run {
+            val projected = client.itemsApi.getItems(
+                ids = listOf(uuid),
+                fields = DETAIL_ITEM_FIELDS,
+            ).content.items?.firstOrNull()
+            projected ?: client.userLibraryApi.getItem(itemId = uuid).content
+        }
         val people = (item.people?.map { person ->
             PersonInfo(
                 id = person.id.toString(),
@@ -707,13 +748,20 @@ class LibraryApiClientImpl @Inject constructor(
             }
         }
 
-    override suspend fun getRecommendations(limit: Int): Result<RecommendationResult> = runCatching {
-        val continueWatching = getContinueWatching(limit = 5).getOrDefault(emptyList())
-        val nextUp = getNextUp(limit = 5).getOrDefault(emptyList())
-
-        val seedItems = (continueWatching + nextUp)
-            .distinctBy { it.id }
-            .take(5)
+    override suspend fun getRecommendations(
+        limit: Int,
+        seeds: List<MediaItem>,
+    ): Result<RecommendationResult> = runCatching {
+        // Reuse caller-supplied seeds when available (e.g. the home screen has
+        // already fetched Continue Watching + Next Up) to avoid duplicate
+        // /Items/Resume and /Shows/NextUp round-trips within the same load.
+        val seedItems = if (seeds.isNotEmpty()) {
+            seeds.distinctBy { it.id }.take(5)
+        } else {
+            val continueWatching = getContinueWatching(limit = 5).getOrDefault(emptyList())
+            val nextUp = getNextUp(limit = 5).getOrDefault(emptyList())
+            (continueWatching + nextUp).distinctBy { it.id }.take(5)
+        }
 
         if (seedItems.isEmpty()) return@runCatching RecommendationResult(emptyList(), null)
 
@@ -773,6 +821,15 @@ class LibraryApiClientImpl @Inject constructor(
                 engine.requireApi().tvShowsApi.getEpisodes(
                     seriesId = seriesId.toUUID(),
                     seasonId = seasonId.toUUID(),
+                ).content.items.map { it.toMediaItem() }.filterByParentalRating()
+            }
+        }
+
+    override suspend fun getAllEpisodes(seriesId: String): Result<List<MediaItem>> =
+        engine.apiResultWithRetry {
+            engine.run {
+                engine.requireApi().tvShowsApi.getEpisodes(
+                    seriesId = seriesId.toUUID(),
                 ).content.items.map { it.toMediaItem() }.filterByParentalRating()
             }
         }
