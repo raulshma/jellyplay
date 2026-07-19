@@ -261,6 +261,16 @@ class DetailViewModel @Inject constructor(
         }
     }
 
+    /**
+     * Persists the season-episode sort order so it is shared across every
+     * series detail screen (and survives navigation/relaunch). The value is
+     * read back reactively via [preferences], so [SeasonsSection] picks it up
+     * without any per-screen plumbing.
+     */
+    fun setEpisodesDescending(descending: Boolean) {
+        launch { preferencesStore.setEpisodesDescending(descending) }
+    }
+
     fun getDownloadFlow(itemId: String): Flow<com.raulshma.jellyplay.core.model.DownloadItem?> =
         downloadRepository.getDownloadByMediaItemIdFlow(itemId)
 

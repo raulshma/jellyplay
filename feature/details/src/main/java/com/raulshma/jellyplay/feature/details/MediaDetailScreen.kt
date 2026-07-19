@@ -270,6 +270,9 @@ fun MediaDetailScreen(
                         onSeasonSelected = { seasonId: String ->
                             viewModel.loadEpisodesForSeason(seriesIdForSeasons, seasonId)
                         },
+                        onEpisodesDescendingChange = { descending: Boolean ->
+                            viewModel.setEpisodesDescending(descending)
+                        },
                         onLoadSeerrData = { detail?.let { viewModel.loadSeerrDataIfNeeded(it) } },
                         onBack = onBack,
                         onSeerrRequest = { item: SeerrSearchItem -> seerrRequestItem = item },
