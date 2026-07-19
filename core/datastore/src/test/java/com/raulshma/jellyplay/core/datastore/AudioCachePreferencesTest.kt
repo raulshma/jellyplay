@@ -30,7 +30,11 @@ class AudioCachePreferencesTest {
     @Before
     fun setup() {
         val context = ApplicationProvider.getApplicationContext<android.content.Context>()
-        store = UserPreferencesStore(context, scope)
+        val dataStore = com.raulshma.jellyplay.core.datastore.TestDataStoreProvider.get(context)
+        val widgetDataStore = com.raulshma.jellyplay.core.datastore.widget.WidgetDataStore(dataStore, scope)
+        val serverIdentityStore = com.raulshma.jellyplay.core.datastore.identity.ServerIdentityStore(dataStore, scope)
+        val pinRateLimiter = com.raulshma.jellyplay.core.datastore.security.PinRateLimiter(dataStore, scope)
+        store = UserPreferencesStore(scope, dataStore, widgetDataStore, serverIdentityStore, pinRateLimiter)
     }
 
     @Test

@@ -99,21 +99,20 @@ import kotlinx.serialization.json.Json
 import javax.inject.Inject
 import javax.inject.Singleton
 
-private val Context.dataStore: DataStore<Preferences> by preferencesDataStore(name = "user_prefs")
-
 @Singleton
 class UserPreferencesStore @Inject constructor(
-    @ApplicationContext private val context: Context,
     @ApplicationScope private val externalScope: CoroutineScope,
+    @com.raulshma.jellyplay.core.datastore.di.UserPreferencesDataStore private val dataStore: DataStore<Preferences>,
+    private val widgetDataStore: com.raulshma.jellyplay.core.datastore.widget.WidgetDataStore,
+    private val serverIdentityStore: com.raulshma.jellyplay.core.datastore.identity.ServerIdentityStore,
+    private val pinRateLimiter: com.raulshma.jellyplay.core.datastore.security.PinRateLimiter,
 ) {
     private val scope = externalScope
 
-    private val sharedPrefs: Flow<Preferences> = context.dataStore.data
+    private val sharedPrefs: Flow<Preferences> = dataStore.data
         .catch { _ -> emit(emptyPreferences()) }
 
     private object Keys {
-        val ACTIVE_SERVER_ID = stringPreferencesKey("active_server_id")
-        val ACTIVE_USER_ID = stringPreferencesKey("active_user_id")
         val PREFERRED_PLAYER = stringPreferencesKey("preferred_player")
         val PREFERRED_SUBTITLE_LANG = stringPreferencesKey("preferred_subtitle_lang")
         val SUBTITLES_FORCED_ONLY = booleanPreferencesKey("subtitles_forced_only")
@@ -156,8 +155,6 @@ class UserPreferencesStore @Inject constructor(
         val MPV_CONFIG = stringPreferencesKey("mpv_config")
         val LIBVLC_CONFIG = stringPreferencesKey("libvlc_config")
         val EXO_CONFIG = stringPreferencesKey("exo_config")
-        val DEVICE_ID = stringPreferencesKey("device_id")
-        val CONTINUE_WATCHING = stringPreferencesKey("continue_watching")
         val SEGMENT_BEHAVIORS = stringPreferencesKey("segment_behaviors")
         val SKIP_INTRO_ENABLED = stringPreferencesKey("skip_intro_enabled")
         val SKIP_OUTRO_ENABLED = stringPreferencesKey("skip_outro_enabled")
@@ -237,17 +234,6 @@ class UserPreferencesStore @Inject constructor(
         val NEWSLETTER_LAST_VIEWED_MS = longPreferencesKey("newsletter_last_viewed_ms")
 
         val TYPED_MIGRATION_DONE = booleanPreferencesKey("_typed_migration_done")
-
-        // ── Home-screen recommendations widgets ──
-        val WIDGET_CONFIG = stringPreferencesKey("widget_config")
-        val WIDGET_CONFIGS = stringPreferencesKey("widget_configs")
-        val LIBRARY_WIDGET_ITEMS = stringPreferencesKey("library_widget_items")
-        val LIBRARY_WIDGET_VERSION = longPreferencesKey("library_widget_version")
-        val LIBRARY_WIDGET_UPDATED_AT_MS = longPreferencesKey("library_widget_updated_at_ms")
-        val SEERR_WIDGET_ITEMS = stringPreferencesKey("seerr_widget_items")
-        val SEERR_WIDGET_VERSION = longPreferencesKey("seerr_widget_version")
-        val SEERR_WIDGET_UPDATED_AT_MS = longPreferencesKey("seerr_widget_updated_at_ms")
-        val WIDGET_LAST_REFRESH_MS = longPreferencesKey("widget_last_refresh_ms")
 
         val NOTIFICATIONS_ENABLED = booleanPreferencesKey("notifications_enabled")
         val NOTIFICATIONS_CHECK_FREQUENCY = stringPreferencesKey("notifications_check_frequency")
@@ -365,22 +351,6 @@ class UserPreferencesStore @Inject constructor(
     }
 
     private companion object {
-        // PIN rate-limiting policy. After MAX_PIN_ATTEMPTS failed attempts the
-        // account is locked for PIN_LOCKOUT_DURATIONS_MS[escalation]. Each
-        // subsequent batch of failed attempts escalates the index by one until
-        // the cap. The durations roughly track common mobile-OS lockout
-        // policies (30s → 1m → 5m → 15m → 1h).
-        // Hashing constants (PBKDF2 iterations, salt size, format prefix) live
-        // in [PinHasher] so the security-critical logic is unit-testable
-        // without an Android Context.
-        const val MAX_PIN_ATTEMPTS = 5
-        val PIN_LOCKOUT_DURATIONS_MS = longArrayOf(
-            30_000L,
-            60_000L,
-            5 * 60_000L,
-            15 * 60_000L,
-            60 * 60_000L,
-        )
         private val ENCODE_DEFAULTS_JSON = Json { encodeDefaults = true }
     }
 
@@ -391,7 +361,7 @@ class UserPreferencesStore @Inject constructor(
     }
 
     private suspend fun migrateToTypedKeys() {
-        context.dataStore.edit { prefs ->
+        dataStore.edit { prefs ->
             if (prefs[Keys.TYPED_MIGRATION_DONE] == true) return@edit
 
             migrateBooleans(prefs,
@@ -573,7 +543,7 @@ class UserPreferencesStore @Inject constructor(
         audioStreamIndex: Int? = null,
         subtitleStreamIndex: Int? = null,
     ) {
-        context.dataStore.edit { prefs ->
+        dataStore.edit { prefs ->
             val current = readMediaStreamSelections(prefs).toMutableMap()
             if (audioStreamIndex == null && subtitleStreamIndex == null) {
                 current.remove(itemId)
@@ -602,7 +572,7 @@ class UserPreferencesStore @Inject constructor(
     }
 
     suspend fun setLiveTvLastChannelId(channelId: String?) {
-        context.dataStore.edit { prefs ->
+        dataStore.edit { prefs ->
             if (channelId == null) {
                 prefs.remove(Keys.LIVE_TV_LAST_CHANNEL_ID)
             } else {
@@ -612,7 +582,7 @@ class UserPreferencesStore @Inject constructor(
     }
 
     private suspend fun writeVideoEffectsForItem(itemId: String, effects: VideoEffectsConfig) {
-        context.dataStore.edit { prefs ->
+        dataStore.edit { prefs ->
             val current = readVideoEffectsByItem(prefs).toMutableMap()
             if (effects.isNeutral) {
                 current.remove(itemId)
@@ -767,7 +737,7 @@ class UserPreferencesStore @Inject constructor(
                     val migrated = legacyIds.associateWith {
                         setOf(HomeSectionType.LATEST_MEDIA, HomeSectionType.RECENTLY_ADDED)
                     }
-                    context.dataStore.edit {
+                    dataStore.edit {
                         it.remove(Keys.HOME_HIDDEN_LIBRARY_SECTION_IDS)
                         it[Keys.HOME_LIBRARY_SECTION_OVERRIDES] = json.encodeToString(migrated)
                     }
@@ -1217,9 +1187,9 @@ class UserPreferencesStore @Inject constructor(
         )
     }.distinctUntilChanged().stateIn(scope, SharingStarted.Eagerly, UserPreferences())
 
-    val activeServerId: Flow<String?> = sharedPrefs.map { it[Keys.ACTIVE_SERVER_ID] }.distinctUntilChanged()
-    val activeUserId: Flow<String?> = sharedPrefs.map { it[Keys.ACTIVE_USER_ID] }.distinctUntilChanged()
-    val deviceId: Flow<String?> = sharedPrefs.map { it[Keys.DEVICE_ID] }.distinctUntilChanged()
+    val activeServerId: Flow<String?> get() = serverIdentityStore.activeServerId
+    val activeUserId: Flow<String?> get() = serverIdentityStore.activeUserId
+    val deviceId: Flow<String?> get() = serverIdentityStore.deviceId
 
     // Narrow per-key flows for hot-path consumers. Reading these avoids
     // collecting the full ~150-field `preferences` StateFlow (rebuilt on every
@@ -1314,21 +1284,11 @@ class UserPreferencesStore @Inject constructor(
             .distinctUntilChanged()
             .stateIn(scope, SharingStarted.WhileSubscribed(5_000), emptyMap())
 
-    suspend fun ensureDeviceId(): String {
-        var id: String? = null
-        context.dataStore.edit { prefs ->
-            id = prefs[Keys.DEVICE_ID] ?: java.util.UUID.randomUUID().toString().also { prefs[Keys.DEVICE_ID] = it }
-        }
-        return id ?: error("deviceId could not be resolved")
-    }
+    suspend fun ensureDeviceId(): String = serverIdentityStore.ensureDeviceId()
 
-    suspend fun setActiveServer(serverId: String) {
-        context.dataStore.edit { it[Keys.ACTIVE_SERVER_ID] = serverId }
-    }
+    suspend fun setActiveServer(serverId: String) = serverIdentityStore.setActiveServer(serverId)
 
-    suspend fun setActiveUser(userId: String) {
-        context.dataStore.edit { it[Keys.ACTIVE_USER_ID] = userId }
-    }
+    suspend fun setActiveUser(userId: String) = serverIdentityStore.setActiveUser(userId)
 
     /**
      * Sets the active server and user in a single DataStore edit. Two back-to-
@@ -1337,101 +1297,97 @@ class UserPreferencesStore @Inject constructor(
      * + 2 full `preferences` re-emissions. Batching them halves the I/O and the
      * downstream re-derivation cascade.
      */
-    suspend fun setActiveSession(serverId: String, userId: String) {
-        context.dataStore.edit { prefs ->
-            prefs[Keys.ACTIVE_SERVER_ID] = serverId
-            prefs[Keys.ACTIVE_USER_ID] = userId
-        }
-    }
+    suspend fun setActiveSession(serverId: String, userId: String) =
+        serverIdentityStore.setActiveSession(serverId, userId)
 
     suspend fun setPreferredPlayer(playerType: PlayerType) {
-        context.dataStore.edit { it[Keys.PREFERRED_PLAYER] = playerType.name }
+        dataStore.edit { it[Keys.PREFERRED_PLAYER] = playerType.name }
     }
 
     suspend fun setPreferredSubtitleLanguage(language: String?) {
-        context.dataStore.edit {
+        dataStore.edit {
             if (language != null) it[Keys.PREFERRED_SUBTITLE_LANG] = language
             else it.remove(Keys.PREFERRED_SUBTITLE_LANG)
         }
     }
 
     suspend fun setAppLanguage(language: String?) {
-        context.dataStore.edit {
+        dataStore.edit {
             if (language != null) it[Keys.APP_LANGUAGE] = language
             else it.remove(Keys.APP_LANGUAGE)
         }
     }
 
     suspend fun setPgsSubtitleDirectPlay(enabled: Boolean) {
-        context.dataStore.edit { it[Keys.PGS_SUBTITLE_DIRECT_PLAY] = enabled }
+        dataStore.edit { it[Keys.PGS_SUBTITLE_DIRECT_PLAY] = enabled }
     }
 
     suspend fun setBackdropThemeMusicEnabled(enabled: Boolean) {
-        context.dataStore.edit { it[Keys.BACKDROP_THEME_MUSIC_ENABLED] = enabled }
+        dataStore.edit { it[Keys.BACKDROP_THEME_MUSIC_ENABLED] = enabled }
     }
 
     suspend fun setHiddenNavItems(items: Set<String>) {
-        context.dataStore.edit { it[Keys.HIDDEN_NAV_ITEMS] = json.encodeToString(items) }
+        dataStore.edit { it[Keys.HIDDEN_NAV_ITEMS] = json.encodeToString(items) }
     }
 
     suspend fun setNavItemOrder(order: List<String>) {
-        context.dataStore.edit { it[Keys.NAV_ITEM_ORDER] = json.encodeToString(order) }
+        dataStore.edit { it[Keys.NAV_ITEM_ORDER] = json.encodeToString(order) }
     }
 
     suspend fun setSelfUpdateCheckEnabled(enabled: Boolean) {
-        context.dataStore.edit { it[Keys.SELF_UPDATE_CHECK_ENABLED] = enabled }
+        dataStore.edit { it[Keys.SELF_UPDATE_CHECK_ENABLED] = enabled }
     }
 
     suspend fun setHideEpisodeThumbnails(enabled: Boolean) {
-        context.dataStore.edit { it[Keys.HIDE_EPISODE_THUMBNAILS] = enabled }
+        dataStore.edit { it[Keys.HIDE_EPISODE_THUMBNAILS] = enabled }
     }
 
     suspend fun setEpisodesDescending(descending: Boolean) {
-        context.dataStore.edit { it[Keys.EPISODES_DESCENDING] = descending }
+        dataStore.edit { it[Keys.EPISODES_DESCENDING] = descending }
     }
 
     suspend fun setSkipSpecials(enabled: Boolean) {
-        context.dataStore.edit { it[Keys.SKIP_SPECIALS] = enabled }
+        dataStore.edit { it[Keys.SKIP_SPECIALS] = enabled }
     }
 
     suspend fun setCellularDownloadSizeWarningMb(sizeMb: Int) {
-        context.dataStore.edit { it[Keys.CELLULAR_DOWNLOAD_SIZE_WARNING_MB] = sizeMb }
+        dataStore.edit { it[Keys.CELLULAR_DOWNLOAD_SIZE_WARNING_MB] = sizeMb }
     }
 
     suspend fun setHapticsEnabled(enabled: Boolean) {
-        context.dataStore.edit { it[Keys.HAPTICS_ENABLED] = enabled }
+        dataStore.edit { it[Keys.HAPTICS_ENABLED] = enabled }
     }
 
     suspend fun setDateFormatPreference(preference: DateFormatPreference) {
-        context.dataStore.edit { it[Keys.DATE_FORMAT_PREFERENCE] = preference.name }
+        dataStore.edit { it[Keys.DATE_FORMAT_PREFERENCE] = preference.name }
     }
 
     suspend fun setAppFontScale(scale: AppFontScale) {
-        context.dataStore.edit { it[Keys.APP_FONT_SCALE] = scale.name }
+        dataStore.edit { it[Keys.APP_FONT_SCALE] = scale.name }
     }
 
     suspend fun setScheduledThemeStartHour(hour: Int) {
-        context.dataStore.edit { it[Keys.SCHEDULED_THEME_START_HOUR] = hour }
+        dataStore.edit { it[Keys.SCHEDULED_THEME_START_HOUR] = hour }
     }
 
     suspend fun setScheduledThemeEndHour(hour: Int) {
-        context.dataStore.edit { it[Keys.SCHEDULED_THEME_END_HOUR] = hour }
+        dataStore.edit { it[Keys.SCHEDULED_THEME_END_HOUR] = hour }
     }
 
     suspend fun setColorBlindMode(mode: ColorBlindMode) {
-        context.dataStore.edit { it[Keys.COLOR_BLIND_MODE] = mode.name }
+        dataStore.edit { it[Keys.COLOR_BLIND_MODE] = mode.name }
     }
 
     suspend fun setHandMode(mode: HandMode) {
-        context.dataStore.edit { it[Keys.HAND_MODE] = mode.name }
+        dataStore.edit { it[Keys.HAND_MODE] = mode.name }
     }
 
     suspend fun setDownloadScheduleEnabled(enabled: Boolean) {
-        context.dataStore.edit { it[Keys.DOWNLOAD_SCHEDULE_ENABLED] = enabled }
+        dataStore.edit { it[Keys.DOWNLOAD_SCHEDULE_ENABLED] = enabled }
     }
 
     suspend fun setDownloadScheduleWindow(window: DownloadScheduleWindow) {
-        context.dataStore.edit {
+        dataStore.edit {
             it[Keys.DOWNLOAD_SCHEDULE_START] = window.startHour
             it[Keys.DOWNLOAD_SCHEDULE_END] = window.endHour
             it[Keys.DOWNLOAD_SCHEDULE_WIFI_ONLY] = window.wifiOnly
@@ -1439,11 +1395,11 @@ class UserPreferencesStore @Inject constructor(
     }
 
     suspend fun setSubtitlesForcedOnly(enabled: Boolean) {
-        context.dataStore.edit { it[Keys.SUBTITLES_FORCED_ONLY] = enabled }
+        dataStore.edit { it[Keys.SUBTITLES_FORCED_ONLY] = enabled }
     }
 
     suspend fun setPreferredAudioLanguage(language: String?) {
-        context.dataStore.edit {
+        dataStore.edit {
             if (language != null) it[Keys.PREFERRED_AUDIO_LANG] = language
             else it.remove(Keys.PREFERRED_AUDIO_LANG)
         }
@@ -1470,55 +1426,55 @@ class UserPreferencesStore @Inject constructor(
     }
 
     suspend fun setDynamicTheming(enabled: Boolean) {
-        context.dataStore.edit { it[Keys.DYNAMIC_THEMING] = enabled }
+        dataStore.edit { it[Keys.DYNAMIC_THEMING] = enabled }
     }
 
     suspend fun setThemeMode(mode: ThemeMode) {
-        context.dataStore.edit { it[Keys.THEME_MODE] = mode.name }
+        dataStore.edit { it[Keys.THEME_MODE] = mode.name }
     }
 
     suspend fun setContrastLevel(level: ContrastLevel) {
-        context.dataStore.edit { it[Keys.CONTRAST_LEVEL] = level.name }
+        dataStore.edit { it[Keys.CONTRAST_LEVEL] = level.name }
     }
 
     suspend fun setOledMode(enabled: Boolean) {
-        context.dataStore.edit { it[Keys.OLED_MODE] = enabled }
+        dataStore.edit { it[Keys.OLED_MODE] = enabled }
     }
 
     suspend fun setSubtitleStyle(style: SubtitleStyle) {
-        context.dataStore.edit { it[Keys.SUBTITLE_STYLE] = json.encodeToString(style) }
+        dataStore.edit { it[Keys.SUBTITLE_STYLE] = json.encodeToString(style) }
     }
 
     suspend fun setHdrSubtitleStyleEnabled(enabled: Boolean) {
-        context.dataStore.edit { it[Keys.HDR_SUBTITLE_STYLE_ENABLED] = enabled }
+        dataStore.edit { it[Keys.HDR_SUBTITLE_STYLE_ENABLED] = enabled }
     }
 
     suspend fun setHdrSubtitleStyle(style: SubtitleStyle) {
-        context.dataStore.edit { it[Keys.HDR_SUBTITLE_STYLE] = json.encodeToString(style) }
+        dataStore.edit { it[Keys.HDR_SUBTITLE_STYLE] = json.encodeToString(style) }
     }
 
     suspend fun setStreamingQuality(quality: StreamingQuality) {
-        context.dataStore.edit { it[Keys.STREAMING_QUALITY] = quality.name }
+        dataStore.edit { it[Keys.STREAMING_QUALITY] = quality.name }
     }
 
     suspend fun setPlaybackMode(mode: PlaybackMode) {
-        context.dataStore.edit { it[Keys.PLAYBACK_MODE] = mode.name }
+        dataStore.edit { it[Keys.PLAYBACK_MODE] = mode.name }
     }
 
     suspend fun setMaxCacheSize(sizeMb: Int) {
-        context.dataStore.edit { it[Keys.MAX_CACHE_SIZE_MB] = sizeMb }
+        dataStore.edit { it[Keys.MAX_CACHE_SIZE_MB] = sizeMb }
     }
 
     suspend fun setAutoDeleteCache(enabled: Boolean) {
-        context.dataStore.edit { it[Keys.AUTO_DELETE_CACHE] = enabled }
+        dataStore.edit { it[Keys.AUTO_DELETE_CACHE] = enabled }
     }
 
     suspend fun setPinLockEnabled(enabled: Boolean) {
-        context.dataStore.edit { it[Keys.PIN_LOCK_ENABLED] = enabled }
+        dataStore.edit { it[Keys.PIN_LOCK_ENABLED] = enabled }
     }
 
     suspend fun setPinHash(hash: String?) {
-        context.dataStore.edit {
+        dataStore.edit {
             if (hash != null) it[Keys.PIN_HASH] = hash
             else it.remove(Keys.PIN_HASH)
         }
@@ -1532,7 +1488,7 @@ class UserPreferencesStore @Inject constructor(
     suspend fun setPin(pin: String) {
         if (pin.isBlank()) return
         val hash = withContext(Dispatchers.Default) { PinHasher.hash(pin) }
-        context.dataStore.edit { prefs ->
+        dataStore.edit { prefs ->
             prefs[Keys.PIN_HASH] = hash
             prefs[Keys.PIN_LOCK_ENABLED] = true
         }
@@ -1543,7 +1499,7 @@ class UserPreferencesStore @Inject constructor(
      * single DataStore transaction.
      */
     suspend fun clearPin() {
-        context.dataStore.edit { prefs ->
+        dataStore.edit { prefs ->
             prefs[Keys.PIN_LOCK_ENABLED] = false
             prefs.remove(Keys.PIN_HASH)
         }
@@ -1568,7 +1524,7 @@ class UserPreferencesStore @Inject constructor(
         if (!PinHasher.verify(pin, current)) return false
         val upgraded = hashPin(pin)
         // Persist only if the user hasn't cleared the PIN concurrently.
-        context.dataStore.edit { prefs ->
+        dataStore.edit { prefs ->
             if (prefs[Keys.PIN_HASH] == current) {
                 prefs[Keys.PIN_HASH] = upgraded
             }
@@ -1578,84 +1534,27 @@ class UserPreferencesStore @Inject constructor(
 
     // ----- PIN rate limiting -------------------------------------------------
     //
-    // Policy: after MAX_PIN_ATTEMPTS failed verifications, apply an exponential
-    // backoff lockout (30s, 1m, 5m, 15m, 1h, capped). The lockout state
-    // survives process death because it is persisted in DataStore. Successful
-    // verification clears the counters.
+    // Delegated to [pinRateLimiter] — the escalation state machine lives there
+    // so the policy concentrates in one module. The PIN *storage keys*
+    // (`pin_failed_attempts`, `pin_lockout_until_ms`) remain in the shared
+    // `"user_prefs"` DataStore; both classes reach the same singleton.
 
-    fun getPinLockoutState(): com.raulshma.jellyplay.core.model.PinLockoutState {
-        val prefs = preferences.value
-        val until = prefs.pinLockoutUntilEpochMs
-        val now = System.currentTimeMillis()
-        // If the lockout has expired but the counter hasn't been reset yet,
-        // expose the unlocked state and reset the failed-attempt count to the
-        // threshold so the user gets exactly one attempt before the next
-        // escalation (standard ATM-style behaviour).
-        return if (until > 0L && now >= until) {
-            com.raulshma.jellyplay.core.model.PinLockoutState(
-                failedAttempts = MAX_PIN_ATTEMPTS,
-                lockoutUntilEpochMs = 0L,
-            )
-        } else {
-            com.raulshma.jellyplay.core.model.PinLockoutState(
-                failedAttempts = prefs.pinFailedAttempts,
-                lockoutUntilEpochMs = until,
-            )
-        }
-    }
+    fun getPinLockoutState(): com.raulshma.jellyplay.core.model.PinLockoutState =
+        pinRateLimiter.getPinLockoutState()
 
-    /**
-     * Records a failed PIN attempt and applies the rate-limit policy. Returns
-     * the resulting [PinLockoutState] so the caller can render the lockout
-     * message immediately.
-     */
-    suspend fun recordFailedPinAttempt(): com.raulshma.jellyplay.core.model.PinLockoutState {
-        var resultState: com.raulshma.jellyplay.core.model.PinLockoutState = com.raulshma.jellyplay.core.model.PinLockoutState.NOT_LOCKED
-        context.dataStore.edit { prefs ->
-            val now = System.currentTimeMillis()
-            val previousUntil = prefs[Keys.PIN_LOCKOUT_UNTIL_MS] ?: 0L
-            val previousAttempts = if (previousUntil > 0L && now >= previousUntil) {
-                // Previous lockout expired: give the user another attempt
-                // before re-escalating.
-                MAX_PIN_ATTEMPTS
-            } else {
-                prefs[Keys.PIN_FAILED_ATTEMPTS] ?: 0
-            }
-            val newAttempts = previousAttempts + 1
-            prefs[Keys.PIN_FAILED_ATTEMPTS] = newAttempts
-
-            val lockoutUntil = if (newAttempts >= MAX_PIN_ATTEMPTS) {
-                val escalations = (newAttempts - MAX_PIN_ATTEMPTS).coerceAtMost(PIN_LOCKOUT_DURATIONS_MS.lastIndex)
-                val durationMs = PIN_LOCKOUT_DURATIONS_MS[escalations]
-                val until = now + durationMs
-                prefs[Keys.PIN_LOCKOUT_UNTIL_MS] = until
-                until
-            } else {
-                prefs[Keys.PIN_LOCKOUT_UNTIL_MS] = 0L
-                0L
-            }
-            resultState = com.raulshma.jellyplay.core.model.PinLockoutState(
-                failedAttempts = newAttempts,
-                lockoutUntilEpochMs = lockoutUntil,
-            )
-        }
-        return resultState
-    }
+    /** @see com.raulshma.jellyplay.core.datastore.security.PinRateLimiter.recordFailedPinAttempt */
+    suspend fun recordFailedPinAttempt(): com.raulshma.jellyplay.core.model.PinLockoutState =
+        pinRateLimiter.recordFailedPinAttempt()
 
     /** Clears the failed-attempt counter and any active lockout. Call on successful unlock. */
-    suspend fun resetPinLockout() {
-        context.dataStore.edit { prefs ->
-            prefs[Keys.PIN_FAILED_ATTEMPTS] = 0
-            prefs[Keys.PIN_LOCKOUT_UNTIL_MS] = 0L
-        }
-    }
+    suspend fun resetPinLockout() = pinRateLimiter.resetPinLockout()
 
     suspend fun setBiometricLockEnabled(enabled: Boolean) {
-        context.dataStore.edit { it[Keys.BIOMETRIC_LOCK_ENABLED] = enabled }
+        dataStore.edit { it[Keys.BIOMETRIC_LOCK_ENABLED] = enabled }
     }
 
     suspend fun setUsePinForPlayerLock(enabled: Boolean) {
-        context.dataStore.edit { it[Keys.USE_PIN_FOR_PLAYER_LOCK] = enabled }
+        dataStore.edit { it[Keys.USE_PIN_FOR_PLAYER_LOCK] = enabled }
     }
 
     /**
@@ -1674,125 +1573,125 @@ class UserPreferencesStore @Inject constructor(
     }
 
     suspend fun setShowAdvancedSettings(enabled: Boolean) {
-        context.dataStore.edit { it[Keys.SHOW_ADVANCED_SETTINGS] = enabled }
+        dataStore.edit { it[Keys.SHOW_ADVANCED_SETTINGS] = enabled }
     }
 
     suspend fun setEnabledExperimentalFeatures(features: Set<com.raulshma.jellyplay.core.model.ExperimentalFeature>) {
-        context.dataStore.edit {
+        dataStore.edit {
             it[Keys.ENABLED_EXPERIMENTAL_FEATURES] =
                 json.encodeToString(features.map { f -> f.name }.toSet())
         }
     }
 
     suspend fun setAudioVisualizerEnabled(enabled: Boolean) {
-        context.dataStore.edit { it[Keys.AUDIO_VISUALIZER_ENABLED] = enabled }
+        dataStore.edit { it[Keys.AUDIO_VISUALIZER_ENABLED] = enabled }
     }
 
     suspend fun setSyncPlayJoinBehavior(behavior: SyncPlayJoinBehavior) {
-        context.dataStore.edit { it[Keys.SYNC_PLAY_JOIN_BEHAVIOR] = behavior.name }
+        dataStore.edit { it[Keys.SYNC_PLAY_JOIN_BEHAVIOR] = behavior.name }
     }
 
     suspend fun setSyncPlayToleranceMs(ms: Long) {
-        context.dataStore.edit { it[Keys.SYNC_PLAY_TOLERANCE_MS] = ms }
+        dataStore.edit { it[Keys.SYNC_PLAY_TOLERANCE_MS] = ms }
     }
 
     suspend fun setSyncPlayAutoAcceptInvites(enabled: Boolean) {
-        context.dataStore.edit { it[Keys.SYNC_PLAY_AUTO_ACCEPT_INVITES] = enabled }
+        dataStore.edit { it[Keys.SYNC_PLAY_AUTO_ACCEPT_INVITES] = enabled }
     }
 
     suspend fun setDefaultCastingStrategy(strategy: CastingStrategy) {
-        context.dataStore.edit { it[Keys.DEFAULT_CASTING_STRATEGY] = strategy.name }
+        dataStore.edit { it[Keys.DEFAULT_CASTING_STRATEGY] = strategy.name }
     }
 
     suspend fun setBackgroundCastingEnabled(enabled: Boolean) {
-        context.dataStore.edit { it[Keys.BACKGROUND_CASTING_ENABLED] = enabled }
+        dataStore.edit { it[Keys.BACKGROUND_CASTING_ENABLED] = enabled }
     }
 
     suspend fun setPreferredRenderer(renderer: String?) {
-        context.dataStore.edit {
+        dataStore.edit {
             if (renderer != null) it[Keys.PREFERRED_RENDERER] = renderer else it.remove(Keys.PREFERRED_RENDERER)
         }
     }
 
     suspend fun setDvrPrePaddingMinutes(minutes: Int) {
-        context.dataStore.edit { it[Keys.DVR_PRE_PADDING_MINUTES] = minutes }
+        dataStore.edit { it[Keys.DVR_PRE_PADDING_MINUTES] = minutes }
     }
 
     suspend fun setDvrPostPaddingMinutes(minutes: Int) {
-        context.dataStore.edit { it[Keys.DVR_POST_PADDING_MINUTES] = minutes }
+        dataStore.edit { it[Keys.DVR_POST_PADDING_MINUTES] = minutes }
     }
 
     suspend fun setDvrRecordingQuality(quality: String) {
-        context.dataStore.edit { it[Keys.DVR_RECORDING_QUALITY] = quality }
+        dataStore.edit { it[Keys.DVR_RECORDING_QUALITY] = quality }
     }
 
     suspend fun setFavoriteChannels(channels: Set<String>) {
-        context.dataStore.edit { it[Keys.FAVORITE_CHANNELS] = json.encodeToString(channels) }
+        dataStore.edit { it[Keys.FAVORITE_CHANNELS] = json.encodeToString(channels) }
     }
 
     suspend fun setEnabledNewsletterSections(sections: Set<NewsletterSectionType>) {
-        context.dataStore.edit { it[Keys.ENABLED_NEWSLETTER_SECTIONS] = json.encodeToString(sections) }
+        dataStore.edit { it[Keys.ENABLED_NEWSLETTER_SECTIONS] = json.encodeToString(sections) }
     }
 
     suspend fun setNewsletterSectionOrder(order: List<NewsletterSectionType>) {
-        context.dataStore.edit { it[Keys.NEWSLETTER_SECTION_ORDER] = json.encodeToString(order) }
+        dataStore.edit { it[Keys.NEWSLETTER_SECTION_ORDER] = json.encodeToString(order) }
     }
 
     suspend fun setManualOffline(enabled: Boolean) {
-        context.dataStore.edit { it[Keys.MANUAL_OFFLINE_ENABLED] = enabled }
+        dataStore.edit { it[Keys.MANUAL_OFFLINE_ENABLED] = enabled }
     }
 
     suspend fun setAutoOfflineEnabled(enabled: Boolean) {
-        context.dataStore.edit { it[Keys.AUTO_OFFLINE_ENABLED] = enabled }
+        dataStore.edit { it[Keys.AUTO_OFFLINE_ENABLED] = enabled }
     }
 
     suspend fun setManualBandwidthCap(cap: Long) {
-        context.dataStore.edit { it[Keys.MANUAL_BANDWIDTH_CAP] = cap }
+        dataStore.edit { it[Keys.MANUAL_BANDWIDTH_CAP] = cap }
     }
 
     suspend fun setMeteredNetworkBehavior(behavior: MeteredNetworkBehavior) {
-        context.dataStore.edit { it[Keys.METERED_NETWORK_BEHAVIOR] = behavior.name }
+        dataStore.edit { it[Keys.METERED_NETWORK_BEHAVIOR] = behavior.name }
     }
 
     suspend fun setAdaptiveBitrateEnabled(enabled: Boolean) {
-        context.dataStore.edit { it[Keys.ADAPTIVE_BITRATE_ENABLED] = enabled }
+        dataStore.edit { it[Keys.ADAPTIVE_BITRATE_ENABLED] = enabled }
     }
 
 
     suspend fun setBackgroundVideoAudioEnabled(enabled: Boolean) {
-        context.dataStore.edit { it[Keys.BACKGROUND_VIDEO_AUDIO_ENABLED] = enabled }
+        dataStore.edit { it[Keys.BACKGROUND_VIDEO_AUDIO_ENABLED] = enabled }
     }
 
     suspend fun setAutoPlayCountdownSec(sec: Int) {
-        context.dataStore.edit { it[Keys.AUTO_PLAY_COUNTDOWN_SEC] = sec }
+        dataStore.edit { it[Keys.AUTO_PLAY_COUNTDOWN_SEC] = sec }
     }
 
     suspend fun setShowUnwatchedBadge(enabled: Boolean) {
-        context.dataStore.edit { it[Keys.SHOW_UNWATCHED_BADGE] = enabled }
+        dataStore.edit { it[Keys.SHOW_UNWATCHED_BADGE] = enabled }
     }
 
     suspend fun setHideWatchedItems(enabled: Boolean) {
-        context.dataStore.edit { it[Keys.HIDE_WATCHED_ITEMS] = enabled }
+        dataStore.edit { it[Keys.HIDE_WATCHED_ITEMS] = enabled }
     }
 
     suspend fun setMergeContinueWatchingAndNextUp(enabled: Boolean) {
-        context.dataStore.edit { it[Keys.MERGE_CONTINUE_WATCHING_NEXT_UP] = enabled }
+        dataStore.edit { it[Keys.MERGE_CONTINUE_WATCHING_NEXT_UP] = enabled }
     }
 
     suspend fun setNextUpMaxDays(days: Int) {
-        context.dataStore.edit { it[Keys.NEXT_UP_MAX_DAYS] = days.coerceAtLeast(0) }
+        dataStore.edit { it[Keys.NEXT_UP_MAX_DAYS] = days.coerceAtLeast(0) }
     }
 
     suspend fun setNextUpRewatching(enabled: Boolean) {
-        context.dataStore.edit { it[Keys.NEXT_UP_REWATCHING] = enabled }
+        dataStore.edit { it[Keys.NEXT_UP_REWATCHING] = enabled }
     }
 
     suspend fun setNextUpExcludedSeriesIds(ids: Set<String>) {
-        context.dataStore.edit { it[Keys.NEXT_UP_EXCLUDED_SERIES_IDS] = json.encodeToString(ids) }
+        dataStore.edit { it[Keys.NEXT_UP_EXCLUDED_SERIES_IDS] = json.encodeToString(ids) }
     }
 
     suspend fun excludeSeriesFromNextUp(seriesId: String) {
-        context.dataStore.edit { prefs ->
+        dataStore.edit { prefs ->
             val current = prefs[Keys.NEXT_UP_EXCLUDED_SERIES_IDS]?.let {
                 try { json.decodeFromString<Set<String>>(it) } catch (_: Exception) { emptySet() }
             } ?: emptySet()
@@ -1801,11 +1700,11 @@ class UserPreferencesStore @Inject constructor(
     }
 
     suspend fun setHiddenCwItemIds(ids: Set<String>) {
-        context.dataStore.edit { it[Keys.HIDDEN_CW_ITEM_IDS] = json.encodeToString(ids) }
+        dataStore.edit { it[Keys.HIDDEN_CW_ITEM_IDS] = json.encodeToString(ids) }
     }
 
     suspend fun hideCwItem(itemId: String) {
-        context.dataStore.edit { prefs ->
+        dataStore.edit { prefs ->
             val current = prefs[Keys.HIDDEN_CW_ITEM_IDS]?.let {
                 try { json.decodeFromString<Set<String>>(it) } catch (_: Exception) { emptySet() }
             } ?: emptySet()
@@ -1814,7 +1713,7 @@ class UserPreferencesStore @Inject constructor(
     }
 
     suspend fun unhideCwItem(itemId: String) {
-        context.dataStore.edit { prefs ->
+        dataStore.edit { prefs ->
             val current = prefs[Keys.HIDDEN_CW_ITEM_IDS]?.let {
                 try { json.decodeFromString<Set<String>>(it) } catch (_: Exception) { emptySet() }
             } ?: emptySet()
@@ -1823,17 +1722,17 @@ class UserPreferencesStore @Inject constructor(
     }
 
     suspend fun unhideAllCwItems() {
-        context.dataStore.edit { it.remove(Keys.HIDDEN_CW_ITEM_IDS) }
+        dataStore.edit { it.remove(Keys.HIDDEN_CW_ITEM_IDS) }
     }
 
     suspend fun setPinnedHomeSections(sections: List<PinnedHomeSection>) {
-        context.dataStore.edit { prefs ->
+        dataStore.edit { prefs ->
             prefs[Keys.PINNED_HOME_SECTIONS] = json.encodeToString(sections)
         }
     }
 
     suspend fun addPinnedHomeSection(section: PinnedHomeSection) {
-        context.dataStore.edit { prefs ->
+        dataStore.edit { prefs ->
             val current = prefs[Keys.PINNED_HOME_SECTIONS]?.let {
                 try { json.decodeFromString<List<PinnedHomeSection>>(it) } catch (_: Exception) { emptyList() }
             } ?: emptyList()
@@ -1844,7 +1743,7 @@ class UserPreferencesStore @Inject constructor(
     }
 
     suspend fun removePinnedHomeSection(sectionId: String) {
-        context.dataStore.edit { prefs ->
+        dataStore.edit { prefs ->
             val current = prefs[Keys.PINNED_HOME_SECTIONS]?.let {
                 try { json.decodeFromString<List<PinnedHomeSection>>(it) } catch (_: Exception) { emptyList() }
             } ?: emptyList()
@@ -1853,13 +1752,13 @@ class UserPreferencesStore @Inject constructor(
     }
 
     suspend fun setHomeLayoutPresets(presets: List<HomeLayoutPreset>) {
-        context.dataStore.edit { prefs ->
+        dataStore.edit { prefs ->
             prefs[Keys.HOME_LAYOUT_PRESETS] = json.encodeToString(presets)
         }
     }
 
     suspend fun saveHomeLayoutPreset(preset: HomeLayoutPreset) {
-        context.dataStore.edit { prefs ->
+        dataStore.edit { prefs ->
             val current = prefs[Keys.HOME_LAYOUT_PRESETS]?.let {
                 try { json.decodeFromString<List<HomeLayoutPreset>>(it) } catch (_: Exception) { emptyList() }
             } ?: emptyList()
@@ -1873,7 +1772,7 @@ class UserPreferencesStore @Inject constructor(
     }
 
     suspend fun deleteHomeLayoutPreset(presetId: String) {
-        context.dataStore.edit { prefs ->
+        dataStore.edit { prefs ->
             val current = prefs[Keys.HOME_LAYOUT_PRESETS]?.let {
                 try { json.decodeFromString<List<HomeLayoutPreset>>(it) } catch (_: Exception) { emptyList() }
             } ?: emptyList()
@@ -1882,19 +1781,19 @@ class UserPreferencesStore @Inject constructor(
     }
 
     suspend fun setContinueWatchingClickBehavior(behavior: ContinueWatchingClickBehavior) {
-        context.dataStore.edit { it[Keys.CONTINUE_WATCHING_CLICK_BEHAVIOR] = behavior.name }
+        dataStore.edit { it[Keys.CONTINUE_WATCHING_CLICK_BEHAVIOR] = behavior.name }
     }
 
     suspend fun setCellularStreamingQuality(quality: StreamingQuality) {
-        context.dataStore.edit { it[Keys.CELLULAR_STREAMING_QUALITY] = quality.name }
+        dataStore.edit { it[Keys.CELLULAR_STREAMING_QUALITY] = quality.name }
     }
 
     suspend fun setShowWatchedCheckmark(enabled: Boolean) {
-        context.dataStore.edit { it[Keys.SHOW_WATCHED_CHECKMARK] = enabled }
+        dataStore.edit { it[Keys.SHOW_WATCHED_CHECKMARK] = enabled }
     }
 
     suspend fun setDefaultLibrarySortOrder(libraryId: String, order: String) {
-        context.dataStore.edit { prefs ->
+        dataStore.edit { prefs ->
             val current = prefs[Keys.DEFAULT_LIBRARY_SORT_ORDERS]?.let {
                 try { json.decodeFromString<Map<String, String>>(it) } catch (_: Exception) { emptyMap() }
             } ?: emptyMap()
@@ -1904,7 +1803,7 @@ class UserPreferencesStore @Inject constructor(
     }
 
     suspend fun setLibraryViewMode(libraryId: String, viewMode: String) {
-        context.dataStore.edit { prefs ->
+        dataStore.edit { prefs ->
             val current = prefs[Keys.LIBRARY_VIEW_MODES]?.let {
                 try { json.decodeFromString<Map<String, String>>(it) } catch (_: Exception) { emptyMap() }
             } ?: emptyMap()
@@ -1914,7 +1813,7 @@ class UserPreferencesStore @Inject constructor(
     }
 
     suspend fun setLibraryFilters(libraryId: String, filters: String) {
-        context.dataStore.edit { prefs ->
+        dataStore.edit { prefs ->
             val current = prefs[Keys.LIBRARY_FILTERS]?.let {
                 try { json.decodeFromString<Map<String, String>>(it) } catch (_: Exception) { emptyMap() }
             } ?: emptyMap()
@@ -1924,71 +1823,71 @@ class UserPreferencesStore @Inject constructor(
     }
 
     suspend fun setKeepScreenOnDuringVideo(enabled: Boolean) {
-        context.dataStore.edit { it[Keys.KEEP_SCREEN_ON_DURING_VIDEO] = enabled }
+        dataStore.edit { it[Keys.KEEP_SCREEN_ON_DURING_VIDEO] = enabled }
     }
 
     suspend fun setDownloadQuality(quality: DownloadQuality) {
-        context.dataStore.edit { it[Keys.DOWNLOAD_QUALITY] = quality.name }
+        dataStore.edit { it[Keys.DOWNLOAD_QUALITY] = quality.name }
     }
 
     suspend fun setSmartDownloadsEnabled(enabled: Boolean) {
-        context.dataStore.edit { it[Keys.SMART_DOWNLOADS_ENABLED] = enabled }
+        dataStore.edit { it[Keys.SMART_DOWNLOADS_ENABLED] = enabled }
     }
 
     suspend fun setAutoDownloadNewEpisodes(enabled: Boolean) {
-        context.dataStore.edit { it[Keys.AUTO_DOWNLOAD_NEW_EPISODES] = enabled }
+        dataStore.edit { it[Keys.AUTO_DOWNLOAD_NEW_EPISODES] = enabled }
     }
 
     suspend fun setIncognitoModeEnabled(enabled: Boolean) {
-        context.dataStore.edit { it[Keys.INCOGNITO_MODE_ENABLED] = enabled }
+        dataStore.edit { it[Keys.INCOGNITO_MODE_ENABLED] = enabled }
     }
 
     suspend fun setShowTimeRemaining(enabled: Boolean) {
-        context.dataStore.edit { it[Keys.SHOW_TIME_REMAINING] = enabled }
+        dataStore.edit { it[Keys.SHOW_TIME_REMAINING] = enabled }
     }
 
     suspend fun setShowClockOnHome(enabled: Boolean) {
-        context.dataStore.edit { it[Keys.SHOW_CLOCK_ON_HOME] = enabled }
+        dataStore.edit { it[Keys.SHOW_CLOCK_ON_HOME] = enabled }
     }
 
     suspend fun setShowSettingsInHomeSearch(enabled: Boolean) {
-        context.dataStore.edit { it[Keys.SHOW_SETTINGS_IN_HOME_SEARCH] = enabled }
+        dataStore.edit { it[Keys.SHOW_SETTINGS_IN_HOME_SEARCH] = enabled }
     }
 
     suspend fun setShowClockInPlayer(enabled: Boolean) {
-        context.dataStore.edit { it[Keys.SHOW_CLOCK_IN_PLAYER] = enabled }
+        dataStore.edit { it[Keys.SHOW_CLOCK_IN_PLAYER] = enabled }
     }
 
     suspend fun setPauseOnAudioFocusLoss(enabled: Boolean) {
-        context.dataStore.edit { it[Keys.PAUSE_ON_AUDIO_FOCUS_LOSS] = enabled }
+        dataStore.edit { it[Keys.PAUSE_ON_AUDIO_FOCUS_LOSS] = enabled }
     }
 
     suspend fun setDuckOnTransientFocusLoss(enabled: Boolean) {
-        context.dataStore.edit { it[Keys.DUCK_ON_TRANSIENT_FOCUS_LOSS] = enabled }
+        dataStore.edit { it[Keys.DUCK_ON_TRANSIENT_FOCUS_LOSS] = enabled }
     }
 
     suspend fun setVolumeBoostEnabled(enabled: Boolean) {
-        context.dataStore.edit { it[Keys.VOLUME_BOOST_ENABLED] = enabled }
+        dataStore.edit { it[Keys.VOLUME_BOOST_ENABLED] = enabled }
     }
 
     suspend fun setVolumeBoostGain(gain: Int) {
-        context.dataStore.edit { it[Keys.VOLUME_BOOST_GAIN] = gain }
+        dataStore.edit { it[Keys.VOLUME_BOOST_GAIN] = gain }
     }
 
     suspend fun setAudioLyricsVisible(enabled: Boolean) {
-        context.dataStore.edit { it[Keys.AUDIO_LYRICS_VISIBLE] = enabled }
+        dataStore.edit { it[Keys.AUDIO_LYRICS_VISIBLE] = enabled }
     }
 
     suspend fun setShowShareMediaOption(enabled: Boolean) {
-        context.dataStore.edit { it[Keys.SHOW_SHARE_MEDIA_OPTION] = enabled }
+        dataStore.edit { it[Keys.SHOW_SHARE_MEDIA_OPTION] = enabled }
     }
 
     suspend fun setShowExternalRatings(enabled: Boolean) {
-        context.dataStore.edit { it[Keys.SHOW_EXTERNAL_RATINGS] = enabled }
+        dataStore.edit { it[Keys.SHOW_EXTERNAL_RATINGS] = enabled }
     }
 
     suspend fun clearAll() {
-        context.dataStore.edit { it.clear() }
+        dataStore.edit { it.clear() }
     }
 
     /**
@@ -1998,12 +1897,7 @@ class UserPreferencesStore @Inject constructor(
      * device id stays stable for Jellyfin session tracking and the user does
      * not lose all preferences on re-login.
      */
-    suspend fun clearSession() {
-        context.dataStore.edit { prefs ->
-            prefs.remove(Keys.ACTIVE_SERVER_ID)
-            prefs.remove(Keys.ACTIVE_USER_ID)
-        }
-    }
+    suspend fun clearSession() = serverIdentityStore.clearSession()
 
     fun verifyPin(input: String, storedHash: String?): Boolean = PinHasher.verify(input, storedHash)
 
@@ -2017,152 +1911,151 @@ class UserPreferencesStore @Inject constructor(
      */
     fun pinHashNeedsMigration(storedHash: String?): Boolean = PinHasher.needsMigration(storedHash)
 
-    suspend fun setContinueWatching(items: List<com.raulshma.jellyplay.core.model.MediaItem>) {
-        context.dataStore.edit { it[Keys.CONTINUE_WATCHING] = json.encodeToString(items) }
-    }
+    suspend fun setContinueWatching(items: List<com.raulshma.jellyplay.core.model.MediaItem>) =
+        widgetDataStore.setContinueWatching(items)
 
     suspend fun setAutoLockTimerMs(ms: Long) {
-        context.dataStore.edit { it[Keys.AUTO_LOCK_TIMER_MS] = ms }
+        dataStore.edit { it[Keys.AUTO_LOCK_TIMER_MS] = ms }
     }
 
     suspend fun setDialogueBoostEnabled(enabled: Boolean) {
-        context.dataStore.edit { it[Keys.DIALOGUE_BOOST_ENABLED] = enabled }
+        dataStore.edit { it[Keys.DIALOGUE_BOOST_ENABLED] = enabled }
     }
 
     suspend fun setDialogueBoostStrength(strength: EffectStrength) {
-        context.dataStore.edit { it[Keys.DIALOGUE_BOOST_STRENGTH] = strength.name }
+        dataStore.edit { it[Keys.DIALOGUE_BOOST_STRENGTH] = strength.name }
     }
 
     suspend fun setEqualizerEnabled(enabled: Boolean) {
-        context.dataStore.edit { it[Keys.EQUALIZER_ENABLED] = enabled }
+        dataStore.edit { it[Keys.EQUALIZER_ENABLED] = enabled }
     }
 
     suspend fun setEqualizerSettings(settings: EqualizerSettings) {
-        context.dataStore.edit { it[Keys.EQUALIZER_SETTINGS] = json.encodeToString(settings) }
+        dataStore.edit { it[Keys.EQUALIZER_SETTINGS] = json.encodeToString(settings) }
     }
 
     suspend fun setAudioDelay(ms: Long) {
-        context.dataStore.edit { it[Keys.AUDIO_DELAY_MS] = ms }
+        dataStore.edit { it[Keys.AUDIO_DELAY_MS] = ms }
     }
 
     suspend fun setDecoderMode(mode: DecoderMode) {
-        context.dataStore.edit { it[Keys.DECODER_MODE] = mode.name }
+        dataStore.edit { it[Keys.DECODER_MODE] = mode.name }
     }
 
     suspend fun setAudioPassthrough(enabled: Boolean) {
-        context.dataStore.edit { it[Keys.AUDIO_PASSTHROUGH] = enabled }
+        dataStore.edit { it[Keys.AUDIO_PASSTHROUGH] = enabled }
     }
 
     suspend fun setFrameRateMatching(enabled: Boolean) {
-        context.dataStore.edit { it[Keys.FRAME_RATE_MATCHING] = enabled }
+        dataStore.edit { it[Keys.FRAME_RATE_MATCHING] = enabled }
     }
 
     suspend fun setNightModeEnabled(enabled: Boolean) {
-        context.dataStore.edit { it[Keys.NIGHT_MODE_ENABLED] = enabled }
+        dataStore.edit { it[Keys.NIGHT_MODE_ENABLED] = enabled }
     }
 
     suspend fun setNightModeStrength(strength: EffectStrength) {
-        context.dataStore.edit { it[Keys.NIGHT_MODE_STRENGTH] = strength.name }
+        dataStore.edit { it[Keys.NIGHT_MODE_STRENGTH] = strength.name }
     }
 
     suspend fun setHomeMode(mode: HomeMode) {
-        context.dataStore.edit { it[Keys.HOME_MODE] = mode.name }
+        dataStore.edit { it[Keys.HOME_MODE] = mode.name }
     }
 
     suspend fun setVideoSeekDurationMs(ms: Long) {
-        context.dataStore.edit { it[Keys.VIDEO_SEEK_DURATION_MS] = ms }
+        dataStore.edit { it[Keys.VIDEO_SEEK_DURATION_MS] = ms }
     }
 
     suspend fun setVideoDefaultOrientation(mode: OrientationMode) {
-        context.dataStore.edit { it[Keys.VIDEO_DEFAULT_ORIENTATION] = mode.name }
+        dataStore.edit { it[Keys.VIDEO_DEFAULT_ORIENTATION] = mode.name }
     }
 
     suspend fun setVideoControlsTimeoutMs(ms: Long) {
-        context.dataStore.edit { it[Keys.VIDEO_CONTROLS_TIMEOUT_MS] = ms }
+        dataStore.edit { it[Keys.VIDEO_CONTROLS_TIMEOUT_MS] = ms }
     }
 
     suspend fun setVideoGesturesEnabled(enabled: Boolean) {
-        context.dataStore.edit { it[Keys.VIDEO_GESTURES_ENABLED] = enabled }
+        dataStore.edit { it[Keys.VIDEO_GESTURES_ENABLED] = enabled }
     }
 
     suspend fun setVideoSkipBackOnResumeMs(ms: Long) {
-        context.dataStore.edit { it[Keys.VIDEO_SKIP_BACK_ON_RESUME_MS] = ms.coerceAtLeast(0L) }
+        dataStore.edit { it[Keys.VIDEO_SKIP_BACK_ON_RESUME_MS] = ms.coerceAtLeast(0L) }
     }
 
     suspend fun setVideoPassOutProtectionHours(hours: Int) {
-        context.dataStore.edit { it[Keys.VIDEO_PASS_OUT_PROTECTION_HOURS] = hours.coerceAtLeast(0) }
+        dataStore.edit { it[Keys.VIDEO_PASS_OUT_PROTECTION_HOURS] = hours.coerceAtLeast(0) }
     }
 
     suspend fun setVideoHoldSpeedEnabled(enabled: Boolean) {
-        context.dataStore.edit { it[Keys.VIDEO_HOLD_SPEED_ENABLED] = enabled }
+        dataStore.edit { it[Keys.VIDEO_HOLD_SPEED_ENABLED] = enabled }
     }
 
     suspend fun setVideoHoldSpeedMultiplier(multiplier: Float) {
-        context.dataStore.edit { it[Keys.VIDEO_HOLD_SPEED_MULTIPLIER] = multiplier }
+        dataStore.edit { it[Keys.VIDEO_HOLD_SPEED_MULTIPLIER] = multiplier }
     }
 
     suspend fun setVideoDefaultSpeed(speed: Float) {
-        context.dataStore.edit { it[Keys.VIDEO_DEFAULT_SPEED] = speed }
+        dataStore.edit { it[Keys.VIDEO_DEFAULT_SPEED] = speed }
     }
 
     suspend fun setVideoDefaultAspectRatio(ratio: String) {
-        context.dataStore.edit { it[Keys.VIDEO_DEFAULT_ASPECT_RATIO] = ratio }
+        dataStore.edit { it[Keys.VIDEO_DEFAULT_ASPECT_RATIO] = ratio }
     }
 
     suspend fun setVideoAutoplayNext(enabled: Boolean) {
-        context.dataStore.edit { it[Keys.VIDEO_AUTOPLAY_NEXT] = enabled }
+        dataStore.edit { it[Keys.VIDEO_AUTOPLAY_NEXT] = enabled }
     }
 
     suspend fun setTrailerAutoplay(enabled: Boolean) {
-        context.dataStore.edit { it[Keys.TRAILER_AUTOPLAY] = enabled }
+        dataStore.edit { it[Keys.TRAILER_AUTOPLAY] = enabled }
     }
 
     suspend fun setCinemaModeEnabled(enabled: Boolean) {
-        context.dataStore.edit { it[Keys.CINEMA_MODE_ENABLED] = enabled }
+        dataStore.edit { it[Keys.CINEMA_MODE_ENABLED] = enabled }
     }
 
     suspend fun setVideoSwipeSeekMaxMs(ms: Long) {
-        context.dataStore.edit { it[Keys.VIDEO_SWIPE_SEEK_MAX_MS] = ms }
+        dataStore.edit { it[Keys.VIDEO_SWIPE_SEEK_MAX_MS] = ms }
     }
 
     suspend fun setVideoRememberBrightness(enabled: Boolean) {
-        context.dataStore.edit { it[Keys.VIDEO_REMEMBER_BRIGHTNESS] = enabled }
+        dataStore.edit { it[Keys.VIDEO_REMEMBER_BRIGHTNESS] = enabled }
     }
 
     suspend fun setVideoBrightnessLevel(level: Float) {
-        context.dataStore.edit { it[Keys.VIDEO_BRIGHTNESS_LEVEL] = level }
+        dataStore.edit { it[Keys.VIDEO_BRIGHTNESS_LEVEL] = level }
     }
 
     suspend fun setAudioDefaultSpeed(speed: Float) {
-        context.dataStore.edit { it[Keys.AUDIO_DEFAULT_SPEED] = speed }
+        dataStore.edit { it[Keys.AUDIO_DEFAULT_SPEED] = speed }
     }
 
     suspend fun setAudioNightModeVolume(volume: Float) {
-        context.dataStore.edit { it[Keys.AUDIO_NIGHT_MODE_VOLUME] = volume }
+        dataStore.edit { it[Keys.AUDIO_NIGHT_MODE_VOLUME] = volume }
     }
 
     suspend fun setAudioNightModeGain(gain: Int) {
-        context.dataStore.edit { it[Keys.AUDIO_NIGHT_MODE_GAIN] = gain }
+        dataStore.edit { it[Keys.AUDIO_NIGHT_MODE_GAIN] = gain }
     }
 
     suspend fun setAudioSkipPreviousThresholdMs(ms: Long) {
-        context.dataStore.edit { it[Keys.AUDIO_SKIP_PREVIOUS_THRESHOLD_MS] = ms }
+        dataStore.edit { it[Keys.AUDIO_SKIP_PREVIOUS_THRESHOLD_MS] = ms }
     }
 
     suspend fun setAudioAutoplayNext(enabled: Boolean) {
-        context.dataStore.edit { it[Keys.AUDIO_AUTOPLAY_NEXT] = enabled }
+        dataStore.edit { it[Keys.AUDIO_AUTOPLAY_NEXT] = enabled }
     }
 
     suspend fun setTrickplayEnabled(enabled: Boolean) {
-        context.dataStore.edit { it[Keys.TRICKPLAY_ENABLED] = enabled }
+        dataStore.edit { it[Keys.TRICKPLAY_ENABLED] = enabled }
     }
 
     suspend fun setTrickplayOnSeekGesture(enabled: Boolean) {
-        context.dataStore.edit { it[Keys.TRICKPLAY_ON_SEEK_GESTURE] = enabled }
+        dataStore.edit { it[Keys.TRICKPLAY_ON_SEEK_GESTURE] = enabled }
     }
 
     suspend fun setSegmentBehavior(type: MediaSegmentType, behavior: SegmentBehavior) {
-        context.dataStore.edit { prefs ->
+        dataStore.edit { prefs ->
             val current = readSegmentBehaviors(prefs).toMutableMap()
             current[type] = behavior
             prefs[Keys.SEGMENT_BEHAVIORS] = json.encodeToString(
@@ -2172,157 +2065,157 @@ class UserPreferencesStore @Inject constructor(
     }
 
     suspend fun setVideoEpisodeBrowserEnabled(enabled: Boolean) {
-        context.dataStore.edit { it[Keys.VIDEO_EPISODE_BROWSER_ENABLED] = enabled }
+        dataStore.edit { it[Keys.VIDEO_EPISODE_BROWSER_ENABLED] = enabled }
     }
 
     suspend fun setVideoShowPlaybackMetadata(enabled: Boolean) {
-        context.dataStore.edit { it[Keys.VIDEO_SHOW_PLAYBACK_METADATA] = enabled }
+        dataStore.edit { it[Keys.VIDEO_SHOW_PLAYBACK_METADATA] = enabled }
     }
 
     suspend fun setVideoPreloadBufferSize(size: PreloadBufferSize) {
-        context.dataStore.edit { it[Keys.VIDEO_PRELOAD_BUFFER_SIZE] = size.name }
+        dataStore.edit { it[Keys.VIDEO_PRELOAD_BUFFER_SIZE] = size.name }
     }
 
     suspend fun setAudioPreloadBufferSize(size: PreloadBufferSize) {
-        context.dataStore.edit { it[Keys.AUDIO_PRELOAD_BUFFER_SIZE] = size.name }
+        dataStore.edit { it[Keys.AUDIO_PRELOAD_BUFFER_SIZE] = size.name }
     }
 
     suspend fun setAudioCachingEnabled(enabled: Boolean) {
-        context.dataStore.edit { it[Keys.AUDIO_CACHING_ENABLED] = enabled }
+        dataStore.edit { it[Keys.AUDIO_CACHING_ENABLED] = enabled }
     }
 
     suspend fun setAudioCacheSizeMb(sizeMb: Int) {
-        context.dataStore.edit { it[Keys.AUDIO_CACHE_SIZE_MB] = sizeMb }
+        dataStore.edit { it[Keys.AUDIO_CACHE_SIZE_MB] = sizeMb }
     }
 
     suspend fun setAudioPrefetchLookahead(lookahead: Int) {
-        context.dataStore.edit { it[Keys.AUDIO_PREFETCH_LOOKAHEAD] = lookahead }
+        dataStore.edit { it[Keys.AUDIO_PREFETCH_LOOKAHEAD] = lookahead }
     }
 
     suspend fun setAudioPrefetchBackfill(backfill: Int) {
-        context.dataStore.edit { it[Keys.AUDIO_PREFETCH_BACKFILL] = backfill }
+        dataStore.edit { it[Keys.AUDIO_PREFETCH_BACKFILL] = backfill }
     }
 
     suspend fun setAudioCacheNetworkPolicy(policy: AudioCacheNetworkPolicy) {
-        context.dataStore.edit { it[Keys.AUDIO_CACHE_NETWORK_POLICY] = policy.name }
+        dataStore.edit { it[Keys.AUDIO_CACHE_NETWORK_POLICY] = policy.name }
     }
 
     suspend fun setAudioCacheCellularMonthlyCapMb(capMb: Int) {
-        context.dataStore.edit { it[Keys.AUDIO_CACHE_CELLULAR_MONTHLY_CAP_MB] = capMb }
+        dataStore.edit { it[Keys.AUDIO_CACHE_CELLULAR_MONTHLY_CAP_MB] = capMb }
     }
 
     suspend fun setAudioNormalizationMode(mode: AudioNormalizationMode) {
-        context.dataStore.edit { it[Keys.AUDIO_NORMALIZATION_MODE] = mode.name }
+        dataStore.edit { it[Keys.AUDIO_NORMALIZATION_MODE] = mode.name }
     }
 
     suspend fun setAudioNormalizationEnabled(enabled: Boolean) {
-        context.dataStore.edit { it[Keys.AUDIO_NORMALIZATION_ENABLED] = enabled }
+        dataStore.edit { it[Keys.AUDIO_NORMALIZATION_ENABLED] = enabled }
     }
 
     suspend fun setReplayGainPreAmpDb(db: Float) {
-        context.dataStore.edit { it[Keys.REPLAYGAIN_PRE_AMP_DB] = db }
+        dataStore.edit { it[Keys.REPLAYGAIN_PRE_AMP_DB] = db }
     }
 
     suspend fun setChannelMixMode(mode: ChannelMixMode) {
-        context.dataStore.edit { it[Keys.CHANNEL_MIX_MODE] = mode.name }
+        dataStore.edit { it[Keys.CHANNEL_MIX_MODE] = mode.name }
     }
 
     suspend fun setChannelMixEnabled(enabled: Boolean) {
-        context.dataStore.edit { it[Keys.CHANNEL_MIX_ENABLED] = enabled }
+        dataStore.edit { it[Keys.CHANNEL_MIX_ENABLED] = enabled }
     }
 
     suspend fun setGaplessEnabled(enabled: Boolean) {
-        context.dataStore.edit { it[Keys.AUDIO_GAPLESS_ENABLED] = enabled }
+        dataStore.edit { it[Keys.AUDIO_GAPLESS_ENABLED] = enabled }
     }
 
     suspend fun setCrossfadeDurationMs(ms: Long) {
-        context.dataStore.edit { it[Keys.AUDIO_CROSSFADE_DURATION_MS] = ms }
+        dataStore.edit { it[Keys.AUDIO_CROSSFADE_DURATION_MS] = ms }
     }
 
     suspend fun setSleepTimerDurationMs(ms: Long) {
-        context.dataStore.edit { it[Keys.SLEEP_TIMER_DURATION_MS] = ms }
+        dataStore.edit { it[Keys.SLEEP_TIMER_DURATION_MS] = ms }
     }
 
     suspend fun setSleepTimerEndOfEpisode(enabled: Boolean) {
-        context.dataStore.edit { it[Keys.SLEEP_TIMER_END_OF_EPISODE] = enabled }
+        dataStore.edit { it[Keys.SLEEP_TIMER_END_OF_EPISODE] = enabled }
     }
 
     suspend fun setDreamImageCategories(categories: Set<DreamImageCategory>) {
-        context.dataStore.edit { it[Keys.DREAM_IMAGE_CATEGORIES] = json.encodeToString(categories) }
+        dataStore.edit { it[Keys.DREAM_IMAGE_CATEGORIES] = json.encodeToString(categories) }
     }
 
     suspend fun setDreamSlideshowIntervalMs(ms: Long) {
-        context.dataStore.edit { it[Keys.DREAM_SLIDESHOW_INTERVAL_MS] = ms }
+        dataStore.edit { it[Keys.DREAM_SLIDESHOW_INTERVAL_MS] = ms }
     }
 
     suspend fun setDreamKenBurnsEnabled(enabled: Boolean) {
-        context.dataStore.edit { it[Keys.DREAM_KEN_BURNS_ENABLED] = enabled }
+        dataStore.edit { it[Keys.DREAM_KEN_BURNS_ENABLED] = enabled }
     }
 
     suspend fun setDreamTransitionStyle(style: DreamTransitionStyle) {
-        context.dataStore.edit { it[Keys.DREAM_TRANSITION_STYLE] = style.name }
+        dataStore.edit { it[Keys.DREAM_TRANSITION_STYLE] = style.name }
     }
 
     suspend fun setDreamShowTitle(enabled: Boolean) {
-        context.dataStore.edit { it[Keys.DREAM_SHOW_TITLE] = enabled }
+        dataStore.edit { it[Keys.DREAM_SHOW_TITLE] = enabled }
     }
 
     suspend fun setEqualizerPreset(preset: EqualizerPreset) {
-        context.dataStore.edit { it[Keys.EQUALIZER_PRESET] = preset.name }
+        dataStore.edit { it[Keys.EQUALIZER_PRESET] = preset.name }
     }
 
     suspend fun setBassBoostEnabled(enabled: Boolean) {
-        context.dataStore.edit { it[Keys.BASS_BOOST_ENABLED] = enabled }
+        dataStore.edit { it[Keys.BASS_BOOST_ENABLED] = enabled }
     }
 
     suspend fun setBassBoostStrength(strength: EffectStrength) {
-        context.dataStore.edit { it[Keys.BASS_BOOST_STRENGTH] = strength.name }
+        dataStore.edit { it[Keys.BASS_BOOST_STRENGTH] = strength.name }
     }
 
     suspend fun setVirtualizerEnabled(enabled: Boolean) {
-        context.dataStore.edit { it[Keys.VIRTUALIZER_ENABLED] = enabled }
+        dataStore.edit { it[Keys.VIRTUALIZER_ENABLED] = enabled }
     }
 
     suspend fun setVirtualizerStrength(strength: Int) {
-        context.dataStore.edit { it[Keys.VIRTUALIZER_STRENGTH] = strength }
+        dataStore.edit { it[Keys.VIRTUALIZER_STRENGTH] = strength }
     }
 
     suspend fun setReverbPreset(preset: ReverbPreset) {
-        context.dataStore.edit { it[Keys.REVERB_PRESET] = preset.name }
+        dataStore.edit { it[Keys.REVERB_PRESET] = preset.name }
     }
 
     suspend fun setLrBalance(balance: Float) {
-        context.dataStore.edit { it[Keys.LR_BALANCE] = balance }
+        dataStore.edit { it[Keys.LR_BALANCE] = balance }
     }
 
     suspend fun setAutoEqByGenre(enabled: Boolean) {
-        context.dataStore.edit { it[Keys.AUTO_EQ_BY_GENRE] = enabled }
+        dataStore.edit { it[Keys.AUTO_EQ_BY_GENRE] = enabled }
     }
 
     suspend fun setPitchSemitones(semitones: Float) {
-        context.dataStore.edit { it[Keys.PITCH_SEMITONES] = semitones }
+        dataStore.edit { it[Keys.PITCH_SEMITONES] = semitones }
     }
 
     suspend fun setWifiOnlyDownloads(enabled: Boolean) {
-        context.dataStore.edit { it[Keys.WIFI_ONLY_DOWNLOADS] = enabled }
+        dataStore.edit { it[Keys.WIFI_ONLY_DOWNLOADS] = enabled }
     }
 
     suspend fun setDownloadConnections(count: Int) {
-        context.dataStore.edit { it[Keys.DOWNLOAD_CONNECTIONS] = count }
+        dataStore.edit { it[Keys.DOWNLOAD_CONNECTIONS] = count }
     }
 
     suspend fun setMaxConcurrentDownloads(count: Int) {
-        context.dataStore.edit { it[Keys.MAX_CONCURRENT_DOWNLOADS] = count.coerceIn(1, 6) }
+        dataStore.edit { it[Keys.MAX_CONCURRENT_DOWNLOADS] = count.coerceIn(1, 6) }
     }
 
     suspend fun setEnabledHomeSectionTypes(types: Set<HomeSectionType>) {
-        context.dataStore.edit {
+        dataStore.edit {
             it[Keys.HOME_ENABLED_SECTION_TYPES] = json.encodeToString(types.map { t -> t.name }.toSet())
         }
     }
 
     suspend fun setHomeSectionOrder(order: List<HomeSectionType>) {
-        context.dataStore.edit {
+        dataStore.edit {
             val normalized = buildList {
                 addAll(order.filter { it in HomeSectionType.CONFIGURABLE }.distinct())
                 addAll(HomeSectionType.CONFIGURABLE.filterNot { it in this })
@@ -2335,209 +2228,125 @@ class UserPreferencesStore @Inject constructor(
         // Drop entries with empty disabled-sets so the map stays clean and
         // "fully enabled" libraries simply have no key.
         val cleaned = overrides.filterValues { it.isNotEmpty() }
-        context.dataStore.edit {
+        dataStore.edit {
             it[Keys.HOME_LIBRARY_SECTION_OVERRIDES] = json.encodeToString(cleaned)
         }
     }
 
     suspend fun setNavBarShowLabels(show: Boolean) {
-        context.dataStore.edit { it[Keys.NAV_BAR_SHOW_LABELS] = show }
+        dataStore.edit { it[Keys.NAV_BAR_SHOW_LABELS] = show }
     }
 
     suspend fun setHideBottomNavOnScroll(hide: Boolean) {
-        context.dataStore.edit { it[Keys.HIDE_BOTTOM_NAV_ON_SCROLL] = hide }
+        dataStore.edit { it[Keys.HIDE_BOTTOM_NAV_ON_SCROLL] = hide }
     }
 
     suspend fun setHomeHeroEnabled(enabled: Boolean) {
-        context.dataStore.edit { it[Keys.HOME_HERO_ENABLED] = enabled }
+        dataStore.edit { it[Keys.HOME_HERO_ENABLED] = enabled }
     }
 
     suspend fun setOnboardingCompleted(completed: Boolean) {
-        context.dataStore.edit { it[Keys.ONBOARDING_COMPLETED] = completed }
+        dataStore.edit { it[Keys.ONBOARDING_COMPLETED] = completed }
     }
 
     suspend fun setMpvConfig(config: MpvEngineConfig) {
-        context.dataStore.edit { it[Keys.MPV_CONFIG] = json.encodeToString(config) }
+        dataStore.edit { it[Keys.MPV_CONFIG] = json.encodeToString(config) }
     }
 
     suspend fun setLibVlcConfig(config: LibVlcEngineConfig) {
-        context.dataStore.edit { it[Keys.LIBVLC_CONFIG] = json.encodeToString(config) }
+        dataStore.edit { it[Keys.LIBVLC_CONFIG] = json.encodeToString(config) }
     }
 
     suspend fun setExoPlayerConfig(config: ExoPlayerEngineConfig) {
-        context.dataStore.edit { it[Keys.EXO_CONFIG] = json.encodeToString(config) }
+        dataStore.edit { it[Keys.EXO_CONFIG] = json.encodeToString(config) }
     }
 
     suspend fun setPerformanceMode(enabled: Boolean) {
-        context.dataStore.edit { it[Keys.PERFORMANCE_MODE] = enabled }
+        dataStore.edit { it[Keys.PERFORMANCE_MODE] = enabled }
     }
 
-    val continueWatching: kotlinx.coroutines.flow.Flow<List<com.raulshma.jellyplay.core.model.MediaItem>> =
-        sharedPrefs.map { prefs ->
-            prefs[Keys.CONTINUE_WATCHING]?.let {
-                try {
-                    json.decodeFromString<List<com.raulshma.jellyplay.core.model.MediaItem>>(it)
-                } catch (_: Exception) { emptyList() }
-            } ?: emptyList()
-        }
+    val continueWatching: kotlinx.coroutines.flow.Flow<List<com.raulshma.jellyplay.core.model.MediaItem>>
+        get() = widgetDataStore.continueWatching
 
-    val widgetConfig: kotlinx.coroutines.flow.Flow<WidgetConfig> =
-        sharedPrefs.map { prefs ->
-            prefs[Keys.WIDGET_CONFIG]?.let {
-                try { json.decodeFromString<WidgetConfig>(it) } catch (_: Exception) { null }
-            } ?: WidgetConfig()
-        }
+    val widgetConfig: kotlinx.coroutines.flow.Flow<WidgetConfig>
+        get() = widgetDataStore.widgetConfig
 
-    val libraryWidgetItems: kotlinx.coroutines.flow.Flow<List<LibraryWidgetItem>> =
-        sharedPrefs.map { prefs ->
-            prefs[Keys.LIBRARY_WIDGET_ITEMS]?.let {
-                try { json.decodeFromString<List<LibraryWidgetItem>>(it) } catch (_: Exception) { emptyList() }
-            } ?: emptyList()
-        }
+    val libraryWidgetItems: kotlinx.coroutines.flow.Flow<List<LibraryWidgetItem>>
+        get() = widgetDataStore.libraryWidgetItems
 
-    val libraryWidgetVersion: kotlinx.coroutines.flow.Flow<Long> =
-        sharedPrefs.map { it[Keys.LIBRARY_WIDGET_VERSION] ?: 0L }.distinctUntilChanged()
+    val libraryWidgetVersion: kotlinx.coroutines.flow.Flow<Long>
+        get() = widgetDataStore.libraryWidgetVersion
 
-    val libraryWidgetUpdatedAtMs: kotlinx.coroutines.flow.Flow<Long> =
-        sharedPrefs.map { it[Keys.LIBRARY_WIDGET_UPDATED_AT_MS] ?: 0L }.distinctUntilChanged()
+    val libraryWidgetUpdatedAtMs: kotlinx.coroutines.flow.Flow<Long>
+        get() = widgetDataStore.libraryWidgetUpdatedAtMs
 
-    val seerrWidgetItems: kotlinx.coroutines.flow.Flow<List<SeerrWidgetItem>> =
-        sharedPrefs.map { prefs ->
-            prefs[Keys.SEERR_WIDGET_ITEMS]?.let {
-                try { json.decodeFromString<List<SeerrWidgetItem>>(it) } catch (_: Exception) { emptyList() }
-            } ?: emptyList()
-        }
+    val seerrWidgetItems: kotlinx.coroutines.flow.Flow<List<SeerrWidgetItem>>
+        get() = widgetDataStore.seerrWidgetItems
 
-    val seerrWidgetVersion: kotlinx.coroutines.flow.Flow<Long> =
-        sharedPrefs.map { it[Keys.SEERR_WIDGET_VERSION] ?: 0L }.distinctUntilChanged()
+    val seerrWidgetVersion: kotlinx.coroutines.flow.Flow<Long>
+        get() = widgetDataStore.seerrWidgetVersion
 
-    val seerrWidgetUpdatedAtMs: kotlinx.coroutines.flow.Flow<Long> =
-        sharedPrefs.map { it[Keys.SEERR_WIDGET_UPDATED_AT_MS] ?: 0L }.distinctUntilChanged()
+    val seerrWidgetUpdatedAtMs: kotlinx.coroutines.flow.Flow<Long>
+        get() = widgetDataStore.seerrWidgetUpdatedAtMs
 
-    val widgetLastRefreshMs: kotlinx.coroutines.flow.Flow<Long> =
-        sharedPrefs.map { it[Keys.WIDGET_LAST_REFRESH_MS] ?: 0L }.distinctUntilChanged()
+    val widgetLastRefreshMs: kotlinx.coroutines.flow.Flow<Long>
+        get() = widgetDataStore.widgetLastRefreshMs
 
-    suspend fun setWidgetConfig(config: WidgetConfig) {
-        context.dataStore.edit { it[Keys.WIDGET_CONFIG] = json.encodeToString(config) }
-    }
+    suspend fun setWidgetConfig(config: WidgetConfig) = widgetDataStore.setWidgetConfig(config)
 
-    /**
-     * Returns the [WidgetConfig] for a specific widget instance, falling back
-     * to the global config if no per-widget config exists.
-     */
-    private val widgetConfigSnapshot: StateFlow<Pair<Map<Int, WidgetConfig>, WidgetConfig?>> =
-        sharedPrefs.map { prefs ->
-            val perWidget = prefs[Keys.WIDGET_CONFIGS]?.let { configsJson ->
-                try { json.decodeFromString<Map<Int, WidgetConfig>>(configsJson) }
-                catch (_: Exception) { null }
-            } ?: emptyMap()
-            val legacy = prefs[Keys.WIDGET_CONFIG]?.let {
-                try { json.decodeFromString<WidgetConfig>(it) } catch (_: Exception) { null }
-            }
-            perWidget to legacy
-        }.stateIn(scope, SharingStarted.Eagerly, emptyMap<Int, WidgetConfig>() to null)
-
-    fun getWidgetConfigForIdSync(appWidgetId: Int): WidgetConfig {
-        val (perWidget, legacy) = widgetConfigSnapshot.value
-        return perWidget[appWidgetId] ?: legacy ?: WidgetConfig()
-    }
+    fun getWidgetConfigForIdSync(appWidgetId: Int): WidgetConfig =
+        widgetDataStore.getWidgetConfigForIdSync(appWidgetId)
 
     fun getWidgetConfigForId(appWidgetId: Int): kotlinx.coroutines.flow.Flow<WidgetConfig> =
-        sharedPrefs.map { prefs ->
-            val perWidgetConfig = prefs[Keys.WIDGET_CONFIGS]?.let { configsJson ->
-                try {
-                    val configs = json.decodeFromString<Map<Int, WidgetConfig>>(configsJson)
-                    configs[appWidgetId]
-                } catch (_: Exception) { null }
-            }
-            perWidgetConfig ?: run {
-                prefs[Keys.WIDGET_CONFIG]?.let {
-                    try { json.decodeFromString<WidgetConfig>(it) } catch (_: Exception) { null }
-                } ?: WidgetConfig()
-            }
-        }
+        widgetDataStore.getWidgetConfigForId(appWidgetId)
 
-    /**
-     * Saves the [WidgetConfig] for a specific widget instance.
-     */
-    suspend fun setWidgetConfigForId(appWidgetId: Int, config: WidgetConfig) {
-        context.dataStore.edit { prefs ->
-            val current = prefs[Keys.WIDGET_CONFIGS]?.let {
-                try { json.decodeFromString<Map<Int, WidgetConfig>>(it) } catch (_: Exception) { emptyMap() }
-            } ?: emptyMap()
-            val next = current.toMutableMap().apply { put(appWidgetId, config) }
-            prefs[Keys.WIDGET_CONFIGS] = json.encodeToString(next)
-        }
-    }
+    suspend fun setWidgetConfigForId(appWidgetId: Int, config: WidgetConfig) =
+        widgetDataStore.setWidgetConfigForId(appWidgetId, config)
 
-    /**
-     * Removes the per-widget config for a specific widget instance (used on widget deletion).
-     */
-    suspend fun removeWidgetConfigForId(appWidgetId: Int) {
-        context.dataStore.edit { prefs ->
-            val current = prefs[Keys.WIDGET_CONFIGS]?.let {
-                try { json.decodeFromString<Map<Int, WidgetConfig>>(it) } catch (_: Exception) { emptyMap() }
-            } ?: emptyMap()
-            val next = current.toMutableMap().apply { remove(appWidgetId) }
-            prefs[Keys.WIDGET_CONFIGS] = json.encodeToString(next)
-        }
-    }
+    suspend fun removeWidgetConfigForId(appWidgetId: Int) =
+        widgetDataStore.removeWidgetConfigForId(appWidgetId)
 
     suspend fun setLibraryWidgetItems(
         items: List<LibraryWidgetItem>,
         version: Long,
         updatedAtMs: Long,
-    ) {
-        context.dataStore.edit { prefs ->
-            prefs[Keys.LIBRARY_WIDGET_ITEMS] = json.encodeToString(items)
-            prefs[Keys.LIBRARY_WIDGET_VERSION] = version
-            prefs[Keys.LIBRARY_WIDGET_UPDATED_AT_MS] = updatedAtMs
-        }
-    }
+    ) = widgetDataStore.setLibraryWidgetItems(items, version, updatedAtMs)
 
     suspend fun setSeerrWidgetItems(
         items: List<SeerrWidgetItem>,
         version: Long,
         updatedAtMs: Long,
-    ) {
-        context.dataStore.edit { prefs ->
-            prefs[Keys.SEERR_WIDGET_ITEMS] = json.encodeToString(items)
-            prefs[Keys.SEERR_WIDGET_VERSION] = version
-            prefs[Keys.SEERR_WIDGET_UPDATED_AT_MS] = updatedAtMs
-        }
-    }
+    ) = widgetDataStore.setSeerrWidgetItems(items, version, updatedAtMs)
 
-    suspend fun setWidgetLastRefreshMs(ms: Long) {
-        context.dataStore.edit { it[Keys.WIDGET_LAST_REFRESH_MS] = ms }
-    }
+    suspend fun setWidgetLastRefreshMs(ms: Long) = widgetDataStore.setWidgetLastRefreshMs(ms)
 
     suspend fun setNewsletterEnabled(enabled: Boolean) {
-        context.dataStore.edit { it[Keys.NEWSLETTER_ENABLED] = enabled }
+        dataStore.edit { it[Keys.NEWSLETTER_ENABLED] = enabled }
     }
 
     suspend fun setNewsletterDayOfWeek(day: Int) {
-        context.dataStore.edit { it[Keys.NEWSLETTER_DAY_OF_WEEK] = day }
+        dataStore.edit { it[Keys.NEWSLETTER_DAY_OF_WEEK] = day }
     }
 
     suspend fun setNewsletterLastViewed(timestampMs: Long) {
-        context.dataStore.edit { it[Keys.NEWSLETTER_LAST_VIEWED_MS] = timestampMs }
+        dataStore.edit { it[Keys.NEWSLETTER_LAST_VIEWED_MS] = timestampMs }
     }
 
     suspend fun setAccentColorSwatch(swatch: String) {
-        context.dataStore.edit { it[Keys.ACCENT_COLOR_SWATCH] = swatch }
+        dataStore.edit { it[Keys.ACCENT_COLOR_SWATCH] = swatch }
     }
 
     suspend fun setColorStyle(style: ColorStyle) {
-        context.dataStore.edit { it[Keys.COLOR_STYLE] = style.name }
+        dataStore.edit { it[Keys.COLOR_STYLE] = style.name }
     }
 
     suspend fun setLibraryViewMode(mode: LibraryViewMode) {
-        context.dataStore.edit { it[Keys.LIBRARY_VIEW_MODE] = mode.name }
+        dataStore.edit { it[Keys.LIBRARY_VIEW_MODE] = mode.name }
     }
 
     suspend fun restorePreferences(prefs: UserPreferences) {
         val json = ENCODE_DEFAULTS_JSON
-        context.dataStore.edit { settings ->
+        dataStore.edit { settings ->
             settings[Keys.PREFERRED_PLAYER] = prefs.preferredPlayer.name
             prefs.preferredSubtitleLanguage?.let { settings[Keys.PREFERRED_SUBTITLE_LANG] = it }
             settings[Keys.SUBTITLES_FORCED_ONLY] = prefs.subtitlesForcedOnly
@@ -2781,7 +2590,7 @@ class UserPreferencesStore @Inject constructor(
         .stateIn(scope, SharingStarted.Eagerly, NotificationPreferences())
 
     suspend fun updateNotificationPreferences(transform: (NotificationPreferences) -> NotificationPreferences) {
-        context.dataStore.edit { prefs ->
+        dataStore.edit { prefs ->
             val current = NotificationPreferences(
                 enabled = prefs[Keys.NOTIFICATIONS_ENABLED] ?: false,
                 checkFrequency = try {
@@ -2827,7 +2636,7 @@ class UserPreferencesStore @Inject constructor(
         }
 
     suspend fun addRecentDlnaDevice(device: DlnaDeviceRef) {
-        context.dataStore.edit { prefs ->
+        dataStore.edit { prefs ->
             val current = try {
                 prefs[Keys.RECENT_DLNA_DEVICES]?.let {
                     json.decodeFromString<List<DlnaDeviceRef>>(it)
@@ -2842,7 +2651,7 @@ class UserPreferencesStore @Inject constructor(
     }
 
     suspend fun removeRecentDlnaDevice(deviceId: String) {
-        context.dataStore.edit { prefs ->
+        dataStore.edit { prefs ->
             val current = try {
                 prefs[Keys.RECENT_DLNA_DEVICES]?.let {
                     json.decodeFromString<List<DlnaDeviceRef>>(it)
@@ -2853,67 +2662,67 @@ class UserPreferencesStore @Inject constructor(
     }
 
     suspend fun setDataSaverEnabled(enabled: Boolean) {
-        context.dataStore.edit { it[Keys.DATA_SAVER_ENABLED] = enabled }
+        dataStore.edit { it[Keys.DATA_SAVER_ENABLED] = enabled }
     }
 
     suspend fun setVerboseNetworkLogging(enabled: Boolean) {
-        context.dataStore.edit { it[Keys.VERBOSE_NETWORK_LOGGING] = enabled }
+        dataStore.edit { it[Keys.VERBOSE_NETWORK_LOGGING] = enabled }
     }
 
     suspend fun setNetworkTimeoutPreset(preset: NetworkTimeoutPreset) {
-        context.dataStore.edit { it[Keys.NETWORK_TIMEOUT_PRESET] = preset.name }
+        dataStore.edit { it[Keys.NETWORK_TIMEOUT_PRESET] = preset.name }
     }
 
     suspend fun setReduceMotionEnabled(enabled: Boolean) {
-        context.dataStore.edit { it[Keys.REDUCE_MOTION_ENABLED] = enabled }
+        dataStore.edit { it[Keys.REDUCE_MOTION_ENABLED] = enabled }
     }
 
     suspend fun setPreferAudioDescription(enabled: Boolean) {
-        context.dataStore.edit { it[Keys.PREFER_AUDIO_DESCRIPTION] = enabled }
+        dataStore.edit { it[Keys.PREFER_AUDIO_DESCRIPTION] = enabled }
     }
 
     suspend fun setHighContrastSubtitles(enabled: Boolean) {
-        context.dataStore.edit { it[Keys.HIGH_CONTRAST_SUBTITLES] = enabled }
+        dataStore.edit { it[Keys.HIGH_CONTRAST_SUBTITLES] = enabled }
     }
 
     suspend fun setHideSearchHistory(enabled: Boolean) {
-        context.dataStore.edit { it[Keys.HIDE_SEARCH_HISTORY] = enabled }
+        dataStore.edit { it[Keys.HIDE_SEARCH_HISTORY] = enabled }
     }
 
     suspend fun setBlueLightFilterEnabled(enabled: Boolean) {
-        context.dataStore.edit { it[Keys.BLUE_LIGHT_FILTER_ENABLED] = enabled }
+        dataStore.edit { it[Keys.BLUE_LIGHT_FILTER_ENABLED] = enabled }
     }
 
     suspend fun setBlueLightFilterStrength(strength: Float) {
-        context.dataStore.edit { it[Keys.BLUE_LIGHT_FILTER_STRENGTH] = strength }
+        dataStore.edit { it[Keys.BLUE_LIGHT_FILTER_STRENGTH] = strength }
     }
 
     suspend fun setTvZoomModePercent(percent: Float) {
-        context.dataStore.edit { it[Keys.TV_ZOOM_MODE_PERCENT] = percent }
+        dataStore.edit { it[Keys.TV_ZOOM_MODE_PERCENT] = percent }
     }
 
     suspend fun setRemoteControlEnabled(enabled: Boolean) {
-        context.dataStore.edit { it[Keys.REMOTE_CONTROL_ENABLED] = enabled }
+        dataStore.edit { it[Keys.REMOTE_CONTROL_ENABLED] = enabled }
     }
 
     suspend fun setMaxDownloadStorageGb(gb: Int) {
-        context.dataStore.edit { it[Keys.MAX_DOWNLOAD_STORAGE_GB] = gb }
+        dataStore.edit { it[Keys.MAX_DOWNLOAD_STORAGE_GB] = gb }
     }
 
     suspend fun setDownloadStorageLocation(location: String) {
-        context.dataStore.edit { it[Keys.DOWNLOAD_STORAGE_LOCATION] = location }
+        dataStore.edit { it[Keys.DOWNLOAD_STORAGE_LOCATION] = location }
     }
 
     suspend fun setAndroidTvWatchNextEnabled(enabled: Boolean) {
-        context.dataStore.edit { it[Keys.ANDROID_TV_WATCH_NEXT_ENABLED] = enabled }
+        dataStore.edit { it[Keys.ANDROID_TV_WATCH_NEXT_ENABLED] = enabled }
     }
 
     suspend fun setUserDataSyncEnabled(enabled: Boolean) {
-        context.dataStore.edit { it[Keys.USER_DATA_SYNC_ENABLED] = enabled }
+        dataStore.edit { it[Keys.USER_DATA_SYNC_ENABLED] = enabled }
     }
 
     suspend fun setSynthwaveMode(enabled: Boolean) {
-        context.dataStore.edit { prefs ->
+        dataStore.edit { prefs ->
             prefs[Keys.SYNTHWAVE_MODE] = enabled
             if (enabled) {
                 prefs[Keys.SOOTHING_MODE] = false
@@ -2923,11 +2732,11 @@ class UserPreferencesStore @Inject constructor(
     }
 
     suspend fun setSynthwaveAccent(accent: String) {
-        context.dataStore.edit { it[Keys.SYNTHWAVE_ACCENT] = accent }
+        dataStore.edit { it[Keys.SYNTHWAVE_ACCENT] = accent }
     }
 
     suspend fun setSoothingMode(enabled: Boolean) {
-        context.dataStore.edit { prefs ->
+        dataStore.edit { prefs ->
             prefs[Keys.SOOTHING_MODE] = enabled
             if (enabled) {
                 prefs[Keys.SYNTHWAVE_MODE] = false
@@ -2937,11 +2746,11 @@ class UserPreferencesStore @Inject constructor(
     }
 
     suspend fun setSoothingAccent(accent: String) {
-        context.dataStore.edit { it[Keys.SOOTHING_ACCENT] = accent }
+        dataStore.edit { it[Keys.SOOTHING_ACCENT] = accent }
     }
 
     suspend fun setMonochromeMode(enabled: Boolean) {
-        context.dataStore.edit { prefs ->
+        dataStore.edit { prefs ->
             prefs[Keys.MONOCHROME_MODE] = enabled
             if (enabled) {
                 prefs[Keys.SYNTHWAVE_MODE] = false
@@ -3022,7 +2831,7 @@ class UserPreferencesStore @Inject constructor(
             )
         }
 
-        context.dataStore.edit { prefs ->
+        dataStore.edit { prefs ->
             keysToReset.forEach { key ->
                 prefs.remove(key)
             }
@@ -3038,7 +2847,7 @@ class UserPreferencesStore @Inject constructor(
      * need a true factory reset must additionally sign out and clear those.
      */
     suspend fun clearAllPreferencesOnly() {
-        context.dataStore.edit { prefs ->
+        dataStore.edit { prefs ->
             prefs.clear()
         }
     }
