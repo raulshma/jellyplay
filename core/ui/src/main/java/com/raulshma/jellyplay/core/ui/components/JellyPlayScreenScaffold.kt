@@ -143,6 +143,7 @@ fun JellyPlayScreenScaffold(
             if (topBarStyle != TopBarStyle.None) {
                 val topAppBarColors = TopAppBarDefaults.topAppBarColors(
                     containerColor = Color.Transparent,
+                    scrolledContainerColor = Color.Transparent,
                 )
 
                 if (topBarStyle == TopBarStyle.Collapsing) {

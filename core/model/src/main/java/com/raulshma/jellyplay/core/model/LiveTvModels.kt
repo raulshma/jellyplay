@@ -93,18 +93,6 @@ data class LiveTvRecording(
     val status: DvrTimerStatus = DvrTimerStatus.COMPLETED,
 )
 
-/**
- * A recording-folder grouping (from `GET /LiveTv/Recordings/Folders`). Tapping
- * one navigates into its contents like any other library folder.
- */
-@Immutable
-@Serializable
-data class RecordingFolder(
-    val id: String,
-    val name: String,
-    val collectionType: String? = null,
-)
-
 /** EPG availability window returned by `GET /LiveTv/GuideInfo`. */
 @Immutable
 @Serializable

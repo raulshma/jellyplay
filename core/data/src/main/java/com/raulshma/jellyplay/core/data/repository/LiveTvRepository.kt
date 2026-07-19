@@ -8,7 +8,6 @@ import com.raulshma.jellyplay.core.model.LiveTvChannel
 import com.raulshma.jellyplay.core.model.LiveTvProgram
 import com.raulshma.jellyplay.core.model.LiveTvRecording
 import com.raulshma.jellyplay.core.model.ProgramFilters
-import com.raulshma.jellyplay.core.model.RecordingFolder
 
 interface LiveTvRepository {
 
@@ -50,8 +49,6 @@ interface LiveTvRepository {
         limit: Int? = null,
         isInProgress: Boolean? = null,
     ): Result<List<LiveTvRecording>>
-
-    suspend fun getRecordingFolders(): Result<List<RecordingFolder>>
 
     suspend fun getTimers(
         isActive: Boolean? = null,

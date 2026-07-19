@@ -42,24 +42,16 @@ data class PlaybackRequest(
     /**
      * Optional MIME type hint for the primary media item. When set, ExoPlayer
      * uses it in preference to URI-extension inference to pick the extractor,
-     * which is essential for downloaded files whose on-disk extension does not
-     * match their actual container (e.g. an MKV stream saved as `.mp4`).
+     * which is essential for downloaded files whose on-disk extension does
+     * not match their actual container (e.g. an MKV stream saved as `.mp4`).
      */
     val mimeType: String? = null,
-    /**
-     * `true` for Live TV / IPTV channels. Engines use this to apply live-aware
-     * configuration (ExoPlayer: `MediaItem.setLiveConfiguration` + a MIME hint
-     * so the HLS/MPEG-TS extractor is selected for the extension-less stream
-     * URL; no `seekTo` to a resume position). See
-     * [com.raulshma.jellyplay.feature.player.video.PlayerSessionManager].
-     */
-    val isLive: Boolean = false,
     /**
      * Server-reported total runtime in milliseconds, derived from the media
      * item's `runTimeTicks`. Used by engines as a duration fallback when the
      * demuxer cannot resolve one for HLS/transcoded streams (where mpv's
      * `duration` property is frequently 0 or only partially resolved). `0`
-     * when no server runtime is available (e.g. live / unknown-length items).
+     * when no server runtime is available (e.g. unknown-length items).
      */
     val serverDurationMs: Long = 0L,
 )

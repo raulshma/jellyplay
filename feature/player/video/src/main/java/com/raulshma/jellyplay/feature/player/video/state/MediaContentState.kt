@@ -18,7 +18,6 @@ data class MediaContentState(
     val people: List<PersonInfo> = emptyList(),
     val artworkUrl: String? = null,
     val lyricsLines: List<LyricsLine> = emptyList(),
-    val isLive: Boolean = false,
     val streamUrl: String? = null,
     val currentMediaSource: MediaSource? = null,
     val mediaStreams: List<MediaStream> = emptyList(),

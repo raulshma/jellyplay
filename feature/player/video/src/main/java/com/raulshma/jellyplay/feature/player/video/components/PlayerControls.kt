@@ -90,6 +90,16 @@ import com.raulshma.jellyplay.core.designsystem.theme.PointToPointEasing
 import com.raulshma.jellyplay.core.designsystem.theme.SyncStatusColors
 import com.raulshma.jellyplay.core.ui.animation.AnimationTokens
 import com.raulshma.jellyplay.core.ui.animation.horizontalFadingEdges
+import com.raulshma.jellyplay.core.ui.player.PlayerIconButton
+import com.raulshma.jellyplay.core.ui.player.playerBottomControlsEnter
+import com.raulshma.jellyplay.core.ui.player.playerBottomControlsExit
+import com.raulshma.jellyplay.core.ui.player.playerBottomScrim
+import com.raulshma.jellyplay.core.ui.player.playerPlayButtonEnter
+import com.raulshma.jellyplay.core.ui.player.playerPlayButtonExit
+import com.raulshma.jellyplay.core.ui.player.playerSeekbarDpSpec
+import com.raulshma.jellyplay.core.ui.player.playerTopControlsEnter
+import com.raulshma.jellyplay.core.ui.player.playerTopControlsExit
+import com.raulshma.jellyplay.core.ui.player.playerTopScrim
 import com.raulshma.jellyplay.core.ui.tv.LocalTvMode
 import com.raulshma.jellyplay.core.ui.tv.ifElse
 import com.raulshma.jellyplay.core.ui.tv.tryRequestFocus
@@ -304,16 +314,7 @@ internal fun PlayerControls(
                             }
                         } else Modifier
                     )
-                    .background(
-                        Brush.verticalGradient(
-                            colors = listOf(
-                                playerScrimColor().copy(alpha = 0.6f),
-                                playerScrimColor().copy(alpha = 0.3f),
-                                playerScrimColor().copy(alpha = 0.08f),
-                                Color.Transparent,
-                            )
-                        )
-                    )
+                    .playerTopScrim()
                     .statusBarsPadding()
                     .padding(horizontal = 8.dp, vertical = 8.dp),
             ) {
@@ -503,16 +504,7 @@ internal fun PlayerControls(
             Column(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .background(
-                        Brush.verticalGradient(
-                            colors = listOf(
-                                Color.Transparent,
-                                playerScrimColor().copy(alpha = 0.1f),
-                                playerScrimColor().copy(alpha = 0.5f),
-                                playerScrimColor().copy(alpha = 0.7f),
-                            )
-                        )
-                    )
+                    .playerBottomScrim()
                     .navigationBarsPadding()
                     .padding(start = 12.dp, end = 12.dp, top = 16.dp),
             ) {

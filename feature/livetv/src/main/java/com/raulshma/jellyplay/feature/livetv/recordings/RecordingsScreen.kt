@@ -8,15 +8,14 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.focusGroup
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
@@ -41,7 +40,6 @@ import com.composables.icons.tabler.Tabler
 import com.composables.icons.tabler.outline.*
 import com.raulshma.jellyplay.core.designsystem.theme.ShapeCache
 import com.raulshma.jellyplay.core.model.LiveTvRecording
-import com.raulshma.jellyplay.core.model.RecordingFolder
 import com.raulshma.jellyplay.core.ui.adaptive.LocalAdaptiveInfo
 import com.raulshma.jellyplay.core.ui.adaptive.bottomPadding
 import com.raulshma.jellyplay.core.ui.adaptive.contentPadding
@@ -56,11 +54,13 @@ import com.raulshma.jellyplay.core.ui.tv.TvGrabInitialFocus
 import com.raulshma.jellyplay.core.ui.tv.tvFocusRestorer
 import com.raulshma.jellyplay.feature.livetv.R
 
+/** Recordings grid: 2 columns per row, vertical scroll. */
+private const val GRID_COLUMNS = 2
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun RecordingsScreen(
     onRecordingClick: (String) -> Unit,
-    onFolderClick: (RecordingFolder) -> Unit,
     viewModel: RecordingsViewModel = hiltViewModel(),
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
@@ -73,18 +73,18 @@ fun RecordingsScreen(
     val focusRequester = remember { FocusRequester() }
     TvGrabInitialFocus(
         focusRequester = focusRequester,
-        itemCount = uiState.recordings.size + uiState.folders.size,
+        itemCount = uiState.recordings.size,
         tag = "recordings_init",
     )
 
     when {
-        uiState.isLoading && uiState.recordings.isEmpty() && uiState.folders.isEmpty() -> {
+        uiState.isLoading && uiState.recordings.isEmpty() -> {
             ScreenLoadingState(modifier = Modifier.fillMaxSize())
         }
-        uiState.error != null && uiState.recordings.isEmpty() && uiState.folders.isEmpty() -> {
+        uiState.error != null && uiState.recordings.isEmpty() -> {
             ErrorScreen(message = uiState.error!!, onRetry = { viewModel.load() })
         }
-        uiState.recordings.isEmpty() && uiState.folders.isEmpty() -> {
+        uiState.recordings.isEmpty() -> {
             ScreenEmptyState(
                 icon = Tabler.Outline.RecordMail,
                 title = stringResource(R.string.livetv_no_recordings_available),
@@ -107,35 +107,33 @@ fun RecordingsScreen(
                         item {
                             SectionTitle(stringResource(R.string.livetv_section_latest_recordings), contentPad)
                         }
-                        item {
-                            LazyRow(
-                                contentPadding = PaddingValues(horizontal = contentPad),
+                        // 2-column grid rendered as one lazy row per pair so the
+                        // whole tab keeps a single vertical scroll (no nested
+                        // scrollers to fight for height).
+                        val rows = uiState.recordings.chunked(GRID_COLUMNS)
+                        items(items = rows, key = { row -> row.first().id }) { row ->
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(horizontal = contentPad),
                                 horizontalArrangement = Arrangement.spacedBy(spacing),
-                                modifier = Modifier.tvFocusRestorer(),
                             ) {
-                                items(items = uiState.recordings, key = { it.id }) { recording ->
+                                row.forEach { recording ->
                                     RecordingCard(
                                         recording = recording,
                                         imageUrl = viewModel.getImageUrl(recording.id, recording.imageTag),
                                         onClick = { onRecordingClick(recording.id) },
+                                        modifier = Modifier.weight(1f),
                                     )
+                                }
+                                // Trailing single card in an odd-length list spans
+                                // only its own column (no artificial stretch).
+                                if (row.size < GRID_COLUMNS) {
+                                    Spacer(Modifier.weight(1f))
                                 }
                             }
                         }
                         item { Spacer(Modifier.height(16.dp)) }
-                    }
-                    if (uiState.folders.isNotEmpty()) {
-                        item {
-                            SectionTitle(stringResource(R.string.livetv_section_recording_folders), contentPad)
-                        }
-                        items(items = uiState.folders, key = { it.id }) { folder ->
-                            FolderRow(
-                                folder = folder,
-                                contentPad = contentPad,
-                                spacing = spacing,
-                                onClick = { onFolderClick(folder) },
-                            )
-                        }
                     }
                     item { Spacer(Modifier.height(bottomPad)) }
                 }
@@ -159,10 +157,10 @@ private fun RecordingCard(
     recording: LiveTvRecording,
     imageUrl: String,
     onClick: () -> Unit,
+    modifier: Modifier = Modifier,
 ) {
     Column(
-        modifier = Modifier
-            .width(200.dp)
+        modifier = modifier
             .clip(ShapeCache.smooth12)
             .focusIndicator(ShapeCache.smooth12)
             .clickable(onClick = onClick)
@@ -170,7 +168,8 @@ private fun RecordingCard(
     ) {
         Box(
             modifier = Modifier
-                .size(width = 192.dp, height = 110.dp)
+                .fillMaxWidth()
+                .aspectRatio(16f / 9f)
                 .clip(ShapeCache.smooth10)
                 .background(MaterialTheme.colorScheme.surfaceContainerHigh),
             contentAlignment = Alignment.Center,
@@ -194,47 +193,5 @@ private fun RecordingCard(
             Text(it, style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1, overflow = TextOverflow.Ellipsis)
         }
-    }
-}
-
-@Composable
-private fun FolderRow(
-    folder: RecordingFolder,
-    contentPad: androidx.compose.ui.unit.Dp,
-    spacing: androidx.compose.ui.unit.Dp,
-    onClick: () -> Unit,
-) {
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(horizontal = contentPad, vertical = 6.dp)
-            .clip(ShapeCache.smooth12)
-            .background(MaterialTheme.colorScheme.surfaceContainerLow)
-            .focusIndicator(ShapeCache.smooth12)
-            .clickable(onClick = onClick)
-            .padding(14.dp),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        Icon(
-            Tabler.Outline.Folder,
-            contentDescription = null,
-            tint = MaterialTheme.colorScheme.primary,
-            modifier = Modifier.size(28.dp),
-        )
-        Spacer(Modifier.width(14.dp))
-        Text(
-            text = folder.name,
-            style = MaterialTheme.typography.bodyLarge,
-            color = MaterialTheme.colorScheme.onSurface,
-            modifier = Modifier.weight(1f),
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis,
-        )
-        Icon(
-            Tabler.Outline.ChevronRight,
-            contentDescription = null,
-            tint = MaterialTheme.colorScheme.onSurfaceVariant,
-            modifier = Modifier.size(22.dp),
-        )
     }
 }

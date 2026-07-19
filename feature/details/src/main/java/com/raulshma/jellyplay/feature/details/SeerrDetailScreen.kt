@@ -713,6 +713,7 @@ private fun SeerrDetailContent(
             },
             colors = TopAppBarDefaults.topAppBarColors(
                 containerColor = animatedContainerColor,
+                scrolledContainerColor = animatedContainerColor,
                 navigationIconContentColor = MaterialTheme.colorScheme.onSurface,
                 titleContentColor = MaterialTheme.colorScheme.onSurface
             ),

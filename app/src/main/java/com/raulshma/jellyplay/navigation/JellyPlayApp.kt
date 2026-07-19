@@ -165,6 +165,7 @@ import com.raulshma.jellyplay.feature.livetv.navigation.liveTvSection
 import com.raulshma.jellyplay.feature.music.navigation.musicSection
 import com.raulshma.jellyplay.feature.music.musichome.MusicHomeScreen
 import com.raulshma.jellyplay.feature.player.audio.navigation.audioPlayerSection
+import com.raulshma.jellyplay.feature.player.live.navigation.livePlayerSection
 import com.raulshma.jellyplay.feature.player.video.navigation.videoPlayerSection
 import com.raulshma.jellyplay.feature.search.navigation.searchSection
 import com.raulshma.jellyplay.feature.settings.navigation.settingsSection
@@ -1537,6 +1538,7 @@ private fun MainNavDisplay(
             detailsSection(navigator)
             editorSection(navigator)
             videoPlayerSection(navigator, onEnterPip = enterPip, onEnterMiniMode = enterVideoMiniMode)
+            livePlayerSection(navigator, onEnterPip = enterPip, onEnterMiniMode = enterVideoMiniMode)
             audioPlayerSection(navigator)
             downloadsSection(navigator)
             authSection(navigator) { navigator.goBack() }
