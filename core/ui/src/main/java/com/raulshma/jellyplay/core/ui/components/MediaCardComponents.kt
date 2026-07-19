@@ -62,7 +62,6 @@ import com.raulshma.jellyplay.core.designsystem.theme.RatingColors
 import com.raulshma.jellyplay.core.designsystem.theme.isLightColor
 import com.raulshma.jellyplay.core.designsystem.theme.ShapeCache
 import com.raulshma.jellyplay.core.designsystem.theme.cardBorder
-import com.raulshma.jellyplay.core.designsystem.theme.cardElevation
 import com.raulshma.jellyplay.core.model.MediaItem
 import com.raulshma.jellyplay.core.model.MediaType
 import com.raulshma.jellyplay.core.ui.animation.fastEffectsSpec
@@ -300,7 +299,6 @@ fun PosterCard(
     // Performance mode: per-card graphicsLayer shadows are an offscreen pass,
     // and cards render by the hundred across Home/Library rows — the single
     // most expensive GPU work in card grids on low-end devices. Drop it.
-    val performanceMode = LocalPerformanceMode.current
     val focusInteraction = rememberJellyFocusableInteraction()
     val interactionSource = remember { MutableInteractionSource() }
     val isPressed by interactionSource.collectIsPressedAsState()
@@ -310,11 +308,6 @@ fun PosterCard(
     // follows it. Two nested graphicsLayers multiply: press (0.95) × focus (1.05).
     val focusScale = focusInteraction.scale
     val themeVariant = com.raulshma.jellyplay.core.designsystem.theme.LocalThemeVariant.current
-    val elevation = themeVariant.cardElevation(
-        isPressed = isPressed,
-        isTvFocused = focusInteraction.isFocused,
-        isTv = isTv,
-    )
     val cardShape = ShapeCache.smooth12
 
     val dominantColor = rememberDominantColor(imageUrl, itemId = item.id)
@@ -387,7 +380,7 @@ fun PosterCard(
                 .graphicsLayer {
                     scaleX = focusScale
                     scaleY = focusScale
-                    shadowElevation = if (performanceMode) 0f else elevation.toPx()
+                    shadowElevation = 0f
                     clip = clipToShape
                     shape = cardShape
                 }

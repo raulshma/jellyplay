@@ -76,7 +76,10 @@ fun ThemeVariant.cardBorder(
         width = 1.dp,
         color = outline.copy(alpha = 0.45f)
     )
-    ThemeVariant.STANDARD -> null
+    ThemeVariant.STANDARD -> BorderStroke(
+        width = 1.dp,
+        color = outline.copy(alpha = 0.3f)
+    )
 }
 
 @Composable
@@ -131,3 +134,6 @@ fun ThemeVariant.cardElevation(
     this == ThemeVariant.SOOTHING -> 1.5.dp
     else -> 4.dp
 }
+// NOTE: per-card drop shadows were removed from Home section cards for GPU
+// performance; cards now rely on a 1px border (see cardBorder) instead. This
+// helper is kept only for non-home callers that still want an elevation value.

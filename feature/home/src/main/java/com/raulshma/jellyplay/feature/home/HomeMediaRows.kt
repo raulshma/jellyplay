@@ -240,15 +240,6 @@ fun WideMediaCard(
         animationSpec = MaterialTheme.motionScheme.fastEffectsSpec(),
         label = "wideCardCombinedScale",
     )
-    val elevation by animateFloatAsState(
-        targetValue = when {
-            isPressed -> 12f
-            tvFocusState.isFocused -> 16f
-            else -> 4f
-        },
-        animationSpec = MaterialTheme.motionScheme.fastEffectsSpec(),
-        label = "wideCardElevation",
-    )
     val brightnessOverlay by animateFloatAsState(
         targetValue = if (isPressed) 0.08f else 0f,
         animationSpec = MaterialTheme.motionScheme.fastEffectsSpec(),
@@ -286,7 +277,7 @@ fun WideMediaCard(
                 .graphicsLayer {
                     scaleX = scale
                     scaleY = scale
-                    shadowElevation = elevation.dp.toPx()
+                    shadowElevation = 0f
                     clip = clipToShape
                     shape = ShapeCache.smooth12
                 }
@@ -298,6 +289,10 @@ fun WideMediaCard(
                     onLongClick = peek.onLongClick,
                 ),
             shape = ShapeCache.smooth12,
+            border = androidx.compose.foundation.BorderStroke(
+                width = 1.dp,
+                color = MaterialTheme.colorScheme.outline.copy(alpha = 0.3f),
+            ),
             elevation = CardDefaults.cardElevation(defaultElevation = 0.dp),
         ) {
             Box {
