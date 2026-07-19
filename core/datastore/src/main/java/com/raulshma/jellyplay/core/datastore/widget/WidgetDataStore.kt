@@ -1,0 +1,201 @@
+package com.raulshma.jellyplay.core.datastore.widget
+
+import androidx.datastore.core.DataStore
+import androidx.datastore.preferences.core.Preferences
+import androidx.datastore.preferences.core.longPreferencesKey
+import androidx.datastore.preferences.core.stringPreferencesKey
+import androidx.datastore.preferences.core.edit
+import com.raulshma.jellyplay.core.datastore.di.ApplicationScope
+import com.raulshma.jellyplay.core.datastore.di.UserPreferencesDataStore
+import com.raulshma.jellyplay.core.model.LibraryWidgetItem
+import com.raulshma.jellyplay.core.model.MediaItem
+import com.raulshma.jellyplay.core.model.SeerrWidgetItem
+import com.raulshma.jellyplay.core.model.WidgetConfig
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.SharingStarted
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.stateIn
+import kotlinx.serialization.json.Json
+import javax.inject.Inject
+import javax.inject.Singleton
+
+/**
+ * Widget cache sink for home-screen widgets (continue-watching, library
+ * recommendations, Seerr recommendations).
+ *
+ * These flows are not "preferences" — they are an I/O buffer between the
+ * widget refresh workers (producers) and the AppWidget providers (consumers).
+ * Persisting them in DataStore lets widgets render the last-known payload
+ * across process death and cold start. Extracted from `UserPreferencesStore`
+ * (where they accreted) so the god store no longer carries widget-I/O concerns.
+ *
+ * **Storage**: injects the shared `"user_prefs"` DataStore provided by
+ * [com.raulshma.jellyplay.core.datastore.di.DataStoreModule] — same file as
+ * `UserPreferencesStore` and the other extracted stores, never a second
+ * DataStore instance (AndroidX forbids that).
+ */
+@Singleton
+class WidgetDataStore @Inject constructor(
+    @UserPreferencesDataStore private val dataStore: DataStore<Preferences>,
+    @ApplicationScope private val externalScope: CoroutineScope,
+) {
+    private val scope = externalScope
+
+    private val sharedPrefs: Flow<Preferences> = dataStore.data
+    private val json = Json { ignoreUnknownKeys = true }
+
+    val continueWatching: Flow<List<MediaItem>> =
+        sharedPrefs.map { prefs ->
+            prefs[Keys.CONTINUE_WATCHING]?.let {
+                try { json.decodeFromString<List<MediaItem>>(it) }
+                catch (_: Exception) { emptyList() }
+            } ?: emptyList()
+        }
+
+    val widgetConfig: Flow<WidgetConfig> =
+        sharedPrefs.map { prefs ->
+            prefs[Keys.WIDGET_CONFIG]?.let {
+                try { json.decodeFromString<WidgetConfig>(it) } catch (_: Exception) { null }
+            } ?: WidgetConfig()
+        }
+
+    val libraryWidgetItems: Flow<List<LibraryWidgetItem>> =
+        sharedPrefs.map { prefs ->
+            prefs[Keys.LIBRARY_WIDGET_ITEMS]?.let {
+                try { json.decodeFromString<List<LibraryWidgetItem>>(it) }
+                catch (_: Exception) { emptyList() }
+            } ?: emptyList()
+        }
+
+    val libraryWidgetVersion: Flow<Long> =
+        sharedPrefs.map { it[Keys.LIBRARY_WIDGET_VERSION] ?: 0L }
+
+    val libraryWidgetUpdatedAtMs: Flow<Long> =
+        sharedPrefs.map { it[Keys.LIBRARY_WIDGET_UPDATED_AT_MS] ?: 0L }
+
+    val seerrWidgetItems: Flow<List<SeerrWidgetItem>> =
+        sharedPrefs.map { prefs ->
+            prefs[Keys.SEERR_WIDGET_ITEMS]?.let {
+                try { json.decodeFromString<List<SeerrWidgetItem>>(it) }
+                catch (_: Exception) { emptyList() }
+            } ?: emptyList()
+        }
+
+    val seerrWidgetVersion: Flow<Long> =
+        sharedPrefs.map { it[Keys.SEERR_WIDGET_VERSION] ?: 0L }
+
+    val seerrWidgetUpdatedAtMs: Flow<Long> =
+        sharedPrefs.map { it[Keys.SEERR_WIDGET_UPDATED_AT_MS] ?: 0L }
+
+    val widgetLastRefreshMs: Flow<Long> =
+        sharedPrefs.map { it[Keys.WIDGET_LAST_REFRESH_MS] ?: 0L }
+
+    suspend fun setWidgetConfig(config: WidgetConfig) {
+        dataStore.edit { it[Keys.WIDGET_CONFIG] = json.encodeToString(config) }
+    }
+
+    /**
+     * Snapshot of (per-widget configs, legacy global config) eagerly cached so
+     * [getWidgetConfigForIdSync] can return a value without suspending. Used by
+     * AppWidget providers which must render synchronously in `onUpdate`.
+     */
+    private val widgetConfigSnapshot: StateFlow<Pair<Map<Int, WidgetConfig>, WidgetConfig?>> =
+        sharedPrefs.map { prefs ->
+            val perWidget = prefs[Keys.WIDGET_CONFIGS]?.let { configsJson ->
+                try { json.decodeFromString<Map<Int, WidgetConfig>>(configsJson) }
+                catch (_: Exception) { null }
+            } ?: emptyMap()
+            val legacy = prefs[Keys.WIDGET_CONFIG]?.let {
+                try { json.decodeFromString<WidgetConfig>(it) } catch (_: Exception) { null }
+            }
+            perWidget to legacy
+        }.stateIn(scope, SharingStarted.Eagerly, emptyMap<Int, WidgetConfig>() to null)
+
+    fun getWidgetConfigForIdSync(appWidgetId: Int): WidgetConfig {
+        val (perWidget, legacy) = widgetConfigSnapshot.value
+        return perWidget[appWidgetId] ?: legacy ?: WidgetConfig()
+    }
+
+    fun getWidgetConfigForId(appWidgetId: Int): Flow<WidgetConfig> =
+        sharedPrefs.map { prefs ->
+            val perWidgetConfig = prefs[Keys.WIDGET_CONFIGS]?.let { configsJson ->
+                try {
+                    val configs = json.decodeFromString<Map<Int, WidgetConfig>>(configsJson)
+                    configs[appWidgetId]
+                } catch (_: Exception) { null }
+            }
+            perWidgetConfig ?: run {
+                prefs[Keys.WIDGET_CONFIG]?.let {
+                    try { json.decodeFromString<WidgetConfig>(it) } catch (_: Exception) { null }
+                } ?: WidgetConfig()
+            }
+        }
+
+    suspend fun setWidgetConfigForId(appWidgetId: Int, config: WidgetConfig) {
+        dataStore.edit { prefs ->
+            val current = prefs[Keys.WIDGET_CONFIGS]?.let {
+                try { json.decodeFromString<Map<Int, WidgetConfig>>(it) } catch (_: Exception) { emptyMap() }
+            } ?: emptyMap()
+            val next = current.toMutableMap().apply { put(appWidgetId, config) }
+            prefs[Keys.WIDGET_CONFIGS] = json.encodeToString(next)
+        }
+    }
+
+    suspend fun removeWidgetConfigForId(appWidgetId: Int) {
+        dataStore.edit { prefs ->
+            val current = prefs[Keys.WIDGET_CONFIGS]?.let {
+                try { json.decodeFromString<Map<Int, WidgetConfig>>(it) } catch (_: Exception) { emptyMap() }
+            } ?: emptyMap()
+            val next = current.toMutableMap().apply { remove(appWidgetId) }
+            prefs[Keys.WIDGET_CONFIGS] = json.encodeToString(next)
+        }
+    }
+
+    suspend fun setLibraryWidgetItems(
+        items: List<LibraryWidgetItem>,
+        version: Long,
+        updatedAtMs: Long,
+    ) {
+        dataStore.edit { prefs ->
+            prefs[Keys.LIBRARY_WIDGET_ITEMS] = json.encodeToString(items)
+            prefs[Keys.LIBRARY_WIDGET_VERSION] = version
+            prefs[Keys.LIBRARY_WIDGET_UPDATED_AT_MS] = updatedAtMs
+        }
+    }
+
+    suspend fun setSeerrWidgetItems(
+        items: List<SeerrWidgetItem>,
+        version: Long,
+        updatedAtMs: Long,
+    ) {
+        dataStore.edit { prefs ->
+            prefs[Keys.SEERR_WIDGET_ITEMS] = json.encodeToString(items)
+            prefs[Keys.SEERR_WIDGET_VERSION] = version
+            prefs[Keys.SEERR_WIDGET_UPDATED_AT_MS] = updatedAtMs
+        }
+    }
+
+    suspend fun setWidgetLastRefreshMs(ms: Long) {
+        dataStore.edit { it[Keys.WIDGET_LAST_REFRESH_MS] = ms }
+    }
+
+    /** Persists the current continue-watching shelf so widgets can render it offline / on cold start. */
+    suspend fun setContinueWatching(items: List<MediaItem>) {
+        dataStore.edit { it[Keys.CONTINUE_WATCHING] = json.encodeToString(items) }
+    }
+
+    private object Keys {
+        val CONTINUE_WATCHING = stringPreferencesKey("continue_watching")
+        val WIDGET_CONFIG = stringPreferencesKey("widget_config")
+        val WIDGET_CONFIGS = stringPreferencesKey("widget_configs")
+        val LIBRARY_WIDGET_ITEMS = stringPreferencesKey("library_widget_items")
+        val LIBRARY_WIDGET_VERSION = longPreferencesKey("library_widget_version")
+        val LIBRARY_WIDGET_UPDATED_AT_MS = longPreferencesKey("library_widget_updated_at_ms")
+        val SEERR_WIDGET_ITEMS = stringPreferencesKey("seerr_widget_items")
+        val SEERR_WIDGET_VERSION = longPreferencesKey("seerr_widget_version")
+        val SEERR_WIDGET_UPDATED_AT_MS = longPreferencesKey("seerr_widget_updated_at_ms")
+        val WIDGET_LAST_REFRESH_MS = longPreferencesKey("widget_last_refresh_ms")
+    }
+}
