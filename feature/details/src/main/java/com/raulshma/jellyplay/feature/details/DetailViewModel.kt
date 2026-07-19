@@ -4,6 +4,7 @@ import android.content.Context
 import androidx.compose.runtime.Immutable
 import com.raulshma.jellyplay.core.data.offline.OfflineModeManager
 import com.raulshma.jellyplay.core.data.repository.ArrRepository
+import com.raulshma.jellyplay.core.data.download.DownloadIntake
 import com.raulshma.jellyplay.core.data.repository.DownloadRepository
 import com.raulshma.jellyplay.core.data.repository.MediaRepository
 import com.raulshma.jellyplay.core.data.repository.PlaybackRepository
@@ -68,6 +69,7 @@ class DetailViewModel @Inject constructor(
     private val playbackRepository: PlaybackRepository,
     private val imageUrlProvider: ImageUrlProvider,
     private val downloadRepository: DownloadRepository,
+    private val downloadIntake: DownloadIntake,
     private val preferencesStore: UserPreferencesStore,
     private val offlineModeManager: OfflineModeManager,
     private val adaptiveBitrateManager: AdaptiveBitrateManager,
@@ -879,78 +881,22 @@ class DetailViewModel @Inject constructor(
         item: com.raulshma.jellyplay.core.model.MediaItem,
         source: com.raulshma.jellyplay.core.model.MediaSource,
     ) {
+        val detail = _uiState.value.detail ?: return
         launch {
             _uiState.update { it.copy(isDownloading = true, downloadError = null) }
             try {
                 // Apply the user's download quality preference when building the
                 // stream URL so the server transcodes to the requested ceiling.
+                // The intake seam owns the full bundle (local images, trickplay,
+                // subtitles, segments, offline metadata row), so feature modules
+                // no longer re-implement the artifact-writing recipe.
                 val prefs = preferencesStore.preferences.value
                 val maxBitrate = qualityToMaxBitrate(prefs.downloadQuality)
-                val streamUrl = playbackRepository.getStreamUrl(
-                    itemId = item.id,
-                    mediaSourceId = source.id,
-                    maxBitrate = maxBitrate,
-                )
-                if (streamUrl.isBlank()) {
-                    _uiState.update { it.copy(downloadError = context.getString(R.string.detail_error_no_stream_url), isDownloading = false) }
-                    return@launch
-                }
-                val imageUrl = playbackRepository.getImageUrl(item.id, maxWidth = 300)
-                val mediaType = when (item.mediaType) {
-                    MediaType.AUDIO, MediaType.MUSIC -> MediaType.AUDIO.name
-                    else -> item.mediaType.name
-                }
-
-                // For episodes, propagate the parent series/season ids so the
-                // downloads row is linked to its series. Without these,
-                // deleteOfflineSeries (WHERE seriesId = :seriesId) finds no rows
-                // and leaves the episode files + download rows orphaned.
-                val isEpisode = item.mediaType == MediaType.EPISODE
-                downloadRepository.startDownload(
-                    mediaItemId = item.id,
-                    name = item.name,
-                    mediaType = mediaType,
-                    mediaSourceId = source.id,
-                    downloadUrl = streamUrl,
-                    imageUrl = imageUrl,
-                    imageBlurHash = item.blurHashes.primary,
-                    seriesId = if (isEpisode) item.seriesId else null,
-                    seasonId = if (isEpisode) item.seasonId else null,
-                    seriesName = if (isEpisode) item.seriesName else null,
-                    seasonName = if (isEpisode) item.seasonName else null,
-                    episodeNumber = if (isEpisode) item.episodeNumber else null,
-                    seasonNumber = if (isEpisode) item.seasonNumber else null,
-                ).onSuccess { downloadItem ->
-                    if (downloadItem.status == com.raulshma.jellyplay.core.model.DownloadStatus.PENDING) {
-                        enqueueDownloadWorker(downloadItem.id)
-                        try {
-                            val backdropUrl = playbackRepository.getBackdropUrl(item.id, maxWidth = 1280)
-                            downloadRepository.saveOfflineMediaItem(item, imageUrl, backdropUrl)
-                        } catch (_: Exception) {
-                        }
-                        source.trickplayInfo?.let { info ->
-                            launch {
-                                downloadRepository.downloadTrickplayData(item.id, info, downloadItem.downloadPath)
-                            }
-                        }
-                        // Bundle external subtitles + intro/outro segments for offline use.
-                        launch {
-                            try {
-                                downloadRepository.downloadExternalSubtitles(
-                                    item.id, source.id, source.mediaStreams, downloadItem.downloadPath,
-                                )
-                            } catch (_: Exception) {
-                            }
-                        }
-                        launch {
-                            try {
-                                downloadRepository.downloadMediaSegments(item.id, downloadItem.downloadPath)
-                            } catch (_: Exception) {
-                            }
-                        }
-                    }
-                }.onFailure { error ->
-                    _uiState.update { it.copy(downloadError = error.message ?: context.getString(R.string.detail_error_download_failed)) }
+                val result = downloadIntake.start(detail, maxBitrate)
+                if (result.downloadItem == null) {
+                    val message = result.error
+                        ?: context.getString(R.string.detail_error_download_failed)
+                    _uiState.update { it.copy(downloadError = message) }
                 }
             } catch (e: Exception) {
                 _uiState.update { it.copy(downloadError = e.message ?: context.getString(R.string.detail_error_download_failed)) }
@@ -975,7 +921,7 @@ class DetailViewModel @Inject constructor(
 
         launch {
             _uiState.update { it.copy(isDownloadingSeries = true, seriesDownloadResult = null) }
-            downloadRepository.downloadSeries(item.id, episodeIds)
+            downloadIntake.startSeries(item.id, episodeIds)
                 .onSuccess { downloadIds ->
                     _uiState.update {
                         it.copy(
@@ -1044,10 +990,6 @@ class DetailViewModel @Inject constructor(
 
     fun getBackdropUrl(itemId: String): String =
         imageUrlProvider.getBackdropUrl(itemId)
-
-    private fun enqueueDownloadWorker(downloadId: String) {
-        downloadRepository.enqueueDownload(downloadId)
-    }
 
     /**
      * Available bytes on the volume backing the download destination

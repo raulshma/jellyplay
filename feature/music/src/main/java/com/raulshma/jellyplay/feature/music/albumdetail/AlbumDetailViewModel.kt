@@ -1,5 +1,6 @@
 package com.raulshma.jellyplay.feature.music.albumdetail
 
+import com.raulshma.jellyplay.core.data.download.DownloadIntake
 import com.raulshma.jellyplay.core.data.playback.AudioPlaybackManager
 import com.raulshma.jellyplay.core.data.playback.toAudioQueueItem
 import com.raulshma.jellyplay.core.data.repository.DownloadRepository
@@ -25,6 +26,7 @@ class AlbumDetailViewModel @Inject constructor(
     private val imageUrlProvider: ImageUrlProvider,
     private val audioPlaybackManager: AudioPlaybackManager,
     private val downloadRepository: DownloadRepository,
+    private val downloadIntake: DownloadIntake,
 ) : JellyPlayViewModel() {
 
     private val _detail = composeState<MediaDetail?>(null)
@@ -136,29 +138,10 @@ class AlbumDetailViewModel @Inject constructor(
         launch {
             try {
                 val detail = mediaRepository.getMediaDetail(track.id).getOrNull() ?: return@launch
-                val source = detail.mediaSources.firstOrNull() ?: return@launch
-                val streamUrl = playbackRepository.getStreamUrl(track.id, source.id)
-                if (streamUrl.isBlank()) return@launch
-                val imageUrl = playbackRepository.getImageUrl(track.id, maxWidth = 300)
-                val mediaType = com.raulshma.jellyplay.core.model.MediaType.AUDIO.name
-
-                downloadRepository.startDownload(
-                    mediaItemId = track.id,
-                    name = track.name,
-                    mediaType = mediaType,
-                    mediaSourceId = source.id,
-                    downloadUrl = streamUrl,
-                    imageUrl = imageUrl,
-                    imageBlurHash = track.blurHashes.primary,
-                ).onSuccess { downloadItem ->
-                    if (downloadItem.status == DownloadStatus.PENDING) {
-                        downloadRepository.enqueueDownload(downloadItem.id)
-                        try {
-                            val backdropUrl = playbackRepository.getBackdropUrl(track.id, maxWidth = 1280)
-                            downloadRepository.saveOfflineMediaItem(track, imageUrl, backdropUrl)
-                        } catch (_: Exception) {}
-                    }
-                }
+                // Intake seam owns the artifact bundle; previously this path
+                // wrote only remote image URLs, so offline cards fell back to
+                // blurHash. Local poster/backdrop are now persisted.
+                downloadIntake.start(detail)
             } catch (_: Exception) {}
         }
     }
@@ -177,29 +160,7 @@ class AlbumDetailViewModel @Inject constructor(
                         downloadSemaphore.acquire()
                         try {
                             val detail = mediaRepository.getMediaDetail(track.id).getOrNull() ?: return@launch
-                            val source = detail.mediaSources.firstOrNull() ?: return@launch
-                            val streamUrl = playbackRepository.getStreamUrl(track.id, source.id)
-                            if (streamUrl.isBlank()) return@launch
-                            val imageUrl = playbackRepository.getImageUrl(track.id, maxWidth = 300)
-                            val mediaType = com.raulshma.jellyplay.core.model.MediaType.AUDIO.name
-
-                            downloadRepository.startDownload(
-                                mediaItemId = track.id,
-                                name = track.name,
-                                mediaType = mediaType,
-                                mediaSourceId = source.id,
-                                downloadUrl = streamUrl,
-                                imageUrl = imageUrl,
-                                imageBlurHash = track.blurHashes.primary,
-                            ).onSuccess { downloadItem ->
-                                if (downloadItem.status == DownloadStatus.PENDING) {
-                                    downloadRepository.enqueueDownload(downloadItem.id)
-                                    try {
-                                        val backdropUrl = playbackRepository.getBackdropUrl(track.id, maxWidth = 1280)
-                                        downloadRepository.saveOfflineMediaItem(track, imageUrl, backdropUrl)
-                                    } catch (_: Exception) {}
-                                }
-                            }
+                            downloadIntake.start(detail)
                         } catch (_: Exception) {
                         } finally {
                             downloadSemaphore.release()
