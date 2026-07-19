@@ -37,7 +37,7 @@ class AudioPlayerViewModel @Inject constructor(
     private val preferencesStore: UserPreferencesStore,
     private val mediaRepository: com.raulshma.jellyplay.core.data.repository.MediaRepository,
     private val downloadRepository: com.raulshma.jellyplay.core.data.repository.DownloadRepository,
-    private val playbackRepository: com.raulshma.jellyplay.core.data.repository.PlaybackRepository,
+    private val downloadIntake: com.raulshma.jellyplay.core.data.download.DownloadIntake,
     private val sleepTimerManager: SleepTimerManager,
     private val castManager: CastManager,
 ) : JellyPlayViewModel() {
@@ -724,30 +724,10 @@ class AudioPlayerViewModel @Inject constructor(
         launch {
             try {
                 val detail = mediaRepository.getMediaDetail(itemId).getOrNull() ?: return@launch
-                val item = detail.item
-                val source = detail.mediaSources.firstOrNull() ?: return@launch
-                val streamUrl = playbackRepository.getStreamUrl(itemId, source.id)
-                if (streamUrl.isBlank()) return@launch
-                val imageUrl = playbackRepository.getImageUrl(itemId, maxWidth = 300)
-                val mediaType = com.raulshma.jellyplay.core.model.MediaType.AUDIO.name
-
-                downloadRepository.startDownload(
-                    mediaItemId = itemId,
-                    name = item.name,
-                    mediaType = mediaType,
-                    mediaSourceId = source.id,
-                    downloadUrl = streamUrl,
-                    imageUrl = imageUrl,
-                    imageBlurHash = item.blurHashes.primary,
-                ).onSuccess { downloadItem ->
-                    if (downloadItem.status == com.raulshma.jellyplay.core.model.DownloadStatus.PENDING) {
-                        downloadRepository.enqueueDownload(downloadItem.id)
-                        try {
-                            val backdropUrl = playbackRepository.getBackdropUrl(itemId, maxWidth = 1280)
-                            downloadRepository.saveOfflineMediaItem(item, imageUrl, backdropUrl)
-                        } catch (_: Exception) {}
-                    }
-                }
+                // Intake seam owns the full artifact bundle (local poster/backdrop,
+                // offline metadata row); previously this path wrote only the
+                // remote image URLs, so offline cards fell back to blurHash.
+                downloadIntake.start(detail)
             } catch (_: Exception) {}
         }
     }

@@ -1,6 +1,7 @@
 package com.raulshma.jellyplay.feature.details
 
 import android.content.Context
+import com.raulshma.jellyplay.core.data.download.DownloadIntake
 import com.raulshma.jellyplay.core.data.offline.OfflineModeManager
 import com.raulshma.jellyplay.core.data.playback.AdaptiveBitrateManager
 import com.raulshma.jellyplay.core.data.playback.AudioPlaybackManager
@@ -48,6 +49,7 @@ class DetailViewModelTest {
     private lateinit var playbackRepository: PlaybackRepository
     private lateinit var imageUrlProvider: ImageUrlProvider
     private lateinit var downloadRepository: DownloadRepository
+    private lateinit var downloadIntake: DownloadIntake
     private lateinit var preferencesStore: UserPreferencesStore
     private lateinit var offlineModeManager: OfflineModeManager
     private lateinit var adaptiveBitrateManager: AdaptiveBitrateManager
@@ -67,6 +69,7 @@ class DetailViewModelTest {
         playbackRepository = mockk(relaxed = true)
         imageUrlProvider = mockk(relaxed = true)
         downloadRepository = mockk(relaxed = true)
+        downloadIntake = mockk(relaxed = true)
         preferencesStore = mockk(relaxed = true)
         offlineModeManager = mockk(relaxed = true)
         adaptiveBitrateManager = mockk(relaxed = true)
@@ -132,6 +135,7 @@ class DetailViewModelTest {
             playbackRepository = playbackRepository,
             imageUrlProvider = imageUrlProvider,
             downloadRepository = downloadRepository,
+            downloadIntake = downloadIntake,
             preferencesStore = preferencesStore,
             offlineModeManager = offlineModeManager,
             adaptiveBitrateManager = adaptiveBitrateManager,
