@@ -244,18 +244,36 @@ class HomeViewModel @Inject constructor(
 
         launch {
             offlineModeManager.offlineMode.collect { mode ->
-                val wasOffline = _uiState.value.offlineMode != OfflineMode.ONLINE
+                // Capture the previous mode before overwriting so transition
+                // detection is stable across the rapid manual+auto+network
+                // re-emissions a single toggle can produce.
+                val previousMode = _uiState.value.offlineMode
                 _uiState.update { it.copy(offlineMode = mode) }
-                if (mode != OfflineMode.ONLINE && !wasOffline) {
-                    _uiState.update { it.copy(sections = emptyList(), discoverSections = emptyMap()) }
-                } else if (mode == OfflineMode.ONLINE && wasOffline) {
-                    // Show the full-screen loader during the post-toggle fetch so
-                    // the online branch doesn't flash blank between the mode flip
-                    // and sections arriving. isGoingOnline is cleared here once
-                    // the transition resolves (success or failure).
-                    _uiState.update { it.copy(isLoading = true) }
-                    fetchAndUpdateSections()
-                    _uiState.update { it.copy(isGoingOnline = false) }
+                when {
+                    previousMode == OfflineMode.ONLINE && mode != OfflineMode.ONLINE -> {
+                        // Online → offline: drop cached online sections. Also clear
+                        // any pending going-online spinner — e.g. the user (or an
+                        // auto-detect flip) took us back offline while the prior
+                        // online fetch was still parked on the refresh mutex.
+                        _uiState.update {
+                            it.copy(sections = emptyList(), discoverSections = emptyMap(), isGoingOnline = false)
+                        }
+                    }
+                    previousMode != OfflineMode.ONLINE && mode == OfflineMode.ONLINE -> {
+                        // Offline → online: show the full-screen loader during the
+                        // post-toggle fetch so the online branch doesn't flash
+                        // blank between the mode flip and sections arriving.
+                        // isGoingOnline MUST clear in finally — previously the
+                        // clear ran after fetchAndUpdateSections() with no guard,
+                        // so any throw/cancellation left it stuck on forever and
+                        // the user had to restart the app to recover.
+                        _uiState.update { it.copy(isLoading = true) }
+                        try {
+                            fetchAndUpdateSections()
+                        } finally {
+                            _uiState.update { it.copy(isGoingOnline = false) }
+                        }
+                    }
                 }
             }
         }
@@ -678,7 +696,11 @@ class HomeViewModel @Inject constructor(
                 fetchRecentlyGrabbed()
             }
         } finally {
-            _uiState.update { it.copy(isLoading = false, isRefreshing = false) }
+            // isGoingOnline is also cleared in the offlineMode collector's
+            // finally, but resetting it here too guarantees the spinner cannot
+            // survive any code path into this method (e.g. sign-in-triggered
+            // fetch, periodic refresh, manual retry) leaving it stuck on.
+            _uiState.update { it.copy(isLoading = false, isRefreshing = false, isGoingOnline = false) }
             refreshMutex.unlock()
         }
         pendingCwSideEffect?.invoke()
