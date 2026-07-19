@@ -24,12 +24,19 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import com.raulshma.jellyplay.core.designsystem.theme.ShapeCache
+import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
 import androidx.compose.material3.Icon
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.SplitButtonDefaults
+import androidx.compose.material3.SplitButtonLayout
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -41,6 +48,9 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.composables.icons.tabler.Tabler
 import com.composables.icons.tabler.outline.PlayerPlay
+import com.composables.icons.tabler.outline.Video
+import com.composables.icons.tabler.outline.VideoPlus
+import com.composables.icons.tabler.outline.X
 import com.raulshma.jellyplay.core.model.LiveTvProgram
 import com.raulshma.jellyplay.core.ui.adaptive.LocalAdaptiveInfo
 import com.raulshma.jellyplay.core.ui.adaptive.contentPadding
@@ -55,11 +65,19 @@ import java.time.format.DateTimeFormatter
 /**
  * The channel detail content: header + Watch Live, now-playing hero (with live
  * progress bar), and the "On Today" timeline of upcoming programs.
+ *
+ * Record / Record Series actions live on each program timeline row (per-program
+ * semantics, matching the jellyfin official client) — not on the channel
+ * header.
  */
 @Composable
 internal fun ChannelDetailContent(
     state: ChannelDetailUiState,
     onPlayChannel: () -> Unit,
+    onRecord: (LiveTvProgram) -> Unit,
+    onRecordSeries: (LiveTvProgram) -> Unit,
+    onCancelTimer: (LiveTvProgram) -> Unit,
+    onCancelSeries: (LiveTvProgram) -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val adaptiveInfo = LocalAdaptiveInfo.current
@@ -110,6 +128,10 @@ internal fun ChannelDetailContent(
                 ProgramTimelineRow(
                     program = program,
                     isAiring = program.id == airingId,
+                    onRecord = onRecord,
+                    onRecordSeries = onRecordSeries,
+                    onCancelTimer = onCancelTimer,
+                    onCancelSeries = onCancelSeries,
                 )
             }
         }
@@ -135,7 +157,7 @@ private fun ChannelHeader(state: ChannelDetailUiState, onWatchLive: () -> Unit) 
             )
         }
         Spacer(Modifier.height(16.dp))
-        // Watch Live button — styled like a primary play action.
+        // Watch Live — primary play action.
         Row(
             modifier = Modifier
                 .clip(ShapeCache.smooth28)
@@ -159,6 +181,108 @@ private fun ChannelHeader(state: ChannelDetailUiState, onWatchLive: () -> Unit) 
             )
         }
     }
+}
+
+/**
+ * Material 3 Expressive split button pairing the single-episode and series
+ * record actions. Leading button: Record / Cancel Recording (toggled by
+ * [LiveTvProgram.timerId]). Trailing button: Record Series / Cancel Series
+ * (toggled by [LiveTvProgram.seriesTimerId]).
+ *
+ * The trailing half is a checkable split-button segment by API contract; we
+ * drive it as a one-shot action (fire on check-on, then uncheck) so it behaves
+ * like a plain click — same pattern used by [PlayShuffleSplitButton].
+ *
+ * @param size button height in dp; passed to the SplitButton `*For(size)` shape
+ *   / padding / icon factories so the leading label and trailing toggle scale
+ *   together. Use 40.dp for hero placement, 32.dp inside dense program rows.
+ */
+@OptIn(ExperimentalMaterial3ExpressiveApi::class)
+@Composable
+private fun RecordSplitButton(
+    program: LiveTvProgram,
+    size: androidx.compose.ui.unit.Dp,
+    onRecord: () -> Unit,
+    onRecordSeries: () -> Unit,
+    onCancelTimer: () -> Unit,
+    onCancelSeries: () -> Unit,
+) {
+    val hasTimer = !program.timerId.isNullOrEmpty()
+    val hasSeriesTimer = !program.seriesTimerId.isNullOrEmpty()
+    val leadingLabel = if (hasTimer) {
+        stringResource(R.string.livetv_cancel_recording)
+    } else {
+        stringResource(R.string.livetv_record_once)
+    }
+    val leadingIcon = if (hasTimer) Tabler.Outline.X else Tabler.Outline.Video
+    val trailingContentDescription = if (hasSeriesTimer) "Cancel series" else "Record series"
+    val trailingIcon = if (hasSeriesTimer) Tabler.Outline.X else Tabler.Outline.VideoPlus
+
+    // Trailing check state driven locally; we only react to check-on so each
+    // tap fires exactly one action and the thumb snaps back.
+    var trailingChecked by remember(program.id, hasSeriesTimer) { mutableStateOf(false) }
+
+    val leadingColors = if (hasTimer) {
+        ButtonDefaults.buttonColors(
+            containerColor = MaterialTheme.colorScheme.error,
+            contentColor = MaterialTheme.colorScheme.onError,
+        )
+    } else {
+        ButtonDefaults.buttonColors(
+            containerColor = MaterialTheme.colorScheme.secondaryContainer,
+            contentColor = MaterialTheme.colorScheme.onSecondaryContainer,
+        )
+    }
+    val trailingColors = ButtonDefaults.buttonColors(
+        containerColor = if (hasSeriesTimer) MaterialTheme.colorScheme.error
+        else MaterialTheme.colorScheme.secondaryContainer,
+        contentColor = if (hasSeriesTimer) MaterialTheme.colorScheme.onError
+        else MaterialTheme.colorScheme.onSecondaryContainer,
+    )
+
+    SplitButtonLayout(
+        leadingButton = {
+            SplitButtonDefaults.LeadingButton(
+                onClick = { if (hasTimer) onCancelTimer() else onRecord() },
+                shapes = SplitButtonDefaults.leadingButtonShapesFor(size),
+                contentPadding = SplitButtonDefaults.leadingButtonContentPaddingFor(size),
+                colors = leadingColors,
+            ) {
+                Icon(
+                    imageVector = leadingIcon,
+                    contentDescription = leadingLabel,
+                    modifier = Modifier.size(SplitButtonDefaults.leadingButtonIconSizeFor(size)),
+                )
+                Spacer(Modifier.size(ButtonDefaults.iconSpacingFor(size)))
+                Text(
+                    text = leadingLabel,
+                    style = ButtonDefaults.textStyleFor(size),
+                )
+            }
+        },
+        trailingButton = {
+            SplitButtonDefaults.TrailingButton(
+                checked = trailingChecked,
+                onCheckedChange = { checked ->
+                    trailingChecked = checked
+                    if (checked) {
+                        if (hasSeriesTimer) onCancelSeries() else onRecordSeries()
+                        // Snap back so the next tap re-fires deterministically.
+                        trailingChecked = false
+                    }
+                },
+                shapes = SplitButtonDefaults.trailingButtonShapesFor(size),
+                contentPadding = SplitButtonDefaults.trailingButtonContentPaddingFor(size),
+                colors = trailingColors,
+            ) {
+                Icon(
+                    imageVector = trailingIcon,
+                    contentDescription = trailingContentDescription,
+                    modifier = Modifier.size(SplitButtonDefaults.trailingButtonIconSizeFor(size)),
+                )
+            }
+        },
+    )
 }
 
 @Composable
@@ -236,7 +360,14 @@ private fun NowPlayingHero(program: LiveTvProgram) {
 }
 
 @Composable
-private fun ProgramTimelineRow(program: LiveTvProgram, isAiring: Boolean) {
+private fun ProgramTimelineRow(
+    program: LiveTvProgram,
+    isAiring: Boolean,
+    onRecord: (LiveTvProgram) -> Unit,
+    onRecordSeries: (LiveTvProgram) -> Unit,
+    onCancelTimer: (LiveTvProgram) -> Unit,
+    onCancelSeries: (LiveTvProgram) -> Unit,
+) {
     val airingProgress = if (isAiring) rememberLiveProgress(program) else 0f
     val time = program.startDate?.let {
         runCatching {
@@ -279,19 +410,31 @@ private fun ProgramTimelineRow(program: LiveTvProgram, isAiring: Boolean) {
                     overflow = TextOverflow.Ellipsis,
                 )
             }
+            if (isAiring) {
+                Spacer(Modifier.height(6.dp))
+                LinearProgressIndicator(
+                    progress = { airingProgress },
+                    modifier = Modifier
+                        .width(120.dp)
+                        .height(3.dp)
+                        .clip(RoundedCornerShape(2.dp)),
+                    color = MaterialTheme.colorScheme.primary,
+                    trackColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.15f),
+                )
+            }
         }
-        if (isAiring) {
-            Spacer(Modifier.width(8.dp))
-            LinearProgressIndicator(
-                progress = { airingProgress },
-                modifier = Modifier
-                    .width(40.dp)
-                    .height(3.dp)
-                    .clip(RoundedCornerShape(2.dp)),
-                color = MaterialTheme.colorScheme.primary,
-                trackColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.15f),
-            )
-        }
+        Spacer(Modifier.width(10.dp))
+        // Per-program record / record-series split button. Bound to this row's
+        // program (not the channel) — matches the jellyfin official client,
+        // where each EPG program carries its own Record affordance.
+        RecordSplitButton(
+            program = program,
+            size = 32.dp,
+            onRecord = { onRecord(program) },
+            onRecordSeries = { onRecordSeries(program) },
+            onCancelTimer = { onCancelTimer(program) },
+            onCancelSeries = { onCancelSeries(program) },
+        )
     }
 }
 

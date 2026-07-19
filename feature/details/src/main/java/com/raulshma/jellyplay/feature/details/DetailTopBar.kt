@@ -141,7 +141,10 @@ internal fun DetailTopBar(
                     }
                 }
             },
-            colors = TopAppBarDefaults.topAppBarColors(containerColor = Color.Transparent),
+            colors = TopAppBarDefaults.topAppBarColors(
+                containerColor = Color.Transparent,
+                scrolledContainerColor = Color.Transparent,
+            ),
             modifier = Modifier.statusBarsPadding(),
             scrollBehavior = scrollBehavior,
         )

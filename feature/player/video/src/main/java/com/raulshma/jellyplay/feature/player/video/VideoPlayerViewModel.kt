@@ -492,13 +492,8 @@ class VideoPlayerViewModel @Inject constructor(
         getResolvedPlayMethod = { playerSessionManager.sessionState.value.playMethod },
         getMediaEngine = { playerSessionManager.engine },
         getIncognitoModeEnabled = { cachedPreferences.incognitoModeEnabled },
-        getIsLive = { _uiState.value.isLive },
         onAutoSkip = { segment -> skipSegment(segment) },
         onPlaybackEndedNoNext = {
-            // Live streams report a tiny/growing duration; the duration-based
-            // end detector would otherwise trip within seconds and dismiss
-            // the player. Suppress for live (see handlePlaybackEnded).
-            if (_uiState.value.isLive) return@PlaybackProgressReporter
             if (cinemaIntroContext != null) {
                 advanceCinemaIntro()
             } else {
@@ -792,7 +787,6 @@ class VideoPlayerViewModel @Inject constructor(
                             isDirectPlayForced = session.isDirectPlayForced,
                             hasAudioOverride = stored?.audioStreamIndex != null,
                             hasSubtitleOverride = stored?.subtitleStreamIndex != null,
-                            isLive = session.isLive,
                         )
                     }
                 // Re-resolve per-item/series language preference when the
@@ -939,13 +933,6 @@ class VideoPlayerViewModel @Inject constructor(
                                 var hasReachedReady = false
                                 var watchdogJob: kotlinx.coroutines.Job? = null
                                 engine.playbackState.collect { state ->
-                                    // Live streams legitimately buffer longer and
-                                    // rebuffer mid-playback; the 20s watchdog
-                                    // would otherwise surface a false "failed to
-                                    // start" error dialog for slow live tuners.
-                                    // Genuine decode errors still surface via
-                                    // errorFlow (onPlayerError) above.
-                                    if (_uiState.value.isLive) return@collect
                                     when (state) {
                                         com.raulshma.jellyplay.feature.player.video.engine.EnginePlaybackState.BUFFERING -> {
                                             if (!hasReachedReady && watchdogJob == null) {
@@ -1993,13 +1980,6 @@ class VideoPlayerViewModel @Inject constructor(
     }
 
     private fun handlePlaybackEnded() {
-        // Live streams are infinite: an ENDED emission (ExoPlayer stall/EOF,
-        // MPV END_FILE, VLC EndReached) must never close the player — it is
-        // almost always a transient rebuffer/drop, not true end-of-content.
-        // Suppressing here lets the engine keep its live window and the user
-        // stays in playback. Without this gate a live channel closes within
-        // seconds of starting.
-        if (_uiState.value.isLive) return
         val next = _uiState.value.nextEpisode
         if (autoplayController.shouldAutoPlayNext(next)) {
             playNextEpisode()

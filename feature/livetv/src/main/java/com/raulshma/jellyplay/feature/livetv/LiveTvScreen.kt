@@ -23,7 +23,6 @@ import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.raulshma.jellyplay.core.model.LiveTvProgram
-import com.raulshma.jellyplay.core.model.RecordingFolder
 import com.raulshma.jellyplay.core.designsystem.theme.ShapeCache
 import com.raulshma.jellyplay.core.ui.components.JellyPlayScreenScaffold
 import com.raulshma.jellyplay.core.ui.components.rememberScreenBackgroundColor
@@ -50,15 +49,17 @@ import kotlinx.coroutines.launch
  * / [onRecordingClick] navigations passed in from the host app.
  *
  * @param onChannelClick channelId, channelName — opens the channel player.
+ * @param onOpenChannelDetail channelId, channelName — opens the channel detail
+ *   (program guide) screen. Used by the Channels tab row tap; the Programs and
+ *   Guide tabs keep playing directly via [onChannelClick].
  * @param onRecordingClick recordingId — opens the recording in the video player.
- * @param onFolderClick folder — opens the recording folder contents.
  */
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalMaterial3ExpressiveApi::class)
 @Composable
 fun LiveTvScreen(
     onChannelClick: (String, String) -> Unit,
+    onOpenChannelDetail: (String, String) -> Unit,
     onRecordingClick: (String) -> Unit,
-    onFolderClick: (RecordingFolder) -> Unit,
     overviewViewModel: LiveTvOverviewViewModel = hiltViewModel(),
 ) {
     val tabs = LiveTvTab.entries
@@ -100,11 +101,11 @@ fun LiveTvScreen(
                         onBack = { scope.launch { pagerState.animateScrollToPage(LiveTvTab.PROGRAMS.ordinal) } },
                     )
                     LiveTvTab.CHANNELS -> ChannelsScreen(
-                        onChannelClick = onChannelClick,
+                        onChannelClick = onOpenChannelDetail,
+                        onPlayChannel = onChannelClick,
                     )
                     LiveTvTab.RECORDINGS -> RecordingsScreen(
                         onRecordingClick = onRecordingClick,
-                        onFolderClick = onFolderClick,
                     )
                     LiveTvTab.SCHEDULE -> ScheduleScreen()
                     LiveTvTab.SERIES -> SeriesScreen()

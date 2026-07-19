@@ -149,11 +149,6 @@ class LiveTvApiClientImpl @Inject constructor(
         ).content.items.map { it.toLiveTvRecording() }
     }
 
-    override suspend fun getRecordingFolders(): Result<List<com.raulshma.jellyplay.core.model.RecordingFolder>> = engine.apiResultWithRetry {
-        engine.requireApi().liveTvApi.getRecordingFolders(userId = userIdUuid())
-            .content.items.map { it.toRecordingFolder() }
-    }
-
     override suspend fun getTimers(
         isActive: Boolean?,
         isScheduled: Boolean?,

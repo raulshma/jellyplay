@@ -276,6 +276,7 @@ class UserPreferencesStore @Inject constructor(
         val DVR_POST_PADDING_MINUTES = intPreferencesKey("dvr_post_padding_minutes")
         val DVR_RECORDING_QUALITY = stringPreferencesKey("dvr_recording_quality")
         val FAVORITE_CHANNELS = stringPreferencesKey("favorite_channels")
+        val LIVE_TV_LAST_CHANNEL_ID = stringPreferencesKey("live_tv_last_channel_id")
         val ENABLED_NEWSLETTER_SECTIONS = stringPreferencesKey("enabled_newsletter_sections")
         val NEWSLETTER_SECTION_ORDER = stringPreferencesKey("newsletter_section_order")
         val MANUAL_OFFLINE_ENABLED = booleanPreferencesKey("manual_offline_enabled")
@@ -586,6 +587,26 @@ class UserPreferencesStore @Inject constructor(
                 current.keys.take(excess).forEach { current.remove(it) }
             }
             prefs[Keys.MEDIA_STREAM_SELECTIONS] = json.encodeToString(current)
+        }
+    }
+
+    /**
+     * Last-watched live TV channel id, used by `:feature:player:live` to
+     * reopen the player on the same channel across launches. `null` when no
+     * channel has been watched yet (or after [setLiveTvLastChannelId] is
+     * called with `null`).
+     */
+    fun observeLiveTvLastChannelId(): Flow<String?> = sharedPrefs.map { prefs ->
+        prefs[Keys.LIVE_TV_LAST_CHANNEL_ID]
+    }
+
+    suspend fun setLiveTvLastChannelId(channelId: String?) {
+        context.dataStore.edit { prefs ->
+            if (channelId == null) {
+                prefs.remove(Keys.LIVE_TV_LAST_CHANNEL_ID)
+            } else {
+                prefs[Keys.LIVE_TV_LAST_CHANNEL_ID] = channelId
+            }
         }
     }
 

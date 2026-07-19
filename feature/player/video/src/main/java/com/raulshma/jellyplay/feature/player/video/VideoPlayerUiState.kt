@@ -133,13 +133,6 @@ data class VideoPlayerUiState(
     val syncPlayShuffleMode: SyncPlayShuffleMode = SyncPlayShuffleMode.SORTED,
     val nextEpisode: JellyfinMediaItem? = null,
     val streamUrl: String? = null,
-    /**
-     * `true` while a Live TV / IPTV channel is playing. Gates the
-     * playback-ended close logic (live streams must not close the player on
-     * EOF/stall) and the duration-based end detector. Surfaced from
-     * [com.raulshma.jellyplay.feature.player.video.PlayerSessionState.isLive].
-     */
-    val isLive: Boolean = false,
     val preferredPlayerType: PlayerType = PlayerType.EXO_PLAYER,
     val currentMediaSource: MediaSource? = null,
     val mediaStreams: List<MediaStream> = emptyList(),
@@ -219,7 +212,7 @@ data class VideoPlayerUiState(
     val media: MediaContentState
         get() = MediaContentState(
             overview = overview, people = people, artworkUrl = artworkUrl,
-            lyricsLines = lyricsLines, isLive = isLive, streamUrl = streamUrl,
+            lyricsLines = lyricsLines, streamUrl = streamUrl,
             currentMediaSource = currentMediaSource, mediaStreams = mediaStreams,
             playMethod = playMethod, isDirectPlayForced = isDirectPlayForced,
             seriesId = seriesId,

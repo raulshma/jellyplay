@@ -136,6 +136,7 @@ dependencies {
     implementation(project(":feature:player:video"))
     implementation(project(":feature:player:core"))
     implementation(project(":feature:player:audio"))
+    implementation(project(":feature:player:live"))
     implementation(project(":feature:downloads"))
     implementation(project(":feature:settings"))
     implementation(project(":feature:music"))

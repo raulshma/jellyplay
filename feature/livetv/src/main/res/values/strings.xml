@@ -23,7 +23,6 @@
     <string name="livetv_no_series_recordings">No series recordings</string>
 
     <string name="livetv_section_latest_recordings">Latest Recordings</string>
-    <string name="livetv_section_recording_folders">Recording Folders</string>
     <string name="livetv_section_active_recordings">Active Recordings</string>
     <string name="livetv_section_upcoming_recordings">Upcoming Recordings</string>
 
@@ -33,6 +32,7 @@
     <string name="livetv_cancel_series">Cancel Series</string>
     <string name="livetv_record_success">Recording scheduled</string>
     <string name="livetv_record_failed">Failed to set recording</string>
+    <string name="livetv_record_canceled">Recording canceled</string>
 
     <!-- Channel detail screen -->
     <string name="livetv_channel_watch_live">Watch Live</string>

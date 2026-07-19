@@ -24,17 +24,4 @@ fun EntryProviderScope<NavKey>.videoPlayerSection(
             onOpenSubtitleTester = { navigator.navigate(Route.SubtitleTester) },
         )
     }
-    entry<Route.LiveTvChannelPlayer> { key ->
-        VideoPlayerScreen(
-            itemId = key.channelId,
-            mediaSourceId = null,
-            startPositionTicks = 0L,
-            subtitleStreamIndex = key.subtitleStreamIndex,
-            audioStreamIndex = key.audioStreamIndex,
-            onBack = { navigator.goBack() },
-            onEnterPip = onEnterPip,
-            onEnterMiniMode = onEnterMiniMode,
-            onOpenSubtitleTester = { navigator.navigate(Route.SubtitleTester) },
-        )
-    }
 }

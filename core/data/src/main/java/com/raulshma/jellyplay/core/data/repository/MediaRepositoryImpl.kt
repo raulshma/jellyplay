@@ -21,7 +21,6 @@ import com.raulshma.jellyplay.core.model.LibraryFolder
 import com.raulshma.jellyplay.core.model.LiveTvChannel
 import com.raulshma.jellyplay.core.model.LiveTvProgram
 import com.raulshma.jellyplay.core.model.LiveTvRecording
-import com.raulshma.jellyplay.core.model.RecordingFolder
 import com.raulshma.jellyplay.core.model.GuideInfo
 import com.raulshma.jellyplay.core.model.ProgramFilters
 import com.raulshma.jellyplay.core.model.LrcLibTrack
@@ -902,8 +901,6 @@ class MediaRepositoryImpl @Inject constructor(
 
     override suspend fun getRecordings(limit: Int?, isInProgress: Boolean?): Result<List<LiveTvRecording>> =
         apiClient.getRecordings(limit, isInProgress)
-
-    override suspend fun getRecordingFolders(): Result<List<RecordingFolder>> = apiClient.getRecordingFolders()
 
     override suspend fun getTimers(isActive: Boolean?, isScheduled: Boolean?): Result<List<DvrTimer>> =
         apiClient.getTimers(isActive, isScheduled)

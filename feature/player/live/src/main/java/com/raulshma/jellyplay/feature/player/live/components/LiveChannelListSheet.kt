@@ -1,0 +1,181 @@
+package com.raulshma.jellyplay.feature.player.live.components
+
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Text
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.remember
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.dp
+import com.composables.icons.tabler.Tabler
+import com.composables.icons.tabler.outline.Star
+import com.raulshma.jellyplay.core.model.LiveTvChannel
+import com.raulshma.jellyplay.core.ui.components.TvSafeSheet
+import com.raulshma.jellyplay.core.ui.image.MediaImage
+import com.raulshma.jellyplay.core.ui.tv.rememberTvFocusState
+import com.raulshma.jellyplay.core.ui.tv.tvFocusIndicator
+import com.raulshma.jellyplay.core.ui.tv.tryRequestFocus
+
+/**
+ * In-player channel list. Rendered as a TvSafeSheet on TV / ModalBottomSheet
+ * on phone. Lists every channel; Select tunes; the favorite star toggles
+ * favorite. Initial focus lands on the currently-playing channel.
+ *
+ * @param currentChannelId id of the channel that's currently playing; its row
+ *  gets initial focus and a "now playing" indicator.
+ * @param favorites set of favorite channel ids (for the star state).
+ * @param logoUrlFor resolves the channel logo URL (null when the channel has
+ *  no PRIMARY image tag).
+ */
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun LiveChannelListSheet(
+    channels: List<LiveTvChannel>,
+    currentChannelId: String?,
+    favorites: Set<String>,
+    logoUrlFor: (LiveTvChannel) -> String?,
+    onChannelSelected: (String) -> Unit,
+    onToggleFavorite: (String) -> Unit,
+    onDismiss: () -> Unit,
+) {
+    TvSafeSheet(
+        onDismissRequest = onDismiss,
+        title = "Channels",
+    ) {
+        val listState = rememberLazyListState()
+        val currentRequester = remember { FocusRequester() }
+
+        // Scroll the current channel into view and focus its row on open.
+        LaunchedEffect(channels, currentChannelId) {
+            val index = channels.indexOfFirst { it.id == currentChannelId }.coerceAtLeast(0)
+            listState.scrollToItem(index)
+            currentRequester.tryRequestFocus()
+        }
+
+        LazyColumn(
+            state = listState,
+            modifier = Modifier.fillMaxWidth(),
+            verticalArrangement = Arrangement.spacedBy(4.dp),
+        ) {
+            items(items = channels, key = { it.id }) { channel ->
+                ChannelRow(
+                    channel = channel,
+                    logoUrl = logoUrlFor(channel),
+                    isCurrent = channel.id == currentChannelId,
+                    isFavorite = channel.id in favorites,
+                    focusRequester = if (channel.id == currentChannelId) currentRequester
+                    else remember { FocusRequester() },
+                    onClick = {
+                        onChannelSelected(channel.id)
+                        onDismiss()
+                    },
+                    onToggleFavorite = { onToggleFavorite(channel.id) },
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun ChannelRow(
+    channel: LiveTvChannel,
+    logoUrl: String?,
+    isCurrent: Boolean,
+    isFavorite: Boolean,
+    focusRequester: FocusRequester,
+    onClick: () -> Unit,
+    onToggleFavorite: () -> Unit,
+) {
+    val tvFocusState = rememberTvFocusState(focusedScale = 1f)
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .focusRequester(focusRequester)
+            .then(tvFocusState.focusModifier)
+            .tvFocusIndicator(tvFocusState, MaterialTheme.shapes.medium)
+            .clickable(onClick = onClick)
+            .padding(horizontal = 16.dp, vertical = 10.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(12.dp),
+    ) {
+        channel.number?.let {
+            Text(
+                text = it,
+                color = if (isCurrent) MaterialTheme.colorScheme.primary
+                else MaterialTheme.colorScheme.onSurfaceVariant,
+                fontWeight = FontWeight.SemiBold,
+                style = MaterialTheme.typography.titleMedium,
+                modifier = Modifier.size(width = 56.dp, height = 24.dp),
+            )
+        }
+        // Channel logo.
+        if (!logoUrl.isNullOrBlank()) {
+            MediaImage(
+                url = logoUrl,
+                contentDescription = "${channel.name} logo",
+                blurHash = channel.primaryBlurHash,
+                modifier = Modifier
+                    .size(48.dp)
+                    .clip(MaterialTheme.shapes.small),
+            )
+        }
+        Column(modifier = Modifier.weight(1f)) {
+            Text(
+                text = channel.name,
+                color = if (isCurrent) MaterialTheme.colorScheme.primary
+                else MaterialTheme.colorScheme.onSurface,
+                fontWeight = if (isCurrent) FontWeight.Bold else FontWeight.Normal,
+                style = MaterialTheme.typography.titleMedium,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
+            channel.currentProgram?.let { prog ->
+                // Program name (+ episode title for series) and an "airing now"
+                // rating suffix when available.
+                val ratingSuffix = prog.officialRating?.let { " · $it" }.orEmpty()
+                Text(
+                    text = prog.name + (prog.episodeTitle?.let { e -> " — $e" }.orEmpty()) + ratingSuffix,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    fontWeight = if (isCurrent) FontWeight.Medium else FontWeight.Normal,
+                    style = MaterialTheme.typography.bodySmall,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+            }
+        }
+        IconButton(onClick = onToggleFavorite) {
+            Icon(
+                imageVector = Tabler.Outline.Star,
+                contentDescription = if (isFavorite) "Unfavorite" else "Favorite",
+                tint = if (isFavorite) MaterialTheme.colorScheme.primary
+                else MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+        if (isCurrent) {
+            Text(
+                text = "▶",
+                color = MaterialTheme.colorScheme.primary,
+                style = MaterialTheme.typography.titleSmall,
+            )
+        }
+    }
+}

@@ -50,14 +50,6 @@ data class PlayerSessionState(
     val isReady: Boolean = false,
     val offlineTrickplayDir: java.io.File? = null,
     val streamUrl: String? = null,
-    /**
-     * `true` for Live TV / IPTV channels (server-issued `liveStreamId` or
-     * `requiresOpening`). Surfaced from [com.raulshma.jellyplay.core.model.ResolvedPlayback.isLive]
-     * so the player layer can treat live streams distinctly from finite VOD
-     * — the close-on-ended logic is suppressed and the engine gets live
-     * hints. Always `false` for offline playback.
-     */
-    val isLive: Boolean = false,
 )
 
 class PlayerSessionManager(
@@ -296,9 +288,6 @@ class PlayerSessionManager(
                 isDirectPlayForced = prefs.playbackMode == PlaybackMode.FORCE_DIRECT_PLAY,
                 playSessionId = resolved?.playSessionId,
                 streamUrl = url,
-                isLive = resolved?.isLive == true ||
-                    source?.liveStreamId != null ||
-                    source?.requiresOpening == true,
             )
         }
 
@@ -374,7 +363,6 @@ class PlayerSessionManager(
             maxBufferMs = prefs.videoPreloadBufferSize.maxBufferMs,
             normalizationGain = detail.item.normalizationGain,
             mimeType = mimeType,
-            isLive = _sessionState.value.isLive,
             serverDurationMs = (detail.item.runTimeTicks ?: 0L) / 10_000,
         )
 
