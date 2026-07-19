@@ -161,6 +161,7 @@ internal fun DetailContentBody(
     val onPersonClick = callbacks.onPersonClick
     val onNavigateToSeries = callbacks.onNavigateToSeries
     val onSeasonSelected = callbacks.onSeasonSelected
+    val onEpisodesDescendingChange = callbacks.onEpisodesDescendingChange
     val onLoadSeerrData = callbacks.onLoadSeerrData
     val seerrRecommendations = state.seerrRecommendations
     val seerrSimilar = state.seerrSimilar
@@ -535,6 +536,8 @@ internal fun DetailContentBody(
                         },
                         onSeasonSelected = onSeasonSelected,
                         hideEpisodeThumbnails = preferences.hideEpisodeThumbnails,
+                        episodesDescending = preferences.episodesDescending,
+                        onEpisodesDescendingChange = onEpisodesDescendingChange,
                     )
                 }
             }
