@@ -146,10 +146,13 @@ fun PluginListItem(
             )
 
             if (plugin.canUninstall) {
+                val uninstallFocusState = rememberTvFocusState()
                 Box(
                     modifier = Modifier
                         .size(36.dp)
                         .clip(CircleShape)
+                        .then(uninstallFocusState.focusModifier)
+                        .tvFocusIndicator(uninstallFocusState, CircleShape)
                         .clickable { onUninstall(plugin.id) },
                     contentAlignment = Alignment.Center,
                 ) {

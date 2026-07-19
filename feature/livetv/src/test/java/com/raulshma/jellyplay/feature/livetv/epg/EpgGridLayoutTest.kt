@@ -20,7 +20,7 @@ import java.time.temporal.ChronoUnit
  *  - Windowing (program filtering/clamping)
  *  - Width/offset math (4 dp per minute)
  *  - Time-marker alignment to half-hour boundaries
- *  - "Live" detection for the current program
+ *  - Layout is now-independent (live state derived elsewhere)
  *
  * Rendering behaviour is verified via Compose UI tests elsewhere — here we
  * keep the tests fast and deterministic by working directly with the layout
@@ -136,9 +136,7 @@ class EpgGridLayoutTest {
             windowStart = windowStart,
             windowEnd = windowEnd,
         )
-        val now = Instant.parse("2026-06-22T14:00:00Z")
-
-        val layout = layoutChannelRow(grid.rows.first(), grid, now)
+        val layout = layoutChannelRow(grid.rows.first(), grid)
 
         assertEquals(1, layout.programLayouts.size)
         val pl = layout.programLayouts.first()
@@ -159,9 +157,8 @@ class EpgGridLayoutTest {
             windowStart = windowStart,
             windowEnd = windowEnd,
         )
-        val now = Instant.parse("2026-06-22T14:00:00Z")
 
-        val layout = layoutChannelRow(grid.rows.first(), grid, now)
+        val layout = layoutChannelRow(grid.rows.first(), grid)
 
         assertEquals(1, layout.programLayouts.size)
         val pl = layout.programLayouts.first()
@@ -172,7 +169,11 @@ class EpgGridLayoutTest {
     }
 
     @Test
-    fun `layoutChannelRow marks the currently airing program as current`() {
+    fun `layoutChannelRow is purely geometric and carries no live-state`() {
+        // The "is this program currently live" check is intentionally excluded
+        // from the layout so the row geometry stays stable across the 30s
+        // now-tick; live status is derived separately by the UI layer. This
+        // test pins that contract: ProgramLayout exposes no isCurrent flag.
         val grid = buildEpgGridData(
             channels = listOf(channel("a")),
             programs = listOf(
@@ -183,12 +184,11 @@ class EpgGridLayoutTest {
             windowStart = windowStart,
             windowEnd = windowEnd,
         )
-        val now = Instant.parse("2026-06-22T15:00:00Z")
 
-        val layout = layoutChannelRow(grid.rows.first(), grid, now)
+        val layout = layoutChannelRow(grid.rows.first(), grid)
 
-        val current = layout.programLayouts.filter { it.isCurrent }.map { it.program.id }
-        assertEquals(listOf("live"), current)
+        // All three programs are laid out regardless of wall-clock "now".
+        assertEquals(listOf("past", "live", "future"), layout.programLayouts.map { it.program.id })
     }
 
     @Test
@@ -207,9 +207,8 @@ class EpgGridLayoutTest {
             windowStart = windowStart,
             windowEnd = windowEnd,
         )
-        val now = Instant.parse("2026-06-22T14:00:00Z")
 
-        val layout = layoutChannelRow(grid.rows.first(), grid, now)
+        val layout = layoutChannelRow(grid.rows.first(), grid)
 
         // Unparseable programs should not crash and should be filtered out.
         assertTrue(layout.programLayouts.isEmpty())

@@ -1,7 +1,6 @@
-package com.raulshma.jellyplay.feature.player.video.components
+package com.raulshma.jellyplay.core.ui.player
 
 import androidx.compose.animation.core.AnimationSpec
-import androidx.compose.animation.core.spring
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.scaleIn
@@ -12,6 +11,11 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.unit.Dp
 
+/**
+ * Motion specs for player chrome (top bar slide-in, bottom bar slide-in,
+ * center play button scale-in, button press springs, seek bar tweens).
+ * Promoted from :feature:player:video so :feature:player:live reuses them.
+ */
 @Composable
 fun playerTopControlsEnter() = fadeIn(MaterialTheme.motionScheme.defaultEffectsSpec()) +
     slideInVertically(MaterialTheme.motionScheme.defaultSpatialSpec()) { -it }
@@ -28,7 +32,7 @@ fun playerPlayButtonEnter() = fadeIn(MaterialTheme.motionScheme.fastEffectsSpec(
 
 @Composable
 fun playerPlayButtonExit() = fadeOut(MaterialTheme.motionScheme.fastEffectsSpec()) + scaleOut(
-    animationSpec = MaterialTheme.motionScheme.fastEffectsSpec(),
+    animationSpec = MaterialTheme.motionScheme.fastSpatialSpec(),
     targetScale = 0.85f,
 )
 
@@ -39,39 +43,6 @@ fun playerBottomControlsEnter() = fadeIn(MaterialTheme.motionScheme.defaultEffec
 @Composable
 fun playerBottomControlsExit() = fadeOut(MaterialTheme.motionScheme.fastEffectsSpec()) +
     slideOutVertically(MaterialTheme.motionScheme.fastSpatialSpec()) { it }
-
-@Composable
-fun playerSkipButtonEnter() = fadeIn(MaterialTheme.motionScheme.fastEffectsSpec()) + scaleIn(
-    animationSpec = MaterialTheme.motionScheme.fastSpatialSpec(),
-    initialScale = 0.8f,
-)
-
-@Composable
-fun playerSkipButtonExit() = fadeOut(MaterialTheme.motionScheme.fastEffectsSpec()) + scaleOut(
-    animationSpec = MaterialTheme.motionScheme.fastEffectsSpec(),
-    targetScale = 0.8f,
-)
-
-@Composable
-fun playerGestureFeedbackEnter() = fadeIn(MaterialTheme.motionScheme.fastEffectsSpec()) + scaleIn(
-    animationSpec = MaterialTheme.motionScheme.defaultSpatialSpec(),
-    initialScale = 0.7f,
-)
-
-@Composable
-fun playerGestureFeedbackExit() = fadeOut(MaterialTheme.motionScheme.fastEffectsSpec()) + scaleOut(
-    animationSpec = MaterialTheme.motionScheme.fastEffectsSpec(),
-    targetScale = 0.8f,
-)
-
-@Composable
-fun playerEdgeBarEnter() = fadeIn(MaterialTheme.motionScheme.fastEffectsSpec()) + scaleIn(
-    animationSpec = MaterialTheme.motionScheme.fastSpatialSpec(),
-    initialScale = 0.85f,
-)
-
-@Composable
-fun playerEdgeBarExit() = fadeOut(MaterialTheme.motionScheme.fastEffectsSpec())
 
 @Composable
 fun playerButtonPressSpec(): AnimationSpec<Float> =

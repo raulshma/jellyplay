@@ -66,6 +66,7 @@ import com.raulshma.jellyplay.feature.livetv.R
 @Composable
 fun ChannelsScreen(
     onChannelClick: (String, String) -> Unit,
+    onPlayChannel: (String, String) -> Unit,
     viewModel: ChannelsViewModel = hiltViewModel(),
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
@@ -145,6 +146,7 @@ fun ChannelsScreen(
                             isNowPlaying = channel.id == nowPlayingChannelId,
                             isFavorite = channel.id in favoriteChannelIds,
                             onClick = { onChannelClick(channel.id, channel.name) },
+                            onPlay = { onPlayChannel(channel.id, channel.name) },
                             onFavoriteToggle = { viewModel.toggleFavorite(channel.id) },
                         )
                     }
@@ -161,6 +163,7 @@ private fun ChannelCard(
     isNowPlaying: Boolean = false,
     isFavorite: Boolean = false,
     onClick: () -> Unit,
+    onPlay: () -> Unit,
     onFavoriteToggle: () -> Unit = {},
 ) {
     Row(
@@ -276,7 +279,7 @@ private fun ChannelCard(
                 .clip(CircleShape)
                 .background(MaterialTheme.colorScheme.onSurface.copy(alpha = 0.12f))
                 .focusIndicator(CircleShape)
-                .clickable(onClick = onClick),
+                .clickable(onClick = onPlay),
             contentAlignment = Alignment.Center,
         ) {
             Icon(

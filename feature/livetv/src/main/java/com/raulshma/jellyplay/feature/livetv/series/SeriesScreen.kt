@@ -13,6 +13,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.focusGroup
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material3.AlertDialog
@@ -24,9 +25,12 @@ import androidx.compose.material3.TextButton
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
@@ -42,9 +46,11 @@ import com.raulshma.jellyplay.core.ui.adaptive.bottomPadding
 import com.raulshma.jellyplay.core.ui.adaptive.contentPadding
 import com.raulshma.jellyplay.core.ui.adaptive.itemSpacing
 import com.raulshma.jellyplay.core.ui.components.ErrorScreen
-import com.raulshma.jellyplay.core.ui.components.JellyPlayLoadingIndicator
 import com.raulshma.jellyplay.core.ui.components.ScreenEmptyState
+import com.raulshma.jellyplay.core.ui.components.ScreenLoadingState
+import com.raulshma.jellyplay.core.ui.components.focusIndicator
 import com.raulshma.jellyplay.core.ui.tv.LocalTvMode
+import com.raulshma.jellyplay.core.ui.tv.TvGrabInitialFocus
 import com.raulshma.jellyplay.core.ui.tv.tvFocusRestorer
 import com.raulshma.jellyplay.feature.livetv.R
 
@@ -60,9 +66,16 @@ fun SeriesScreen(
     val spacing = adaptiveInfo.itemSpacing(isTv)
     val bottomPad = adaptiveInfo.bottomPadding(isTv)
 
+    val focusRequester = remember { FocusRequester() }
+    TvGrabInitialFocus(
+        focusRequester = focusRequester,
+        itemCount = uiState.seriesTimers.size,
+        tag = "series_init",
+    )
+
     when {
         uiState.isLoading && uiState.seriesTimers.isEmpty() -> {
-            Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { JellyPlayLoadingIndicator() }
+            ScreenLoadingState(modifier = Modifier.fillMaxSize())
         }
         uiState.error != null && uiState.seriesTimers.isEmpty() -> {
             ErrorScreen(message = uiState.error!!, onRetry = { viewModel.load() })
@@ -78,7 +91,9 @@ fun SeriesScreen(
                 LazyColumn(
                     modifier = Modifier
                         .fillMaxSize()
-                        .tvFocusRestorer(),
+                        .focusGroup()
+                        .tvFocusRestorer()
+                        .focusRequester(focusRequester),
                     contentPadding = PaddingValues(top = 8.dp, bottom = bottomPad),
                     verticalArrangement = Arrangement.spacedBy(spacing),
                 ) {
@@ -111,6 +126,7 @@ private fun SeriesTimerCard(
             .padding(horizontal = contentPad, vertical = 4.dp)
             .clip(ShapeCache.smooth12)
             .background(MaterialTheme.colorScheme.surfaceContainerLow)
+            .focusIndicator(ShapeCache.smooth12)
             .clickable(onClick = onClick)
             .padding(14.dp),
         verticalAlignment = Alignment.CenterVertically,

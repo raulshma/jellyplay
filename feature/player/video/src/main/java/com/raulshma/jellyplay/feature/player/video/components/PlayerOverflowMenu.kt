@@ -54,7 +54,7 @@ import com.raulshma.jellyplay.core.ui.tv.tryRequestFocus
  * [androidx.compose.material3.DropdownMenu]. A DropdownMenu opens a separate Popup
  * window that does not inherit the player's immersive mode, so the status/navigation
  * bars would flash on every open — the same problem solved for the bottom sheets
- * (see [com.raulshma.jellyplay.feature.player.video.components.PlayerModalBottomSheet]).
+ * (see [com.raulshma.jellyplay.core.ui.components.PlayerModalBottomSheet]).
  * Anchoring the panel inside the controls overlay keeps it in the immersive window so
  * the system bars never appear.
  *

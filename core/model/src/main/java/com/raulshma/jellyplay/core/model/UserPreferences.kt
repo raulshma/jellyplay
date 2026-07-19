@@ -224,6 +224,7 @@ data class UserPreferences(
     val navItemOrder: List<String> = emptyList(),
     val selfUpdateCheckEnabled: Boolean = true,
     val hideEpisodeThumbnails: Boolean = false,
+    val episodesDescending: Boolean = true,
     val skipSpecials: Boolean = false,
     val cellularDownloadSizeWarningMb: Int = 0,
     val hapticsEnabled: Boolean = true,

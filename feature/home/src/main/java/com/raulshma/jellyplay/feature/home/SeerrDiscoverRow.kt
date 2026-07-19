@@ -1,6 +1,7 @@
 package com.raulshma.jellyplay.feature.home
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.focusGroup
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
@@ -16,6 +17,7 @@ import androidx.compose.ui.unit.dp
 import com.raulshma.jellyplay.core.model.seerr.SeerrSearchItem
 import com.raulshma.jellyplay.core.ui.animation.lazyItemPlacementSpec
 import com.raulshma.jellyplay.core.ui.components.LocalSeerrCardLoadingState
+import com.raulshma.jellyplay.core.ui.tv.tvFocusRestorer
 import com.raulshma.jellyplay.core.ui.components.LocalSeerrPrefetch
 import com.raulshma.jellyplay.core.ui.components.SeerrCardLoadingState
 import com.raulshma.jellyplay.core.ui.components.SeerrMediaCard
@@ -81,6 +83,8 @@ internal fun SeerrDiscoverRow(
         LazyRow(
             modifier = Modifier
                 .fillMaxWidth()
+                .focusGroup()
+                .tvFocusRestorer()
                 .then(if (clippingEnabled) Modifier.clipToBounds() else Modifier)
                 .background(backgroundColor)
                 .padding(horizontal = rowHorizontalPadding, vertical = spacing / 2),

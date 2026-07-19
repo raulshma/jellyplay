@@ -5,7 +5,6 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.rememberPagerState
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Badge
 import androidx.compose.material3.BadgedBox
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -24,7 +23,7 @@ import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.raulshma.jellyplay.core.model.LiveTvProgram
-import com.raulshma.jellyplay.core.model.RecordingFolder
+import com.raulshma.jellyplay.core.designsystem.theme.ShapeCache
 import com.raulshma.jellyplay.core.ui.components.JellyPlayScreenScaffold
 import com.raulshma.jellyplay.core.ui.components.rememberScreenBackgroundColor
 import com.raulshma.jellyplay.feature.livetv.channels.ChannelsScreen
@@ -50,15 +49,17 @@ import kotlinx.coroutines.launch
  * / [onRecordingClick] navigations passed in from the host app.
  *
  * @param onChannelClick channelId, channelName — opens the channel player.
+ * @param onOpenChannelDetail channelId, channelName — opens the channel detail
+ *   (program guide) screen. Used by the Channels tab row tap; the Programs and
+ *   Guide tabs keep playing directly via [onChannelClick].
  * @param onRecordingClick recordingId — opens the recording in the video player.
- * @param onFolderClick folder — opens the recording folder contents.
  */
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalMaterial3ExpressiveApi::class)
 @Composable
 fun LiveTvScreen(
     onChannelClick: (String, String) -> Unit,
+    onOpenChannelDetail: (String, String) -> Unit,
     onRecordingClick: (String) -> Unit,
-    onFolderClick: (RecordingFolder) -> Unit,
     overviewViewModel: LiveTvOverviewViewModel = hiltViewModel(),
 ) {
     val tabs = LiveTvTab.entries
@@ -100,11 +101,11 @@ fun LiveTvScreen(
                         onBack = { scope.launch { pagerState.animateScrollToPage(LiveTvTab.PROGRAMS.ordinal) } },
                     )
                     LiveTvTab.CHANNELS -> ChannelsScreen(
-                        onChannelClick = onChannelClick,
+                        onChannelClick = onOpenChannelDetail,
+                        onPlayChannel = onChannelClick,
                     )
                     LiveTvTab.RECORDINGS -> RecordingsScreen(
                         onRecordingClick = onRecordingClick,
-                        onFolderClick = onFolderClick,
                     )
                     LiveTvTab.SCHEDULE -> ScheduleScreen()
                     LiveTvTab.SERIES -> SeriesScreen()
@@ -118,7 +119,7 @@ fun LiveTvScreen(
  * Material 3 Expressive Live TV tab bar: a [PrimaryScrollableTabRow] (six tabs
  * need scrolling on narrow phones) with a content-hugging rounded pill
  * indicator (`tabIndicatorOffset(matchContentSize = true)` + a
- * [RoundedCornerShape] pill) and per-tab [Badge]s for Recordings / Schedule /
+ * [ShapeCache.smoothPill] pill) and per-tab [Badge]s for Recordings / Schedule /
  * Series counts. Mirrors the expressive tab style used elsewhere in the app.
  */
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalMaterial3ExpressiveApi::class)
@@ -143,7 +144,7 @@ private fun LiveTvTabBar(
                 width = androidx.compose.ui.unit.Dp.Unspecified,
                 height = 6.dp,
                 color = MaterialTheme.colorScheme.primary,
-                shape = RoundedCornerShape(50),
+                shape = ShapeCache.smoothPill,
             )
         },
         divider = {},

@@ -27,8 +27,10 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import com.raulshma.jellyplay.core.data.cast.CastDevice
 import com.raulshma.jellyplay.core.data.cast.CastManager
+import com.raulshma.jellyplay.core.ui.tv.LocalTvMode
 import com.raulshma.jellyplay.core.ui.tv.rememberTvFocusState
 import com.raulshma.jellyplay.core.ui.tv.tvFocusIndicator
+import com.raulshma.jellyplay.core.ui.components.TvSafeSheet
 import com.composables.icons.tabler.Tabler
 import com.composables.icons.tabler.outline.*
 
@@ -46,47 +48,97 @@ fun PlayOnDeviceSheet(
 ) {
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
 
-    ModalBottomSheet(
-        onDismissRequest = onDismiss,
-        sheetState = sheetState,
-    ) {
-        Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 16.dp)
-                .padding(bottom = 24.dp),
+    val isTv = com.raulshma.jellyplay.core.ui.tv.LocalTvMode.current
+    if (isTv) {
+        com.raulshma.jellyplay.core.ui.components.TvSafeSheet(
+            onDismissRequest = onDismiss,
         ) {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.SpaceBetween,
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 16.dp)
+                    .padding(bottom = 24.dp),
             ) {
-                Text(
-                    text = "Play On",
-                    style = MaterialTheme.typography.titleLarge,
-                    fontWeight = FontWeight.SemiBold,
-                )
-            }
-            Spacer(Modifier.height(8.dp))
-
-            when {
-                devices.isEmpty() -> {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                ) {
                     Text(
-                        text = "No Jellyfin clients found. Open JellyPlay or Jellyfin on another device and it will appear here.",
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        textAlign = TextAlign.Center,
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(vertical = 32.dp),
+                        text = "Play On",
+                        style = MaterialTheme.typography.titleLarge,
+                        fontWeight = FontWeight.SemiBold,
                     )
                 }
-                else -> {
-                    LazyColumn(
-                        verticalArrangement = Arrangement.spacedBy(4.dp),
-                    ) {
-                        items(devices, key = { it.id }, contentType = { "playOnDevice" }) { device ->
-                            DeviceRow(device = device, onClick = { onSelect(device) })
+                Spacer(Modifier.height(8.dp))
+
+                when {
+                    devices.isEmpty() -> {
+                        Text(
+                            text = "No Jellyfin clients found. Open JellyPlay or Jellyfin on another device and it will appear here.",
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            textAlign = TextAlign.Center,
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(vertical = 32.dp),
+                        )
+                    }
+                    else -> {
+                        LazyColumn(
+                            verticalArrangement = Arrangement.spacedBy(4.dp),
+                        ) {
+                            items(devices, key = { it.id }, contentType = { "playOnDevice" }) { device ->
+                                DeviceRow(device = device, onClick = { onSelect(device) })
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    } else {
+        ModalBottomSheet(
+            onDismissRequest = onDismiss,
+            sheetState = sheetState,
+        ) {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 16.dp)
+                    .padding(bottom = 24.dp),
+            ) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                ) {
+                    Text(
+                        text = "Play On",
+                        style = MaterialTheme.typography.titleLarge,
+                        fontWeight = FontWeight.SemiBold,
+                    )
+                }
+                Spacer(Modifier.height(8.dp))
+
+                when {
+                    devices.isEmpty() -> {
+                        Text(
+                            text = "No Jellyfin clients found. Open JellyPlay or Jellyfin on another device and it will appear here.",
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            textAlign = TextAlign.Center,
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(vertical = 32.dp),
+                        )
+                    }
+                    else -> {
+                        LazyColumn(
+                            verticalArrangement = Arrangement.spacedBy(4.dp),
+                        ) {
+                            items(devices, key = { it.id }, contentType = { "playOnDevice" }) { device ->
+                                DeviceRow(device = device, onClick = { onSelect(device) })
+                            }
                         }
                     }
                 }

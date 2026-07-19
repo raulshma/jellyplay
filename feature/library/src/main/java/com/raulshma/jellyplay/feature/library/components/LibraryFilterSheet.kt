@@ -408,7 +408,7 @@ fun LibraryFilterSheet(
                 modifier = Modifier
                     .fillMaxHeight(0.85f)
                     .fillMaxWidth(0.7f)
-                    .clip(RoundedCornerShape(24.dp)),
+                    .clip(ShapeCache.smooth24),
                 color = sheetContainerColor,
                 tonalElevation = 6.dp,
             ) {

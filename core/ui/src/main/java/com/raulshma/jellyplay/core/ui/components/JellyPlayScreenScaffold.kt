@@ -143,6 +143,7 @@ fun JellyPlayScreenScaffold(
             if (topBarStyle != TopBarStyle.None) {
                 val topAppBarColors = TopAppBarDefaults.topAppBarColors(
                     containerColor = Color.Transparent,
+                    scrolledContainerColor = Color.Transparent,
                 )
 
                 if (topBarStyle == TopBarStyle.Collapsing) {
@@ -268,6 +269,7 @@ fun ScreenLoadingState(
     }
 }
 
+@OptIn(androidx.compose.material3.ExperimentalMaterial3ExpressiveApi::class)
 @Composable
 fun ScreenEmptyState(
     icon: androidx.compose.ui.graphics.vector.ImageVector,
@@ -275,6 +277,9 @@ fun ScreenEmptyState(
     description: String? = null,
     actionLabel: String? = null,
     onAction: (() -> Unit)? = null,
+    /** When true, disables the action button and swaps its label for a small
+     *  spinner. Use while the action is in flight so the tap isn't silent. */
+    actionLoading: Boolean = false,
     modifier: Modifier = Modifier,
 ) {
     Box(
@@ -308,11 +313,18 @@ fun ScreenEmptyState(
                 val actionFocusState = rememberTvFocusState(focusedScale = 1.05f)
                 androidx.compose.material3.OutlinedButton(
                     onClick = onAction,
+                    enabled = !actionLoading,
                     modifier = Modifier
                         .then(actionFocusState.focusModifier)
                         .tvFocusIndicator(actionFocusState, ShapeCache.smooth12),
                 ) {
-                    Text(actionLabel)
+                    if (actionLoading) {
+                        JellyPlayCircularProgressIndicator(
+                            modifier = Modifier.size(16.dp),
+                        )
+                    } else {
+                        Text(actionLabel)
+                    }
                 }
             }
         }

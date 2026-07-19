@@ -8,14 +8,19 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.FilterChip
+import androidx.compose.material3.FilterChipDefaults
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.Text
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import com.raulshma.jellyplay.core.designsystem.theme.ShapeCache
+import com.raulshma.jellyplay.core.ui.components.PlayerModalBottomSheet
 import com.raulshma.jellyplay.feature.player.audio.R
 
 private val SPEED_OPTIONS = floatArrayOf(0.5f, 0.75f, 1.0f, 1.25f, 1.5f, 2.0f)
@@ -27,28 +32,52 @@ internal fun SpeedPickerSheet(
     onSelect: (Float) -> Unit,
     onDismiss: () -> Unit,
 ) {
-    ModalBottomSheet(
+    PlayerModalBottomSheet(
         onDismissRequest = onDismiss,
         sheetState = rememberModalBottomSheetState(),
     ) {
         Column(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(horizontal = 16.dp)
                 .padding(bottom = 32.dp),
         ) {
-            Text(stringResource(R.string.audio_speed_title), style = MaterialTheme.typography.titleMedium)
-            Spacer(Modifier.height(12.dp))
+            Text(
+                stringResource(R.string.audio_speed_title),
+                style = MaterialTheme.typography.titleLarge.copy(
+                    fontWeight = FontWeight.Bold,
+                ),
+                modifier = Modifier.padding(horizontal = 24.dp),
+            )
+            Spacer(Modifier.height(20.dp))
             Row(
-                modifier = Modifier.fillMaxWidth(),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 24.dp),
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
             ) {
                 SPEED_OPTIONS.forEach { speed ->
-                    androidx.compose.material3.FilterChip(
-                        selected = speed == currentSpeed,
+                    val isSelected = speed == currentSpeed
+                    FilterChip(
+                        selected = isSelected,
                         onClick = { onSelect(speed); onDismiss() },
-                        label = { Text(if (speed == 1.0f) "1x" else "${speed}x") },
+                        label = {
+                            Text(
+                                if (speed == 1.0f) "1x" else "${speed}x",
+                                fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
+                            )
+                        },
                         modifier = Modifier.weight(1f),
+                        shape = ShapeCache.smoothPill,
+                        colors = FilterChipDefaults.filterChipColors(
+                            selectedContainerColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.18f),
+                            selectedLabelColor = MaterialTheme.colorScheme.primary,
+                        ),
+                        border = FilterChipDefaults.filterChipBorder(
+                            borderColor = Color.Transparent,
+                            selectedBorderColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.4f),
+                            enabled = true,
+                            selected = isSelected,
+                        ),
                     )
                 }
             }

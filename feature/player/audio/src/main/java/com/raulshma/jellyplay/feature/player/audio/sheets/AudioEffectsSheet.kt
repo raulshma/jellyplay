@@ -13,9 +13,10 @@ import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.FilterChip
+import androidx.compose.material3.FilterChipDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.Slider
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -23,12 +24,16 @@ import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.composables.icons.tabler.Tabler
 import com.composables.icons.tabler.outline.*
+import com.raulshma.jellyplay.core.designsystem.theme.ShapeCache
 import com.raulshma.jellyplay.core.model.EffectStrength
 import com.raulshma.jellyplay.core.model.ReverbPreset
+import com.raulshma.jellyplay.core.ui.components.PlayerModalBottomSheet
 import com.raulshma.jellyplay.feature.player.audio.AudioEffectsState
 import com.raulshma.jellyplay.feature.player.audio.R
 
@@ -52,7 +57,7 @@ internal fun AudioEffectsSheet(
     onPitchSemitones: (Float) -> Unit,
     onAutoEqByGenre: (Boolean) -> Unit,
 ) {
-    ModalBottomSheet(
+    PlayerModalBottomSheet(
         onDismissRequest = onDismiss,
         sheetState = rememberModalBottomSheetState(),
     ) {
@@ -64,7 +69,13 @@ internal fun AudioEffectsSheet(
             verticalArrangement = Arrangement.spacedBy(16.dp),
         ) {
             item {
-                Text(stringResource(R.string.audio_effects_title), style = MaterialTheme.typography.titleMedium)
+                Text(
+                    stringResource(R.string.audio_effects_title),
+                    style = MaterialTheme.typography.titleLarge.copy(
+                        fontWeight = FontWeight.Bold,
+                    ),
+                    modifier = Modifier.padding(horizontal = 8.dp),
+                )
             }
 
             item {
@@ -128,11 +139,23 @@ internal fun AudioEffectsSheet(
                         // overflow horizontally on narrow screens.
                         FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                             EffectStrength.entries.forEach { strength ->
-                                androidx.compose.material3.FilterChip(
-                                    selected = state.bassBoostStrength == strength,
+                                val isSelected = state.bassBoostStrength == strength
+                                FilterChip(
+                                    selected = isSelected,
                                     onClick = { onBassBoostStrength(strength) },
                                     label = { Text(strength.displayName, style = MaterialTheme.typography.labelSmall) },
                                     modifier = Modifier.height(28.dp),
+                                    shape = ShapeCache.smoothPill,
+                                    colors = FilterChipDefaults.filterChipColors(
+                                        selectedContainerColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.18f),
+                                        selectedLabelColor = MaterialTheme.colorScheme.primary,
+                                    ),
+                                    border = FilterChipDefaults.filterChipBorder(
+                                        borderColor = Color.Transparent,
+                                        selectedBorderColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.4f),
+                                        enabled = true,
+                                        selected = isSelected,
+                                    ),
                                 )
                             }
                         }
@@ -202,10 +225,22 @@ internal fun AudioEffectsSheet(
                     val reverbPresets = ReverbPreset.entries
                     items(reverbPresets.size, key = { reverbPresets[it].name }) { index ->
                         val preset = reverbPresets[index]
-                        androidx.compose.material3.FilterChip(
-                            selected = state.reverbPreset == preset,
+                        val isSelected = state.reverbPreset == preset
+                        FilterChip(
+                            selected = isSelected,
                             onClick = { onReverbPreset(preset) },
                             label = { Text(preset.displayName, style = MaterialTheme.typography.labelSmall) },
+                            shape = ShapeCache.smoothPill,
+                            colors = FilterChipDefaults.filterChipColors(
+                                selectedContainerColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.18f),
+                                selectedLabelColor = MaterialTheme.colorScheme.primary,
+                            ),
+                            border = FilterChipDefaults.filterChipBorder(
+                                borderColor = Color.Transparent,
+                                selectedBorderColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.4f),
+                                enabled = true,
+                                selected = isSelected,
+                            ),
                         )
                     }
                 }
@@ -244,11 +279,23 @@ internal fun AudioEffectsSheet(
                         Spacer(Modifier.height(8.dp))
                         FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                             EffectStrength.entries.forEach { strength ->
-                                androidx.compose.material3.FilterChip(
-                                    selected = state.dialogueBoostStrength == strength,
+                                val isSelected = state.dialogueBoostStrength == strength
+                                FilterChip(
+                                    selected = isSelected,
                                     onClick = { onDialogueBoostStrength(strength) },
                                     label = { Text(strength.displayName, style = MaterialTheme.typography.labelSmall) },
                                     modifier = Modifier.height(28.dp),
+                                    shape = ShapeCache.smoothPill,
+                                    colors = FilterChipDefaults.filterChipColors(
+                                        selectedContainerColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.18f),
+                                        selectedLabelColor = MaterialTheme.colorScheme.primary,
+                                    ),
+                                    border = FilterChipDefaults.filterChipBorder(
+                                        borderColor = Color.Transparent,
+                                        selectedBorderColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.4f),
+                                        enabled = true,
+                                        selected = isSelected,
+                                    ),
                                 )
                             }
                         }
@@ -289,11 +336,23 @@ internal fun AudioEffectsSheet(
                         Spacer(Modifier.height(8.dp))
                         FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                             EffectStrength.entries.forEach { strength ->
-                                androidx.compose.material3.FilterChip(
-                                    selected = state.nightModeStrength == strength,
+                                val isSelected = state.nightModeStrength == strength
+                                FilterChip(
+                                    selected = isSelected,
                                     onClick = { onNightModeStrength(strength) },
                                     label = { Text(strength.displayName, style = MaterialTheme.typography.labelSmall) },
                                     modifier = Modifier.height(28.dp),
+                                    shape = ShapeCache.smoothPill,
+                                    colors = FilterChipDefaults.filterChipColors(
+                                        selectedContainerColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.18f),
+                                        selectedLabelColor = MaterialTheme.colorScheme.primary,
+                                    ),
+                                    border = FilterChipDefaults.filterChipBorder(
+                                        borderColor = Color.Transparent,
+                                        selectedBorderColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.4f),
+                                        enabled = true,
+                                        selected = isSelected,
+                                    ),
                                 )
                             }
                         }

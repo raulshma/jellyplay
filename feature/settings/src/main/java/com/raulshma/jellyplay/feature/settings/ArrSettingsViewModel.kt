@@ -9,11 +9,18 @@ import com.raulshma.jellyplay.core.model.arr.ArrServiceKind
 import com.raulshma.jellyplay.core.model.arr.ArrServiceSummary
 import com.raulshma.jellyplay.core.ui.viewmodel.JellyPlayViewModel
 import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.stateIn
+import kotlinx.coroutines.flow.update
+import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
+import kotlinx.coroutines.sync.Semaphore
+import kotlinx.coroutines.sync.withPermit
 import javax.inject.Inject
 
 /**
@@ -60,8 +67,27 @@ class ArrSettingsViewModel @Inject constructor(
     private val _serverStatus = MutableStateFlow<Map<String, ServerConnectionStatus>>(emptyMap())
     val serverStatus: StateFlow<Map<String, ServerConnectionStatus>> = _serverStatus.asStateFlow()
 
+    /**
+     * Caps concurrent network probes so a large server list doesn't fan out
+     * into dozens of simultaneous connections. Probes are short-lived HTTP
+     * calls; a small window keeps the UI responsive while bounding load.
+     */
+    private val probePermit = Semaphore(4)
+
+    /**
+     * Tracks the in-flight [testAllServers] wave so a second invocation (e.g.
+     * the user toggling discovery or adding a server while one wave is still
+     * running) cancels the prior instead of stacking overlapping probes.
+     */
+    private var testAllJob: Job? = null
+
     init {
         refreshServers()
+    }
+
+    override fun onCleared() {
+        super.onCleared()
+        testAllJob?.cancel()
     }
 
     fun refreshServers() {
@@ -74,7 +100,7 @@ class ArrSettingsViewModel @Inject constructor(
             // Drop status for servers no longer present; seed the rest as Idle so
             // a resolved set that lost an entry doesn't keep a stale Error on screen.
             val liveIds = (summary.radarrServers + summary.sonarrServers).map { it.id }.toSet()
-            _serverStatus.value = _serverStatus.value.filterKeys { it in liveIds }
+            _serverStatus.update { it.filterKeys { key -> key in liveIds } }
             _isRefreshing.value = false
             // Auto-probe so the user sees reachability on entry instead of having
             // to click Test. Skipped when empty (nothing to test).
@@ -84,28 +110,48 @@ class ArrSettingsViewModel @Inject constructor(
 
     /**
      * Probes a single resolved server and pushes the result into [serverStatus].
-     * Concurrent-safe: each call writes only its own key, so [testAllServers]
-     * fans these out without a coordinating lock.
+     * Concurrent-safe: each call writes only its own key via an atomic CAS
+     * (`update`), so [testAllServers] can fan these out without a coordinating
+     * lock even when many probes resolve near-simultaneously.
      */
     fun testServer(server: ArrServerConfig) {
-        launch {
-            _serverStatus.value = _serverStatus.value + (server.id to ServerConnectionStatus.Testing)
-            val result = arrRepository.testServer(server)
-            _serverStatus.value = _serverStatus.value + (server.id to result.fold(
-                onSuccess = { ServerConnectionStatus.Connected },
-                onFailure = { ServerConnectionStatus.Error(it.message ?: "Connection failed") },
-            ))
-        }
+        launch { probeServer(server) }
     }
 
     /**
      * Probes every server in [summary] (or the current [_servers] value when
-     * null) concurrently. Each server's status updates independently as its
-     * probe resolves, so a slow host doesn't block the rest of the UI.
+     * null). Probes run with a bounded concurrency cap ([probePermit]) so a
+     * large list doesn't open dozens of simultaneous connections. A new wave
+     * cancels a still-running prior wave so rapid mutations don't stack.
      */
     fun testAllServers(summary: ArrServiceSummary? = null) {
-        val targets = summary ?: _servers.value
-        (targets.radarrServers + targets.sonarrServers).forEach { testServer(it) }
+        testAllJob?.cancel()
+        val targets = (summary ?: _servers.value).let { it.radarrServers + it.sonarrServers }
+        if (targets.isEmpty()) return
+        testAllJob = launch {
+            coroutineScope {
+                targets.map { async { probeServer(it) } }.awaitAll()
+            }
+        }
+    }
+
+    /**
+     * The actual probe: marks the server [ServerConnectionStatus.Testing],
+     * waits its turn through [probePermit], then resolves and stores the
+     * result. Factored out so both [testServer] (single) and [testAllServers]
+     * (batched) share one code path and the concurrency cap applies uniformly.
+     */
+    private suspend fun probeServer(server: ArrServerConfig) {
+        _serverStatus.update { it + (server.id to ServerConnectionStatus.Testing) }
+        probePermit.withPermit {
+            val result = arrRepository.testServer(server)
+            _serverStatus.update {
+                it + (server.id to result.fold(
+                    onSuccess = { ServerConnectionStatus.Connected },
+                    onFailure = { err -> ServerConnectionStatus.Error(err.message ?: "Connection failed") },
+                ))
+            }
+        }
     }
 
     fun setUseSeerrDiscovery(enabled: Boolean) {

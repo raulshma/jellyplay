@@ -44,9 +44,10 @@ abstract class DataModule {
         @dagger.Provides
         @Singleton
         fun provideDownloadDelegate(
+            @dagger.hilt.android.qualifiers.ApplicationContext context: android.content.Context,
             downloadRepository: com.raulshma.jellyplay.core.data.repository.DownloadRepository,
             playbackRepository: com.raulshma.jellyplay.core.data.repository.PlaybackRepository,
-        ): DownloadDelegate = DownloadDelegate(downloadRepository, playbackRepository)
+        ): DownloadDelegate = DownloadDelegate(context, downloadRepository, playbackRepository)
 
         // LyricsRepository is a narrow (ISP) view of the same MediaRepository singleton
         // (MediaRepository extends LyricsRepository). Providing it via delegation guarantees

@@ -92,6 +92,11 @@ internal val appLanguages = listOf(
     "nb" to "Norsk Bokmål",
 )
 
+private val appLanguageNameByCode: Map<String?, String> = appLanguages.associate { it.first to it.second }
+
+private val LANGUAGE_GROUP_IDS = setOf("app_language", "audio_language", "subtitle_language")
+private val SUBTITLE_GROUP_IDS = setOf("subtitle_font_size", "subtitle_forced_only", "high_contrast_subtitles", "pgs_direct_play", "hdr_subtitle_style", "hdr_subtitle_font_size", "subtitle_color", "subtitle_background", "subtitle_edge_style", "subtitle_sync_offset", "subtitle_vertical_position")
+
 @OptIn(ExperimentalMaterial3Api::class, androidx.compose.material3.ExperimentalMaterial3ExpressiveApi::class, androidx.compose.foundation.ExperimentalFoundationApi::class)
 @Composable
 fun LanguageSettingsScreen(
@@ -119,8 +124,8 @@ fun LanguageSettingsScreen(
     val scrollState = rememberLazyListState()
     val scrollIndex = remember(highlightSettingId) {
         when (highlightSettingId) {
-            in listOf("app_language", "audio_language", "subtitle_language") -> 0
-            in listOf("subtitle_font_size", "subtitle_forced_only", "high_contrast_subtitles", "pgs_direct_play", "hdr_subtitle_style", "hdr_subtitle_font_size", "subtitle_color", "subtitle_background", "subtitle_edge_style", "subtitle_sync_offset", "subtitle_vertical_position") -> 1
+            in LANGUAGE_GROUP_IDS -> 0
+            in SUBTITLE_GROUP_IDS -> 1
             else -> -1
         }
     }
@@ -220,7 +225,7 @@ fun LanguageSettingsScreen(
                     title = stringResource(R.string.settings_subtitles),
                     summary = { stringResource(R.string.settings_subtitles_summary, preferences.subtitleStyle.fontSize) },
                     modifier = Modifier.padding(vertical = 8.dp),
-                    initiallyExpanded = highlightSettingId in listOf("subtitle_font_size", "subtitle_forced_only", "high_contrast_subtitles", "pgs_direct_play", "hdr_subtitle_style", "hdr_subtitle_font_size", "subtitle_color", "subtitle_background", "subtitle_edge_style", "subtitle_sync_offset", "subtitle_vertical_position"),
+                    initiallyExpanded = highlightSettingId in SUBTITLE_GROUP_IDS,
                 ) {
                     var subIdx = 0
                     val subTotal = when {
@@ -362,7 +367,7 @@ fun LanguageSettingsScreen(
         SettingsListPickerSheet(
             title = "Display Language",
             items = appLanguages.map { it.first },
-            label = { code -> appLanguages.find { it.first == code }?.second ?: code ?: "System Default" },
+            label = { code -> appLanguageNameByCode[code] ?: code ?: "System Default" },
             isSelected = { it == preferences.appLanguage },
             onDismiss = { activeDialog = LanguageSettingsDialog.None },
             onSelect = {
@@ -376,7 +381,7 @@ fun LanguageSettingsScreen(
         SettingsListPickerSheet(
             title = "Audio Language",
             items = langs.map { it.first },
-            label = { code -> langs.find { it.first == code }?.second ?: code ?: "Default" },
+            label = { code -> languageNameByCode[code] ?: code ?: "Default" },
             isSelected = { it == preferences.preferredAudioLanguage },
             onDismiss = { activeDialog = LanguageSettingsDialog.None },
             onSelect = {
@@ -390,7 +395,7 @@ fun LanguageSettingsScreen(
         SettingsListPickerSheet(
             title = "Subtitle Language",
             items = langs.map { it.first },
-            label = { code -> langs.find { it.first == code }?.second ?: code ?: "Default" },
+            label = { code -> languageNameByCode[code] ?: code ?: "Default" },
             isSelected = { it == preferences.preferredSubtitleLanguage },
             onDismiss = { activeDialog = LanguageSettingsDialog.None },
             onSelect = {

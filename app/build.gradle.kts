@@ -116,13 +116,6 @@ tasks.matching { it.name == "preBuild" }.configureEach {
     dependsOn("exportLibraryDefinitions")
 }
 
-if (project.hasProperty("enableComposeMetrics")) {
-    composeCompiler {
-        metricsDestination = layout.buildDirectory.dir("compose-metrics")
-        reportsDestination = layout.buildDirectory.dir("compose-reports")
-    }
-}
-
 dependencies {
     // Explicitly add libmpv first so pickFirsts grabs its newer libc++_shared.so
     implementation(libs.libmpv)
@@ -143,6 +136,7 @@ dependencies {
     implementation(project(":feature:player:video"))
     implementation(project(":feature:player:core"))
     implementation(project(":feature:player:audio"))
+    implementation(project(":feature:player:live"))
     implementation(project(":feature:downloads"))
     implementation(project(":feature:settings"))
     implementation(project(":feature:music"))

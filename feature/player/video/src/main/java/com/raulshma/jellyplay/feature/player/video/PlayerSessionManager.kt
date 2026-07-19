@@ -50,14 +50,6 @@ data class PlayerSessionState(
     val isReady: Boolean = false,
     val offlineTrickplayDir: java.io.File? = null,
     val streamUrl: String? = null,
-    /**
-     * `true` for Live TV / IPTV channels (server-issued `liveStreamId` or
-     * `requiresOpening`). Surfaced from [com.raulshma.jellyplay.core.model.ResolvedPlayback.isLive]
-     * so the player layer can treat live streams distinctly from finite VOD
-     * — the close-on-ended logic is suppressed and the engine gets live
-     * hints. Always `false` for offline playback.
-     */
-    val isLive: Boolean = false,
 )
 
 class PlayerSessionManager(
@@ -165,6 +157,24 @@ class PlayerSessionManager(
         val subtitle = offlineItem?.seriesName ?: offlineItem?.overview?.take(60) ?: ""
         val url = Uri.fromFile(localFile).toString()
 
+        var runTimeTicks = offlineItem?.runTimeTicks
+        if (runTimeTicks == null || runTimeTicks <= 0L) {
+            val extractedDurationMs = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+                try {
+                    val retriever = android.media.MediaMetadataRetriever()
+                    retriever.setDataSource(localFile.absolutePath)
+                    val durationStr = retriever.extractMetadata(android.media.MediaMetadataRetriever.METADATA_KEY_DURATION)
+                    retriever.release()
+                    durationStr?.toLongOrNull()
+                } catch (e: Exception) {
+                    null
+                }
+            }
+            if (extractedDurationMs != null && extractedDurationMs > 0) {
+                runTimeTicks = extractedDurationMs * 10_000
+            }
+        }
+
         // Resolve the real container so ExoPlayer gets the right MIME type and
         // selects the correct extractor. Precedence:
         //   1. Container persisted at download time (new downloads).
@@ -203,7 +213,7 @@ class PlayerSessionManager(
                 mediaType = download?.mediaType ?: com.raulshma.jellyplay.core.model.MediaType.UNKNOWN,
                 overview = offlineItem?.overview,
                 seriesName = offlineItem?.seriesName,
-                runTimeTicks = offlineItem?.runTimeTicks,
+                runTimeTicks = runTimeTicks,
             ),
             mediaSources = emptyList(),
             chapters = emptyList(),
@@ -278,9 +288,6 @@ class PlayerSessionManager(
                 isDirectPlayForced = prefs.playbackMode == PlaybackMode.FORCE_DIRECT_PLAY,
                 playSessionId = resolved?.playSessionId,
                 streamUrl = url,
-                isLive = resolved?.isLive == true ||
-                    source?.liveStreamId != null ||
-                    source?.requiresOpening == true,
             )
         }
 
@@ -356,7 +363,6 @@ class PlayerSessionManager(
             maxBufferMs = prefs.videoPreloadBufferSize.maxBufferMs,
             normalizationGain = detail.item.normalizationGain,
             mimeType = mimeType,
-            isLive = _sessionState.value.isLive,
             serverDurationMs = (detail.item.runTimeTicks ?: 0L) / 10_000,
         )
 

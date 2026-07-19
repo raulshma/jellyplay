@@ -97,4 +97,10 @@ interface PlaybackApiClient {
     suspend fun downloadRemoteSubtitle(itemId: String, subtitleId: String): Result<Unit>
     suspend fun getTrickplayTileImage(itemId: String, width: Int, index: Int): ByteArray?
     suspend fun getServerTime(): Result<com.raulshma.jellyplay.core.model.UtcTimeResponse>
+    /**
+     * Fetches an item's image bytes via the authenticated Jellyfin SDK API so
+     * it can be persisted locally for offline viewing. Returns null if the
+     * item has no such image or the request fails.
+     */
+    suspend fun getItemImageBytes(itemId: String, imageType: String, maxWidth: Int): ByteArray?
 }

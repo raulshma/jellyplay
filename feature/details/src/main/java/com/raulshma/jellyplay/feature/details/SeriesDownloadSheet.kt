@@ -11,6 +11,9 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.imePadding
+import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -32,7 +35,9 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TriStateCheckbox
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -71,6 +76,11 @@ fun SeriesDownloadSheet(
 ) {
     val selection = rememberSeriesDownloadSelection(seasons, episodes, downloadedEpisodeIds)
     var expandedSeasonId by remember { mutableStateOf<String?>(null) }
+    // Whole-season selections requested while a season's episode list was still
+    // loading. Pair of <seasonId, markSelectAll>; once episodes arrive we apply
+    // the pending selection (and clear the entry). Lets the user pick a whole
+    // season from the collapsed checkbox without first expanding it.
+    val pendingSeasonSelections = remember { mutableStateListOf<Pair<String, Boolean>>() }
 
     val totalSelectedCount = selection.totalSelectedCount
     val allSelected = selection.allSelected
@@ -79,6 +89,13 @@ fun SeriesDownloadSheet(
     Column(
         modifier = Modifier
             .fillMaxWidth()
+            // Cap the sheet body so the Cancel/Download actions are always
+            // visible without scrolling. The bottom sheet sizes itself to its
+            // content; an unbounded column here would let the LazyColumn grow
+            // past the sheet and push the action buttons off screen.
+            .heightIn(max = 560.dp)
+            .navigationBarsPadding()
+            .imePadding()
             .padding(horizontal = 20.dp, vertical = 16.dp),
     ) {
         Row(
@@ -162,7 +179,7 @@ fun SeriesDownloadSheet(
         LazyColumn(
             modifier = Modifier
                 .fillMaxWidth()
-                .height(400.dp),
+                .weight(1f),
             verticalArrangement = Arrangement.spacedBy(4.dp),
         ) {
             items(seasons, key = { it.id }, contentType = { "season" }) { season ->
@@ -175,6 +192,33 @@ fun SeriesDownloadSheet(
                 }
                 val selectedInSeason = selection.selectedForSeason(season.id)
                 val triState = selection.triStateForSeason(season.id, downloadedInSeason)
+
+                // Apply any whole-season selection that was requested while this
+                // season's episodes were still loading, once they arrive.
+                LaunchedEffect(season.id, seasonEpisodes, pendingSeasonSelections) {
+                    val pendingIdx = pendingSeasonSelections.indexOfFirst { it.first == season.id }
+                    if (pendingIdx >= 0 && seasonEpisodes.isNotEmpty() && !isLoadingThis) {
+                        val (_, markSelectAll) = pendingSeasonSelections.removeAt(pendingIdx)
+                        if (markSelectAll) {
+                            selection.selectAllInSeason(season.id)
+                        }
+                    }
+                }
+
+                fun onSeasonCheckboxToggle() {
+                    // If episodes aren't loaded yet, fetch them and defer the
+                    // selection until they arrive.
+                    if (season.id !in episodes.keys && seasonEpisodes.isEmpty()) {
+                        if (triState == androidx.compose.ui.state.ToggleableState.On) {
+                            // Already fully selected (e.g. all downloaded) — no-op.
+                            return
+                        }
+                        onLoadEpisodes(season.id)
+                        pendingSeasonSelections.add(season.id to true)
+                    } else {
+                        selection.toggleSeason(season.id)
+                    }
+                }
 
                 val seasonBgColor by animateColorAsState(
                     targetValue = if (isExpanded) MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.3f)
@@ -211,7 +255,7 @@ fun SeriesDownloadSheet(
                     ) {
                         TriStateCheckbox(
                             state = triState,
-                            onClick = { selection.toggleSeason(season.id) },
+                            onClick = { onSeasonCheckboxToggle() },
                         )
                         Spacer(Modifier.width(4.dp))
                         Column(modifier = Modifier.weight(1f)) {

@@ -14,6 +14,7 @@ import androidx.compose.animation.ContentTransform
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.togetherWith
 import com.raulshma.jellyplay.core.designsystem.theme.AlphaEasing
+import com.raulshma.jellyplay.core.designsystem.theme.Dimensions
 import com.raulshma.jellyplay.core.designsystem.theme.FancyTransitionEasing
 import com.raulshma.jellyplay.core.designsystem.theme.PointToPointEasing
 import androidx.compose.foundation.background
@@ -88,7 +89,6 @@ import androidx.compose.foundation.layout.offset
 import androidx.compose.ui.draw.scale
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.blur
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.NavigationBarItem
 import androidx.compose.material3.NavigationBarItemDefaults
 import androidx.compose.material3.Surface
@@ -165,6 +165,7 @@ import com.raulshma.jellyplay.feature.livetv.navigation.liveTvSection
 import com.raulshma.jellyplay.feature.music.navigation.musicSection
 import com.raulshma.jellyplay.feature.music.musichome.MusicHomeScreen
 import com.raulshma.jellyplay.feature.player.audio.navigation.audioPlayerSection
+import com.raulshma.jellyplay.feature.player.live.navigation.livePlayerSection
 import com.raulshma.jellyplay.feature.player.video.navigation.videoPlayerSection
 import com.raulshma.jellyplay.feature.search.navigation.searchSection
 import com.raulshma.jellyplay.feature.settings.navigation.settingsSection
@@ -573,7 +574,7 @@ private fun MainContent(
 
     val tvTypography = if (isTv) TvTypography else null
 
-    val bottomNavHeight = 80.dp // Approximate height
+    val bottomNavHeight = Dimensions.floatingNavHeight // Canonical floating nav-bar height
     val bottomNavHeightPx = with(LocalDensity.current) { bottomNavHeight.toPx() }
     val bottomNavOffsetHeightPx = remember { mutableFloatStateOf(0f) }
     val isBottomNavVisibleState = remember { mutableStateOf(true) }
@@ -690,6 +691,19 @@ private fun MainContent(
                     libraryFolders = libraryFolders,
                     nowPlayingTitle = audioTitle.takeIf { audioItemId != null },
                     nowPlayingEnabled = audioItemId != null,
+                    showMiniPlayer = showMiniPlayer,
+                    audioPlaybackManager = audioPlaybackManager,
+                    isAudioPlaying = isAudioPlaying,
+                    audioTitle = audioTitle,
+                    audioArtist = audioArtist,
+                    audioArtworkUrl = audioArtworkUrl,
+                    onDismissMiniPlayer = { isMiniPlayerDismissed = true },
+                    isVideoMiniMode = isVideoMiniMode,
+                    videoMiniPlayerState = videoMiniPlayerState,
+                    videoMiniTitle = videoMiniTitle,
+                    videoMiniSubtitle = videoMiniSubtitle,
+                    videoMiniIsPlaying = videoMiniIsPlaying,
+                    videoMiniItemId = videoMiniItemId,
                 )
             } else {
                 if (!isFullScreenRoute) {
@@ -875,6 +889,19 @@ private fun TvContent(
     libraryFolders: List<com.raulshma.jellyplay.core.model.LibraryFolder>,
     nowPlayingTitle: String?,
     nowPlayingEnabled: Boolean,
+    showMiniPlayer: Boolean,
+    audioPlaybackManager: AudioPlaybackManager,
+    isAudioPlaying: Boolean,
+    audioTitle: String,
+    audioArtist: String,
+    audioArtworkUrl: String,
+    onDismissMiniPlayer: () -> Unit,
+    isVideoMiniMode: Boolean,
+    videoMiniPlayerState: com.raulshma.jellyplay.core.data.playback.VideoMiniPlayerState,
+    videoMiniTitle: String,
+    videoMiniSubtitle: String,
+    videoMiniIsPlaying: Boolean,
+    videoMiniItemId: String?,
 ) {
     TvMaterial3Theme(
         colorScheme = tvDarkColorScheme(
@@ -922,19 +949,75 @@ private fun TvContent(
                 nowPlayingEnabled = nowPlayingEnabled,
                 onNowPlayingClick = onNowPlayingClick,
             ) {
-                MainNavDisplay(
-                    navigationState = navigationState,
-                    navigator = navigator,
-                    onLogout = onLogout,
-                    homeMode = homeMode,
-                    onModeChange = onModeChange,
-                    enterPip = enterPip,
-                    enterVideoMiniMode = enterVideoMiniMode,
-                    saveableStateHolder = saveableStateHolder,
-                    entryDecorator = entryDecorator,
-                    onNowPlayingClick = onNowPlayingClick,
-                    onAmbientClick = onAmbientClick,
-                )
+                Box(modifier = Modifier.fillMaxSize()) {
+                    MainNavDisplay(
+                        navigationState = navigationState,
+                        navigator = navigator,
+                        onLogout = onLogout,
+                        homeMode = homeMode,
+                        onModeChange = onModeChange,
+                        enterPip = enterPip,
+                        enterVideoMiniMode = enterVideoMiniMode,
+                        saveableStateHolder = saveableStateHolder,
+                        entryDecorator = entryDecorator,
+                        onNowPlayingClick = onNowPlayingClick,
+                        onAmbientClick = onAmbientClick,
+                    )
+                    // TV mini-player transport: the drawer's "Now Playing" row only opens the
+                    // full player, so without this overlay backgrounded audio has no D-pad-
+                    // reachable pause/skip/close bar on TV. The components are already TV-aware
+                    // (MiniPlayer/VideoMiniPlayer apply tvFocusIndicator); this is the host
+                    // wiring gap called out in the TV navigation audit (H5).
+                    if (showMiniPlayer) {
+                        Box(
+                            modifier = Modifier
+                                .align(Alignment.BottomCenter)
+                                .padding(bottom = 8.dp),
+                        ) {
+                            MiniPlayer(
+                                isVisible = true,
+                                title = audioTitle,
+                                artist = audioArtist,
+                                artworkUri = audioArtworkUrl,
+                                isPlaying = isAudioPlaying,
+                                onClick = onNowPlayingClick,
+                                onClose = {
+                                    audioPlaybackManager.stopAndRelease()
+                                    onDismissMiniPlayer()
+                                },
+                                onPlayPause = {
+                                    audioPlaybackManager.togglePlayPause()
+                                },
+                                onSkipNext = {
+                                    audioPlaybackManager.skipToNext()
+                                },
+                            )
+                        }
+                    }
+                    if (isVideoMiniMode) {
+                        VideoMiniPlayer(
+                            isVisible = true,
+                            engine = videoMiniPlayerState.engine as? com.raulshma.jellyplay.feature.player.video.engine.MediaEngine,
+                            title = videoMiniTitle,
+                            subtitle = videoMiniSubtitle,
+                            isPlaying = videoMiniIsPlaying,
+                            onClick = {
+                                val itemId = videoMiniItemId ?: return@VideoMiniPlayer
+                                navigator.navigate(Route.VideoPlayer(itemId))
+                            },
+                            onClose = {
+                                videoMiniPlayerState.release()
+                            },
+                            onPlayPause = {
+                                videoMiniPlayerState.togglePlayPause()
+                            },
+                            modifier = Modifier
+                                .align(Alignment.BottomEnd)
+                                .padding(end = 8.dp, bottom = 8.dp)
+                                .fillMaxWidth(0.45f),
+                        )
+                    }
+                }
             }
         }
     }
@@ -1108,7 +1191,7 @@ private fun PhoneContent(
                             .align(Alignment.BottomCenter)
                             .padding(bottom = systemNavBarBottom + 60.dp)
                             .offset {
-                                val maxOffset = 60.dp.toPx()
+                                val maxOffset = Dimensions.floatingNavHeight.toPx()
                                 val yOffset = (-bottomNavOffsetHeightPx.floatValue).coerceAtMost(maxOffset)
                                 IntOffset(x = 0, y = yOffset.roundToInt())
                             }
@@ -1455,6 +1538,7 @@ private fun MainNavDisplay(
             detailsSection(navigator)
             editorSection(navigator)
             videoPlayerSection(navigator, onEnterPip = enterPip, onEnterMiniMode = enterVideoMiniMode)
+            livePlayerSection(navigator, onEnterPip = enterPip, onEnterMiniMode = enterVideoMiniMode)
             audioPlayerSection(navigator)
             downloadsSection(navigator)
             authSection(navigator) { navigator.goBack() }
@@ -1522,7 +1606,7 @@ private fun FloatingNavigationBar(
 ) {
     Surface(
         modifier = modifier,
-        shape = RoundedCornerShape(percent = 50),
+        shape = ShapeCache.smoothPill,
         color = containerColor.copy(alpha = 0.65f),
         tonalElevation = 0.dp,
         shadowElevation = 0.dp,

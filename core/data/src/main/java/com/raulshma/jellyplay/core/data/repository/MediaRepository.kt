@@ -128,6 +128,14 @@ interface MediaRepository : LiveTvRepository, SyncPlayRepository, NewsletterRepo
 
     suspend fun getEpisodes(seriesId: String, seasonId: String): Result<List<MediaItem>>
 
+    /**
+     * Fetches every episode for a series in a single round-trip and groups the
+     * result by `seasonId`. Collapses an N-season fan-out (one request per
+     * season) into a single call to Jellyfin's `/Shows/{seriesId}/Episodes`
+     * endpoint (which returns the full set when `seasonId` is omitted).
+     */
+    suspend fun getAllEpisodesGrouped(seriesId: String): Result<Map<String, List<MediaItem>>>
+
     suspend fun getCollectionItems(
         collectionId: String,
         startIndex: Int = 0,
@@ -165,6 +173,14 @@ interface MediaRepository : LiveTvRepository, SyncPlayRepository, NewsletterRepo
     suspend fun invalidateCaches()
 
     fun invalidateDetailCache(itemId: String? = null)
+
+    /**
+     * Drops the TTL-cached seasons/episodes entries for the given series so the
+     * next call re-fetches fresh user-data (played state, playback positions)
+     * from the server. Used after user-data mutations on an episode or the
+     * series itself.
+     */
+    fun invalidateSeriesCache(seriesId: String)
 
     suspend fun getPhotoFolderChildImageUrls(folderId: String, limit: Int = 4): List<String>
 }

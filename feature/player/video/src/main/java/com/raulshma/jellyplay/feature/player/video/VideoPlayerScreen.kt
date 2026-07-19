@@ -120,7 +120,7 @@ import com.raulshma.jellyplay.feature.player.video.components.RememberPreference
 import com.raulshma.jellyplay.feature.player.video.components.PlaybackErrorDialog
 import com.raulshma.jellyplay.feature.player.video.components.QualityPickerSheet
 import com.raulshma.jellyplay.feature.player.video.components.PlaybackModeSheet
-import com.raulshma.jellyplay.feature.player.video.components.PlayerModalBottomSheet
+import com.raulshma.jellyplay.core.ui.components.PlayerModalBottomSheet
 import com.raulshma.jellyplay.feature.player.video.components.SubtitleManagerSheet
 import com.raulshma.jellyplay.feature.player.video.components.CastIndicatorOverlay
 import com.raulshma.jellyplay.feature.player.video.components.CompanionDashboard
@@ -138,7 +138,7 @@ import com.raulshma.jellyplay.feature.player.video.components.SyncPlayPlayerShee
 import com.raulshma.jellyplay.feature.player.video.components.TrackPickerSheet
 import com.raulshma.jellyplay.feature.player.video.components.TrickplayOverlay
 import com.raulshma.jellyplay.feature.player.video.components.VideoFilterSheet
-import com.raulshma.jellyplay.feature.player.video.findActivity
+import com.raulshma.jellyplay.core.ui.player.findActivity
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import androidx.compose.animation.core.tween

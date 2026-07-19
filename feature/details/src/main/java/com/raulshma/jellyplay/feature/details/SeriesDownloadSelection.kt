@@ -86,6 +86,19 @@ internal class SeriesDownloadSelection(
         selectedEpisodeIds = selectedEpisodeIds + (seasonId to newSet)
     }
 
+    /**
+     * Force-select every selectable episode in a season. Unlike [toggleSeason],
+     * this never toggles off — used to apply a deferred whole-season selection
+     * after its episodes finish loading (the checkbox may be tapped before the
+     * episode list has been fetched, when `selectableEpisodeIdsForSeason` is
+     * still empty and `toggleSeason` would be a no-op).
+     */
+    fun selectAllInSeason(seasonId: String) {
+        val selectable = selectableEpisodeIdsForSeason(seasonId)
+        if (selectable.isEmpty()) return
+        selectedEpisodeIds = selectedEpisodeIds + (seasonId to selectable)
+    }
+
     fun toggleEpisode(seasonId: String, episodeId: String) {
         val current = selectedForSeason(seasonId)
         val newSet = if (episodeId in current) current - episodeId else current + episodeId

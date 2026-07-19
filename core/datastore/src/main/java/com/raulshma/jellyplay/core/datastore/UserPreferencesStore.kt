@@ -276,6 +276,7 @@ class UserPreferencesStore @Inject constructor(
         val DVR_POST_PADDING_MINUTES = intPreferencesKey("dvr_post_padding_minutes")
         val DVR_RECORDING_QUALITY = stringPreferencesKey("dvr_recording_quality")
         val FAVORITE_CHANNELS = stringPreferencesKey("favorite_channels")
+        val LIVE_TV_LAST_CHANNEL_ID = stringPreferencesKey("live_tv_last_channel_id")
         val ENABLED_NEWSLETTER_SECTIONS = stringPreferencesKey("enabled_newsletter_sections")
         val NEWSLETTER_SECTION_ORDER = stringPreferencesKey("newsletter_section_order")
         val MANUAL_OFFLINE_ENABLED = booleanPreferencesKey("manual_offline_enabled")
@@ -347,6 +348,7 @@ class UserPreferencesStore @Inject constructor(
         val PIN_FAILED_ATTEMPTS = intPreferencesKey("pin_failed_attempts")
         val PIN_LOCKOUT_UNTIL_MS = longPreferencesKey("pin_lockout_until_ms")
         val HIDE_EPISODE_THUMBNAILS = booleanPreferencesKey("hide_episode_thumbnails")
+        val EPISODES_DESCENDING = booleanPreferencesKey("episodes_descending")
         val SKIP_SPECIALS = booleanPreferencesKey("skip_specials")
         val CELLULAR_DOWNLOAD_SIZE_WARNING_MB = intPreferencesKey("cellular_download_size_warning_mb")
         val HAPTICS_ENABLED = booleanPreferencesKey("haptics_enabled")
@@ -586,6 +588,26 @@ class UserPreferencesStore @Inject constructor(
                 current.keys.take(excess).forEach { current.remove(it) }
             }
             prefs[Keys.MEDIA_STREAM_SELECTIONS] = json.encodeToString(current)
+        }
+    }
+
+    /**
+     * Last-watched live TV channel id, used by `:feature:player:live` to
+     * reopen the player on the same channel across launches. `null` when no
+     * channel has been watched yet (or after [setLiveTvLastChannelId] is
+     * called with `null`).
+     */
+    fun observeLiveTvLastChannelId(): Flow<String?> = sharedPrefs.map { prefs ->
+        prefs[Keys.LIVE_TV_LAST_CHANNEL_ID]
+    }
+
+    suspend fun setLiveTvLastChannelId(channelId: String?) {
+        context.dataStore.edit { prefs ->
+            if (channelId == null) {
+                prefs.remove(Keys.LIVE_TV_LAST_CHANNEL_ID)
+            } else {
+                prefs[Keys.LIVE_TV_LAST_CHANNEL_ID] = channelId
+            }
         }
     }
 
@@ -1167,6 +1189,7 @@ class UserPreferencesStore @Inject constructor(
             navItemOrder = navItemOrder,
             selfUpdateCheckEnabled = readBool(prefs, Keys.SELF_UPDATE_CHECK_ENABLED, "self_update_check_enabled", true),
             hideEpisodeThumbnails = readBool(prefs, Keys.HIDE_EPISODE_THUMBNAILS, "hide_episode_thumbnails", false),
+            episodesDescending = readBool(prefs, Keys.EPISODES_DESCENDING, "episodes_descending", true),
             skipSpecials = readBool(prefs, Keys.SKIP_SPECIALS, "skip_specials", false),
             cellularDownloadSizeWarningMb = readInt(prefs, Keys.CELLULAR_DOWNLOAD_SIZE_WARNING_MB, "cellular_download_size_warning_mb", 0),
             hapticsEnabled = readBool(prefs, Keys.HAPTICS_ENABLED, "haptics_enabled", true),
@@ -1363,6 +1386,10 @@ class UserPreferencesStore @Inject constructor(
         context.dataStore.edit { it[Keys.HIDE_EPISODE_THUMBNAILS] = enabled }
     }
 
+    suspend fun setEpisodesDescending(descending: Boolean) {
+        context.dataStore.edit { it[Keys.EPISODES_DESCENDING] = descending }
+    }
+
     suspend fun setSkipSpecials(enabled: Boolean) {
         context.dataStore.edit { it[Keys.SKIP_SPECIALS] = enabled }
     }
@@ -1504,7 +1531,7 @@ class UserPreferencesStore @Inject constructor(
      */
     suspend fun setPin(pin: String) {
         if (pin.isBlank()) return
-        val hash = PinHasher.hash(pin)
+        val hash = withContext(Dispatchers.Default) { PinHasher.hash(pin) }
         context.dataStore.edit { prefs ->
             prefs[Keys.PIN_HASH] = hash
             prefs[Keys.PIN_LOCK_ENABLED] = true

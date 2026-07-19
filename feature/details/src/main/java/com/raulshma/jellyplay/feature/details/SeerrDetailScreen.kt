@@ -1,5 +1,6 @@
 package com.raulshma.jellyplay.feature.details
 
+import android.util.Log
 import androidx.compose.animation.*
 import com.raulshma.jellyplay.core.designsystem.theme.RatingColors
 import com.raulshma.jellyplay.core.designsystem.theme.ShapeCache
@@ -7,6 +8,7 @@ import com.raulshma.jellyplay.core.designsystem.theme.isLightColor
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.focusGroup
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
@@ -711,6 +713,7 @@ private fun SeerrDetailContent(
             },
             colors = TopAppBarDefaults.topAppBarColors(
                 containerColor = animatedContainerColor,
+                scrolledContainerColor = animatedContainerColor,
                 navigationIconContentColor = MaterialTheme.colorScheme.onSurface,
                 titleContentColor = MaterialTheme.colorScheme.onSurface
             ),
@@ -922,6 +925,7 @@ private fun SeerrDetailBody(
                                 episodesBySeason = episodesBySeason,
                                 isLoadingEpisodes = isLoadingEpisodes,
                                 onSeasonClick = onSeasonClick,
+                                showPosterUrl = tvDetail.posterUrl,
                             )
                         }
 
@@ -953,6 +957,7 @@ private fun SeerrDetailBody(
                         episodesBySeason = episodesBySeason,
                         isLoadingEpisodes = isLoadingEpisodes,
                         onSeasonClick = onSeasonClick,
+                        showPosterUrl = tvDetail.posterUrl,
                     )
                 }
 
@@ -1021,6 +1026,7 @@ private fun SeerrHorizontalSection(
             horizontalArrangement = Arrangement.spacedBy(16.dp),
             contentPadding = PaddingValues(horizontal = 4.dp),
             modifier = Modifier
+                .focusGroup()
                 .tvFocusRestorer(),
         ) {
             items(uniqueItems, key = { it.id }, contentType = { "seerrSearchItem" }) { item ->
@@ -1126,6 +1132,7 @@ private fun CastSection(
             horizontalArrangement = Arrangement.spacedBy(16.dp),
             contentPadding = PaddingValues(horizontal = 4.dp),
             modifier = Modifier
+                .focusGroup()
                 .tvFocusRestorer(),
         ) {
             items(uniqueCast, key = { member -> when (member) { is SeerrAggregateCast -> member.id; is SeerrCast -> member.id; else -> member.hashCode() } }, contentType = { "castMember" }) { member ->
@@ -1192,10 +1199,22 @@ private fun SeasonsSection(
     episodesBySeason: Map<Int, List<SeerrEpisode>> = emptyMap(),
     isLoadingEpisodes: Boolean = false,
     onSeasonClick: (Int) -> Unit = {},
+    showPosterUrl: String? = null,
 ) {
     val isTv = LocalTvMode.current
     val sortedSeasons = remember(seasons) {
         seasons.sortedByDescending { it.seasonNumber }.distinctBy { it.seasonNumber }
+    }
+    // TEMP diagnostic: capture which seasons have artwork so we can see whether
+    // posterPath is arriving null from the API or being lost locally. Remove
+    // once the season/episode image issue is confirmed resolved.
+    LaunchedEffect(sortedSeasons) {
+        sortedSeasons.forEach { s ->
+            Log.d(
+                "SeerrSeasonImg",
+                "season=${s.seasonNumber} name='${s.name}' posterPath=${s.posterPath} posterUrl=${s.posterUrl}"
+            )
+        }
     }
 
     Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
@@ -1209,6 +1228,7 @@ private fun SeasonsSection(
             horizontalArrangement = Arrangement.spacedBy(16.dp),
             contentPadding = PaddingValues(horizontal = 4.dp),
             modifier = Modifier
+                .focusGroup()
                 .tvFocusRestorer(),
         ) {
             items(sortedSeasons, key = { it.seasonNumber }, contentType = { "season" }) { season ->
@@ -1221,6 +1241,14 @@ private fun SeasonsSection(
                     )
                 } else Modifier
 
+                // Fall back to the show's main poster when this season has no
+                // dedicated artwork — Overseerr returns a null posterPath for
+                // some seasons (notably specials/season 0, or seasons TMDB has
+                // no poster for). Without the fallback the card showed the
+                // generic placeholder even though the show itself has artwork.
+                val seasonCardUrl = remember(season.posterUrl, showPosterUrl) {
+                    season.posterUrl ?: showPosterUrl
+                }
                 Column(
                     modifier = Modifier
                         .width(120.dp)
@@ -1237,7 +1265,7 @@ private fun SeasonsSection(
                     ) {
                         Box {
                             MediaImage(
-                                url = season.posterUrl ?: "",
+                                url = seasonCardUrl ?: "",
                                 contentDescription = season.name,
                                 modifier = Modifier.fillMaxSize(),
                                 contentScale = ContentScale.Crop
@@ -1315,8 +1343,13 @@ private fun SeasonsSection(
                             color = MaterialTheme.colorScheme.onSurface,
                             modifier = Modifier.padding(bottom = 12.dp)
                         )
+                        // Prefer the selected season's own poster as the
+                        // episode-still fallback, then the show poster.
+                        val selectedSeasonPoster = sortedSeasons
+                            .find { it.seasonNumber == selectedSeason }?.posterUrl
+                            ?: showPosterUrl
                         episodes.forEach { episode ->
-                            EpisodeRow(episode = episode)
+                            EpisodeRow(episode = episode, fallbackImageUrl = selectedSeasonPoster)
                         }
                     }
                 }
@@ -1326,7 +1359,14 @@ private fun SeasonsSection(
 }
 
 @Composable
-private fun EpisodeRow(episode: SeerrEpisode) {
+private fun EpisodeRow(
+    episode: SeerrEpisode,
+    fallbackImageUrl: String? = null,
+) {
+    // TMDB episode stills are frequently missing (unaired episodes, or episodes
+    // TMDB has no still for). Fall back to the season/show poster so the row
+    // isn't a bare text entry when stillPath is null.
+    val stillUrl = episode.stillUrl?.takeIf { it.isNotBlank() } ?: fallbackImageUrl
     Card(
         modifier = Modifier.fillMaxWidth(),
         shape = ShapeCache.smooth8,
@@ -1336,14 +1376,14 @@ private fun EpisodeRow(episode: SeerrEpisode) {
         elevation = CardDefaults.cardElevation(defaultElevation = 0.dp)
     ) {
         Column(modifier = Modifier.fillMaxWidth()) {
-            episode.stillUrl?.takeIf { it.isNotBlank() }?.let { url ->
+            if (stillUrl != null) {
                 Box(
                     modifier = Modifier
                         .fillMaxWidth()
                         .aspectRatio(16f / 9f)
                 ) {
                     MediaImage(
-                        url = url,
+                        url = stillUrl,
                         contentDescription = episode.name,
                         modifier = Modifier.fillMaxSize(),
                         contentScale = ContentScale.Crop
@@ -1571,6 +1611,7 @@ private fun VideosSection(
             horizontalArrangement = Arrangement.spacedBy(16.dp),
             contentPadding = PaddingValues(horizontal = 4.dp),
             modifier = Modifier
+                .focusGroup()
                 .tvFocusRestorer(),
         ) {
             items(uniqueVideos, key = { it.key!! }, contentType = { "video" }) { video ->

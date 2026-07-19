@@ -186,3 +186,5 @@ internal val languages = listOf(
     "zha" to "Zhuang",
     "zul" to "Zulu",
 )
+
+internal val languageNameByCode: Map<String?, String> = languages.associate { it.first to it.second }

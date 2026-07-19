@@ -14,11 +14,6 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Scaffold
-import androidx.compose.material3.Text
-import androidx.compose.material3.MediumTopAppBar
-import androidx.compose.material3.TopAppBarDefaults
-import androidx.compose.material3.rememberTopAppBarState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -26,10 +21,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.graphics.graphicsLayer
-import androidx.compose.ui.graphics.Color
-import com.raulshma.jellyplay.core.designsystem.theme.LocalIsSynthwave
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
@@ -39,7 +31,8 @@ import com.raulshma.jellyplay.core.ui.adaptive.bottomPadding
 import com.raulshma.jellyplay.core.ui.adaptive.contentPadding
 import com.raulshma.jellyplay.core.ui.adaptive.gridMinSize
 import com.raulshma.jellyplay.core.ui.adaptive.itemSpacing
-import com.raulshma.jellyplay.core.ui.components.CircleBgBackButton
+import com.raulshma.jellyplay.core.ui.components.JellyPlayScreenScaffold
+import com.raulshma.jellyplay.core.ui.components.TopBarStyle
 import com.raulshma.jellyplay.core.ui.components.ErrorScreen
 import com.raulshma.jellyplay.core.ui.components.DelayedLoadingScreen
 import com.raulshma.jellyplay.core.ui.components.progressFraction
@@ -75,25 +68,10 @@ fun CollectionDetailScreen(
         }
     }
 
-    val isSynthwave = LocalIsSynthwave.current
-    val scrollBehavior = TopAppBarDefaults.exitUntilCollapsedScrollBehavior(rememberTopAppBarState())
-
-    Scaffold(
-        modifier = Modifier.nestedScroll(scrollBehavior.nestedScrollConnection),
-        containerColor = if (isSynthwave) Color.Transparent else MaterialTheme.colorScheme.background,
-        topBar = {
-            MediumTopAppBar(
-                title = { Text(collectionDetail?.item?.name ?: "Collection") },
-                navigationIcon = {
-                    CircleBgBackButton(onClick = onBack)
-                },
-                colors = TopAppBarDefaults.mediumTopAppBarColors(
-                    containerColor = Color.Transparent,
-                    scrolledContainerColor = Color.Transparent
-                ),
-                scrollBehavior = scrollBehavior,
-            )
-        },
+    JellyPlayScreenScaffold(
+        title = collectionDetail?.item?.name ?: "Collection",
+        onBack = onBack,
+        topBarStyle = TopBarStyle.Collapsing,
     ) { padding ->
         when {
             isLoading -> {

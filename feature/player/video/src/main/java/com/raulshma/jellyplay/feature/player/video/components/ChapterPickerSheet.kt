@@ -2,6 +2,7 @@ package com.raulshma.jellyplay.feature.player.video.components
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import com.raulshma.jellyplay.core.ui.components.PlayerModalBottomSheet
 import com.raulshma.jellyplay.core.ui.tv.rememberTvFocusState
 import com.raulshma.jellyplay.core.ui.tv.tryRequestFocus
 import com.raulshma.jellyplay.core.ui.tv.verticalWrapAround

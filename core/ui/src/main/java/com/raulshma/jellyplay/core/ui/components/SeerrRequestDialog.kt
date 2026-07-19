@@ -7,6 +7,7 @@ import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.PaddingValues
@@ -35,6 +36,7 @@ import androidx.compose.material3.Icon
 import com.raulshma.jellyplay.core.ui.components.JellyPlayLinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
+import com.raulshma.jellyplay.core.ui.tv.LocalTvMode
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.SuggestionChip
 import androidx.compose.material3.SuggestionChipDefaults
@@ -190,13 +192,9 @@ fun SeerrRequestDialog(
 
     val colorScheme = MaterialTheme.colorScheme
     val typography = MaterialTheme.typography
+    val isTvDevice = LocalTvMode.current
 
-    ModalBottomSheet(
-        onDismissRequest = { if (!isRequesting) onDismiss() },
-        sheetState = sheetState,
-        shape = ShapeCache.smooth20,
-        containerColor = colorScheme.surfaceContainer.copy(alpha = 0.95f),
-    ) {
+    val content: @Composable ColumnScope.() -> Unit = {
         MaterialTheme(
             colorScheme = colorScheme,
             typography = typography,
@@ -587,6 +585,20 @@ fun SeerrRequestDialog(
                 }
             }
         }
+    }
+    if (isTvDevice) {
+        TvSafeSheet(
+            onDismissRequest = { if (!isRequesting) onDismiss() },
+            content = content,
+        )
+    } else {
+        ModalBottomSheet(
+            onDismissRequest = { if (!isRequesting) onDismiss() },
+            sheetState = sheetState,
+            shape = ShapeCache.smooth20,
+            containerColor = colorScheme.surfaceContainer.copy(alpha = 0.95f),
+            content = content,
+        )
     }
 }
 
