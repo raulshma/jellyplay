@@ -33,7 +33,10 @@ import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.composables.icons.tabler.Tabler
-import com.composables.icons.tabler.outline.*
+import com.composables.icons.tabler.outline.BadgeHd
+import com.composables.icons.tabler.outline.FileDescription
+import com.composables.icons.tabler.outline.Subtitles
+import com.composables.icons.tabler.outline.Volume
 import com.raulshma.jellyplay.core.model.MediaDetail
 import com.raulshma.jellyplay.core.model.MediaSource
 import com.raulshma.jellyplay.core.model.MediaStream

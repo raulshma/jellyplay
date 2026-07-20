@@ -34,13 +34,13 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.raulshma.jellyplay.core.designsystem.theme.ArtworkThemeWrapper
 import com.raulshma.jellyplay.core.designsystem.theme.rememberIsLightTheme
 import com.raulshma.jellyplay.core.model.MediaType
-import com.raulshma.jellyplay.core.model.seerr.SeerrRelatedVideo
 import com.raulshma.jellyplay.core.model.seerr.SeerrSearchItem
 import com.raulshma.jellyplay.core.ui.components.InlineTrailerPlayer
 import com.raulshma.jellyplay.core.ui.components.SeerrPrefetchCallback
 import com.raulshma.jellyplay.core.ui.components.SeerrRequestDialog
 import com.raulshma.jellyplay.core.ui.components.TvSafeSheet
 import com.raulshma.jellyplay.core.ui.components.rememberSeerrCardLoadingState
+import com.raulshma.jellyplay.core.ui.components.rememberVideoClickHandler
 import com.raulshma.jellyplay.core.ui.components.LocalSeerrCardLoadingState
 import com.raulshma.jellyplay.core.ui.components.LocalSeerrPrefetch
 import com.raulshma.jellyplay.core.ui.navigation.Route
@@ -234,10 +234,15 @@ fun MediaDetailScreen(
                     )
                 }
 
+                val onVideoClick = rememberVideoClickHandler(
+                    uriHandler = uriHandler,
+                    onPlayYouTube = { key -> activeTrailerKey = key },
+                )
+
                 val callbacks = remember(
                     rememberedGetImageUrl, rememberedGetBackdropUrl, rememberedGetSeerrPosterUrl,
                     viewModel, onPlayClick, onAudioClick, itemId, onItemClick, onPersonClick,
-                    onNavigateToSeries, onNavigate, onEditClick, onManageSeries, onBack, uriHandler,
+                    onNavigateToSeries, onNavigate, onEditClick, onManageSeries, onBack, onVideoClick,
                 ) {
                     DetailContentCallbacks(
                         getImageUrl = rememberedGetImageUrl,
@@ -279,17 +284,7 @@ fun MediaDetailScreen(
                         onNavigate = onNavigate,
                         onEditClick = { onEditClick(itemId) },
                         onPlayAlbumTrack = { index: Int -> viewModel.playAlbum(index) },
-                        onVideoClick = { video: SeerrRelatedVideo ->
-                            if (video.site?.lowercase() == "youtube" && video.key != null) {
-                                activeTrailerKey = video.key
-                            } else if (video.key != null) {
-                                val url = when (video.site?.lowercase()) {
-                                    "youtube" -> "https://www.youtube.com/watch?v=${video.key}"
-                                    else -> null
-                                }
-                                url?.let { uriHandler.openUri(it) }
-                            }
-                        },
+                        onVideoClick = onVideoClick,
                         onHideFromNextUp = { viewModel.hideFromNextUp() },
                         onHideFromContinueWatching = { viewModel.hideFromContinueWatching() },
                         onManageSeries = { onManageSeries(itemId) },

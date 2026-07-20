@@ -38,6 +38,7 @@ import com.composables.icons.tabler.outline.Heart
 import com.composables.icons.tabler.outline.PlayerPlay
 import com.raulshma.jellyplay.core.designsystem.theme.ShapeCache
 import com.raulshma.jellyplay.core.model.MediaType
+import com.raulshma.jellyplay.core.model.isAudioType
 import com.raulshma.jellyplay.core.ui.components.progressFraction
 import com.raulshma.jellyplay.core.ui.navigation.Route
 import com.raulshma.jellyplay.core.ui.tv.LocalTvMode
@@ -66,7 +67,7 @@ internal fun DetailActionButtons(
 ) {
     val detail = state.detail ?: return
     val item = detail.item
-    val isAudio = item.mediaType == MediaType.AUDIO || item.mediaType == MediaType.MUSIC || item.mediaType == MediaType.ALBUM
+    val isAudio = item.mediaType.isAudioType
     val isAlbum = item.mediaType == MediaType.ALBUM
 
     val isSeriesOrEpisode = item.mediaType == MediaType.SERIES || item.mediaType == MediaType.EPISODE

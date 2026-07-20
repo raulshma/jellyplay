@@ -52,6 +52,7 @@ import com.raulshma.jellyplay.core.model.MediaDetail
 import com.raulshma.jellyplay.core.model.MediaItem
 import com.raulshma.jellyplay.core.model.MediaType
 import com.raulshma.jellyplay.core.model.UserPreferences
+import com.raulshma.jellyplay.core.model.isAudioType
 import com.raulshma.jellyplay.core.model.seerr.SeerrRelatedVideo
 import com.raulshma.jellyplay.core.model.seerr.SeerrSearchItem
 import com.raulshma.jellyplay.core.ui.adaptive.LocalAdaptiveInfo
@@ -144,7 +145,7 @@ internal fun DetailContentBody(
     val selectedSubtitleIndex = state.selectedSubtitleIndex
     val selectedAudioIndex = state.selectedAudioIndex
     val getImageUrl = callbacks.getImageUrl
-    val isAudio = item.mediaType == MediaType.AUDIO || item.mediaType == MediaType.MUSIC || item.mediaType == MediaType.ALBUM
+    val isAudio = item.mediaType.isAudioType
     val isAlbum = item.mediaType == MediaType.ALBUM
     val albumTracks = state.albumTracks
     val collectionItems = state.collectionItems
