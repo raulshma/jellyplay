@@ -53,8 +53,8 @@ class FakeMediaEngine : MediaEngine {
     override val durationMs: Long get() = durationValue
     override val positionFlow: Flow<Long> get() = positionEmissions.value
     val positionEmissions = MutableStateFlow(kotlinx.coroutines.flow.flowOf(0L))
-    override val errorFlow: Flow<String> get() = errorEmissions.asSharedFlow()
-    val errorEmissions = MutableSharedFlow<String>(extraBufferCapacity = 4)
+    override val errorFlow: Flow<EngineError> get() = errorEmissions.asSharedFlow()
+    val errorEmissions = MutableSharedFlow<EngineError>(extraBufferCapacity = 4)
     override val playbackSpeed: Float = 1f
     override val audioSessionId: Int = -1
 

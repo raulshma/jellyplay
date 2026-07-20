@@ -31,8 +31,8 @@ class TrickplayManager(
 
     private fun obtainTileBitmap(width: Int, height: Int): Bitmap {
         // NOTE: a bitmap pool previously fed by thumbnailCache.entryRemoved
-        // was removed to fix the recycle-vs-Compose-use race (H8) and the
-        // non-thread-safe ArrayDeque access (H9). Thumbnails handed to the
+        // was removed to fix the recycle-vs-Compose-use race and the
+        // non-thread-safe ArrayDeque access. Thumbnails handed to the
         // UI are now dropped (never recycled) on eviction and left for GC.
         return Bitmap.createBitmap(width, height, Bitmap.Config.RGB_565)
     }
@@ -51,7 +51,13 @@ class TrickplayManager(
     private val spriteSheetCache = object : LruCache<Int, Bitmap>((maxSpriteSheetCacheBytes / 1024).toInt()) {
         override fun sizeOf(key: Int, value: Bitmap): Int = value.allocationByteCount / 1024
         override fun entryRemoved(evictedBySize: Boolean, key: Int, oldValue: Bitmap, newValue: Bitmap?) {
-            if (!oldValue.isRecycled) oldValue.recycle()
+            // Do NOT recycle sprite sheets here. extractTile /
+            // extractTileRange / preloadNeighborTiles capture the sheet in a
+            // local var on Dispatchers.Default and draw from it via Canvas;
+            // a concurrent put() (which triggers this callback) would recycle
+            // the bitmap out from under an in-progress draw, throwing
+            // "Cannot draw a recycled bitmap". Matches the thumbnailCache
+            // policy above. Let GC reclaim bitmaps.
         }
     }
     private val sheetMutexes = ConcurrentHashMap<Int, Mutex>()
@@ -62,7 +68,7 @@ class TrickplayManager(
     // outlive `clear()` — the manager is held as a VM field so dies with the
     // VM, but per-item `clear()` on item switch leaked work from the previous
     // item. Recreated lazily, only when inactive (mirrors the engineScope
-    // pattern that fixed H5).
+    // pattern).
     private var scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
     private var info: TrickplayInfo? = null
     private var itemId: String? = null
@@ -107,14 +113,25 @@ class TrickplayManager(
         val currentInfo = info ?: return null
         val id = itemId ?: return null
 
-        val thumbnailIndex = (positionMs / currentInfo.interval).toInt()
+        // Guard against malformed TrickplayInfo (interval/tileWidth/tileHeight
+        // == 0 from a stale meta.json or bad server payload). Division by zero
+        // below would otherwise throw ArithmeticException on every seek.
+        val interval = currentInfo.interval.coerceAtLeast(1)
+        val tileWidth = currentInfo.tileWidth.coerceAtLeast(1)
+        val tileHeight = currentInfo.tileHeight.coerceAtLeast(1)
+
+        val thumbnailIndex = (positionMs / interval.toLong()).toInt()
             .coerceIn(0, currentInfo.thumbnailCount - 1)
 
         thumbnailCache.get(thumbnailIndex)?.let { return it }
 
         return withContext(Dispatchers.Default) {
+            // clear()/initialize() for a different item may have run while
+            // we were waiting for this dispatcher. Bail before decoding so we
+            // don't write item N's tiles into item N+1's cache.
+            if (itemId != id) return@withContext null
             try {
-                val thumbnailsPerSheet = currentInfo.tileWidth * currentInfo.tileHeight
+                val thumbnailsPerSheet = tileWidth * tileHeight
                 val sheetIndex = thumbnailIndex / thumbnailsPerSheet
 
                 val sheet = spriteSheetCache.get(sheetIndex)
@@ -122,7 +139,9 @@ class TrickplayManager(
                     ?: return@withContext null
 
                 val result = extractTile(sheet, thumbnailIndex, currentInfo)
-                if (result != null) {
+                // Re-check after the (potentially suspending) decode —
+                // item may have switched while we were waiting on I/O.
+                if (result != null && itemId == id) {
                     thumbnailCache.put(thumbnailIndex, result)
                 }
 

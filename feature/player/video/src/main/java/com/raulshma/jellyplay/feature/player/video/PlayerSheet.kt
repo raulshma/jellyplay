@@ -32,26 +32,13 @@ sealed class PlayerSheet {
 val PlayerSheetSaver: Saver<PlayerSheet, String> = Saver(
     save = { it::class.simpleName ?: PlayerSheet.None::class.simpleName!! },
     restore = { name ->
+        // Enumerate via reflection so the list cannot drift from the
+        // sealed-class declaration. The prior hand-maintained ALL_SHEETS
+        // silently fell back to None when a new sheet was added but
+        // forgotten here — the open sheet vanished on rotation.
         ALL_SHEETS.firstOrNull { it::class.simpleName == name } ?: PlayerSheet.None
     },
 )
 
-private val ALL_SHEETS: List<PlayerSheet> = listOf(
-    PlayerSheet.None,
-    PlayerSheet.Speed,
-    PlayerSheet.Audio,
-    PlayerSheet.Subtitle,
-    PlayerSheet.Chapter,
-    PlayerSheet.PlaybackInfo,
-    PlayerSheet.AspectRatio,
-    PlayerSheet.SubtitleStyle,
-    PlayerSheet.AVSync,
-    PlayerSheet.Decoder,
-    PlayerSheet.SubtitleDownload,
-    PlayerSheet.Episodes,
-    PlayerSheet.SyncPlay,
-    PlayerSheet.Quality,
-    PlayerSheet.PlaybackMode,
-    PlayerSheet.SleepTimer,
-    PlayerSheet.VideoFilter,
-)
+private val ALL_SHEETS: List<PlayerSheet> =
+    PlayerSheet::class.sealedSubclasses.mapNotNull { it.objectInstance }

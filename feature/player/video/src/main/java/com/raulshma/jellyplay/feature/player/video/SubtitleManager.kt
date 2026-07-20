@@ -10,6 +10,8 @@ import com.raulshma.jellyplay.core.ui.feedback.UserMessageBus
 import com.raulshma.jellyplay.feature.player.video.engine.SubtitleSource
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
@@ -48,6 +50,23 @@ internal class SubtitleManager(
     private val getCurrentItemId: () -> String?,
     private val onMediaDetailRefreshed: (MediaDetail) -> Unit,
 ) {
+    /**
+     * In-flight remote-search job. A slow "en" query landing after a
+     * fast "fr" query used to overwrite the latter's results, surfacing
+     * stale results for the wrong language. Cancel the prior search before
+     * starting a new one.
+     */
+    private var searchJob: Job? = null
+
+    /**
+     * In-flight download job. A slow download landing after a newer pick
+     * used to race the post-download media-detail refresh and surface stale
+     * loading/error state. Cancel the prior download before starting a new one,
+     * mirroring [searchJob] — and cancelled jobs must not fire error toasts
+     * (cancellation is intentional, not a failure).
+     */
+    private var downloadJob: Job? = null
+
     fun loadRemoteSubtitles() {
         val itemId = getCurrentItemId() ?: return
         updateUiState { it.copy(isLoadingRemoteSubtitles = true) }
@@ -59,11 +78,29 @@ internal class SubtitleManager(
 
     fun downloadSubtitle(subtitleInfo: RemoteSubtitleInfo) {
         val itemId = getCurrentItemId() ?: return
-        scope.launch {
-            playbackRepository.downloadSubtitle(itemId, subtitleInfo.id)
-            mediaRepository.getMediaDetail(itemId).getOrNull()?.let { detail ->
-                onMediaDetailRefreshed(detail)
-            }
+        // Cancel any in-flight download so a stale post-download refresh can't
+        // clobber the new one's state (mirrors searchJob's cancellation guard).
+        downloadJob?.cancel()
+        updateUiState { it.copy(isDownloadingSubtitle = true, subtitleDownloadError = null) }
+        downloadJob = scope.launch {
+            val result = runCatching { playbackRepository.downloadSubtitle(itemId, subtitleInfo.id) }
+            // If superseded (a newer downloadSubtitle() call cancelled us), do
+            // not touch UI state — the newer job owns it now. The new job has
+            // already reset isDownloadingSubtitle = true on entry.
+            ensureActive()
+            result.fold(
+                onSuccess = {
+                    mediaRepository.getMediaDetail(itemId).getOrNull()?.let { detail ->
+                        onMediaDetailRefreshed(detail)
+                    }
+                    updateUiState { it.copy(isDownloadingSubtitle = false, subtitleDownloadError = null) }
+                },
+                onFailure = { e ->
+                    val msg = e.message ?: "Download failed"
+                    userMessageBus.error("Subtitle download failed: $msg")
+                    updateUiState { it.copy(isDownloadingSubtitle = false, subtitleDownloadError = msg) }
+                },
+            )
         }
     }
 
@@ -94,7 +131,7 @@ internal class SubtitleManager(
     /**
      * Resets the Subtitle Manager's search/cultures state. Called when the sheet
      * opens (or the playback item changes) so results from a previous item don't
-     * leak into a new one (H4). Cultures are reloaded on demand since they may
+     * leak into a new one. Cultures are reloaded on demand since they may
      * be item-scoped on some servers.
      */
     fun resetSubtitleManagerState() {
@@ -134,14 +171,15 @@ internal class SubtitleManager(
      * Results populate the Search tab and are kept separate from the Download
      * tab's server-default list. A failure surfaces as [VideoPlayerUiState.subtitleSearchError]
      * (distinct from an empty result) so the UI can invite retry rather than
-     * implying "no subtitles exist" (H3).
+     * implying "no subtitles exist".
      */
     fun searchRemoteSubtitles(language: String) {
         val itemId = getCurrentItemId() ?: return
+        searchJob?.cancel()
         updateUiState {
             it.copy(isSearchingSubtitles = true, hasSearchedSubtitles = false, searchedSubtitles = emptyList(), subtitleSearchError = null)
         }
-        scope.launch {
+        searchJob = scope.launch {
             playbackRepository.searchRemoteSubtitles(itemId, language).fold(
                 onSuccess = { subs ->
                     updateUiState {

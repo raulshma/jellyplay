@@ -65,6 +65,14 @@ class ExoLiveEngine(
 
     private var currentMethod: LivePlayMethod = LivePlayMethod.DIRECT_STREAM
 
+    /** Latch: once release() runs, every subsequent method short-circuits. */
+    @Volatile
+    private var released: Boolean = false
+
+    /** Latch: prevent rebuffer storms from firing fallback repeatedly. */
+    @Volatile
+    private var fallbackInvoked: Boolean = false
+
     private val httpDataSourceFactory = OkHttpDataSource.Factory(streamingClient)
         .setUserAgent("JellyPlay")
         .setDefaultRequestProperties(
@@ -98,8 +106,13 @@ class ExoLiveEngine(
     override val media3Player: Player get() = exoPlayer
 
     override fun load(request: LivePlaybackRequest) {
+        if (released) return
         _errorMessage.value = null
         currentMethod = request.playMethod
+        // Per-load reset: a previous channel's fallback latch must not carry
+        // over — otherwise a reused engine could never fire the transcode
+        // fallback for the new channel after one fallback fired on the old.
+        fallbackInvoked = false
 
         val mediaItem = MediaItem.Builder()
             .setUri(request.url)
@@ -117,23 +130,46 @@ class ExoLiveEngine(
         exoPlayer.play()
     }
 
-    override fun play() = exoPlayer.play()
-    override fun pause() = exoPlayer.pause()
+    override fun play() = runIfNotReleased { exoPlayer.play() }
 
-    override fun seekToLiveEdge() {
-        val duration = exoPlayer.duration
-        if (duration == C.TIME_UNSET || duration <= 0L) return
-        exoPlayer.seekTo(duration)
+    override fun pause() = runIfNotReleased { exoPlayer.pause() }
+
+    override fun seekToLiveEdge() = runIfNotReleased {
+        // seekToDefaultPosition() is ExoPlayer's documented "return to live
+        // edge" call for HLS — seeking to `duration` lands one segment before
+        // the true edge because `duration` is the upper window bound.
+        exoPlayer.seekToDefaultPosition()
     }
 
-    override fun seekTo(positionMs: Long) {
+    override fun seekTo(positionMs: Long) = runIfNotReleased {
         val duration = exoPlayer.duration
-        if (duration == C.TIME_UNSET || duration <= 0L) return
+        if (duration == C.TIME_UNSET || duration <= 0L) return@runIfNotReleased
         exoPlayer.seekTo(positionMs.coerceIn(0L, duration))
     }
 
+    override fun refreshLiveWindow() = runIfNotReleased {
+        val duration = exoPlayer.duration
+        _durationMs.value = if (duration == C.TIME_UNSET) -1L else duration
+        _positionMs.value = exoPlayer.currentPosition.coerceAtLeast(0L)
+        _isAtLiveEdge.value = duration == C.TIME_UNSET ||
+            duration <= 0L ||
+            (duration - exoPlayer.currentPosition) <= LIVE_EDGE_TOLERANCE_MS
+    }
+
     override fun release() {
-        exoPlayer.release()
+        if (released) return
+        released = true
+        runCatching { exoPlayer.release() }
+    }
+
+    /**
+     * Short-circuit helper for the post-release guards. `release()` keeps its
+     * own explicit guard because it must not become a no-op when already
+     * released (it sets the latch first).
+     */
+    private inline fun runIfNotReleased(block: () -> Unit) {
+        if (released) return
+        block()
     }
 
     private inner class PlayerListener : Player.Listener {
@@ -157,19 +193,13 @@ class ExoLiveEngine(
             // ask the ViewModel to re-resolve with transcoding forced.
             _state.value = LiveEngineState.ERROR
             _errorMessage.value = error.localizedMessage ?: "Playback error"
-            if (currentMethod != LivePlayMethod.TRANSCODE) {
+            // Gate on fallbackInvoked — ExoPlayer can fire onPlayerError
+            // repeatedly during a rebuffer storm and we only want one trigger.
+            if (!fallbackInvoked && currentMethod != LivePlayMethod.TRANSCODE) {
+                fallbackInvoked = true
                 onTranscodeFallbackNeeded?.invoke()
             }
         }
-    }
-
-    override fun refreshLiveWindow() {
-        val duration = exoPlayer.duration
-        _durationMs.value = if (duration == C.TIME_UNSET) -1L else duration
-        _positionMs.value = exoPlayer.currentPosition.coerceAtLeast(0L)
-        _isAtLiveEdge.value = duration == C.TIME_UNSET ||
-            duration <= 0L ||
-            (duration - exoPlayer.currentPosition) <= LIVE_EDGE_TOLERANCE_MS
     }
 
     private companion object {
