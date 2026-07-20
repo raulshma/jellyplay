@@ -95,31 +95,25 @@ fun MediaDetailScreen(
     val snackbarHostState = remember { SnackbarHostState() }
     val snackbarContext = LocalContext.current
 
-    LaunchedEffect(uiState.seriesDownloadResult) {
-        uiState.seriesDownloadResult?.let { result ->
-            val message = if (result.error != null) {
-                result.error
-            } else if (result.queuedCount > 0) {
-                snackbarContext.resources.getQuantityString(R.plurals.detail_episodes_queued, result.queuedCount, result.queuedCount)
-            } else {
-                snackbarContext.getString(R.string.detail_msg_no_episodes_queued)
+    LaunchedEffect(Unit) {
+        viewModel.messages.collect { message ->
+            val text = when (message) {
+                is DetailMessage.Text -> message.text
+                is DetailMessage.SeriesDownload -> {
+                    if (message.error != null) {
+                        message.error
+                    } else if (message.queuedCount > 0) {
+                        snackbarContext.resources.getQuantityString(
+                            R.plurals.detail_episodes_queued,
+                            message.queuedCount,
+                            message.queuedCount,
+                        )
+                    } else {
+                        snackbarContext.getString(R.string.detail_msg_no_episodes_queued)
+                    }
+                }
             }
-            snackbarHostState.showSnackbar(message)
-            viewModel.clearSeriesDownloadResult()
-        }
-    }
-
-    LaunchedEffect(uiState.downloadError) {
-        uiState.downloadError?.let { error ->
-            snackbarHostState.showSnackbar(error)
-            viewModel.clearDownloadError()
-        }
-    }
-
-    LaunchedEffect(uiState.userMessage) {
-        uiState.userMessage?.let { message ->
-            snackbarHostState.showSnackbar(message)
-            viewModel.clearUserMessage()
+            snackbarHostState.showSnackbar(text)
         }
     }
 
