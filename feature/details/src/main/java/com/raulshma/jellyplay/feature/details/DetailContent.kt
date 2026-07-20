@@ -40,6 +40,12 @@ import com.raulshma.jellyplay.core.ui.tv.tryRequestFocus
 import com.raulshma.jellyplay.core.ui.tv.tvFocusRestorer
 
 /**
+ * Max frames to wait for the detail content's [FocusRequester] to attach on TV
+ * before giving up the focus request. ~0.3s at 60fps. See [DetailContent].
+ */
+private const val FOCUS_REQUEST_RETRY_FRAMES = 20
+
+/**
  * The private orchestrator for the media-detail content tree.
  *
  * Receives only [state] + [callbacks] bundles (two parameters instead of the
@@ -81,14 +87,19 @@ internal fun DetailContent(
 
     if (isTv) {
         LaunchedEffect(contentVisible) {
-            if (contentVisible) {
-                // The Play button carrying contentFocusRequester lives inside AnimatedVisibility(contentVisible),
-                // so it may not be composed/attached on the very frame contentVisible flips true. Wait a frame
-                // and retry briefly so the request is not silently swallowed by tryRequestFocus.
-                for (attempt in 1..20) {
-                    withFrameNanos { }
-                    if (contentFocusRequester.tryRequestFocus("detail_content")) break
-                }
+            if (!contentVisible) return@LaunchedEffect
+            // The Play button carrying contentFocusRequester lives inside
+            // AnimatedVisibility(contentVisible), so it may not be composed/
+            // attached on the very frame contentVisible flips true. Poll once
+            // per frame until the requester attaches (or up to
+            // [FOCUS_REQUEST_RETRY_FRAMES] frames — ~0.3s at 60fps) so the
+            // focus request is not silently swallowed by tryRequestFocus.
+            //
+            // FocusRequester has no public isAttached() API, so a frame-bounded
+            // retry loop is the canonical workaround.
+            repeat(FOCUS_REQUEST_RETRY_FRAMES) {
+                withFrameNanos { }
+                if (contentFocusRequester.tryRequestFocus("detail_content")) return@LaunchedEffect
             }
         }
     }
