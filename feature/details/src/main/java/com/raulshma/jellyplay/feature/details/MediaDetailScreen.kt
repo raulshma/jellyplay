@@ -191,42 +191,38 @@ fun MediaDetailScreen(
                     detail?.item?.seriesId ?: itemId
                 }
 
-                val state = remember(
-                    itemId, detail, uiState.seasons, uiState.episodes, uiState.fetchedSeasonIds,
-                    uiState.smartPlayTarget, uiState.selectedSubtitleIndex, uiState.selectedAudioIndex,
-                    uiState.isDownloading, uiState.isDownloadingSeries, activeDownload, uiState.isLoading,
-                    uiState.error, uiState.albumTracks, uiState.collectionItems, uiState.relatedItems,
-                    uiState.relatedVideos, uiState.seerrRecommendations, uiState.seerrSimilar,
-                    uiState.isSeerrConnected, uiState.isSeerrRecommendationsEnabled,
-                    preferences, canManageSeries,
-                ) {
-                    DetailContentState(
-                        itemId = itemId,
-                        detail = detail,
-                        seasons = uiState.seasons,
-                        episodes = uiState.episodes,
-                        fetchedSeasonIds = uiState.fetchedSeasonIds,
-                        smartPlayTarget = uiState.smartPlayTarget,
-                        selectedSubtitleIndex = uiState.selectedSubtitleIndex,
-                        selectedAudioIndex = uiState.selectedAudioIndex,
-                        isDownloading = uiState.isDownloading,
-                        isDownloadingSeries = uiState.isDownloadingSeries,
-                        activeDownload = activeDownload,
-                        isLoading = uiState.isLoading,
-                        error = uiState.error,
-                        isAccessDenied = uiState.isAccessDenied,
-                        albumTracks = uiState.albumTracks,
-                        collectionItems = uiState.collectionItems,
-                        relatedItems = uiState.relatedItems,
-                        relatedVideos = uiState.relatedVideos,
-                        seerrRecommendations = uiState.seerrRecommendations,
-                        seerrSimilar = uiState.seerrSimilar,
-                        isSeerrConnected = uiState.isSeerrConnected,
-                        isSeerrRecommendationsEnabled = uiState.isSeerrRecommendationsEnabled,
-                        preferences = preferences,
-                        canManageSeries = canManageSeries,
-                    )
-                }
+                // Constructed directly (not via `remember`) — DetailContentState
+                // is a @Immutable data class, so Compose structural-equals it for
+                // free and `DetailContent` is skipped whenever no field actually
+                // changed. The former 22-key `remember` added per-recomposition
+                // key-comparison cost and silently drifted whenever a new uiState
+                // field was added without updating the key list.
+                val state = DetailContentState(
+                    itemId = itemId,
+                    detail = detail,
+                    seasons = uiState.seasons,
+                    episodes = uiState.episodes,
+                    fetchedSeasonIds = uiState.fetchedSeasonIds,
+                    smartPlayTarget = uiState.smartPlayTarget,
+                    selectedSubtitleIndex = uiState.selectedSubtitleIndex,
+                    selectedAudioIndex = uiState.selectedAudioIndex,
+                    isDownloading = uiState.isDownloading,
+                    isDownloadingSeries = uiState.isDownloadingSeries,
+                    activeDownload = activeDownload,
+                    isLoading = uiState.isLoading,
+                    error = uiState.error,
+                    isAccessDenied = uiState.isAccessDenied,
+                    albumTracks = uiState.albumTracks,
+                    collectionItems = uiState.collectionItems,
+                    relatedItems = uiState.relatedItems,
+                    relatedVideos = uiState.relatedVideos,
+                    seerrRecommendations = uiState.seerrRecommendations,
+                    seerrSimilar = uiState.seerrSimilar,
+                    isSeerrConnected = uiState.isSeerrConnected,
+                    isSeerrRecommendationsEnabled = uiState.isSeerrRecommendationsEnabled,
+                    preferences = preferences,
+                    canManageSeries = canManageSeries,
+                )
 
                 val onVideoClick = rememberVideoClickHandler(
                     uriHandler = uriHandler,
