@@ -28,6 +28,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.dp
 import com.raulshma.jellyplay.core.model.MediaType
+import com.raulshma.jellyplay.core.model.isAudioType
 import com.raulshma.jellyplay.core.ui.adaptive.LocalAdaptiveInfo
 import com.raulshma.jellyplay.core.ui.adaptive.WindowSizeClass
 import com.raulshma.jellyplay.core.ui.components.DelayedLoadingScreen
@@ -59,7 +60,7 @@ internal fun DetailContent(
 ) {
     val item = state.detail?.item
     val listState = rememberLazyListState()
-    val isAudio = item?.mediaType == MediaType.AUDIO || item?.mediaType == MediaType.MUSIC || item?.mediaType == MediaType.ALBUM
+    val isAudio = item?.mediaType?.isAudioType == true
     val isAlbum = item?.mediaType == MediaType.ALBUM
     val isSeries = item?.mediaType == MediaType.SERIES
     var showDownloadDialog by remember { mutableStateOf(false) }

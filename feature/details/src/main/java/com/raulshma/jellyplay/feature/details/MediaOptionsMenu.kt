@@ -17,6 +17,7 @@ import com.raulshma.jellyplay.core.model.DownloadStatus
 import com.raulshma.jellyplay.core.model.MediaDetail
 import com.raulshma.jellyplay.core.model.MediaItem
 import com.raulshma.jellyplay.core.model.MediaType
+import com.raulshma.jellyplay.core.model.isAudioType
 import com.raulshma.jellyplay.core.model.UserPreferences
 import com.raulshma.jellyplay.feature.details.R
 
@@ -75,7 +76,7 @@ internal fun rememberMediaOptions(
     } else 0f
 
     val canDownload = item != null && detail != null && detail.mediaSources.isNotEmpty() &&
-        (item.mediaType == MediaType.AUDIO || item.mediaType == MediaType.MUSIC || (!isAudio && !isSeries))
+        (item.mediaType.isAudioType || (!isAudio && !isSeries))
 
     // Resolve localized labels in the @Composable body — the remember {} calculation lambda
     // below is not a composable scope, so stringResource cannot be called inside it.
