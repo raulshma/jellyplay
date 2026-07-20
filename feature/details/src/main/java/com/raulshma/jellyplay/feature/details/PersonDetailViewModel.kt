@@ -2,12 +2,14 @@ package com.raulshma.jellyplay.feature.details
 
 import com.raulshma.jellyplay.core.data.repository.MediaRepository
 import com.raulshma.jellyplay.core.data.util.ImageUrlProvider
-import com.raulshma.jellyplay.core.model.MediaItem
 import com.raulshma.jellyplay.core.network.RetryPolicy
 import com.raulshma.jellyplay.core.ui.viewmodel.JellyPlayViewModel
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
 import javax.inject.Inject
 
 @HiltViewModel
@@ -16,24 +18,12 @@ class PersonDetailViewModel @Inject constructor(
     private val imageUrlProvider: ImageUrlProvider,
 ) : JellyPlayViewModel() {
 
-    private val _name = composeState("")
-    val name: String get() = _name.value
-
-    private val _filmography = composeState<List<MediaItem>>(emptyList())
-    val filmography: List<MediaItem> get() = _filmography.value
-
-    private val _isLoading = composeState(true)
-    val isLoading: Boolean get() = _isLoading.value
-
-    private val _error = composeState<String?>(null)
-    val error: String? get() = _error.value
+    private val _uiState = MutableStateFlow<PersonDetailUiState>(PersonDetailUiState.Loading)
+    val uiState: StateFlow<PersonDetailUiState> = _uiState.asStateFlow()
 
     fun loadPerson(personId: String) {
+        _uiState.value = PersonDetailUiState.Loading
         launch {
-            _isLoading.value = true
-            _error.value = null
-            _name.value = ""
-            _filmography.value = emptyList()
             coroutineScope {
                 val detailDeferred = async {
                     RetryPolicy.executeWithRetry { mediaRepository.getMediaDetail(personId) }
@@ -45,16 +35,17 @@ class PersonDetailViewModel @Inject constructor(
                 val detailResult = detailDeferred.await()
                 val itemsResult = itemsDeferred.await()
 
-                if (detailResult.isSuccess && itemsResult.isSuccess) {
-                    _name.value = detailResult.getOrThrow().item.name
-                    _filmography.value = itemsResult.getOrThrow()
+                _uiState.value = if (detailResult.isSuccess && itemsResult.isSuccess) {
+                    PersonDetailUiState.Success(
+                        name = detailResult.getOrThrow().item.name,
+                        filmography = itemsResult.getOrThrow(),
+                    )
                 } else {
                     val detailError = detailResult.exceptionOrNull()?.message
                     val itemsError = itemsResult.exceptionOrNull()?.message
-                    _error.value = itemsError ?: detailError ?: "Failed to load"
+                    PersonDetailUiState.Error(itemsError ?: detailError ?: "Failed to load")
                 }
             }
-            _isLoading.value = false
         }
     }
 

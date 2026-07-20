@@ -27,13 +27,16 @@ import io.mockk.every
 import io.mockk.mockk
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withTimeout
 import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
+import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Rule
 import org.junit.Test
@@ -159,6 +162,23 @@ class DetailViewModelTest {
         assertEquals("boom", viewModel.uiState.value.error)
         assertNull(viewModel.uiState.value.detail)
     }
+
+    // The single SharedFlow<DetailMessage> must surface exactly one event per
+    // action, even when the precondition fails synchronously (no detail loaded
+    // yet). Regression for the former nullable-field approach where the screen
+    // had to clear the field after showing.
+    @Test
+    fun messages_downloadSeriesWithNoDetail_emitsSeriesDownloadError() =
+        runTest(mainDispatcherRule.testDispatcher) {
+            backgroundScope.launch { viewModel.messages.collect { /* warm */ } }
+            every { context.getString(R.string.detail_error_details_not_loaded) } returns "no detail"
+
+            viewModel.downloadSeries()
+
+            val message = withTimeout(1_000) { viewModel.messages.first() }
+            assertTrue(message is DetailMessage.SeriesDownload)
+            assertEquals("no detail", (message as DetailMessage.SeriesDownload).error)
+        }
 
     @Test
     fun loadItem_movie_clearsSmartPlayTarget() = runTest(mainDispatcherRule.testDispatcher) {

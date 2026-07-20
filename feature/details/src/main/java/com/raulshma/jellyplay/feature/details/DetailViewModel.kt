@@ -40,8 +40,11 @@ import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.MutableSharedFlow
+import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -89,6 +92,18 @@ class DetailViewModel @Inject constructor(
     // folds in [SeerrRequestStateHolder] state via combine() so observers see a
     // single atomic snapshot.
     private val _uiState = MutableStateFlow(DetailUiState())
+
+    /**
+     * One-shot user-facing messages. Buffered so a message emitted before the
+     * screen subscribes (e.g. during `loadItem`) is not lost. Replaces the
+     * former `userMessage` / `downloadError` / `seriesDownloadResult` nullable
+     * fields on [DetailUiState] and their clear-* methods.
+     */
+    private val _messages = MutableSharedFlow<DetailMessage>(
+        replay = 0,
+        extraBufferCapacity = 8,
+    )
+    val messages: SharedFlow<DetailMessage> = _messages.asSharedFlow()
 
     /**
      * Whether the "Manage Series" action should be shown. True iff:
@@ -227,18 +242,6 @@ class DetailViewModel @Inject constructor(
     private var seerrDataLoaded = false
     private var seerrDataGeneration = 0L
 
-    fun clearDownloadError() {
-        _uiState.update { it.copy(downloadError = null) }
-    }
-
-    fun clearUserMessage() {
-        _uiState.update { it.copy(userMessage = null) }
-    }
-
-    fun clearSeriesDownloadResult() {
-        _uiState.update { it.copy(seriesDownloadResult = null) }
-    }
-
     fun selectSubtitle(index: Int?) {
         _uiState.update { it.copy(selectedSubtitleIndex = index) }
         val itemId = _uiState.value.detail?.item?.id ?: return
@@ -305,8 +308,6 @@ class DetailViewModel @Inject constructor(
                     relatedVideos = emptyList(),
                     isDownloading = false,
                     isDownloadingSeries = false,
-                    downloadError = null,
-                    seriesDownloadResult = null,
                     sonarrServersResolved = false,
                 )
             }
@@ -776,7 +777,7 @@ class DetailViewModel @Inject constructor(
                 }
                 .onFailure {
                     // Don't leave the user guessing why the heart didn't flip.
-                    _uiState.update { it.copy(userMessage = context.getString(R.string.detail_msg_couldnt_update_favorite)) }
+                    _messages.emit(DetailMessage.Text(context.getString(R.string.detail_msg_couldnt_update_favorite)))
                 }
         }
     }
@@ -795,7 +796,7 @@ class DetailViewModel @Inject constructor(
                     }
                 }
                 .onFailure {
-                    _uiState.update { it.copy(userMessage = context.getString(R.string.detail_msg_couldnt_mark_played)) }
+                    _messages.emit(DetailMessage.Text(context.getString(R.string.detail_msg_couldnt_mark_played)))
                 }
         }
     }
@@ -814,7 +815,7 @@ class DetailViewModel @Inject constructor(
                     }
                 }
                 .onFailure {
-                    _uiState.update { it.copy(userMessage = context.getString(R.string.detail_msg_couldnt_mark_unplayed)) }
+                    _messages.emit(DetailMessage.Text(context.getString(R.string.detail_msg_couldnt_mark_unplayed)))
                 }
         }
     }
@@ -836,11 +837,11 @@ class DetailViewModel @Inject constructor(
 
     fun startDownload() {
         val detail = _uiState.value.detail ?: run {
-            _uiState.update { it.copy(downloadError = context.getString(R.string.detail_error_details_not_loaded)) }
+            launch { _messages.emit(DetailMessage.Text(context.getString(R.string.detail_error_details_not_loaded))) }
             return
         }
         val source = detail.mediaSources.firstOrNull() ?: run {
-            _uiState.update { it.copy(downloadError = context.getString(R.string.detail_error_no_source)) }
+            launch { _messages.emit(DetailMessage.Text(context.getString(R.string.detail_error_no_source))) }
             return
         }
 
@@ -883,7 +884,7 @@ class DetailViewModel @Inject constructor(
     ) {
         val detail = _uiState.value.detail ?: return
         launch {
-            _uiState.update { it.copy(isDownloading = true, downloadError = null) }
+            _uiState.update { it.copy(isDownloading = true) }
             try {
                 // Apply the user's download quality preference when building the
                 // stream URL so the server transcodes to the requested ceiling.
@@ -896,10 +897,10 @@ class DetailViewModel @Inject constructor(
                 if (result.downloadItem == null) {
                     val message = result.error
                         ?: context.getString(R.string.detail_error_download_failed)
-                    _uiState.update { it.copy(downloadError = message) }
+                    _messages.emit(DetailMessage.Text(message))
                 }
             } catch (e: Exception) {
-                _uiState.update { it.copy(downloadError = e.message ?: context.getString(R.string.detail_error_download_failed)) }
+                _messages.emit(DetailMessage.Text(e.message ?: context.getString(R.string.detail_error_download_failed)))
             }
             _uiState.update { it.copy(isDownloading = false) }
         }
@@ -910,31 +911,23 @@ class DetailViewModel @Inject constructor(
 
     fun downloadSeries(episodeIds: Map<String, List<String>>? = null) {
         val detail = _uiState.value.detail ?: run {
-            _uiState.update { it.copy(seriesDownloadResult = SeriesDownloadResult(error = context.getString(R.string.detail_error_details_not_loaded))) }
+            launch { _messages.emit(DetailMessage.SeriesDownload(queuedCount = 0, error = context.getString(R.string.detail_error_details_not_loaded))) }
             return
         }
         val item = detail.item
         if (item.mediaType != MediaType.SERIES) {
-            _uiState.update { it.copy(seriesDownloadResult = SeriesDownloadResult(error = context.getString(R.string.detail_error_not_a_series))) }
+            launch { _messages.emit(DetailMessage.SeriesDownload(queuedCount = 0, error = context.getString(R.string.detail_error_not_a_series))) }
             return
         }
 
         launch {
-            _uiState.update { it.copy(isDownloadingSeries = true, seriesDownloadResult = null) }
+            _uiState.update { it.copy(isDownloadingSeries = true) }
             downloadIntake.startSeries(item.id, episodeIds)
                 .onSuccess { downloadIds ->
-                    _uiState.update {
-                        it.copy(
-                            seriesDownloadResult = SeriesDownloadResult(queuedCount = downloadIds.size),
-                        )
-                    }
+                    _messages.emit(DetailMessage.SeriesDownload(queuedCount = downloadIds.size, error = null))
                 }
                 .onFailure { error ->
-                    _uiState.update {
-                        it.copy(
-                            seriesDownloadResult = SeriesDownloadResult(error = error.message ?: context.getString(R.string.detail_error_queue_failed)),
-                        )
-                    }
+                    _messages.emit(DetailMessage.SeriesDownload(queuedCount = 0, error = error.message ?: context.getString(R.string.detail_error_queue_failed)))
                 }
             _uiState.update { it.copy(isDownloadingSeries = false) }
         }
@@ -1144,12 +1137,6 @@ class DetailViewModel @Inject constructor(
         themeMusicPlayer.stop()
     }
 }
-
-@Immutable
-data class SeriesDownloadResult(
-    val queuedCount: Int = 0,
-    val error: String? = null,
-)
 
 /**
  * Snapshot of the Seerr request-flow ephemera (dialog picker state + result
