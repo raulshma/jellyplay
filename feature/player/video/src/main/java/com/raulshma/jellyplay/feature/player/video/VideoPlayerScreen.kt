@@ -281,8 +281,13 @@ fun VideoPlayerScreen(
             onBack()
         }
     }
+    // Capture the latest onBack via rememberUpdatedState — the collector
+    // below keys on Unit, so without this the screen keeps invoking the
+    // onBack lambda captured at first composition (a nav lambda that may have
+    // been rebuilt by the parent).
+    val currentOnBack by rememberUpdatedState(onBack)
     LaunchedEffect(Unit) {
-        viewModel.closePlayer.collect { onBack() }
+        viewModel.closePlayer.collect { currentOnBack() }
     }
     // Restore immersive mode when leaving PiP
     LaunchedEffect(isInPipMode) {
@@ -843,7 +848,16 @@ fun VideoPlayerScreen(
                             }
                             gestureDeltaMs = totalDeltaMs
                             val durationMs = eng.durationMs.coerceAtLeast(0)
-                            gestureSeekPositionMs = (gestureStartPositionMs + totalDeltaMs).coerceIn(0, durationMs)
+                            // For live streams durationMs is 0, so the
+                            // upper clamp pinned every seek to 0. Skip the
+                            // clamp when there is no known duration; live seek
+                            // gestures are rare and the engine clamps on its
+                            // own at seek time.
+                            gestureSeekPositionMs = if (durationMs <= 0L) {
+                                (gestureStartPositionMs + totalDeltaMs).coerceAtLeast(0L)
+                            } else {
+                                (gestureStartPositionMs + totalDeltaMs).coerceIn(0L, durationMs)
+                            }
                         }
                     }
                 },
@@ -863,10 +877,14 @@ fun VideoPlayerScreen(
                 onVolumeGesture = remember(context, isCastConnected, castVolume) {
                     { delta ->
                         if (isCastConnected) {
+                            // Cast volume used to scale by 0.02, requiring
+                            // ~50 full-height swipes for the full range. Use the
+                            // accumulator pattern from the local path so one
+                            // full-height swipe moves ~0.5 of the range.
                             val currentNorm = castVolume
-                            val newVolume = (currentNorm + delta * 0.02f).coerceIn(0f, 1f)
+                            volumeGestureAccumulator += delta
+                            val newVolume = (currentNorm + volumeGestureAccumulator).coerceIn(0f, 1f)
                             volumeOverlay = newVolume
-                            volumeGestureAccumulator = 0f
                             viewModel.setCastVolume(newVolume)
                         } else {
                             val am = context.getSystemService(Context.AUDIO_SERVICE) as? android.media.AudioManager
@@ -1041,7 +1059,7 @@ fun VideoPlayerScreen(
             }
 
             if (isScreenLocked && !isInPipMode) {
-                val usePin = uiState.usePinForPlayerLock && uiState.pinHash != null
+                val usePin = uiState.usePinForPlayerLock && uiState.hasPin
                 if (usePin) {
                     PinLockOverlay(
                         visible = true,
@@ -1083,9 +1101,11 @@ fun VideoPlayerScreen(
                     playerType = uiState.preferredPlayerType.name,
                     decoderMode = uiState.decoderMode.displayName,
                     audioSessionId = 0,
+                    // Drop below the CastIndicator when both are visible so
+                    // they don't stack on the same (60dp, 16dp) anchor.
                     modifier = Modifier
                         .align(Alignment.TopStart)
-                        .padding(start = 16.dp, top = 60.dp)
+                        .padding(start = 16.dp, top = if (isCastConnected || isCastConnecting) 92.dp else 60.dp)
                         .width(280.dp),
                 )
             }
@@ -1461,6 +1481,8 @@ fun VideoPlayerScreen(
         PlaybackErrorDialog(
             errorMessage = playerError,
             currentPlayerType = uiState.preferredPlayerType,
+            retryable = uiState.playerErrorRetryable,
+            onRetry = { viewModel.retryPlayback() },
             onRetryWithEngine = { viewModel.retryWithEngine(it) },
             onDismiss = { viewModel.dismissPlaybackError() },
         )

@@ -67,8 +67,8 @@ class LibVlcPlayerEngine(
     private val _availableTracks = MutableStateFlow<List<MediaTrack>>(emptyList())
     override val availableTracks: StateFlow<List<MediaTrack>> = _availableTracks.asStateFlow()
 
-    private val _errorFlow = MutableSharedFlow<String>(extraBufferCapacity = 1)
-    override val errorFlow: Flow<String> = _errorFlow.asSharedFlow()
+    private val _errorFlow = MutableSharedFlow<EngineError>(extraBufferCapacity = 1)
+    override val errorFlow: Flow<EngineError> = _errorFlow.asSharedFlow()
 
     private val _bufferedPositionMs = MutableStateFlow(0L)
     override val bufferedPositionMs: StateFlow<Long> = _bufferedPositionMs.asStateFlow()
@@ -150,7 +150,7 @@ class LibVlcPlayerEngine(
             }
             MediaPlayer.Event.EncounteredError -> {
                 _playbackState.value = EnginePlaybackState.ERROR
-                _errorFlow.tryEmit("VLC encountered an error during playback")
+                _errorFlow.tryEmit(EngineError.Unknown("VLC encountered an error during playback"))
             }
         }
     }
@@ -263,7 +263,7 @@ class LibVlcPlayerEngine(
         } catch (e: Exception) {
             Log.e(TAG, "Failed to create LibVLC", e)
             currentPlaybackRequest = null
-            _errorFlow.tryEmit("Failed to initialize VLC Engine")
+            _errorFlow.tryEmit(EngineError.Render(e))
             return
         }
         libVLC = vlc
@@ -348,10 +348,15 @@ class LibVlcPlayerEngine(
     override fun play() {
         try {
             val mp = mediaPlayer ?: return
-            if (_playbackState.value == EnginePlaybackState.ENDED) {
+            val wasEnded = _playbackState.value == EnginePlaybackState.ENDED
+            mp.play()
+            // After EndReached VLC is in stopped state; setTime() on a
+            // stopped player silently fails, so restart playback first then
+            // seek to 0. The old order (time=0 then play) re-fired EndReached
+            // immediately because the seek was a no-op.
+            if (wasEnded) {
                 mp.time = 0L
             }
-            mp.play()
         } catch (_: Exception) {}
     }
 
@@ -375,17 +380,26 @@ class LibVlcPlayerEngine(
         if (currentConfig == config) return
         val oldConfig = currentConfig
         currentConfig = config
-        
+
         try {
             val mp = mediaPlayer ?: return
-            
+
+            // Audio delay and subtitle delay apply live via libvlc setters.
             if (oldConfig.audioDelayMs != config.audioDelayMs) {
                 mp.setAudioDelay(config.audioDelayMs)
             }
             if (oldConfig.subtitleDelayMs != config.subtitleDelayMs) {
                 mp.setSpuDelay(config.subtitleDelayMs * 1000L)
             }
-            
+
+            // Known limitation: channel-mix mode, audio-normalization,
+            // decoder mode, audio passthrough, and subtitle style are
+            // load-time `--stereo-mode` / `--audio-filter` / `--avcodec` VLC
+            // options — libvlc's runtime API surface on Android does not
+            // expose setters for these, so toggling them mid-playback forces
+            // a reload below (subtitle style does; the rest require the user
+            // to back out and re-enter the player). Documented here so future
+            // contributors don't assume the toggle is silently dropped.
             if (oldConfig.subtitleStyle != config.subtitleStyle || oldConfig.videoEffects != config.videoEffects) {
                 reloadMediaForSubtitleStyleChange()
             }

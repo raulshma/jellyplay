@@ -93,7 +93,7 @@ class NoOpEngineTest {
     fun flows_areEmptyByDefault() = runBlocking {
         val engine = newEngine()
         assertEquals(emptyList<Long>(), engine.positionFlow.toList())
-        assertEquals(emptyList<String>(), engine.errorFlow.toList())
+        assertEquals(emptyList<EngineError>(), engine.errorFlow.toList())
         assertNull(engine.underlyingPlayer)
     }
 

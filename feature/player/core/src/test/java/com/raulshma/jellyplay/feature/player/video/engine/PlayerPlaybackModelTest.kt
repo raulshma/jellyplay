@@ -9,6 +9,7 @@ import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
+import org.junit.Assert.assertSame
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
@@ -153,16 +154,16 @@ class PlayerPlaybackModelTest {
     }
 
     @Test
-    fun bind_errorsMappedToUnknownFromBareString() = runTest {
+    fun bind_passesThroughStructuredEngineError() = runTest {
         val fake = FakeMediaEngine()
         val model = DefaultPlayerPlaybackModel(scope = backgroundScope)
         model.bind(fake)
         val collected = backgroundScope.async { model.errors.first() }
-        fake.errorEmissions.emit("Playback error (mpv): -7")
+        val structured = EngineError.Network(cause = null)
+        fake.errorEmissions.emit(structured)
         val error = collected.await()
-        assertTrue(error is EngineError.Unknown)
-        assertEquals("Playback error (mpv): -7", (error as EngineError.Unknown).raw)
-        assertFalse(error.retryable)
+        assertSame(structured, error)
+        assertTrue(error.retryable)
     }
 
     @Test
@@ -183,7 +184,7 @@ class PlayerPlaybackModelTest {
         val model = DefaultPlayerPlaybackModel(scope = backgroundScope)
         model.bind(fake)
         // Emit an error, then unbind before subscribing.
-        fake.errorEmissions.emit("Playback error (mpv): -7")
+        fake.errorEmissions.emit(EngineError.Unknown("Playback error (mpv): -7"))
         model.unbind()
         // Re-bind a fresh engine — the stale error must not carry over.
         val fake2 = FakeMediaEngine()

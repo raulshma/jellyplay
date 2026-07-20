@@ -38,10 +38,8 @@ import androidx.media3.ui.CaptionStyleCompat
 import androidx.media3.ui.PlayerView
 import androidx.media3.extractor.DefaultExtractorsFactory
 import androidx.media3.extractor.text.DefaultSubtitleParserFactory
-import com.raulshma.jellyplay.core.data.playback.AudioNormalizationHelper
 import com.raulshma.jellyplay.core.data.playback.BassBoostHelper
 import com.raulshma.jellyplay.core.data.playback.ChannelMixAudioProcessor
-import com.raulshma.jellyplay.core.data.playback.ChannelMixHelper
 import com.raulshma.jellyplay.core.data.playback.DialogueBoostHelper
 import com.raulshma.jellyplay.core.data.playback.DynamicsCompressorAudioProcessor
 import com.raulshma.jellyplay.core.data.playback.EqualizerHelper
@@ -52,8 +50,6 @@ import com.raulshma.jellyplay.core.data.playback.NightModeHelper
 import com.raulshma.jellyplay.core.data.playback.ReplayGainAudioProcessor
 import com.raulshma.jellyplay.core.data.playback.ReverbHelper
 import com.raulshma.jellyplay.core.data.playback.VirtualizerHelper
-import com.raulshma.jellyplay.core.model.AudioNormalizationMode
-import com.raulshma.jellyplay.core.model.ChannelMixMode
 import com.raulshma.jellyplay.core.model.DecoderMode
 import com.raulshma.jellyplay.core.model.ExoAudioOffloadMode
 import com.raulshma.jellyplay.core.model.ExoFrameRateStrategy
@@ -124,6 +120,18 @@ class ExoPlayerEngine(
         }
     }
 
+    /**
+     * ExoPlayer requires application-thread access for every mutation. The VM
+     * calls [load]/[release] from `viewModelScope` (Default + Main) which is
+     * safe, but tests or off-Main callers can violate the precondition and
+     * corrupt the player silently. Fail fast with a clear cause instead.
+     */
+    private fun ensurePlayerThread(op: String) {
+        check(Looper.myLooper() == Looper.getMainLooper()) {
+            "ExoPlayerEngine.$op must run on the main thread; was ${Thread.currentThread()}"
+        }
+    }
+
     override val capabilities = EngineCapabilityMatrix.EXO_PLAYER
 
     private val _playbackState = MutableStateFlow(EnginePlaybackState.IDLE)
@@ -135,8 +143,8 @@ class ExoPlayerEngine(
     private val _availableTracks = MutableStateFlow<List<MediaTrack>>(emptyList())
     override val availableTracks: StateFlow<List<MediaTrack>> = _availableTracks.asStateFlow()
 
-    private val _errorFlow = MutableSharedFlow<String>(extraBufferCapacity = 1)
-    override val errorFlow: Flow<String> = _errorFlow.asSharedFlow()
+    private val _errorFlow = MutableSharedFlow<EngineError>(extraBufferCapacity = 1)
+    override val errorFlow: Flow<EngineError> = _errorFlow.asSharedFlow()
 
     private val _bufferedPositionMs = MutableStateFlow(0L)
     override val bufferedPositionMs: StateFlow<Long> = _bufferedPositionMs.asStateFlow()
@@ -163,6 +171,7 @@ class ExoPlayerEngine(
     private var activeTrackIsAss: Boolean = false
     private var lastFrameW = -1
     private var lastFrameH = -1
+    @Volatile
     private var currentMediaItem: MediaItem? = null
     private val bandwidthMeter = bandwidthMeter ?: DefaultBandwidthMeter.Builder(context).build()
 
@@ -175,7 +184,16 @@ class ExoPlayerEngine(
     @Volatile
     private var serverDurationMs: Long = 0L
 
-    private val currentSubtitleConfigs = mutableListOf<MediaItem.SubtitleConfiguration>()
+    /**
+     * Mutated from [load] and [release] (both asserted on the player
+     * thread) and from [addExternalSubtitle] via [runOnPlayerThread], but read
+     * by [buildMediaItem] which may be invoked on a coroutine. CopyOnWrite
+     * guarantees safe iteration without ever blocking the player thread, and
+     * sidesteps `ConcurrentModificationException` if a subtitle-add lands
+     * during a reload.
+     */
+    private val currentSubtitleConfigs =
+        java.util.concurrent.CopyOnWriteArrayList<MediaItem.SubtitleConfiguration>()
 
     override val underlyingPlayer: androidx.media3.common.Player? get() = player
     
@@ -192,8 +210,6 @@ class ExoPlayerEngine(
     private val highPassFilter = HighPassFilterAudioProcessor()
     private val dialogueBoost = DialogueBoostHelper(equalizerHelper, highPassFilter)
     private val nightMode = NightModeHelper()
-    private val audioNormalizationHelper = AudioNormalizationHelper()
-    private val channelMixHelper = ChannelMixHelper()
     private val bassBoostHelper = BassBoostHelper()
     private val virtualizerHelper = VirtualizerHelper()
     private val reverbHelper = ReverbHelper()
@@ -206,6 +222,28 @@ class ExoPlayerEngine(
     private val channelMixProcessor = ChannelMixAudioProcessor()
     private val dynamicsProcessor = DynamicsCompressorAudioProcessor()
     private val replayGainProcessor = ReplayGainAudioProcessor()
+
+    /**
+     * Collapses the prior 9-helper + 3-processor sprawl behind a single
+     * attach/apply/release surface. Owns the bookkeeping
+     * (`audioEffectsAttached`, `lastAudioEffectsConfig`,
+     * `lastAppliedReverbPreset`) that used to live on the engine. The two
+     * legacy dead helpers (`AudioNormalizationHelper`, `ChannelMixHelper`)
+     * that existed only to be configured-then-disabled every tick are gone
+     * — their load-bearing work is done by the in-sink processors.
+     */
+    private val audioEffectChain = AudioEffectChain(
+        dialogueBoost = dialogueBoost,
+        nightMode = nightMode,
+        equalizerHelper = equalizerHelper,
+        bassBoostHelper = bassBoostHelper,
+        virtualizerHelper = virtualizerHelper,
+        reverbHelper = reverbHelper,
+        loudnessEnhancerHelper = loudnessEnhancerHelper,
+        channelMixProcessor = channelMixProcessor,
+        dynamicsProcessor = dynamicsProcessor,
+        replayGainProcessor = replayGainProcessor,
+    )
 
     private var lastVideoStats: EngineVideoStats? = null
 
@@ -220,9 +258,8 @@ class ExoPlayerEngine(
      */
     @Volatile
     private var videoDecoderCounters: DecoderCounters? = null
-    private var audioEffectsAttached = false
-    private var lastAudioEffectsConfig: AudioEffectsConfig? = null
-    private var lastAppliedReverbPreset: com.raulshma.jellyplay.core.model.ReverbPreset? = null
+    // audioEffectsAttached / lastAudioEffectsConfig / lastAppliedReverbPreset
+    // moved into AudioEffectChain.
 
     private val _pollingIntervalMs = MutableStateFlow(1000L)
     override val pollingIntervalMs: StateFlow<Long> = _pollingIntervalMs.asStateFlow()
@@ -250,7 +287,7 @@ class ExoPlayerEngine(
 
         override fun onPlayerError(error: PlaybackException) {
             _playbackState.value = EnginePlaybackState.ERROR
-            _errorFlow.tryEmit(error.message ?: "Unknown playback error")
+            _errorFlow.tryEmit(error.toEngineError())
         }
 
         override fun onAudioSessionIdChanged(audioSessionId: Int) {
@@ -258,13 +295,11 @@ class ExoPlayerEngine(
                 lastAppliedAudioSessionId = audioSessionId
                 // The audio session id changed mid-playback (e.g. track
                 // switch). AudioEffect handles are bound to the *old*
-                // session id, which is now dead. Detach everything so
-                // applyAudioEffects() re-binds to the new session instead
-                // of short-circuiting on the cached config.
-                if (audioEffectsAttached) {
-                    releaseAudioEffects()
-                }
-                applyAudioEffects()
+                // session id, which is now dead. Detach everything so the
+                // chain re-binds to the new session instead of short-
+                // circuiting on the cached config.
+                audioEffectChain.release()
+                audioEffectChain.apply(audioSessionId, currentConfig.audioEffects, currentNormalizationGain)
             }
         }
 
@@ -300,6 +335,7 @@ class ExoPlayerEngine(
     }
 
     override fun load(request: PlaybackRequest) {
+        ensurePlayerThread("load")
         release()
         engineScope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
 
@@ -599,6 +635,7 @@ class ExoPlayerEngine(
     }
 
     override fun release() {
+        ensurePlayerThread("release")
         engineScope.cancel()
         player?.removeListener(listener)
         player?.removeAnalyticsListener(decoderCountersListener)
@@ -799,6 +836,16 @@ class ExoPlayerEngine(
     }
 
     override fun createSurfaceView(context: Context): View {
+        // Idempotent teardown. A second call (e.g. recomposition after a
+        // surface recycle) used to leak the previous PlayerView — it kept the
+        // (possibly released) ExoPlayer and its layout listener alive. Detach
+        // both before constructing the replacement.
+        playerView?.let { old ->
+            old.player = null
+            frameSizeListener?.let { old.removeOnLayoutChangeListener(it) }
+        }
+        frameSizeListener = null
+
         val pv = PlayerView(context).apply {
             this.player = this@ExoPlayerEngine.player
             useController = false
@@ -1092,12 +1139,17 @@ class ExoPlayerEngine(
                     else -> null
                 }
             },
-            videoHdrType = videoFormat?.colorInfo?.let { ci ->
+            videoHdrType = videoFormat?.let { f ->
+                val ci = f.colorInfo
+                // Dolby Vision is identified by codec/MIME, not transfer
+                // function — ST2084/PQ is shared by HDR10 and DV, so the prior
+                // mapping mislabeled every HDR10 stream as "Dolby Vision".
                 when {
-                    ci.hdrStaticInfo != null -> "HDR10"
-                    ci.colorTransfer == androidx.media3.common.C.COLOR_TRANSFER_HLG -> "HLG"
-                    ci.colorTransfer == androidx.media3.common.C.COLOR_TRANSFER_ST2084 -> "Dolby Vision"
-                    ci.colorTransfer == androidx.media3.common.C.COLOR_TRANSFER_SDR -> null
+                    f.sampleMimeType == androidx.media3.common.MimeTypes.VIDEO_DOLBY_VISION -> "Dolby Vision"
+                    ci?.hdrStaticInfo != null -> "HDR10"
+                    ci?.colorTransfer == androidx.media3.common.C.COLOR_TRANSFER_HLG -> "HLG"
+                    ci?.colorTransfer == androidx.media3.common.C.COLOR_TRANSFER_ST2084 -> "HDR10"
+                    ci?.colorTransfer == androidx.media3.common.C.COLOR_TRANSFER_SDR -> null
                     else -> null
                 }
             },
@@ -1130,117 +1182,11 @@ class ExoPlayerEngine(
     }
 
     private fun applyAudioEffects() {
-        val sid = audioSessionId
-        if (sid == C.AUDIO_SESSION_ID_UNSET) return
-        
-        val config = currentConfig.audioEffects
-        if (lastAudioEffectsConfig == config && audioEffectsAttached) return
-        
-        if (!audioEffectsAttached) {
-            dialogueBoost.attach(sid)
-            nightMode.attach(sid)
-            equalizerHelper.attach(sid)
-            audioNormalizationHelper.attach(sid)
-            channelMixHelper.attach(sid)
-            bassBoostHelper.attach(sid)
-            virtualizerHelper.attach(sid)
-            reverbHelper.attach(sid)
-            loudnessEnhancerHelper.attach(sid)
-            audioEffectsAttached = true
-        }
-        
-        dialogueBoost.setStrength(config.dialogueBoostStrength)
-        dialogueBoost.setEnabled(config.dialogueBoostEnabled)
-        // dialogueBoost also toggles highPassFilter (its rumble cut) —
-        // driven inside DialogueBoostHelper.setEnabled.
-
-        nightMode.setStrength(config.nightModeStrength)
-        nightMode.setEnabled(config.nightModeEnabled)
-
-        // equalizerHelper owns the single priority-0 Equalizer for this
-        // session and DialogueBoostHelper overlays its vocal-band gains
-        // on top via setBandOffsets (see EqualizerHelper kdoc). The
-        // underlying effect must stay enabled while EITHER is on; if
-        // only the user's EQ is off but boost is on, disabling here
-        // would silently kill the boost overlay.
-        equalizerHelper.setSettings(config.equalizerSettings)
-        equalizerHelper.setEnabled(config.equalizerEnabled || config.dialogueBoostEnabled)
-
-        // Normalization is now handled by the in-sink AudioProcessor chain
-        // rather than the legacy audiofx LoudnessEnhancer, so the three
-        // modes are consistent with the audio/music + MPV paths:
-        //  - DYNAMIC  → DSP compressor (dynamicsProcessor)
-        //  - TRACK/ALBUM → per-track ReplayGain (replayGainProcessor) when
-        //    the item has a normalizationGain, else no-op
-        //  - NONE     → both off
-        when (config.audioNormalizationMode) {
-            AudioNormalizationMode.DYNAMIC -> {
-                if (config.audioNormalizationEnabled) {
-                    dynamicsProcessor.setEnabled(true)
-                    replayGainProcessor.setGainDb(0f)
-                } else {
-                    dynamicsProcessor.setEnabled(false)
-                    replayGainProcessor.setGainDb(0f)
-                }
-            }
-            AudioNormalizationMode.TRACK, AudioNormalizationMode.ALBUM -> {
-                dynamicsProcessor.setEnabled(false)
-                val gain = currentNormalizationGain ?: 0f
-                replayGainProcessor.setGainDb(if (config.audioNormalizationEnabled) gain else 0f)
-            }
-            AudioNormalizationMode.NONE -> {
-                dynamicsProcessor.setEnabled(false)
-                replayGainProcessor.setGainDb(0f)
-            }
-        }
-        // Legacy LoudnessEnhancer is intentionally left disabled to avoid
-        // double-processing DYNAMIC mode alongside the DSP compressor.
-        audioNormalizationHelper.setMode(AudioNormalizationMode.NONE)
-        audioNormalizationHelper.setEnabled(false)
-
-        // Real channel matrix mixing via the in-sink processor; the legacy
-        // audiofx-based channelMixHelper no longer drives a mode here.
-        channelMixProcessor.setMode(config.channelMixMode)
-        channelMixProcessor.setEnabled(config.channelMixEnabled)
-        channelMixHelper.setMode(ChannelMixMode.AUTO)
-        channelMixHelper.setEnabled(false)
-
-        bassBoostHelper.setStrength(config.bassBoostStrength)
-        bassBoostHelper.setEnabled(config.bassBoostEnabled)
-
-        virtualizerHelper.setStrength(config.virtualizerStrength)
-        virtualizerHelper.setEnabled(config.virtualizerEnabled)
-
-        loudnessEnhancerHelper.setGain(config.volumeBoostGain)
-        loudnessEnhancerHelper.setEnabled(config.volumeBoostEnabled)
-
-        if (config.reverbPreset != com.raulshma.jellyplay.core.model.ReverbPreset.NONE) {
-            if (lastAppliedReverbPreset != config.reverbPreset) {
-                reverbHelper.detach()
-                reverbHelper.attach(sid)
-            }
-            reverbHelper.setPreset(config.reverbPreset)
-        } else {
-            reverbHelper.setEnabled(false)
-        }
-        lastAppliedReverbPreset = config.reverbPreset
-        
-        lastAudioEffectsConfig = config
+        audioEffectChain.apply(audioSessionId, currentConfig.audioEffects, currentNormalizationGain)
     }
 
     private fun releaseAudioEffects() {
-        dialogueBoost.detach()
-        nightMode.detach()
-        equalizerHelper.detach()
-        audioNormalizationHelper.detach()
-        channelMixHelper.detach()
-        bassBoostHelper.detach()
-        virtualizerHelper.detach()
-        reverbHelper.detach()
-        loudnessEnhancerHelper.detach()
-        audioEffectsAttached = false
-        lastAudioEffectsConfig = null
-        lastAppliedReverbPreset = null
+        audioEffectChain.release()
     }
 
     private fun buildTracks(): List<MediaTrack> {
@@ -1319,4 +1265,61 @@ class ExoPlayerEngine(
         if (wasPlaying) exo.play()
     }
 
+}
+
+/**
+ * Maps a Media3 [PlaybackException] onto the [EngineError] taxonomy so the UI
+ * can distinguish retryable from fatal failures. Previously every error
+ * collapsed to `EngineError.Unknown(raw)` and the retry / switch-engine
+ * affordances (gated on `retryable` / specific subtypes) could never fire.
+ *
+ * The mapping is heuristic — Media3's error codes group by failure category
+ * (`ERROR_CODE_IO_*`, `ERROR_CODE_DECODER_*`, `ERROR_CODE_DRM_*`,
+ * `ERROR_CODE_AUDIO_RENDER_*` / `VIDEO_*`). When in doubt we fall back to
+ * [EngineError.Unknown], which is non-retryable.
+ */
+private fun PlaybackException.toEngineError(): EngineError {
+    val raw = message ?: "Unknown playback error"
+    val cause = cause
+    return when (errorCode) {
+        // Network / IO failures — always retryable.
+        PlaybackException.ERROR_CODE_IO_UNSPECIFIED,
+        PlaybackException.ERROR_CODE_IO_NETWORK_CONNECTION_FAILED,
+        PlaybackException.ERROR_CODE_IO_NETWORK_CONNECTION_TIMEOUT,
+        PlaybackException.ERROR_CODE_IO_INVALID_HTTP_CONTENT_TYPE,
+        PlaybackException.ERROR_CODE_IO_BAD_HTTP_STATUS,
+        PlaybackException.ERROR_CODE_IO_FILE_NOT_FOUND,
+        PlaybackException.ERROR_CODE_IO_NO_PERMISSION,
+        PlaybackException.ERROR_CODE_IO_CLEARTEXT_NOT_PERMITTED,
+        PlaybackException.ERROR_CODE_IO_READ_POSITION_OUT_OF_RANGE,
+        PlaybackException.ERROR_CODE_PARSING_MANIFEST_MALFORMED,
+        -> EngineError.Network(cause)
+
+        // Decoder / codec failures — not retryable on the same engine.
+        PlaybackException.ERROR_CODE_DECODER_INIT_FAILED,
+        PlaybackException.ERROR_CODE_DECODER_QUERY_FAILED,
+        PlaybackException.ERROR_CODE_DECODING_FAILED,
+        PlaybackException.ERROR_CODE_DECODING_FORMAT_EXCEEDS_CAPABILITIES,
+        PlaybackException.ERROR_CODE_DECODING_FORMAT_UNSUPPORTED,
+        PlaybackException.ERROR_CODE_AUDIO_TRACK_INIT_FAILED,
+        PlaybackException.ERROR_CODE_AUDIO_TRACK_WRITE_FAILED,
+        -> EngineError.Decoder(codec = null, cause = cause)
+
+        // DRM — not retryable.
+        PlaybackException.ERROR_CODE_DRM_UNSPECIFIED,
+        PlaybackException.ERROR_CODE_DRM_SCHEME_UNSUPPORTED,
+        PlaybackException.ERROR_CODE_DRM_PROVISIONING_FAILED,
+        PlaybackException.ERROR_CODE_DRM_LICENSE_ACQUISITION_FAILED,
+        PlaybackException.ERROR_CODE_DRM_DISALLOWED_OPERATION,
+        PlaybackException.ERROR_CODE_DRM_SYSTEM_ERROR,
+        PlaybackException.ERROR_CODE_DRM_DEVICE_REVOKED,
+        -> EngineError.Drm(scheme = null, cause = cause)
+
+        // Render surface failures — retryable (re-attach surface + retry).
+        PlaybackException.ERROR_CODE_VIDEO_FRAME_PROCESSOR_INIT_FAILED,
+        PlaybackException.ERROR_CODE_VIDEO_FRAME_PROCESSING_FAILED,
+        -> EngineError.Render(cause = cause)
+
+        else -> EngineError.Unknown(raw, cause)
+    }
 }

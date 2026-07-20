@@ -163,8 +163,8 @@ class DefaultPlayerPlaybackModel(
             engine.videoStats.collect { _videoStats.value = it }
         }
         reactiveJobs += scope.launch(Dispatchers.Unconfined) {
-            engine.errorFlow.collect { raw ->
-                _errors.tryEmit(EngineError.Unknown(raw))
+            engine.errorFlow.collect { engineError ->
+                _errors.tryEmit(engineError)
             }
         }
     }
