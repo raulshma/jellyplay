@@ -26,14 +26,19 @@ import io.mockk.coEvery
 import io.mockk.every
 import io.mockk.mockk
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.filter
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flowOf
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withTimeout
+import kotlinx.coroutines.test.TestScope
 import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
@@ -290,6 +295,149 @@ class DetailViewModelTest {
         assertEquals("e1", target.episode.id)
     }
 
+    // ---- Season-level mark played / unplayed --------------------------------
+
+    // markSeasonPlayed flips every episode in that season to isPlayed=true in
+    // the optimistic uiState snapshot (no re-fetch), so the WATCHED badge and
+    // the next-up target update immediately. The Jellyfin endpoint recurses
+    // into the season's children, so this is a single markPlayed(seasonId) call.
+    @Test
+    fun markSeasonPlayed_flipsAllEpisodesAndRecomputesSmartPlay() =
+        runTest(mainDispatcherRule.testDispatcher) {
+            backgroundScope.launch { viewModel.uiState.collect { /* warm */ } }
+            val season = MediaItem(id = "season1", name = "Season 1", mediaType = MediaType.SEASON, indexNumber = 1)
+            val ep1 = episode("e1", 1, 1, isPlayed = false)
+            val ep2 = episode("e2", 1, 2, isPlayed = false)
+            stubSeries("s1", season, listOf(ep1, ep2))
+            coEvery { mediaRepository.markPlayed("season1") } returns Result.success(Unit)
+
+            viewModel.loadItem("s1")
+            advanceUntilIdle()
+            // Sanity: before the action, smart-play points at the first unplayed ep.
+            assertEquals("e1", viewModel.uiState.value.smartPlayTarget!!.episode.id)
+
+            viewModel.markSeasonPlayed("season1")
+            advanceUntilIdle()
+
+            val episodes = viewModel.uiState.value.episodes["season1"]!!
+            assertTrue(episodes.all { it.isPlayed })
+            // Position is cleared server-side on mark-played; mirror locally.
+            assertEquals(0L, episodes.first().playbackPositionTicks)
+            // Every episode now played → smart-play falls back to a replay of S1:E1.
+            // The recompute launches on Dispatchers.Default, so poll the uiState
+            // flow until the label settles (avoids a race where advanceUntilIdle
+            // returns before the Default launch posts its update).
+            val target = awaitSmartPlayTarget { it.episode.id == "e1" }
+            assertEquals("Replay S1:E1", target.label)
+            io.mockk.coVerify(exactly = 1) { mediaRepository.markPlayed("season1") }
+        }
+
+    // markSeasonPlayed only affects the targeted season — episodes in a sibling
+    // season are left untouched (regression guard for an over-broad map rewrite).
+    @Test
+    fun markSeasonPlayed_leavesSiblingSeasonUnchanged() =
+        runTest(mainDispatcherRule.testDispatcher) {
+            backgroundScope.launch { viewModel.uiState.collect { /* warm */ } }
+            val s1 = MediaItem(id = "season1", name = "Season 1", mediaType = MediaType.SEASON, indexNumber = 1)
+            val s2 = MediaItem(id = "season2", name = "Season 2", mediaType = MediaType.SEASON, indexNumber = 2)
+            val s1e1 = episode("e1", 1, 1, isPlayed = false).copy(seasonId = "season1")
+            val s2e1 = episode("e2", 2, 1, isPlayed = false).copy(seasonId = "season2")
+            coEvery { mediaRepository.getMediaDetail("s1") } returns Result.success(
+                MediaDetail(item = MediaItem(id = "s1", name = "Show", mediaType = MediaType.SERIES)),
+            )
+            coEvery { mediaRepository.getSeasons("s1") } returns Result.success(listOf(s1, s2))
+            coEvery { mediaRepository.getEpisodes("s1", "season1") } returns Result.success(listOf(s1e1))
+            coEvery { mediaRepository.getEpisodes("s1", "season2") } returns Result.success(listOf(s2e1))
+            coEvery { mediaRepository.getAllEpisodesGrouped("s1") } returns Result.success(
+                mapOf("season1" to listOf(s1e1), "season2" to listOf(s2e1)),
+            )
+            coEvery { mediaRepository.markPlayed("season1") } returns Result.success(Unit)
+
+            viewModel.loadItem("s1")
+            advanceUntilIdle()
+
+            viewModel.markSeasonPlayed("season1")
+            advanceUntilIdle()
+
+            assertTrue(viewModel.uiState.value.episodes["season1"]!!.all { it.isPlayed })
+            assertTrue(viewModel.uiState.value.episodes["season2"]!!.none { it.isPlayed })
+        }
+
+    // Repository failure must surface the localized snackbar and leave the
+    // episodes map unchanged (no optimistic corruption on error). Mirrors the
+    // existing messages_* tests: `withTimeout { first() }` drives virtual time
+    // forward until the async emit from markSeason's launch lands.
+    @Test
+    fun markSeasonPlayed_repositoryFailure_emitsMessageAndLeavesStateIntact() =
+        runTest(mainDispatcherRule.testDispatcher) {
+            backgroundScope.launch { viewModel.uiState.collect { /* warm */ } }
+            val season = MediaItem(id = "season1", name = "Season 1", mediaType = MediaType.SEASON, indexNumber = 1)
+            val ep1 = episode("e1", 1, 1, isPlayed = false)
+            stubSeries("s1", season, listOf(ep1))
+            coEvery { mediaRepository.markPlayed("season1") } returns Result.failure(RuntimeException("boom"))
+            every { context.getString(R.string.detail_msg_couldnt_mark_played) } returns "couldn't mark"
+
+            viewModel.loadItem("s1")
+            advanceUntilIdle()
+
+            viewModel.markSeasonPlayed("season1")
+
+            val message = withTimeout(1_000) { viewModel.messages.first() }
+            assertTrue(message is DetailMessage.Text)
+            assertEquals("couldn't mark", (message as DetailMessage.Text).text)
+            advanceUntilIdle()
+            assertFalse(viewModel.uiState.value.episodes["season1"]!!.any { it.isPlayed })
+        }
+
+    // markSeasonUnplayed is the mirror image — flips isPlayed=false and lets
+    // smart-play target the now-unplayed first episode again.
+    @Test
+    fun markSeasonUnplayed_flipsEpisodesAndRetargets() =
+        runTest(mainDispatcherRule.testDispatcher) {
+            backgroundScope.launch { viewModel.uiState.collect { /* warm */ } }
+            val season = MediaItem(id = "season1", name = "Season 1", mediaType = MediaType.SEASON, indexNumber = 1)
+            val ep1 = episode("e1", 1, 1, isPlayed = true)
+            val ep2 = episode("e2", 1, 2, isPlayed = true)
+            stubSeries("s1", season, listOf(ep1, ep2))
+            coEvery { mediaRepository.markUnplayed("season1") } returns Result.success(Unit)
+
+            viewModel.loadItem("s1")
+            advanceUntilIdle()
+            // Before: all played → replay label.
+            assertEquals("Replay S1:E1", viewModel.uiState.value.smartPlayTarget!!.label)
+
+            viewModel.markSeasonUnplayed("season1")
+            advanceUntilIdle()
+
+            assertTrue(viewModel.uiState.value.episodes["season1"]!!.none { it.isPlayed })
+            // After: first episode unplayed → play label, no longer a replay.
+            // (The recompute launches on Dispatchers.Default — poll for the
+            // label to settle rather than asserting the instant `advanceUntilIdle`
+            // returns.)
+            val target = awaitSmartPlayTarget { it.episode.id == "e1" }
+            assertEquals("Play S1:E1", target.label)
+        }
+
+    // When every episode is already in the target state, the call short-circuits
+    // — no network round-trip, no spurious cache invalidation.
+    @Test
+    fun markSeasonPlayed_alreadyAllPlayed_isNoOp() =
+        runTest(mainDispatcherRule.testDispatcher) {
+            backgroundScope.launch { viewModel.uiState.collect { /* warm */ } }
+            val season = MediaItem(id = "season1", name = "Season 1", mediaType = MediaType.SEASON, indexNumber = 1)
+            val ep1 = episode("e1", 1, 1, isPlayed = true)
+            stubSeries("s1", season, listOf(ep1))
+            // No stub for markPlayed → relaxed mock would return Unit, so verify
+            // it was never invoked instead.
+            viewModel.loadItem("s1")
+            advanceUntilIdle()
+
+            viewModel.markSeasonPlayed("season1")
+            advanceUntilIdle()
+
+            io.mockk.coVerify(exactly = 0) { mediaRepository.markPlayed(any()) }
+        }
+
     // Regression: loadSeerrData must read isSeerrConnected/isSeerrRecommendationsEnabled
     // from the PUBLISHED uiState (where the seerr-flags combine folds them in),
     // not from _uiState (the Group-1 primary flow, where they are never written
@@ -451,4 +599,30 @@ class DetailViewModelTest {
         seriesId = "s1",
         seasonId = "season1",
     )
+
+    /**
+     * Awaits a [DetailUiState.SmartPlayTarget] matching [predicate].
+     *
+     * The smart-play recompute launches on `Dispatchers.Default`, which is NOT
+     * driven by the test dispatcher — so `advanceUntilIdle()` alone can return
+     * before that launch posts its update. Yielding the test coroutine lets the
+     * Default thread actually run; we poll up to a hard cap so a genuine logic
+     * failure still fails the test instead of hanging.
+     */
+    private suspend fun TestScope.awaitSmartPlayTarget(
+        predicate: (DetailUiState.SmartPlayTarget) -> Boolean,
+    ): DetailUiState.SmartPlayTarget {
+        val deadline = System.currentTimeMillis() + 2_000
+        while (System.currentTimeMillis() < deadline) {
+            val target = viewModel.uiState.value.smartPlayTarget
+            if (target != null && predicate(target)) return target
+            // Let the Dispatchers.Default recompute make progress before re-checking.
+            delay(10)
+            advanceUntilIdle()
+        }
+        error(
+            "smartPlayTarget never matched within timeout. " +
+                "Last value: ${viewModel.uiState.value.smartPlayTarget}",
+        )
+    }
 }

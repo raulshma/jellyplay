@@ -72,6 +72,8 @@ internal data class DetailContentCallbacks(
     val onToggleFavorite: () -> Unit,
     val onMarkPlayed: () -> Unit,
     val onMarkUnplayed: () -> Unit,
+    val onMarkSeasonPlayed: (seasonId: String) -> Unit,
+    val onMarkSeasonUnplayed: (seasonId: String) -> Unit,
     val onSubtitleSelect: (Int?) -> Unit,
     val onAudioSelect: (Int?) -> Unit,
     val onItemClick: (String) -> Unit,
